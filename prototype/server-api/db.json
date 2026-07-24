@@ -1,0 +1,249 @@
+{
+  "$schema": "./node_modules/json-server/schema.json",
+  "serverStatus": {
+    "id": "status",
+    "name": "Northstar",
+    "version": "0.1.0-prototype",
+    "state": "online",
+    "connectionMode": "local",
+    "localUrl": "http://127.0.0.1:3000",
+    "publicUrl": null,
+    "startedAt": "2026-07-24T02:42:00.000Z",
+    "lastHealthCheckAt": "2026-07-24T03:16:56.000Z",
+    "acp": {
+      "state": "ready",
+      "pid": 42871,
+      "version": "2026.07",
+      "activeSessions": 3
+    }
+  },
+  "settings": {
+    "id": "settings",
+    "connectionMode": "local",
+    "publicUrl": null,
+    "allowedWorkspaceRoots": [
+      "/home/codenamegary/sites"
+    ],
+    "approvalPolicy": "always-ask",
+    "pairingEnabled": true,
+    "pairingCodeTtlSeconds": 600
+  },
+  "workspaces": [
+    {
+      "id": "ws-agent-server",
+      "name": "Agent Server",
+      "path": "/home/codenamegary/sites/agent-server",
+      "additionalDirectories": [],
+      "state": "available",
+      "agentCount": 3,
+      "activeAgentCount": 2,
+      "createdAt": "2026-07-21T14:20:00.000Z",
+      "lastUsedAt": "2026-07-24T03:15:18.000Z"
+    },
+    {
+      "id": "ws-personal-site",
+      "name": "Personal Site",
+      "path": "/home/codenamegary/sites/personal-site",
+      "additionalDirectories": [],
+      "state": "available",
+      "agentCount": 1,
+      "activeAgentCount": 0,
+      "createdAt": "2026-07-20T18:02:00.000Z",
+      "lastUsedAt": "2026-07-23T21:44:00.000Z"
+    },
+    {
+      "id": "ws-scratch",
+      "name": "Scratch",
+      "path": "/home/codenamegary/scratch",
+      "additionalDirectories": [],
+      "state": "unavailable",
+      "agentCount": 0,
+      "activeAgentCount": 0,
+      "createdAt": "2026-07-18T09:10:00.000Z",
+      "lastUsedAt": null
+    }
+  ],
+  "agents": [
+    {
+      "id": "agent-auth",
+      "sessionId": "acp_session_01JFC7W43J7Z7S5C7Z5PCE7C8T",
+      "workspaceId": "ws-agent-server",
+      "name": "Device authentication",
+      "state": "awaiting-approval",
+      "currentRunId": "run_01JFC814BRKPTDZY03NTQF0NE5",
+      "summary": "Implementing Android Keystore challenge enrollment",
+      "createdAt": "2026-07-23T22:18:00.000Z",
+      "lastUsedAt": "2026-07-24T03:15:18.000Z"
+    },
+    {
+      "id": "agent-acp",
+      "sessionId": "acp_session_01JFC60DSRX8Y80AEKJ84J7K36",
+      "workspaceId": "ws-agent-server",
+      "name": "ACP supervisor",
+      "state": "running",
+      "currentRunId": "run_01JFC7ZXPDV7BW1W4RCA6F82G1",
+      "summary": "Adding reconnect and session recovery behavior",
+      "createdAt": "2026-07-23T18:04:00.000Z",
+      "lastUsedAt": "2026-07-24T03:12:02.000Z"
+    },
+    {
+      "id": "agent-general",
+      "sessionId": "acp_session_01JFC22K8J68W5HCF2G3Z7CGPX",
+      "workspaceId": "ws-agent-server",
+      "name": "General",
+      "state": "idle",
+      "currentRunId": null,
+      "summary": "Initial architecture exploration",
+      "createdAt": "2026-07-21T14:24:00.000Z",
+      "lastUsedAt": "2026-07-23T16:38:00.000Z"
+    },
+    {
+      "id": "agent-homepage",
+      "sessionId": "acp_session_01JFBZP6R9SG3N8VFPM26PG1XM",
+      "workspaceId": "ws-personal-site",
+      "name": "Homepage redesign",
+      "state": "idle",
+      "currentRunId": null,
+      "summary": "Hero and navigation refresh",
+      "createdAt": "2026-07-20T18:04:00.000Z",
+      "lastUsedAt": "2026-07-23T21:44:00.000Z"
+    }
+  ],
+  "devices": [
+    {
+      "id": "device-pixel",
+      "name": "Gary's Pixel",
+      "platform": "android",
+      "fingerprint": "SHA256:6F:48:90:AC:17:32:9D:04",
+      "state": "online",
+      "pairedAt": "2026-07-22T20:31:00.000Z",
+      "lastSeenAt": "2026-07-24T03:16:48.000Z"
+    },
+    {
+      "id": "device-local",
+      "name": "Local management console",
+      "platform": "web-local",
+      "fingerprint": "LOCAL:LOOPBACK:MANAGEMENT",
+      "state": "online",
+      "pairedAt": "2026-07-21T14:20:00.000Z",
+      "lastSeenAt": "2026-07-24T03:16:56.000Z"
+    },
+    {
+      "id": "device-tablet",
+      "name": "Travel tablet",
+      "platform": "android",
+      "fingerprint": "SHA256:13:5B:72:D8:EC:91:04:AF",
+      "state": "offline",
+      "pairedAt": "2026-07-22T22:08:00.000Z",
+      "lastSeenAt": "2026-07-23T19:11:00.000Z"
+    }
+  ],
+  "pairingCodes": [
+    {
+      "id": "pair-current",
+      "code": "R7K-4MP",
+      "endpoint": "http://127.0.0.1:3000",
+      "serverPublicKey": "ed25519:VbJ6b7eJ3ALqPqv1i5bZp7VYXtwzmWQ0VmJkLaJgW8A",
+      "state": "active",
+      "createdAt": "2026-07-24T03:14:00.000Z",
+      "expiresAt": "2026-07-24T03:24:00.000Z"
+    }
+  ],
+  "approvals": [
+    {
+      "id": "approval-install",
+      "agentId": "agent-auth",
+      "workspaceId": "ws-agent-server",
+      "kind": "shell",
+      "title": "Install production dependencies",
+      "detail": "bun add @fastify/websocket @sinclair/typebox",
+      "state": "pending",
+      "requestedAt": "2026-07-24T03:15:18.000Z",
+      "resolvedAt": null,
+      "resolvedByDeviceId": null
+    }
+  ],
+  "activityEvents": [
+    {
+      "id": "event-5",
+      "type": "approval.requested",
+      "message": "Device authentication is waiting for shell approval",
+      "workspaceId": "ws-agent-server",
+      "agentId": "agent-auth",
+      "deviceId": null,
+      "occurredAt": "2026-07-24T03:15:18.000Z"
+    },
+    {
+      "id": "event-4",
+      "type": "agent.state-changed",
+      "message": "ACP supervisor started a new run",
+      "workspaceId": "ws-agent-server",
+      "agentId": "agent-acp",
+      "deviceId": "device-pixel",
+      "occurredAt": "2026-07-24T03:12:02.000Z"
+    },
+    {
+      "id": "event-3",
+      "type": "device.connected",
+      "message": "Gary's Pixel connected through the local endpoint",
+      "workspaceId": null,
+      "agentId": null,
+      "deviceId": "device-pixel",
+      "occurredAt": "2026-07-24T03:09:41.000Z"
+    },
+    {
+      "id": "event-2",
+      "type": "agent.created",
+      "message": "Device authentication agent created",
+      "workspaceId": "ws-agent-server",
+      "agentId": "agent-auth",
+      "deviceId": "device-pixel",
+      "occurredAt": "2026-07-23T22:18:00.000Z"
+    },
+    {
+      "id": "event-1",
+      "type": "server.started",
+      "message": "Northstar server started and ACP is ready",
+      "workspaceId": null,
+      "agentId": null,
+      "deviceId": null,
+      "occurredAt": "2026-07-24T02:42:00.000Z"
+    }
+  ],
+  "proxyGuides": [
+    {
+      "id": "caddy",
+      "name": "Caddy on a VPS",
+      "description": "Terminate public TLS on your own cloud host and proxy over a private WireGuard tunnel.",
+      "difficulty": "moderate",
+      "requirements": [
+        "A domain pointed at your VPS",
+        "WireGuard connectivity from VPS to this machine",
+        "Caddy installed on the VPS"
+      ],
+      "configTemplate": "agent.example.com {\n  reverse_proxy 10.8.0.2:8787\n}"
+    },
+    {
+      "id": "tailscale",
+      "name": "Tailscale Serve",
+      "description": "Keep the server private to your tailnet with automatic device networking and HTTPS.",
+      "difficulty": "easy",
+      "requirements": [
+        "Tailscale installed on both devices",
+        "MagicDNS enabled"
+      ],
+      "configTemplate": "tailscale serve --bg http://127.0.0.1:8787"
+    },
+    {
+      "id": "cloudflare",
+      "name": "Cloudflare Tunnel",
+      "description": "Create an outbound tunnel without opening ports on your home router.",
+      "difficulty": "moderate",
+      "requirements": [
+        "A Cloudflare-managed domain",
+        "cloudflared installed locally"
+      ],
+      "configTemplate": "cloudflared tunnel --url http://127.0.0.1:8787"
+    }
+  ]
+}

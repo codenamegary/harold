@@ -1,0 +1,8 @@
+{
+  "name": "cursor-acp-console-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "npx vite --host 127.0.0.1"
+  }
+}
