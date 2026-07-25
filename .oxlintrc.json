@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "oxc"],
+  "rules": {
+    "typescript/consistent-type-imports": [
+      "error",
+      { "prefer": "no-type-imports" }
+    ],
+    "typescript/consistent-type-definitions": ["error", "type"],
+    "max-classes-per-file": ["error", { "max": 0 }],
+    "typescript/no-extraneous-class": "error",
+    "oxc/no-barrel-file": ["error", { "threshold": 0 }],
+    "prefer-const": "error",
+    "no-var": "error"
+  }
+}
