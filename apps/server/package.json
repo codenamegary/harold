@@ -1,0 +1,22 @@
+{
+  "name": "server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/main.ts",
+    "start": "bun run src/main.ts",
+    "lint": "oxlint",
+    "typecheck": "tsc --noEmit",
+    "test": "NODE_ENV=test bun test"
+  },
+  "dependencies": {
+    "contracts": "workspace:*",
+    "fastify": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "oxlint": "catalog:",
+    "typescript": "catalog:"
+  }
+}
