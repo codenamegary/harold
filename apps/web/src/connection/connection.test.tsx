@@ -78,7 +78,12 @@ describe("connection shell wiring", () => {
 
     expect(within(sidebar).getByLabelText("online status")).toBeInTheDocument()
     expect(within(sidebar).getByText("LIVE")).toBeInTheDocument()
+    expect(within(sidebar).getByText("0.1.0")).toBeInTheDocument()
+    expect(within(sidebar).queryByText("v0.8.4")).not.toBeInTheDocument()
     expect(getByText("API connected")).toBeInTheDocument()
+
+    const connectLink = within(sidebar).getByRole("link", { name: /connect/i })
+    expect(within(connectLink).queryByText("2")).not.toBeInTheDocument()
   })
 
   test("sidebar and topbar show unreachable state when API is down", async () => {
@@ -100,6 +105,12 @@ describe("connection shell wiring", () => {
     expect(queryByText("127.0.0.1:3847")).not.toBeInTheDocument()
     expect(queryByText("LIVE")).not.toBeInTheDocument()
     expect(queryByText("demo data")).not.toBeInTheDocument()
+    expect(within(sidebar).getByText("—")).toBeInTheDocument()
+    expect(within(sidebar).queryByText("v0.8.4")).not.toBeInTheDocument()
+    expect(within(sidebar).queryByText("0.1.0")).not.toBeInTheDocument()
+
+    const connectLink = within(sidebar).getByRole("link", { name: /connect/i })
+    expect(within(connectLink).queryByText("2")).not.toBeInTheDocument()
   })
 
   test("refresh button refetches status", async () => {
