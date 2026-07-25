@@ -139,9 +139,9 @@ const AccessModeStep: React.FC<AccessModeStepProps> = ({
         i
       </span>
       <p className="m-0 leading-[1.55]">
-        <strong className="text-body">Your agent stays local.</strong> Relay keeps the workspace and
-        Cursor CLI on this machine. Secure the proxy-to-home hop with WireGuard or another encrypted
-        tunnel.
+        <strong className="text-body">Your agent stays local.</strong> Agent Server keeps the workspace
+        and Cursor CLI on this machine. Secure the proxy-to-home hop with WireGuard or another
+        encrypted tunnel.
       </p>
     </div>
 
@@ -335,7 +335,7 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack }) => (
       <div>
         <h2 className="m-0 text-lg font-semibold">Pair an Android device</h2>
         <p className="m-0 mt-1.5 text-sm text-muted">
-          Scan the code or enter the six-character code in the Relay app.
+          Scan the code or enter the six-character code in the Agent Server app.
         </p>
       </div>
     </div>
@@ -347,7 +347,7 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack }) => (
       >
         <div className="size-full rounded bg-[#b8bdb4]" />
         <span className="absolute top-1/2 left-1/2 grid size-10 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-lg bg-white text-sm font-semibold text-lime-ink">
-          R
+          A
         </span>
       </div>
 
@@ -370,7 +370,7 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack }) => (
           complete.
         </p>
         <ol className="mt-4 space-y-2 pl-4 text-xs leading-[1.55] text-body-soft">
-          <li>Open Relay on Android</li>
+          <li>Open Agent Server on Android</li>
           <li>
             Select <strong className="text-body">Pair a server</strong>
           </li>

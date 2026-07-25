@@ -72,7 +72,8 @@ export const ProviderPanel: React.FC = () => (
         <SectionKicker>WORKSPACE SOURCES</SectionKicker>
         <h3 className="m-0 text-lg font-semibold">Workspace provider</h3>
         <p className="m-0 mt-2 max-w-2xl text-sm text-muted">
-          Control where Relay can create workspaces and which folders agents are allowed to access.
+          Control where Agent Server can create workspaces and which folders agents are allowed to
+          access.
         </p>
       </div>
       <StatusPill variant="success">0 configured</StatusPill>

@@ -13,7 +13,7 @@ const main = async () => {
   await listen(app, config, runtime)
   app.log.info(
     { host: config.host, port: config.port },
-    "relay server listening",
+    "agent server listening",
   )
 }
 

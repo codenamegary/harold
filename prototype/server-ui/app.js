@@ -18,9 +18,9 @@ const mockState = {
     { id: "agent-docs", workspaceId: "ws-docs", name: "Documentation refresh", state: "offline" },
   ],
   devices: [
-    { id: "device-pixel", name: "Gary’s Pixel", type: "mobile", client: "Relay for Android · device key", lastSeen: "Active now", location: "Direct", status: "online" },
+    { id: "device-pixel", name: "Gary’s Pixel", type: "mobile", client: "Agent Server for Android · device key", lastSeen: "Active now", location: "Direct", status: "online" },
     { id: "device-local", name: "Local management console", type: "desktop", client: "Loopback-only web UI", lastSeen: "Active now", location: "This machine", status: "online" },
-    { id: "device-tablet", name: "Travel tablet", type: "tablet", client: "Relay for Android · device key", lastSeen: "Yesterday, 19:11", location: "Cloud proxy", status: "offline" },
+    { id: "device-tablet", name: "Travel tablet", type: "tablet", client: "Agent Server for Android · device key", lastSeen: "Yesterday, 19:11", location: "Cloud proxy", status: "offline" },
   ],
   activities: [
     { title: "Agent completed task", detail: "agent-server · 14 files changed", time: "12s", color: "green" },
@@ -228,7 +228,7 @@ async function hydrateFromApi(showToast = false) {
   state.devices = devices.map((device) => ({
     ...device,
     type: device.platform === "android" ? "mobile" : "desktop",
-    client: device.platform === "android" ? "Relay for Android · device key" : "Loopback-only web UI",
+    client: device.platform === "android" ? "Agent Server for Android · device key" : "Loopback-only web UI",
     lastSeen: device.lastSeenAt ? new Date(device.lastSeenAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "Never",
     location: device.platform === "android" ? "Paired endpoint" : "This machine",
     status: device.state,
