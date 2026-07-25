@@ -51,9 +51,9 @@ export const AppShell: React.FC = () => {
             <span className="absolute left-2 top-[21px] h-[3px] w-[17px] -rotate-[35deg] rounded-sm bg-[#0b1007]" />
           </div>
           <div>
-            <div className="font-bold leading-tight tracking-tight">Relay</div>
+            <div className="font-bold leading-tight tracking-tight">Agent Server</div>
             <div className="mt-[3px] font-mono text-[10px] uppercase tracking-[0.08em] text-dim">
-              ACP console
+              Operator console
             </div>
           </div>
         </div>
@@ -91,7 +91,7 @@ export const AppShell: React.FC = () => {
             Settings
           </SidebarNavLink>
           <div className="flex justify-between px-[9px] pt-[13px] font-mono text-[9px] text-[#414955]">
-            <span>relay/acp</span>
+            <span>agent-server</span>
             <span>v0.8.4</span>
           </div>
         </div>
