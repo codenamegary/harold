@@ -1,12 +1,41 @@
-import { useContext } from "react"
-import { ConnectionContext, ConnectionContextValue } from "./connectionContext"
+import { Status } from "contracts/http/status"
+import { useCallback } from "react"
+import { ConnectionState } from "./connectionState"
+import { useStatusQuery } from "./useStatusQuery"
 
-export const useConnection = (): ConnectionContextValue => {
-  const context = useContext(ConnectionContext)
+export type ConnectionValue = {
+  connection: ConnectionState
+  refetch: () => Promise<void>
+}
 
-  if (context === null) {
-    throw new Error("useConnection must be used within ConnectionProvider")
+const connectionFromQuery = (
+  data: Status | undefined,
+  isLoading: boolean,
+  isError: boolean,
+): ConnectionState => {
+  if (data !== undefined) {
+    return { phase: "online", status: data }
   }
 
-  return context
+  if (isLoading) {
+    return { phase: "loading" }
+  }
+
+  if (isError) {
+    return { phase: "unreachable" }
+  }
+
+  return { phase: "loading" }
+}
+
+export const useConnection = (): ConnectionValue => {
+  const { data, isLoading, isError, refetch: refetchQuery } = useStatusQuery()
+
+  const connection = connectionFromQuery(data, isLoading, isError)
+
+  const refetch = useCallback(async () => {
+    await refetchQuery()
+  }, [refetchQuery])
+
+  return { connection, refetch }
 }

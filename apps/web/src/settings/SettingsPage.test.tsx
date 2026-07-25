@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { render, waitFor } from "@testing-library/react"
-import { MemoryRouter } from "react-router"
-import { ConnectionProvider } from "../connection/ConnectionProvider"
+import { waitFor } from "@testing-library/react"
+import { renderWithProviders } from "../query/renderWithProviders"
 import { SettingsPage } from "../shell/pages/SettingsPage"
 
 const validStatus = {
@@ -19,13 +18,9 @@ const validStatus = {
 const originalFetch = globalThis.fetch
 
 const renderSettingsPage = async () => {
-  const view = render(
-    <MemoryRouter initialEntries={["/settings"]}>
-      <ConnectionProvider>
-        <SettingsPage />
-      </ConnectionProvider>
-    </MemoryRouter>,
-  )
+  const view = renderWithProviders(<SettingsPage />, {
+    initialEntries: ["/settings"],
+  })
 
   await waitFor(() => {
     expect(view.getByRole("region", { name: "Server details" })).toHaveTextContent(
@@ -106,13 +101,9 @@ describe("SettingsPage", () => {
   test("shows em dashes when server is unreachable", async () => {
     globalThis.fetch = mock(() => Promise.reject(new Error("network error"))) as typeof fetch
 
-    const { getByRole } = render(
-      <MemoryRouter initialEntries={["/settings"]}>
-        <ConnectionProvider>
-          <SettingsPage />
-        </ConnectionProvider>
-      </MemoryRouter>,
-    )
+    const { getByRole } = renderWithProviders(<SettingsPage />, {
+      initialEntries: ["/settings"],
+    })
 
     await waitFor(() => {
       const details = getByRole("region", { name: "Server details" })

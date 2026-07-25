@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { fireEvent, render, waitFor, within } from "@testing-library/react"
-import { MemoryRouter } from "react-router"
+import { fireEvent, waitFor, within } from "@testing-library/react"
+import { renderWithProviders } from "../query/renderWithProviders"
 import { AppRoutes } from "./AppRouter"
 
 const validStatus = {
@@ -29,13 +29,11 @@ const forbiddenLabelPatterns = [/demo data/i, /mock-success/i, /mock success/i] 
 const originalFetch = globalThis.fetch
 
 const renderShellRoute = (path: string) =>
-  render(
-    <MemoryRouter initialEntries={[path]}>
-      <AppRoutes />
-    </MemoryRouter>,
-  )
+  renderWithProviders(<AppRoutes />, {
+    initialEntries: [path],
+  })
 
-const waitForShellReady = async (getByRole: ReturnType<typeof render>["getByRole"]) => {
+const waitForShellReady = async (getByRole: ReturnType<typeof renderWithProviders>["getByRole"]) => {
   await waitFor(() => {
     expect(getByRole("main")).toBeInTheDocument()
   })
