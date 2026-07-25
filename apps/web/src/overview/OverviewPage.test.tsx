@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { render, waitFor, within } from "@testing-library/react"
+import { act, render, waitFor, within } from "@testing-library/react"
 import { createStore, Provider } from "jotai"
 import { MemoryRouter } from "react-router"
 import { ConnectionProvider } from "../connection/ConnectionProvider"
@@ -115,7 +115,9 @@ describe("OverviewPage", () => {
       expect(within(getByRole("article", { name: "Server status" })).getByText("1h 0m")).toBeInTheDocument()
     })
 
-    store.set(nowAtom, startedAtMs + 3_661_000)
+    act(() => {
+      store.set(nowAtom, startedAtMs + 3_661_000)
+    })
 
     await waitFor(() => {
       expect(within(getByRole("article", { name: "Server status" })).getByText("1h 1m")).toBeInTheDocument()
