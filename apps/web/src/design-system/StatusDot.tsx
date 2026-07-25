@@ -7,9 +7,9 @@ type StatusDotProps = {
 } & ComponentPropsWithoutRef<"span">
 
 const variantClasses: Record<StatusDotVariant, string> = {
-  online: "bg-lime shadow-[0_0_9px_rgba(182,243,107,0.4)]",
-  warning: "bg-[#f4bc5f]",
-  offline: "bg-[#505866]",
+  online: "bg-lime shadow-[0_0_9px] shadow-lime/40",
+  warning: "bg-amber",
+  offline: "bg-offline",
 }
 
 export const StatusDot = ({

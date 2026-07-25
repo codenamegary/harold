@@ -19,8 +19,8 @@ export const NavItem = ({
   const isDisabled = disabled === true || ariaDisabled === true
   const disabledClasses = isDisabled ? "opacity-50 pointer-events-none" : ""
   const activeClasses = active
-    ? "bg-[#151920] text-slate-200 shadow-[inset_0_0_0_1px_#222935] before:absolute before:-left-2.5 before:h-4 before:w-0.5 before:rounded-sm before:bg-lime"
-    : "text-[#7f8998] hover:bg-[#11151b] hover:text-slate-200"
+    ? "bg-surface-raised text-slate-200 ring-1 ring-inset ring-nav-active-ring before:absolute before:-left-2.5 before:h-4 before:w-0.5 before:rounded-sm before:bg-lime"
+    : "text-nav hover:bg-nav-hover hover:text-slate-200"
 
   return (
     <button
@@ -31,7 +31,10 @@ export const NavItem = ({
       className={`relative flex min-h-10 w-full items-center gap-[11px] rounded-[7px] border-0 bg-transparent px-2.5 text-left text-[13px] cursor-pointer ${activeClasses} ${disabledClasses} ${className}`}
       {...props}
     >
-      <span className={`grid w-[18px] place-items-center font-mono text-base ${active ? "text-lime" : "text-[#6e7888]"}`}>
+      <span
+        aria-hidden
+        className={`grid w-[18px] place-items-center font-mono text-base ${active ? "text-lime" : "text-nav-icon"}`}
+      >
         {icon}
       </span>
       {children}

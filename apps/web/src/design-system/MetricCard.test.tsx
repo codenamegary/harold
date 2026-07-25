@@ -12,7 +12,7 @@ describe("MetricCard", () => {
 
     const card = getByText("Active sessions").parentElement
     expect(card).toHaveClass("min-h-[155px]")
-    expect(card).toHaveClass("border-[#1a1f28]")
+    expect(card).toHaveClass("border-line-soft")
   })
 
   test("lime accent adds accent class", () => {

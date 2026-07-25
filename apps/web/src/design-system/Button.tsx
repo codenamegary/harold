@@ -9,10 +9,10 @@ type ButtonProps = {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-lime border border-lime text-[#10150c] shadow-[0_0_0_1px_rgba(0,0,0,0.18),inset_0_1px_rgba(255,255,255,0.25)] hover:bg-[#c2ff78]",
+    "bg-lime border border-lime text-lime-ink shadow-[0_0_0_1px_rgba(0,0,0,0.18),inset_0_1px_rgba(255,255,255,0.25)] hover:bg-lime-hover",
   secondary:
-    "bg-[#12161d] text-[#c4cad3] border border-[#2a313d] hover:bg-[#181d25] hover:border-[#3a4350] hover:text-white",
-  text: "bg-transparent text-[#98a1ae] hover:text-lime",
+    "bg-panel-2 text-body border border-line-strong hover:bg-hover-surface-strong hover:border-line-hover-strong hover:text-white",
+  text: "bg-transparent text-body-soft hover:text-lime",
 }
 
 export const Button = ({

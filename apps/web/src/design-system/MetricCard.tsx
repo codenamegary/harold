@@ -22,7 +22,7 @@ export const MetricCard = ({
 
   return (
     <article
-      className={`min-h-[155px] rounded-[9px] border border-[#1a1f28] bg-linear-to-br from-[#101319] to-[#0c0f14] px-[17px] pt-4 pb-[13px] ${accentClass} ${className}`}
+      className={`min-h-[155px] rounded-[9px] border border-line-soft bg-linear-to-br from-surface to-metric-to px-[17px] pt-4 pb-[13px] ${accentClass} ${className}`}
       {...props}
     >
       {children}

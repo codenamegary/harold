@@ -19,7 +19,7 @@ export const IconButton = ({
       type="button"
       disabled={disabled}
       aria-disabled={ariaDisabled}
-      className={`grid size-[34px] place-items-center rounded-[7px] border border-line bg-[#101319] text-[#9ba5b4] cursor-pointer hover:border-[#3b4452] hover:bg-[#151a21] hover:text-slate-200 ${disabledClasses} ${className}`}
+      className={`grid size-[34px] place-items-center rounded-[7px] border border-line bg-surface text-icon cursor-pointer hover:border-line-hover hover:bg-hover-surface hover:text-slate-200 ${disabledClasses} ${className}`}
       {...props}
     >
       {children}

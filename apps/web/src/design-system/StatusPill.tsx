@@ -8,9 +8,9 @@ type StatusPillProps = {
 } & ComponentPropsWithoutRef<"span">
 
 const variantClasses: Record<StatusPillVariant, string> = {
-  default: "bg-[#181d25] text-[#a6afbc]",
+  default: "bg-panel-elevated text-pill",
   success: "border border-lime/13 bg-lime/10 text-lime",
-  violet: "border border-violet/16 bg-violet/12 text-[#c0b6ff]",
+  violet: "border border-violet/16 bg-violet/12 text-violet-soft",
 }
 
 export const StatusPill = ({

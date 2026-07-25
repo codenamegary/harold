@@ -7,8 +7,8 @@ describe("TextInput", () => {
     const { getByRole } = render(<TextInput aria-label="Workspace name" />)
 
     const input = getByRole("textbox", { name: "Workspace name" })
-    expect(input).toHaveClass("bg-[#090c10]")
-    expect(input).toHaveClass("border-[#2e3540]")
+    expect(input).toHaveClass("bg-surface-deep")
+    expect(input).toHaveClass("border-line-input")
   })
 
   test("disabled text input is not editable", () => {

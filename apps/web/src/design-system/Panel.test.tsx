@@ -8,6 +8,6 @@ describe("Panel", () => {
 
     expect(container.firstChild).toHaveClass("bg-panel")
     expect(container.firstChild).toHaveClass("border")
-    expect(container.firstChild).toHaveClass("border-[#1a1f28]")
+    expect(container.firstChild).toHaveClass("border-line-soft")
   })
 })

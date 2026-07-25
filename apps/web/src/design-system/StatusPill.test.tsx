@@ -6,7 +6,7 @@ describe("StatusPill", () => {
   test("default variant uses neutral styling", () => {
     const { getByText } = render(<StatusPill>Idle</StatusPill>)
 
-    expect(getByText("Idle")).toHaveClass("bg-[#181d25]")
+    expect(getByText("Idle")).toHaveClass("bg-panel-elevated")
   })
 
   test("success variant uses lime styling", () => {
@@ -19,7 +19,7 @@ describe("StatusPill", () => {
   test("violet variant uses violet styling", () => {
     const { getByText } = render(<StatusPill variant="violet">Pairing</StatusPill>)
 
-    expect(getByText("Pairing")).toHaveClass("text-[#c0b6ff]")
+    expect(getByText("Pairing")).toHaveClass("text-violet-soft")
     expect(getByText("Pairing")).toHaveClass("bg-violet/12")
   })
 })

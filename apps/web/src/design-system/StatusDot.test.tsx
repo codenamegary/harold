@@ -12,12 +12,12 @@ describe("StatusDot", () => {
   test("warning variant uses amber", () => {
     const { getByLabelText } = render(<StatusDot variant="warning" />)
 
-    expect(getByLabelText("warning status")).toHaveClass("bg-[#f4bc5f]")
+    expect(getByLabelText("warning status")).toHaveClass("bg-amber")
   })
 
   test("offline variant uses muted gray", () => {
     const { getByLabelText } = render(<StatusDot variant="offline" />)
 
-    expect(getByLabelText("offline status")).toHaveClass("bg-[#505866]")
+    expect(getByLabelText("offline status")).toHaveClass("bg-offline")
   })
 })

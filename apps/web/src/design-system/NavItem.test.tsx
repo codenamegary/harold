@@ -11,7 +11,7 @@ describe("NavItem", () => {
     )
 
     const button = getByRole("button", { name: /Dashboard/ })
-    expect(button).toHaveClass("bg-[#151920]")
+    expect(button).toHaveClass("bg-surface-raised")
     expect(button).toHaveAttribute("aria-current", "page")
   })
 
@@ -22,7 +22,7 @@ describe("NavItem", () => {
       </NavItem>,
     )
 
-    expect(getByRole("button", { name: /Dashboard/ })).toHaveClass("text-[#7f8998]")
+    expect(getByRole("button", { name: /Dashboard/ })).toHaveClass("text-nav")
   })
 
   test("disabled nav item is not interactive", () => {
@@ -35,6 +35,19 @@ describe("NavItem", () => {
     const button = getByRole("button", { name: /Dashboard/ })
     expect(button).toBeDisabled()
     expect(button).toHaveClass("opacity-50")
+  })
+
+  test("icon span is hidden from assistive tech", () => {
+    const { getByRole } = render(
+      <NavItem icon={<span>⌂</span>}>
+        Dashboard
+      </NavItem>,
+    )
+
+    const button = getByRole("button", { name: "Dashboard" })
+    const iconSpan = button.querySelector("span[aria-hidden='true']")
+    expect(iconSpan).not.toBeNull()
+    expect(iconSpan).toHaveTextContent("⌂")
   })
 
   test("aria-disabled nav item exposes aria-disabled", () => {

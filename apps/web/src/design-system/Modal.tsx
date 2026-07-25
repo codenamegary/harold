@@ -1,4 +1,4 @@
-import { ReactNode } from "react"
+import { ReactNode, useId } from "react"
 
 type ModalProps = {
   open: boolean
@@ -9,6 +9,8 @@ type ModalProps = {
 }
 
 export const Modal = ({ open, onClose, title, children, actions }: ModalProps) => {
+  const titleId = useId()
+
   if (!open) {
     return null
   }
@@ -21,18 +23,18 @@ export const Modal = ({ open, onClose, title, children, actions }: ModalProps) =
       <section
         role="dialog"
         aria-modal="true"
-        aria-labelledby="modal-title"
-        className="w-full max-w-[430px] rounded-[10px] border border-[#303844] bg-[#101319] p-[22px] shadow-[0_25px_80px_rgba(0,0,0,0.6)]"
+        aria-labelledby={titleId}
+        className="w-full max-w-[430px] rounded-[10px] border border-line-modal bg-surface p-[22px] shadow-[0_25px_80px_rgba(0,0,0,0.6)]"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="mb-5 flex items-start justify-between gap-4">
-          <h3 id="modal-title" className="m-0 text-base font-semibold">
+          <h3 id={titleId} className="m-0 text-base font-semibold">
             {title}
           </h3>
         </header>
         <div>{children}</div>
         {actions ? (
-          <footer className="mt-[22px] flex justify-end gap-2 border-t border-[#1a1f28] pt-4">
+          <footer className="mt-[22px] flex justify-end gap-2 border-t border-line-soft pt-4">
             {actions}
           </footer>
         ) : null}

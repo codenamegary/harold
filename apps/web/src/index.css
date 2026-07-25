@@ -3,10 +3,40 @@
 @theme {
   --color-ink: #080a0d;
   --color-panel: #0e1117;
+  --color-panel-2: #12161d;
+  --color-panel-elevated: #181d25;
+  --color-surface: #101319;
+  --color-surface-deep: #090c10;
+  --color-surface-raised: #151920;
   --color-lime: #b6f36b;
+  --color-lime-hover: #c2ff78;
+  --color-lime-ink: #10150c;
   --color-violet: #9d8cff;
+  --color-violet-soft: #c0b6ff;
   --color-line: #242a35;
+  --color-line-soft: #1a1f28;
+  --color-line-input: #2e3540;
+  --color-line-modal: #303844;
+  --color-line-strong: #2a313d;
+  --color-line-hover: #3b4452;
+  --color-line-hover-strong: #3a4350;
   --color-muted: #8c96a5;
+  --color-dim: #5d6674;
+  --color-nav: #7f8998;
+  --color-nav-icon: #6e7888;
+  --color-nav-hover: #11151b;
+  --color-nav-active-ring: #222935;
+  --color-label: #909aa8;
+  --color-body-soft: #98a1ae;
+  --color-body: #c4cad3;
+  --color-input: #c7ced7;
+  --color-pill: #a6afbc;
+  --color-icon: #9ba5b4;
+  --color-amber: #f4bc5f;
+  --color-offline: #505866;
+  --color-hover-surface: #151a21;
+  --color-hover-surface-strong: #181d25;
+  --color-metric-to: #0c0f14;
 
   --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", monospace;
@@ -36,7 +66,7 @@
   input:focus-visible,
   textarea:focus-visible,
   select:focus-visible {
-    outline: 2px solid rgba(182, 243, 107, 0.65);
+    outline: 2px solid color-mix(in srgb, var(--color-lime) 65%, transparent);
     outline-offset: 2px;
   }
 }

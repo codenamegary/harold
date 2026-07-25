@@ -10,7 +10,7 @@ export const FieldLabel = ({
   ...props
 }: FieldLabelProps) => (
   <label
-    className={`mt-[17px] mb-[7px] block text-[9px] text-[#909aa8] ${className}`}
+    className={`mt-[17px] mb-[7px] block text-[9px] text-label ${className}`}
     {...props}
   >
     {children}

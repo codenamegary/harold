@@ -40,6 +40,19 @@ describe("Modal", () => {
     expect(getByRole("button", { name: "Save" })).toBeInTheDocument()
   })
 
+  test("links title id to aria-labelledby", () => {
+    const { getByRole } = render(
+      <Modal open onClose={() => {}} title="Add workspace">
+        Body
+      </Modal>,
+    )
+
+    const dialog = getByRole("dialog")
+    const labelledBy = dialog.getAttribute("aria-labelledby")
+    expect(labelledBy).toBeTruthy()
+    expect(document.getElementById(labelledBy as string)).toHaveTextContent("Add workspace")
+  })
+
   test("calls onClose when backdrop is clicked", () => {
     const state = { closed: false }
     const onClose = () => {

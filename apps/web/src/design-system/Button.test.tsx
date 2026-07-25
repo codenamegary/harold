@@ -12,7 +12,7 @@ describe("Button", () => {
   test("secondary variant uses panel styling", () => {
     const { getByRole } = render(<Button variant="secondary">Cancel</Button>)
 
-    expect(getByRole("button", { name: "Cancel" })).toHaveClass("bg-[#12161d]")
+    expect(getByRole("button", { name: "Cancel" })).toHaveClass("bg-panel-2")
   })
 
   test("text variant uses transparent background", () => {
