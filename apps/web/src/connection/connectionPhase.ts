@@ -1,6 +1,6 @@
 export type ConnectionPhase = "loading" | "online" | "unreachable"
 
-type StatusDotVariant = "online" | "warning" | "offline" | "error"
+type StatusDotVariant = "online" | "warning" | "offline"
 
 type ConnectionPhaseChrome = {
   sidebarDotVariant: StatusDotVariant
@@ -26,7 +26,7 @@ export const connectionPhaseChromeByPhase: Record<
     topbarAlert: false,
   },
   unreachable: {
-    sidebarDotVariant: "error",
+    sidebarDotVariant: "offline",
     topbarLabel: "API unreachable",
     showLiveBadge: false,
     topbarAlert: true,
