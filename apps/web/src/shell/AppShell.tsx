@@ -1,5 +1,7 @@
 import React, { useState } from "react"
 import { Link, Outlet, useLocation } from "react-router"
+import { connectionPhaseChromeByPhase } from "../connection/connectionPhase"
+import { useConnection } from "../connection/ConnectionProvider"
 import { IconButton } from "../design-system/IconButton"
 import { StatusDot } from "../design-system/StatusDot"
 import { SidebarNavLink } from "./SidebarNavLink"
@@ -21,9 +23,16 @@ const routeMetaByPath: Record<string, RouteMeta> = {
 export const AppShell: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { pathname } = useLocation()
+  const { connection, refetch } = useConnection()
   const routeMeta = routeMetaByPath[pathname]
   const eyebrow = routeMeta?.eyebrow ?? ""
   const title = routeMeta?.title ?? ""
+  const connectionPhase = connection.phase
+  const phaseChrome = connectionPhaseChromeByPhase[connectionPhase]
+  const instanceAddress =
+    connection.phase === "online"
+      ? `${connection.status.bindAddress}:${connection.status.port}`
+      : null
 
   const closeSidebar = () => setSidebarOpen(false)
   const toggleSidebar = () => setSidebarOpen((open) => !open)
@@ -79,13 +88,17 @@ export const AppShell: React.FC = () => {
         <div className="mt-auto">
           <div className="mb-2 rounded-lg border border-line-soft bg-[#0d1015] p-[11px]">
             <div className="flex items-center gap-[7px] text-[11px] text-[#bbc2cc]">
-              <StatusDot variant="online" />
+              <StatusDot variant={phaseChrome.sidebarDotVariant} />
               <span>Local instance</span>
-              <span className="ml-auto font-mono text-[8px] text-lime">LIVE</span>
+              {phaseChrome.showLiveBadge ? (
+                <span className="ml-auto font-mono text-[8px] text-lime">LIVE</span>
+              ) : null}
             </div>
-            <code className="mt-[7px] ml-3.5 block font-mono text-[9px] text-dim">
-              127.0.0.1:3210
-            </code>
+            {phaseChrome.showLiveBadge && instanceAddress ? (
+              <code className="mt-[7px] ml-3.5 block font-mono text-[9px] text-dim">
+                {instanceAddress}
+              </code>
+            ) : null}
           </div>
           <SidebarNavLink to="/settings" subtle icon={<span>⚙</span>}>
             Settings
@@ -117,10 +130,12 @@ export const AppShell: React.FC = () => {
               className="flex h-8 items-center gap-[7px] rounded-[7px] border border-line px-2.5 text-[10px] text-muted max-[820px]:hidden"
               title="JSON Server API status"
             >
-              <StatusDot variant="warning" />
-              <span>Checking API</span>
+              <StatusDot variant={phaseChrome.sidebarDotVariant} />
+              <span>{phaseChrome.topbarLabel}</span>
             </div>
-            <IconButton aria-label="Refresh data">↻</IconButton>
+            <IconButton aria-label="Refresh data" onClick={() => void refetch()}>
+              ↻
+            </IconButton>
             <Link
               to="/chat"
               onClick={closeSidebar}
