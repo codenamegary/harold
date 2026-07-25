@@ -9,7 +9,7 @@ type SidebarNavLinkProps = {
 } & Omit<NavLinkProps, "className" | "children">
 
 const baseClasses =
-  "group relative flex min-h-10 w-full items-center gap-[11px] rounded-[7px] border-0 bg-transparent px-2.5 text-left text-[13px] no-underline cursor-pointer"
+  "group relative flex min-h-10 w-full items-center gap-[11px] rounded-[7px] border-0 bg-transparent px-2.5 text-left text-sm no-underline cursor-pointer"
 
 const inactiveClasses = "text-nav hover:bg-nav-hover hover:text-slate-200"
 const activeClasses =
@@ -38,7 +38,7 @@ export const SidebarNavLink: React.FC<SidebarNavLinkProps> = ({
     </span>
     {children}
     {badge !== undefined ? (
-      <span className="ml-auto grid min-w-[19px] h-[19px] place-items-center rounded-[10px] bg-lime px-[5px] font-mono text-[10px] text-lime-ink">
+      <span className="ml-auto grid min-w-[19px] h-[19px] place-items-center rounded-[10px] bg-lime px-[5px] font-mono text-xs text-lime-ink">
         {badge}
       </span>
     ) : null}

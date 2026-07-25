@@ -9,7 +9,7 @@ export const WorkspacesToolbar: React.FC = () => (
       <span aria-hidden>⌕</span>
       <TextInput
         aria-label="Search workspaces"
-        className="min-h-0 border-0 bg-transparent p-0 text-[10px] focus:border-transparent"
+        className="min-h-0 border-0 bg-transparent p-0 text-sm focus:border-transparent"
         disabled
         placeholder="Search workspaces…"
         role="searchbox"
@@ -27,7 +27,7 @@ export const WorkspacesToolbar: React.FC = () => (
           type="button"
           disabled
           aria-pressed={option === "All"}
-          className={`min-h-7 rounded-[5px] border-0 px-3 text-[9px] ${
+          className={`min-h-7 rounded-[5px] border-0 px-3 text-xs ${
             option === "All"
               ? "bg-[#1b2029] text-[#c5ccd5]"
               : "bg-transparent text-dim max-[640px]:hidden"

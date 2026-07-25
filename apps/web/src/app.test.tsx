@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { fireEvent, render, within } from "@testing-library/react"
+import { fireEvent, render } from "@testing-library/react"
 import { MemoryRouter } from "react-router"
 import { AppRoutes } from "./shell/AppRouter"
 
@@ -21,9 +21,8 @@ describe("routing", () => {
         </MemoryRouter>,
       )
 
-      const main = getByRole("main")
-      expect(main).toBeInTheDocument()
-      expect(within(main).getByRole("heading", { level: 1, name: heading })).toBeInTheDocument()
+      expect(getByRole("main")).toBeInTheDocument()
+      expect(getByRole("heading", { level: 1, name: heading })).toBeInTheDocument()
     })
   })
 

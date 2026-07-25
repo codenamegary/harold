@@ -17,7 +17,7 @@ export const TextInput: React.FC<TextInputProps> = ({
     <input
       disabled={disabled}
       aria-disabled={ariaDisabled}
-      className={`min-h-10 w-full rounded-md border border-line-input bg-surface-deep px-[11px] text-[10px] text-input outline-none focus:border-lime/40 ${disabledClasses} ${className}`}
+      className={`min-h-10 w-full rounded-md border border-line-input bg-surface-deep px-[11px] text-sm text-input outline-none focus:border-lime/40 ${disabledClasses} ${className}`}
       {...props}
     />
   )

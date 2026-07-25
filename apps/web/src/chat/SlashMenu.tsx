@@ -16,8 +16,8 @@ export const SlashMenu: React.FC = () => (
         aria-label={`${command} ${description}`}
         className="flex min-h-9 w-full cursor-not-allowed items-center gap-[15px] rounded-[5px] border-0 bg-transparent px-[9px] text-left opacity-50"
       >
-        <code className="min-w-[50px] font-mono text-[9px] text-lime">{command}</code>
-        <span className="text-[8px] text-[#697381]">{description}</span>
+        <code className="min-w-[50px] font-mono text-xs text-lime">{command}</code>
+        <span className="text-2xs text-[#697381]">{description}</span>
       </button>
     ))}
   </div>

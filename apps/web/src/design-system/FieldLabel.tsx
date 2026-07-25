@@ -10,7 +10,7 @@ export const FieldLabel: React.FC<FieldLabelProps> = ({
   ...props
 }) => (
   <label
-    className={`mt-[17px] mb-[7px] block text-[9px] text-label ${className}`}
+    className={`mt-[17px] mb-[7px] block text-2xs text-label ${className}`}
     {...props}
   >
     {children}

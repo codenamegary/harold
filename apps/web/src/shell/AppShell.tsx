@@ -61,7 +61,7 @@ export const AppShell: React.FC = () => {
           </div>
           <div>
             <div className="font-bold leading-tight tracking-tight">Agent Server</div>
-            <div className="mt-[3px] font-mono text-[10px] uppercase tracking-[0.08em] text-dim">
+            <div className="mt-[3px] font-mono text-xs uppercase tracking-[0.08em] text-dim">
               Operator console
             </div>
           </div>
@@ -87,15 +87,15 @@ export const AppShell: React.FC = () => {
 
         <div className="mt-auto">
           <div className="mb-2 rounded-lg border border-line-soft bg-[#0d1015] p-[11px]">
-            <div className="flex items-center gap-[7px] text-[11px] text-[#bbc2cc]">
+            <div className="flex items-center gap-[7px] text-2xs text-[#bbc2cc]">
               <StatusDot variant={phaseChrome.sidebarDotVariant} />
               <span>Local instance</span>
               {phaseChrome.showLiveBadge ? (
-                <span className="ml-auto font-mono text-[8px] text-lime">LIVE</span>
+                <span className="ml-auto font-mono text-2xs text-lime">LIVE</span>
               ) : null}
             </div>
             {phaseChrome.showLiveBadge && instanceAddress ? (
-              <code className="mt-[7px] ml-3.5 block font-mono text-[9px] text-dim">
+              <code className="mt-[7px] ml-3.5 block font-mono text-2xs text-dim">
                 {instanceAddress}
               </code>
             ) : null}
@@ -103,7 +103,7 @@ export const AppShell: React.FC = () => {
           <SidebarNavLink to="/settings" subtle icon={<span>⚙</span>}>
             Settings
           </SidebarNavLink>
-          <div className="flex justify-between px-[9px] pt-[13px] font-mono text-[9px] text-[#414955]">
+          <div className="flex justify-between px-[9px] pt-[13px] font-mono text-2xs text-[#414955]">
             <span>agent-server</span>
             <span>v0.8.4</span>
           </div>
@@ -120,14 +120,14 @@ export const AppShell: React.FC = () => {
             ☰
           </IconButton>
           <div>
-            <div className="font-mono text-[9px] leading-tight tracking-[0.12em] text-[#667080]">
+            <div className="font-mono text-2xs leading-tight tracking-[0.12em] text-[#667080]">
               {eyebrow}
             </div>
-            <h1 className="m-0 mt-[3px] text-lg font-semibold tracking-tight">{title}</h1>
+            <h1 className="m-0 mt-[3px] text-xl font-semibold tracking-tight">{title}</h1>
           </div>
           <div className="flex items-center gap-2 max-[820px]:ml-auto">
             <div
-              className="flex h-8 items-center gap-[7px] rounded-[7px] border border-line px-2.5 text-[10px] text-muted max-[820px]:hidden"
+              className="flex h-8 items-center gap-[7px] rounded-[7px] border border-line px-2.5 text-xs text-muted max-[820px]:hidden"
               title="JSON Server API status"
             >
               <StatusDot variant={phaseChrome.sidebarDotVariant} />
@@ -139,7 +139,7 @@ export const AppShell: React.FC = () => {
             <Link
               to="/chat"
               onClick={closeSidebar}
-              className="inline-flex min-h-9 items-center justify-center gap-3 rounded-[7px] border border-lime bg-lime px-3.5 text-[11px] font-semibold whitespace-nowrap text-lime-ink shadow-[0_0_0_1px_rgba(0,0,0,0.18),inset_0_1px_rgba(255,255,255,0.25)] hover:bg-lime-hover max-[640px]:hidden"
+              className="inline-flex min-h-9 items-center justify-center gap-3 rounded-[7px] border border-lime bg-lime px-3.5 text-base font-semibold whitespace-nowrap text-lime-ink shadow-[0_0_0_1px_rgba(0,0,0,0.18),inset_0_1px_rgba(255,255,255,0.25)] hover:bg-lime-hover max-[640px]:hidden"
             >
               <span>Open test chat</span>
               <span aria-hidden>→</span>
