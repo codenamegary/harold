@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { IdSchema, TimestampSchema } from "../http/primitives";
-import { RelayStateSchema } from "../http/status";
+import { AgentServerStateSchema } from "../http/status";
 import { SessionStateSchema } from "../http/session";
 import { WorkspaceStateSchema } from "../http/workspace";
 import { CursorSchema } from "./primitives";
@@ -16,7 +16,7 @@ export const EventSchema = z.discriminatedUnion("type", [
   EventScopeSchema.extend({
     type: z.literal("server.status"),
     payload: z.object({
-      state: RelayStateSchema,
+      state: AgentServerStateSchema,
     }),
   }),
   EventScopeSchema.extend({

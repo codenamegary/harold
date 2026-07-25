@@ -33,7 +33,8 @@ describe("GET /v1/status", () => {
     expect(body.state).toBe("starting")
     expect(body.bindAddress).toBe("127.0.0.1")
     expect(body.acp).toEqual({ state: "stopped", activeSessions: 0 })
-    expect(body.uptimeSeconds).toBeGreaterThanOrEqual(0)
+    expect(body.startedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+    expect("uptimeSeconds" in body).toBe(false)
 
     await app.close()
   })

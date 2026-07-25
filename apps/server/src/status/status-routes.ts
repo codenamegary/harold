@@ -22,7 +22,6 @@ export const registerStatusRoutes = (
       bindAddress: "127.0.0.1",
       port: resolvePort(app, config),
       startedAt: runtime.startedAt,
-      uptimeSeconds: runtime.uptimeSeconds(),
       acp: {
         state: "stopped",
         activeSessions: 0,

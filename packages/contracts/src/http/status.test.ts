@@ -7,7 +7,6 @@ const validStatus = {
   bindAddress: "127.0.0.1",
   port: 3847,
   startedAt: "2026-07-24T12:00:00.000Z",
-  uptimeSeconds: 42,
   acp: {
     state: "stopped",
     activeSessions: 0,
@@ -28,6 +27,12 @@ describe("StatusSchema", () => {
   test("rejects prototype connection mode fields", () => {
     expect(() =>
       StatusSchema.parse({ ...validStatus, connectionMode: "local" }),
+    ).toThrow();
+  });
+
+  test("rejects server-computed uptime fields", () => {
+    expect(() =>
+      StatusSchema.parse({ ...validStatus, uptimeSeconds: 42 }),
     ).toThrow();
   });
 });

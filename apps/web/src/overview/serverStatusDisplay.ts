@@ -1,8 +1,6 @@
-import { Status } from "contracts/http/status"
+import { AgentServerState } from "contracts/http/status"
 import { ConnectionPhase } from "../connection/connectionPhase"
 import { formatUptime } from "./formatUptime"
-
-type RelayState = Status["state"]
 
 type ServerStatusDisplay = {
   value: string
@@ -10,14 +8,14 @@ type ServerStatusDisplay = {
   uptime: string | null
 }
 
-const relayStateLabels: Record<RelayState, string> = {
+const agentServerStateLabels: Record<AgentServerState, string> = {
   starting: "Starting",
   online: "Online",
   shutting_down: "Shutting down",
   offline: "Offline",
 }
 
-const relayStatePillLabels: Record<RelayState, string> = {
+const agentServerStatePillLabels: Record<AgentServerState, string> = {
   starting: "Starting",
   online: "Healthy",
   shutting_down: "Shutting down",
@@ -26,8 +24,8 @@ const relayStatePillLabels: Record<RelayState, string> = {
 
 export const serverStatusDisplay = (
   phase: ConnectionPhase,
-  state: RelayState | null,
-  uptimeSeconds: number | null,
+  state: AgentServerState | null,
+  elapsedSeconds: number | null,
 ): ServerStatusDisplay => {
   if (phase === "loading") {
     return {
@@ -45,7 +43,7 @@ export const serverStatusDisplay = (
     }
   }
 
-  if (state === null || uptimeSeconds === null) {
+  if (state === null || elapsedSeconds === null) {
     return {
       value: "Checking…",
       pill: null,
@@ -54,8 +52,8 @@ export const serverStatusDisplay = (
   }
 
   return {
-    value: relayStateLabels[state],
-    pill: relayStatePillLabels[state],
-    uptime: formatUptime(uptimeSeconds),
+    value: agentServerStateLabels[state],
+    pill: agentServerStatePillLabels[state],
+    uptime: formatUptime(elapsedSeconds),
   }
 }
