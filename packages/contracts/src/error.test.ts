@@ -7,19 +7,30 @@ import {
 } from "./error";
 
 describe("ValidationProblemSchema", () => {
-  test("accepts RFC 9457 pointer-style field errors", () => {
+  test("accepts localization codes for field errors", () => {
     const problem = {
       type: PROBLEM_TYPES.validationError,
       title: "Request validation failed",
       status: 400,
-      detail: "One or more fields are invalid.",
+      code: "validation.request.invalid",
       errors: [
-        { pointer: "#/name", detail: "Required" },
-        { pointer: "#/path", detail: "Must be an absolute path" },
+        { pointer: "#/name", code: "validation.field.required" },
+        { pointer: "#/path", code: "validation.field.path.absolute" },
       ],
     };
 
     expect(ValidationProblemSchema.parse(problem)).toEqual(problem);
+  });
+
+  test("rejects human-readable detail strings on field errors", () => {
+    expect(() =>
+      ValidationProblemSchema.parse({
+        type: PROBLEM_TYPES.validationError,
+        title: "Request validation failed",
+        code: "validation.request.invalid",
+        errors: [{ pointer: "#/name", detail: "Required" }],
+      }),
+    ).toThrow();
   });
 
   test("rejects validation problems without errors", () => {
@@ -27,6 +38,7 @@ describe("ValidationProblemSchema", () => {
       ValidationProblemSchema.parse({
         type: PROBLEM_TYPES.validationError,
         title: "Request validation failed",
+        code: "validation.request.invalid",
         errors: [],
       }),
     ).toThrow();
@@ -45,7 +57,7 @@ describe("ValidationProblemSchema", () => {
 });
 
 describe("InternalProblemSchema", () => {
-  test("accepts a problem without extensions", () => {
+  test("accepts a problem with human-readable detail", () => {
     const problem = {
       type: PROBLEM_TYPES.internalError,
       title: "Internal server error",
@@ -62,7 +74,8 @@ describe("ProblemDetailsSchema", () => {
     const validation = {
       type: PROBLEM_TYPES.validationError,
       title: "Request validation failed",
-      errors: [{ pointer: "#/name", detail: "Required" }],
+      code: "validation.request.invalid",
+      errors: [{ pointer: "#/name", code: "validation.field.required" }],
     };
 
     const internal = {

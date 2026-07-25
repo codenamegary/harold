@@ -7,22 +7,29 @@ export const PROBLEM_TYPES = {
 
 export const ProblemErrorSchema = z.object({
   pointer: z.string().min(1),
-  detail: z.string().min(1),
+  code: z.string().min(1),
 });
 
-const SharedProblemFieldsSchema = z.object({
+const InternalProblemFieldsSchema = z.object({
   title: z.string().min(1),
   status: z.number().int().optional(),
   detail: z.string().optional(),
   instance: z.string().optional(),
 });
 
-export const ValidationProblemSchema = SharedProblemFieldsSchema.extend({
+const ValidationProblemFieldsSchema = z.object({
+  title: z.string().min(1),
+  status: z.number().int().optional(),
+  code: z.string().min(1),
+  instance: z.string().optional(),
+});
+
+export const ValidationProblemSchema = ValidationProblemFieldsSchema.extend({
   type: z.literal(PROBLEM_TYPES.validationError),
   errors: z.array(ProblemErrorSchema).min(1),
 }).strict();
 
-export const InternalProblemSchema = SharedProblemFieldsSchema.extend({
+export const InternalProblemSchema = InternalProblemFieldsSchema.extend({
   type: z.literal(PROBLEM_TYPES.internalError),
 }).strict();
 
