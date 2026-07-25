@@ -1,7 +1,7 @@
 # Milestone 1: Core Local Operator
 
 Status: Planned  
-Roadmap: [Relay delivery roadmap](roadmap.md)
+Roadmap: [Agent Server delivery roadmap](roadmap.md)
 
 ## Value
 
@@ -10,7 +10,7 @@ work to independent, durable Cursor agent sessions through a real local web
 console.
 
 Milestone 1 replaces the simulated prototype with a production-shaped
-loopback-only system. Relay owns ACP sessions, persists enough protocol history
+loopback-only system. Agent Server owns ACP sessions, persists enough protocol history
 to replay and recover them, and exposes one versioned API and reconnectable
 event stream for the web console and future clients.
 
@@ -76,17 +76,17 @@ into `packages` only when it has a genuine second consumer.
 
 ### Cursor ACP
 
-- Relay owns one supervised `agent acp` subprocess and multiplexes sessions by
+- Agent Server owns one supervised `agent acp` subprocess and multiplexes sessions by
   internal ACP session ID.
 - Negotiate capabilities and protocol version at startup.
 - Implement current Cursor ACP v1 behind a small internal boundary:
   `session/new`, capability-gated `session/load`, `session/prompt`,
   `session/update`, `session/cancel`, and capability-gated `session/close`.
-- Preserve a stable Relay API so ACP v2 `session/resume` can be added without
+- Preserve a stable Agent Server API so ACP v2 `session/resume` can be added without
   changing client contracts.
 - Automatically select the agent-provided one-time allow option for
   `session/request_permission`. Journal the interaction and fail explicitly if
-  no permissive option exists. Do not add Relay approval policy or UI.
+  no permissive option exists. Do not add Agent Server approval policy or UI.
 
 ### Event journal
 
@@ -94,7 +94,7 @@ Maintain an append-only journal containing:
 
 - Session-scoped outbound ACP traffic
 - Session-scoped inbound ACP traffic
-- Relay session and turn lifecycle records
+- Agent Server session and turn lifecycle records
 - Session-associated failures
 
 Each record includes a durable global cursor, session ID, per-session sequence,
@@ -126,7 +126,7 @@ Deliver:
 - Cancel the active turn without ending its session.
 - Run independent sessions concurrently in the background.
 - Reconnect the web client and replay missed durable events.
-- Resume the same underlying Cursor conversation after Relay restart when
+- Resume the same underlying Cursor conversation after Agent Server restart when
   Cursor supports loading.
 - Preserve history and mark sessions honestly non-resumable when loading is
   unsupported or rejected.
@@ -159,7 +159,7 @@ available.
 
 The final end-to-end journey registers a folder, creates and uses two sessions,
 streams output, switches without interrupting background work, cancels a turn,
-restarts Relay, reconnects and replays events, resumes supported context, and
+restarts Agent Server, reconnects and replays events, resumes supported context, and
 verifies honest fallback when resume is unavailable.
 
 ## Completion boundary
@@ -176,6 +176,6 @@ Out of scope:
 - Folder browsing and repository cloning
 - GitHub and GitLab providers
 - Workspace pause
-- Relay-level approvals
+- Agent Server-level approvals
 - Transcript search, export, branching, and duplication
 - Installers, desktop shells, and containers
