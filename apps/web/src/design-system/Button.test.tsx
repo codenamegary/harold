@@ -1,0 +1,41 @@
+import { describe, expect, test } from "bun:test"
+import { render } from "@testing-library/react"
+import { Button } from "./Button"
+
+describe("Button", () => {
+  test("primary variant uses lime background", () => {
+    const { getByRole } = render(<Button variant="primary">Save</Button>)
+
+    expect(getByRole("button", { name: "Save" })).toHaveClass("bg-lime")
+  })
+
+  test("secondary variant uses panel styling", () => {
+    const { getByRole } = render(<Button variant="secondary">Cancel</Button>)
+
+    expect(getByRole("button", { name: "Cancel" })).toHaveClass("bg-[#12161d]")
+  })
+
+  test("text variant uses transparent background", () => {
+    const { getByRole } = render(<Button variant="text">Back</Button>)
+
+    expect(getByRole("button", { name: "Back" })).toHaveClass("bg-transparent")
+  })
+
+  test("disabled button is not interactive", () => {
+    const { getByRole } = render(<Button disabled>Save</Button>)
+
+    const button = getByRole("button", { name: "Save" })
+    expect(button).toBeDisabled()
+    expect(button).toHaveClass("opacity-50")
+    expect(button).toHaveClass("pointer-events-none")
+  })
+
+  test("aria-disabled button exposes aria-disabled", () => {
+    const { getByRole } = render(<Button aria-disabled>Save</Button>)
+
+    const button = getByRole("button", { name: "Save" })
+    expect(button).toHaveAttribute("aria-disabled", "true")
+    expect(button).toHaveClass("opacity-50")
+    expect(button).toHaveClass("pointer-events-none")
+  })
+})
