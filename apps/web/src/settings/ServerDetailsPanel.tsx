@@ -1,5 +1,5 @@
 import React from "react"
-import { useConnection } from "../connection/ConnectionProvider"
+import { useConnection } from "../connection/useConnection"
 import { Button } from "../design-system/Button"
 import { Panel } from "../design-system/Panel"
 import { serverDetailsDisplayByPhase } from "./serverDetailsDisplay"

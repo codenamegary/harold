@@ -1,7 +1,7 @@
 import { useAtomValue, useSetAtom } from "jotai"
 import React, { useEffect } from "react"
-import { useConnection } from "../connection/ConnectionProvider"
 import { serverElapsedSecondsAtom, serverStartedAtAtom } from "../connection/serverUptimeAtoms"
+import { useConnection } from "../connection/useConnection"
 import { MetricCard } from "../design-system/MetricCard"
 import { StatusPill } from "../design-system/StatusPill"
 import { serverStatusDisplay } from "./serverStatusDisplay"

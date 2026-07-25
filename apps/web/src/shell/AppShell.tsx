@@ -1,7 +1,7 @@
 import React, { useState } from "react"
 import { Link, Outlet, useLocation } from "react-router"
 import { connectionPhaseChromeByPhase } from "../connection/connectionPhase"
-import { useConnection } from "../connection/ConnectionProvider"
+import { useConnection } from "../connection/useConnection"
 import { IconButton } from "../design-system/IconButton"
 import { StatusDot } from "../design-system/StatusDot"
 import { SidebarNavLink } from "./SidebarNavLink"

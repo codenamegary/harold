@@ -1,25 +1,7 @@
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from "react"
-import { Status } from "contracts/http/status"
+import React, { useCallback, useEffect, useMemo, useState } from "react"
+import { ConnectionContext } from "./connectionContext"
+import { ConnectionState } from "./connectionState"
 import { fetchStatus } from "./fetchStatus"
-
-export type ConnectionState =
-  | { phase: "loading" }
-  | { phase: "online"; status: Status }
-  | { phase: "unreachable" }
-
-type ConnectionContextValue = {
-  connection: ConnectionState
-  refetch: () => Promise<void>
-}
-
-const ConnectionContext = createContext<ConnectionContextValue | null>(null)
 
 export const ConnectionProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -52,14 +34,4 @@ export const ConnectionProvider: React.FC<{ children: React.ReactNode }> = ({
   return (
     <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>
   )
-}
-
-export const useConnection = (): ConnectionContextValue => {
-  const context = useContext(ConnectionContext)
-
-  if (context === null) {
-    throw new Error("useConnection must be used within ConnectionProvider")
-  }
-
-  return context
 }
