@@ -20,4 +20,10 @@ describe("StatusDot", () => {
 
     expect(getByLabelText("offline status")).toHaveClass("bg-offline")
   })
+
+  test("error variant uses danger red", () => {
+    const { getByLabelText } = render(<StatusDot variant="error" />)
+
+    expect(getByLabelText("error status")).toHaveClass("bg-danger")
+  })
 })

@@ -1,6 +1,6 @@
 import React, { ComponentPropsWithoutRef } from "react"
 
-type StatusDotVariant = "online" | "warning" | "offline"
+type StatusDotVariant = "online" | "warning" | "offline" | "error"
 
 type StatusDotProps = {
   variant: StatusDotVariant
@@ -10,6 +10,7 @@ const variantClasses: Record<StatusDotVariant, string> = {
   online: "bg-lime shadow-[0_0_9px] shadow-lime/40",
   warning: "bg-amber",
   offline: "bg-offline",
+  error: "bg-danger shadow-[0_0_9px] shadow-danger/40",
 }
 
 export const StatusDot: React.FC<StatusDotProps> = ({

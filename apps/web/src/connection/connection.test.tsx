@@ -97,7 +97,7 @@ describe("connection shell wiring", () => {
       expect(getByText("API unreachable")).toBeInTheDocument()
     })
 
-    expect(within(sidebar).getByLabelText("offline status")).toBeInTheDocument()
+    expect(within(sidebar).getByLabelText("error status")).toBeInTheDocument()
     expect(queryByText("127.0.0.1:3847")).not.toBeInTheDocument()
     expect(queryByText("LIVE")).not.toBeInTheDocument()
     expect(queryByText("demo data")).not.toBeInTheDocument()
