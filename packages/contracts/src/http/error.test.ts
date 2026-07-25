@@ -6,6 +6,17 @@ import {
   ValidationProblemSchema,
 } from "./error";
 
+describe("PROBLEM_TYPES", () => {
+  test("uses agent-server.local problem type URLs", () => {
+    expect(PROBLEM_TYPES.validationError).toBe(
+      "https://agent-server.local/problems/validation-error",
+    )
+    expect(PROBLEM_TYPES.internalError).toBe(
+      "https://agent-server.local/problems/internal-error",
+    )
+  })
+})
+
 describe("ValidationProblemSchema", () => {
   test("accepts localization codes for field errors", () => {
     const problem = {

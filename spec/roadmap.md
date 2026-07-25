@@ -1,21 +1,21 @@
-# Relay Delivery Roadmap
+# Agent Server Delivery Roadmap
 
 Status: Confirmed  
 Last updated: 2026-07-25
 
 ## Product direction
 
-Relay will turn the prototype into a working local agent server one complete
+Agent Server will turn the prototype into a working local agent server one complete
 operator outcome at a time. The whole product shell remains visible and evolves
 throughout development, but unfinished screens must be clearly read-only rather
 than simulate success.
 
 The local web console and future Android client will use the same versioned API
-and reconnectable event stream. Relay alone owns ACP sessions.
+and reconnectable event stream. Agent Server alone owns ACP sessions.
 
 ## Target repository layout
 
-Relay will use a lean monorepo:
+Agent Server will use a lean monorepo:
 
 ```text
 /
@@ -84,14 +84,14 @@ Deliver:
 - Rename, end/archive, and resume sessions.
 - Exchange multiple chat turns with streamed output.
 - Cancel the current turn without ending the session.
-- Resume the same underlying agent and its context after Relay restarts.
-- Persist raw ACP events with only the Relay metadata needed to route and replay
+- Resume the same underlying agent and its context after Agent Server restarts.
+- Persist raw ACP events with only the Agent Server metadata needed to route and replay
   them: session ID, sequence number, timestamp, and protocol version.
 - Expose all functionality through the shared client API and event stream.
 
 Acceptance boundary:
 
-- Relay does not intercept or limit agent read, write, command, or tool access.
+- Agent Server does not intercept or limit agent read, write, command, or tool access.
 - Only existing local folders are supported.
 - Folder browsing, repository cloning, provider integrations, and per-workspace
   policy are deferred.
@@ -154,12 +154,12 @@ Acceptance boundary:
 
 ### 3. Remote access
 
-**Value:** A paired client can reach Relay through user-managed HTTPS.
+**Value:** A paired client can reach Agent Server through user-managed HTTPS.
 
 Deliver:
 
 - Support a generic HTTPS reverse-proxy deployment.
-- Configure the externally advertised Relay URL.
+- Configure the externally advertised Agent Server URL.
 - Perform real reachability, TLS, and device-authentication checks.
 - Report actionable setup failures instead of simulated success.
 
@@ -195,7 +195,7 @@ operation.
 
 Deliver:
 
-- Real Relay server and ACP runtime health.
+- Real Agent Server and ACP runtime health.
 - Session, device, and pairing activity.
 - Running, idle, ended, and error states.
 - Useful latency and failure signals.
@@ -208,7 +208,7 @@ Acceptance boundary:
 
 ### 6. Runtime configuration
 
-**Value:** The operator can configure Relay without editing source code.
+**Value:** The operator can configure Agent Server without editing source code.
 
 Deliver:
 
@@ -258,15 +258,15 @@ An increment is not complete when its UI merely simulates the intended result.
 
 ## Explicit cuts and deferrals
 
-- Relay-level approval interception and approval policies.
+- Agent Server-level approval interception and approval policies.
 - Workspace pause.
 - Separate web and Android server interfaces.
 - Packaged installers, desktop shells, and containers during initial development.
 - Session transcript search, export, branching, and duplication.
 - GitHub or GitLab pull request, issue, CI, and synchronization workflows.
 
-If the underlying agent emits its own interaction or approval event, Relay may
-stream it transparently, but Relay will not introduce an independent approval
+If the underlying agent emits its own interaction or approval event, Agent Server may
+stream it transparently, but Agent Server will not introduce an independent approval
 gate.
 
 ## Dependency chain

@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 export const PROBLEM_TYPES = {
-  validationError: "https://relay.local/problems/validation-error",
-  internalError: "https://relay.local/problems/internal-error",
+  validationError: "https://agent-server.local/problems/validation-error",
+  internalError: "https://agent-server.local/problems/internal-error",
 } as const;
 
 export const ProblemErrorSchema = z.object({

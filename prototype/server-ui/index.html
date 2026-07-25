@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
-    <title>Relay — Cursor ACP Console</title>
+    <title>Agent Server — Cursor ACP Console</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -44,7 +44,7 @@
             <span></span><span></span><span></span>
           </div>
           <div>
-            <div class="brand-name">Relay</div>
+            <div class="brand-name">Agent Server</div>
             <div class="brand-subtitle">ACP console</div>
           </div>
         </div>
@@ -80,7 +80,7 @@
           <button class="nav-item subtle" data-section="settings">
             <span class="nav-icon">⚙</span><span>Settings</span>
           </button>
-          <div class="version-row"><span>relay/acp</span><span>v0.8.4</span></div>
+          <div class="version-row"><span>agent-server/acp</span><span>v0.8.4</span></div>
         </div>
       </aside>
 
@@ -217,7 +217,7 @@
                       <div class="choice-meta"><span class="status-pill violet">Remote access</span><code>HTTPS required</code></div>
                     </button>
                   </div>
-                  <div class="info-callout"><span>i</span><p><strong>Your agent stays local.</strong> Relay keeps the workspace and Cursor CLI on this machine. Secure the proxy-to-home hop with WireGuard or another encrypted tunnel.</p></div>
+                  <div class="info-callout"><span>i</span><p><strong>Your agent stays local.</strong> Agent Server keeps the workspace and Cursor CLI on this machine. Secure the proxy-to-home hop with WireGuard or another encrypted tunnel.</p></div>
                   <div class="setup-actions"><span></span><button class="primary-button next-step">Continue <span>→</span></button></div>
                 </div>
 
@@ -251,17 +251,17 @@
                 </div>
 
                 <div class="setup-page" data-setup-page="4">
-                  <div class="setup-heading"><span class="step-icon">◇</span><div><h3>Pair an Android device</h3><p>Scan the code or enter the six-character code in the Relay app.</p></div></div>
+                  <div class="setup-heading"><span class="step-icon">◇</span><div><h3>Pair an Android device</h3><p>Scan the code or enter the six-character code in the Agent Server app.</p></div></div>
                   <div class="pair-layout">
                     <div class="qr-card" aria-label="Decorative QR pairing code">
                       <div class="qr-grid" id="qr-grid"></div>
-                      <span class="qr-logo">R</span>
+                      <span class="qr-logo">A</span>
                     </div>
                     <div class="pair-details">
                       <label>PAIRING CODE</label>
                       <div class="pair-code"><strong id="pair-code">RLY-8K2</strong><button class="copy-button" data-copy-target="pair-code">Copy</button></div>
                       <p>Expires in <strong id="pair-expiry">09:42</strong>. Keep this page open until pairing is complete.</p>
-                      <ol><li>Open Relay on Android</li><li>Select <strong>Pair a server</strong></li><li>Scan this code or enter the pairing code</li></ol>
+                      <ol><li>Open Agent Server on Android</li><li>Select <strong>Pair a server</strong></li><li>Scan this code or enter the pairing code</li></ol>
                     </div>
                   </div>
                   <div class="pair-wait"><span class="spinner"></span><div><strong>Waiting for a device…</strong><small>Listening securely on your external endpoint</small></div><button class="text-button" id="regenerate-code">Regenerate</button></div>
@@ -352,7 +352,7 @@
                 <div>
                   <div class="section-kicker">WORKSPACE SOURCES</div>
                   <h3>Workspace provider</h3>
-                  <p>Control where Relay can create workspaces and which folders agents are allowed to access.</p>
+                  <p>Control where Agent Server can create workspaces and which folders agents are allowed to access.</p>
                 </div>
                 <span class="status-pill success">1 configured</span>
               </div>
