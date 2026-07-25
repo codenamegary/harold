@@ -1,18 +1,15 @@
-import { RelayStateSchema } from "contracts/http/status"
-import { z } from "zod"
-
-export type RelayState = z.infer<typeof RelayStateSchema>
+import { AgentServerState } from "contracts/http/status"
 
 export type Runtime = {
   readonly version: string
   readonly startedAt: string
-  getState: () => RelayState
-  setState: (state: RelayState) => void
+  getState: () => AgentServerState
+  setState: (state: AgentServerState) => void
 }
 
 export const createRuntime = (version: string): Runtime => {
   const startedAt = new Date().toISOString()
-  const stateCell = { value: "starting" as RelayState }
+  const stateCell = { value: "starting" as AgentServerState }
 
   return {
     version,

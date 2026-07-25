@@ -1,5 +1,5 @@
 import { atom } from "jotai"
-import { elapsedSecondsFromStartedAt } from "../overview/elapsedSecondsFromStartedAt"
+import { elapsedSecondsFromStartedAt } from "./elapsedSecondsFromStartedAt"
 import { nowAtom } from "./nowAtom"
 
 export const serverStartedAtAtom = atom<string | null>(null)
