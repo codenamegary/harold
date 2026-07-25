@@ -1,7 +1,12 @@
 import React from "react"
+import { WorkspaceCardGrid } from "../../workspace/WorkspaceCardGrid"
+import { WorkspacesPageIntro } from "../../workspace/WorkspacesPageIntro"
+import { WorkspacesToolbar } from "../../workspace/WorkspacesToolbar"
 
 export const WorkspacesPage: React.FC = () => (
   <main>
-    <h1>Workspaces</h1>
+    <WorkspacesPageIntro />
+    <WorkspacesToolbar />
+    <WorkspaceCardGrid />
   </main>
 )
