@@ -4,11 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    "./status": "./src/status.ts",
-    "./error": "./src/error.ts",
-    "./workspace": "./src/workspace.ts",
-    "./session": "./src/session.ts",
-    "./event": "./src/event.ts"
+    "./http/status": "./src/http/status.ts",
+    "./http/error": "./src/http/error.ts",
+    "./http/workspace": "./src/http/workspace.ts",
+    "./http/session": "./src/http/session.ts",
+    "./events/event": "./src/events/event.ts"
   },
   "scripts": {
     "lint": "oxlint",

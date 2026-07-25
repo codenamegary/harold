@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { CursorSchema, IdSchema, TimestampSchema } from "./primitives";
-import { RelayStateSchema } from "./status";
-import { SessionStateSchema } from "./session";
-import { WorkspaceStateSchema } from "./workspace";
+import { IdSchema, TimestampSchema } from "../http/primitives";
+import { RelayStateSchema } from "../http/status";
+import { SessionStateSchema } from "../http/session";
+import { WorkspaceStateSchema } from "../http/workspace";
+import { CursorSchema } from "./primitives";
 
 const EventScopeSchema = z.object({
   cursor: CursorSchema,
