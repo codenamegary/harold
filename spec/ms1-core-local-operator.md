@@ -16,15 +16,16 @@ event stream for the web console and future clients.
 
 ## Delivery structure
 
-Milestone 1 is delivered as seven independently verifiable epics on GitHub:
+Milestone 1 is delivered as eight independently verifiable epics on GitHub:
 
 1. [Workspace, contracts, and server foundation](https://github.com/codenamegary/agent-server/issues/1)
-2. [Durable workspace registry](https://github.com/codenamegary/agent-server/issues/2)
-3. [ACP supervision and session lifecycle](https://github.com/codenamegary/agent-server/issues/4)
-4. [Journal and reconnectable event stream](https://github.com/codenamegary/agent-server/issues/3)
-5. [Streamed turns and cancellation](https://github.com/codenamegary/agent-server/issues/5)
-6. [Concurrent sessions and restart recovery](https://github.com/codenamegary/agent-server/issues/6)
-7. [Operator console and hardening](https://github.com/codenamegary/agent-server/issues/7)
+2. [Operator console shell](https://github.com/codenamegary/agent-server/issues/16)
+3. [Durable workspace registry](https://github.com/codenamegary/agent-server/issues/2)
+4. [ACP supervision and session lifecycle](https://github.com/codenamegary/agent-server/issues/4)
+5. [Journal and reconnectable event stream](https://github.com/codenamegary/agent-server/issues/3)
+6. [Streamed turns and cancellation](https://github.com/codenamegary/agent-server/issues/5)
+7. [Concurrent sessions and restart recovery](https://github.com/codenamegary/agent-server/issues/6)
+8. [Operator console and hardening](https://github.com/codenamegary/agent-server/issues/7)
 
 Each epic must satisfy its own acceptance, verification, migration, error, and
 recovery criteria before the next dependent epic is considered complete.
@@ -163,7 +164,7 @@ verifies honest fallback when resume is unavailable.
 
 ## Completion boundary
 
-Milestone 1 is complete only when all seven epics pass their checks and the
+Milestone 1 is complete only when all eight epics pass their checks and the
 loopback operator journey works without simulated success.
 
 Out of scope:

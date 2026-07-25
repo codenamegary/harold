@@ -1,7 +1,7 @@
 # Relay Delivery Roadmap
 
 Status: Confirmed  
-Last updated: 2026-07-24
+Last updated: 2026-07-25
 
 ## Product direction
 
@@ -96,6 +96,42 @@ Acceptance boundary:
 - Folder browsing, repository cloning, provider integrations, and per-workspace
   policy are deferred.
 - The project may continue to run from source during this phase.
+
+#### Web console migration
+
+Migrate `prototype/server-ui` into `apps/web` before wiring backend slices.
+The whole product shell stays visible from the start. Each epic enables its
+slice. Everything else stays clearly read-only.
+
+Rules:
+
+- Match prototype layout, navigation, and visual design in React, TypeScript,
+  Vite, and Tailwind.
+- Organize `apps/web` into vertical slices: workspace, session, chat, and
+  connection.
+- Do not copy prototype mock-success fallbacks, demo data, or simulated timers.
+- Disabled controls must look disabled and explain that the feature is not live
+  yet.
+- Later epics turn on slices by wiring them to the real API and event stream.
+
+#### MS1 epic delivery order
+
+Milestone 1 ships eight epics. Epic numbers are logical order, not GitHub issue
+numbers.
+
+| Epic | Title | Delivers |
+|------|-------|----------|
+| 01 | Workspace, contracts, and server foundation | Bun monorepo, shared contracts, loopback Fastify server |
+| 02 | Operator console shell | Prototype migrated to `apps/web`. Full shell visible. Slices disabled until their epic lands. |
+| 03 | Durable workspace registry | SQLite, migrations, `/v1/workspaces` CRUD, workspace slice wired to API |
+| 04 | ACP supervision and session lifecycle | Supervised ACP process, session create/list/select/rename/archive |
+| 05 | Journal and reconnectable event stream | Append-only journal, WebSocket `/v1/events` with cursor replay |
+| 06 | Streamed turns and cancellation | Multi-turn chat, streaming output, turn cancel, chat slice live |
+| 07 | Concurrent sessions and restart recovery | Background sessions, restart resume, recovery UI states |
+| 08 | Operator console hardening | Localization, E2E journey, polish, remove remaining prototype gaps |
+
+Epic 02 is UI-only. It does not require a working backend beyond what Epic 01
+already provides. Epics 03 onward enable server-backed behavior slice by slice.
 
 ### 2. Trusted devices
 
