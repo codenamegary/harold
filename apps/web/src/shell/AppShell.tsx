@@ -33,6 +33,8 @@ export const AppShell: React.FC = () => {
     connection.phase === "online"
       ? `${connection.status.bindAddress}:${connection.status.port}`
       : null
+  const sidebarVersion =
+    connection.phase === "online" ? connection.status.version : "—"
 
   const closeSidebar = () => setSidebarOpen(false)
   const toggleSidebar = () => setSidebarOpen((open) => !open)
@@ -71,7 +73,7 @@ export const AppShell: React.FC = () => {
           <SidebarNavLink to="/" end icon={<span>⌁</span>}>
             Overview
           </SidebarNavLink>
-          <SidebarNavLink to="/connect" icon={<span>↗</span>} badge="2">
+          <SidebarNavLink to="/connect" icon={<span>↗</span>}>
             Connect
           </SidebarNavLink>
           <SidebarNavLink to="/workspaces" icon={<span>⌘</span>}>
@@ -105,7 +107,7 @@ export const AppShell: React.FC = () => {
           </SidebarNavLink>
           <div className="flex justify-between px-[9px] pt-[13px] font-mono text-2xs text-[#414955]">
             <span>agent-server</span>
-            <span>v0.8.4</span>
+            <span>{sidebarVersion}</span>
           </div>
         </div>
       </aside>
