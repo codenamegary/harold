@@ -9,7 +9,7 @@ type StatusDotProps = {
 const variantClasses: Record<StatusDotVariant, string> = {
   online: "bg-lime shadow-[0_0_9px] shadow-lime/40",
   warning: "bg-amber",
-  offline: "bg-offline",
+  offline: "bg-danger shadow-[0_0_9px] shadow-danger/40",
 }
 
 export const StatusDot: React.FC<StatusDotProps> = ({

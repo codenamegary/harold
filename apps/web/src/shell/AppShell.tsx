@@ -127,7 +127,11 @@ export const AppShell: React.FC = () => {
           </div>
           <div className="flex items-center gap-2 max-[820px]:ml-auto">
             <div
-              className="flex h-8 items-center gap-[7px] rounded-[7px] border border-line px-2.5 text-xs text-muted max-[820px]:hidden"
+              className={`flex h-8 items-center gap-[7px] rounded-[7px] border px-2.5 text-xs max-[820px]:hidden ${
+                phaseChrome.topbarAlert
+                  ? "border-danger/25 bg-danger/5 text-danger"
+                  : "border-line text-muted"
+              }`}
               title="JSON Server API status"
             >
               <StatusDot variant={phaseChrome.sidebarDotVariant} />
