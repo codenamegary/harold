@@ -19,14 +19,23 @@ const validStatus = {
 
 const originalFetch = globalThis.fetch
 
-const renderSettingsPage = () =>
-  render(
+const renderSettingsPage = async () => {
+  const view = render(
     <MemoryRouter initialEntries={["/settings"]}>
       <ConnectionProvider>
         <SettingsPage />
       </ConnectionProvider>
     </MemoryRouter>,
   )
+
+  await waitFor(() => {
+    expect(view.getByRole("region", { name: "Server details" })).toHaveTextContent(
+      "http://127.0.0.1:3847",
+    )
+  })
+
+  return view
+}
 
 describe("SettingsPage", () => {
   beforeEach(() => {
@@ -44,30 +53,30 @@ describe("SettingsPage", () => {
     globalThis.fetch = originalFetch
   })
 
-  test("renders page intro description", () => {
-    const { getByText } = renderSettingsPage()
+  test("renders page intro description", async () => {
+    const { getByText } = await renderSettingsPage()
 
     expect(getByText("Configure runtime behavior and diagnostics.")).toBeInTheDocument()
   })
 
-  test("filesystem provider is read-only with zero configured roots", () => {
-    const { getByText, getByRole } = renderSettingsPage()
+  test("filesystem provider is read-only with zero configured roots", async () => {
+    const { getByText, getByRole } = await renderSettingsPage()
 
     expect(getByText("0 configured")).toBeInTheDocument()
     expect(getByText("Local filesystem")).toBeInTheDocument()
     expect(getByRole("button", { name: "+ Allow another folder" })).toBeDisabled()
   })
 
-  test("github and gitlab providers are greyed with coming soon", () => {
-    const { getAllByText, getByRole } = renderSettingsPage()
+  test("github and gitlab providers are greyed with coming soon", async () => {
+    const { getAllByText, getByRole } = await renderSettingsPage()
 
     expect(getAllByText("Coming soon")).toHaveLength(2)
     expect(getByRole("button", { name: "Connect GitHub" })).toBeDisabled()
     expect(getByRole("button", { name: "Connect GitLab" })).toBeDisabled()
   })
 
-  test("runtime toggles are disabled and unchecked", () => {
-    const { getByRole } = renderSettingsPage()
+  test("runtime toggles are disabled and unchecked", async () => {
+    const { getByRole } = await renderSettingsPage()
 
     const allowLocalNetwork = getByRole("checkbox", { name: /allow local network/i })
     const detailedLogs = getByRole("checkbox", { name: /detailed request logs/i })
@@ -79,23 +88,18 @@ describe("SettingsPage", () => {
     expect(() => getByRole("checkbox", { name: /start with system/i })).toThrow()
   })
 
-  test("download diagnostics button is disabled", () => {
-    const { getByRole } = renderSettingsPage()
+  test("download diagnostics button is disabled", async () => {
+    const { getByRole } = await renderSettingsPage()
 
     expect(getByRole("button", { name: "Download diagnostics" })).toBeDisabled()
   })
 
   test("shows live endpoint and version when server is online", async () => {
-    const { getByRole } = renderSettingsPage()
-
-    await waitFor(() => {
-      expect(getByRole("region", { name: "Server details" })).toHaveTextContent(
-        "http://127.0.0.1:3847",
-      )
-    })
+    const { getByRole } = await renderSettingsPage()
 
     const details = getByRole("region", { name: "Server details" })
 
+    expect(details).toHaveTextContent("http://127.0.0.1:3847")
     expect(details).toHaveTextContent("0.1.0")
     expect(details).toHaveTextContent("—")
   })
@@ -103,7 +107,13 @@ describe("SettingsPage", () => {
   test("shows em dashes when server is unreachable", async () => {
     globalThis.fetch = mock(() => Promise.reject(new Error("network error"))) as typeof fetch
 
-    const { getByRole } = renderSettingsPage()
+    const { getByRole } = render(
+      <MemoryRouter initialEntries={["/settings"]}>
+        <ConnectionProvider>
+          <SettingsPage />
+        </ConnectionProvider>
+      </MemoryRouter>,
+    )
 
     await waitFor(() => {
       const details = getByRole("region", { name: "Server details" })

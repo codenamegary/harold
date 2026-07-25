@@ -1,6 +1,6 @@
 import React from "react"
 import { Link } from "react-router"
-import { useConnection } from "../connection/ConnectionProvider"
+import { useConnection } from "../connection/useConnection"
 import { SectionKicker } from "../design-system/SectionKicker"
 import { heroCopyByPhase } from "./overviewCopy"
 

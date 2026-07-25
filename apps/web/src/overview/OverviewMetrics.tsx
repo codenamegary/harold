@@ -1,5 +1,5 @@
 import React from "react"
-import { useConnection } from "../connection/ConnectionProvider"
+import { useConnection } from "../connection/useConnection"
 import { MetricCard } from "../design-system/MetricCard"
 import { StatusPill } from "../design-system/StatusPill"
 import { serverStatusDisplay } from "./serverStatusDisplay"
