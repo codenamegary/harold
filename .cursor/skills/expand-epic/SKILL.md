@@ -1,6 +1,6 @@
 ---
 name: expand-epic
-description: Expands a slim GitHub epic into a build spec, story index, and native sub-issues. Takes a milestone and epic issue number, fetches GitHub milestone and issue context via gh, reads local spec/ constraints, runs research and grilling, applies the global typescript-dev skill, then creates tracer-bullet sub-issues. Use when shaping an epic, turning a GitHub issue into stories, or preparing work for implement.
+description: Expands a slim GitHub epic into a build spec, story index, and native sub-issues. Takes a milestone and epic issue number, fetches GitHub milestone and issue context via gh, reads local spec/ constraints, runs research and grill-me, applies the global typescript-dev skill, then creates tracer-bullet sub-issues. Use when shaping an epic, turning a GitHub issue into stories, or preparing work for implement.
 disable-model-invocation: true
 ---
 
@@ -35,7 +35,7 @@ Do this before drafting research conclusions that touch code shape, and again be
 |-------|-------|------|
 | Research | `research` | Facts from primary sources. Post to epic comments, not local files. |
 | Research + build spec | `~/.cursor/skills/typescript-dev/SKILL.md` | TypeScript and architecture conventions. Read the file. |
-| Decisions | `grilling` | One question at a time. Look up facts. Wait for shared understanding. |
+| Decisions | `grill-me` | One question at a time. Look up facts. Wait for shared understanding. |
 | Stories | `to-tickets` | Tracer-bullet slices, blocking edges, ticket shape. |
 
 ## Invocation
@@ -84,7 +84,7 @@ Copy this checklist and track progress:
 Expand epic progress:
 - [ ] 1. Intake
 - [ ] 2. Research
-- [ ] 3. Grilling
+- [ ] 3. Grill-me
 - [ ] 4. Build spec (Gate A)
 - [ ] 5. Story index (Gate B)
 - [ ] 6. Sub-issues
@@ -135,9 +135,9 @@ Sources:
 
 Keep working on other items while background research runs. Fold confirmed facts into the build spec draft.
 
-### 3. Grilling
+### 3. Grill-me
 
-For each **needs decision** item, follow `grilling`:
+For each **needs decision** item, follow `grill-me`:
 
 - One question at a time.
 - Give a recommended answer.
@@ -179,7 +179,7 @@ Highest test seams. What each seam proves. Prior art in the repo.
 
 ### Implementation decisions
 
-Numbered list of technical choices made during grilling. No file paths unless a prototype snippet encodes a decision better than prose.
+Numbered list of technical choices made during grill-me. No file paths unless a prototype snippet encodes a decision better than prose.
 
 ### Out of scope
 
@@ -273,7 +273,7 @@ Rules:
 
 ## What this skill does not do
 
-- Implement stories (`implement`)
+- Implement stories (`implement-story`)
 - Create per-epic markdown in `spec/`
-- Skip grilling for open decisions
+- Skip grill-me for open decisions
 - Auto-publish without user approval at both gates
