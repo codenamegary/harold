@@ -1,4 +1,4 @@
-import { ReactNode, useId } from "react"
+import React, { ReactNode, useId } from "react"
 
 type ModalProps = {
   open: boolean
@@ -8,7 +8,7 @@ type ModalProps = {
   actions?: ReactNode
 }
 
-export const Modal = ({ open, onClose, title, children, actions }: ModalProps) => {
+export const Modal: React.FC<ModalProps> = ({ open, onClose, title, children, actions }) => {
   const titleId = useId()
 
   if (!open) {

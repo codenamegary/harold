@@ -1,14 +1,14 @@
-import { ComponentPropsWithoutRef, ReactNode } from "react"
+import React, { ComponentPropsWithoutRef, ReactNode } from "react"
 
 type FieldLabelProps = {
   children: ReactNode
 } & ComponentPropsWithoutRef<"label">
 
-export const FieldLabel = ({
+export const FieldLabel: React.FC<FieldLabelProps> = ({
   children,
   className = "",
   ...props
-}: FieldLabelProps) => (
+}) => (
   <label
     className={`mt-[17px] mb-[7px] block text-[9px] text-label ${className}`}
     {...props}

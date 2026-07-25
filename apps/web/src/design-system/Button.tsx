@@ -1,4 +1,4 @@
-import { ComponentPropsWithoutRef } from "react"
+import React, { ComponentPropsWithoutRef } from "react"
 
 type ButtonVariant = "primary" | "secondary" | "text"
 
@@ -15,14 +15,14 @@ const variantClasses: Record<ButtonVariant, string> = {
   text: "bg-transparent text-body-soft hover:text-lime",
 }
 
-export const Button = ({
+export const Button: React.FC<ButtonProps> = ({
   variant = "primary",
   className = "",
   disabled,
   "aria-disabled": ariaDisabled,
   children,
   ...props
-}: ButtonProps) => {
+}) => {
   const isDisabled = disabled === true || ariaDisabled === true
   const disabledClasses = isDisabled ? "opacity-50 pointer-events-none" : ""
 
