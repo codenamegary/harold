@@ -1,4 +1,4 @@
-import { ConnectionState } from "../connection/ConnectionProvider"
+import { ConnectionState } from "../connection/connectionState"
 
 export type ServerDetailsDisplay = {
   endpoint: string
