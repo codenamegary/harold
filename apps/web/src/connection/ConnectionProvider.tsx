@@ -7,12 +7,15 @@ import React, {
   useState,
 } from "react"
 import { Status } from "contracts/http/status"
+import { ConnectionPhase } from "./connectionPhase"
 import { fetchStatus } from "./fetchStatus"
 
 export type ConnectionState =
   | { phase: "loading" }
   | { phase: "online"; status: Status }
   | { phase: "unreachable" }
+
+export type { ConnectionPhase }
 
 type ConnectionContextValue = {
   connection: ConnectionState

@@ -1,5 +1,6 @@
 import React, { useState } from "react"
 import { Link, Outlet, useLocation } from "react-router"
+import { connectionPhaseChromeByPhase } from "../connection/connectionPhase"
 import { useConnection } from "../connection/ConnectionProvider"
 import { IconButton } from "../design-system/IconButton"
 import { StatusDot } from "../design-system/StatusDot"
@@ -19,32 +20,6 @@ const routeMetaByPath: Record<string, RouteMeta> = {
   "/settings": { eyebrow: "SERVER", title: "Settings" },
 }
 
-const sidebarDotVariant = (
-  phase: "loading" | "online" | "unreachable",
-): "online" | "warning" | "offline" => {
-  if (phase === "online") {
-    return "online"
-  }
-
-  if (phase === "loading") {
-    return "warning"
-  }
-
-  return "offline"
-}
-
-const topbarLabel = (phase: "loading" | "online" | "unreachable"): string => {
-  if (phase === "online") {
-    return "API connected"
-  }
-
-  if (phase === "unreachable") {
-    return "API unreachable"
-  }
-
-  return "Checking API"
-}
-
 export const AppShell: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { pathname } = useLocation()
@@ -53,6 +28,7 @@ export const AppShell: React.FC = () => {
   const eyebrow = routeMeta?.eyebrow ?? ""
   const title = routeMeta?.title ?? ""
   const connectionPhase = connection.phase
+  const phaseChrome = connectionPhaseChromeByPhase[connectionPhase]
   const instanceAddress =
     connection.phase === "online"
       ? `${connection.status.bindAddress}:${connection.status.port}`
@@ -112,13 +88,13 @@ export const AppShell: React.FC = () => {
         <div className="mt-auto">
           <div className="mb-2 rounded-lg border border-line-soft bg-[#0d1015] p-[11px]">
             <div className="flex items-center gap-[7px] text-[11px] text-[#bbc2cc]">
-              <StatusDot variant={sidebarDotVariant(connectionPhase)} />
+              <StatusDot variant={phaseChrome.sidebarDotVariant} />
               <span>Local instance</span>
-              {connectionPhase === "online" ? (
+              {phaseChrome.showLiveBadge ? (
                 <span className="ml-auto font-mono text-[8px] text-lime">LIVE</span>
               ) : null}
             </div>
-            {instanceAddress ? (
+            {phaseChrome.showLiveBadge && instanceAddress ? (
               <code className="mt-[7px] ml-3.5 block font-mono text-[9px] text-dim">
                 {instanceAddress}
               </code>
@@ -154,8 +130,8 @@ export const AppShell: React.FC = () => {
               className="flex h-8 items-center gap-[7px] rounded-[7px] border border-line px-2.5 text-[10px] text-muted max-[820px]:hidden"
               title="JSON Server API status"
             >
-              <StatusDot variant={sidebarDotVariant(connectionPhase)} />
-              <span>{topbarLabel(connectionPhase)}</span>
+              <StatusDot variant={phaseChrome.sidebarDotVariant} />
+              <span>{phaseChrome.topbarLabel}</span>
             </div>
             <IconButton aria-label="Refresh data" onClick={() => void refetch()}>
               ↻
