@@ -1,0 +1,25 @@
+{
+  "name": "contracts",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./http/status": "./src/http/status.ts",
+    "./http/error": "./src/http/error.ts",
+    "./http/workspace": "./src/http/workspace.ts",
+    "./http/session": "./src/http/session.ts",
+    "./events/event": "./src/events/event.ts"
+  },
+  "scripts": {
+    "lint": "oxlint",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "oxlint": "catalog:",
+    "typescript": "catalog:"
+  }
+}
