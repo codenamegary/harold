@@ -1,4 +1,4 @@
-import { ComponentPropsWithoutRef, ReactNode } from "react"
+import React, { ComponentPropsWithoutRef, ReactNode } from "react"
 
 type NavItemProps = {
   active?: boolean
@@ -7,7 +7,7 @@ type NavItemProps = {
   "aria-disabled"?: boolean
 } & ComponentPropsWithoutRef<"button">
 
-export const NavItem = ({
+export const NavItem: React.FC<NavItemProps> = ({
   active = false,
   icon,
   children,
@@ -15,7 +15,7 @@ export const NavItem = ({
   disabled,
   "aria-disabled": ariaDisabled,
   ...props
-}: NavItemProps) => {
+}) => {
   const isDisabled = disabled === true || ariaDisabled === true
   const disabledClasses = isDisabled ? "opacity-50 pointer-events-none" : ""
   const activeClasses = active

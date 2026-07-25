@@ -1,15 +1,15 @@
-import { ComponentPropsWithoutRef } from "react"
+import React, { ComponentPropsWithoutRef } from "react"
 
 type TextInputProps = {
   "aria-disabled"?: boolean
 } & ComponentPropsWithoutRef<"input">
 
-export const TextInput = ({
+export const TextInput: React.FC<TextInputProps> = ({
   className = "",
   disabled,
   "aria-disabled": ariaDisabled,
   ...props
-}: TextInputProps) => {
+}) => {
   const isDisabled = disabled === true || ariaDisabled === true
   const disabledClasses = isDisabled ? "opacity-50 pointer-events-none" : ""
 

@@ -1,4 +1,4 @@
-import { ComponentPropsWithoutRef } from "react"
+import React, { ComponentPropsWithoutRef } from "react"
 
 type StatusDotVariant = "online" | "warning" | "offline"
 
@@ -12,11 +12,11 @@ const variantClasses: Record<StatusDotVariant, string> = {
   offline: "bg-offline",
 }
 
-export const StatusDot = ({
+export const StatusDot: React.FC<StatusDotProps> = ({
   variant,
   className = "",
   ...props
-}: StatusDotProps) => (
+}) => (
   <span
     aria-label={`${variant} status`}
     className={`inline-block size-[7px] shrink-0 rounded-full ${variantClasses[variant]} ${className}`}

@@ -1,4 +1,4 @@
-import { ComponentPropsWithoutRef, ReactNode } from "react"
+import React, { ComponentPropsWithoutRef, ReactNode } from "react"
 
 type StatusPillVariant = "default" | "success" | "violet"
 
@@ -13,12 +13,12 @@ const variantClasses: Record<StatusPillVariant, string> = {
   violet: "border border-violet/16 bg-violet/12 text-violet-soft",
 }
 
-export const StatusPill = ({
+export const StatusPill: React.FC<StatusPillProps> = ({
   variant = "default",
   children,
   className = "",
   ...props
-}: StatusPillProps) => (
+}) => (
   <span
     className={`inline-flex min-h-5 items-center rounded-[5px] px-[7px] font-mono text-[8px] ${variantClasses[variant]} ${className}`}
     {...props}

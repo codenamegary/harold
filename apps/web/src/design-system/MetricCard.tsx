@@ -1,4 +1,4 @@
-import { ComponentPropsWithoutRef, ReactNode } from "react"
+import React, { ComponentPropsWithoutRef, ReactNode } from "react"
 
 type MetricAccent = "lime" | "violet"
 
@@ -12,13 +12,15 @@ const accentClasses: Record<MetricAccent, string> = {
   violet: "after:bg-violet/6",
 }
 
-export const MetricCard = ({
+export const MetricCard: React.FC<MetricCardProps> = ({
   accent,
   children,
   className = "",
   ...props
-}: MetricCardProps) => {
-  const accentClass = accent ? `relative overflow-hidden after:pointer-events-none after:absolute after:-right-6 after:-bottom-11 after:size-[110px] after:rounded-full after:blur-2xl ${accentClasses[accent]}` : ""
+}) => {
+  const accentClass = accent
+    ? `relative overflow-hidden after:pointer-events-none after:absolute after:-right-6 after:-bottom-11 after:size-[110px] after:rounded-full after:blur-2xl ${accentClasses[accent]}`
+    : ""
 
   return (
     <article

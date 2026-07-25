@@ -1,16 +1,16 @@
-import { ComponentPropsWithoutRef } from "react"
+import React, { ComponentPropsWithoutRef } from "react"
 
 type IconButtonProps = {
   "aria-disabled"?: boolean
 } & ComponentPropsWithoutRef<"button">
 
-export const IconButton = ({
+export const IconButton: React.FC<IconButtonProps> = ({
   className = "",
   disabled,
   "aria-disabled": ariaDisabled,
   children,
   ...props
-}: IconButtonProps) => {
+}) => {
   const isDisabled = disabled === true || ariaDisabled === true
   const disabledClasses = isDisabled ? "opacity-50 pointer-events-none" : ""
 

@@ -1,32 +1,46 @@
 import { describe, expect, test } from "bun:test"
-import { render } from "@testing-library/react"
-import { StatusSchema } from "contracts/http/status"
-import App from "./App"
+import { fireEvent, render, within } from "@testing-library/react"
+import { MemoryRouter } from "react-router"
+import { AppRoutes } from "./shell/AppRouter"
 
-describe("App", () => {
-  test("renders the agent server placeholder", () => {
-    const { getByRole, getByText } = render(<App />)
+const routePages = [
+  { path: "/", heading: "Overview" },
+  { path: "/connect", heading: "Connect" },
+  { path: "/workspaces", heading: "Workspaces" },
+  { path: "/devices", heading: "Devices" },
+  { path: "/chat", heading: "Agent playground" },
+  { path: "/settings", heading: "Settings" },
+] as const
 
-    expect(getByRole("main")).toBeInTheDocument()
-    expect(getByText("Agent Server")).toBeInTheDocument()
-  })
-})
+describe("routing", () => {
+  routePages.forEach(({ path, heading }) => {
+    test(`route ${path} renders page landmark and heading`, () => {
+      const { getByRole } = render(
+        <MemoryRouter initialEntries={[path]}>
+          <AppRoutes />
+        </MemoryRouter>,
+      )
 
-describe("contracts workspace dependency", () => {
-  test("StatusSchema parses a valid status payload", () => {
-    const status = StatusSchema.parse({
-      version: "0.1.0",
-      state: "online",
-      bindAddress: "127.0.0.1",
-      port: 3847,
-      startedAt: "2026-01-01T00:00:00.000Z",
-      uptimeSeconds: 42,
-      acp: {
-        state: "ready",
-        activeSessions: 0,
-      },
+      const main = getByRole("main")
+      expect(main).toBeInTheDocument()
+      expect(within(main).getByRole("heading", { level: 1, name: heading })).toBeInTheDocument()
     })
+  })
 
-    expect(status.port).toBe(3847)
+  test("mobile menu toggles sidebar open state", () => {
+    const { getByRole } = render(
+      <MemoryRouter initialEntries={["/"]}>
+        <AppRoutes />
+      </MemoryRouter>,
+    )
+
+    const sidebar = getByRole("complementary", { name: "Sidebar" })
+    expect(sidebar).toHaveAttribute("data-sidebar-open", "false")
+
+    fireEvent.click(getByRole("button", { name: "Toggle navigation" }))
+    expect(sidebar).toHaveAttribute("data-sidebar-open", "true")
+
+    fireEvent.click(getByRole("button", { name: "Toggle navigation" }))
+    expect(sidebar).toHaveAttribute("data-sidebar-open", "false")
   })
 })
