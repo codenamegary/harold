@@ -11,13 +11,13 @@ describe("parseConfig", () => {
     })
   })
 
-  test("RELAY_PORT overrides the default port", () => {
-    const config = parseConfig({ RELAY_PORT: "4000" })
+  test("AGENT_SERVER_PORT overrides the default port", () => {
+    const config = parseConfig({ AGENT_SERVER_PORT: "4000" })
 
     expect(config.port).toBe(4000)
   })
 
-  test("RELAY_HOST must be loopback", () => {
-    expect(() => parseConfig({ RELAY_HOST: "0.0.0.0" })).toThrow()
+  test("AGENT_SERVER_HOST must be loopback", () => {
+    expect(() => parseConfig({ AGENT_SERVER_HOST: "0.0.0.0" })).toThrow()
   })
 })

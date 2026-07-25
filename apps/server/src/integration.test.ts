@@ -12,8 +12,8 @@ import { createRuntime } from "./runtime/runtime"
 
 const testConfig = (port = 0) =>
   parseConfig({
-    RELAY_HOST: "127.0.0.1",
-    RELAY_PORT: String(port),
+    AGENT_SERVER_HOST: "127.0.0.1",
+    AGENT_SERVER_PORT: String(port),
   })
 
 describe("GET /v1/status", () => {
