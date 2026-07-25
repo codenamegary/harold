@@ -11,7 +11,6 @@ describe("serverDetailsDisplayByPhase", () => {
         bindAddress: "127.0.0.1",
         port: 3847,
         startedAt: "2026-01-01T00:00:00.000Z",
-        uptimeSeconds: 42,
         acp: { state: "ready", activeSessions: 0 },
       },
     })

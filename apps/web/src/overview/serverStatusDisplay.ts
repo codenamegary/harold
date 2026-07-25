@@ -27,7 +27,7 @@ const relayStatePillLabels: Record<RelayState, string> = {
 export const serverStatusDisplay = (
   phase: ConnectionPhase,
   state: RelayState | null,
-  uptimeSeconds: number | null,
+  elapsedSeconds: number | null,
 ): ServerStatusDisplay => {
   if (phase === "loading") {
     return {
@@ -45,7 +45,7 @@ export const serverStatusDisplay = (
     }
   }
 
-  if (state === null || uptimeSeconds === null) {
+  if (state === null || elapsedSeconds === null) {
     return {
       value: "Checking…",
       pill: null,
@@ -56,6 +56,6 @@ export const serverStatusDisplay = (
   return {
     value: relayStateLabels[state],
     pill: relayStatePillLabels[state],
-    uptime: formatUptime(uptimeSeconds),
+    uptime: formatUptime(elapsedSeconds),
   }
 }

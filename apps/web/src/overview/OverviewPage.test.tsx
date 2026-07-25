@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { render, waitFor, within } from "@testing-library/react"
+import { createStore, Provider } from "jotai"
 import { MemoryRouter } from "react-router"
 import { ConnectionProvider } from "../connection/ConnectionProvider"
+import { nowAtom } from "../connection/nowAtom"
+import { serverStartedAtAtom } from "../connection/serverUptimeAtoms"
 import { OverviewPage } from "../shell/pages/OverviewPage"
 
 const validStatus = {
@@ -10,7 +13,6 @@ const validStatus = {
   bindAddress: "127.0.0.1",
   port: 3847,
   startedAt: "2026-01-01T00:00:00.000Z",
-  uptimeSeconds: 3661,
   acp: {
     state: "ready",
     activeSessions: 0,
@@ -19,13 +21,21 @@ const validStatus = {
 
 const originalFetch = globalThis.fetch
 
-const renderOverviewPage = () =>
+const createOverviewStore = (now: number) => {
+  const store = createStore()
+  store.set(nowAtom, now)
+  return store
+}
+
+const renderOverviewPage = (now = new Date("2026-01-01T01:01:01.000Z").getTime()) =>
   render(
-    <MemoryRouter initialEntries={["/"]}>
-      <ConnectionProvider>
-        <OverviewPage />
-      </ConnectionProvider>
-    </MemoryRouter>,
+    <Provider store={createOverviewStore(now)}>
+      <MemoryRouter initialEntries={["/"]}>
+        <ConnectionProvider>
+          <OverviewPage />
+        </ConnectionProvider>
+      </MemoryRouter>
+    </Provider>,
   )
 
 describe("OverviewPage", () => {
@@ -85,6 +95,31 @@ describe("OverviewPage", () => {
 
     expect(within(serverCard).getByText("Healthy")).toBeInTheDocument()
     expect(within(serverCard).getByText("1h 1m")).toBeInTheDocument()
+  })
+
+  test("server status uptime updates when now advances", async () => {
+    const startedAtMs = new Date(validStatus.startedAt).getTime()
+    const store = createOverviewStore(startedAtMs + 3_600_000)
+    store.set(serverStartedAtAtom, validStatus.startedAt)
+    const { getByRole } = render(
+      <Provider store={store}>
+        <MemoryRouter initialEntries={["/"]}>
+          <ConnectionProvider>
+            <OverviewPage />
+          </ConnectionProvider>
+        </MemoryRouter>
+      </Provider>,
+    )
+
+    await waitFor(() => {
+      expect(within(getByRole("article", { name: "Server status" })).getByText("1h 0m")).toBeInTheDocument()
+    })
+
+    store.set(nowAtom, startedAtMs + 3_661_000)
+
+    await waitFor(() => {
+      expect(within(getByRole("article", { name: "Server status" })).getByText("1h 1m")).toBeInTheDocument()
+    })
   })
 
   test("coming soon metric cards show muted copy without fake numbers", async () => {

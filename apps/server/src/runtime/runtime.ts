@@ -8,7 +8,6 @@ export type Runtime = {
   readonly startedAt: string
   getState: () => RelayState
   setState: (state: RelayState) => void
-  uptimeSeconds: () => number
 }
 
 export const createRuntime = (version: string): Runtime => {
@@ -22,10 +21,5 @@ export const createRuntime = (version: string): Runtime => {
     setState: (state) => {
       stateCell.value = state
     },
-    uptimeSeconds: () =>
-      Math.max(
-        0,
-        Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000),
-      ),
   }
 }

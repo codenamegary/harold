@@ -17,7 +17,6 @@ export const StatusSchema = z
     bindAddress: z.literal("127.0.0.1"),
     port: z.number().int().positive(),
     startedAt: TimestampSchema,
-    uptimeSeconds: z.number().int().nonnegative(),
     acp: z.object({
       state: AcpStateSchema,
       activeSessions: z.number().int().nonnegative(),
