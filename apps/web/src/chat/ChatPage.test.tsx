@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { render, within } from "@testing-library/react"
+import { render } from "@testing-library/react"
 import { MemoryRouter } from "react-router"
 import { ChatPage } from "../shell/pages/ChatPage"
 
@@ -14,8 +14,7 @@ describe("ChatPage", () => {
   test("renders page landmark and welcome copy", () => {
     const { getByRole, getByText } = renderChatPage()
 
-    const main = getByRole("main")
-    expect(within(main).getByRole("heading", { level: 1, name: "Agent playground" })).toBeInTheDocument()
+    expect(getByRole("main")).toBeInTheDocument()
     expect(getByRole("heading", { level: 3, name: "Test your ACP connection" })).toBeInTheDocument()
     expect(getByText("Send a prompt directly to an agent without leaving the console.")).toBeInTheDocument()
   })

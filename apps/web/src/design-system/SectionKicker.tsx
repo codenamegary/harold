@@ -10,7 +10,7 @@ export const SectionKicker: React.FC<SectionKickerProps> = ({
   ...props
 }) => (
   <p
-    className={`mb-2.5 flex items-center gap-[7px] font-mono text-[9px] tracking-[0.12em] text-lime uppercase ${className}`}
+    className={`mb-2.5 flex items-center gap-[7px] font-mono text-2xs tracking-[0.12em] text-lime uppercase ${className}`}
     {...props}
   >
     {children}

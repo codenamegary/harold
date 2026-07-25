@@ -1,7 +1,6 @@
 import React, { useState } from "react"
 import { Button } from "../design-system/Button"
 import { FieldLabel } from "../design-system/FieldLabel"
-import { SectionKicker } from "../design-system/SectionKicker"
 import { StatusDot } from "../design-system/StatusDot"
 import { StatusPill } from "../design-system/StatusPill"
 import { TextInput } from "../design-system/TextInput"
@@ -42,13 +41,13 @@ const ConnectWizardStepRail: React.FC<ConnectWizardStepRailProps> = ({
           className={`relative flex gap-[11px] border-0 bg-transparent py-[9px] text-left cursor-pointer max-[820px]:px-[5px] max-[820px]:py-0 ${isActive ? "text-body" : "text-[#657080]"}`}
         >
           <b
-            className={`z-[1] grid size-[35px] shrink-0 place-items-center rounded-full border font-mono text-[8px] ${isActive ? "border-lime bg-lime text-lime-ink shadow-[0_0_0_4px_rgba(182,243,107,0.08)]" : isComplete ? "border-lime/35 text-lime text-[0px] after:text-[11px] after:content-['✓']" : "border-line bg-ink"}`}
+            className={`text-2xs z-[1] grid size-[35px] shrink-0 place-items-center rounded-full border font-mono ${isActive ? "border-lime bg-lime text-lime-ink shadow-[0_0_0_4px_rgba(182,243,107,0.08)]" : isComplete ? "border-lime/35 text-lime text-[0px] after:text-2xs after:content-['✓']" : "border-line bg-ink"}`}
           >
             {isComplete ? "" : step.number}
           </b>
           <span className="pt-[3px] max-[820px]:hidden">
-            <strong className="block text-[10px] font-medium">{step.title}</strong>
-            <small className="mt-[5px] block text-[8px] text-[#505966]">{step.subtitle}</small>
+            <strong className="block text-sm font-medium">{step.title}</strong>
+            <small className="mt-[5px] block text-xs text-[#505966]">{step.subtitle}</small>
           </span>
         </button>
       )
@@ -73,8 +72,8 @@ const AccessModeStep: React.FC<AccessModeStepProps> = ({
         ⌁
       </span>
       <div>
-        <h2 className="m-0 text-[13px] font-semibold">How will you connect?</h2>
-        <p className="m-0 mt-1.5 text-[10px] text-muted">
+        <h2 className="m-0 text-lg font-semibold">How will you connect?</h2>
+        <p className="m-0 mt-1.5 text-sm text-muted">
           You can change this later without losing paired devices.
         </p>
       </div>
@@ -95,14 +94,16 @@ const AccessModeStep: React.FC<AccessModeStepProps> = ({
           ) : null}
         </div>
         <div className="mb-3.5 text-xl">⌂</div>
-        <h3 className="m-0 mb-2 text-[13px] font-semibold">Local or private network</h3>
-        <p className="m-0 min-h-[43px] text-[10px] leading-[1.55] text-muted max-[640px]:min-h-0">
+        <h3 className="m-0 mb-2 text-base font-semibold">Local or private network</h3>
+        <p className="m-0 min-h-[43px] text-sm leading-[1.55] text-muted max-[640px]:min-h-0">
           Use the local test UI, your trusted LAN, or a private tailnet. Skip cloud configuration
           entirely.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <StatusPill variant="success">Simple setup</StatusPill>
-          <code className="font-mono text-[8px] text-pill">private access</code>
+          <StatusPill variant="success">
+            Simple setup
+          </StatusPill>
+          <code className="font-mono text-2xs text-pill">private access</code>
         </div>
       </button>
 
@@ -120,19 +121,21 @@ const AccessModeStep: React.FC<AccessModeStepProps> = ({
           ) : null}
         </div>
         <div className="mb-3.5 text-xl text-violet">⌁</div>
-        <h3 className="m-0 mb-2 text-[13px] font-semibold">Cloud proxy</h3>
-        <p className="m-0 min-h-[43px] text-[10px] leading-[1.55] text-muted max-[640px]:min-h-0">
+        <h3 className="m-0 mb-2 text-base font-semibold">Cloud proxy</h3>
+        <p className="m-0 min-h-[43px] text-sm leading-[1.55] text-muted max-[640px]:min-h-0">
           Reach your agents securely from anywhere using your own tunnel or proxy.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <StatusPill variant="violet">Remote access</StatusPill>
-          <code className="font-mono text-[8px] text-pill">HTTPS required</code>
+          <StatusPill variant="violet">
+            Remote access
+          </StatusPill>
+          <code className="font-mono text-2xs text-pill">HTTPS required</code>
         </div>
       </button>
     </div>
 
-    <div className="mt-[22px] flex gap-3 rounded-lg border border-line-soft bg-panel-2 p-3.5 text-[10px] text-body-soft">
-      <span className="grid size-5 shrink-0 place-items-center rounded-full border border-line text-[9px] text-muted">
+    <div className="mt-[22px] flex gap-3 rounded-lg border border-line-soft bg-panel-2 p-3.5 text-xs text-body-soft">
+      <span className="grid size-5 shrink-0 place-items-center rounded-full border border-line text-2xs text-muted">
         i
       </span>
       <p className="m-0 leading-[1.55]">
@@ -173,8 +176,8 @@ const ExternalUrlStep: React.FC<ExternalUrlStepProps> = ({
           ↗
         </span>
         <div>
-          <h2 className="m-0 text-[13px] font-semibold">Configure external access</h2>
-          <p className="m-0 mt-1.5 text-[10px] text-muted">
+          <h2 className="m-0 text-lg font-semibold">Configure external access</h2>
+          <p className="m-0 mt-1.5 text-sm text-muted">
             Use an HTTPS endpoint that forwards to{" "}
             <code className="text-[#b8c0cb]">127.0.0.1:{localAgentPort}</code>.
           </p>
@@ -183,7 +186,7 @@ const ExternalUrlStep: React.FC<ExternalUrlStepProps> = ({
 
       <FieldLabel htmlFor="external-url">Public server URL</FieldLabel>
       <div className="flex items-center gap-2 rounded-md border border-line-input bg-surface-deep px-[11px]">
-        <span className="text-[10px] text-dim">https://</span>
+        <span className="text-sm text-dim">https://</span>
         <TextInput
           id="external-url"
           aria-label="Public server URL"
@@ -205,7 +208,7 @@ const ExternalUrlStep: React.FC<ExternalUrlStepProps> = ({
               aria-selected={isActive}
               aria-controls="proxy-template-panel"
               onClick={() => onProxyProviderChange(provider)}
-              className={`relative cursor-pointer border-0 bg-transparent px-3.5 py-2.5 text-[10px] ${isActive ? "text-body after:absolute after:right-2.5 after:bottom-[-1px] after:left-2.5 after:h-0.5 after:bg-lime after:content-['']" : "text-[#687280]"}`}
+              className={`relative cursor-pointer border-0 bg-transparent px-3.5 py-2.5 text-sm ${isActive ? "text-body after:absolute after:right-2.5 after:bottom-[-1px] after:left-2.5 after:h-0.5 after:bg-lime after:content-['']" : "text-[#687280]"}`}
             >
               {proxyTemplates[provider].tabLabel}
             </button>
@@ -219,17 +222,17 @@ const ExternalUrlStep: React.FC<ExternalUrlStepProps> = ({
         className="mt-4 overflow-hidden rounded-[9px] border border-line bg-[#0b0e13]"
       >
         <div className="flex items-center justify-between border-b border-line-soft px-3.5 py-2.5">
-          <span className="font-mono text-[9px] text-muted">{template.label}</span>
-          <Button variant="secondary" aria-disabled className="min-h-7 px-2.5 text-[9px]">
+          <span className="font-mono text-2xs text-muted">{template.label}</span>
+          <Button variant="secondary" aria-disabled className="min-h-7 px-2.5">
             Copy
           </Button>
         </div>
-        <pre className="m-0 overflow-x-auto p-3.5 font-mono text-[9px] leading-[1.6] text-body-soft">
+        <pre className="m-0 overflow-x-auto p-3.5 font-mono text-sm leading-[1.6] text-body-soft">
           {template.code(fullUrl)}
         </pre>
       </div>
 
-      <p className="mt-3.5 text-[10px] leading-[1.55] text-muted">{template.note}</p>
+      <p className="mt-3.5 text-xs leading-[1.55] text-muted">{template.note}</p>
 
       <div className="mt-6 flex items-center justify-between border-t border-line-soft pt-[18px]">
         <Button variant="secondary" onClick={onBack}>
@@ -272,8 +275,8 @@ const TestConnectionStep: React.FC<TestConnectionStepProps> = ({ onBack }) => (
         ◎
       </span>
       <div>
-        <h2 className="m-0 text-[13px] font-semibold">Test your connection</h2>
-        <p className="m-0 mt-1.5 text-[10px] text-muted">
+        <h2 className="m-0 text-lg font-semibold">Test your connection</h2>
+        <p className="m-0 mt-1.5 text-sm text-muted">
           We&apos;ll verify TLS, ACP discovery, and authentication.
         </p>
       </div>
@@ -281,8 +284,8 @@ const TestConnectionStep: React.FC<TestConnectionStepProps> = ({ onBack }) => (
 
     <div className="flex items-center gap-2.5 rounded-lg border border-line-soft bg-panel-2 px-3.5 py-3">
       <StatusDot variant="warning" />
-      <code className="font-mono text-[10px] text-body">https://{defaultExternalHost}</code>
-      <span className="ml-auto text-[9px] text-dim">External endpoint</span>
+      <code className="font-mono text-sm text-body">https://{defaultExternalHost}</code>
+      <span className="ml-auto text-2xs text-dim">External endpoint</span>
     </div>
 
     <div className="mt-4 flex flex-col gap-2">
@@ -291,19 +294,19 @@ const TestConnectionStep: React.FC<TestConnectionStepProps> = ({ onBack }) => (
           key={check.id}
           className="flex items-center gap-3 rounded-lg border border-line-soft bg-[#0b0e13] px-3.5 py-3"
         >
-          <span className="font-mono text-[13px] text-dim">·</span>
+          <span className="font-mono text-sm text-dim">·</span>
           <div className="flex-1">
-            <strong className="block text-[10px] font-medium text-body">{check.title}</strong>
-            <small className="mt-1 block text-[9px] text-dim">{check.detail}</small>
+            <strong className="block text-sm font-medium text-body">{check.title}</strong>
+            <small className="mt-1 block text-xs text-dim">{check.detail}</small>
           </div>
-          <em className="text-[9px] text-dim not-italic">Waiting</em>
+          <em className="text-2xs text-dim not-italic">Waiting</em>
         </div>
       ))}
     </div>
 
     <div className="mt-4 rounded-lg border border-line-soft bg-panel-2 px-3.5 py-3">
-      <span className="block text-[10px] text-body">Ready when you are</span>
-      <small className="mt-1 block text-[9px] text-dim">
+      <span className="block text-xs text-body">Ready when you are</span>
+      <small className="mt-1 block text-2xs text-dim">
         Tests run locally and take about 3 seconds.
       </small>
     </div>
@@ -330,8 +333,8 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack }) => (
         ◇
       </span>
       <div>
-        <h2 className="m-0 text-[13px] font-semibold">Pair an Android device</h2>
-        <p className="m-0 mt-1.5 text-[10px] text-muted">
+        <h2 className="m-0 text-lg font-semibold">Pair an Android device</h2>
+        <p className="m-0 mt-1.5 text-sm text-muted">
           Scan the code or enter the six-character code in the Relay app.
         </p>
       </div>
@@ -349,7 +352,7 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack }) => (
       </div>
 
       <div>
-        <p className="m-0 font-mono text-[9px] tracking-[0.12em] text-dim">PAIRING CODE</p>
+        <p className="m-0 font-mono text-2xs tracking-[0.12em] text-dim">PAIRING CODE</p>
         <div className="mt-2 flex items-center gap-2">
           <span
             role="status"
@@ -358,15 +361,15 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack }) => (
           >
             —
           </span>
-          <Button variant="secondary" aria-disabled className="min-h-7 px-2.5 text-[9px]">
+          <Button variant="secondary" aria-disabled className="min-h-7 px-2.5">
             Copy
           </Button>
         </div>
-        <p className="mt-3 text-[10px] leading-[1.55] text-muted">
+        <p className="mt-3 text-xs leading-[1.55] text-muted">
           Expires in <strong className="text-body">—</strong>. Keep this page open until pairing is
           complete.
         </p>
-        <ol className="mt-4 space-y-2 pl-4 text-[10px] leading-[1.55] text-body-soft">
+        <ol className="mt-4 space-y-2 pl-4 text-xs leading-[1.55] text-body-soft">
           <li>Open Relay on Android</li>
           <li>
             Select <strong className="text-body">Pair a server</strong>
@@ -378,8 +381,8 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack }) => (
 
     <div className="mt-5 flex items-center gap-3 rounded-lg border border-line-soft bg-panel-2 px-3.5 py-3">
       <div className="flex-1">
-        <strong className="block text-[10px] text-body">Waiting for a device…</strong>
-        <small className="mt-1 block text-[9px] text-dim">
+        <strong className="block text-xs text-body">Waiting for a device…</strong>
+        <small className="mt-1 block text-2xs text-dim">
           Listening securely on your external endpoint
         </small>
       </div>
@@ -411,17 +414,13 @@ export const ConnectWizard: React.FC = () => {
   return (
     <div>
       <div className="mb-[22px] flex items-start justify-between gap-4">
-        <div>
-          <SectionKicker>Connection wizard</SectionKicker>
-          <h2 className="m-0 text-[22px] font-semibold tracking-tight">Connect your devices</h2>
-          <p className="m-0 mt-2 text-[11px] text-muted">
-            Choose how your Android app reaches this local agent server.
-          </p>
-        </div>
+        <p className="m-0 max-w-2xl text-sm text-muted">
+          Choose how your Android app reaches this local agent server.
+        </p>
         <div
           role="status"
           aria-label="Wizard progress"
-          className="rounded-lg border border-line-soft bg-panel-2 px-3 py-2 font-mono text-[10px] text-muted"
+          className="shrink-0 rounded-lg border border-line-soft bg-panel-2 px-3 py-2 font-mono text-2xs text-muted"
         >
           {currentStep} / {connectWizardSteps.length}
         </div>

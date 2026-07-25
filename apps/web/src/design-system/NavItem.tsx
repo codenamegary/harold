@@ -28,7 +28,7 @@ export const NavItem: React.FC<NavItemProps> = ({
       disabled={disabled}
       aria-disabled={ariaDisabled}
       aria-current={active ? "page" : undefined}
-      className={`relative flex min-h-10 w-full items-center gap-[11px] rounded-[7px] border-0 bg-transparent px-2.5 text-left text-[13px] cursor-pointer ${activeClasses} ${disabledClasses} ${className}`}
+      className={`relative flex min-h-10 w-full items-center gap-[11px] rounded-[7px] border-0 bg-transparent px-2.5 text-left text-sm cursor-pointer ${activeClasses} ${disabledClasses} ${className}`}
       {...props}
     >
       <span

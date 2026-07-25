@@ -20,7 +20,7 @@ export const StatusPill: React.FC<StatusPillProps> = ({
   ...props
 }) => (
   <span
-    className={`inline-flex min-h-5 items-center rounded-[5px] px-[7px] font-mono text-[8px] ${variantClasses[variant]} ${className}`}
+    className={`inline-flex min-h-5 items-center rounded-[5px] px-[7px] font-mono text-2xs ${variantClasses[variant]} ${className}`}
     {...props}
   >
     {children}

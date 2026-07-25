@@ -31,7 +31,7 @@ export const Button: React.FC<ButtonProps> = ({
       type="button"
       disabled={disabled}
       aria-disabled={ariaDisabled}
-      className={`inline-flex min-h-9 items-center justify-center gap-3 rounded-[7px] px-3.5 text-[11px] font-semibold whitespace-nowrap cursor-pointer ${variantClasses[variant]} ${disabledClasses} ${className}`}
+      className={`inline-flex min-h-9 items-center justify-center gap-3 rounded-[7px] px-3.5 text-base font-semibold whitespace-nowrap cursor-pointer ${variantClasses[variant]} ${disabledClasses} ${className}`}
       {...props}
     >
       {children}
