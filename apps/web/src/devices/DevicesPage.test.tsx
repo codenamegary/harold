@@ -10,7 +10,7 @@ describe("DevicesPage", () => {
     expect(getByRole("button", { name: "+ Pair new device" })).toBeDisabled()
     expect(getByText("0 devices online")).toBeInTheDocument()
     expect(getByText("of 0 paired")).toBeInTheDocument()
-    expect(queryByRole("row", { name: /device/i })).not.toBeInTheDocument()
+    expect(getByText("DEVICE")).toBeInTheDocument()
     expect(queryByRole("button", { name: /revoke/i })).not.toBeInTheDocument()
   })
 })
