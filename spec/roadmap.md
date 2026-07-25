@@ -24,7 +24,7 @@ Relay will use a lean monorepo:
 │   ├── web/             # Local operator console
 │   └── android/         # Android client and Gradle build
 ├── packages/
-│   ├── contracts/       # Shared client API schemas and event types
+│   ├── contracts/       # Shared wire schemas: contracts/http and contracts/events
 │   └── test-support/    # Shared fixtures and integration helpers, when needed
 ├── spec/                # Product and technical specifications
 ├── prototype/           # Temporary reference until replaced

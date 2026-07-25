@@ -16,15 +16,15 @@ event stream for the web console and future clients.
 
 ## Delivery structure
 
-Milestone 1 is delivered as seven independently verifiable epics:
+Milestone 1 is delivered as seven independently verifiable epics on GitHub:
 
-1. [Workspace, contracts, and server foundation](ms1-epics/ms1-epic-01-workspace-contracts-server.md)
-2. [Durable workspace registry](ms1-epics/ms1-epic-02-durable-workspace-registry.md)
-3. [ACP supervision and session lifecycle](ms1-epics/ms1-epic-03-acp-session-lifecycle.md)
-4. [Journal and reconnectable event stream](ms1-epics/ms1-epic-04-journal-event-stream.md)
-5. [Streamed turns and cancellation](ms1-epics/ms1-epic-05-streamed-turns-cancellation.md)
-6. [Concurrent sessions and restart recovery](ms1-epics/ms1-epic-06-concurrency-restart-recovery.md)
-7. [Operator console and hardening](ms1-epics/ms1-epic-07-operator-console-hardening.md)
+1. [Workspace, contracts, and server foundation](https://github.com/codenamegary/agent-server/issues/1)
+2. [Durable workspace registry](https://github.com/codenamegary/agent-server/issues/2)
+3. [ACP supervision and session lifecycle](https://github.com/codenamegary/agent-server/issues/4)
+4. [Journal and reconnectable event stream](https://github.com/codenamegary/agent-server/issues/3)
+5. [Streamed turns and cancellation](https://github.com/codenamegary/agent-server/issues/5)
+6. [Concurrent sessions and restart recovery](https://github.com/codenamegary/agent-server/issues/6)
+7. [Operator console and hardening](https://github.com/codenamegary/agent-server/issues/7)
 
 Each epic must satisfy its own acceptance, verification, migration, error, and
 recovery criteria before the next dependent epic is considered complete.
@@ -37,12 +37,12 @@ recovery criteria before the next dependent epic is considered complete.
 │   ├── server/          # Fastify API, SQLite, ACP ownership, event stream
 │   └── web/             # React, TypeScript, Vite, and Tailwind console
 ├── packages/
-│   ├── contracts/       # Shared Zod API and event schemas
+│   ├── contracts/       # Shared wire schemas: contracts/http and contracts/events
 │   └── test-support/    # Fixtures, fake ACP process, integration helpers
 ├── prototype/           # Temporary behavioral and visual reference
 └── spec/
     ├── ms1-core-local-operator.md
-    └── ms1-epics/
+    └── roadmap.md
 ```
 
 Use Bun workspaces, one root `bun.lock`, `workspace:*` internal dependencies,
