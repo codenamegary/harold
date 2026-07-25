@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { fireEvent, render, waitFor, within } from "@testing-library/react"
-import { MemoryRouter } from "react-router"
+import { fireEvent, waitFor, within } from "@testing-library/react"
 import { AppRoutes } from "../shell/AppRouter"
+import { renderWithProviders } from "../query/renderWithProviders"
 import { fetchStatus } from "./fetchStatus"
 
 const validStatus = {
@@ -64,11 +64,9 @@ describe("connection shell wiring", () => {
   })
 
   test("sidebar and topbar show live status when API is online", async () => {
-    const { getByRole, getByText } = render(
-      <MemoryRouter initialEntries={["/"]}>
-        <AppRoutes />
-      </MemoryRouter>,
-    )
+    const { getByRole, getByText } = renderWithProviders(<AppRoutes />, {
+      initialEntries: ["/"],
+    })
 
     const sidebar = getByRole("complementary", { name: "Sidebar" })
 
@@ -89,11 +87,9 @@ describe("connection shell wiring", () => {
   test("sidebar and topbar show unreachable state when API is down", async () => {
     globalThis.fetch = mock(() => Promise.reject(new Error("network error"))) as typeof fetch
 
-    const { getByRole, getByText, queryByText } = render(
-      <MemoryRouter initialEntries={["/"]}>
-        <AppRoutes />
-      </MemoryRouter>,
-    )
+    const { getByRole, getByText, queryByText } = renderWithProviders(<AppRoutes />, {
+      initialEntries: ["/"],
+    })
 
     const sidebar = getByRole("complementary", { name: "Sidebar" })
 
@@ -124,11 +120,9 @@ describe("connection shell wiring", () => {
     )
     globalThis.fetch = fetchMock as typeof fetch
 
-    const { getByRole, getByText } = render(
-      <MemoryRouter initialEntries={["/"]}>
-        <AppRoutes />
-      </MemoryRouter>,
-    )
+    const { getByRole, getByText } = renderWithProviders(<AppRoutes />, {
+      initialEntries: ["/"],
+    })
 
     await waitFor(() => {
       expect(getByText("API connected")).toBeInTheDocument()

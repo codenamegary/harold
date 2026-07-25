@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { fireEvent, render, waitFor } from "@testing-library/react"
-import { MemoryRouter } from "react-router"
+import { fireEvent, waitFor } from "@testing-library/react"
+import { renderWithProviders } from "./query/renderWithProviders"
 import { AppRoutes } from "./shell/AppRouter"
 
 const validStatus = {
@@ -27,11 +27,9 @@ const routePages = [
 const originalFetch = globalThis.fetch
 
 const renderAppRoute = async (path: string) => {
-  const view = render(
-    <MemoryRouter initialEntries={[path]}>
-      <AppRoutes />
-    </MemoryRouter>,
-  )
+  const view = renderWithProviders(<AppRoutes />, {
+    initialEntries: [path],
+  })
 
   await waitFor(() => {
     expect(view.getByText("API connected")).toBeInTheDocument()

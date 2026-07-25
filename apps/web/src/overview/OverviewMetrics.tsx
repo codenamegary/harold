@@ -1,7 +1,6 @@
-import { useAtomValue, useSetAtom } from "jotai"
-import React, { useEffect } from "react"
-import { serverElapsedSecondsAtom, serverStartedAtAtom } from "../connection/serverUptimeAtoms"
+import React from "react"
 import { useConnection } from "../connection/useConnection"
+import { useServerElapsedSeconds } from "../connection/useServerElapsedSeconds"
 import { MetricCard } from "../design-system/MetricCard"
 import { StatusPill } from "../design-system/StatusPill"
 import { serverStatusDisplay } from "./serverStatusDisplay"
@@ -32,15 +31,9 @@ const ComingSoonMetricCard: React.FC<ComingSoonMetricCardProps> = ({
 
 export const OverviewMetrics: React.FC = () => {
   const { connection } = useConnection()
-  const setServerStartedAt = useSetAtom(serverStartedAtAtom)
-  const elapsedSeconds = useAtomValue(serverElapsedSecondsAtom)
   const statusState = connection.phase === "online" ? connection.status.state : null
   const startedAt = connection.phase === "online" ? connection.status.startedAt : null
-
-  useEffect(() => {
-    setServerStartedAt(startedAt)
-  }, [setServerStartedAt, startedAt])
-
+  const elapsedSeconds = useServerElapsedSeconds(startedAt)
   const serverStatus = serverStatusDisplay(connection.phase, statusState, elapsedSeconds)
 
   return (
