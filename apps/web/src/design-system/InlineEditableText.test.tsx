@@ -3,6 +3,20 @@ import { fireEvent, render, waitFor } from "@testing-library/react"
 import { InlineEditableText } from "./InlineEditableText"
 
 describe("InlineEditableText", () => {
+  test("shows text cursor on the idle label", () => {
+    const { getByRole } = render(
+      <InlineEditableText
+        value="agent-server"
+        onSave={() => {}}
+        onCancel={() => {}}
+        isSaving={false}
+        ariaLabel="Rename workspace"
+      />,
+    )
+
+    expect(getByRole("button", { name: "Rename workspace" })).toHaveClass("cursor-text")
+  })
+
   test("enters edit mode when title is clicked", () => {
     const { getByRole } = render(
       <InlineEditableText
