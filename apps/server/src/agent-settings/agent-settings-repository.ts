@@ -160,6 +160,10 @@ export const createAgentSettingsRepository = (
         return resolvedPath
       }
       nextPath = resolvedPath.value
+    } else if (nextEnabled && current.path !== null) {
+      if (!validatePath(current.path)) {
+        return { ok: false, error: { kind: "path_invalid", path: current.path } }
+      }
     }
 
     const nextRow: AgentSettingsRow = {

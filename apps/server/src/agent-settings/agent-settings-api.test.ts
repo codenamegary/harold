@@ -234,6 +234,39 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     expect(body.path).toBe(storedPath)
   })
 
+  test("returns 400 when re-enabling with an invalid stored path", async () => {
+    const dataDir = await createTempDataDir()
+    const storedPath = "/opt/custom/agent"
+    const { app: setupApp } = await createTestApp(dataDir)
+
+    await setupApp.inject({
+      method: "PATCH",
+      url: "/v1/settings/agents/cursor",
+      payload: { enabled: true, path: storedPath },
+    })
+
+    await setupApp.inject({
+      method: "PATCH",
+      url: "/v1/settings/agents/cursor",
+      payload: { enabled: false },
+    })
+
+    await setupApp.close()
+
+    const { app } = await createTestApp(dataDir, undefined, validateExecutablePath)
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/settings/agents/cursor",
+      payload: { enabled: true },
+    })
+
+    const body = ValidationProblemSchema.parse(JSON.parse(response.body))
+
+    expect(response.statusCode).toBe(400)
+    expect(body.title).toBe("Invalid agent executable path")
+  })
+
   test("sets path with manual override", async () => {
     const dataDir = await createTempDataDir()
     const { app } = await createTestApp(dataDir)
