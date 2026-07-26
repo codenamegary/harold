@@ -35,7 +35,7 @@ recovery criteria before the next dependent epic is considered complete.
 ```text
 /
 ├── apps/
-│   ├── server/          # Fastify API, SQLite, ACP ownership, event stream
+│   ├── server/          # Fastify API, SQLite w/Drizzle, ACP ownership, event stream
 │   └── web/             # React, TypeScript, Vite, and Tailwind console
 ├── packages/
 │   ├── contracts/       # Shared wire schemas: contracts/http and contracts/events

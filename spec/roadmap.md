@@ -123,7 +123,7 @@ numbers.
 |------|-------|----------|
 | 01 | Workspace, contracts, and server foundation | Bun monorepo, shared contracts, loopback Fastify server |
 | 02 | Operator console shell | Prototype migrated to `apps/web`. Full shell visible. Slices disabled until their epic lands. |
-| 03 | Durable workspace registry | SQLite, migrations, `/v1/workspaces` CRUD, workspace slice wired to API |
+| 03 | Durable workspace registry | Drizzle SQLite, migrations, `/v1/workspaces` CRUD, workspace slice wired to API |
 | 04 | ACP supervision and session lifecycle | Supervised ACP process, session create/list/select/rename/archive |
 | 05 | Journal and reconnectable event stream | Append-only journal, WebSocket `/v1/events` with cursor replay |
 | 06 | Streamed turns and cancellation | Multi-turn chat, streaming output, turn cancel, chat slice live |
