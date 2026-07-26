@@ -5,6 +5,7 @@ import path from "node:path"
 import { openDatabase } from "../persistence/open-database"
 import { workspaces } from "../persistence/schema/workspaces"
 import { createWorkspaceRepository } from "./workspace-repository"
+import { encodeWorkspacePageCursor } from "./workspace-page-cursor"
 
 const tempDirs: string[] = []
 
@@ -217,11 +218,62 @@ describe("workspace repository", () => {
     expect(secondPage.value.items.length).toBe(1)
     expect(secondPage.value.nextCursor).toBeUndefined()
 
-    const invalid = repository.list({ cursor: "ws_01J0000000000000000000000" })
+    const invalid = repository.list({
+      cursor: encodeWorkspacePageCursor({
+        id: "ws_01J0000000000000000000000",
+        edge: "after",
+      }),
+    })
     expect(invalid.ok).toBe(false)
     if (!invalid.ok) {
       expect(invalid.error.kind).toBe("invalid_cursor")
     }
+
+    database.close()
+  })
+
+  test("pages backward with encoded previous cursor", async () => {
+    const dataDir = await createTempDataDir()
+    const dirs = await Promise.all([
+      createWorkspaceDir(dataDir, "one"),
+      createWorkspaceDir(dataDir, "two"),
+      createWorkspaceDir(dataDir, "three"),
+    ])
+    const database = openDatabase({ dataDir })
+    const repository = createWorkspaceRepository(database)
+
+    for (const [index, dir] of dirs.entries()) {
+      const created = repository.create(`Workspace ${index + 1}`, dir)
+      expect(created.ok).toBe(true)
+    }
+
+    const firstPage = repository.list({ limit: 2 })
+    expect(firstPage.ok).toBe(true)
+    if (!firstPage.ok) {
+      return
+    }
+
+    const secondPage = repository.list({
+      limit: 2,
+      cursor: firstPage.value.nextCursor,
+    })
+    expect(secondPage.ok).toBe(true)
+    if (!secondPage.ok) {
+      return
+    }
+
+    const backToFirst = repository.list({
+      limit: 2,
+      cursor: secondPage.value.previousCursor,
+    })
+    expect(backToFirst.ok).toBe(true)
+    if (!backToFirst.ok) {
+      return
+    }
+
+    expect(backToFirst.value.items.map((workspace) => workspace.id)).toEqual(
+      firstPage.value.items.map((workspace) => workspace.id),
+    )
 
     database.close()
   })

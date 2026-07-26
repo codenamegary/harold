@@ -1,11 +1,15 @@
 import { and, asc, count, desc, eq, gt, lt, or } from "drizzle-orm"
-import { Workspace, WorkspaceListDirection } from "contracts/http/workspace"
+import { Workspace } from "contracts/http/workspace"
 import { AgentDatabase } from "../persistence/open-database"
 import { workspaces } from "../persistence/schema/workspaces"
 import { canonicalizeWorkspacePath } from "./canonicalize-workspace-path"
 import { createWorkspaceId } from "./create-workspace-id"
 import { probeWorkspaceState } from "./probe-workspace-state"
 import { WorkspaceRepositoryError } from "./workspace-errors"
+import {
+  decodeWorkspacePageCursor,
+  encodeWorkspacePageCursor,
+} from "./workspace-page-cursor"
 
 export type WorkspaceRepositoryResult<T> =
   | { ok: true; value: T }
@@ -14,7 +18,6 @@ export type WorkspaceRepositoryResult<T> =
 export type WorkspaceListOptions = {
   limit: number
   cursor?: string
-  direction?: WorkspaceListDirection
 }
 
 export type WorkspaceListPage = {
@@ -98,8 +101,12 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
     const last = rows[rows.length - 1]!
 
     return {
-      nextCursor: hasMoreAfter(last) ? last.id : undefined,
-      previousCursor: hasMoreBefore(first) ? first.id : undefined,
+      nextCursor: hasMoreAfter(last)
+        ? encodeWorkspacePageCursor({ id: last.id, edge: "after" })
+        : undefined,
+      previousCursor: hasMoreBefore(first)
+        ? encodeWorkspacePageCursor({ id: first.id, edge: "before" })
+        : undefined,
     }
   }
 
@@ -183,16 +190,23 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
 
   const list = (options?: Partial<WorkspaceListOptions>): WorkspaceListResult => {
     const limit = options?.limit ?? DEFAULT_LIST_LIMIT
-    const direction = options?.direction ?? "forward"
-    const cursorRow =
-      options?.cursor === undefined ? undefined : getRowById(options.cursor)
 
-    if (options?.cursor !== undefined && cursorRow === undefined) {
+    const decodedCursor =
+      options?.cursor === undefined ? undefined : decodeWorkspacePageCursor(options.cursor)
+
+    if (options?.cursor !== undefined && !decodedCursor?.ok) {
+      return { ok: false, error: { kind: "invalid_cursor" } }
+    }
+
+    const cursorRow =
+      decodedCursor?.ok === true ? getRowById(decodedCursor.value.id) : undefined
+
+    if (decodedCursor?.ok === true && cursorRow === undefined) {
       return { ok: false, error: { kind: "invalid_cursor" } }
     }
 
     const rows =
-      direction === "backward"
+      decodedCursor?.ok === true && decodedCursor.value.edge === "before"
         ? listBackward(limit, cursorRow)
         : listForward(limit, cursorRow)
 

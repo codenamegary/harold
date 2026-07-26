@@ -15,6 +15,7 @@ import { createServer } from "../bootstrap/create-server"
 import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/open-database"
 import { createRuntime } from "../runtime/runtime"
+import { encodeWorkspacePageCursor } from "./workspace-page-cursor"
 
 const tempDirs: string[] = []
 const apps: Awaited<ReturnType<typeof createServer>>[] = []
@@ -221,7 +222,7 @@ describe("GET /v1/workspaces", () => {
         (
           await app.inject({
             method: "GET",
-            url: `/v1/workspaces?limit=2&cursor=${secondPage.page.previousCursor}&direction=backward`,
+            url: `/v1/workspaces?limit=2&cursor=${secondPage.page.previousCursor}`,
           })
         ).body,
       ),
@@ -238,7 +239,10 @@ describe("GET /v1/workspaces", () => {
 
     const response = await app.inject({
       method: "GET",
-      url: "/v1/workspaces?cursor=ws_01J0000000000000000000000",
+      url: `/v1/workspaces?cursor=${encodeWorkspacePageCursor({
+        id: "ws_01J0000000000000000000000",
+        edge: "after",
+      })}`,
     })
 
     const body = ValidationProblemSchema.parse(JSON.parse(response.body))

@@ -43,7 +43,6 @@ export const registerWorkspaceRoutes = (
     const result = repository.list({
       limit: query.limit,
       cursor: query.cursor,
-      direction: query.direction,
     })
 
     if (!result.ok) {

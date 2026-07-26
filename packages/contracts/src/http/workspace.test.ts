@@ -91,10 +91,9 @@ describe("UpdateWorkspaceBodySchema", () => {
 })
 
 describe("ListWorkspacesQuerySchema", () => {
-  test("defaults limit to 100 and direction to forward", () => {
+  test("defaults limit to 100", () => {
     expect(ListWorkspacesQuerySchema.parse({})).toEqual({
       limit: 100,
-      direction: "forward",
     })
   })
 
