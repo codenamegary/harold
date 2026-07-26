@@ -91,7 +91,7 @@ describe("WorkspacesPage", () => {
     const card = getByRole("article", { name: "agent-server workspace" })
 
     expect(within(card).getByText("/home/operator/agent-server")).toBeInTheDocument()
-    expect(within(card).getByText("Available")).toBeInTheDocument()
+    expect(within(card).getByLabelText("Available")).toHaveClass("bg-lime")
     expect(getByText("1 of 1 workspaces")).toBeInTheDocument()
   })
 
@@ -243,7 +243,7 @@ describe("WorkspacesPage", () => {
     })
 
     const card = getByRole("article", { name: "agent-server workspace" })
-    expect(within(card).getByText("Missing")).toBeInTheDocument()
+    expect(within(card).getByLabelText("Missing")).toHaveClass("bg-amber")
   })
 
   test("disables load more when next cursor is absent", async () => {

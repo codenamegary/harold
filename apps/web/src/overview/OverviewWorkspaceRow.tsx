@@ -2,7 +2,7 @@ import { Workspace } from "contracts/http/workspace"
 import { useAtomValue } from "jotai"
 import React from "react"
 import { nowAtom } from "../connection/nowAtom"
-import { StatusPill } from "../design-system/StatusPill"
+import { StatusDot } from "../design-system/StatusDot"
 import { formatRelativeLastUsed } from "../workspace/formatRelativeLastUsed"
 import { workspaceStateDisplayByState } from "../workspace/workspaceStateDisplay"
 
@@ -46,8 +46,9 @@ export const OverviewWorkspaceRow: React.FC<OverviewWorkspaceRowProps> = ({ work
           <small className="mt-[5px] block truncate text-[8px] text-dim">Agents not live</small>
         </div>
       </div>
-      <div className="max-[1100px]:hidden">
-        <StatusPill variant={stateDisplay.variant}>{stateDisplay.label}</StatusPill>
+      <div className="flex items-center gap-1.5 max-[1100px]:hidden">
+        <StatusDot variant={stateDisplay.dotVariant} aria-label={stateDisplay.label} />
+        <span className="text-[9px] text-[#a5aebb]">{stateDisplay.label}</span>
       </div>
       <div className="text-right font-mono text-[8px] whitespace-nowrap text-dim max-[1100px]:hidden">
         {formatRelativeLastUsed(workspace.lastUsedAt, workspace.createdAt, nowMs)}

@@ -2,7 +2,7 @@ import { Workspace } from "contracts/http/workspace"
 import React, { useState } from "react"
 import { InlineEditableText } from "../design-system/InlineEditableText"
 import { Panel } from "../design-system/Panel"
-import { StatusPill } from "../design-system/StatusPill"
+import { StatusDot } from "../design-system/StatusDot"
 import { isWorkspaceUpdateError } from "./updateWorkspace"
 import { UnregisterWorkspaceModal } from "./UnregisterWorkspaceModal"
 import { useUpdateWorkspaceMutation } from "./useUpdateWorkspaceMutation"
@@ -50,28 +50,32 @@ export const WorkspaceCard: React.FC<WorkspaceCardProps> = ({ workspace }) => {
         role="article"
       >
         <div className="mb-2 flex items-start justify-between gap-3">
-          <InlineEditableText
-            value={workspace.name}
-            onSave={handleRenameSave}
-            onCancel={handleRenameCancel}
-            onEditingChange={setIsEditingName}
-            isSaving={updateWorkspaceMutation.isPending}
-            error={renameError}
-            ariaLabel={`Rename ${workspace.name}`}
-          />
-          <div className="flex items-center gap-2">
-            {!isEditingName ? (
-              <button
-                type="button"
-                aria-label={`Unregister ${workspace.name}`}
-                className="grid size-7 place-items-center rounded text-dim hover:text-red-400"
-                onClick={() => setIsUnregisterModalOpen(true)}
-              >
-                ×
-              </button>
-            ) : null}
-            <StatusPill variant={stateDisplay.variant}>{stateDisplay.label}</StatusPill>
+          <div className="flex min-w-0 flex-1 items-start gap-2">
+            <StatusDot
+              variant={stateDisplay.dotVariant}
+              aria-label={stateDisplay.label}
+              className="mt-[5px]"
+            />
+            <InlineEditableText
+              value={workspace.name}
+              onSave={handleRenameSave}
+              onCancel={handleRenameCancel}
+              onEditingChange={setIsEditingName}
+              isSaving={updateWorkspaceMutation.isPending}
+              error={renameError}
+              ariaLabel={`Rename ${workspace.name}`}
+            />
           </div>
+          {!isEditingName ? (
+            <button
+              type="button"
+              aria-label={`Unregister ${workspace.name}`}
+              className="grid size-7 shrink-0 place-items-center rounded text-dim hover:text-red-400"
+              onClick={() => setIsUnregisterModalOpen(true)}
+            >
+              ×
+            </button>
+          ) : null}
         </div>
         <p className="m-0 font-mono text-xs text-dim">{workspace.path}</p>
       </Panel>
