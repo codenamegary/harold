@@ -76,7 +76,7 @@ export const InlineEditableText: React.FC<InlineEditableTextProps> = ({
     return (
       <button
         type="button"
-        className="m-0 border-0 bg-transparent p-0 text-left text-sm font-semibold text-white hover:text-lime"
+        className="m-0 min-h-5 border-0 bg-transparent p-0 text-left text-sm font-semibold leading-5 text-white hover:text-lime"
         aria-label={ariaLabel}
         onClick={startEditing}
       >

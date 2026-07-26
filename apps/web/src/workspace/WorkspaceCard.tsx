@@ -49,12 +49,12 @@ export const WorkspaceCard: React.FC<WorkspaceCardProps> = ({ workspace }) => {
         className="p-4"
         role="article"
       >
-        <div className="mb-2 flex items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-1 items-start gap-2">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <StatusDot
               variant={stateDisplay.dotVariant}
               aria-label={stateDisplay.label}
-              className="mt-[5px]"
+              className="shrink-0"
             />
             <InlineEditableText
               value={workspace.name}
@@ -70,7 +70,7 @@ export const WorkspaceCard: React.FC<WorkspaceCardProps> = ({ workspace }) => {
             <button
               type="button"
               aria-label={`Unregister ${workspace.name}`}
-              className="grid size-7 shrink-0 place-items-center rounded text-dim hover:text-red-400"
+              className="flex size-5 shrink-0 items-center justify-center self-center rounded text-base leading-none text-dim hover:text-red-400"
               onClick={() => setIsUnregisterModalOpen(true)}
             >
               ×
