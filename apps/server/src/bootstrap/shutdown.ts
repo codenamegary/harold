@@ -1,5 +1,6 @@
 import { FastifyInstance } from "fastify"
 import { Config } from "../config/config"
+import { AgentDatabase } from "../persistence/open-database"
 import { Runtime } from "../runtime/runtime"
 
 export const listen = async (
@@ -15,12 +16,14 @@ export const listen = async (
 export const registerShutdown = (
   app: FastifyInstance,
   runtime: Runtime,
+  database: AgentDatabase,
   signals: ReadonlyArray<NodeJS.Signals> = ["SIGINT", "SIGTERM"],
 ) => {
   const shutdown = async (signal: NodeJS.Signals) => {
     app.log.info({ signal }, "shutting down")
     runtime.setState("shutting_down")
     await app.close()
+    database.close()
     runtime.setState("offline")
     process.exit(0)
   }
