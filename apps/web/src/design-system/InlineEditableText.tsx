@@ -60,6 +60,14 @@ export const InlineEditableText: React.FC<InlineEditableTextProps> = ({
     }
   }
 
+  const handleBlur = () => {
+    if (isSaving) {
+      return
+    }
+
+    cancelEditing()
+  }
+
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       event.preventDefault()
@@ -103,12 +111,14 @@ export const InlineEditableText: React.FC<InlineEditableTextProps> = ({
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={handleKeyDown}
+            onBlur={handleBlur}
           />
           <button
             type="button"
             aria-label="Cancel rename"
             className="absolute top-1/2 right-2 grid size-6 -translate-y-1/2 place-items-center rounded text-dim hover:text-white"
             disabled={isSaving}
+            onMouseDown={(event) => event.preventDefault()}
             onClick={cancelEditing}
           >
             ×
