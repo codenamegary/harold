@@ -1,0 +1,22 @@
+{
+  "name": "test-support",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "bin": {
+    "fake-acp": "./src/fake-acp/bin.ts"
+  },
+  "exports": {
+    "./spawn": "./src/spawn/spawnFakeAcp.ts"
+  },
+  "scripts": {
+    "lint": "oxlint",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "bun-types": "^1.3.1",
+    "oxlint": "catalog:",
+    "typescript": "catalog:"
+  }
+}
