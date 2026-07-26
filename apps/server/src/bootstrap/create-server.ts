@@ -9,6 +9,8 @@ import { createAgentSettingsRepository } from "../agent-settings/agent-settings-
 import { registerAgentSettingsRoutes } from "../agent-settings/agent-settings-routes"
 import { createWorkspaceRepository } from "../workspace/workspace-repository"
 import { registerWorkspaceRoutes } from "../workspace/workspace-routes"
+import { createSessionRepository } from "../session/session-repository"
+import { registerSessionRoutes } from "../session/session-routes"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
 
@@ -60,10 +62,18 @@ export const createServer = async ({
 
   registerErrorHandler(app)
   registerStatusRoutes(app, runtime, config)
-  registerWorkspaceRoutes(app, createWorkspaceRepository(database))
-  registerAgentSettingsRoutes(
+  const workspaceRepository = createWorkspaceRepository(database)
+  const agentSettingsRepository = createAgentSettingsRepository(database, {
+    whichFn,
+    validateExecutablePathFn,
+  })
+  registerWorkspaceRoutes(app, workspaceRepository)
+  registerAgentSettingsRoutes(app, agentSettingsRepository)
+  registerSessionRoutes(
     app,
-    createAgentSettingsRepository(database, { whichFn, validateExecutablePathFn }),
+    createSessionRepository(database),
+    workspaceRepository,
+    agentSettingsRepository,
   )
 
   if (withTestRoutes) {

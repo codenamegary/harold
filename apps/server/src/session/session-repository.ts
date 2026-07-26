@@ -1,4 +1,5 @@
 import { and, asc, count, desc, eq, gt, lt, or } from "drizzle-orm"
+import { AgentId, AgentIdSchema } from "contracts/http/agent-settings"
 import { Session, SessionState, SessionStateSchema, UpdateSessionBody } from "contracts/http/session"
 import { AgentDatabase } from "../persistence/open-database"
 import { sessions } from "../persistence/schema/sessions"
@@ -15,6 +16,7 @@ export type SessionRepositoryResult<T> =
 
 export type CreateSessionInput = {
   workspaceId: string
+  agentId: AgentId
   name: string
   acpSessionId: string
   state?: SessionState
@@ -61,6 +63,7 @@ const DEFAULT_LIST_LIMIT = 100
 const rowToSession = (row: SessionRow): Session => ({
   id: row.id,
   workspaceId: row.workspaceId,
+  agentId: AgentIdSchema.parse(row.agentId),
   name: row.name,
   state: SessionStateSchema.parse(row.state),
   createdAt: row.createdAt,
@@ -195,6 +198,7 @@ export const createSessionRepository = (database: AgentDatabase) => {
       .values({
         id,
         workspaceId: input.workspaceId,
+        agentId: input.agentId,
         name: input.name,
         state,
         acpSessionId: input.acpSessionId,
@@ -210,6 +214,7 @@ export const createSessionRepository = (database: AgentDatabase) => {
       value: rowToSession({
         id,
         workspaceId: input.workspaceId,
+        agentId: input.agentId,
         name: input.name,
         state,
         acpSessionId: input.acpSessionId,

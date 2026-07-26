@@ -10,6 +10,7 @@ import {
 const validSession = {
   id: "session-auth",
   workspaceId: "ws-agent-server",
+  agentId: "cursor",
   name: "Auth flow",
   state: "idle",
   createdAt: "2026-07-24T12:00:00.000Z",
@@ -22,7 +23,12 @@ describe("SessionSchema", () => {
     expect(SessionSchema.parse(validSession)).toEqual(validSession)
   })
 
-  test("rejects prototype agent vocabulary", () => {
+  test("accepts cursor and claude agent ids", () => {
+    expect(SessionSchema.parse({ ...validSession, agentId: "cursor" }).agentId).toBe("cursor")
+    expect(SessionSchema.parse({ ...validSession, agentId: "claude" }).agentId).toBe("claude")
+  })
+
+  test("rejects invalid agent id", () => {
     expect(() =>
       SessionSchema.parse({ ...validSession, agentId: "agent-auth" }),
     ).toThrow()
@@ -40,15 +46,30 @@ describe("SessionSchema", () => {
 
 describe("CreateSessionBodySchema", () => {
   test("accepts a valid create body", () => {
-    const body = { workspaceId: "ws-agent-server", name: "Auth flow" }
+    const body = {
+      workspaceId: "ws-agent-server",
+      agentId: "cursor",
+      name: "Auth flow",
+    }
 
     expect(CreateSessionBodySchema.parse(body)).toEqual(body)
+  })
+
+  test("rejects invalid agent id", () => {
+    expect(() =>
+      CreateSessionBodySchema.parse({
+        workspaceId: "ws-agent-server",
+        agentId: "agent-auth",
+        name: "Auth flow",
+      }),
+    ).toThrow()
   })
 
   test("rejects empty name", () => {
     expect(() =>
       CreateSessionBodySchema.parse({
         workspaceId: "ws-agent-server",
+        agentId: "cursor",
         name: "",
       }),
     ).toThrow()
@@ -58,6 +79,7 @@ describe("CreateSessionBodySchema", () => {
     expect(() =>
       CreateSessionBodySchema.parse({
         workspaceId: "ws-agent-server",
+        agentId: "cursor",
         name: "a".repeat(121),
       }),
     ).toThrow()
@@ -67,6 +89,7 @@ describe("CreateSessionBodySchema", () => {
     expect(() =>
       CreateSessionBodySchema.parse({
         workspaceId: "ws-agent-server",
+        agentId: "cursor",
         name: "Auth flow",
         acpSessionId: "acp-session-1",
       }),
@@ -77,6 +100,7 @@ describe("CreateSessionBodySchema", () => {
     expect(() =>
       CreateSessionBodySchema.parse({
         workspaceId: "ws-agent-server",
+        agentId: "cursor",
         name: "Auth flow",
         state: "idle",
       }),

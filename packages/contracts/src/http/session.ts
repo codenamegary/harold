@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { AgentIdSchema } from "./agent-settings"
 import { createCollectionSchema } from "./collection"
 import { CursorSchema, IdSchema, TimestampSchema } from "./primitives"
 
@@ -16,6 +17,7 @@ export const SessionStateSchema = z.enum([
 export const SessionSchema = z.strictObject({
   id: IdSchema,
   workspaceId: IdSchema,
+  agentId: AgentIdSchema,
   name: z.string().min(1).max(120),
   state: SessionStateSchema,
   createdAt: TimestampSchema,
@@ -25,6 +27,7 @@ export const SessionSchema = z.strictObject({
 
 export const CreateSessionBodySchema = z.strictObject({
   workspaceId: IdSchema,
+  agentId: AgentIdSchema,
   name: z.string().min(1).max(120),
 })
 

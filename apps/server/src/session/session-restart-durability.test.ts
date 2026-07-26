@@ -41,6 +41,7 @@ describe("session persistence restart durability", () => {
 
     const created = sessionRepository.create({
       workspaceId: workspace.value.id,
+      agentId: "cursor",
       name: "Persist me",
       acpSessionId: "acp-persist-1",
       state: "running",
@@ -63,6 +64,7 @@ describe("session persistence restart durability", () => {
     if (fetched.ok) {
       expect(fetched.value.id).toBe(created.value.id)
       expect(fetched.value.workspaceId).toBe(workspace.value.id)
+      expect(fetched.value.agentId).toBe("cursor")
       expect(fetched.value.name).toBe("Persist me")
       expect(fetched.value.state).toBe("running")
       expect(fetched.value.archivedAt).toBeNull()

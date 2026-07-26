@@ -47,6 +47,7 @@ describe("session repository", () => {
 
     const result = repository.create({
       workspaceId,
+      agentId: "cursor",
       name: "Debug auth",
       acpSessionId: "acp-internal-123",
     })
@@ -55,6 +56,7 @@ describe("session repository", () => {
     if (result.ok) {
       expect(result.value.id).toMatch(/^sess_[0-9A-HJKMNP-TV-Z]{26}$/)
       expect(result.value.workspaceId).toBe(workspaceId)
+      expect(result.value.agentId).toBe("cursor")
       expect(result.value.name).toBe("Debug auth")
       expect(result.value.state).toBe("idle")
       expect(result.value.createdAt).toBe(result.value.lastUsedAt)
@@ -76,16 +78,19 @@ describe("session repository", () => {
 
     const first = repository.create({
       workspaceId,
+      agentId: "cursor",
       name: "Alpha",
       acpSessionId: "acp-1",
     })
     const second = repository.create({
       workspaceId,
+      agentId: "cursor",
       name: "Beta",
       acpSessionId: "acp-2",
     })
     const third = repository.create({
       workspaceId,
+      agentId: "cursor",
       name: "Gamma",
       acpSessionId: "acp-3",
     })
@@ -125,6 +130,7 @@ describe("session repository", () => {
         {
           id: "sess_ZZZZZZZZZZZZZZZZZZZZZZZZZ",
           workspaceId,
+          agentId: "cursor",
           name: "Zulu",
           state: "idle",
           acpSessionId: "acp-z",
@@ -136,6 +142,7 @@ describe("session repository", () => {
         {
           id: "sess_AAAAAAAAAAAAAAAAAAAAAAAA",
           workspaceId,
+          agentId: "cursor",
           name: "Alpha",
           state: "idle",
           acpSessionId: "acp-a",
@@ -168,6 +175,7 @@ describe("session repository", () => {
 
     const created = repository.create({
       workspaceId,
+      agentId: "cursor",
       name: "Original",
       acpSessionId: "acp-original",
     })
@@ -224,6 +232,7 @@ describe("session repository", () => {
     for (const [index, name] of ["One", "Two", "Three"].entries()) {
       const created = repository.create({
         workspaceId,
+        agentId: "cursor",
         name: `Session ${index + 1} (${name})`,
         acpSessionId: `acp-${index}`,
       })
@@ -232,6 +241,7 @@ describe("session repository", () => {
 
     repository.create({
       workspaceId: otherWorkspace.value.id,
+      agentId: "cursor",
       name: "Other workspace session",
       acpSessionId: "acp-other",
     })
@@ -282,6 +292,7 @@ describe("session repository", () => {
     for (const [index, name] of ["One", "Two", "Three"].entries()) {
       const created = repository.create({
         workspaceId,
+        agentId: "cursor",
         name: `Session ${index + 1} (${name})`,
         acpSessionId: `acp-${index}`,
       })
@@ -353,6 +364,7 @@ describe("session repository", () => {
 
     const created = repository.create({
       workspaceId,
+      agentId: "cursor",
       name: "Cascade me",
       acpSessionId: "acp-cascade",
     })

@@ -94,6 +94,7 @@ describe("drizzle migrations", () => {
     expect(columns.map((row) => row.name)).toEqual([
       "id",
       "workspace_id",
+      "agent_id",
       "name",
       "state",
       "acp_session_id",

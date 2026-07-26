@@ -1,6 +1,7 @@
 CREATE TABLE `sessions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`workspace_id` text NOT NULL,
+	`agent_id` text NOT NULL,
 	`name` text NOT NULL,
 	`state` text NOT NULL,
 	`acp_session_id` text NOT NULL,

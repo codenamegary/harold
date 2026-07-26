@@ -6,6 +6,7 @@ export const sessions = sqliteTable("sessions", {
   workspaceId: text("workspace_id")
     .notNull()
     .references(() => workspaces.id, { onDelete: "cascade" }),
+  agentId: text("agent_id").notNull(),
   name: text("name").notNull(),
   state: text("state").notNull(),
   acpSessionId: text("acp_session_id").notNull(),
