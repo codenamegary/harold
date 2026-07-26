@@ -62,14 +62,13 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
 
     return {
       ok: true,
-      value: {
+      value: rowToWorkspace({
         id,
         name,
-        path: canonicalizeResult.canonicalPath,
-        state: probeWorkspaceState(canonicalizeResult.canonicalPath),
+        canonicalPath: canonicalizeResult.canonicalPath,
         createdAt: timestamp,
         lastUsedAt: timestamp,
-      },
+      }),
     }
   }
 

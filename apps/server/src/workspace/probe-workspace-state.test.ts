@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { accessSync } from "node:fs"
 import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { probeWorkspaceState } from "./probe-workspace-state"
-import { chmodBlocksAccess } from "./test-chmod-blocks-access"
 
 const tempDirs: string[] = []
 
@@ -11,6 +11,15 @@ const createTempDir = async (prefix: string) => {
   const dir = await mkdtemp(path.join(os.tmpdir(), prefix))
   tempDirs.push(dir)
   return dir
+}
+
+const chmodBlocksAccess = (targetPath: string): boolean => {
+  try {
+    accessSync(targetPath)
+    return false
+  } catch {
+    return true
+  }
 }
 
 afterEach(async () => {

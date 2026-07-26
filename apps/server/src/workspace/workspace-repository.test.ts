@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { openDatabase } from "../persistence/open-database"
+import { workspaces } from "../persistence/schema/workspaces"
 import { createWorkspaceRepository } from "./workspace-repository"
 
 const tempDirs: string[] = []
@@ -89,6 +90,43 @@ describe("workspace repository", () => {
       second.value.id,
       third.value.id,
       first.value.id,
+    ])
+
+    database.close()
+  })
+
+  test("breaks ties on id asc when lastUsedAt matches", async () => {
+    const dataDir = await createTempDataDir()
+    const alpha = await createWorkspaceDir(dataDir, "alpha")
+    const beta = await createWorkspaceDir(dataDir, "beta")
+    const database = openDatabase({ dataDir })
+    const repository = createWorkspaceRepository(database)
+    const timestamp = "2026-01-01T00:00:00.000Z"
+
+    database.db
+      .insert(workspaces)
+      .values([
+        {
+          id: "ws_ZZZZZZZZZZZZZZZZZZZZZZZZZZ",
+          name: "Zulu",
+          canonicalPath: alpha,
+          createdAt: timestamp,
+          lastUsedAt: timestamp,
+        },
+        {
+          id: "ws_AAAAAAAAAAAAAAAAAAAAAAAAA",
+          name: "Alpha",
+          canonicalPath: beta,
+          createdAt: timestamp,
+          lastUsedAt: timestamp,
+        },
+      ])
+      .run()
+
+    const items = repository.list()
+    expect(items.map((workspace) => workspace.id)).toEqual([
+      "ws_AAAAAAAAAAAAAAAAAAAAAAAAA",
+      "ws_ZZZZZZZZZZZZZZZZZZZZZZZZZZ",
     ])
 
     database.close()

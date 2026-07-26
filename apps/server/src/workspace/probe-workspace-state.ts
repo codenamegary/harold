@@ -1,17 +1,6 @@
 import { accessSync, constants, statSync } from "node:fs"
 import { WorkspaceState } from "contracts/http/workspace"
-
-const isMissingError = (error: unknown): boolean =>
-  typeof error === "object" &&
-  error !== null &&
-  "code" in error &&
-  (error.code === "ENOENT" || error.code === "ENOTDIR")
-
-const isPermissionError = (error: unknown): boolean =>
-  typeof error === "object" &&
-  error !== null &&
-  "code" in error &&
-  (error.code === "EACCES" || error.code === "EPERM")
+import { isMissingFilesystemError, isPermissionFilesystemError } from "./filesystem-errors"
 
 export const probeWorkspaceState = (canonicalPath: string): WorkspaceState => {
   try {
@@ -23,10 +12,10 @@ export const probeWorkspaceState = (canonicalPath: string): WorkspaceState => {
     accessSync(canonicalPath, constants.R_OK | constants.X_OK)
     return "available"
   } catch (error: unknown) {
-    if (isMissingError(error)) {
+    if (isMissingFilesystemError(error)) {
       return "missing"
     }
-    if (isPermissionError(error)) {
+    if (isPermissionFilesystemError(error)) {
       return "unavailable"
     }
     throw error
