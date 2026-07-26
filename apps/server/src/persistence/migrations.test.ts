@@ -32,6 +32,7 @@ describe("drizzle migrations", () => {
 
     expect(tables).toContain("__drizzle_migrations")
     expect(tables).toContain("workspaces")
+    expect(tables).toContain("agent_settings")
     expect(tables).not.toContain("schema_migrations")
 
     const columns = database.sqlite
@@ -47,11 +48,35 @@ describe("drizzle migrations", () => {
       "last_used_at",
     ])
 
+    const agentSettingsColumns = database.sqlite
+      .query<{ name: string }, []>("PRAGMA table_info(agent_settings)")
+      .all()
+      .map((row) => row.name)
+
+    expect(agentSettingsColumns).toEqual([
+      "agent_id",
+      "enabled",
+      "path_override",
+      "detected_path",
+      "updated_at",
+    ])
+
     const migrationCount = database.sqlite
       .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM __drizzle_migrations")
       .get()?.count
 
-    expect(migrationCount).toBe(1)
+    expect(migrationCount).toBe(2)
+
+    const seededAgents = database.sqlite
+      .query<{ agent_id: string; enabled: number }, []>(
+        "SELECT agent_id, enabled FROM agent_settings ORDER BY agent_id",
+      )
+      .all()
+
+    expect(seededAgents).toEqual([
+      { agent_id: "claude", enabled: 0 },
+      { agent_id: "cursor", enabled: 0 },
+    ])
 
     database.close()
   })
@@ -67,7 +92,7 @@ describe("drizzle migrations", () => {
       .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM __drizzle_migrations")
       .get()?.count
 
-    expect(migrationCount).toBe(1)
+    expect(migrationCount).toBe(2)
     second.close()
   })
 })
@@ -99,7 +124,7 @@ describe("openDatabase", () => {
       .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM __drizzle_migrations")
       .get()?.count
 
-    expect(migrationCount).toBe(1)
+    expect(migrationCount).toBe(2)
     second.close()
   })
 

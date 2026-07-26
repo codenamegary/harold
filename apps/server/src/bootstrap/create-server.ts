@@ -5,8 +5,11 @@ import { Config } from "../config/config"
 import { AgentDatabase } from "../persistence/open-database"
 import { Runtime } from "../runtime/runtime"
 import { registerStatusRoutes } from "../status/status-routes"
+import { createAgentSettingsRepository } from "../agent-settings/agent-settings-repository"
+import { registerAgentSettingsRoutes } from "../agent-settings/agent-settings-routes"
 import { createWorkspaceRepository } from "../workspace/workspace-repository"
 import { registerWorkspaceRoutes } from "../workspace/workspace-routes"
+import { WhichFn } from "../agent-settings/resolve-agent-path"
 
 const TestBodySchema = z.object({
   name: z.string().min(1),
@@ -28,6 +31,7 @@ export type CreateServerOptions = {
   runtime: Runtime
   database: AgentDatabase
   registerTestRoutes?: boolean
+  whichFn?: WhichFn
 }
 
 export const createServer = async ({
@@ -35,6 +39,7 @@ export const createServer = async ({
   runtime,
   database,
   registerTestRoutes: withTestRoutes = false,
+  whichFn,
 }: CreateServerOptions) => {
   const app = Fastify({
     logger: {
@@ -53,6 +58,10 @@ export const createServer = async ({
   registerErrorHandler(app)
   registerStatusRoutes(app, runtime, config)
   registerWorkspaceRoutes(app, createWorkspaceRepository(database))
+  registerAgentSettingsRoutes(
+    app,
+    createAgentSettingsRepository(database, { whichFn }),
+  )
 
   if (withTestRoutes) {
     registerTestRoutes(app)

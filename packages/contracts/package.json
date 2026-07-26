@@ -9,6 +9,7 @@
     "./http/error": "./src/http/error.ts",
     "./http/workspace": "./src/http/workspace.ts",
     "./http/session": "./src/http/session.ts",
+    "./http/agent-settings": "./src/http/agent-settings.ts",
     "./events/event": "./src/events/event.ts"
   },
   "scripts": {
