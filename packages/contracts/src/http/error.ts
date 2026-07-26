@@ -1,9 +1,11 @@
-import { z } from "zod";
+import { z } from "zod"
 
 export const PROBLEM_TYPES = {
   validationError: "https://agent-server.local/problems/validation-error",
   internalError: "https://agent-server.local/problems/internal-error",
-} as const;
+  notFound: "https://agent-server.local/problems/not-found",
+  conflict: "https://agent-server.local/problems/conflict",
+} as const
 
 export const ProblemErrorSchema = z.object({
   pointer: z.string().min(1),
@@ -31,14 +33,26 @@ export const ValidationProblemSchema = ValidationProblemFieldsSchema.extend({
 
 export const InternalProblemSchema = InternalProblemFieldsSchema.extend({
   type: z.literal(PROBLEM_TYPES.internalError),
-}).strict();
+}).strict()
+
+export const NotFoundProblemSchema = InternalProblemFieldsSchema.extend({
+  type: z.literal(PROBLEM_TYPES.notFound),
+}).strict()
+
+export const ConflictProblemSchema = InternalProblemFieldsSchema.extend({
+  type: z.literal(PROBLEM_TYPES.conflict),
+}).strict()
 
 export const ProblemDetailsSchema = z.discriminatedUnion("type", [
   ValidationProblemSchema,
   InternalProblemSchema,
-]);
+  NotFoundProblemSchema,
+  ConflictProblemSchema,
+])
 
-export type ProblemError = z.infer<typeof ProblemErrorSchema>;
-export type ValidationProblem = z.infer<typeof ValidationProblemSchema>;
-export type InternalProblem = z.infer<typeof InternalProblemSchema>;
-export type ProblemDetails = z.infer<typeof ProblemDetailsSchema>;
+export type ProblemError = z.infer<typeof ProblemErrorSchema>
+export type ValidationProblem = z.infer<typeof ValidationProblemSchema>
+export type InternalProblem = z.infer<typeof InternalProblemSchema>
+export type NotFoundProblem = z.infer<typeof NotFoundProblemSchema>
+export type ConflictProblem = z.infer<typeof ConflictProblemSchema>
+export type ProblemDetails = z.infer<typeof ProblemDetailsSchema>
