@@ -47,28 +47,12 @@ export const toAgentSettings = (
   definition: AgentDefinition,
   row: {
     enabled: boolean
-    pathOverride: string | null
-    detectedPath: string | null
+    path: string | null
   },
-): AgentSettings => {
-  const resolutionStatus = !definition.available
-    ? "unavailable"
-    : row.pathOverride
-      ? "overridden"
-      : row.detectedPath
-        ? "detected"
-        : "not_found"
-
-  const effectivePath = row.pathOverride ?? row.detectedPath ?? null
-
-  return {
-    id: definition.id,
-    displayName: definition.displayName,
-    available: definition.available,
-    enabled: row.enabled,
-    detectedPath: row.detectedPath,
-    pathOverride: row.pathOverride,
-    effectivePath,
-    resolutionStatus,
-  }
-}
+): AgentSettings => ({
+  id: definition.id,
+  displayName: definition.displayName,
+  available: definition.available,
+  enabled: row.enabled,
+  path: row.path,
+})

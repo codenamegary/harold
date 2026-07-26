@@ -12,10 +12,16 @@ import {
   toAgentSettings,
 } from "./agent-registry"
 import { resolveAgentPath, WhichFn } from "./resolve-agent-path"
+import {
+  validateExecutablePath,
+  ValidateExecutablePathFn,
+} from "./validate-agent-path"
 
 export type AgentSettingsRepositoryError =
   | { kind: "not_found" }
   | { kind: "cannot_enable" }
+  | { kind: "path_not_found" }
+  | { kind: "path_invalid"; path: string }
 
 export type AgentSettingsRepositoryResult<T> =
   | { ok: true; value: T }
@@ -25,6 +31,7 @@ type AgentSettingsRow = typeof agentSettings.$inferSelect
 
 export type AgentSettingsRepository = {
   list: () => AgentSettings[]
+  detectPath: (agentId: AgentId) => AgentSettingsRepositoryResult<{ path: string }>
   update: (input: {
     agentId: AgentId
     body: UpdateAgentSettingsBody
@@ -33,6 +40,7 @@ export type AgentSettingsRepository = {
 
 export type CreateAgentSettingsRepositoryOptions = {
   whichFn?: WhichFn
+  validateExecutablePathFn?: ValidateExecutablePathFn
 }
 
 const nowIso = () => new Date().toISOString()
@@ -50,31 +58,27 @@ const detectPathForAgent = (
   return resolveAgentPath(definition.binaryName, whichFn)
 }
 
-const computeNextRow = (
+const resolvePathForUpdate = (
   agentId: AgentId,
-  current: AgentSettingsRow,
   body: UpdateAgentSettingsBody,
   whichFn: WhichFn,
-): AgentSettingsRow => {
-  const nextEnabled = body.enabled ?? current.enabled
-  const nextPathOverride =
-    body.pathOverride === undefined ? current.pathOverride : body.pathOverride
-
-  const shouldDetect =
-    nextPathOverride === null &&
-    (body.enabled === true || (body.pathOverride === null && nextEnabled))
-
-  const nextDetectedPath = shouldDetect
-    ? detectPathForAgent(agentId, whichFn)
-    : current.detectedPath
-
-  return {
-    ...current,
-    enabled: nextEnabled,
-    pathOverride: nextPathOverride,
-    detectedPath: nextDetectedPath,
-    updatedAt: nowIso(),
+  validatePath: ValidateExecutablePathFn,
+): AgentSettingsRepositoryResult<string> => {
+  if ("path" in body) {
+    if (!validatePath(body.path)) {
+      return { ok: false, error: { kind: "path_invalid", path: body.path } }
+    }
+    return { ok: true, value: body.path }
   }
+
+  const detectedPath = detectPathForAgent(agentId, whichFn)
+  if (!detectedPath) {
+    return { ok: false, error: { kind: "path_not_found" } }
+  }
+  if (!validatePath(detectedPath)) {
+    return { ok: false, error: { kind: "path_invalid", path: detectedPath } }
+  }
+  return { ok: true, value: detectedPath }
 }
 
 export const createAgentSettingsRepository = (
@@ -82,6 +86,7 @@ export const createAgentSettingsRepository = (
   options: CreateAgentSettingsRepositoryOptions = {},
 ): AgentSettingsRepository => {
   const whichFn: WhichFn = options.whichFn ?? ((name) => Bun.which(name))
+  const validatePath = options.validateExecutablePathFn ?? validateExecutablePath
 
   const list = (): AgentSettings[] => {
     const rows = database.db.select().from(agentSettings).all()
@@ -93,10 +98,25 @@ export const createAgentSettingsRepository = (
         ? rowToAgentSettings(row)
         : toAgentSettings(definition, {
             enabled: false,
-            pathOverride: null,
-            detectedPath: null,
+            path: null,
           })
     })
+  }
+
+  const detectPath = (
+    agentId: AgentId,
+  ): AgentSettingsRepositoryResult<{ path: string }> => {
+    const definition = agentDefinitions[agentId]
+    if (!definition) {
+      return { ok: false, error: { kind: "not_found" } }
+    }
+
+    const detectedPath = detectPathForAgent(agentId, whichFn)
+    if (!detectedPath || !validatePath(detectedPath)) {
+      return { ok: false, error: { kind: "path_not_found" } }
+    }
+
+    return { ok: true, value: { path: detectedPath } }
   }
 
   const update = ({
@@ -111,7 +131,7 @@ export const createAgentSettingsRepository = (
       return { ok: false, error: { kind: "not_found" } }
     }
 
-    if (body.enabled === true && !definition.available) {
+    if (body.enabled && !definition.available) {
       return { ok: false, error: { kind: "cannot_enable" } }
     }
 
@@ -125,14 +145,29 @@ export const createAgentSettingsRepository = (
       return { ok: false, error: { kind: "not_found" } }
     }
 
-    const nextRow = computeNextRow(agentId, current, body, whichFn)
+    const nextEnabled = body.enabled
+    let nextPath = current.path
+
+    if ("path" in body || nextEnabled) {
+      const resolvedPath = resolvePathForUpdate(agentId, body, whichFn, validatePath)
+      if (!resolvedPath.ok) {
+        return resolvedPath
+      }
+      nextPath = resolvedPath.value
+    }
+
+    const nextRow: AgentSettingsRow = {
+      ...current,
+      enabled: nextEnabled,
+      path: nextPath,
+      updatedAt: nowIso(),
+    }
 
     database.db
       .update(agentSettings)
       .set({
         enabled: nextRow.enabled,
-        pathOverride: nextRow.pathOverride,
-        detectedPath: nextRow.detectedPath,
+        path: nextRow.path,
         updatedAt: nextRow.updatedAt,
       })
       .where(eq(agentSettings.agentId, agentId))
@@ -143,6 +178,7 @@ export const createAgentSettingsRepository = (
 
   return {
     list,
+    detectPath,
     update,
   }
 }

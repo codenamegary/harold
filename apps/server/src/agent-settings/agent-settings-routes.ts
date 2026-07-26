@@ -2,6 +2,7 @@ import {
   AgentIdSchema,
   AgentSettingsCollectionSchema,
   AgentSettingsSchema,
+  DetectAgentPathResponseSchema,
   UpdateAgentSettingsBodySchema,
 } from "contracts/http/agent-settings"
 import { FastifyInstance } from "fastify"
@@ -9,6 +10,8 @@ import { AgentSettingsRepository } from "./agent-settings-repository"
 import {
   buildAgentCannotEnableProblem,
   buildAgentNotFoundProblem,
+  buildAgentPathInvalidProblem,
+  buildAgentPathNotFoundProblem,
 } from "./agent-settings-problems"
 
 const sendProblem = (
@@ -33,6 +36,22 @@ export const registerAgentSettingsRoutes = (
     return reply.status(200).send(collection)
   })
 
+  app.post("/v1/settings/agents/:agentId/detect-path", async (request, reply) => {
+    const agentId = AgentIdSchema.parse((request.params as { agentId: string }).agentId)
+    const result = repository.detectPath(agentId)
+
+    if (!result.ok) {
+      if (result.error.kind === "path_not_found") {
+        return sendProblem(reply, 404, buildAgentPathNotFoundProblem())
+      }
+      return sendProblem(reply, 404, buildAgentNotFoundProblem())
+    }
+
+    return reply.status(200).send(
+      DetectAgentPathResponseSchema.parse(result.value),
+    )
+  })
+
   app.patch("/v1/settings/agents/:agentId", async (request, reply) => {
     const agentId = AgentIdSchema.parse((request.params as { agentId: string }).agentId)
     const body = UpdateAgentSettingsBodySchema.parse(request.body)
@@ -41,6 +60,12 @@ export const registerAgentSettingsRoutes = (
     if (!result.ok) {
       if (result.error.kind === "cannot_enable") {
         return sendProblem(reply, 409, buildAgentCannotEnableProblem())
+      }
+      if (result.error.kind === "path_not_found") {
+        return sendProblem(reply, 404, buildAgentPathNotFoundProblem())
+      }
+      if (result.error.kind === "path_invalid") {
+        return sendProblem(reply, 400, buildAgentPathInvalidProblem(result.error.path))
       }
       return sendProblem(reply, 404, buildAgentNotFoundProblem())
     }

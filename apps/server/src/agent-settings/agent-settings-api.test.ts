@@ -4,17 +4,20 @@ import os from "node:os"
 import path from "node:path"
 import {
   ConflictProblemSchema,
+  NotFoundProblemSchema,
   ValidationProblemSchema,
 } from "contracts/http/error"
 import {
   AgentSettingsCollectionSchema,
   AgentSettingsSchema,
+  DetectAgentPathResponseSchema,
 } from "contracts/http/agent-settings"
 import { createServer } from "../bootstrap/create-server"
 import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/open-database"
 import { createRuntime } from "../runtime/runtime"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
+import { ValidateExecutablePathFn, validateExecutablePath } from "../agent-settings/validate-agent-path"
 
 const tempDirs: string[] = []
 const apps: Awaited<ReturnType<typeof createServer>>[] = []
@@ -25,7 +28,13 @@ const createTempDataDir = async () => {
   return dir
 }
 
-const createTestApp = async (dataDir: string, whichFn?: WhichFn) => {
+const acceptTestExecutablePath: ValidateExecutablePathFn = () => true
+
+const createTestApp = async (
+  dataDir: string,
+  whichFn?: WhichFn,
+  validateExecutablePathFn: ValidateExecutablePathFn = acceptTestExecutablePath,
+) => {
   const config = parseConfig({
     AGENT_SERVER_HOST: "127.0.0.1",
     AGENT_SERVER_PORT: "0",
@@ -33,7 +42,13 @@ const createTestApp = async (dataDir: string, whichFn?: WhichFn) => {
   })
   const database = openDatabase({ dataDir: config.dataDir })
   const runtime = createRuntime("0.1.0")
-  const app = await createServer({ config, runtime, database, whichFn })
+  const app = await createServer({
+    config,
+    runtime,
+    database,
+    whichFn,
+    validateExecutablePathFn,
+  })
   apps.push(app)
   return { app, database, config }
 }
@@ -72,20 +87,60 @@ describe("GET /v1/settings/agents", () => {
     const cursor = findAgent(body, "cursor")
     expect(cursor.enabled).toBe(false)
     expect(cursor.available).toBe(true)
-    expect(cursor.detectedPath).toBeNull()
-    expect(cursor.pathOverride).toBeNull()
-    expect(cursor.effectivePath).toBeNull()
-    expect(cursor.resolutionStatus).toBe("not_found")
+    expect(cursor.path).toBeNull()
 
     const claude = findAgent(body, "claude")
     expect(claude.enabled).toBe(false)
     expect(claude.available).toBe(false)
-    expect(claude.resolutionStatus).toBe("unavailable")
+    expect(claude.path).toBeNull()
+  })
+})
+
+describe("POST /v1/settings/agents/:agentId/detect-path", () => {
+  test("returns detected path without persisting", async () => {
+    const dataDir = await createTempDataDir()
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { app } = await createTestApp(dataDir, whichFn)
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/settings/agents/cursor/detect-path",
+    })
+
+    const body = DetectAgentPathResponseSchema.parse(JSON.parse(response.body))
+
+    expect(response.statusCode).toBe(200)
+    expect(body.path).toBe(detectedPath)
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/settings/agents",
+    })
+    const listBody = AgentSettingsCollectionSchema.parse(JSON.parse(listResponse.body))
+    expect(findAgent(listBody, "cursor").path).toBeNull()
+  })
+
+  test("returns 404 when detect fails", async () => {
+    const dataDir = await createTempDataDir()
+    const whichFn: WhichFn = () => undefined
+    const { app } = await createTestApp(dataDir, whichFn)
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/settings/agents/cursor/detect-path",
+    })
+
+    const body = NotFoundProblemSchema.parse(JSON.parse(response.body))
+
+    expect(response.statusCode).toBe(404)
+    expect(body.title).toBe("Agent executable not found")
   })
 })
 
 describe("PATCH /v1/settings/agents/:agentId", () => {
-  test("enables cursor and detects executable path", async () => {
+  test("enables cursor and auto-detects executable path", async () => {
     const dataDir = await createTempDataDir()
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
@@ -102,12 +157,10 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
 
     expect(response.statusCode).toBe(200)
     expect(body.enabled).toBe(true)
-    expect(body.detectedPath).toBe(detectedPath)
-    expect(body.effectivePath).toBe(detectedPath)
-    expect(body.resolutionStatus).toBe("detected")
+    expect(body.path).toBe(detectedPath)
   })
 
-  test("enables cursor with not_found when detect fails", async () => {
+  test("returns 404 when enable auto-detect fails", async () => {
     const dataDir = await createTempDataDir()
     const whichFn: WhichFn = () => undefined
     const { app } = await createTestApp(dataDir, whichFn)
@@ -118,19 +171,17 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
       payload: { enabled: true },
     })
 
-    const body = AgentSettingsSchema.parse(JSON.parse(response.body))
+    const body = NotFoundProblemSchema.parse(JSON.parse(response.body))
 
-    expect(response.statusCode).toBe(200)
-    expect(body.enabled).toBe(true)
-    expect(body.detectedPath).toBeNull()
-    expect(body.effectivePath).toBeNull()
-    expect(body.resolutionStatus).toBe("not_found")
+    expect(response.statusCode).toBe(404)
+    expect(body.title).toBe("Agent executable not found")
   })
 
-  test("disables cursor", async () => {
+  test("disables cursor and keeps stored path", async () => {
     const dataDir = await createTempDataDir()
+    const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
-      binaryName === "agent" ? "/usr/local/bin/agent" : undefined
+      binaryName === "agent" ? detectedPath : undefined
     const { app } = await createTestApp(dataDir, whichFn)
 
     await app.inject({
@@ -149,53 +200,53 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
 
     expect(response.statusCode).toBe(200)
     expect(body.enabled).toBe(false)
-    expect(body.detectedPath).toBe("/usr/local/bin/agent")
+    expect(body.path).toBe(detectedPath)
   })
 
-  test("sets path override", async () => {
+  test("sets path with manual override", async () => {
     const dataDir = await createTempDataDir()
     const { app } = await createTestApp(dataDir)
 
     const response = await app.inject({
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
-      payload: { pathOverride: "/opt/custom/agent" },
+      payload: { enabled: true, path: "/opt/custom/agent" },
     })
 
     const body = AgentSettingsSchema.parse(JSON.parse(response.body))
 
     expect(response.statusCode).toBe(200)
-    expect(body.pathOverride).toBe("/opt/custom/agent")
-    expect(body.effectivePath).toBe("/opt/custom/agent")
-    expect(body.resolutionStatus).toBe("overridden")
+    expect(body.enabled).toBe(true)
+    expect(body.path).toBe("/opt/custom/agent")
   })
 
-  test("clears path override and re-detects when enabled", async () => {
+  test("returns 400 for invalid executable path", async () => {
     const dataDir = await createTempDataDir()
-    const detectedPath = "/usr/local/bin/agent"
-    const whichFn: WhichFn = (binaryName) =>
-      binaryName === "agent" ? detectedPath : undefined
-    const { app } = await createTestApp(dataDir, whichFn)
-
-    await app.inject({
-      method: "PATCH",
-      url: "/v1/settings/agents/cursor",
-      payload: { enabled: true, pathOverride: "/opt/custom/agent" },
-    })
+    const { app } = await createTestApp(dataDir, undefined, validateExecutablePath)
 
     const response = await app.inject({
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
-      payload: { pathOverride: null },
+      payload: { enabled: true, path: "/does/not/exist" },
     })
 
-    const body = AgentSettingsSchema.parse(JSON.parse(response.body))
+    const body = ValidationProblemSchema.parse(JSON.parse(response.body))
 
-    expect(response.statusCode).toBe(200)
-    expect(body.pathOverride).toBeNull()
-    expect(body.detectedPath).toBe(detectedPath)
-    expect(body.effectivePath).toBe(detectedPath)
-    expect(body.resolutionStatus).toBe("detected")
+    expect(response.statusCode).toBe(400)
+    expect(body.title).toBe("Invalid agent executable path")
+  })
+
+  test("rejects null path override", async () => {
+    const dataDir = await createTempDataDir()
+    const { app } = await createTestApp(dataDir)
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/settings/agents/cursor",
+      payload: { enabled: true, path: null },
+    })
+
+    expect(response.statusCode).toBe(400)
   })
 
   test("returns 409 when enabling claude", async () => {
@@ -252,6 +303,7 @@ describe("agent settings durability", () => {
       runtime: firstRuntime,
       database: firstDatabase,
       whichFn,
+      validateExecutablePathFn: acceptTestExecutablePath,
     })
 
     await firstApp.inject({
@@ -270,6 +322,7 @@ describe("agent settings durability", () => {
       runtime: secondRuntime,
       database: secondDatabase,
       whichFn,
+      validateExecutablePathFn: acceptTestExecutablePath,
     })
     apps.push(secondApp)
 
@@ -281,7 +334,7 @@ describe("agent settings durability", () => {
     const cursor = findAgent(body, "cursor")
 
     expect(cursor.enabled).toBe(true)
-    expect(cursor.detectedPath).toBe(detectedPath)
+    expect(cursor.path).toBe(detectedPath)
 
     secondDatabase.close()
   })

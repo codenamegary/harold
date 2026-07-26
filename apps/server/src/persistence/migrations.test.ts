@@ -56,8 +56,7 @@ describe("drizzle migrations", () => {
     expect(agentSettingsColumns).toEqual([
       "agent_id",
       "enabled",
-      "path_override",
-      "detected_path",
+      "path",
       "updated_at",
     ])
 

@@ -10,6 +10,7 @@ import { registerAgentSettingsRoutes } from "../agent-settings/agent-settings-ro
 import { createWorkspaceRepository } from "../workspace/workspace-repository"
 import { registerWorkspaceRoutes } from "../workspace/workspace-routes"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
+import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
 
 const TestBodySchema = z.object({
   name: z.string().min(1),
@@ -32,6 +33,7 @@ export type CreateServerOptions = {
   database: AgentDatabase
   registerTestRoutes?: boolean
   whichFn?: WhichFn
+  validateExecutablePathFn?: ValidateExecutablePathFn
 }
 
 export const createServer = async ({
@@ -40,6 +42,7 @@ export const createServer = async ({
   database,
   registerTestRoutes: withTestRoutes = false,
   whichFn,
+  validateExecutablePathFn,
 }: CreateServerOptions) => {
   const app = Fastify({
     logger: {
@@ -60,7 +63,7 @@ export const createServer = async ({
   registerWorkspaceRoutes(app, createWorkspaceRepository(database))
   registerAgentSettingsRoutes(
     app,
-    createAgentSettingsRepository(database, { whichFn }),
+    createAgentSettingsRepository(database, { whichFn, validateExecutablePathFn }),
   )
 
   if (withTestRoutes) {

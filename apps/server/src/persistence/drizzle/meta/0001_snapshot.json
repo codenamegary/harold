@@ -22,15 +22,8 @@
           "autoincrement": false,
           "default": false
         },
-        "path_override": {
-          "name": "path_override",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "detected_path": {
-          "name": "detected_path",
+        "path": {
+          "name": "path",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

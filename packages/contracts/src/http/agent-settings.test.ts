@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   AgentSettingsCollectionSchema,
   AgentSettingsSchema,
+  DetectAgentPathResponseSchema,
   UpdateAgentSettingsBodySchema,
 } from "./agent-settings"
 
@@ -10,10 +11,7 @@ const validAgentSettings = {
   displayName: "Cursor",
   available: true,
   enabled: false,
-  detectedPath: null,
-  pathOverride: null,
-  effectivePath: null,
-  resolutionStatus: "not_found",
+  path: null,
 } as const
 
 describe("AgentSettingsSchema", () => {
@@ -21,13 +19,11 @@ describe("AgentSettingsSchema", () => {
     expect(AgentSettingsSchema.parse(validAgentSettings)).toEqual(validAgentSettings)
   })
 
-  test("accepts detected path fields when enabled", () => {
+  test("accepts path when enabled", () => {
     const settings = {
       ...validAgentSettings,
       enabled: true,
-      detectedPath: "/usr/local/bin/agent",
-      effectivePath: "/usr/local/bin/agent",
-      resolutionStatus: "detected",
+      path: "/usr/local/bin/agent",
     }
 
     expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
@@ -39,10 +35,7 @@ describe("AgentSettingsSchema", () => {
       displayName: "Claude",
       available: false,
       enabled: false,
-      detectedPath: null,
-      pathOverride: null,
-      effectivePath: null,
-      resolutionStatus: "unavailable",
+      path: null,
     }
 
     expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
@@ -62,24 +55,42 @@ describe("UpdateAgentSettingsBodySchema", () => {
     })
   })
 
-  test("accepts path override", () => {
+  test("accepts enable with path", () => {
     expect(
-      UpdateAgentSettingsBodySchema.parse({ pathOverride: "/opt/agent/bin" }),
+      UpdateAgentSettingsBodySchema.parse({
+        enabled: true,
+        path: "/opt/agent/bin",
+      }),
     ).toEqual({
-      pathOverride: "/opt/agent/bin",
+      enabled: true,
+      path: "/opt/agent/bin",
     })
   })
 
-  test("accepts null path override to clear", () => {
-    expect(UpdateAgentSettingsBodySchema.parse({ pathOverride: null })).toEqual({
-      pathOverride: null,
-    })
-  })
-
-  test("rejects empty path override", () => {
+  test("rejects null path", () => {
     expect(() =>
-      UpdateAgentSettingsBodySchema.parse({ pathOverride: "" }),
+      UpdateAgentSettingsBodySchema.parse({ enabled: true, path: null }),
     ).toThrow()
+  })
+
+  test("rejects path without enabled", () => {
+    expect(() =>
+      UpdateAgentSettingsBodySchema.parse({ path: "/opt/agent/bin" }),
+    ).toThrow()
+  })
+
+  test("rejects empty path", () => {
+    expect(() =>
+      UpdateAgentSettingsBodySchema.parse({ enabled: true, path: "" }),
+    ).toThrow()
+  })
+})
+
+describe("DetectAgentPathResponseSchema", () => {
+  test("accepts a detected path", () => {
+    expect(DetectAgentPathResponseSchema.parse({ path: "/usr/local/bin/agent" })).toEqual({
+      path: "/usr/local/bin/agent",
+    })
   })
 })
 
@@ -93,10 +104,7 @@ describe("AgentSettingsCollectionSchema", () => {
           displayName: "Claude",
           available: false,
           enabled: false,
-          detectedPath: null,
-          pathOverride: null,
-          effectivePath: null,
-          resolutionStatus: "unavailable",
+          path: null,
         },
       ],
     }
