@@ -6,14 +6,14 @@
       "idx": 0,
       "version": "6",
       "when": 1785039208857,
-      "tag": "0000_gray_captain_america",
+      "tag": "0000_add_workspaces_table",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "6",
       "when": 1785095002093,
-      "tag": "0001_outstanding_gertrude_yorkes",
+      "tag": "0001_add_agent_settings_table",
       "breakpoints": true
     }
   ]

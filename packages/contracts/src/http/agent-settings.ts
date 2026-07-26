@@ -8,6 +8,7 @@ export const AgentSettingsSchema = z.strictObject({
   available: z.boolean(),
   enabled: z.boolean(),
   path: z.string().min(1).nullable(),
+  pathValid: z.boolean(),
 })
 
 export const AgentSettingsCollectionSchema = z.strictObject({
