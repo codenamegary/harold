@@ -85,8 +85,13 @@ describe("workspace repository", () => {
     const renamed = repository.updateName(second.value.id, "Beta Renamed")
     expect(renamed.ok).toBe(true)
 
-    const items = repository.list()
-    expect(items.map((workspace) => workspace.id)).toEqual([
+    const listResult = repository.list({ limit: 100 })
+    expect(listResult.ok).toBe(true)
+    if (!listResult.ok) {
+      return
+    }
+
+    expect(listResult.value.items.map((workspace) => workspace.id)).toEqual([
       second.value.id,
       third.value.id,
       first.value.id,
@@ -123,8 +128,13 @@ describe("workspace repository", () => {
       ])
       .run()
 
-    const items = repository.list()
-    expect(items.map((workspace) => workspace.id)).toEqual([
+    const listResult = repository.list({ limit: 100 })
+    expect(listResult.ok).toBe(true)
+    if (!listResult.ok) {
+      return
+    }
+
+    expect(listResult.value.items.map((workspace) => workspace.id)).toEqual([
       "ws_AAAAAAAAAAAAAAAAAAAAAAAAA",
       "ws_ZZZZZZZZZZZZZZZZZZZZZZZZZZ",
     ])
@@ -165,6 +175,52 @@ describe("workspace repository", () => {
     expect(missing.ok).toBe(false)
     if (!missing.ok) {
       expect(missing.error.kind).toBe("not_found")
+    }
+
+    database.close()
+  })
+
+  test("pages forward with opaque cursors and count", async () => {
+    const dataDir = await createTempDataDir()
+    const dirs = await Promise.all([
+      createWorkspaceDir(dataDir, "one"),
+      createWorkspaceDir(dataDir, "two"),
+      createWorkspaceDir(dataDir, "three"),
+    ])
+    const database = openDatabase({ dataDir })
+    const repository = createWorkspaceRepository(database)
+
+    for (const [index, dir] of dirs.entries()) {
+      const created = repository.create(`Workspace ${index + 1}`, dir)
+      expect(created.ok).toBe(true)
+    }
+
+    const firstPage = repository.list({ limit: 2 })
+    expect(firstPage.ok).toBe(true)
+    if (!firstPage.ok) {
+      return
+    }
+
+    expect(firstPage.value.items.length).toBe(2)
+    expect(firstPage.value.count).toBe(3)
+    expect(firstPage.value.nextCursor).toBeDefined()
+
+    const secondPage = repository.list({
+      limit: 2,
+      cursor: firstPage.value.nextCursor,
+    })
+    expect(secondPage.ok).toBe(true)
+    if (!secondPage.ok) {
+      return
+    }
+
+    expect(secondPage.value.items.length).toBe(1)
+    expect(secondPage.value.nextCursor).toBeUndefined()
+
+    const invalid = repository.list({ cursor: "ws_01J0000000000000000000000" })
+    expect(invalid.ok).toBe(false)
+    if (!invalid.ok) {
+      expect(invalid.error.kind).toBe("invalid_cursor")
     }
 
     database.close()

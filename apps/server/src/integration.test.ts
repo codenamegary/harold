@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import net from "node:net"
+import { mkdtemp, rm } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 import { StatusSchema } from "contracts/http/status"
 import {
   InternalProblemSchema,
@@ -8,22 +11,42 @@ import {
 } from "contracts/http/error"
 import { createServer } from "./bootstrap/create-server"
 import { parseConfig } from "./config/config"
+import { openDatabase } from "./persistence/open-database"
 import { createRuntime } from "./runtime/runtime"
 
-const testConfig = (port = 0) =>
-  parseConfig({
+const tempDirs: string[] = []
+
+const createTempDataDir = async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-integration-"))
+  tempDirs.push(dir)
+  return dir
+}
+
+const createTestServer = async (port = 0) => {
+  const dataDir = await createTempDataDir()
+  const config = parseConfig({
     AGENT_SERVER_HOST: "127.0.0.1",
     AGENT_SERVER_PORT: String(port),
+    AGENT_SERVER_DATA_DIR: dataDir,
   })
+  const database = openDatabase({ dataDir: config.dataDir })
+  const runtime = createRuntime("0.1.0")
+  const app = await createServer({
+    config,
+    runtime,
+    database,
+    registerTestRoutes: true,
+  })
+  return { app, database, config, runtime }
+}
+
+afterEach(async () => {
+  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+})
 
 describe("GET /v1/status", () => {
   test("returns 200 with a StatusSchema payload", async () => {
-    const runtime = createRuntime("0.1.0")
-    const app = await createServer({
-      config: testConfig(3847),
-      runtime,
-      registerTestRoutes: true,
-    })
+    const { app } = await createTestServer(3847)
 
     const response = await app.inject({ method: "GET", url: "/v1/status" })
     const body = StatusSchema.parse(JSON.parse(response.body))
@@ -48,13 +71,7 @@ describe("bind and shutdown", () => {
   })
 
   test("listens on loopback and releases the port after close", async () => {
-    const runtime = createRuntime("0.1.0")
-    const config = testConfig(0)
-    const app = await createServer({
-      config,
-      runtime,
-      registerTestRoutes: true,
-    })
+    const { app, config, database, runtime } = await createTestServer(0)
     apps.push(app)
 
     await app.listen({ host: config.host, port: config.port })
@@ -75,6 +92,7 @@ describe("bind and shutdown", () => {
     expect(connected).toBe(true)
 
     await app.close()
+    database.close()
 
     const portReleased = await new Promise<boolean>((resolve) => {
       const probe = net.createServer()
@@ -90,12 +108,7 @@ describe("bind and shutdown", () => {
 
 describe("error responses", () => {
   test("validation errors return ValidationProblemSchema as problem+json", async () => {
-    const runtime = createRuntime("0.1.0")
-    const app = await createServer({
-      config: testConfig(),
-      runtime,
-      registerTestRoutes: true,
-    })
+    const { app } = await createTestServer()
 
     const response = await app.inject({
       method: "POST",
@@ -114,12 +127,7 @@ describe("error responses", () => {
   })
 
   test("internal errors return InternalProblemSchema as problem+json", async () => {
-    const runtime = createRuntime("0.1.0")
-    const app = await createServer({
-      config: testConfig(),
-      runtime,
-      registerTestRoutes: true,
-    })
+    const { app } = await createTestServer()
 
     const response = await app.inject({
       method: "GET",

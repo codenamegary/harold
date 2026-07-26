@@ -34,6 +34,7 @@ describe("startup with database", () => {
     const app = await createServer({
       config,
       runtime,
+      database,
       registerTestRoutes: true,
     })
 

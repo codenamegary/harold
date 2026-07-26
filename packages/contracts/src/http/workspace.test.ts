@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
   CreateWorkspaceBodySchema,
+  ListWorkspacesQuerySchema,
   UpdateWorkspaceBodySchema,
   WorkspaceCollectionSchema,
   WorkspaceSchema,
@@ -86,6 +87,19 @@ describe("UpdateWorkspaceBodySchema", () => {
         path: "/home/operator/agent-server",
       }),
     ).toThrow()
+  })
+})
+
+describe("ListWorkspacesQuerySchema", () => {
+  test("defaults limit to 100 and direction to forward", () => {
+    expect(ListWorkspacesQuerySchema.parse({})).toEqual({
+      limit: 100,
+      direction: "forward",
+    })
+  })
+
+  test("rejects limit above 200", () => {
+    expect(() => ListWorkspacesQuerySchema.parse({ limit: 201 })).toThrow()
   })
 })
 

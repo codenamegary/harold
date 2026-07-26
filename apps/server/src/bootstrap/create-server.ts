@@ -2,8 +2,11 @@ import Fastify, { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { registerErrorHandler } from "../error/error-handler"
 import { Config } from "../config/config"
+import { AgentDatabase } from "../persistence/open-database"
 import { Runtime } from "../runtime/runtime"
 import { registerStatusRoutes } from "../status/status-routes"
+import { createWorkspaceRepository } from "../workspace/workspace-repository"
+import { registerWorkspaceRoutes } from "../workspace/workspace-routes"
 
 const TestBodySchema = z.object({
   name: z.string().min(1),
@@ -23,12 +26,14 @@ export const registerTestRoutes = (app: FastifyInstance) => {
 export type CreateServerOptions = {
   config: Config
   runtime: Runtime
+  database: AgentDatabase
   registerTestRoutes?: boolean
 }
 
 export const createServer = async ({
   config,
   runtime,
+  database,
   registerTestRoutes: withTestRoutes = false,
 }: CreateServerOptions) => {
   const app = Fastify({
@@ -47,6 +52,7 @@ export const createServer = async ({
 
   registerErrorHandler(app)
   registerStatusRoutes(app, runtime, config)
+  registerWorkspaceRoutes(app, createWorkspaceRepository(database))
 
   if (withTestRoutes) {
     registerTestRoutes(app)

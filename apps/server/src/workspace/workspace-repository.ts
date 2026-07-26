@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm"
-import { Workspace } from "contracts/http/workspace"
+import { and, asc, count, desc, eq, gt, lt, or } from "drizzle-orm"
+import { Workspace, WorkspaceListDirection } from "contracts/http/workspace"
 import { AgentDatabase } from "../persistence/open-database"
 import { workspaces } from "../persistence/schema/workspaces"
 import { canonicalizeWorkspacePath } from "./canonicalize-workspace-path"
@@ -11,7 +11,27 @@ export type WorkspaceRepositoryResult<T> =
   | { ok: true; value: T }
   | { ok: false; error: WorkspaceRepositoryError }
 
+export type WorkspaceListOptions = {
+  limit: number
+  cursor?: string
+  direction?: WorkspaceListDirection
+}
+
+export type WorkspaceListPage = {
+  items: Workspace[]
+  limit: number
+  nextCursor?: string
+  previousCursor?: string
+  count: number
+}
+
+export type WorkspaceListResult =
+  | { ok: true; value: WorkspaceListPage }
+  | { ok: false; error: { kind: "invalid_cursor" } }
+
 type WorkspaceRow = typeof workspaces.$inferSelect
+
+const DEFAULT_LIST_LIMIT = 100
 
 const isUniqueConstraintError = (error: unknown): boolean =>
   error instanceof Error && error.message.includes("UNIQUE constraint failed")
@@ -30,9 +50,98 @@ const compareWorkspaceRows = (left: WorkspaceRow, right: WorkspaceRow): number =
   return lastUsedCompare === 0 ? left.id.localeCompare(right.id) : lastUsedCompare
 }
 
+const conditionAfter = (row: WorkspaceRow) =>
+  or(
+    lt(workspaces.lastUsedAt, row.lastUsedAt),
+    and(eq(workspaces.lastUsedAt, row.lastUsedAt), gt(workspaces.id, row.id)),
+  )
+
+const conditionBefore = (row: WorkspaceRow) =>
+  or(
+    gt(workspaces.lastUsedAt, row.lastUsedAt),
+    and(eq(workspaces.lastUsedAt, row.lastUsedAt), lt(workspaces.id, row.id)),
+  )
+
 const nowIso = (): string => new Date().toISOString()
 
 export const createWorkspaceRepository = (database: AgentDatabase) => {
+  const countAll = (): number =>
+    database.db.select({ value: count() }).from(workspaces).get()?.value ?? 0
+
+  const getRowById = (id: string): WorkspaceRow | undefined =>
+    database.db.select().from(workspaces).where(eq(workspaces.id, id)).get()
+
+  const hasMoreAfter = (row: WorkspaceRow): boolean =>
+    database.db
+      .select()
+      .from(workspaces)
+      .where(conditionAfter(row))
+      .orderBy(desc(workspaces.lastUsedAt), asc(workspaces.id))
+      .limit(1)
+      .get() !== undefined
+
+  const hasMoreBefore = (row: WorkspaceRow): boolean =>
+    database.db
+      .select()
+      .from(workspaces)
+      .where(conditionBefore(row))
+      .orderBy(asc(workspaces.lastUsedAt), desc(workspaces.id))
+      .limit(1)
+      .get() !== undefined
+
+  const buildPageCursors = (rows: WorkspaceRow[]) => {
+    if (rows.length === 0) {
+      return { nextCursor: undefined, previousCursor: undefined }
+    }
+
+    const first = rows[0]!
+    const last = rows[rows.length - 1]!
+
+    return {
+      nextCursor: hasMoreAfter(last) ? last.id : undefined,
+      previousCursor: hasMoreBefore(first) ? first.id : undefined,
+    }
+  }
+
+  const listForward = (limit: number, cursorRow?: WorkspaceRow): WorkspaceRow[] => {
+    if (cursorRow === undefined) {
+      return database.db
+        .select()
+        .from(workspaces)
+        .orderBy(desc(workspaces.lastUsedAt), asc(workspaces.id))
+        .limit(limit)
+        .all()
+    }
+
+    return database.db
+      .select()
+      .from(workspaces)
+      .where(conditionAfter(cursorRow))
+      .orderBy(desc(workspaces.lastUsedAt), asc(workspaces.id))
+      .limit(limit)
+      .all()
+  }
+
+  const listBackward = (limit: number, cursorRow?: WorkspaceRow): WorkspaceRow[] => {
+    const rows =
+      cursorRow === undefined
+        ? database.db
+            .select()
+            .from(workspaces)
+            .orderBy(asc(workspaces.lastUsedAt), desc(workspaces.id))
+            .limit(limit)
+            .all()
+        : database.db
+            .select()
+            .from(workspaces)
+            .where(conditionBefore(cursorRow))
+            .orderBy(asc(workspaces.lastUsedAt), desc(workspaces.id))
+            .limit(limit)
+            .all()
+
+    return [...rows].sort(compareWorkspaceRows)
+  }
+
   const create = (name: string, inputPath: string): WorkspaceRepositoryResult<Workspace> => {
     const canonicalizeResult = canonicalizeWorkspacePath(inputPath)
     if (!canonicalizeResult.ok) {
@@ -72,16 +181,37 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
     }
   }
 
-  const list = (): Workspace[] =>
-    database.db
-      .select()
-      .from(workspaces)
-      .all()
-      .sort(compareWorkspaceRows)
-      .map(rowToWorkspace)
+  const list = (options?: Partial<WorkspaceListOptions>): WorkspaceListResult => {
+    const limit = options?.limit ?? DEFAULT_LIST_LIMIT
+    const direction = options?.direction ?? "forward"
+    const cursorRow =
+      options?.cursor === undefined ? undefined : getRowById(options.cursor)
+
+    if (options?.cursor !== undefined && cursorRow === undefined) {
+      return { ok: false, error: { kind: "invalid_cursor" } }
+    }
+
+    const rows =
+      direction === "backward"
+        ? listBackward(limit, cursorRow)
+        : listForward(limit, cursorRow)
+
+    const cursors = buildPageCursors(rows)
+
+    return {
+      ok: true,
+      value: {
+        items: rows.map(rowToWorkspace),
+        limit,
+        nextCursor: cursors.nextCursor,
+        previousCursor: cursors.previousCursor,
+        count: countAll(),
+      },
+    }
+  }
 
   const getById = (id: string): WorkspaceRepositoryResult<Workspace> => {
-    const row = database.db.select().from(workspaces).where(eq(workspaces.id, id)).get()
+    const row = getRowById(id)
 
     if (row === undefined) {
       return { ok: false, error: { kind: "not_found" } }

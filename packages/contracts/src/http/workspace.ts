@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { createCollectionSchema } from "./collection"
-import { IdSchema, TimestampSchema } from "./primitives"
+import { CursorSchema, IdSchema, TimestampSchema } from "./primitives"
 
 export const WorkspaceStateSchema = z.enum([
   "available",
@@ -28,8 +28,18 @@ export const UpdateWorkspaceBodySchema = z.strictObject({
 
 export const WorkspaceCollectionSchema = createCollectionSchema(WorkspaceSchema)
 
+export const WorkspaceListDirectionSchema = z.enum(["forward", "backward"])
+
+export const ListWorkspacesQuerySchema = z.strictObject({
+  limit: z.coerce.number().int().positive().max(200).default(100),
+  cursor: CursorSchema.optional(),
+  direction: WorkspaceListDirectionSchema.default("forward"),
+})
+
 export type Workspace = z.infer<typeof WorkspaceSchema>
 export type WorkspaceState = z.infer<typeof WorkspaceStateSchema>
 export type CreateWorkspaceBody = z.infer<typeof CreateWorkspaceBodySchema>
 export type UpdateWorkspaceBody = z.infer<typeof UpdateWorkspaceBodySchema>
 export type WorkspaceCollection = z.infer<typeof WorkspaceCollectionSchema>
+export type WorkspaceListDirection = z.infer<typeof WorkspaceListDirectionSchema>
+export type ListWorkspacesQuery = z.infer<typeof ListWorkspacesQuerySchema>
