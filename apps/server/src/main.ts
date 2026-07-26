@@ -20,15 +20,6 @@ const main = async () => {
 }
 
 main().catch((error: unknown) => {
-  if (
-    error instanceof Error &&
-    "version" in error &&
-    typeof error.version === "number"
-  ) {
-    console.error({ err: error, migrationVersion: error.version }, "migration failed")
-  } else {
-    console.error(error)
-  }
-
+  console.error({ err: error }, "agent server failed to start")
   process.exit(1)
 })

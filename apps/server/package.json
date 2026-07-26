@@ -8,15 +8,18 @@
     "start": "bun run src/main.ts",
     "lint": "oxlint",
     "typecheck": "tsc --noEmit",
-    "test": "NODE_ENV=test bun test"
+    "test": "NODE_ENV=test bun test",
+    "db:generate": "bun --bun drizzle-kit generate"
   },
   "dependencies": {
     "contracts": "workspace:*",
+    "drizzle-orm": "catalog:",
     "fastify": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "bun-types": "^1.3.1",
+    "drizzle-kit": "^0.31.10",
     "oxlint": "catalog:",
     "typescript": "catalog:"
   }

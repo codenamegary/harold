@@ -1,10 +1,13 @@
 import { Database } from "bun:sqlite"
 import { mkdirSync } from "node:fs"
 import path from "node:path"
-import { migrationFailure, runMigrations } from "./migrations/run-migrations"
+import { drizzle } from "drizzle-orm/bun-sqlite"
+import { migrate } from "drizzle-orm/bun-sqlite/migrator"
+import * as schema from "./schema/schema"
 
 export type AgentDatabase = {
-  db: Database
+  db: ReturnType<typeof drizzle<typeof schema>>
+  sqlite: Database
   path: string
   close: () => void
 }
@@ -14,36 +17,32 @@ export type OpenDatabaseOptions = {
 }
 
 const databaseFileName = "agent-server.db"
+const migrationsFolder = path.join(import.meta.dir, "drizzle")
 
 export const openDatabase = (options: OpenDatabaseOptions): AgentDatabase => {
   mkdirSync(options.dataDir, { recursive: true })
 
   const databasePath = path.join(options.dataDir, databaseFileName)
-  const db = new Database(databasePath)
+  const sqlite = new Database(databasePath)
 
-  db.run("PRAGMA journal_mode = WAL")
+  sqlite.run("PRAGMA journal_mode = WAL")
+
+  const db = drizzle({ client: sqlite, schema })
 
   try {
-    runMigrations(db)
+    migrate(db, { migrationsFolder })
   } catch (error: unknown) {
-    db.close()
-
-    if (
-      error instanceof Error &&
-      "version" in error &&
-      typeof error.version === "number"
-    ) {
-      throw error
-    }
-
-    throw migrationFailure(0, error)
+    sqlite.close()
+    console.error({ err: error }, "database migration failed")
+    throw error
   }
 
   return {
     db,
+    sqlite,
     path: databasePath,
     close: () => {
-      db.close()
+      sqlite.close()
     },
   }
 }

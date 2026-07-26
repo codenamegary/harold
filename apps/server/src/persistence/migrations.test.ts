@@ -4,7 +4,6 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { openDatabase } from "./open-database"
-import { runMigrations } from "./migrations/run-migrations"
 
 const tempDirs: string[] = []
 
@@ -18,22 +17,24 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
-describe("runMigrations", () => {
-  test("creates schema_migrations and applies 001 workspaces", () => {
-    const db = new Database(":memory:")
-    const applied = runMigrations(db)
+const tableNames = (sqlite: Database) =>
+  sqlite
+    .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+    .all()
+    .map((row) => row.name)
 
-    expect(applied).toEqual([1])
+describe("drizzle migrations", () => {
+  test("creates __drizzle_migrations and applies workspaces table", async () => {
+    const dataDir = await createTempDataDir()
+    const database = openDatabase({ dataDir })
 
-    const tables = db
-      .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
-      .all()
-      .map((row) => row.name)
+    const tables = tableNames(database.sqlite)
 
-    expect(tables).toContain("schema_migrations")
+    expect(tables).toContain("__drizzle_migrations")
     expect(tables).toContain("workspaces")
+    expect(tables).not.toContain("schema_migrations")
 
-    const columns = db
+    const columns = database.sqlite
       .query<{ name: string }, []>("PRAGMA table_info(workspaces)")
       .all()
       .map((row) => row.name)
@@ -46,34 +47,28 @@ describe("runMigrations", () => {
       "last_used_at",
     ])
 
-    const versions = db
-      .query<{ version: number }, []>("SELECT version FROM schema_migrations ORDER BY version")
-      .all()
-      .map((row) => row.version)
+    const migrationCount = database.sqlite
+      .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM __drizzle_migrations")
+      .get()?.count
 
-    expect(versions).toEqual([1])
+    expect(migrationCount).toBe(1)
+
+    database.close()
   })
 
-  test("second run applies zero new migrations", () => {
-    const db = new Database(":memory:")
-    const first = runMigrations(db)
-    const second = runMigrations(db)
+  test("second open is idempotent", async () => {
+    const dataDir = await createTempDataDir()
+    const first = openDatabase({ dataDir })
+    first.close()
 
-    expect(first).toEqual([1])
-    expect(second).toEqual([])
-  })
+    const second = openDatabase({ dataDir })
 
-  test("throws with migration version when SQL fails", async () => {
-    const migrationsDir = await createTempDataDir()
-    await writeFile(
-      path.join(migrationsDir, "002_bad.sql"),
-      "NOT VALID SQL;",
-    )
+    const migrationCount = second.sqlite
+      .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM __drizzle_migrations")
+      .get()?.count
 
-    const db = new Database(":memory:")
-    runMigrations(db)
-
-    expect(() => runMigrations(db, { migrationsDir })).toThrow(/migration 2/i)
+    expect(migrationCount).toBe(1)
+    second.close()
   })
 })
 
@@ -84,7 +79,7 @@ describe("openDatabase", () => {
 
     expect(database.path).toBe(path.join(dataDir, "agent-server.db"))
 
-    const journalMode = database.db
+    const journalMode = database.sqlite
       .query<{ journal_mode: string }, []>("PRAGMA journal_mode")
       .get()?.journal_mode
 
@@ -100,12 +95,21 @@ describe("openDatabase", () => {
 
     const second = openDatabase({ dataDir })
 
-    const versions = second.db
-      .query<{ version: number }, []>("SELECT version FROM schema_migrations")
-      .all()
-      .map((row) => row.version)
+    const migrationCount = second.sqlite
+      .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM __drizzle_migrations")
+      .get()?.count
 
-    expect(versions).toEqual([1])
+    expect(migrationCount).toBe(1)
     second.close()
+  })
+
+  test("throws when the data dir cannot be created", async () => {
+    const parentDir = await createTempDataDir()
+    const blockedPath = path.join(parentDir, "blocked")
+    await writeFile(blockedPath, "not a directory")
+
+    expect(() =>
+      openDatabase({ dataDir: path.join(blockedPath, "nested") }),
+    ).toThrow()
   })
 })
