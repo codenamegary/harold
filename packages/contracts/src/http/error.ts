@@ -7,41 +7,45 @@ export const PROBLEM_TYPES = {
   conflict: "https://agent-server.local/problems/conflict",
 } as const
 
-export const ProblemErrorSchema = z.object({
+export const ProblemErrorSchema = z.strictObject({
   pointer: z.string().min(1),
   code: z.string().min(1),
-});
+})
 
-const InternalProblemFieldsSchema = z.object({
+const InternalProblemFieldsSchema = z.strictObject({
   title: z.string().min(1),
   status: z.number().int().optional(),
   detail: z.string().optional(),
   instance: z.string().optional(),
-});
+})
 
-const ValidationProblemFieldsSchema = z.object({
+const ValidationProblemFieldsSchema = z.strictObject({
   title: z.string().min(1),
   status: z.number().int().optional(),
   code: z.string().min(1),
   instance: z.string().optional(),
-});
+})
 
-export const ValidationProblemSchema = ValidationProblemFieldsSchema.extend({
+export const ValidationProblemSchema = z.strictObject({
+  ...ValidationProblemFieldsSchema.shape,
   type: z.literal(PROBLEM_TYPES.validationError),
   errors: z.array(ProblemErrorSchema).min(1),
-}).strict();
+})
 
-export const InternalProblemSchema = InternalProblemFieldsSchema.extend({
+export const InternalProblemSchema = z.strictObject({
+  ...InternalProblemFieldsSchema.shape,
   type: z.literal(PROBLEM_TYPES.internalError),
-}).strict()
+})
 
-export const NotFoundProblemSchema = InternalProblemFieldsSchema.extend({
+export const NotFoundProblemSchema = z.strictObject({
+  ...InternalProblemFieldsSchema.shape,
   type: z.literal(PROBLEM_TYPES.notFound),
-}).strict()
+})
 
-export const ConflictProblemSchema = InternalProblemFieldsSchema.extend({
+export const ConflictProblemSchema = z.strictObject({
+  ...InternalProblemFieldsSchema.shape,
   type: z.literal(PROBLEM_TYPES.conflict),
-}).strict()
+})
 
 export const ProblemDetailsSchema = z.discriminatedUnion("type", [
   ValidationProblemSchema,

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { z } from "zod"
 import { createCollectionSchema, PageInfoSchema } from "./collection"
 
-const ItemSchema = z.object({ id: z.string().min(1) }).strict()
+const ItemSchema = z.strictObject({ id: z.string().min(1) })
 
 describe("PageInfoSchema", () => {
   test("accepts page info with all optional fields", () => {

@@ -8,29 +8,23 @@ export const WorkspaceStateSchema = z.enum([
   "unavailable",
 ])
 
-export const WorkspaceSchema = z
-  .object({
-    id: IdSchema,
-    name: z.string().min(1).max(80),
-    path: z.string().min(1),
-    state: WorkspaceStateSchema,
-    createdAt: TimestampSchema,
-    lastUsedAt: TimestampSchema,
-  })
-  .strict()
+export const WorkspaceSchema = z.strictObject({
+  id: IdSchema,
+  name: z.string().min(1).max(80),
+  path: z.string().min(1),
+  state: WorkspaceStateSchema,
+  createdAt: TimestampSchema,
+  lastUsedAt: TimestampSchema,
+})
 
-export const CreateWorkspaceBodySchema = z
-  .object({
-    name: z.string().min(1).max(80),
-    path: z.string().min(1),
-  })
-  .strict()
+export const CreateWorkspaceBodySchema = z.strictObject({
+  name: z.string().min(1).max(80),
+  path: z.string().min(1),
+})
 
-export const UpdateWorkspaceBodySchema = z
-  .object({
-    name: z.string().min(1).max(80),
-  })
-  .strict()
+export const UpdateWorkspaceBodySchema = z.strictObject({
+  name: z.string().min(1).max(80),
+})
 
 export const WorkspaceCollectionSchema = createCollectionSchema(WorkspaceSchema)
 
