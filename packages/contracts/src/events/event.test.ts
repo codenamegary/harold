@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test";
-import { EventSchema } from "./event";
+import { describe, expect, test } from "bun:test"
+import { CursorSchema } from "../http/primitives"
+import { EventSchema } from "./event"
 
 describe("EventSchema", () => {
   test("accepts a server.status event", () => {
@@ -47,6 +48,14 @@ describe("EventSchema", () => {
         occurredAt: "2026-07-24T12:01:00.000Z",
         payload: { deviceId: "device-1" },
       }),
-    ).toThrow();
-  });
-});
+    ).toThrow()
+  })
+})
+
+describe("CursorSchema", () => {
+  test("is shared from http primitives", () => {
+    expect(CursorSchema.parse("evt_01JFC8C7E77NQCFH0RF9Z22JHH")).toBe(
+      "evt_01JFC8C7E77NQCFH0RF9Z22JHH",
+    )
+  })
+})

@@ -1,11 +1,11 @@
 import { ZodIssue } from "zod"
 
-export const zodPathToPointer = (path: ReadonlyArray<string | number>): string =>
+export const zodPathToPointer = (path: ReadonlyArray<PropertyKey>): string =>
   path.length === 0 ? "#" : `#/${path.map(String).join("/")}`
 
 export const zodIssueToCode = (issue: ZodIssue): string => {
   if (issue.code === "invalid_type") {
-    return issue.received === "undefined"
+    return issue.input === undefined
       ? "validation.field.required"
       : "validation.field.invalid_type"
   }
@@ -18,7 +18,7 @@ export const zodIssueToCode = (issue: ZodIssue): string => {
     return "validation.field.too_big"
   }
 
-  if (issue.code === "invalid_string") {
+  if (issue.code === "invalid_format") {
     return "validation.field.invalid_string"
   }
 

@@ -1,44 +1,62 @@
-import { z } from "zod";
+import { z } from "zod"
 
 export const PROBLEM_TYPES = {
   validationError: "https://agent-server.local/problems/validation-error",
   internalError: "https://agent-server.local/problems/internal-error",
-} as const;
+  notFound: "https://agent-server.local/problems/not-found",
+  conflict: "https://agent-server.local/problems/conflict",
+} as const
 
-export const ProblemErrorSchema = z.object({
+export const ProblemErrorSchema = z.strictObject({
   pointer: z.string().min(1),
   code: z.string().min(1),
-});
+})
 
-const InternalProblemFieldsSchema = z.object({
+const InternalProblemFieldsSchema = z.strictObject({
   title: z.string().min(1),
   status: z.number().int().optional(),
   detail: z.string().optional(),
   instance: z.string().optional(),
-});
+})
 
-const ValidationProblemFieldsSchema = z.object({
+const ValidationProblemFieldsSchema = z.strictObject({
   title: z.string().min(1),
   status: z.number().int().optional(),
   code: z.string().min(1),
   instance: z.string().optional(),
-});
+})
 
-export const ValidationProblemSchema = ValidationProblemFieldsSchema.extend({
+export const ValidationProblemSchema = z.strictObject({
+  ...ValidationProblemFieldsSchema.shape,
   type: z.literal(PROBLEM_TYPES.validationError),
   errors: z.array(ProblemErrorSchema).min(1),
-}).strict();
+})
 
-export const InternalProblemSchema = InternalProblemFieldsSchema.extend({
+export const InternalProblemSchema = z.strictObject({
+  ...InternalProblemFieldsSchema.shape,
   type: z.literal(PROBLEM_TYPES.internalError),
-}).strict();
+})
+
+export const NotFoundProblemSchema = z.strictObject({
+  ...InternalProblemFieldsSchema.shape,
+  type: z.literal(PROBLEM_TYPES.notFound),
+})
+
+export const ConflictProblemSchema = z.strictObject({
+  ...InternalProblemFieldsSchema.shape,
+  type: z.literal(PROBLEM_TYPES.conflict),
+})
 
 export const ProblemDetailsSchema = z.discriminatedUnion("type", [
   ValidationProblemSchema,
   InternalProblemSchema,
-]);
+  NotFoundProblemSchema,
+  ConflictProblemSchema,
+])
 
-export type ProblemError = z.infer<typeof ProblemErrorSchema>;
-export type ValidationProblem = z.infer<typeof ValidationProblemSchema>;
-export type InternalProblem = z.infer<typeof InternalProblemSchema>;
-export type ProblemDetails = z.infer<typeof ProblemDetailsSchema>;
+export type ProblemError = z.infer<typeof ProblemErrorSchema>
+export type ValidationProblem = z.infer<typeof ValidationProblemSchema>
+export type InternalProblem = z.infer<typeof InternalProblemSchema>
+export type NotFoundProblem = z.infer<typeof NotFoundProblemSchema>
+export type ConflictProblem = z.infer<typeof ConflictProblemSchema>
+export type ProblemDetails = z.infer<typeof ProblemDetailsSchema>
