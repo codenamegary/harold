@@ -26,7 +26,7 @@ export const registerWorkspaceRoutes = (
 ) => {
   app.post("/v1/workspaces", async (request, reply) => {
     const body = CreateWorkspaceBodySchema.parse(request.body)
-    const result = repository.create({ name: body.name, path: body.path })
+    const result = repository.create(body)
 
     if (!result.ok) {
       if (result.error.kind === "path") {
@@ -40,10 +40,7 @@ export const registerWorkspaceRoutes = (
 
   app.get("/v1/workspaces", async (request, reply) => {
     const query = ListWorkspacesQuerySchema.parse(request.query)
-    const result = repository.list({
-      limit: query.limit,
-      cursor: query.cursor,
-    })
+    const result = repository.list(query)
 
     if (!result.ok) {
       return sendProblem(reply, 400, buildInvalidCursorProblem())
@@ -76,7 +73,7 @@ export const registerWorkspaceRoutes = (
   app.patch("/v1/workspaces/:workspaceId", async (request, reply) => {
     const { workspaceId } = request.params as { workspaceId: string }
     const body = UpdateWorkspaceBodySchema.parse(request.body)
-    const result = repository.updateName({ id: workspaceId, name: body.name })
+    const result = repository.updateName({ id: workspaceId, ...body })
 
     if (!result.ok) {
       return sendProblem(reply, 404, buildNotFoundProblem())

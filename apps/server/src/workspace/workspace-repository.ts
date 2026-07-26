@@ -1,5 +1,9 @@
 import { and, asc, count, desc, eq, gt, lt, or } from "drizzle-orm"
-import { Workspace } from "contracts/http/workspace"
+import {
+  CreateWorkspaceBody,
+  UpdateWorkspaceBody,
+  Workspace,
+} from "contracts/http/workspace"
 import { AgentDatabase } from "../persistence/open-database"
 import { workspaces } from "../persistence/schema/workspaces"
 import { canonicalizeWorkspacePath } from "./canonicalize-workspace-path"
@@ -20,19 +24,13 @@ export type WorkspaceListOptions = {
   cursor?: string
 }
 
-export type CreateWorkspaceInput = {
-  name: string
-  path: string
-}
-
 export type GetWorkspaceByIdInput = {
   id: string
 }
 
 export type UpdateWorkspaceNameInput = {
   id: string
-  name: string
-}
+} & UpdateWorkspaceBody
 
 export type DeleteWorkspaceInput = {
   id: string
@@ -167,10 +165,8 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
     return [...rows].sort(compareWorkspaceRows)
   }
 
-  const create = ({
-    name,
-    path: inputPath,
-  }: CreateWorkspaceInput): WorkspaceRepositoryResult<Workspace> => {
+  const create = (input: CreateWorkspaceBody): WorkspaceRepositoryResult<Workspace> => {
+    const { name, path: inputPath } = input
     const canonicalizeResult = canonicalizeWorkspacePath(inputPath)
     if (!canonicalizeResult.ok) {
       return { ok: false, error: { kind: "path", error: canonicalizeResult.error } }
