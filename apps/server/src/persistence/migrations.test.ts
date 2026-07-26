@@ -64,7 +64,7 @@ describe("drizzle migrations", () => {
       .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM __drizzle_migrations")
       .get()?.count
 
-    expect(migrationCount).toBe(2)
+    expect(migrationCount).toBe(3)
 
     const seededAgents = database.sqlite
       .query<{ agent_id: string; enabled: number }, []>(
@@ -75,6 +75,47 @@ describe("drizzle migrations", () => {
     expect(seededAgents).toEqual([
       { agent_id: "claude", enabled: 0 },
       { agent_id: "cursor", enabled: 0 },
+    ])
+
+    database.close()
+  })
+
+  test("creates sessions table with resumable default and cascade fk", async () => {
+    const dataDir = await createTempDataDir()
+    const database = openDatabase({ dataDir })
+
+    const tables = tableNames(database.sqlite)
+    expect(tables).toContain("sessions")
+
+    const columns = database.sqlite
+      .query<{ name: string; dflt_value: string | null }, []>("PRAGMA table_info(sessions)")
+      .all()
+
+    expect(columns.map((row) => row.name)).toEqual([
+      "id",
+      "workspace_id",
+      "agent_id",
+      "name",
+      "state",
+      "acp_session_id",
+      "created_at",
+      "last_used_at",
+      "archived_at",
+      "resumable",
+    ])
+
+    const resumable = columns.find((row) => row.name === "resumable")
+    expect(resumable?.dflt_value).toBe("false")
+
+    const foreignKeys = database.sqlite
+      .query<{ table: string; on_delete: string }, []>("PRAGMA foreign_key_list(sessions)")
+      .all()
+
+    expect(foreignKeys).toEqual([
+      expect.objectContaining({
+        table: "workspaces",
+        on_delete: "CASCADE",
+      }),
     ])
 
     database.close()
@@ -91,7 +132,7 @@ describe("drizzle migrations", () => {
       .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM __drizzle_migrations")
       .get()?.count
 
-    expect(migrationCount).toBe(2)
+    expect(migrationCount).toBe(3)
     second.close()
   })
 })
@@ -123,7 +164,7 @@ describe("openDatabase", () => {
       .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM __drizzle_migrations")
       .get()?.count
 
-    expect(migrationCount).toBe(2)
+    expect(migrationCount).toBe(3)
     second.close()
   })
 

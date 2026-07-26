@@ -26,6 +26,7 @@ export const openDatabase = (options: OpenDatabaseOptions): AgentDatabase => {
   const sqlite = new Database(databasePath)
 
   sqlite.run("PRAGMA journal_mode = WAL")
+  sqlite.run("PRAGMA foreign_keys = ON")
 
   const db = drizzle({ client: sqlite, schema })
 
