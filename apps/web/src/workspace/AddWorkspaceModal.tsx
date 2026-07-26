@@ -5,6 +5,7 @@ import { Modal } from "../design-system/Modal"
 import { TextInput } from "../design-system/TextInput"
 import { isWorkspaceCreateError } from "./createWorkspace"
 import { useCreateWorkspaceMutation } from "./useCreateWorkspaceMutation"
+import { workspaceMutationErrorMessage } from "./workspaceMutationErrorMessage"
 
 type AddWorkspaceModalProps = {
   open: boolean
@@ -28,22 +29,27 @@ export const AddWorkspaceModal: React.FC<AddWorkspaceModalProps> = ({ open, onCl
     onClose()
   }
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setErrorMessage(undefined)
 
-    try {
-      await createWorkspaceMutation.mutateAsync({ name, path })
-      handleClose()
-    } catch (error: unknown) {
-      if (isWorkspaceCreateError(error)) {
-        const fieldSuffix = error.problem.fieldError ? ` ${error.problem.fieldError}` : ""
-        setErrorMessage(`${error.problem.detail}${fieldSuffix}`)
-        return
-      }
-
-      setErrorMessage("Could not add workspace.")
-    }
+    createWorkspaceMutation.mutate(
+      { name, path },
+      {
+        onSuccess: () => {
+          handleClose()
+        },
+        onError: (error) => {
+          setErrorMessage(
+            workspaceMutationErrorMessage(
+              error,
+              isWorkspaceCreateError,
+              "Could not add workspace.",
+            ),
+          )
+        },
+      },
+    )
   }
 
   return (

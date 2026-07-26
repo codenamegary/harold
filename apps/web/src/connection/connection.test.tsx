@@ -110,14 +110,21 @@ describe("connection shell wiring", () => {
   })
 
   test("refresh button refetches status", async () => {
-    const fetchMock = mock(() =>
-      Promise.resolve(
+    const statusCallCount = { value: 0 }
+    const fetchMock = mock((input: RequestInfo | URL) => {
+      const url = String(input)
+
+      if (url === "/v1/status") {
+        statusCallCount.value += 1
+      }
+
+      return Promise.resolve(
         new Response(JSON.stringify(validStatus), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
-      ),
-    )
+      )
+    })
     globalThis.fetch = fetchMock as typeof fetch
 
     const { getByRole, getByText } = renderWithProviders(<AppRoutes />, {
@@ -128,10 +135,12 @@ describe("connection shell wiring", () => {
       expect(getByText("API connected")).toBeInTheDocument()
     })
 
+    const initialStatusCalls = statusCallCount.value
+
     fireEvent.click(getByRole("button", { name: "Refresh data" }))
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(statusCallCount.value).toBe(initialStatusCalls + 1)
     })
   })
 })

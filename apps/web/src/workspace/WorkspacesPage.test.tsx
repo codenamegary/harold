@@ -91,7 +91,7 @@ describe("WorkspacesPage", () => {
     const card = getByRole("article", { name: "agent-server workspace" })
 
     expect(within(card).getByText("/home/operator/agent-server")).toBeInTheDocument()
-    expect(within(card).getByText("Available")).toBeInTheDocument()
+    expect(within(card).getByLabelText("Available")).toHaveClass("bg-lime")
     expect(getByText("1 of 1 workspaces")).toBeInTheDocument()
   })
 
@@ -230,7 +230,7 @@ describe("WorkspacesPage", () => {
     })
     globalThis.fetch = fetchMock as typeof fetch
 
-    const { getByRole, getByText } = renderWorkspacesPage()
+    const { getByRole } = renderWorkspacesPage()
 
     fireEvent.click(getByRole("button", { name: "Missing" }))
 
@@ -243,7 +243,7 @@ describe("WorkspacesPage", () => {
     })
 
     const card = getByRole("article", { name: "agent-server workspace" })
-    expect(within(card).getByText("Missing")).toBeInTheDocument()
+    expect(within(card).getByLabelText("Missing")).toHaveClass("bg-amber")
   })
 
   test("disables load more when next cursor is absent", async () => {
@@ -282,6 +282,221 @@ describe("WorkspacesPage", () => {
 
     await waitFor(() => {
       expect(getByRole("alert")).toHaveTextContent("Could not load workspaces.")
+    })
+  })
+
+  test("renames a workspace inline", async () => {
+    const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+
+      if (url === "/v1/workspaces/ws-agent-server" && init?.method === "PATCH") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ...validWorkspace,
+              name: "Renamed Project",
+              lastUsedAt: "2026-07-24T12:10:00.000Z",
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        )
+      }
+
+      if (url.startsWith("/v1/workspaces")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(listCollection), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    })
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const { getByRole } = renderWorkspacesPage()
+
+    await waitFor(() => {
+      expect(getByRole("article", { name: "agent-server workspace" })).toBeInTheDocument()
+    })
+
+    fireEvent.click(getByRole("button", { name: "Rename agent-server" }))
+    const renameInput = getByRole("textbox", { name: "Rename agent-server" })
+    fireEvent.change(renameInput, {
+      target: { value: "Renamed Project" },
+    })
+
+    await waitFor(() => {
+      expect(renameInput).toHaveValue("Renamed Project")
+    })
+
+    fireEvent.submit(renameInput.closest("form")!)
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/v1/workspaces/ws-agent-server",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ name: "Renamed Project" }),
+        }),
+      )
+    })
+  })
+
+  test("shows rename errors on the card", async () => {
+    const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+
+      if (url === "/v1/workspaces/ws-agent-server" && init?.method === "PATCH") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              type: "https://agent-server.local/problems/not-found",
+              title: "Workspace not found",
+              detail: "Unknown workspace id.",
+            }),
+            {
+              status: 404,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        )
+      }
+
+      if (url.startsWith("/v1/workspaces")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(listCollection), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    })
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const { getByRole } = renderWorkspacesPage()
+
+    await waitFor(() => {
+      expect(getByRole("article", { name: "agent-server workspace" })).toBeInTheDocument()
+    })
+
+    fireEvent.click(getByRole("button", { name: "Rename agent-server" }))
+    const renameInput = getByRole("textbox", { name: "Rename agent-server" })
+    fireEvent.change(renameInput, {
+      target: { value: "Missing Workspace" },
+    })
+
+    await waitFor(() => {
+      expect(renameInput).toHaveValue("Missing Workspace")
+    })
+
+    fireEvent.submit(renameInput.closest("form")!)
+
+    await waitFor(() => {
+      expect(getByRole("alert")).toHaveTextContent("Unknown workspace id.")
+    })
+  })
+
+  test("unregisters a workspace after confirmation", async () => {
+    const emptyAfterDelete = WorkspaceCollectionSchema.parse({
+      items: [],
+      page: { limit: 20, count: 0 },
+    })
+    const deleted = { value: false }
+
+    const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+
+      if (url === "/v1/workspaces/ws-agent-server" && init?.method === "DELETE") {
+        deleted.value = true
+        return Promise.resolve(new Response(null, { status: 204 }))
+      }
+
+      if (url.startsWith("/v1/workspaces")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(deleted.value ? emptyAfterDelete : listCollection), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    })
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const { getByRole, queryByRole } = renderWorkspacesPage()
+
+    await waitFor(() => {
+      expect(getByRole("article", { name: "agent-server workspace" })).toBeInTheDocument()
+    })
+
+    fireEvent.click(getByRole("button", { name: "Unregister agent-server" }))
+    const dialog = getByRole("dialog")
+    fireEvent.click(within(dialog).getByRole("button", { name: "Unregister" }))
+
+    await waitFor(() => {
+      expect(queryByRole("dialog")).not.toBeInTheDocument()
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/v1/workspaces/ws-agent-server",
+      expect.objectContaining({
+        method: "DELETE",
+      }),
+    )
+  }, 15000)
+
+  test("shows unregister errors in the modal", async () => {
+    const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+
+      if (url === "/v1/workspaces/ws-agent-server" && init?.method === "DELETE") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              type: "https://agent-server.local/problems/not-found",
+              title: "Workspace not found",
+              detail: "Unknown workspace id.",
+            }),
+            {
+              status: 404,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        )
+      }
+
+      if (url.startsWith("/v1/workspaces")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(listCollection), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    })
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const { getByRole } = renderWorkspacesPage()
+
+    await waitFor(() => {
+      expect(getByRole("article", { name: "agent-server workspace" })).toBeInTheDocument()
+    })
+
+    fireEvent.click(getByRole("button", { name: "Unregister agent-server" }))
+    fireEvent.click(getByRole("button", { name: "Unregister" }))
+
+    await waitFor(() => {
+      expect(getByRole("dialog")).toHaveTextContent("Unknown workspace id.")
     })
   })
 })
