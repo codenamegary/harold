@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { fireEvent, waitFor, within } from "@testing-library/react"
 import { renderWithProviders } from "../query/renderWithProviders"
 import { AppRoutes } from "./AppRouter"
@@ -26,6 +27,11 @@ const shellRoutes = [
 
 const forbiddenLabelPatterns = [/demo data/i, /mock-success/i, /mock success/i] as const
 
+const emptyWorkspaceCollection = WorkspaceCollectionSchema.parse({
+  items: [],
+  page: { limit: 20, count: 0 },
+})
+
 const originalFetch = globalThis.fetch
 
 const renderShellRoute = (path: string) =>
@@ -41,14 +47,25 @@ const waitForShellReady = async (getByRole: ReturnType<typeof renderWithProvider
 
 describe("shell honesty", () => {
   beforeEach(() => {
-    globalThis.fetch = mock(() =>
-      Promise.resolve(
+    globalThis.fetch = mock((input: RequestInfo | URL) => {
+      const url = String(input)
+
+      if (url.startsWith("/v1/workspaces")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(emptyWorkspaceCollection), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(
         new Response(JSON.stringify(validStatus), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
-      ),
-    ) as typeof fetch
+      )
+    }) as typeof fetch
   })
 
   afterEach(() => {
@@ -105,17 +122,22 @@ describe("shell honesty", () => {
     })
   })
 
-  describe("workspaces disabled honesty", () => {
-    test("add workspace, search, and filter controls are disabled", async () => {
-      const { getByRole } = renderShellRoute("/workspaces")
+  describe("workspaces functional honesty", () => {
+    test("workspace controls are enabled and list loads from the API", async () => {
+      const { getByRole, getByText } = renderShellRoute("/workspaces")
 
       await waitForShellReady(getByRole)
 
-      expect(getByRole("button", { name: "+ Add workspace" })).toBeDisabled()
-      expect(getByRole("searchbox", { name: "Search workspaces" })).toBeDisabled()
-      expect(getByRole("button", { name: "All" })).toBeDisabled()
-      expect(getByRole("button", { name: "Active" })).toBeDisabled()
-      expect(getByRole("button", { name: "Paused" })).toBeDisabled()
+      expect(getByRole("button", { name: "+ Add workspace" })).toBeEnabled()
+      expect(getByRole("searchbox", { name: "Search workspaces" })).toBeEnabled()
+      expect(getByRole("button", { name: "All" })).toBeEnabled()
+      expect(getByRole("button", { name: "Available" })).toBeEnabled()
+      expect(getByRole("button", { name: "Missing" })).toBeEnabled()
+      expect(getByRole("button", { name: "Unavailable" })).toBeEnabled()
+
+      await waitFor(() => {
+        expect(getByText("No workspaces registered yet.")).toBeInTheDocument()
+      })
     })
   })
 

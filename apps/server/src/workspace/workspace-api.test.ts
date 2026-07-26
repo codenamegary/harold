@@ -251,6 +251,45 @@ describe("GET /v1/workspaces", () => {
     expect(body.errors[0]?.pointer).toBe("#/cursor")
     expect(body.errors[0]?.code).toBe("validation.query.cursor.invalid")
   })
+
+  test("filters by search query and state", async () => {
+    const dataDir = await createTempDataDir()
+    const alpha = await createWorkspaceDir(dataDir, "alpha-project")
+    const beta = await createWorkspaceDir(dataDir, "beta-other")
+    const { app } = await createTestApp(dataDir)
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/workspaces",
+      payload: { name: "Alpha Project", path: alpha },
+    })
+    await app.inject({
+      method: "POST",
+      url: "/v1/workspaces",
+      payload: { name: "Beta Other", path: beta },
+    })
+    await rm(beta, { recursive: true, force: true })
+
+    const searchResponse = await app.inject({
+      method: "GET",
+      url: "/v1/workspaces?q=alpha",
+    })
+    const searchBody = WorkspaceCollectionSchema.parse(JSON.parse(searchResponse.body))
+
+    expect(searchResponse.statusCode).toBe(200)
+    expect(searchBody.items.map((workspace) => workspace.name)).toEqual(["Alpha Project"])
+    expect(searchBody.page.count).toBe(1)
+
+    const stateResponse = await app.inject({
+      method: "GET",
+      url: "/v1/workspaces?state=missing",
+    })
+    const stateBody = WorkspaceCollectionSchema.parse(JSON.parse(stateResponse.body))
+
+    expect(stateResponse.statusCode).toBe(200)
+    expect(stateBody.items.map((workspace) => workspace.name)).toEqual(["Beta Other"])
+    expect(stateBody.page.count).toBe(1)
+  })
 })
 
 describe("GET /v1/workspaces/:workspaceId", () => {

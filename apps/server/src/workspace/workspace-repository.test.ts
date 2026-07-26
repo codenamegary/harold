@@ -278,6 +278,94 @@ describe("workspace repository", () => {
     database.close()
   })
 
+  test("filters by search query on name and path", async () => {
+    const dataDir = await createTempDataDir()
+    const alpha = await createWorkspaceDir(dataDir, "alpha-project")
+    const beta = await createWorkspaceDir(dataDir, "beta-other")
+    const database = openDatabase({ dataDir })
+    const repository = createWorkspaceRepository(database)
+
+    repository.create({ name: "Alpha Project", path: alpha })
+    repository.create({ name: "Beta Other", path: beta })
+
+    const byName = repository.list({ q: "alpha" })
+    expect(byName.ok).toBe(true)
+    if (byName.ok) {
+      expect(byName.value.items.map((workspace) => workspace.name)).toEqual(["Alpha Project"])
+      expect(byName.value.count).toBe(1)
+    }
+
+    const byPath = repository.list({ q: "beta-other" })
+    expect(byPath.ok).toBe(true)
+    if (byPath.ok) {
+      expect(byPath.value.items.map((workspace) => workspace.name)).toEqual(["Beta Other"])
+      expect(byPath.value.count).toBe(1)
+    }
+
+    database.close()
+  })
+
+  test("filters by state after probing paths", async () => {
+    const dataDir = await createTempDataDir()
+    const availableDir = await createWorkspaceDir(dataDir, "available")
+    const missingDir = await createWorkspaceDir(dataDir, "missing")
+    const database = openDatabase({ dataDir })
+    const repository = createWorkspaceRepository(database)
+
+    const available = repository.create({ name: "Available", path: availableDir })
+    const missing = repository.create({ name: "Missing", path: missingDir })
+    expect(available.ok && missing.ok).toBe(true)
+    if (!available.ok || !missing.ok) {
+      return
+    }
+
+    await rm(missingDir, { recursive: true, force: true })
+
+    const availableOnly = repository.list({ state: "available" })
+    expect(availableOnly.ok).toBe(true)
+    if (availableOnly.ok) {
+      expect(availableOnly.value.items.map((workspace) => workspace.name)).toEqual(["Available"])
+      expect(availableOnly.value.count).toBe(1)
+    }
+
+    const missingOnly = repository.list({ state: "missing" })
+    expect(missingOnly.ok).toBe(true)
+    if (missingOnly.ok) {
+      expect(missingOnly.value.items.map((workspace) => workspace.name)).toEqual(["Missing"])
+      expect(missingOnly.value.count).toBe(1)
+    }
+
+    database.close()
+  })
+
+  test("combines search and state filters with pagination", async () => {
+    const dataDir = await createTempDataDir()
+    const dirs = await Promise.all([
+      createWorkspaceDir(dataDir, "agent-one"),
+      createWorkspaceDir(dataDir, "agent-two"),
+      createWorkspaceDir(dataDir, "other"),
+    ])
+    const database = openDatabase({ dataDir })
+    const repository = createWorkspaceRepository(database)
+
+    repository.create({ name: "Agent One", path: dirs[0]! })
+    repository.create({ name: "Agent Two", path: dirs[1]! })
+    repository.create({ name: "Other", path: dirs[2]! })
+    await rm(dirs[1]!, { recursive: true, force: true })
+
+    const firstPage = repository.list({ q: "agent-one", state: "available", limit: 1 })
+    expect(firstPage.ok).toBe(true)
+    if (!firstPage.ok) {
+      return
+    }
+
+    expect(firstPage.value.items.map((workspace) => workspace.name)).toEqual(["Agent One"])
+    expect(firstPage.value.count).toBe(1)
+    expect(firstPage.value.nextCursor).toBeUndefined()
+
+    database.close()
+  })
+
   test("returns not_found for missing ids", async () => {
     const dataDir = await createTempDataDir()
     const database = openDatabase({ dataDir })

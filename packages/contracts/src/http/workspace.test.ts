@@ -100,6 +100,16 @@ describe("ListWorkspacesQuerySchema", () => {
   test("rejects limit above 200", () => {
     expect(() => ListWorkspacesQuerySchema.parse({ limit: 201 })).toThrow()
   })
+
+  test("accepts search and state filters", () => {
+    expect(
+      ListWorkspacesQuerySchema.parse({ q: "agent", state: "available" }),
+    ).toEqual({
+      limit: 100,
+      q: "agent",
+      state: "available",
+    })
+  })
 })
 
 describe("WorkspaceCollectionSchema", () => {
