@@ -11,8 +11,8 @@ export const OverviewPanels: React.FC = () => (
     >
       <div className="flex h-[65px] items-center justify-between border-b border-line-soft px-[17px]">
         <div>
-          <h3 className="m-0 text-[13px] font-semibold">Recent activity</h3>
-          <p className="m-0 mt-[5px] text-[9px] text-dim">Live event stream</p>
+          <h3 className="m-0 text-sm font-semibold">Recent activity</h3>
+          <p className="m-0 mt-[5px] text-2xs text-dim">Live event stream</p>
         </div>
       </div>
       <p className="m-0 px-[17px] py-6 text-sm text-[#697381]">No recent activity.</p>

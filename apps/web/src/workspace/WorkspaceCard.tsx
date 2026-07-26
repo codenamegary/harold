@@ -6,6 +6,7 @@ import { StatusDot } from "../design-system/StatusDot"
 import { isWorkspaceUpdateError } from "./updateWorkspace"
 import { UnregisterWorkspaceModal } from "./UnregisterWorkspaceModal"
 import { useUpdateWorkspaceMutation } from "./useUpdateWorkspaceMutation"
+import { workspaceMutationErrorMessage } from "./workspaceMutationErrorMessage"
 import { workspaceStateDisplayByState } from "./workspaceStateDisplay"
 
 type WorkspaceCardProps = {
@@ -14,32 +15,26 @@ type WorkspaceCardProps = {
 
 export const WorkspaceCard: React.FC<WorkspaceCardProps> = ({ workspace }) => {
   const [isEditingName, setIsEditingName] = useState(false)
-  const [renameError, setRenameError] = useState<string | undefined>(undefined)
   const [isUnregisterModalOpen, setIsUnregisterModalOpen] = useState(false)
   const updateWorkspaceMutation = useUpdateWorkspaceMutation()
   const stateDisplay = workspaceStateDisplayByState[workspace.state]
+  const renameError = updateWorkspaceMutation.isError
+    ? workspaceMutationErrorMessage(
+        updateWorkspaceMutation.error,
+        isWorkspaceUpdateError,
+        "Could not rename workspace.",
+      )
+    : undefined
 
   const handleRenameSave = async (name: string) => {
-    setRenameError(undefined)
-
-    try {
-      await updateWorkspaceMutation.mutateAsync({
-        workspaceId: workspace.id,
-        body: { name },
-      })
-    } catch (error: unknown) {
-      if (isWorkspaceUpdateError(error)) {
-        setRenameError(error.problem.detail)
-      } else {
-        setRenameError("Could not rename workspace.")
-      }
-
-      throw error
-    }
+    await updateWorkspaceMutation.mutateAsync({
+      workspaceId: workspace.id,
+      body: { name },
+    })
   }
 
   const handleRenameCancel = () => {
-    setRenameError(undefined)
+    updateWorkspaceMutation.reset()
   }
 
   return (

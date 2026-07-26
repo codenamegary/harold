@@ -3,6 +3,7 @@ import { Button } from "../design-system/Button"
 import { Modal } from "../design-system/Modal"
 import { isWorkspaceDeleteError } from "./deleteWorkspace"
 import { useDeleteWorkspaceMutation } from "./useDeleteWorkspaceMutation"
+import { workspaceMutationErrorMessage } from "./workspaceMutationErrorMessage"
 
 type UnregisterWorkspaceModalProps = {
   workspaceId: string
@@ -25,20 +26,23 @@ export const UnregisterWorkspaceModal: React.FC<UnregisterWorkspaceModalProps> =
     onClose()
   }
 
-  const handleUnregister = async () => {
+  const handleUnregister = () => {
     setErrorMessage(undefined)
 
-    try {
-      await deleteWorkspaceMutation.mutateAsync(workspaceId)
-      handleClose()
-    } catch (error: unknown) {
-      if (isWorkspaceDeleteError(error)) {
-        setErrorMessage(error.problem.detail)
-        return
-      }
-
-      setErrorMessage("Could not unregister workspace.")
-    }
+    deleteWorkspaceMutation.mutate(workspaceId, {
+      onSuccess: () => {
+        handleClose()
+      },
+      onError: (error) => {
+        setErrorMessage(
+          workspaceMutationErrorMessage(
+            error,
+            isWorkspaceDeleteError,
+            "Could not unregister workspace.",
+          ),
+        )
+      },
+    })
   }
 
   return (
@@ -54,9 +58,7 @@ export const UnregisterWorkspaceModal: React.FC<UnregisterWorkspaceModalProps> =
           <Button
             className="border-red-500/40 bg-red-500/15 text-red-300 hover:border-red-400 hover:bg-red-500/25 hover:text-red-200"
             disabled={deleteWorkspaceMutation.isPending}
-            onClick={() => {
-              void handleUnregister()
-            }}
+            onClick={handleUnregister}
           >
             Unregister
           </Button>

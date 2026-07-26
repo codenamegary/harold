@@ -15,8 +15,8 @@ export const OverviewWorkspacePanel: React.FC = () => {
     <Panel aria-label="Workspaces" className="col-span-1">
       <div className="flex h-[65px] items-center justify-between border-b border-line-soft px-[17px]">
         <div>
-          <h3 className="m-0 text-[13px] font-semibold">Workspaces</h3>
-          <p className="m-0 mt-[5px] text-[9px] text-dim">Agent activity across connected projects</p>
+          <h3 className="m-0 text-sm font-semibold">Workspaces</h3>
+          <p className="m-0 mt-[5px] text-2xs text-dim">Agent activity across connected projects</p>
         </div>
         <Link className={textLinkClassName} to="/workspaces">
           Manage all <span aria-hidden>→</span>
