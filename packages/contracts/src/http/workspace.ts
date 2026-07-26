@@ -31,6 +31,8 @@ export const WorkspaceCollectionSchema = createCollectionSchema(WorkspaceSchema)
 export const ListWorkspacesQuerySchema = z.strictObject({
   limit: z.coerce.number().int().positive().max(200).default(100),
   cursor: CursorSchema.optional(),
+  q: z.string().min(1).optional(),
+  state: WorkspaceStateSchema.optional(),
 })
 
 export type Workspace = z.infer<typeof WorkspaceSchema>

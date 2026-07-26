@@ -1,8 +1,9 @@
-import { and, asc, count, desc, eq, gt, lt, or } from "drizzle-orm"
+import { and, asc, count, desc, eq, gt, lt, or, sql } from "drizzle-orm"
 import {
   CreateWorkspaceBody,
   UpdateWorkspaceBody,
   Workspace,
+  WorkspaceState,
 } from "contracts/http/workspace"
 import { AgentDatabase } from "../persistence/open-database"
 import { workspaces } from "../persistence/schema/workspaces"
@@ -13,6 +14,7 @@ import { WorkspaceRepositoryError } from "./workspace-errors"
 import {
   decodeWorkspacePageCursor,
   encodeWorkspacePageCursor,
+  WorkspacePageCursorPayload,
 } from "./workspace-page-cursor"
 
 export type WorkspaceRepositoryResult<T> =
@@ -22,6 +24,8 @@ export type WorkspaceRepositoryResult<T> =
 export type WorkspaceListOptions = {
   limit?: number
   cursor?: string
+  q?: string
+  state?: WorkspaceState
 }
 
 export type GetWorkspaceByIdInput = {
@@ -64,9 +68,80 @@ const rowToWorkspace = (row: WorkspaceRow): Workspace => ({
   lastUsedAt: row.lastUsedAt,
 })
 
-const compareWorkspaceRows = (left: WorkspaceRow, right: WorkspaceRow): number => {
+const compareWorkspaces = (left: Workspace, right: Workspace): number => {
   const lastUsedCompare = right.lastUsedAt.localeCompare(left.lastUsedAt)
   return lastUsedCompare === 0 ? left.id.localeCompare(right.id) : lastUsedCompare
+}
+
+const paginateFilteredWorkspaces = (
+  workspaces: Workspace[],
+  limit: number,
+  decodedCursor?: WorkspacePageCursorPayload,
+):
+  | { ok: true; value: { items: Workspace[]; nextCursor?: string; previousCursor?: string } }
+  | { ok: false } => {
+  if (decodedCursor === undefined) {
+    const pageItems = workspaces.slice(0, limit)
+    const last = pageItems[pageItems.length - 1]
+
+    return {
+      ok: true,
+      value: {
+        items: pageItems,
+        nextCursor:
+          pageItems.length === limit && workspaces.length > limit && last !== undefined
+            ? encodeWorkspacePageCursor({ id: last.id, edge: "after" })
+            : undefined,
+        previousCursor: undefined,
+      },
+    }
+  }
+
+  const index = workspaces.findIndex((workspace) => workspace.id === decodedCursor.id)
+  if (index === -1) {
+    return { ok: false }
+  }
+
+  if (decodedCursor.edge === "after") {
+    const pageItems = workspaces.slice(index + 1, index + 1 + limit)
+    const last = pageItems[pageItems.length - 1]
+    const first = pageItems[0]
+
+    return {
+      ok: true,
+      value: {
+        items: pageItems,
+        nextCursor:
+          index + 1 + pageItems.length < workspaces.length && last !== undefined
+            ? encodeWorkspacePageCursor({ id: last.id, edge: "after" })
+            : undefined,
+        previousCursor:
+          first !== undefined && index + 1 > 0
+            ? encodeWorkspacePageCursor({ id: first.id, edge: "before" })
+            : undefined,
+      },
+    }
+  }
+
+  const start = Math.max(0, index - limit)
+  const pageItems = workspaces.slice(start, index)
+  const last = pageItems[pageItems.length - 1]
+  const first = pageItems[0]
+
+  return {
+    ok: true,
+    value: {
+      items: pageItems,
+      nextCursor:
+        index < workspaces.length && last !== undefined
+          ? encodeWorkspacePageCursor({ id: last.id, edge: "after" })
+          : undefined,
+      previousCursor:
+        start > 0 && first !== undefined
+          ? encodeWorkspacePageCursor({ id: first.id, edge: "before" })
+          : undefined,
+    },
+  }
 }
 
 const conditionAfter = (row: WorkspaceRow) =>
@@ -162,7 +237,7 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
             .limit(limit)
             .all()
 
-    return [...rows].sort(compareWorkspaceRows)
+    return [...rows].sort((left, right) => compareWorkspaces(rowToWorkspace(left), rowToWorkspace(right)))
   }
 
   const create = (input: CreateWorkspaceBody): WorkspaceRepositoryResult<Workspace> => {
@@ -205,14 +280,76 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
     }
   }
 
+  const searchRows = (query?: string): WorkspaceRow[] => {
+    if (query === undefined || query === "") {
+      return database.db
+        .select()
+        .from(workspaces)
+        .orderBy(desc(workspaces.lastUsedAt), asc(workspaces.id))
+        .all()
+    }
+
+    const searchTerm = query.toLowerCase()
+
+    return database.db
+      .select()
+      .from(workspaces)
+      .where(
+        or(
+          sql`instr(lower(${workspaces.name}), ${searchTerm}) > 0`,
+          sql`instr(lower(${workspaces.canonicalPath}), ${searchTerm}) > 0`,
+        ),
+      )
+      .orderBy(desc(workspaces.lastUsedAt), asc(workspaces.id))
+      .all()
+  }
+
+  const listFiltered = (
+    limit: number,
+    decodedCursor: WorkspacePageCursorPayload | undefined,
+    query?: string,
+    state?: WorkspaceState,
+  ): WorkspaceListResult => {
+    const filtered = searchRows(query)
+      .map(rowToWorkspace)
+      .filter((workspace) => state === undefined || workspace.state === state)
+      .sort(compareWorkspaces)
+
+    const page = paginateFilteredWorkspaces(filtered, limit, decodedCursor)
+    if (!page.ok) {
+      return { ok: false, error: { kind: "invalid_cursor" } }
+    }
+
+    return {
+      ok: true,
+      value: {
+        items: page.value.items,
+        limit,
+        nextCursor: page.value.nextCursor,
+        previousCursor: page.value.previousCursor,
+        count: filtered.length,
+      },
+    }
+  }
+
   const list = (options: WorkspaceListOptions = {}): WorkspaceListResult => {
     const limit = options?.limit ?? DEFAULT_LIST_LIMIT
+    const hasFilters = options.q !== undefined || options.state !== undefined
 
     const decodedCursor =
       options?.cursor === undefined ? undefined : decodeWorkspacePageCursor(options.cursor)
 
     if (options?.cursor !== undefined && !decodedCursor?.ok) {
       return { ok: false, error: { kind: "invalid_cursor" } }
+    }
+
+    if (hasFilters) {
+      return listFiltered(
+        limit,
+        decodedCursor?.ok === true ? decodedCursor.value : undefined,
+        options.q,
+        options.state,
+      )
     }
 
     const cursorRow =
