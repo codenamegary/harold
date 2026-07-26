@@ -5,6 +5,7 @@ import path from "node:path"
 import { openDatabase } from "../persistence/open-database"
 import { workspaces } from "../persistence/schema/workspaces"
 import { createWorkspaceRepository } from "./workspace-repository"
+import { encodeWorkspacePageCursor } from "./workspace-page-cursor"
 
 const tempDirs: string[] = []
 
@@ -31,7 +32,7 @@ describe("workspace repository", () => {
     const database = openDatabase({ dataDir })
     const repository = createWorkspaceRepository(database)
 
-    const result = repository.create("My Project", workspaceDir)
+    const result = repository.create({ name: "My Project", path: workspaceDir })
 
     expect(result.ok).toBe(true)
     if (result.ok) {
@@ -53,8 +54,8 @@ describe("workspace repository", () => {
     const database = openDatabase({ dataDir })
     const repository = createWorkspaceRepository(database)
 
-    const first = repository.create("First", target)
-    const second = repository.create("Second", link)
+    const first = repository.create({ name: "First", path: target })
+    const second = repository.create({ name: "Second", path: link })
 
     expect(first.ok).toBe(true)
     expect(second.ok).toBe(false)
@@ -73,20 +74,25 @@ describe("workspace repository", () => {
     const database = openDatabase({ dataDir })
     const repository = createWorkspaceRepository(database)
 
-    const first = repository.create("Alpha", alpha)
-    const second = repository.create("Beta", beta)
-    const third = repository.create("Gamma", gamma)
+    const first = repository.create({ name: "Alpha", path: alpha })
+    const second = repository.create({ name: "Beta", path: beta })
+    const third = repository.create({ name: "Gamma", path: gamma })
 
     expect(first.ok && second.ok && third.ok).toBe(true)
     if (!first.ok || !second.ok || !third.ok) {
       return
     }
 
-    const renamed = repository.updateName(second.value.id, "Beta Renamed")
+    const renamed = repository.updateName({ id: second.value.id, name: "Beta Renamed" })
     expect(renamed.ok).toBe(true)
 
-    const items = repository.list()
-    expect(items.map((workspace) => workspace.id)).toEqual([
+    const listResult = repository.list({ limit: 100 })
+    expect(listResult.ok).toBe(true)
+    if (!listResult.ok) {
+      return
+    }
+
+    expect(listResult.value.items.map((workspace) => workspace.id)).toEqual([
       second.value.id,
       third.value.id,
       first.value.id,
@@ -123,8 +129,13 @@ describe("workspace repository", () => {
       ])
       .run()
 
-    const items = repository.list()
-    expect(items.map((workspace) => workspace.id)).toEqual([
+    const listResult = repository.list({ limit: 100 })
+    expect(listResult.ok).toBe(true)
+    if (!listResult.ok) {
+      return
+    }
+
+    expect(listResult.value.items.map((workspace) => workspace.id)).toEqual([
       "ws_AAAAAAAAAAAAAAAAAAAAAAAAA",
       "ws_ZZZZZZZZZZZZZZZZZZZZZZZZZZ",
     ])
@@ -138,34 +149,131 @@ describe("workspace repository", () => {
     const database = openDatabase({ dataDir })
     const repository = createWorkspaceRepository(database)
 
-    const created = repository.create("Original", workspaceDir)
+    const created = repository.create({ name: "Original", path: workspaceDir })
     expect(created.ok).toBe(true)
     if (!created.ok) {
       return
     }
 
-    const fetched = repository.getById(created.value.id)
+    const fetched = repository.getById({ id: created.value.id })
     expect(fetched.ok).toBe(true)
     if (fetched.ok) {
       expect(fetched.value.name).toBe("Original")
       expect(fetched.value.state).toBe("available")
     }
 
-    const renamed = repository.updateName(created.value.id, "Renamed")
+    const renamed = repository.updateName({ id: created.value.id, name: "Renamed" })
     expect(renamed.ok).toBe(true)
     if (renamed.ok) {
       expect(renamed.value.name).toBe("Renamed")
       expect(renamed.value.lastUsedAt >= created.value.lastUsedAt).toBe(true)
     }
 
-    const deleted = repository.delete(created.value.id)
+    const deleted = repository.delete({ id: created.value.id })
     expect(deleted.ok).toBe(true)
 
-    const missing = repository.getById(created.value.id)
+    const missing = repository.getById({ id: created.value.id })
     expect(missing.ok).toBe(false)
     if (!missing.ok) {
       expect(missing.error.kind).toBe("not_found")
     }
+
+    database.close()
+  })
+
+  test("pages forward with opaque cursors and count", async () => {
+    const dataDir = await createTempDataDir()
+    const dirs = await Promise.all([
+      createWorkspaceDir(dataDir, "one"),
+      createWorkspaceDir(dataDir, "two"),
+      createWorkspaceDir(dataDir, "three"),
+    ])
+    const database = openDatabase({ dataDir })
+    const repository = createWorkspaceRepository(database)
+
+    for (const [index, dir] of dirs.entries()) {
+      const created = repository.create({ name: `Workspace ${index + 1}`, path: dir })
+      expect(created.ok).toBe(true)
+    }
+
+    const firstPage = repository.list({ limit: 2 })
+    expect(firstPage.ok).toBe(true)
+    if (!firstPage.ok) {
+      return
+    }
+
+    expect(firstPage.value.items.length).toBe(2)
+    expect(firstPage.value.count).toBe(3)
+    expect(firstPage.value.nextCursor).toBeDefined()
+
+    const secondPage = repository.list({
+      limit: 2,
+      cursor: firstPage.value.nextCursor,
+    })
+    expect(secondPage.ok).toBe(true)
+    if (!secondPage.ok) {
+      return
+    }
+
+    expect(secondPage.value.items.length).toBe(1)
+    expect(secondPage.value.nextCursor).toBeUndefined()
+
+    const invalid = repository.list({
+      cursor: encodeWorkspacePageCursor({
+        id: "ws_01J0000000000000000000000",
+        edge: "after",
+      }),
+    })
+    expect(invalid.ok).toBe(false)
+    if (!invalid.ok) {
+      expect(invalid.error.kind).toBe("invalid_cursor")
+    }
+
+    database.close()
+  })
+
+  test("pages backward with encoded previous cursor", async () => {
+    const dataDir = await createTempDataDir()
+    const dirs = await Promise.all([
+      createWorkspaceDir(dataDir, "one"),
+      createWorkspaceDir(dataDir, "two"),
+      createWorkspaceDir(dataDir, "three"),
+    ])
+    const database = openDatabase({ dataDir })
+    const repository = createWorkspaceRepository(database)
+
+    for (const [index, dir] of dirs.entries()) {
+      const created = repository.create({ name: `Workspace ${index + 1}`, path: dir })
+      expect(created.ok).toBe(true)
+    }
+
+    const firstPage = repository.list({ limit: 2 })
+    expect(firstPage.ok).toBe(true)
+    if (!firstPage.ok) {
+      return
+    }
+
+    const secondPage = repository.list({
+      limit: 2,
+      cursor: firstPage.value.nextCursor,
+    })
+    expect(secondPage.ok).toBe(true)
+    if (!secondPage.ok) {
+      return
+    }
+
+    const backToFirst = repository.list({
+      limit: 2,
+      cursor: secondPage.value.previousCursor,
+    })
+    expect(backToFirst.ok).toBe(true)
+    if (!backToFirst.ok) {
+      return
+    }
+
+    expect(backToFirst.value.items.map((workspace) => workspace.id)).toEqual(
+      firstPage.value.items.map((workspace) => workspace.id),
+    )
 
     database.close()
   })
@@ -175,9 +283,12 @@ describe("workspace repository", () => {
     const database = openDatabase({ dataDir })
     const repository = createWorkspaceRepository(database)
 
-    const getResult = repository.getById("ws_01J0000000000000000000000")
-    const updateResult = repository.updateName("ws_01J0000000000000000000000", "Nope")
-    const deleteResult = repository.delete("ws_01J0000000000000000000000")
+    const getResult = repository.getById({ id: "ws_01J0000000000000000000000" })
+    const updateResult = repository.updateName({
+      id: "ws_01J0000000000000000000000",
+      name: "Nope",
+    })
+    const deleteResult = repository.delete({ id: "ws_01J0000000000000000000000" })
 
     expect(getResult.ok).toBe(false)
     expect(updateResult.ok).toBe(false)
@@ -196,7 +307,7 @@ describe("workspace repository", () => {
     const database = openDatabase({ dataDir })
     const repository = createWorkspaceRepository(database)
 
-    const created = repository.create("Ephemeral", workspaceDir)
+    const created = repository.create({ name: "Ephemeral", path: workspaceDir })
     expect(created.ok).toBe(true)
     if (!created.ok) {
       return
@@ -204,7 +315,7 @@ describe("workspace repository", () => {
 
     await rm(workspaceDir, { recursive: true, force: true })
 
-    const fetched = repository.getById(created.value.id)
+    const fetched = repository.getById({ id: created.value.id })
     expect(fetched.ok).toBe(true)
     if (fetched.ok) {
       expect(fetched.value.state).toBe("missing")
