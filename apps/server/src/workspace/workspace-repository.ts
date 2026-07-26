@@ -16,8 +16,26 @@ export type WorkspaceRepositoryResult<T> =
   | { ok: false; error: WorkspaceRepositoryError }
 
 export type WorkspaceListOptions = {
-  limit: number
+  limit?: number
   cursor?: string
+}
+
+export type CreateWorkspaceInput = {
+  name: string
+  path: string
+}
+
+export type GetWorkspaceByIdInput = {
+  id: string
+}
+
+export type UpdateWorkspaceNameInput = {
+  id: string
+  name: string
+}
+
+export type DeleteWorkspaceInput = {
+  id: string
 }
 
 export type WorkspaceListPage = {
@@ -149,7 +167,10 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
     return [...rows].sort(compareWorkspaceRows)
   }
 
-  const create = (name: string, inputPath: string): WorkspaceRepositoryResult<Workspace> => {
+  const create = ({
+    name,
+    path: inputPath,
+  }: CreateWorkspaceInput): WorkspaceRepositoryResult<Workspace> => {
     const canonicalizeResult = canonicalizeWorkspacePath(inputPath)
     if (!canonicalizeResult.ok) {
       return { ok: false, error: { kind: "path", error: canonicalizeResult.error } }
@@ -188,7 +209,7 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
     }
   }
 
-  const list = (options?: Partial<WorkspaceListOptions>): WorkspaceListResult => {
+  const list = (options: WorkspaceListOptions = {}): WorkspaceListResult => {
     const limit = options?.limit ?? DEFAULT_LIST_LIMIT
 
     const decodedCursor =
@@ -224,7 +245,7 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
     }
   }
 
-  const getById = (id: string): WorkspaceRepositoryResult<Workspace> => {
+  const getById = ({ id }: GetWorkspaceByIdInput): WorkspaceRepositoryResult<Workspace> => {
     const row = getRowById(id)
 
     if (row === undefined) {
@@ -234,7 +255,10 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
     return { ok: true, value: rowToWorkspace(row) }
   }
 
-  const updateName = (id: string, name: string): WorkspaceRepositoryResult<Workspace> => {
+  const updateName = ({
+    id,
+    name,
+  }: UpdateWorkspaceNameInput): WorkspaceRepositoryResult<Workspace> => {
     const timestamp = nowIso()
     const row = database.db
       .update(workspaces)
@@ -250,7 +274,7 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
     return { ok: true, value: rowToWorkspace(row) }
   }
 
-  const deleteById = (id: string): WorkspaceRepositoryResult<void> => {
+  const deleteById = ({ id }: DeleteWorkspaceInput): WorkspaceRepositoryResult<void> => {
     const row = database.db.delete(workspaces).where(eq(workspaces.id, id)).returning().get()
 
     if (row === undefined) {

@@ -26,7 +26,7 @@ export const registerWorkspaceRoutes = (
 ) => {
   app.post("/v1/workspaces", async (request, reply) => {
     const body = CreateWorkspaceBodySchema.parse(request.body)
-    const result = repository.create(body.name, body.path)
+    const result = repository.create({ name: body.name, path: body.path })
 
     if (!result.ok) {
       if (result.error.kind === "path") {
@@ -64,7 +64,7 @@ export const registerWorkspaceRoutes = (
 
   app.get("/v1/workspaces/:workspaceId", async (request, reply) => {
     const { workspaceId } = request.params as { workspaceId: string }
-    const result = repository.getById(workspaceId)
+    const result = repository.getById({ id: workspaceId })
 
     if (!result.ok) {
       return sendProblem(reply, 404, buildNotFoundProblem())
@@ -76,7 +76,7 @@ export const registerWorkspaceRoutes = (
   app.patch("/v1/workspaces/:workspaceId", async (request, reply) => {
     const { workspaceId } = request.params as { workspaceId: string }
     const body = UpdateWorkspaceBodySchema.parse(request.body)
-    const result = repository.updateName(workspaceId, body.name)
+    const result = repository.updateName({ id: workspaceId, name: body.name })
 
     if (!result.ok) {
       return sendProblem(reply, 404, buildNotFoundProblem())
@@ -87,7 +87,7 @@ export const registerWorkspaceRoutes = (
 
   app.delete("/v1/workspaces/:workspaceId", async (request, reply) => {
     const { workspaceId } = request.params as { workspaceId: string }
-    const result = repository.delete(workspaceId)
+    const result = repository.delete({ id: workspaceId })
 
     if (!result.ok) {
       return sendProblem(reply, 404, buildNotFoundProblem())

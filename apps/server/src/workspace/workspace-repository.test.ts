@@ -32,7 +32,7 @@ describe("workspace repository", () => {
     const database = openDatabase({ dataDir })
     const repository = createWorkspaceRepository(database)
 
-    const result = repository.create("My Project", workspaceDir)
+    const result = repository.create({ name: "My Project", path: workspaceDir })
 
     expect(result.ok).toBe(true)
     if (result.ok) {
@@ -54,8 +54,8 @@ describe("workspace repository", () => {
     const database = openDatabase({ dataDir })
     const repository = createWorkspaceRepository(database)
 
-    const first = repository.create("First", target)
-    const second = repository.create("Second", link)
+    const first = repository.create({ name: "First", path: target })
+    const second = repository.create({ name: "Second", path: link })
 
     expect(first.ok).toBe(true)
     expect(second.ok).toBe(false)
@@ -74,16 +74,16 @@ describe("workspace repository", () => {
     const database = openDatabase({ dataDir })
     const repository = createWorkspaceRepository(database)
 
-    const first = repository.create("Alpha", alpha)
-    const second = repository.create("Beta", beta)
-    const third = repository.create("Gamma", gamma)
+    const first = repository.create({ name: "Alpha", path: alpha })
+    const second = repository.create({ name: "Beta", path: beta })
+    const third = repository.create({ name: "Gamma", path: gamma })
 
     expect(first.ok && second.ok && third.ok).toBe(true)
     if (!first.ok || !second.ok || !third.ok) {
       return
     }
 
-    const renamed = repository.updateName(second.value.id, "Beta Renamed")
+    const renamed = repository.updateName({ id: second.value.id, name: "Beta Renamed" })
     expect(renamed.ok).toBe(true)
 
     const listResult = repository.list({ limit: 100 })
@@ -149,30 +149,30 @@ describe("workspace repository", () => {
     const database = openDatabase({ dataDir })
     const repository = createWorkspaceRepository(database)
 
-    const created = repository.create("Original", workspaceDir)
+    const created = repository.create({ name: "Original", path: workspaceDir })
     expect(created.ok).toBe(true)
     if (!created.ok) {
       return
     }
 
-    const fetched = repository.getById(created.value.id)
+    const fetched = repository.getById({ id: created.value.id })
     expect(fetched.ok).toBe(true)
     if (fetched.ok) {
       expect(fetched.value.name).toBe("Original")
       expect(fetched.value.state).toBe("available")
     }
 
-    const renamed = repository.updateName(created.value.id, "Renamed")
+    const renamed = repository.updateName({ id: created.value.id, name: "Renamed" })
     expect(renamed.ok).toBe(true)
     if (renamed.ok) {
       expect(renamed.value.name).toBe("Renamed")
       expect(renamed.value.lastUsedAt >= created.value.lastUsedAt).toBe(true)
     }
 
-    const deleted = repository.delete(created.value.id)
+    const deleted = repository.delete({ id: created.value.id })
     expect(deleted.ok).toBe(true)
 
-    const missing = repository.getById(created.value.id)
+    const missing = repository.getById({ id: created.value.id })
     expect(missing.ok).toBe(false)
     if (!missing.ok) {
       expect(missing.error.kind).toBe("not_found")
@@ -192,7 +192,7 @@ describe("workspace repository", () => {
     const repository = createWorkspaceRepository(database)
 
     for (const [index, dir] of dirs.entries()) {
-      const created = repository.create(`Workspace ${index + 1}`, dir)
+      const created = repository.create({ name: `Workspace ${index + 1}`, path: dir })
       expect(created.ok).toBe(true)
     }
 
@@ -243,7 +243,7 @@ describe("workspace repository", () => {
     const repository = createWorkspaceRepository(database)
 
     for (const [index, dir] of dirs.entries()) {
-      const created = repository.create(`Workspace ${index + 1}`, dir)
+      const created = repository.create({ name: `Workspace ${index + 1}`, path: dir })
       expect(created.ok).toBe(true)
     }
 
@@ -283,9 +283,12 @@ describe("workspace repository", () => {
     const database = openDatabase({ dataDir })
     const repository = createWorkspaceRepository(database)
 
-    const getResult = repository.getById("ws_01J0000000000000000000000")
-    const updateResult = repository.updateName("ws_01J0000000000000000000000", "Nope")
-    const deleteResult = repository.delete("ws_01J0000000000000000000000")
+    const getResult = repository.getById({ id: "ws_01J0000000000000000000000" })
+    const updateResult = repository.updateName({
+      id: "ws_01J0000000000000000000000",
+      name: "Nope",
+    })
+    const deleteResult = repository.delete({ id: "ws_01J0000000000000000000000" })
 
     expect(getResult.ok).toBe(false)
     expect(updateResult.ok).toBe(false)
@@ -304,7 +307,7 @@ describe("workspace repository", () => {
     const database = openDatabase({ dataDir })
     const repository = createWorkspaceRepository(database)
 
-    const created = repository.create("Ephemeral", workspaceDir)
+    const created = repository.create({ name: "Ephemeral", path: workspaceDir })
     expect(created.ok).toBe(true)
     if (!created.ok) {
       return
@@ -312,7 +315,7 @@ describe("workspace repository", () => {
 
     await rm(workspaceDir, { recursive: true, force: true })
 
-    const fetched = repository.getById(created.value.id)
+    const fetched = repository.getById({ id: created.value.id })
     expect(fetched.ok).toBe(true)
     if (fetched.ok) {
       expect(fetched.value.state).toBe("missing")
