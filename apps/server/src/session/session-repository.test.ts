@@ -361,7 +361,6 @@ describe("session repository", () => {
       return
     }
 
-    database.sqlite.run("PRAGMA foreign_keys = ON")
     database.db.delete(workspaces).where(eq(workspaces.id, workspaceId)).run()
 
     const remaining = database.db.select().from(sessions).all()

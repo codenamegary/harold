@@ -1,5 +1,5 @@
 import { and, asc, count, desc, eq, gt, lt, or } from "drizzle-orm"
-import { Session, SessionState, UpdateSessionBody } from "contracts/http/session"
+import { Session, SessionState, SessionStateSchema, UpdateSessionBody } from "contracts/http/session"
 import { AgentDatabase } from "../persistence/open-database"
 import { sessions } from "../persistence/schema/sessions"
 import { createSessionId } from "./create-session-id"
@@ -62,7 +62,7 @@ const rowToSession = (row: SessionRow): Session => ({
   id: row.id,
   workspaceId: row.workspaceId,
   name: row.name,
-  state: row.state as SessionState,
+  state: SessionStateSchema.parse(row.state),
   createdAt: row.createdAt,
   lastUsedAt: row.lastUsedAt,
   archivedAt: row.archivedAt,
