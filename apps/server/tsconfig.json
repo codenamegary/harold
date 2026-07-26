@@ -10,7 +10,8 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "verbatimModuleSyntax": false,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "types": ["bun-types"]
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts"]

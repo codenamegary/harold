@@ -69,8 +69,8 @@ into `packages` only when it has a genuine second consumer.
 ### Server and persistence
 
 - Use Fastify and bind to `127.0.0.1` for milestone 1.
-- Use `bun:sqlite` without an ORM.
-- Apply explicit numbered SQL migrations transactionally.
+- Use Drizzle ORM on `bun:sqlite` with `drizzle-kit` migrations.
+- Apply generated SQL migrations transactionally via Drizzle `migrate()`.
 - Return versioned, schema-validated API responses and structured errors.
 - Emit structured logs without authentication material or secrets.
 
