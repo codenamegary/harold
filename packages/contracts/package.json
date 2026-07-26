@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./http/status": "./src/http/status.ts",
+    "./http/collection": "./src/http/collection.ts",
     "./http/error": "./src/http/error.ts",
     "./http/workspace": "./src/http/workspace.ts",
     "./http/session": "./src/http/session.ts",

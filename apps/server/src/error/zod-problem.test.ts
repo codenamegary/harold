@@ -16,9 +16,9 @@ describe("zodIssueToCode", () => {
       {
         code: "invalid_type",
         expected: "string",
-        received: "undefined",
         path: ["name"],
         message: "Required",
+        input: undefined,
       },
     ]).issues[0]!
 
@@ -30,12 +30,26 @@ describe("zodIssueToCode", () => {
       {
         code: "invalid_type",
         expected: "string",
-        received: "number",
         path: ["name"],
         message: "Expected string",
+        input: 123,
       },
     ]).issues[0]!
 
     expect(zodIssueToCode(issue)).toBe("validation.field.invalid_type")
+  })
+
+  test("maps invalid_format to invalid_string code", () => {
+    const issue = new ZodError([
+      {
+        code: "invalid_format",
+        format: "datetime",
+        path: ["createdAt"],
+        message: "Invalid ISO datetime",
+        input: "not-a-date",
+      },
+    ]).issues[0]!
+
+    expect(zodIssueToCode(issue)).toBe("validation.field.invalid_string")
   })
 })

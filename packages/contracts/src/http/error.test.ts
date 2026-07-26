@@ -1,10 +1,12 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test"
 import {
+  ConflictProblemSchema,
   InternalProblemSchema,
+  NotFoundProblemSchema,
   PROBLEM_TYPES,
   ProblemDetailsSchema,
   ValidationProblemSchema,
-} from "./error";
+} from "./error"
 
 describe("PROBLEM_TYPES", () => {
   test("uses agent-server.local problem type URLs", () => {
@@ -13,6 +15,12 @@ describe("PROBLEM_TYPES", () => {
     )
     expect(PROBLEM_TYPES.internalError).toBe(
       "https://agent-server.local/problems/internal-error",
+    )
+    expect(PROBLEM_TYPES.notFound).toBe(
+      "https://agent-server.local/problems/not-found",
+    )
+    expect(PROBLEM_TYPES.conflict).toBe(
+      "https://agent-server.local/problems/conflict",
     )
   })
 })
@@ -74,11 +82,37 @@ describe("InternalProblemSchema", () => {
       title: "Internal server error",
       status: 500,
       detail: "Unexpected failure",
-    };
+    }
 
-    expect(InternalProblemSchema.parse(problem)).toEqual(problem);
-  });
-});
+    expect(InternalProblemSchema.parse(problem)).toEqual(problem)
+  })
+})
+
+describe("NotFoundProblemSchema", () => {
+  test("accepts a not-found problem", () => {
+    const problem = {
+      type: PROBLEM_TYPES.notFound,
+      title: "Workspace not found",
+      status: 404,
+      detail: "Unknown workspaceId",
+    }
+
+    expect(NotFoundProblemSchema.parse(problem)).toEqual(problem)
+  })
+})
+
+describe("ConflictProblemSchema", () => {
+  test("accepts a conflict problem", () => {
+    const problem = {
+      type: PROBLEM_TYPES.conflict,
+      title: "Workspace path already registered",
+      status: 409,
+      detail: "Duplicate canonical path",
+    }
+
+    expect(ConflictProblemSchema.parse(problem)).toEqual(problem)
+  })
+})
 
 describe("ProblemDetailsSchema", () => {
   test("parses validation and internal problems by type", () => {
@@ -87,15 +121,32 @@ describe("ProblemDetailsSchema", () => {
       title: "Request validation failed",
       code: "validation.request.invalid",
       errors: [{ pointer: "#/name", code: "validation.field.required" }],
-    };
+    }
 
     const internal = {
       type: PROBLEM_TYPES.internalError,
       title: "Internal server error",
       detail: "Unexpected failure",
-    };
+    }
 
-    expect(ProblemDetailsSchema.parse(validation)).toEqual(validation);
-    expect(ProblemDetailsSchema.parse(internal)).toEqual(internal);
-  });
-});
+    expect(ProblemDetailsSchema.parse(validation)).toEqual(validation)
+    expect(ProblemDetailsSchema.parse(internal)).toEqual(internal)
+  })
+
+  test("parses not-found and conflict problems by type", () => {
+    const notFound = {
+      type: PROBLEM_TYPES.notFound,
+      title: "Workspace not found",
+      status: 404,
+    }
+
+    const conflict = {
+      type: PROBLEM_TYPES.conflict,
+      title: "Workspace path already registered",
+      status: 409,
+    }
+
+    expect(ProblemDetailsSchema.parse(notFound)).toEqual(notFound)
+    expect(ProblemDetailsSchema.parse(conflict)).toEqual(conflict)
+  })
+})
