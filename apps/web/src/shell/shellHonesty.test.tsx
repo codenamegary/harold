@@ -139,6 +139,50 @@ describe("shell honesty", () => {
         expect(getByText("No workspaces registered yet.")).toBeInTheDocument()
       })
     })
+
+    test("unregister control is visible when workspaces exist", async () => {
+      const listCollection = WorkspaceCollectionSchema.parse({
+        items: [
+          {
+            id: "ws-agent-server",
+            name: "agent-server",
+            path: "/home/operator/agent-server",
+            state: "available",
+            createdAt: "2026-07-24T12:00:00.000Z",
+            lastUsedAt: "2026-07-24T12:05:00.000Z",
+          },
+        ],
+        page: { limit: 20, count: 1 },
+      })
+
+      globalThis.fetch = mock((input: RequestInfo | URL) => {
+        const url = String(input)
+
+        if (url.startsWith("/v1/workspaces")) {
+          return Promise.resolve(
+            new Response(JSON.stringify(listCollection), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }),
+          )
+        }
+
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }) as typeof fetch
+
+      const { getByRole } = renderShellRoute("/workspaces")
+
+      await waitForShellReady(getByRole)
+
+      await waitFor(() => {
+        expect(getByRole("button", { name: "Unregister agent-server" })).toBeInTheDocument()
+      })
+    })
   })
 
   describe("devices disabled honesty", () => {

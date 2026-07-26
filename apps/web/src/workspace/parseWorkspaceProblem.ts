@@ -1,5 +1,6 @@
 import {
   ConflictProblemSchema,
+  NotFoundProblemSchema,
   ValidationProblemSchema,
 } from "contracts/http/error"
 
@@ -22,6 +23,14 @@ export const parseWorkspaceProblem = async (
       fieldError: firstError
         ? `${firstError.pointer}: ${firstError.code}`
         : undefined,
+    }
+  }
+
+  if (response.status === 404) {
+    const problem = NotFoundProblemSchema.parse(payload)
+
+    return {
+      detail: problem.detail ?? problem.title,
     }
   }
 
