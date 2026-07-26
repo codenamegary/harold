@@ -148,7 +148,13 @@ export const createAgentSettingsRepository = (
     const nextEnabled = body.enabled
     let nextPath = current.path
 
-    if ("path" in body || nextEnabled) {
+    if ("path" in body) {
+      const resolvedPath = resolvePathForUpdate(agentId, body, whichFn, validatePath)
+      if (!resolvedPath.ok) {
+        return resolvedPath
+      }
+      nextPath = resolvedPath.value
+    } else if (nextEnabled && current.path === null) {
       const resolvedPath = resolvePathForUpdate(agentId, body, whichFn, validatePath)
       if (!resolvedPath.ok) {
         return resolvedPath

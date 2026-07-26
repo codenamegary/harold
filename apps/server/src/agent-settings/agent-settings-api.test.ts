@@ -203,6 +203,37 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     expect(body.path).toBe(detectedPath)
   })
 
+  test("re-enables cursor without re-detecting when path is already stored", async () => {
+    const dataDir = await createTempDataDir()
+    const storedPath = "/opt/custom/agent"
+    const whichFn: WhichFn = () => "/usr/local/bin/agent"
+    const { app } = await createTestApp(dataDir, whichFn)
+
+    await app.inject({
+      method: "PATCH",
+      url: "/v1/settings/agents/cursor",
+      payload: { enabled: true, path: storedPath },
+    })
+
+    await app.inject({
+      method: "PATCH",
+      url: "/v1/settings/agents/cursor",
+      payload: { enabled: false },
+    })
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/settings/agents/cursor",
+      payload: { enabled: true },
+    })
+
+    const body = AgentSettingsSchema.parse(JSON.parse(response.body))
+
+    expect(response.statusCode).toBe(200)
+    expect(body.enabled).toBe(true)
+    expect(body.path).toBe(storedPath)
+  })
+
   test("sets path with manual override", async () => {
     const dataDir = await createTempDataDir()
     const { app } = await createTestApp(dataDir)
