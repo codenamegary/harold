@@ -18,7 +18,7 @@ import { createRuntime } from "../runtime/runtime"
 import { encodeWorkspacePageCursor } from "./workspace-page-cursor"
 
 const tempDirs: string[] = []
-const apps: Awaited<ReturnType<typeof createServer>>[] = []
+const apps: Awaited<ReturnType<typeof createServer>>["app"][] = []
 
 const createTempDataDir = async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-workspace-api-"))
@@ -40,7 +40,7 @@ const createTestApp = async (dataDir: string) => {
   })
   const database = openDatabase({ dataDir: config.dataDir })
   const runtime = createRuntime("0.1.0")
-  const app = await createServer({ config, runtime, database })
+  const { app } = await createServer({ config, runtime, database })
   apps.push(app)
   return { app, database, config }
 }
@@ -453,7 +453,7 @@ describe("restart durability", () => {
     })
     const firstDatabase = openDatabase({ dataDir: firstConfig.dataDir })
     const firstRuntime = createRuntime("0.1.0")
-    const firstApp = await createServer({
+    const { app: firstApp } = await createServer({
       config: firstConfig,
       runtime: firstRuntime,
       database: firstDatabase,
@@ -471,7 +471,7 @@ describe("restart durability", () => {
 
     const secondDatabase = openDatabase({ dataDir })
     const secondRuntime = createRuntime("0.1.0")
-    const secondApp = await createServer({
+    const { app: secondApp } = await createServer({
       config: firstConfig,
       runtime: secondRuntime,
       database: secondDatabase,

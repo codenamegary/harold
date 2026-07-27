@@ -31,7 +31,7 @@ const createTestServer = async (port = 0) => {
   })
   const database = openDatabase({ dataDir: config.dataDir })
   const runtime = createRuntime("0.1.0")
-  const app = await createServer({
+  const { app } = await createServer({
     config,
     runtime,
     database,
@@ -64,7 +64,7 @@ describe("GET /v1/status", () => {
 })
 
 describe("bind and shutdown", () => {
-  const apps: Awaited<ReturnType<typeof createServer>>[] = []
+  const apps: Awaited<ReturnType<typeof createServer>>["app"][] = []
 
   afterEach(async () => {
     await Promise.all(apps.splice(0).map((app) => app.close()))

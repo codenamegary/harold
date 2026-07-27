@@ -20,7 +20,7 @@ import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn, validateExecutablePath } from "../agent-settings/validate-agent-path"
 
 const tempDirs: string[] = []
-const apps: Awaited<ReturnType<typeof createServer>>[] = []
+const apps: Awaited<ReturnType<typeof createServer>>["app"][] = []
 
 const createTempDataDir = async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-agent-settings-api-"))
@@ -42,7 +42,7 @@ const createTestApp = async (
   })
   const database = openDatabase({ dataDir: config.dataDir })
   const runtime = createRuntime("0.1.0")
-  const app = await createServer({
+  const { app } = await createServer({
     config,
     runtime,
     database,
@@ -362,7 +362,7 @@ describe("agent settings durability", () => {
     })
     const firstDatabase = openDatabase({ dataDir: firstConfig.dataDir })
     const firstRuntime = createRuntime("0.1.0")
-    const firstApp = await createServer({
+    const { app: firstApp } = await createServer({
       config: firstConfig,
       runtime: firstRuntime,
       database: firstDatabase,
@@ -381,7 +381,7 @@ describe("agent settings durability", () => {
 
     const secondDatabase = openDatabase({ dataDir })
     const secondRuntime = createRuntime("0.1.0")
-    const secondApp = await createServer({
+    const { app: secondApp } = await createServer({
       config: firstConfig,
       runtime: secondRuntime,
       database: secondDatabase,

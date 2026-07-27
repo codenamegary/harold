@@ -16,7 +16,7 @@ import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
 
 const tempDirs: string[] = []
-const apps: Awaited<ReturnType<typeof createServer>>[] = []
+const apps: Awaited<ReturnType<typeof createServer>>["app"][] = []
 
 const createTempDataDir = async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-session-api-"))
@@ -44,7 +44,7 @@ const createTestApp = async (
   })
   const database = openDatabase({ dataDir: config.dataDir })
   const runtime = createRuntime("0.1.0")
-  const app = await createServer({
+  const { app } = await createServer({
     config,
     runtime,
     database,
@@ -60,7 +60,10 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
-const seedWorkspace = async (app: Awaited<ReturnType<typeof createServer>>, dataDir: string) => {
+const seedWorkspace = async (
+  app: Awaited<ReturnType<typeof createServer>>["app"],
+  dataDir: string,
+) => {
   const workspaceDir = await createWorkspaceDir(dataDir, "project")
   const response = await app.inject({
     method: "POST",
@@ -72,7 +75,7 @@ const seedWorkspace = async (app: Awaited<ReturnType<typeof createServer>>, data
 }
 
 const enableAgent = async (
-  app: Awaited<ReturnType<typeof createServer>>,
+  app: Awaited<ReturnType<typeof createServer>>["app"],
   agentId: "cursor" | "claude",
   whichFn?: WhichFn,
 ) => {
