@@ -33,7 +33,7 @@ export type AgentRegistryMetadata = {
 export const agentRegistryMetadataById: Record<AgentId, AgentRegistryMetadata> = {
   cursor: {
     command: ["agent", "acp"],
-    authMethodId: "cursor",
+    authMethodId: "cursor_login",
     capabilities: ["session/new", "session/prompt", "session/cancel"],
   },
   claude: {

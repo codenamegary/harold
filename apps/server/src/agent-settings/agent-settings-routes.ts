@@ -6,6 +6,7 @@ import {
   UpdateAgentSettingsBodySchema,
 } from "contracts/http/agent-settings"
 import { FastifyInstance } from "fastify"
+import { AcpSupervisor } from "../acp/acp-supervisor-types"
 import { AgentSettingsRepository } from "./agent-settings-repository"
 import {
   buildAgentCannotEnableProblem,
@@ -27,6 +28,7 @@ const sendProblem = (
 export const registerAgentSettingsRoutes = (
   app: FastifyInstance,
   repository: AgentSettingsRepository,
+  acpSupervisor: AcpSupervisor,
 ) => {
   app.get("/v1/settings/agents", async (_request, reply) => {
     const collection = AgentSettingsCollectionSchema.parse({
@@ -68,6 +70,10 @@ export const registerAgentSettingsRoutes = (
         return sendProblem(reply, 400, buildAgentPathInvalidProblem(result.error.path))
       }
       return sendProblem(reply, 404, buildAgentNotFoundProblem())
+    }
+
+    if (!body.enabled) {
+      await acpSupervisor.handleAgentDisabled(agentId)
     }
 
     return reply.status(200).send(AgentSettingsSchema.parse(result.value))

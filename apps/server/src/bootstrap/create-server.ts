@@ -13,6 +13,9 @@ import { createSessionRepository } from "../session/session-repository"
 import { registerSessionRoutes } from "../session/session-routes"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
+import { createAcpSupervisor } from "../acp/acp-supervisor"
+import { AcpSupervisor } from "../acp/acp-supervisor-types"
+import { SpawnAgentProcessFn } from "../acp/spawn-agent-process"
 
 const TestBodySchema = z.object({
   name: z.string().min(1),
@@ -36,6 +39,8 @@ export type CreateServerOptions = {
   registerTestRoutes?: boolean
   whichFn?: WhichFn
   validateExecutablePathFn?: ValidateExecutablePathFn
+  acpSupervisor?: AcpSupervisor
+  spawnAgentProcessFn?: SpawnAgentProcessFn
 }
 
 export const createServer = async ({
@@ -45,6 +50,8 @@ export const createServer = async ({
   registerTestRoutes: withTestRoutes = false,
   whichFn,
   validateExecutablePathFn,
+  acpSupervisor: providedAcpSupervisor,
+  spawnAgentProcessFn,
 }: CreateServerOptions) => {
   const app = Fastify({
     logger: {
@@ -61,14 +68,22 @@ export const createServer = async ({
   })
 
   registerErrorHandler(app)
-  registerStatusRoutes(app, runtime, config)
-  const workspaceRepository = createWorkspaceRepository(database)
   const agentSettingsRepository = createAgentSettingsRepository(database, {
     whichFn,
     validateExecutablePathFn,
   })
+  const acpSupervisor =
+    providedAcpSupervisor ??
+    createAcpSupervisor({
+      agentSettingsRepository,
+      serverVersion: runtime.version,
+      spawnAgentProcessFn,
+    })
+
+  registerStatusRoutes(app, runtime, config, acpSupervisor)
+  const workspaceRepository = createWorkspaceRepository(database)
   registerWorkspaceRoutes(app, workspaceRepository)
-  registerAgentSettingsRoutes(app, agentSettingsRepository)
+  registerAgentSettingsRoutes(app, agentSettingsRepository, acpSupervisor)
   registerSessionRoutes(
     app,
     createSessionRepository(database),
@@ -80,5 +95,5 @@ export const createServer = async ({
     registerTestRoutes(app)
   }
 
-  return app
+  return { app, acpSupervisor }
 }

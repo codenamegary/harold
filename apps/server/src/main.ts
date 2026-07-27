@@ -9,9 +9,9 @@ const main = async () => {
   const config = parseConfig(process.env)
   const database = openDatabase({ dataDir: config.dataDir })
   const runtime = createRuntime(packageJson.version)
-  const app = await createServer({ config, runtime, database })
+  const { app, acpSupervisor } = await createServer({ config, runtime, database })
 
-  registerShutdown(app, runtime, database)
+  registerShutdown(app, runtime, database, acpSupervisor)
   await listen(app, config, runtime)
   app.log.info(
     { host: config.host, port: config.port, dataDir: config.dataDir },
