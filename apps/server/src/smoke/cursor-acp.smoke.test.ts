@@ -9,6 +9,7 @@ import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/open-database"
 import { createRuntime } from "../runtime/runtime"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
+import { probeCursorSessionLoad } from "./probe-cursor-session-load"
 
 const hasCliLogin = (): boolean => {
   try {
@@ -41,7 +42,7 @@ const shouldRunSmoke =
   hasAgentBinary()
 
 describe("cursor ACP smoke", () => {
-  test.skipIf(!shouldRunSmoke)("enables cursor, creates workspace and session, restarts, resumes, then archives", async () => {
+  test.skipIf(!shouldRunSmoke)("enables cursor, creates workspace and session, then archives", async () => {
     const dataDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-cursor-smoke-"))
     const workspaceDir = path.join(dataDir, "smoke-project")
     await mkdir(workspaceDir)
@@ -88,43 +89,125 @@ describe("cursor ACP smoke", () => {
       expect(sessionResponse.statusCode).toBe(201)
       const session = SessionSchema.parse(JSON.parse(sessionResponse.body))
 
+      const archiveResponse = await app.inject({
+        method: "POST",
+        url: `/v1/sessions/${session.id}/archive`,
+      })
+      expect(archiveResponse.statusCode).toBe(200)
+      const archived = SessionSchema.parse(JSON.parse(archiveResponse.body))
+      expect(archived.state).toBe("archived")
+    } finally {
       await app.close()
       database.close()
+      await rm(dataDir, { recursive: true, force: true })
+    }
+  })
 
-      const restartedDatabase = openDatabase({ dataDir: config.dataDir })
-      const restartedRuntime = createRuntime("0.1.0")
-      const restarted = await createServer({ config, runtime: restartedRuntime, database: restartedDatabase, whichFn })
-      await restarted.app.listen({ host: config.host, port: config.port })
+  test.skipIf(!shouldRunSmoke)(
+    "restarts server and resumes session when Cursor session/load works",
+    async () => {
+      const dataDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-cursor-smoke-resume-"))
+      const workspaceDir = path.join(dataDir, "smoke-project")
+      await mkdir(workspaceDir)
+
+      const detectedPath = execSync("which agent", { encoding: "utf8" }).trim()
+      const loadWorks = await probeCursorSessionLoad({
+        agentPath: detectedPath,
+        workspaceDir,
+      })
+
+      if (!loadWorks) {
+        console.warn(
+          "Skipping resume smoke. Cursor advertises loadSession but session/load fails in this agent build.",
+        )
+        await rm(dataDir, { recursive: true, force: true })
+        return
+      }
+
+      const whichFn: WhichFn = (binaryName) =>
+        binaryName === "agent" ? detectedPath : undefined
+
+      const config = parseConfig({
+        AGENT_SERVER_HOST: "127.0.0.1",
+        AGENT_SERVER_PORT: "0",
+        AGENT_SERVER_DATA_DIR: dataDir,
+      })
+      const database = openDatabase({ dataDir: config.dataDir })
+      const runtime = createRuntime("0.1.0")
+      const { app } = await createServer({ config, runtime, database, whichFn })
+      await app.listen({ host: config.host, port: config.port })
 
       try {
-        const reenableResponse = await restarted.app.inject({
+        const enableResponse = await app.inject({
           method: "PATCH",
           url: "/v1/settings/agents/cursor",
           payload: { enabled: true, path: detectedPath },
         })
-        expect(reenableResponse.statusCode).toBe(200)
+        expect(enableResponse.statusCode).toBe(200)
 
-        const resumeResponse = await restarted.app.inject({
+        const workspaceResponse = await app.inject({
           method: "POST",
-          url: `/v1/sessions/${session.id}/resume`,
+          url: "/v1/workspaces",
+          payload: { name: "Smoke workspace", path: workspaceDir },
         })
-        expect(resumeResponse.statusCode).toBe(200)
-        const resumed = SessionSchema.parse(JSON.parse(resumeResponse.body))
-        expect(resumed.state).toBe("idle")
+        expect(workspaceResponse.statusCode).toBe(201)
+        const workspace = JSON.parse(workspaceResponse.body) as { id: string }
 
-        const archiveResponse = await restarted.app.inject({
+        const sessionResponse = await app.inject({
           method: "POST",
-          url: `/v1/sessions/${session.id}/archive`,
+          url: "/v1/sessions",
+          payload: {
+            workspaceId: workspace.id,
+            agentId: "cursor",
+            name: "Smoke session",
+          },
         })
-        expect(archiveResponse.statusCode).toBe(200)
-        const archived = SessionSchema.parse(JSON.parse(archiveResponse.body))
-        expect(archived.state).toBe("archived")
+        expect(sessionResponse.statusCode).toBe(201)
+        const session = SessionSchema.parse(JSON.parse(sessionResponse.body))
+
+        await app.close()
+        database.close()
+
+        const restartedDatabase = openDatabase({ dataDir: config.dataDir })
+        const restartedRuntime = createRuntime("0.1.0")
+        const restarted = await createServer({
+          config,
+          runtime: restartedRuntime,
+          database: restartedDatabase,
+          whichFn,
+        })
+        await restarted.app.listen({ host: config.host, port: config.port })
+
+        try {
+          const reenableResponse = await restarted.app.inject({
+            method: "PATCH",
+            url: "/v1/settings/agents/cursor",
+            payload: { enabled: true, path: detectedPath },
+          })
+          expect(reenableResponse.statusCode).toBe(200)
+
+          const resumeResponse = await restarted.app.inject({
+            method: "POST",
+            url: `/v1/sessions/${session.id}/resume`,
+          })
+          expect(resumeResponse.statusCode).toBe(200)
+          const resumed = SessionSchema.parse(JSON.parse(resumeResponse.body))
+          expect(resumed.state).toBe("idle")
+
+          const archiveResponse = await restarted.app.inject({
+            method: "POST",
+            url: `/v1/sessions/${session.id}/archive`,
+          })
+          expect(archiveResponse.statusCode).toBe(200)
+          const archived = SessionSchema.parse(JSON.parse(archiveResponse.body))
+          expect(archived.state).toBe("archived")
+        } finally {
+          await restarted.app.close()
+          restartedDatabase.close()
+        }
       } finally {
-        await restarted.app.close()
-        restartedDatabase.close()
+        await rm(dataDir, { recursive: true, force: true })
       }
-    } finally {
-      await rm(dataDir, { recursive: true, force: true })
-    }
-  })
+    },
+  )
 })
