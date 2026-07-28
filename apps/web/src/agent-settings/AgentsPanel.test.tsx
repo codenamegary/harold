@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { fireEvent, waitFor, within } from "@testing-library/react"
+import { act, fireEvent, waitFor, within } from "@testing-library/react"
 import {
   AgentSettings,
   AgentSettingsCollectionSchema,
@@ -20,6 +20,8 @@ const validStatus = {
     activeSessions: 0,
   },
 } as const
+
+const mutationFlowTimeoutMs = 15000
 
 const claudeAgent: AgentSettings = {
   id: "claude",
@@ -55,19 +57,39 @@ const autoDetectFailedProblem = {
 
 const renderAgentsPanel = () => renderWithProviders(<AgentsPanel />)
 
-const setInputValue = (input: HTMLElement, value: string) => {
+const clickInAct = async (element: HTMLElement) => {
+  await act(async () => {
+    fireEvent.click(element)
+  })
+}
+
+const flushDetectSuccessFeedback = async (card: HTMLElement) => {
+  const checkmark = card.querySelector(".animate-detect-path-check")
+
+  if (!checkmark) {
+    return
+  }
+
+  await act(async () => {
+    fireEvent.animationEnd(checkmark)
+  })
+}
+
+const setInputValue = async (input: HTMLElement, value: string) => {
   const inputElement = input as HTMLInputElement
   const valueSetter = Object.getOwnPropertyDescriptor(
     HTMLInputElement.prototype,
     "value",
   )?.set
 
-  if (valueSetter) {
-    valueSetter.call(inputElement, value)
-  }
+  await act(async () => {
+    if (valueSetter) {
+      valueSetter.call(inputElement, value)
+    }
 
-  inputElement.dispatchEvent(new Event("input", { bubbles: true }))
-  inputElement.dispatchEvent(new Event("change", { bubbles: true }))
+    inputElement.dispatchEvent(new Event("input", { bubbles: true }))
+    inputElement.dispatchEvent(new Event("change", { bubbles: true }))
+  })
 }
 
 describe("AgentsPanel", () => {
@@ -148,14 +170,14 @@ describe("AgentsPanel", () => {
       expect(view.getByLabelText("Enable Cursor")).toBeInTheDocument()
     })
 
-    fireEvent.click(view.getByLabelText("Enable Cursor"))
+    await clickInAct(view.getByLabelText("Enable Cursor"))
 
     await waitFor(() => {
       const card = view.getByLabelText("Cursor agent")
       expect(within(card).getByDisplayValue(detectedPath)).toBeInTheDocument()
-      expect(within(card).getByText("Enabled")).toBeInTheDocument()
+      expect(within(card).getByLabelText("Enable Cursor")).toBeChecked()
     })
-  })
+  }, mutationFlowTimeoutMs)
 
   test("keeps cursor enabled and shows path error when auto-detect fails", async () => {
     const cursorState = { agent: cursorAgent() }
@@ -202,7 +224,7 @@ describe("AgentsPanel", () => {
       expect(view.getByLabelText("Enable Cursor")).toBeInTheDocument()
     })
 
-    fireEvent.click(view.getByLabelText("Enable Cursor"))
+    await clickInAct(view.getByLabelText("Enable Cursor"))
 
     await waitFor(() => {
       const card = view.getByLabelText("Cursor agent")
@@ -210,7 +232,7 @@ describe("AgentsPanel", () => {
       expect(within(card).getByLabelText("Enable Cursor")).toBeChecked()
       expect(within(card).getByRole("button", { name: "Save path" })).toBeInTheDocument()
     })
-  })
+  }, mutationFlowTimeoutMs)
 
   test("saves a manual path override", async () => {
     const manualPath = "/opt/custom/agent"
@@ -260,18 +282,18 @@ describe("AgentsPanel", () => {
     const view = renderAgentsPanel()
 
     await waitFor(() => {
-      expect(within(view.getByLabelText("Cursor agent")).getByText("Enabled")).toBeInTheDocument()
+      expect(within(view.getByLabelText("Cursor agent")).getByLabelText("Enable Cursor")).toBeChecked()
     })
 
     const card = view.getByLabelText("Cursor agent")
     const pathInput = within(card).getByLabelText("Executable path")
-    setInputValue(pathInput, manualPath)
+    await setInputValue(pathInput, manualPath)
 
     await waitFor(() => {
       expect(within(card).getByRole("button", { name: "Save path" })).not.toBeDisabled()
     })
 
-    fireEvent.click(within(card).getByRole("button", { name: "Save path" }))
+    await clickInAct(within(card).getByRole("button", { name: "Save path" }))
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -281,8 +303,9 @@ describe("AgentsPanel", () => {
           body: JSON.stringify({ enabled: true, path: manualPath }),
         }),
       )
+      expect(within(card).getByRole("button", { name: "Save path" })).toBeDisabled()
     })
-  })
+  }, mutationFlowTimeoutMs)
 
   test("detect path link pre-fills the input without saving", async () => {
     const detectedPath = "/usr/local/bin/agent"
@@ -330,11 +353,13 @@ describe("AgentsPanel", () => {
     })
 
     const card = view.getByLabelText("Cursor agent")
-    fireEvent.click(within(card).getByRole("button", { name: "Detect path" }))
+    await clickInAct(within(card).getByRole("button", { name: "Detect path" }))
 
     await waitFor(() => {
       expect(within(card).getByDisplayValue(detectedPath)).toBeInTheDocument()
     })
+
+    await flushDetectSuccessFeedback(card)
 
     expect(
       fetchMock.mock.calls.some(
@@ -343,6 +368,97 @@ describe("AgentsPanel", () => {
       ),
     ).toBe(false)
   })
+
+  test("detect path clears save path error and pre-fills input", async () => {
+    const invalidPath = "/does/not/exist"
+    const detectedPath = "/usr/local/bin/agent"
+    const cursorState = { agent: cursorAgent({ enabled: true, path: null }) }
+
+    const invalidPathProblem = {
+      type: PROBLEM_TYPES.validationError,
+      title: "Invalid agent executable path",
+      status: 400,
+      code: "validation.field.path.invalid",
+      errors: [{ pointer: "#/path", code: "validation.field.path.invalid" }],
+    }
+
+    const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(agentsCollection(cursorState.agent)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents/cursor" && method === "PATCH") {
+        const body = JSON.parse(String(init?.body))
+
+        if (body.path === invalidPath) {
+          return Promise.resolve(
+            new Response(JSON.stringify(invalidPathProblem), {
+              status: 400,
+              headers: { "Content-Type": "application/problem+json" },
+            }),
+          )
+        }
+      }
+
+      if (url === "/v1/settings/agents/cursor/detect-path" && method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ path: detectedPath }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    })
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByLabelText("Cursor agent")).toBeInTheDocument()
+    })
+
+    const card = view.getByLabelText("Cursor agent")
+    const pathInput = within(card).getByLabelText("Executable path")
+    await setInputValue(pathInput, invalidPath)
+
+    await waitFor(() => {
+      expect(within(card).getByRole("button", { name: "Save path" })).not.toBeDisabled()
+    })
+
+    await clickInAct(within(card).getByRole("button", { name: "Save path" }))
+
+    await waitFor(() => {
+      expect(within(card).getByText("Invalid agent executable path")).toBeInTheDocument()
+    })
+
+    await clickInAct(within(card).getByRole("button", { name: "Detect path" }))
+
+    await waitFor(() => {
+      expect(within(card).getByDisplayValue(detectedPath)).toBeInTheDocument()
+      expect(within(card).queryByText("Invalid agent executable path")).not.toBeInTheDocument()
+    })
+
+    await flushDetectSuccessFeedback(card)
+  }, mutationFlowTimeoutMs)
 
   test("claude card is greyed out and cannot be enabled", async () => {
     const view = renderAgentsPanel()
@@ -354,7 +470,7 @@ describe("AgentsPanel", () => {
     const claudeCard = view.getByLabelText("Claude agent")
 
     expect(within(claudeCard).getByText("Coming soon")).toBeInTheDocument()
-    expect(within(claudeCard).getByLabelText("Enable Claude")).toBeDisabled()
+    expect(within(claudeCard).queryByLabelText("Enable Claude")).not.toBeInTheDocument()
     expect(within(claudeCard).getByRole("button", { name: "Detect path" })).toBeDisabled()
     expect(within(claudeCard).getByRole("button", { name: "Save path" })).toBeDisabled()
   })

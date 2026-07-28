@@ -7,5 +7,8 @@ export const createTestQueryClient = () =>
         retry: false,
         gcTime: 0,
       },
+      mutations: {
+        retry: false,
+      },
     },
   })
