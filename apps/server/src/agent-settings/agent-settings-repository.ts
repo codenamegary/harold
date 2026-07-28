@@ -21,6 +21,7 @@ export type AgentSettingsRepositoryError =
   | { kind: "not_found" }
   | { kind: "cannot_enable" }
   | { kind: "path_not_found" }
+  | { kind: "path_auto_detect_failed" }
   | { kind: "path_invalid"; path: string }
 
 export type AgentSettingsRepositoryResult<T> =
@@ -155,11 +156,29 @@ export const createAgentSettingsRepository = (
       }
       nextPath = resolvedPath.value
     } else if (nextEnabled && current.path === null) {
-      const resolvedPath = resolvePathForUpdate(agentId, body, whichFn, validatePath)
-      if (!resolvedPath.ok) {
-        return resolvedPath
+      const detectedPath = detectPathForAgent(agentId, whichFn)
+      if (!detectedPath || !validatePath(detectedPath)) {
+        const partialRow: AgentSettingsRow = {
+          ...current,
+          enabled: true,
+          path: null,
+          updatedAt: nowIso(),
+        }
+
+        database.db
+          .update(agentSettings)
+          .set({
+            enabled: partialRow.enabled,
+            path: partialRow.path,
+            updatedAt: partialRow.updatedAt,
+          })
+          .where(eq(agentSettings.agentId, agentId))
+          .run()
+
+        return { ok: false, error: { kind: "path_auto_detect_failed" } }
       }
-      nextPath = resolvedPath.value
+
+      nextPath = detectedPath
     } else if (nextEnabled && current.path !== null) {
       if (!validatePath(current.path)) {
         return { ok: false, error: { kind: "path_invalid", path: current.path } }

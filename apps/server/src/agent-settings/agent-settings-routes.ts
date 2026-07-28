@@ -11,6 +11,7 @@ import { AgentSettingsRepository } from "./agent-settings-repository"
 import {
   buildAgentCannotEnableProblem,
   buildAgentNotFoundProblem,
+  buildAgentPathAutoDetectFailedProblem,
   buildAgentPathInvalidProblem,
   buildAgentPathNotFoundProblem,
 } from "./agent-settings-problems"
@@ -65,6 +66,9 @@ export const registerAgentSettingsRoutes = (
       }
       if (result.error.kind === "path_not_found") {
         return sendProblem(reply, 404, buildAgentPathNotFoundProblem())
+      }
+      if (result.error.kind === "path_auto_detect_failed") {
+        return sendProblem(reply, 400, buildAgentPathAutoDetectFailedProblem())
       }
       if (result.error.kind === "path_invalid") {
         return sendProblem(reply, 400, buildAgentPathInvalidProblem(result.error.path))

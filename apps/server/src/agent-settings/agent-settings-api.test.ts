@@ -160,7 +160,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     expect(body.path).toBe(detectedPath)
   })
 
-  test("returns 404 when enable auto-detect fails", async () => {
+  test("returns 400 and persists enabled when enable auto-detect fails", async () => {
     const dataDir = await createTempDataDir()
     const whichFn: WhichFn = () => undefined
     const { app } = await createTestApp(dataDir, whichFn)
@@ -171,10 +171,22 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
       payload: { enabled: true },
     })
 
-    const body = NotFoundProblemSchema.parse(JSON.parse(response.body))
+    const body = ValidationProblemSchema.parse(JSON.parse(response.body))
 
-    expect(response.statusCode).toBe(404)
-    expect(body.title).toBe("Agent executable not found")
+    expect(response.statusCode).toBe(400)
+    expect(body.title).toBe("Could not detect agent path automatically.")
+    expect(body.errors[0]?.pointer).toBe("#/path")
+    expect(body.errors[0]?.code).toBe("validation.field.path.auto_detect_failed")
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/settings/agents",
+    })
+    const listBody = AgentSettingsCollectionSchema.parse(JSON.parse(listResponse.body))
+    const cursor = findAgent(listBody, "cursor")
+
+    expect(cursor.enabled).toBe(true)
+    expect(cursor.path).toBeNull()
   })
 
   test("disables cursor and keeps stored path", async () => {
