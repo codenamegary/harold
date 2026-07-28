@@ -1,17 +1,21 @@
 import {
   CreateWorkspaceBodySchema,
+  DeleteWorkspaceQuerySchema,
   ListWorkspacesQuerySchema,
   UpdateWorkspaceBodySchema,
   WorkspaceCollectionSchema,
   WorkspaceSchema,
 } from "contracts/http/workspace"
 import { FastifyInstance } from "fastify"
+import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
+import { SessionRepository } from "../session/session-repository"
 import { WorkspaceRepository } from "./workspace-repository"
 import {
   buildConflictProblem,
   buildInvalidCursorProblem,
   buildNotFoundProblem,
   buildPathValidationProblem,
+  buildWorkspaceActiveSessionsProblem,
 } from "./workspace-problems"
 
 const sendProblem = (
@@ -23,6 +27,8 @@ const sendProblem = (
 export const registerWorkspaceRoutes = (
   app: FastifyInstance,
   repository: WorkspaceRepository,
+  sessionRepository: SessionRepository,
+  acpSupervisor: AcpSupervisor,
 ) => {
   app.post("/v1/workspaces", async (request, reply) => {
     const body = CreateWorkspaceBodySchema.parse(request.body)
@@ -84,6 +90,38 @@ export const registerWorkspaceRoutes = (
 
   app.delete("/v1/workspaces/:workspaceId", async (request, reply) => {
     const { workspaceId } = request.params as { workspaceId: string }
+    const query = DeleteWorkspaceQuerySchema.parse(request.query)
+    const force = query.force ?? false
+
+    const workspace = repository.getById({ id: workspaceId })
+    if (!workspace.ok) {
+      return sendProblem(reply, 404, buildNotFoundProblem())
+    }
+
+    const liveSessions = sessionRepository.listLiveByWorkspace({ workspaceId })
+    const closeResult = await acpSupervisor.closeWorkspaceSessions({
+      sessions: liveSessions.map((session) => ({
+        acpSessionId: session.acpSessionId,
+        agentId: session.agentId,
+      })),
+    })
+
+    if (closeResult.failures.length > 0 && !force) {
+      const detail = closeResult.failures.map((failure) => failure.reason).join("; ")
+      return sendProblem(reply, 409, buildWorkspaceActiveSessionsProblem(detail))
+    }
+
+    if (closeResult.failures.length > 0) {
+      acpSupervisor.unbindWorkspaceSessions({
+        sessions: closeResult.failures.map((failure) => ({
+          acpSessionId: failure.acpSessionId,
+          agentId:
+            liveSessions.find((session) => session.acpSessionId === failure.acpSessionId)?.agentId ??
+            "cursor",
+        })),
+      })
+    }
+
     const result = repository.delete({ id: workspaceId })
 
     if (!result.ok) {

@@ -5,6 +5,7 @@ export type SpawnFakeAcpOptions = {
   capabilities?: Partial<FakeAcpCapabilities>
   sessionNewSessionId?: string
   sessionLoadSessionId?: string
+  sessionCloseFails?: boolean
   emitPermissionRequest?: boolean
   emitPermissionRequestNoAllow?: boolean
   emitFsReadRequest?: boolean

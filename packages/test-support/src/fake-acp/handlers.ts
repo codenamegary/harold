@@ -167,6 +167,13 @@ const handleSessionClose = (request: JsonRpcRequest, config: FakeAcpConfig): Han
     }
   }
 
+  if (config.sessionCloseFails) {
+    return {
+      response: jsonRpcError(request.id, -32000, "session close failed"),
+      outbound: [],
+    }
+  }
+
   return {
     response: jsonRpcResult(request.id, {}),
     outbound: [],

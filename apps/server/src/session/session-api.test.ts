@@ -1,135 +1,35 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { mkdir, mkdtemp, rm } from "node:fs/promises"
-import os from "node:os"
-import path from "node:path"
 import {
   ConflictProblemSchema,
   NotFoundProblemSchema,
   ValidationProblemSchema,
 } from "contracts/http/error"
 import { SessionCollectionSchema, SessionSchema } from "contracts/http/session"
-import { spawnFakeAcp } from "test-support/spawn"
-import { createServer } from "../bootstrap/create-server"
-import { parseConfig } from "../config/config"
-import { openDatabase } from "../persistence/open-database"
-import { createRuntime } from "../runtime/runtime"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
-import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
-import { SpawnedAgentProcess } from "../acp/supervisor/spawn-agent-process"
+import { buildAcpUnavailableProblem } from "./session-problems"
+import {
+  acceptTestExecutablePath,
+  cleanupTestAppResources,
+  createTempDataDir,
+  createTestApp,
+  createTestAppResources,
+  enableAgent,
+  seedWorkspace,
+} from "../test-support/create-test-app"
 
-const tempDirs: string[] = []
-const apps: Awaited<ReturnType<typeof createServer>>["app"][] = []
-const fakeProcesses: Array<{ kill: () => void }> = []
-
-const createTempDataDir = async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-session-api-"))
-  tempDirs.push(dir)
-  return dir
-}
-
-const createWorkspaceDir = async (parent: string, name: string) => {
-  const dir = path.join(parent, name)
-  await mkdir(dir)
-  return dir
-}
-
-const acceptTestExecutablePath: ValidateExecutablePathFn = () => true
-
-const createFakeSpawnFn = (
-  fakeOptions: Parameters<typeof spawnFakeAcp>[0] = {},
-) => {
-  const spawnAgentProcessFn = (): SpawnedAgentProcess => {
-    const fake = spawnFakeAcp(fakeOptions)
-    fakeProcesses.push(fake)
-    return {
-      stdin: fake.stdin,
-      stdout: fake.stdout,
-      kill: () => {
-        fake.kill()
-      },
-      waitForExit: () => fake.process.exited,
-    }
-  }
-
-  return { spawnAgentProcessFn }
-}
-
-const createTestApp = async (
-  dataDir: string,
-  whichFn?: WhichFn,
-  validateExecutablePathFn: ValidateExecutablePathFn = acceptTestExecutablePath,
-  fakeAcpOptions: Parameters<typeof spawnFakeAcp>[0] = {
-    capabilities: { loadSession: true, sessionClose: true },
-    sessionNewSessionId: "fake-session-new",
-    sessionLoadSessionId: "fake-session-new",
-  },
-) => {
-  const config = parseConfig({
-    AGENT_SERVER_HOST: "127.0.0.1",
-    AGENT_SERVER_PORT: "0",
-    AGENT_SERVER_DATA_DIR: dataDir,
-  })
-  const database = openDatabase({ dataDir: config.dataDir })
-  const runtime = createRuntime("0.1.0")
-  const { spawnAgentProcessFn } = createFakeSpawnFn(fakeAcpOptions)
-  const { app } = await createServer({
-    config,
-    runtime,
-    database,
-    whichFn,
-    validateExecutablePathFn,
-    spawnAgentProcessFn,
-  })
-  apps.push(app)
-  return { app, database, config }
-}
+const resources = createTestAppResources()
 
 afterEach(async () => {
-  fakeProcesses.splice(0).forEach((process) => process.kill())
-  await Promise.all(apps.splice(0).map((app) => app.close()))
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+  await cleanupTestAppResources(resources)
 })
-
-const seedWorkspace = async (
-  app: Awaited<ReturnType<typeof createServer>>["app"],
-  dataDir: string,
-) => {
-  const workspaceDir = await createWorkspaceDir(dataDir, "project")
-  const response = await app.inject({
-    method: "POST",
-    url: "/v1/workspaces",
-    payload: { name: "Project", path: workspaceDir },
-  })
-  const workspace = JSON.parse(response.body) as { id: string }
-  return { workspaceId: workspace.id, workspaceDir }
-}
-
-const enableAgent = async (
-  app: Awaited<ReturnType<typeof createServer>>["app"],
-  agentId: "cursor" | "claude",
-  whichFn?: WhichFn,
-) => {
-  const detectedPath = "/usr/local/bin/agent"
-  const resolvedWhichFn: WhichFn =
-    whichFn ?? ((binaryName) => (binaryName === "agent" ? detectedPath : undefined))
-
-  if (agentId === "cursor") {
-    const response = await app.inject({
-      method: "PATCH",
-      url: "/v1/settings/agents/cursor",
-      payload: { enabled: true, path: resolvedWhichFn("agent") ?? detectedPath },
-    })
-    expect(response.statusCode).toBe(200)
-  }
-}
 
 describe("POST /v1/sessions", () => {
   test("returns 201 with SessionSchema when workspace and agent are valid", async () => {
-    const dataDir = await createTempDataDir()
+    const dataDir = await createTempDataDir(resources)
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app } = await createTestApp(dataDir, whichFn)
+    const { app } = await createTestApp(resources, dataDir, whichFn)
     const { workspaceId } = await seedWorkspace(app, dataDir)
 
     await enableAgent(app, "cursor", whichFn)
@@ -156,8 +56,8 @@ describe("POST /v1/sessions", () => {
   })
 
   test("returns 400 for invalid agent id", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const dataDir = await createTempDataDir(resources)
+    const { app } = await createTestApp(resources, dataDir)
     const { workspaceId } = await seedWorkspace(app, dataDir)
 
     const response = await app.inject({
@@ -178,11 +78,11 @@ describe("POST /v1/sessions", () => {
   })
 
   test("returns 404 for unknown workspace", async () => {
-    const dataDir = await createTempDataDir()
+    const dataDir = await createTempDataDir(resources)
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app } = await createTestApp(dataDir, whichFn)
+    const { app } = await createTestApp(resources, dataDir, whichFn)
 
     await enableAgent(app, "cursor", whichFn)
 
@@ -203,8 +103,8 @@ describe("POST /v1/sessions", () => {
   })
 
   test("returns 409 when agent is unavailable", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const dataDir = await createTempDataDir(resources)
+    const { app } = await createTestApp(resources, dataDir)
     const { workspaceId } = await seedWorkspace(app, dataDir)
 
     const response = await app.inject({
@@ -224,8 +124,8 @@ describe("POST /v1/sessions", () => {
   })
 
   test("returns 409 when agent is disabled", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const dataDir = await createTempDataDir(resources)
+    const { app } = await createTestApp(resources, dataDir)
     const { workspaceId } = await seedWorkspace(app, dataDir)
 
     const response = await app.inject({
@@ -245,11 +145,11 @@ describe("POST /v1/sessions", () => {
   })
 
   test("returns 400 for empty name", async () => {
-    const dataDir = await createTempDataDir()
+    const dataDir = await createTempDataDir(resources)
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app } = await createTestApp(dataDir, whichFn)
+    const { app } = await createTestApp(resources, dataDir, whichFn)
     const { workspaceId } = await seedWorkspace(app, dataDir)
 
     await enableAgent(app, "cursor", whichFn)
@@ -267,15 +167,23 @@ describe("POST /v1/sessions", () => {
     expect(response.statusCode).toBe(400)
     ValidationProblemSchema.parse(JSON.parse(response.body))
   })
+
+  test("sanitizes protocol error detail in API problem responses", () => {
+    const secret = "sk_live_super_secret_token_abcdefghijklmnopqrstuvwxyz"
+    const problem = buildAcpUnavailableProblem(`session/load failed: Bearer ${secret}`)
+
+    expect(problem.detail ?? "").not.toContain(secret)
+    expect(problem.detail).toContain("[redacted]")
+  })
 })
 
 describe("session lifecycle", () => {
   test("create, list, get, rename, select, archive, and resume conflicts", async () => {
-    const dataDir = await createTempDataDir()
+    const dataDir = await createTempDataDir(resources)
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app } = await createTestApp(dataDir, whichFn, acceptTestExecutablePath, {
+    const { app } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
       capabilities: { loadSession: true, sessionClose: true },
       sessionNewSessionId: "lifecycle-session",
       sessionLoadSessionId: "lifecycle-session",
@@ -371,11 +279,11 @@ describe("session lifecycle", () => {
   })
 
   test("resume returns idle session when loadSession is supported", async () => {
-    const dataDir = await createTempDataDir()
+    const dataDir = await createTempDataDir(resources)
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app } = await createTestApp(dataDir, whichFn, acceptTestExecutablePath, {
+    const { app } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
       capabilities: { loadSession: true, sessionClose: false },
       sessionNewSessionId: "resumable-session",
       sessionLoadSessionId: "resumable-session",
@@ -403,12 +311,12 @@ describe("session lifecycle", () => {
     expect(resumed.state).toBe("idle")
   })
 
-  test("resume returns 409 when agent does not support loadSession", async () => {
-    const dataDir = await createTempDataDir()
+  test("resume returns 409 when agent does not support loadSession and metadata stays intact", async () => {
+    const dataDir = await createTempDataDir(resources)
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app } = await createTestApp(dataDir, whichFn, acceptTestExecutablePath, {
+    const { app } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
       capabilities: { loadSession: false, sessionClose: false },
       sessionNewSessionId: "non-resumable-session",
     })
@@ -433,14 +341,96 @@ describe("session lifecycle", () => {
     const body = ConflictProblemSchema.parse(JSON.parse(resumeResponse.body))
     expect(resumeResponse.statusCode).toBe(409)
     expect(body.title).toBe("Session is not resumable")
+
+    const getResponse = await app.inject({
+      method: "GET",
+      url: `/v1/sessions/${created.id}`,
+    })
+    const persisted = SessionSchema.parse(JSON.parse(getResponse.body))
+    expect(getResponse.statusCode).toBe(200)
+    expect(persisted.id).toBe(created.id)
+    expect(persisted.name).toBe("Non-resumable")
+    expect(persisted.state).toBe("idle")
   })
 
-  test("archive skips session/close when agent does not advertise close", async () => {
-    const dataDir = await createTempDataDir()
+  test("archive succeeds when agent advertises session/close", async () => {
+    const dataDir = await createTempDataDir(resources)
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app } = await createTestApp(dataDir, whichFn, acceptTestExecutablePath, {
+    const { app } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
+      capabilities: { loadSession: false, sessionClose: true },
+      sessionNewSessionId: "close-on-archive-session",
+    })
+    const { workspaceId } = await seedWorkspace(app, dataDir)
+    await enableAgent(app, "cursor", whichFn)
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: {
+        workspaceId,
+        agentId: "cursor",
+        name: "Close on archive",
+      },
+    })
+    const created = SessionSchema.parse(JSON.parse(createResponse.body))
+    expect(createResponse.statusCode).toBe(201)
+
+    const archiveResponse = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${created.id}/archive`,
+    })
+    const archived = SessionSchema.parse(JSON.parse(archiveResponse.body))
+    expect(archiveResponse.statusCode).toBe(200)
+    expect(archived.state).toBe("archived")
+  })
+
+  test("archive returns 409 when session/close fails", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { app } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
+      capabilities: { loadSession: false, sessionClose: true },
+      sessionNewSessionId: "close-fail-session",
+      sessionCloseFails: true,
+    })
+    const { workspaceId } = await seedWorkspace(app, dataDir)
+    await enableAgent(app, "cursor", whichFn)
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: {
+        workspaceId,
+        agentId: "cursor",
+        name: "Close fail",
+      },
+    })
+    const created = SessionSchema.parse(JSON.parse(createResponse.body))
+
+    const archiveResponse = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${created.id}/archive`,
+    })
+    expect(archiveResponse.statusCode).toBe(409)
+    ConflictProblemSchema.parse(JSON.parse(archiveResponse.body))
+
+    const getResponse = await app.inject({
+      method: "GET",
+      url: `/v1/sessions/${created.id}`,
+    })
+    const persisted = SessionSchema.parse(JSON.parse(getResponse.body))
+    expect(persisted.state).toBe("idle")
+  })
+
+  test("archive skips session/close when agent does not advertise close", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { app } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
       capabilities: { loadSession: false, sessionClose: false },
       sessionNewSessionId: "metadata-archive-session",
     })
@@ -468,8 +458,8 @@ describe("session lifecycle", () => {
   })
 
   test("returns 404 for unknown session", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const dataDir = await createTempDataDir(resources)
+    const { app } = await createTestApp(resources, dataDir)
 
     const response = await app.inject({
       method: "GET",
@@ -482,11 +472,11 @@ describe("session lifecycle", () => {
   })
 
   test("returns 400 for invalid list cursor", async () => {
-    const dataDir = await createTempDataDir()
+    const dataDir = await createTempDataDir(resources)
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app } = await createTestApp(dataDir, whichFn)
+    const { app } = await createTestApp(resources, dataDir, whichFn)
     const { workspaceId } = await seedWorkspace(app, dataDir)
 
     const response = await app.inject({

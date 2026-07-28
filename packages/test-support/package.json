@@ -7,7 +7,8 @@
     "fake-acp": "./src/fake-acp/bin.ts"
   },
   "exports": {
-    "./spawn": "./src/spawn/spawnFakeAcp.ts"
+    "./spawn": "./src/spawn/spawnFakeAcp.ts",
+    "./json-rpc-client": "./src/spawn/jsonRpcClient.ts"
   },
   "scripts": {
     "lint": "oxlint",

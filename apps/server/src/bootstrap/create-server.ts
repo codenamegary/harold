@@ -82,9 +82,9 @@ export const createServer = async ({
 
   registerStatusRoutes(app, runtime, config, acpSupervisor)
   const workspaceRepository = createWorkspaceRepository(database)
-  registerWorkspaceRoutes(app, workspaceRepository)
-  registerAgentSettingsRoutes(app, agentSettingsRepository, acpSupervisor)
   const sessionRepository = createSessionRepository(database)
+  registerWorkspaceRoutes(app, workspaceRepository, sessionRepository, acpSupervisor)
+  registerAgentSettingsRoutes(app, agentSettingsRepository, acpSupervisor)
   registerSessionRoutes(
     app,
     sessionRepository,

@@ -7,13 +7,7 @@ export type AcpClientCapabilities = {
     readonly readTextFile: true
     readonly writeTextFile: true
   }
-  readonly terminal: {
-    readonly create: true
-    readonly output: true
-    readonly waitForExit: true
-    readonly kill: true
-    readonly release: true
-  }
+  readonly terminal: true
 }
 
 export type AgentProfile = {
@@ -29,13 +23,7 @@ const cursorClientCapabilities: AcpClientCapabilities = {
     readTextFile: true,
     writeTextFile: true,
   },
-  terminal: {
-    create: true,
-    output: true,
-    waitForExit: true,
-    kill: true,
-    release: true,
-  },
+  terminal: true,
 }
 
 export const cursorAgentProfile: AgentProfile = {

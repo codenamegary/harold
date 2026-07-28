@@ -35,9 +35,17 @@ export const ListWorkspacesQuerySchema = z.strictObject({
   state: WorkspaceStateSchema.optional(),
 })
 
+export const DeleteWorkspaceQuerySchema = z.strictObject({
+  force: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value === "true"),
+})
+
 export type Workspace = z.infer<typeof WorkspaceSchema>
 export type WorkspaceState = z.infer<typeof WorkspaceStateSchema>
 export type CreateWorkspaceBody = z.infer<typeof CreateWorkspaceBodySchema>
 export type UpdateWorkspaceBody = z.infer<typeof UpdateWorkspaceBodySchema>
 export type WorkspaceCollection = z.infer<typeof WorkspaceCollectionSchema>
 export type ListWorkspacesQuery = z.infer<typeof ListWorkspacesQuerySchema>
+export type DeleteWorkspaceQuery = z.infer<typeof DeleteWorkspaceQuerySchema>
