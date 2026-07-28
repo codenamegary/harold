@@ -1,4 +1,5 @@
 import { AgentId } from "contracts/http/agent-settings"
+import { ExtensionHandlers, cursorExtensionHandlers } from "./extension-handlers"
 
 export type AcpClientCapabilities = {
   readonly fs: {
@@ -19,6 +20,7 @@ export type AgentProfile = {
   readonly command: readonly string[]
   readonly authMethodId: string
   readonly clientCapabilities: AcpClientCapabilities
+  readonly extensionHandlers: ExtensionHandlers
 }
 
 const cursorClientCapabilities: AcpClientCapabilities = {
@@ -40,6 +42,7 @@ export const cursorAgentProfile: AgentProfile = {
   command: ["agent", "acp"],
   authMethodId: "cursor_login",
   clientCapabilities: cursorClientCapabilities,
+  extensionHandlers: cursorExtensionHandlers,
 }
 
 export const agentProfilesById: Record<AgentId, AgentProfile | undefined> = {

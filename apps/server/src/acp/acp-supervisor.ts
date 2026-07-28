@@ -10,6 +10,8 @@ import {
   createAcpStartError,
 } from "./acp-supervisor-types"
 import { createJsonRpcTransport, JsonRpcTransport } from "./json-rpc-transport"
+import { registerAcpClientHandlers } from "./register-acp-client-handlers"
+import { createSessionBindingRegistry } from "./session-binding-registry"
 import { spawnAgentProcess, SpawnedAgentProcess } from "./spawn-agent-process"
 
 type SupervisorRuntime = {
@@ -92,6 +94,7 @@ export const createAcpSupervisor = ({
       stdout: process.stdout,
     }),
 }: CreateAcpSupervisorParams): AcpSupervisor => {
+  const sessionBindingRegistry = createSessionBindingRegistry()
   const runtime: SupervisorRuntime = {
     state: "stopped",
     runningAgentId: null,
@@ -151,6 +154,12 @@ export const createAcpSupervisor = ({
       runtime.transport = transport
       runtime.runningAgentId = agentId
 
+      registerAcpClientHandlers({
+        transport,
+        profile: resolved.profile,
+        sessionBindingRegistry,
+      })
+
       runtime.exitMonitor = monitorProcessExit(runtime, process, transitionToError)
 
       const initResult = await transport.request("initialize", {
@@ -183,6 +192,8 @@ export const createAcpSupervisor = ({
     getStatus: () => statusFromState(runtime.state),
     getRunningAgentId: () => runtime.runningAgentId,
     getAgentCapabilities: () => runtime.agentCapabilities,
+    getTransport: () => runtime.transport,
+    getSessionBindingRegistry: () => sessionBindingRegistry,
     start,
     stop,
     handleAgentDisabled,

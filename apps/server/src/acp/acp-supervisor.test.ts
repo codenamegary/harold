@@ -20,6 +20,10 @@ const createMockTransport = () => {
       const existing = notifications.get(method) ?? []
       notifications.set(method, [...existing, handler])
     },
+    onRequest: () => undefined,
+    onUnhandledRequest: () => undefined,
+    respond: () => undefined,
+    respondError: () => undefined,
     close: () => undefined,
   }
 

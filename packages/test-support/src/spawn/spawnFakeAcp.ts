@@ -6,6 +6,17 @@ export type SpawnFakeAcpOptions = {
   sessionNewSessionId?: string
   sessionLoadSessionId?: string
   emitPermissionRequest?: boolean
+  emitPermissionRequestNoAllow?: boolean
+  emitFsReadRequest?: boolean
+  emitFsWriteRequest?: boolean
+  emitTerminalCreateRequest?: boolean
+  emitCursorAskQuestion?: boolean
+  emitCursorCreatePlan?: boolean
+  emitUnknownExtension?: boolean
+  fsReadPath?: string
+  fsWritePath?: string
+  fsWriteContent?: string
+  terminalCommand?: string
 }
 
 export type SpawnedFakeAcp = {
