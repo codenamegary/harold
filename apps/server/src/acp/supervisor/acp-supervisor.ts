@@ -29,11 +29,6 @@ type SupervisorRuntime = {
   exitMonitor: Promise<void> | null
 }
 
-const statusFromState = (state: AcpSupervisorState): AcpSupervisorStatus => ({
-  state,
-  activeSessions: 0,
-})
-
 const sanitizeFailureReason = (error: unknown, fallback: string): string => {
   const message = error instanceof Error ? error.message : fallback
   return sanitizeAcpErrorMessage(message)
@@ -123,6 +118,7 @@ export const createAcpSupervisor = ({
     runtime.exitMonitor = null
     runtime.runningAgentId = null
     runtime.agentCapabilities = null
+    sessionBindingRegistry.clear()
   }
 
   const transitionToError = () => {
@@ -346,7 +342,10 @@ export const createAcpSupervisor = ({
   }
 
   return {
-    getStatus: () => statusFromState(runtime.state),
+    getStatus: (): AcpSupervisorStatus => ({
+      state: runtime.state,
+      activeSessions: sessionBindingRegistry.count(),
+    }),
     getRunningAgentId: () => runtime.runningAgentId,
     getAgentCapabilities: () => runtime.agentCapabilities,
     getTransport: () => runtime.transport,

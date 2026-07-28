@@ -245,6 +245,13 @@ export const registerSessionRoutes = (
       if (!closeResult.ok) {
         return sendProblem(reply, 409, buildAcpUnavailableProblem(closeResult.reason))
       }
+    } else {
+      acpSupervisor.unbindWorkspaceSessions({
+        sessions: [{
+          acpSessionId: binding.value.acpSessionId,
+          agentId: binding.value.agentId,
+        }],
+      })
     }
 
     const archived = sessionRepository.archive({ id: sessionId })
