@@ -92,3 +92,31 @@
     outline-offset: 2px;
   }
 }
+
+@keyframes detect-path-check {
+  0% {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+
+  18% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  72% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+@layer utilities {
+  .animate-detect-path-check {
+    animation: detect-path-check 1.35s ease-in-out forwards;
+  }
+}

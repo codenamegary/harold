@@ -153,7 +153,7 @@ describe("AgentsPanel", () => {
     await waitFor(() => {
       const card = view.getByLabelText("Cursor agent")
       expect(within(card).getByDisplayValue(detectedPath)).toBeInTheDocument()
-      expect(within(card).getByText("Enabled")).toBeInTheDocument()
+      expect(within(card).getByLabelText("Enable Cursor")).toBeChecked()
     })
   })
 
@@ -260,7 +260,7 @@ describe("AgentsPanel", () => {
     const view = renderAgentsPanel()
 
     await waitFor(() => {
-      expect(within(view.getByLabelText("Cursor agent")).getByText("Enabled")).toBeInTheDocument()
+      expect(within(view.getByLabelText("Cursor agent")).getByLabelText("Enable Cursor")).toBeChecked()
     })
 
     const card = view.getByLabelText("Cursor agent")
@@ -344,6 +344,95 @@ describe("AgentsPanel", () => {
     ).toBe(false)
   })
 
+  test("detect path clears save path error and pre-fills input", async () => {
+    const invalidPath = "/does/not/exist"
+    const detectedPath = "/usr/local/bin/agent"
+    const cursorState = { agent: cursorAgent({ enabled: true, path: null }) }
+
+    const invalidPathProblem = {
+      type: PROBLEM_TYPES.validationError,
+      title: "Invalid agent executable path",
+      status: 400,
+      code: "validation.field.path.invalid",
+      errors: [{ pointer: "#/path", code: "validation.field.path.invalid" }],
+    }
+
+    const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(agentsCollection(cursorState.agent)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents/cursor" && method === "PATCH") {
+        const body = JSON.parse(String(init?.body))
+
+        if (body.path === invalidPath) {
+          return Promise.resolve(
+            new Response(JSON.stringify(invalidPathProblem), {
+              status: 400,
+              headers: { "Content-Type": "application/problem+json" },
+            }),
+          )
+        }
+      }
+
+      if (url === "/v1/settings/agents/cursor/detect-path" && method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ path: detectedPath }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    })
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByLabelText("Cursor agent")).toBeInTheDocument()
+    })
+
+    const card = view.getByLabelText("Cursor agent")
+    const pathInput = within(card).getByLabelText("Executable path")
+    setInputValue(pathInput, invalidPath)
+
+    await waitFor(() => {
+      expect(within(card).getByRole("button", { name: "Save path" })).not.toBeDisabled()
+    })
+
+    fireEvent.click(within(card).getByRole("button", { name: "Save path" }))
+
+    await waitFor(() => {
+      expect(within(card).getByText("Invalid agent executable path")).toBeInTheDocument()
+    })
+
+    fireEvent.click(within(card).getByRole("button", { name: "Detect path" }))
+
+    await waitFor(() => {
+      expect(within(card).getByDisplayValue(detectedPath)).toBeInTheDocument()
+      expect(within(card).queryByText("Invalid agent executable path")).not.toBeInTheDocument()
+    })
+  })
+
   test("claude card is greyed out and cannot be enabled", async () => {
     const view = renderAgentsPanel()
 
@@ -354,7 +443,7 @@ describe("AgentsPanel", () => {
     const claudeCard = view.getByLabelText("Claude agent")
 
     expect(within(claudeCard).getByText("Coming soon")).toBeInTheDocument()
-    expect(within(claudeCard).getByLabelText("Enable Claude")).toBeDisabled()
+    expect(within(claudeCard).queryByLabelText("Enable Claude")).not.toBeInTheDocument()
     expect(within(claudeCard).getByRole("button", { name: "Detect path" })).toBeDisabled()
     expect(within(claudeCard).getByRole("button", { name: "Save path" })).toBeDisabled()
   })
