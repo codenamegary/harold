@@ -3,7 +3,9 @@ import {
   NotFoundProblemSchema,
   PROBLEM_TYPES,
   ValidationProblemSchema,
+  WorkspaceActiveSessionsProblemSchema,
 } from "contracts/http/error"
+import { sanitizeAcpErrorMessage } from "../acp/sanitize-acp-error"
 import { WorkspacePathError } from "./workspace-errors"
 
 const pathErrorCodes: Record<WorkspacePathError["kind"], string> = {
@@ -44,4 +46,15 @@ export const buildInvalidCursorProblem = () =>
     status: 400,
     code: "validation.request.invalid",
     errors: [{ pointer: "#/cursor", code: "validation.query.cursor.invalid" }],
+  })
+
+export const buildWorkspaceActiveSessionsProblem = (
+  detail = "Workspace has active sessions that could not be closed",
+) =>
+  WorkspaceActiveSessionsProblemSchema.parse({
+    type: PROBLEM_TYPES.workspaceActiveSessions,
+    title: "Workspace has active sessions",
+    status: 409,
+    detail: sanitizeAcpErrorMessage(detail),
+    forceDeleteAvailable: true,
   })

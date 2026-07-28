@@ -20,6 +20,7 @@
     "test": "bun run --filter '*' test",
     "typecheck": "bun run --filter '*' typecheck",
     "check": "bun run lint && bun run typecheck && bun run test",
+    "test:smoke": "AGENT_SERVER_RUN_CURSOR_SMOKE=1 bun --filter server test src/smoke",
     "db:generate": "bun run --filter server db:generate"
   },
   "devDependencies": {

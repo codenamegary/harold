@@ -4,6 +4,7 @@ import {
   PROBLEM_TYPES,
   ValidationProblemSchema,
 } from "contracts/http/error"
+import { sanitizeAcpErrorMessage } from "../acp/sanitize-acp-error"
 
 export const buildWorkspaceNotFoundProblem = (detail = "Unknown workspace id") =>
   NotFoundProblemSchema.parse({
@@ -67,7 +68,7 @@ export const buildSessionNotResumableProblem = (detail = "Session cannot be resu
     type: PROBLEM_TYPES.conflict,
     title: "Session is not resumable",
     status: 409,
-    detail,
+    detail: sanitizeAcpErrorMessage(detail),
   })
 
 export const buildAcpUnavailableProblem = (detail = "ACP agent is unavailable") =>
@@ -75,5 +76,5 @@ export const buildAcpUnavailableProblem = (detail = "ACP agent is unavailable") 
     type: PROBLEM_TYPES.conflict,
     title: "ACP unavailable",
     status: 409,
-    detail,
+    detail: sanitizeAcpErrorMessage(detail),
   })

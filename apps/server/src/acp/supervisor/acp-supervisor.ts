@@ -1,5 +1,6 @@
 import { AgentId } from "contracts/http/agent-settings"
 import { resolveAgentProfile } from "../agent-profile"
+import { sanitizeAcpErrorMessage } from "../sanitize-acp-error"
 import {
   AgentCapabilities,
   AgentSettingsReader,
@@ -8,8 +9,11 @@ import {
   AcpSupervisor,
   AcpSupervisorState,
   AcpSupervisorStatus,
+  CloseWorkspaceSessionFailure,
+  CloseWorkspaceSessionsResult,
   CreateAcpSupervisorParams,
   createAcpStartError,
+  LiveWorkspaceSession,
 } from "./acp-supervisor-types"
 import { createJsonRpcTransport, JsonRpcTransport } from "../transport/json-rpc-transport"
 import { registerAcpClientHandlers } from "../client/register-handlers"
@@ -29,6 +33,11 @@ const statusFromState = (state: AcpSupervisorState): AcpSupervisorStatus => ({
   state,
   activeSessions: 0,
 })
+
+const sanitizeFailureReason = (error: unknown, fallback: string): string => {
+  const message = error instanceof Error ? error.message : fallback
+  return sanitizeAcpErrorMessage(message)
+}
 
 const parseAgentCapabilities = (result: unknown): AgentCapabilities => {
   const value = result as {
@@ -179,8 +188,7 @@ export const createAcpSupervisor = ({
       runtime.state = "ready"
     } catch (error: unknown) {
       transitionToError()
-      const message = error instanceof Error ? error.message : "ACP supervisor failed to start"
-      throw createAcpStartError(message)
+      throw createAcpStartError(sanitizeFailureReason(error, "ACP supervisor failed to start"))
     }
   }
 
@@ -213,8 +221,7 @@ export const createAcpSupervisor = ({
 
       return { ok: true, acpSessionId: result.sessionId }
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "session/new failed"
-      return { ok: false, reason: message }
+      return { ok: false, reason: sanitizeFailureReason(error, "session/new failed") }
     }
   }
 
@@ -251,8 +258,7 @@ export const createAcpSupervisor = ({
 
       return { ok: true, acpSessionId: result.sessionId }
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "session/load failed"
-      return { ok: false, reason: message }
+      return { ok: false, reason: sanitizeFailureReason(error, "session/load failed") }
     }
   }
 
@@ -277,9 +283,66 @@ export const createAcpSupervisor = ({
       sessionBindingRegistry.unbind({ acpSessionId })
       return { ok: true }
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "session/close failed"
-      return { ok: false, reason: message }
+      return { ok: false, reason: sanitizeFailureReason(error, "session/close failed") }
     }
+  }
+
+  const ensureSupervisorReadyForAgent = async (agentId: AgentId): Promise<boolean> => {
+    if (runtime.state === "ready" && runtime.runningAgentId === agentId) {
+      return true
+    }
+
+    try {
+      await start(agentId)
+      return runtime.state === "ready"
+    } catch {
+      return false
+    }
+  }
+
+  const closeWorkspaceSessions = async ({
+    sessions,
+  }: {
+    sessions: ReadonlyArray<LiveWorkspaceSession>
+  }): Promise<CloseWorkspaceSessionsResult> => {
+    const failures: CloseWorkspaceSessionFailure[] = []
+
+    for (const session of sessions) {
+      const ready = await ensureSupervisorReadyForAgent(session.agentId)
+      if (!ready) {
+        failures.push({
+          acpSessionId: session.acpSessionId,
+          reason: "ACP supervisor is not ready",
+        })
+        continue
+      }
+
+      const closeSupported = runtime.agentCapabilities?.sessionCapabilities.close === true
+      if (!closeSupported) {
+        sessionBindingRegistry.unbind({ acpSessionId: session.acpSessionId })
+        continue
+      }
+
+      const result = await closeAcpSession({ acpSessionId: session.acpSessionId })
+      if (!result.ok) {
+        failures.push({
+          acpSessionId: session.acpSessionId,
+          reason: result.reason,
+        })
+      }
+    }
+
+    return { failures }
+  }
+
+  const unbindWorkspaceSessions = ({
+    sessions,
+  }: {
+    sessions: ReadonlyArray<LiveWorkspaceSession>
+  }): void => {
+    sessions.forEach((session) => {
+      sessionBindingRegistry.unbind({ acpSessionId: session.acpSessionId })
+    })
   }
 
   return {
@@ -294,5 +357,7 @@ export const createAcpSupervisor = ({
     createAcpSession,
     loadAcpSession,
     closeAcpSession,
+    closeWorkspaceSessions,
+    unbindWorkspaceSessions,
   }
 }

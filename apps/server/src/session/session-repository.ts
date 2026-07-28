@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, lt, or } from "drizzle-orm"
+import { and, asc, count, desc, eq, gt, lt, or, sql } from "drizzle-orm"
 import { AgentId, AgentIdSchema } from "contracts/http/agent-settings"
 import { Session, SessionState, SessionStateSchema, UpdateSessionBody } from "contracts/http/session"
 import { AgentDatabase } from "../persistence/open-database"
@@ -57,6 +57,16 @@ export type MarkSessionErrorInput = {
 
 export type GetSessionAcpBindingInput = {
   id: string
+}
+
+export type ListLiveSessionsByWorkspaceInput = {
+  workspaceId: string
+}
+
+export type LiveSessionBinding = {
+  id: string
+  acpSessionId: string
+  agentId: AgentId
 }
 
 export type SessionAcpBinding = {
@@ -399,6 +409,31 @@ export const createSessionRepository = (database: AgentDatabase) => {
     return { ok: true, value: rowToSession(row) }
   }
 
+  const listLiveByWorkspace = ({
+    workspaceId,
+  }: ListLiveSessionsByWorkspaceInput): LiveSessionBinding[] =>
+    database.db
+      .select({
+        id: sessions.id,
+        acpSessionId: sessions.acpSessionId,
+        agentId: sessions.agentId,
+      })
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.workspaceId, workspaceId),
+          sql`${sessions.archivedAt} IS NULL`,
+          sql`${sessions.state} != 'archived'`,
+          sql`${sessions.acpSessionId} != 'pending'`,
+        ),
+      )
+      .all()
+      .map((row) => ({
+        id: row.id,
+        acpSessionId: row.acpSessionId,
+        agentId: AgentIdSchema.parse(row.agentId),
+      }))
+
   return {
     create,
     list,
@@ -409,6 +444,7 @@ export const createSessionRepository = (database: AgentDatabase) => {
     markReady,
     markError,
     getAcpBinding,
+    listLiveByWorkspace,
   }
 }
 
