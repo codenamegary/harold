@@ -1,0 +1,389 @@
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { fireEvent, waitFor, within } from "@testing-library/react"
+import {
+  AgentSettings,
+  AgentSettingsCollectionSchema,
+  AgentSettingsSchema,
+} from "contracts/http/agent-settings"
+import { PROBLEM_TYPES } from "contracts/http/error"
+import { renderWithProviders } from "../query/renderWithProviders"
+import { AgentsPanel } from "./AgentsPanel"
+
+const validStatus = {
+  version: "0.1.0",
+  state: "online",
+  bindAddress: "127.0.0.1",
+  port: 3847,
+  startedAt: "2026-01-01T00:00:00.000Z",
+  acp: {
+    state: "ready",
+    activeSessions: 0,
+  },
+} as const
+
+const claudeAgent: AgentSettings = {
+  id: "claude",
+  displayName: "Claude",
+  available: false,
+  enabled: false,
+  path: null,
+}
+
+const cursorAgent = (overrides: Partial<AgentSettings> = {}): AgentSettings => ({
+  id: "cursor",
+  displayName: "Cursor",
+  available: true,
+  enabled: false,
+  path: null,
+  ...overrides,
+})
+
+const agentsCollection = (cursor: AgentSettings) =>
+  AgentSettingsCollectionSchema.parse({
+    items: [cursor, claudeAgent],
+  })
+
+const originalFetch = globalThis.fetch
+
+const autoDetectFailedProblem = {
+  type: PROBLEM_TYPES.validationError,
+  title: "Could not detect agent path automatically.",
+  status: 400,
+  code: "validation.field.path.auto_detect_failed",
+  errors: [{ pointer: "#/path", code: "validation.field.path.auto_detect_failed" }],
+}
+
+const renderAgentsPanel = () => renderWithProviders(<AgentsPanel />)
+
+const setInputValue = (input: HTMLElement, value: string) => {
+  const inputElement = input as HTMLInputElement
+  const valueSetter = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )?.set
+
+  if (valueSetter) {
+    valueSetter.call(inputElement, value)
+  }
+
+  inputElement.dispatchEvent(new Event("input", { bubbles: true }))
+  inputElement.dispatchEvent(new Event("change", { bubbles: true }))
+}
+
+describe("AgentsPanel", () => {
+  beforeEach(() => {
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(agentsCollection(cursorAgent())), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+  })
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  test("enables cursor with auto-detected path", async () => {
+    const detectedPath = "/usr/local/bin/agent"
+    const cursorState = { agent: cursorAgent() }
+
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(agentsCollection(cursorState.agent)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents/cursor" && method === "PATCH") {
+        cursorState.agent = cursorAgent({ enabled: true, path: detectedPath })
+
+        return Promise.resolve(
+          new Response(JSON.stringify(AgentSettingsSchema.parse(cursorState.agent)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByLabelText("Enable Cursor")).toBeInTheDocument()
+    })
+
+    fireEvent.click(view.getByLabelText("Enable Cursor"))
+
+    await waitFor(() => {
+      const card = view.getByLabelText("Cursor agent")
+      expect(within(card).getByDisplayValue(detectedPath)).toBeInTheDocument()
+      expect(within(card).getByText("Enabled")).toBeInTheDocument()
+    })
+  })
+
+  test("keeps cursor enabled and shows path error when auto-detect fails", async () => {
+    const cursorState = { agent: cursorAgent() }
+
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(agentsCollection(cursorState.agent)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents/cursor" && method === "PATCH") {
+        cursorState.agent = cursorAgent({ enabled: true, path: null })
+
+        return Promise.resolve(
+          new Response(JSON.stringify(autoDetectFailedProblem), {
+            status: 400,
+            headers: { "Content-Type": "application/problem+json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByLabelText("Enable Cursor")).toBeInTheDocument()
+    })
+
+    fireEvent.click(view.getByLabelText("Enable Cursor"))
+
+    await waitFor(() => {
+      const card = view.getByLabelText("Cursor agent")
+      expect(within(card).getByText("Could not detect agent path automatically.")).toBeInTheDocument()
+      expect(within(card).getByLabelText("Enable Cursor")).toBeChecked()
+      expect(within(card).getByRole("button", { name: "Save path" })).toBeInTheDocument()
+    })
+  })
+
+  test("saves a manual path override", async () => {
+    const manualPath = "/opt/custom/agent"
+    const cursorState = { agent: cursorAgent({ enabled: true, path: null }) }
+
+    const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(agentsCollection(cursorState.agent)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents/cursor" && method === "PATCH") {
+        const body = JSON.parse(String(init?.body))
+
+        if (body.path === manualPath) {
+          cursorState.agent = cursorAgent({ enabled: true, path: manualPath })
+
+          return Promise.resolve(
+            new Response(JSON.stringify(AgentSettingsSchema.parse(cursorState.agent)), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }),
+          )
+        }
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    })
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(within(view.getByLabelText("Cursor agent")).getByText("Enabled")).toBeInTheDocument()
+    })
+
+    const card = view.getByLabelText("Cursor agent")
+    const pathInput = within(card).getByLabelText("Executable path")
+    setInputValue(pathInput, manualPath)
+
+    await waitFor(() => {
+      expect(within(card).getByRole("button", { name: "Save path" })).not.toBeDisabled()
+    })
+
+    fireEvent.click(within(card).getByRole("button", { name: "Save path" }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/v1/settings/agents/cursor",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ enabled: true, path: manualPath }),
+        }),
+      )
+    })
+  })
+
+  test("detect path link pre-fills the input without saving", async () => {
+    const detectedPath = "/usr/local/bin/agent"
+    const cursorState = { agent: cursorAgent({ enabled: true, path: null }) }
+
+    const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(agentsCollection(cursorState.agent)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents/cursor/detect-path" && method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ path: detectedPath }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    })
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByLabelText("Cursor agent")).toBeInTheDocument()
+    })
+
+    const card = view.getByLabelText("Cursor agent")
+    fireEvent.click(within(card).getByRole("button", { name: "Detect path" }))
+
+    await waitFor(() => {
+      expect(within(card).getByDisplayValue(detectedPath)).toBeInTheDocument()
+    })
+
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) =>
+          String(url) === "/v1/settings/agents/cursor" && init?.method === "PATCH",
+      ),
+    ).toBe(false)
+  })
+
+  test("claude card is greyed out and cannot be enabled", async () => {
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByLabelText("Claude agent")).toBeInTheDocument()
+    })
+
+    const claudeCard = view.getByLabelText("Claude agent")
+
+    expect(within(claudeCard).getByText("Coming soon")).toBeInTheDocument()
+    expect(within(claudeCard).getByLabelText("Enable Claude")).toBeDisabled()
+    expect(within(claudeCard).getByRole("button", { name: "Detect path" })).toBeDisabled()
+    expect(within(claudeCard).getByRole("button", { name: "Save path" })).toBeDisabled()
+  })
+
+  test("shows error when agent settings API is unreachable", async () => {
+    globalThis.fetch = mock((input: RequestInfo | URL) => {
+      const url = String(input)
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents") {
+        return Promise.reject(new Error("network error"))
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByText("Could not load agent settings.")).toBeInTheDocument()
+      expect(view.getByText("Unavailable")).toBeInTheDocument()
+    })
+  })
+})
