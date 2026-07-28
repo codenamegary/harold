@@ -39,3 +39,12 @@ export const buildAgentPathInvalidProblem = (_path: string) =>
     code: "validation.field.path.invalid",
     errors: [{ pointer: "#/path", code: "validation.field.path.invalid" }],
   })
+
+export const buildAgentPathAutoDetectFailedProblem = () =>
+  ValidationProblemSchema.parse({
+    type: PROBLEM_TYPES.validationError,
+    title: "Could not detect agent path automatically.",
+    status: 400,
+    code: "validation.field.path.auto_detect_failed",
+    errors: [{ pointer: "#/path", code: "validation.field.path.auto_detect_failed" }],
+  })

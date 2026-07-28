@@ -5,4 +5,6 @@ export const queryKeys = {
   workspacesRoot: ["workspaces"] as const,
   workspaces: (filters: { q?: string; state?: WorkspaceState }) =>
     [...queryKeys.workspacesRoot, filters] as const,
+  agentSettingsRoot: ["agentSettings"] as const,
+  agentSettings: () => [...queryKeys.agentSettingsRoot] as const,
 }
