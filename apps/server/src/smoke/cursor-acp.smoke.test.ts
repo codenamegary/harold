@@ -10,8 +10,21 @@ import { openDatabase } from "../persistence/open-database"
 import { createRuntime } from "../runtime/runtime"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 
-const hasCursorCredentials = (): boolean =>
-  Boolean(process.env.CURSOR_API_KEY ?? process.env.CURSOR_AUTH_TOKEN)
+const hasCliLogin = (): boolean => {
+  try {
+    const output = execSync("agent status", {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+    return output.includes("Logged in")
+  } catch {
+    return false
+  }
+}
+
+const hasCursorAuth = (): boolean =>
+  Boolean(process.env.CURSOR_API_KEY ?? process.env.CURSOR_AUTH_TOKEN) ||
+  hasCliLogin()
 
 const hasAgentBinary = (): boolean => {
   try {
@@ -24,7 +37,7 @@ const hasAgentBinary = (): boolean => {
 
 const shouldRunSmoke =
   process.env.AGENT_SERVER_RUN_CURSOR_SMOKE === "1" &&
-  hasCursorCredentials() &&
+  hasCursorAuth() &&
   hasAgentBinary()
 
 describe("cursor ACP smoke", () => {
