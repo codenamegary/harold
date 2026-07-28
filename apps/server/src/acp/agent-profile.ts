@@ -1,5 +1,6 @@
 import { AgentId } from "contracts/http/agent-settings"
-import { ExtensionHandlers, cursorExtensionHandlers } from "./extension-handlers"
+import { cursorExtensionHandlers } from "./client/extensions/cursor"
+import { ExtensionHandlers } from "./client/extensions/types"
 
 export type AcpClientCapabilities = {
   readonly fs: {

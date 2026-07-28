@@ -1,8 +1,8 @@
 import { AgentId } from "contracts/http/agent-settings"
-import { AgentProfile } from "./agent-profile"
-import { JsonRpcTransport } from "./json-rpc-transport"
+import { AgentProfile } from "../agent-profile"
+import { JsonRpcTransport } from "../transport/json-rpc-transport"
 import { SpawnedAgentProcess } from "./spawn-agent-process"
-import { SessionBindingRegistry } from "./session-binding-registry"
+import { SessionBindingRegistry } from "../client/session-binding-registry"
 
 export type AcpSupervisorState = "stopped" | "starting" | "ready" | "error"
 

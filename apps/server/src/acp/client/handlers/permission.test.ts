@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createAcpPermissionHandler } from "./acp-permission-handler"
+import { createAcpPermissionHandler } from "./permission"
 
 describe("createAcpPermissionHandler", () => {
   test("auto-selects allow-once when available", async () => {

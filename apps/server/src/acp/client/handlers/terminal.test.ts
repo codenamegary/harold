@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { createAcpTerminalHandlers } from "./acp-terminal-handlers"
-import { createSessionBindingRegistry } from "./session-binding-registry"
+import { createAcpTerminalHandlers } from "./terminal"
+import { createSessionBindingRegistry } from "../session-binding-registry"
 
 describe("createAcpTerminalHandlers", () => {
   test("runs terminal lifecycle methods", async () => {

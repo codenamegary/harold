@@ -1,10 +1,10 @@
-import { createAcpFsHandlers } from "./acp-fs-handlers"
-import { isAcpJsonRpcError } from "./acp-json-rpc-error"
-import { createAcpPermissionHandler } from "./acp-permission-handler"
-import { createAcpTerminalHandlers } from "./acp-terminal-handlers"
-import { AgentProfile } from "./agent-profile"
-import { resolveExtensionHandler } from "./extension-handlers"
-import { JsonRpcTransport } from "./json-rpc-transport"
+import { createAcpFsHandlers } from "./handlers/fs"
+import { createAcpPermissionHandler } from "./handlers/permission"
+import { createAcpTerminalHandlers } from "./handlers/terminal"
+import { AgentProfile } from "../agent-profile"
+import { resolveExtensionHandler } from "./extensions/types"
+import { isAcpJsonRpcError } from "../transport/json-rpc-error"
+import { JsonRpcTransport } from "../transport/json-rpc-transport"
 import { SessionBindingRegistry } from "./session-binding-registry"
 
 export type RegisterAcpClientHandlersParams = {

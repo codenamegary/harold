@@ -3,8 +3,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { spawnFakeAcp } from "test-support/spawn"
-import { createAcpSupervisor } from "./acp-supervisor"
-import { SpawnedAgentProcess } from "./spawn-agent-process"
+import { createAcpSupervisor } from "./supervisor/acp-supervisor"
+import { SpawnedAgentProcess } from "./supervisor/spawn-agent-process"
 
 const tempDirs: string[] = []
 const fakeProcesses: Array<{ kill: () => void }> = []

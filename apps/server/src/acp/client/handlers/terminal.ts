@@ -1,5 +1,5 @@
-import { createAcpJsonRpcError, AcpJsonRpcError } from "./acp-json-rpc-error"
-import { SessionBindingRegistry } from "./session-binding-registry"
+import { createAcpJsonRpcError, AcpJsonRpcError } from "../../transport/json-rpc-error"
+import { SessionBindingRegistry } from "../session-binding-registry"
 
 export type AcpTerminalHandlersDeps = {
   sessionBindingRegistry: SessionBindingRegistry

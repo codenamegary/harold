@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { AgentId } from "contracts/http/agent-settings"
 import { createAcpSupervisor } from "./acp-supervisor"
-import { JsonRpcTransport } from "./json-rpc-transport"
+import { JsonRpcTransport } from "../transport/json-rpc-transport"
 import { SpawnedAgentProcess } from "./spawn-agent-process"
 
 const createMockTransport = () => {

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { cursorExtensionHandlers, resolveExtensionHandler } from "./extension-handlers"
+import { cursorExtensionHandlers } from "./cursor"
+import { resolveExtensionHandler } from "./types"
 
 describe("extension handlers", () => {
   test("cursor ask_question selects the first option", async () => {

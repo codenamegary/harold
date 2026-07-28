@@ -13,9 +13,9 @@ import { createSessionRepository } from "../session/session-repository"
 import { registerSessionRoutes } from "../session/session-routes"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
-import { createAcpSupervisor } from "../acp/acp-supervisor"
-import { AcpSupervisor } from "../acp/acp-supervisor-types"
-import { SpawnAgentProcessFn } from "../acp/spawn-agent-process"
+import { createAcpSupervisor } from "../acp/supervisor/acp-supervisor"
+import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
+import { SpawnAgentProcessFn } from "../acp/supervisor/spawn-agent-process"
 
 const TestBodySchema = z.object({
   name: z.string().min(1),

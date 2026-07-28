@@ -1,5 +1,5 @@
 import { AgentId } from "contracts/http/agent-settings"
-import { resolveAgentProfile } from "./agent-profile"
+import { resolveAgentProfile } from "../agent-profile"
 import {
   AgentCapabilities,
   AgentSettingsReader,
@@ -9,9 +9,9 @@ import {
   CreateAcpSupervisorParams,
   createAcpStartError,
 } from "./acp-supervisor-types"
-import { createJsonRpcTransport, JsonRpcTransport } from "./json-rpc-transport"
-import { registerAcpClientHandlers } from "./register-acp-client-handlers"
-import { createSessionBindingRegistry } from "./session-binding-registry"
+import { createJsonRpcTransport, JsonRpcTransport } from "../transport/json-rpc-transport"
+import { registerAcpClientHandlers } from "../client/register-handlers"
+import { createSessionBindingRegistry } from "../client/session-binding-registry"
 import { spawnAgentProcess, SpawnedAgentProcess } from "./spawn-agent-process"
 
 type SupervisorRuntime = {

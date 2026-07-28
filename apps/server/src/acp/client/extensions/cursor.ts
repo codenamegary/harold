@@ -1,4 +1,4 @@
-import { createAcpJsonRpcError } from "./acp-json-rpc-error"
+import { ExtensionHandlers } from "./types"
 
 type CursorAskQuestionParams = {
   questions?: Array<{
@@ -6,10 +6,6 @@ type CursorAskQuestionParams = {
     options?: Array<{ id?: string; label?: string }>
   }>
 }
-
-export type ExtensionHandler = (params: unknown) => unknown | Promise<unknown>
-
-export type ExtensionHandlers = Record<string, ExtensionHandler>
 
 const cursorAskQuestionHandler = (params: unknown) => {
   const request = params as CursorAskQuestionParams
@@ -38,26 +34,4 @@ const cursorCreatePlanHandler = () => ({
 export const cursorExtensionHandlers: ExtensionHandlers = {
   "cursor/ask_question": cursorAskQuestionHandler,
   "cursor/create_plan": cursorCreatePlanHandler,
-}
-
-export const createUnknownExtensionHandler = (method: string): ExtensionHandler => () => {
-  throw createAcpJsonRpcError(`unknown extension: ${method}`, -32601)
-}
-
-export const resolveExtensionHandler = (params: {
-  method: string
-  extensionHandlers: ExtensionHandlers
-  onUnknown: (method: string) => void
-}): ExtensionHandler | undefined => {
-  const handler = params.extensionHandlers[params.method]
-  if (handler) {
-    return handler
-  }
-
-  if (!params.method.includes("/")) {
-    return undefined
-  }
-
-  params.onUnknown(params.method)
-  return createUnknownExtensionHandler(params.method)
 }

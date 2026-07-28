@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises"
-import { createAcpJsonRpcError, AcpJsonRpcError } from "./acp-json-rpc-error"
-import { SessionBindingRegistry } from "./session-binding-registry"
-import { resolvePathWithinWorkspace } from "./resolve-path-within-workspace"
+import { createAcpJsonRpcError, AcpJsonRpcError } from "../../transport/json-rpc-error"
+import { SessionBindingRegistry } from "../session-binding-registry"
+import { resolvePathWithinWorkspace } from "../resolve-path-within-workspace"
 
 export type AcpFsHandlersDeps = {
   sessionBindingRegistry: SessionBindingRegistry

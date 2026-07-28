@@ -6,7 +6,7 @@ import {
   UpdateAgentSettingsBodySchema,
 } from "contracts/http/agent-settings"
 import { FastifyInstance } from "fastify"
-import { AcpSupervisor } from "../acp/acp-supervisor-types"
+import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { AgentSettingsRepository } from "./agent-settings-repository"
 import {
   buildAgentCannotEnableProblem,

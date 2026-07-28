@@ -1,4 +1,4 @@
-import { createAcpJsonRpcError, AcpJsonRpcError } from "./acp-json-rpc-error"
+import { createAcpJsonRpcError, AcpJsonRpcError } from "../../transport/json-rpc-error"
 
 type PermissionOption = {
   optionId?: string
