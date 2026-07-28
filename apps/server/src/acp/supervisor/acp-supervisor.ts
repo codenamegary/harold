@@ -5,7 +5,9 @@ import {
   AgentCapabilities,
   AgentSettingsReader,
   AcpSessionCloseResult,
+  AcpSessionCancelResult,
   AcpSessionOperationResult,
+  AcpSessionPromptResult,
   AcpSupervisor,
   AcpSupervisorState,
   AcpSupervisorStatus,
@@ -93,6 +95,7 @@ const monitorProcessExit = async (
 export const createAcpSupervisor = ({
   agentSettingsRepository,
   serverVersion,
+  onSessionUpdate = () => undefined,
   spawnAgentProcessFn = spawnAgentProcess,
   createTransportFn = (process) =>
     createJsonRpcTransport({
@@ -165,6 +168,18 @@ export const createAcpSupervisor = ({
         transport,
         profile: resolved.profile,
         sessionBindingRegistry,
+      })
+
+      transport.onNotification("session/update", (params) => {
+        const value = params as { sessionId?: string; update?: unknown }
+        if (value.sessionId === undefined) {
+          return
+        }
+
+        onSessionUpdate({
+          acpSessionId: value.sessionId,
+          update: value.update,
+        })
       })
 
       runtime.exitMonitor = monitorProcessExit(runtime, process, transitionToError)
@@ -283,6 +298,67 @@ export const createAcpSupervisor = ({
     }
   }
 
+  const requireBoundSession = (
+    acpSessionId: string,
+  ): { ok: true } | { ok: false; reason: string } => {
+    if (sessionBindingRegistry.getWorkspaceRoot(acpSessionId) === undefined) {
+      return { ok: false as const, reason: "Session is not bound" }
+    }
+
+    return { ok: true as const }
+  }
+
+  const promptAcpSession = async ({
+    acpSessionId,
+    prompt,
+  }: {
+    acpSessionId: string
+    prompt: unknown
+  }): Promise<AcpSessionPromptResult> => {
+    const transport = runtime.transport
+    if (runtime.state !== "ready" || transport === null) {
+      return { ok: false, reason: "ACP supervisor is not ready" }
+    }
+
+    const bound = requireBoundSession(acpSessionId)
+    if (!bound.ok) {
+      return bound
+    }
+
+    try {
+      const result = await transport.request("session/prompt", {
+        sessionId: acpSessionId,
+        prompt,
+      })
+      return { ok: true, result }
+    } catch (error: unknown) {
+      return { ok: false, reason: sanitizeFailureReason(error, "session/prompt failed") }
+    }
+  }
+
+  const cancelAcpSession = async ({
+    acpSessionId,
+  }: {
+    acpSessionId: string
+  }): Promise<AcpSessionCancelResult> => {
+    const transport = runtime.transport
+    if (runtime.state !== "ready" || transport === null) {
+      return { ok: false, reason: "ACP supervisor is not ready" }
+    }
+
+    const bound = requireBoundSession(acpSessionId)
+    if (!bound.ok) {
+      return bound
+    }
+
+    try {
+      await transport.request("session/cancel", { sessionId: acpSessionId })
+      return { ok: true }
+    } catch (error: unknown) {
+      return { ok: false, reason: sanitizeFailureReason(error, "session/cancel failed") }
+    }
+  }
+
   const ensureSupervisorReadyForAgent = async (agentId: AgentId): Promise<boolean> => {
     if (runtime.state === "ready" && runtime.runningAgentId === agentId) {
       return true
@@ -356,6 +432,8 @@ export const createAcpSupervisor = ({
     createAcpSession,
     loadAcpSession,
     closeAcpSession,
+    promptAcpSession,
+    cancelAcpSession,
     closeWorkspaceSessions,
     unbindWorkspaceSessions,
   }

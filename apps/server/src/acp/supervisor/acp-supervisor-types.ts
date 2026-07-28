@@ -26,6 +26,19 @@ export type AcpSessionCloseResult =
   | { ok: true }
   | { ok: false; reason: string }
 
+export type AcpSessionPromptResult =
+  | { ok: true; result: unknown }
+  | { ok: false; reason: string }
+
+export type AcpSessionCancelResult =
+  | { ok: true }
+  | { ok: false; reason: string }
+
+export type SessionUpdateHandler = (input: {
+  acpSessionId: string
+  update: unknown
+}) => void
+
 export type LiveWorkspaceSession = {
   readonly acpSessionId: string
   readonly agentId: AgentId
@@ -55,6 +68,11 @@ export type AcpSupervisor = {
     workspaceCwd: string
   }) => Promise<AcpSessionOperationResult>
   closeAcpSession: (params: { acpSessionId: string }) => Promise<AcpSessionCloseResult>
+  promptAcpSession: (params: {
+    acpSessionId: string
+    prompt: unknown
+  }) => Promise<AcpSessionPromptResult>
+  cancelAcpSession: (params: { acpSessionId: string }) => Promise<AcpSessionCancelResult>
   closeWorkspaceSessions: (params: {
     sessions: ReadonlyArray<LiveWorkspaceSession>
   }) => Promise<CloseWorkspaceSessionsResult>
@@ -74,6 +92,7 @@ export type AgentSettingsReader = {
 export type CreateAcpSupervisorParams = {
   agentSettingsRepository: AgentSettingsReader
   serverVersion: string
+  onSessionUpdate?: SessionUpdateHandler
   spawnAgentProcessFn?: (input: {
     profile: AgentProfile
     executablePath: string

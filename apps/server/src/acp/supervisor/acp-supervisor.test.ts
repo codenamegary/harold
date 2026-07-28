@@ -32,6 +32,10 @@ const createMockTransport = () => {
     setHandler: (method: string, handler: (params: unknown) => unknown) => {
       handlers.set(method, handler)
     },
+    emitNotification: (method: string, params: unknown) => {
+      const handlersForMethod = notifications.get(method) ?? []
+      handlersForMethod.forEach((handler) => handler(params))
+    },
   }
 }
 
@@ -255,5 +259,161 @@ describe("createAcpSupervisor", () => {
 
     await supervisor.stop()
     expect(supervisor.getStatus().activeSessions).toBe(0)
+  })
+
+  test("promptAcpSession rejects unknown sessions", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: () => createMockProcess(),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+
+    const result = await supervisor.promptAcpSession({
+      acpSessionId: "missing-session",
+      prompt: [{ type: "text", text: "hello" }],
+    })
+
+    expect(result).toEqual({ ok: false, reason: "Session is not bound" })
+  })
+
+  test("promptAcpSession forwards prompt payload to session/prompt", async () => {
+    const mock = createMockTransport()
+    const promptCalls: unknown[] = []
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+    mock.setHandler("session/new", () => ({ sessionId: "acp-session-prompt" }))
+    mock.setHandler("session/prompt", (params) => {
+      promptCalls.push(params)
+      return { stopReason: "end_turn" }
+    })
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: () => createMockProcess(),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    await supervisor.createAcpSession({ workspaceCwd: "/tmp/ws" })
+
+    const prompt = [{ type: "text", text: "hello" }]
+    const result = await supervisor.promptAcpSession({
+      acpSessionId: "acp-session-prompt",
+      prompt,
+    })
+
+    expect(result).toEqual({ ok: true, result: { stopReason: "end_turn" } })
+    expect(promptCalls).toEqual([
+      { sessionId: "acp-session-prompt", prompt },
+    ])
+  })
+
+  test("cancelAcpSession forwards session/cancel for bound sessions", async () => {
+    const mock = createMockTransport()
+    const cancelCalls: unknown[] = []
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+    mock.setHandler("session/new", () => ({ sessionId: "acp-session-cancel" }))
+    mock.setHandler("session/cancel", (params) => {
+      cancelCalls.push(params)
+      return {}
+    })
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: () => createMockProcess(),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    await supervisor.createAcpSession({ workspaceCwd: "/tmp/ws" })
+
+    const result = await supervisor.cancelAcpSession({ acpSessionId: "acp-session-cancel" })
+
+    expect(result).toEqual({ ok: true })
+    expect(cancelCalls).toEqual([{ sessionId: "acp-session-cancel" }])
+  })
+
+  test("cancelAcpSession rejects unknown sessions", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: () => createMockProcess(),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+
+    const result = await supervisor.cancelAcpSession({ acpSessionId: "missing-session" })
+
+    expect(result).toEqual({ ok: false, reason: "Session is not bound" })
+  })
+
+  test("routes session/update notifications to onSessionUpdate", async () => {
+    const mock = createMockTransport()
+    const updates: Array<{ acpSessionId: string; update: unknown }> = []
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      onSessionUpdate: (input) => {
+        updates.push(input)
+      },
+      spawnAgentProcessFn: () => createMockProcess(),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    mock.emitNotification("session/update", {
+      sessionId: "acp-session-update",
+      update: { kind: "turn_complete" },
+    })
+
+    expect(updates).toEqual([
+      {
+        acpSessionId: "acp-session-update",
+        update: { kind: "turn_complete" },
+      },
+    ])
   })
 })
