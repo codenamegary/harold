@@ -3,6 +3,8 @@ import { resolveAgentProfile } from "../agent-profile"
 import {
   AgentCapabilities,
   AgentSettingsReader,
+  AcpSessionCloseResult,
+  AcpSessionOperationResult,
   AcpSupervisor,
   AcpSupervisorState,
   AcpSupervisorStatus,
@@ -188,6 +190,98 @@ export const createAcpSupervisor = ({
     }
   }
 
+  const createAcpSession = async ({
+    workspaceCwd,
+  }: {
+    workspaceCwd: string
+  }): Promise<AcpSessionOperationResult> => {
+    const transport = runtime.transport
+    if (runtime.state !== "ready" || transport === null) {
+      return { ok: false, reason: "ACP supervisor is not ready" }
+    }
+
+    try {
+      const result = await transport.request<{ sessionId: string }>("session/new", {
+        cwd: workspaceCwd,
+        mcpServers: [],
+      })
+
+      sessionBindingRegistry.bind({
+        acpSessionId: result.sessionId,
+        workspaceRoot: workspaceCwd,
+      })
+
+      return { ok: true, acpSessionId: result.sessionId }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "session/new failed"
+      return { ok: false, reason: message }
+    }
+  }
+
+  const loadAcpSession = async ({
+    acpSessionId,
+    workspaceCwd,
+  }: {
+    acpSessionId: string
+    workspaceCwd: string
+  }): Promise<AcpSessionOperationResult> => {
+    const transport = runtime.transport
+    const capabilities = runtime.agentCapabilities
+
+    if (runtime.state !== "ready" || transport === null) {
+      return { ok: false, reason: "ACP supervisor is not ready" }
+    }
+
+    if (!capabilities?.loadSession) {
+      return { ok: false, reason: "Agent does not support session/load" }
+    }
+
+    try {
+      const result = await transport.request<{ sessionId: string }>("session/load", {
+        sessionId: acpSessionId,
+        cwd: workspaceCwd,
+        mcpServers: [],
+      })
+
+      sessionBindingRegistry.unbind({ acpSessionId })
+      sessionBindingRegistry.bind({
+        acpSessionId: result.sessionId,
+        workspaceRoot: workspaceCwd,
+      })
+
+      return { ok: true, acpSessionId: result.sessionId }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "session/load failed"
+      return { ok: false, reason: message }
+    }
+  }
+
+  const closeAcpSession = async ({
+    acpSessionId,
+  }: {
+    acpSessionId: string
+  }): Promise<AcpSessionCloseResult> => {
+    const transport = runtime.transport
+    const capabilities = runtime.agentCapabilities
+
+    if (runtime.state !== "ready" || transport === null) {
+      return { ok: false, reason: "ACP supervisor is not ready" }
+    }
+
+    if (!capabilities?.sessionCapabilities.close) {
+      return { ok: false, reason: "Agent does not support session/close" }
+    }
+
+    try {
+      await transport.request("session/close", { sessionId: acpSessionId })
+      sessionBindingRegistry.unbind({ acpSessionId })
+      return { ok: true }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "session/close failed"
+      return { ok: false, reason: message }
+    }
+  }
+
   return {
     getStatus: () => statusFromState(runtime.state),
     getRunningAgentId: () => runtime.runningAgentId,
@@ -197,5 +291,8 @@ export const createAcpSupervisor = ({
     start,
     stop,
     handleAgentDisabled,
+    createAcpSession,
+    loadAcpSession,
+    closeAcpSession,
   }
 }

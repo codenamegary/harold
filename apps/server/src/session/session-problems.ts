@@ -2,6 +2,7 @@ import {
   ConflictProblemSchema,
   NotFoundProblemSchema,
   PROBLEM_TYPES,
+  ValidationProblemSchema,
 } from "contracts/http/error"
 
 export const buildWorkspaceNotFoundProblem = (detail = "Unknown workspace id") =>
@@ -32,6 +33,47 @@ export const buildAgentDisabledProblem = (detail = "Agent is not enabled") =>
   ConflictProblemSchema.parse({
     type: PROBLEM_TYPES.conflict,
     title: "Agent is disabled",
+    status: 409,
+    detail,
+  })
+
+export const buildSessionNotFoundProblem = (detail = "Unknown session id") =>
+  NotFoundProblemSchema.parse({
+    type: PROBLEM_TYPES.notFound,
+    title: "Session not found",
+    status: 404,
+    detail,
+  })
+
+export const buildInvalidCursorProblem = () =>
+  ValidationProblemSchema.parse({
+    type: PROBLEM_TYPES.validationError,
+    title: "Request validation failed",
+    status: 400,
+    code: "validation.request.invalid",
+    errors: [{ pointer: "#/cursor", code: "validation.query.cursor.invalid" }],
+  })
+
+export const buildSessionArchivedProblem = (detail = "Session is archived") =>
+  ConflictProblemSchema.parse({
+    type: PROBLEM_TYPES.conflict,
+    title: "Session is archived",
+    status: 409,
+    detail,
+  })
+
+export const buildSessionNotResumableProblem = (detail = "Session cannot be resumed") =>
+  ConflictProblemSchema.parse({
+    type: PROBLEM_TYPES.conflict,
+    title: "Session is not resumable",
+    status: 409,
+    detail,
+  })
+
+export const buildAcpUnavailableProblem = (detail = "ACP agent is unavailable") =>
+  ConflictProblemSchema.parse({
+    type: PROBLEM_TYPES.conflict,
+    title: "ACP unavailable",
     status: 409,
     detail,
   })

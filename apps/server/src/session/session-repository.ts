@@ -36,12 +36,35 @@ export type RenameSessionInput = {
   id: string
 } & UpdateSessionBody
 
-export type SelectSessionInput = {
+export type ArchiveSessionInput = {
   id: string
 }
 
-export type ArchiveSessionInput = {
+export type SelectSessionInput = {
   id: string
+  lastUsedAt?: string
+}
+
+export type MarkSessionReadyInput = {
+  id: string
+  acpSessionId: string
+  resumable: boolean
+}
+
+export type MarkSessionErrorInput = {
+  id: string
+}
+
+export type GetSessionAcpBindingInput = {
+  id: string
+}
+
+export type SessionAcpBinding = {
+  acpSessionId: string
+  resumable: boolean
+  agentId: AgentId
+  workspaceId: string
+  archivedAt: string | null
 }
 
 export type SessionListPage = {
@@ -289,8 +312,8 @@ export const createSessionRepository = (database: AgentDatabase) => {
     return { ok: true, value: rowToSession(row) }
   }
 
-  const select = ({ id }: SelectSessionInput): SessionRepositoryResult<Session> => {
-    const timestamp = nowIso()
+  const select = ({ id, lastUsedAt }: SelectSessionInput): SessionRepositoryResult<Session> => {
+    const timestamp = lastUsedAt ?? nowIso()
     const row = database.db
       .update(sessions)
       .set({ lastUsedAt: timestamp })
@@ -303,6 +326,61 @@ export const createSessionRepository = (database: AgentDatabase) => {
     }
 
     return { ok: true, value: rowToSession(row) }
+  }
+
+  const markReady = ({
+    id,
+    acpSessionId,
+    resumable,
+  }: MarkSessionReadyInput): SessionRepositoryResult<Session> => {
+    const row = database.db
+      .update(sessions)
+      .set({ acpSessionId, state: "idle", resumable })
+      .where(eq(sessions.id, id))
+      .returning()
+      .get()
+
+    if (row === undefined) {
+      return { ok: false, error: { kind: "not_found" } }
+    }
+
+    return { ok: true, value: rowToSession(row) }
+  }
+
+  const markError = ({ id }: MarkSessionErrorInput): SessionRepositoryResult<Session> => {
+    const row = database.db
+      .update(sessions)
+      .set({ state: "error" })
+      .where(eq(sessions.id, id))
+      .returning()
+      .get()
+
+    if (row === undefined) {
+      return { ok: false, error: { kind: "not_found" } }
+    }
+
+    return { ok: true, value: rowToSession(row) }
+  }
+
+  const getAcpBinding = ({
+    id,
+  }: GetSessionAcpBindingInput): SessionRepositoryResult<SessionAcpBinding> => {
+    const row = getRowById(id)
+
+    if (row === undefined) {
+      return { ok: false, error: { kind: "not_found" } }
+    }
+
+    return {
+      ok: true,
+      value: {
+        acpSessionId: row.acpSessionId,
+        resumable: row.resumable,
+        agentId: AgentIdSchema.parse(row.agentId),
+        workspaceId: row.workspaceId,
+        archivedAt: row.archivedAt,
+      },
+    }
   }
 
   const archive = ({ id }: ArchiveSessionInput): SessionRepositoryResult<Session> => {
@@ -328,6 +406,9 @@ export const createSessionRepository = (database: AgentDatabase) => {
     rename,
     select,
     archive,
+    markReady,
+    markError,
+    getAcpBinding,
   }
 }
 
