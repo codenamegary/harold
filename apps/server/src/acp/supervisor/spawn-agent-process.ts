@@ -1,4 +1,4 @@
-import { AgentProfile } from "./agent-profile"
+import { AgentProfile } from "../agent-profile"
 
 export type SpawnedAgentProcess = {
   stdin: { write: (chunk: string) => void | number | Promise<void | number> }

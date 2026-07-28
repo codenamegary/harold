@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { cursorAgentProfile } from "./agent-profile"
+import { cursorAgentProfile } from "../agent-profile"
 import { buildAgentSpawnCommand } from "./spawn-agent-process"
 
 describe("buildAgentSpawnCommand", () => {

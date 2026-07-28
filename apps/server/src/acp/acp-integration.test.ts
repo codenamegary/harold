@@ -8,7 +8,7 @@ import { createServer } from "../bootstrap/create-server"
 import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/open-database"
 import { createRuntime } from "../runtime/runtime"
-import { SpawnedAgentProcess } from "../acp/spawn-agent-process"
+import { SpawnedAgentProcess } from "./supervisor/spawn-agent-process"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
 
 const tempDirs: string[] = []

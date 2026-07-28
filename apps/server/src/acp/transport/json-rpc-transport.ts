@@ -5,9 +5,24 @@ type PendingRequest = {
 
 type NotificationHandler = (params: unknown) => void
 
+type InboundRequestHandler = (input: {
+  id: string | number
+  params: unknown
+}) => void | Promise<void>
+
+type UnhandledRequestHandler = (input: {
+  method: string
+  id: string | number
+  params: unknown
+}) => void | Promise<void>
+
 export type JsonRpcTransport = {
   request: <T = unknown>(method: string, params?: unknown) => Promise<T>
   onNotification: (method: string, handler: NotificationHandler) => void
+  onRequest: (method: string, handler: InboundRequestHandler) => void
+  onUnhandledRequest: (handler: UnhandledRequestHandler) => void
+  respond: (id: string | number, result: unknown) => void
+  respondError: (id: string | number, code: number, message: string) => void
   close: () => void
 }
 
@@ -53,6 +68,8 @@ export const createJsonRpcTransport = ({
   const { readLine, cancel } = createLineReader(stdout)
   const pendingRequests = new Map<string | number, PendingRequest>()
   const notificationHandlers = new Map<string, NotificationHandler[]>()
+  const requestHandlers = new Map<string, InboundRequestHandler[]>()
+  const unhandledRequestHandlers: UnhandledRequestHandler[] = []
   const closed = { value: false }
 
   const nextRequestId = (() => {
@@ -63,6 +80,27 @@ export const createJsonRpcTransport = ({
     }
   })()
 
+  const dispatchInboundRequest = async (message: {
+    id: string | number
+    method: string
+    params?: unknown
+  }) => {
+    const handlers = requestHandlers.get(message.method) ?? []
+    if (handlers.length > 0) {
+      await Promise.all(handlers.map((handler) => handler({
+        id: message.id,
+        params: message.params,
+      })))
+      return
+    }
+
+    await Promise.all(unhandledRequestHandlers.map((handler) => handler({
+      method: message.method,
+      id: message.id,
+      params: message.params,
+    })))
+  }
+
   const dispatchMessage = (message: {
     id?: string | number
     method?: string
@@ -70,6 +108,15 @@ export const createJsonRpcTransport = ({
     result?: unknown
     error?: { message: string }
   }) => {
+    if (message.method !== undefined && message.id !== undefined) {
+      void dispatchInboundRequest({
+        id: message.id,
+        method: message.method,
+        params: message.params,
+      })
+      return
+    }
+
     if (message.method !== undefined && message.id === undefined) {
       const handlers = notificationHandlers.get(message.method) ?? []
       handlers.forEach((handler) => handler(message.params))
@@ -142,6 +189,35 @@ export const createJsonRpcTransport = ({
     notificationHandlers.set(method, [...handlers, handler])
   }
 
+  const onRequest = (method: string, handler: InboundRequestHandler) => {
+    const handlers = requestHandlers.get(method) ?? []
+    requestHandlers.set(method, [...handlers, handler])
+  }
+
+  const onUnhandledRequest = (handler: UnhandledRequestHandler) => {
+    unhandledRequestHandlers.push(handler)
+  }
+
+  const respond = (id: string | number, result: unknown) => {
+    void stdin.write(
+      `${JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        result,
+      })}\n`,
+    )
+  }
+
+  const respondError = (id: string | number, code: number, message: string) => {
+    void stdin.write(
+      `${JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        error: { code, message },
+      })}\n`,
+    )
+  }
+
   const close = () => {
     closed.value = true
     cancel()
@@ -151,5 +227,13 @@ export const createJsonRpcTransport = ({
     pendingRequests.clear()
   }
 
-  return { request, onNotification, close }
+  return {
+    request,
+    onNotification,
+    onRequest,
+    onUnhandledRequest,
+    respond,
+    respondError,
+    close,
+  }
 }
