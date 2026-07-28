@@ -18,6 +18,14 @@ export type AcpSupervisorStatus = {
   readonly activeSessions: number
 }
 
+export type AcpSessionOperationResult =
+  | { ok: true; acpSessionId: string }
+  | { ok: false; reason: string }
+
+export type AcpSessionCloseResult =
+  | { ok: true }
+  | { ok: false; reason: string }
+
 export type AcpSupervisor = {
   getStatus: () => AcpSupervisorStatus
   getRunningAgentId: () => AgentId | null
@@ -27,6 +35,12 @@ export type AcpSupervisor = {
   start: (agentId: AgentId) => Promise<void>
   stop: () => Promise<void>
   handleAgentDisabled: (agentId: AgentId) => Promise<void>
+  createAcpSession: (params: { workspaceCwd: string }) => Promise<AcpSessionOperationResult>
+  loadAcpSession: (params: {
+    acpSessionId: string
+    workspaceCwd: string
+  }) => Promise<AcpSessionOperationResult>
+  closeAcpSession: (params: { acpSessionId: string }) => Promise<AcpSessionCloseResult>
 }
 
 export type AgentSettingsReader = {

@@ -84,11 +84,13 @@ export const createServer = async ({
   const workspaceRepository = createWorkspaceRepository(database)
   registerWorkspaceRoutes(app, workspaceRepository)
   registerAgentSettingsRoutes(app, agentSettingsRepository, acpSupervisor)
+  const sessionRepository = createSessionRepository(database)
   registerSessionRoutes(
     app,
-    createSessionRepository(database),
+    sessionRepository,
     workspaceRepository,
     agentSettingsRepository,
+    acpSupervisor,
   )
 
   if (withTestRoutes) {

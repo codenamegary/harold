@@ -40,6 +40,11 @@ export type DeleteWorkspaceInput = {
   id: string
 }
 
+export type TouchWorkspaceLastUsedInput = {
+  id: string
+  lastUsedAt: string
+}
+
 export type WorkspaceListPage = {
   items: Workspace[]
   limit: number
@@ -417,12 +422,31 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
     return { ok: true, value: undefined }
   }
 
+  const touchLastUsed = ({
+    id,
+    lastUsedAt,
+  }: TouchWorkspaceLastUsedInput): WorkspaceRepositoryResult<Workspace> => {
+    const row = database.db
+      .update(workspaces)
+      .set({ lastUsedAt })
+      .where(eq(workspaces.id, id))
+      .returning()
+      .get()
+
+    if (row === undefined) {
+      return { ok: false, error: { kind: "not_found" } }
+    }
+
+    return { ok: true, value: rowToWorkspace(row) }
+  }
+
   return {
     create,
     list,
     getById,
     updateName,
     delete: deleteById,
+    touchLastUsed,
   }
 }
 
