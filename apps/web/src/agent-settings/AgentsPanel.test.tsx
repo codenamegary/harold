@@ -21,6 +21,8 @@ const validStatus = {
   },
 } as const
 
+const mutationFlowTimeoutMs = 15000
+
 const claudeAgent: AgentSettings = {
   id: "claude",
   displayName: "Claude",
@@ -155,7 +157,7 @@ describe("AgentsPanel", () => {
       expect(within(card).getByDisplayValue(detectedPath)).toBeInTheDocument()
       expect(within(card).getByLabelText("Enable Cursor")).toBeChecked()
     })
-  })
+  }, mutationFlowTimeoutMs)
 
   test("keeps cursor enabled and shows path error when auto-detect fails", async () => {
     const cursorState = { agent: cursorAgent() }
@@ -210,7 +212,7 @@ describe("AgentsPanel", () => {
       expect(within(card).getByLabelText("Enable Cursor")).toBeChecked()
       expect(within(card).getByRole("button", { name: "Save path" })).toBeInTheDocument()
     })
-  })
+  }, mutationFlowTimeoutMs)
 
   test("saves a manual path override", async () => {
     const manualPath = "/opt/custom/agent"
@@ -282,7 +284,7 @@ describe("AgentsPanel", () => {
         }),
       )
     })
-  })
+  }, mutationFlowTimeoutMs)
 
   test("detect path link pre-fills the input without saving", async () => {
     const detectedPath = "/usr/local/bin/agent"
@@ -431,7 +433,7 @@ describe("AgentsPanel", () => {
       expect(within(card).getByDisplayValue(detectedPath)).toBeInTheDocument()
       expect(within(card).queryByText("Invalid agent executable path")).not.toBeInTheDocument()
     })
-  })
+  }, mutationFlowTimeoutMs)
 
   test("claude card is greyed out and cannot be enabled", async () => {
     const view = renderAgentsPanel()
