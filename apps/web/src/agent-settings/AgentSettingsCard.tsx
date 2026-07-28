@@ -14,8 +14,13 @@ import { updateAgentSettings } from "./updateAgentSettings"
 const textLinkClassName =
   "inline-flex min-h-9 items-center justify-center gap-3 rounded-[7px] bg-transparent px-0 text-sm font-semibold whitespace-nowrap text-body-soft transition-opacity duration-300 ease-out hover:text-lime cursor-pointer disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50"
 
-const DetectSuccessCheck: React.FC = () => (
-  <svg viewBox="0 0 16 16" aria-hidden className="size-3.5 shrink-0 text-lime animate-detect-path-check">
+const DetectSuccessCheck: React.FC<{ onAnimationEnd: () => void }> = ({ onAnimationEnd }) => (
+  <svg
+    viewBox="0 0 16 16"
+    aria-hidden
+    className="size-3.5 shrink-0 text-lime animate-detect-path-check"
+    onAnimationEnd={onAnimationEnd}
+  >
     <path
       fill="currentColor"
       d="M6.2 11.1 3.4 8.3l-1 1 3.8 3.8 7.4-7.4-1-1z"
@@ -58,15 +63,6 @@ export const AgentSettingsCard: React.FC<AgentSettingsCardProps> = ({
   useEffect(() => {
     setDraftPath(savedPath)
   }, [savedPath])
-
-  useEffect(() => {
-    if (!detectSuccessVisible) {
-      return undefined
-    }
-
-    const timer = setTimeout(() => setDetectSuccessVisible(false), 1350)
-    return () => clearTimeout(timer)
-  }, [detectSuccessVisible])
 
   const isComingSoon = !agent.available
   const cardDisabled = controlsDisabled || isComingSoon
@@ -195,7 +191,9 @@ export const AgentSettingsCard: React.FC<AgentSettingsCardProps> = ({
             >
               Detect path
             </button>
-            {detectSuccessVisible ? <DetectSuccessCheck /> : null}
+            {detectSuccessVisible ? (
+              <DetectSuccessCheck onAnimationEnd={() => setDetectSuccessVisible(false)} />
+            ) : null}
           </span>
           <Button
             variant="secondary"
