@@ -197,4 +197,63 @@ describe("createAcpSupervisor", () => {
 
     expect(supervisor.getStatus().state).toBe("stopped")
   })
+
+  test("createAcpSession updates activeSessions count", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: { loadSession: false, sessionCapabilities: { close: true } },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+    mock.setHandler("session/new", () => ({ sessionId: "acp-session-1" }))
+    mock.setHandler("session/close", () => ({}))
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: () => createMockProcess(),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    expect(supervisor.getStatus().activeSessions).toBe(0)
+
+    const created = await supervisor.createAcpSession({ workspaceCwd: "/tmp/ws" })
+    expect(created.ok).toBe(true)
+    expect(supervisor.getStatus().activeSessions).toBe(1)
+
+    if (created.ok) {
+      const closed = await supervisor.closeAcpSession({ acpSessionId: created.acpSessionId })
+      expect(closed.ok).toBe(true)
+    }
+    expect(supervisor.getStatus().activeSessions).toBe(0)
+  })
+
+  test("stop clears activeSessions to zero", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+    mock.setHandler("session/new", () => ({ sessionId: "acp-session-2" }))
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: () => createMockProcess(),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    await supervisor.createAcpSession({ workspaceCwd: "/tmp/ws" })
+    expect(supervisor.getStatus().activeSessions).toBe(1)
+
+    await supervisor.stop()
+    expect(supervisor.getStatus().activeSessions).toBe(0)
+  })
 })

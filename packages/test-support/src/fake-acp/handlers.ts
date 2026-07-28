@@ -153,6 +153,13 @@ const handleSessionLoad = (request: JsonRpcRequest, config: FakeAcpConfig): Hand
     }
   }
 
+  if (config.sessionLoadFails) {
+    return {
+      response: jsonRpcError(request.id, -32000, "session load failed"),
+      outbound: [],
+    }
+  }
+
   return {
     response: jsonRpcResult(request.id, { sessionId: config.sessionLoadSessionId }),
     outbound: [],

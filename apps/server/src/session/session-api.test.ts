@@ -5,6 +5,7 @@ import {
   ValidationProblemSchema,
 } from "contracts/http/error"
 import { SessionCollectionSchema, SessionSchema } from "contracts/http/session"
+import { StatusSchema } from "contracts/http/status"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { buildAcpUnavailableProblem } from "./session-problems"
 import {
@@ -351,6 +352,101 @@ describe("session lifecycle", () => {
     expect(persisted.id).toBe(created.id)
     expect(persisted.name).toBe("Non-resumable")
     expect(persisted.state).toBe("idle")
+  })
+
+  test("resume returns 409 when session/load fails and metadata stays intact", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { app } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
+      capabilities: { loadSession: true, sessionClose: false },
+      sessionNewSessionId: "load-fail-session",
+      sessionLoadSessionId: "load-fail-session-loaded",
+      sessionLoadFails: true,
+    })
+    const { workspaceId } = await seedWorkspace(app, dataDir)
+    await enableAgent(app, "cursor", whichFn)
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: {
+        workspaceId,
+        agentId: "cursor",
+        name: "Load fail",
+      },
+    })
+    const created = SessionSchema.parse(JSON.parse(createResponse.body))
+
+    const resumeResponse = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${created.id}/resume`,
+    })
+    const body = ConflictProblemSchema.parse(JSON.parse(resumeResponse.body))
+    expect(resumeResponse.statusCode).toBe(409)
+    expect(body.title).toBe("Session is not resumable")
+    expect(body.detail).toContain("session load failed")
+
+    const getResponse = await app.inject({
+      method: "GET",
+      url: `/v1/sessions/${created.id}`,
+    })
+    const persisted = SessionSchema.parse(JSON.parse(getResponse.body))
+    expect(getResponse.statusCode).toBe(200)
+    expect(persisted.id).toBe(created.id)
+    expect(persisted.name).toBe("Load fail")
+    expect(persisted.state).toBe("idle")
+  })
+
+  test("status reports activeSessions for live bindings", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { app, config } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
+      capabilities: { loadSession: false, sessionClose: false },
+      sessionNewSessionId: "active-session",
+    })
+    await app.listen({ host: config.host, port: config.port })
+    const { workspaceId } = await seedWorkspace(app, dataDir)
+    await enableAgent(app, "cursor", whichFn)
+
+    const statusBefore = StatusSchema.parse(JSON.parse((await app.inject({
+      method: "GET",
+      url: "/v1/status",
+    })).body))
+    expect(statusBefore.acp.activeSessions).toBe(0)
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: {
+        workspaceId,
+        agentId: "cursor",
+        name: "Active binding",
+      },
+    })
+    const created = SessionSchema.parse(JSON.parse(createResponse.body))
+    expect(createResponse.statusCode).toBe(201)
+
+    const statusAfterCreate = StatusSchema.parse(JSON.parse((await app.inject({
+      method: "GET",
+      url: "/v1/status",
+    })).body))
+    expect(statusAfterCreate.acp.activeSessions).toBe(1)
+
+    const archiveResponse = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${created.id}/archive`,
+    })
+    expect(archiveResponse.statusCode).toBe(200)
+
+    const statusAfterArchive = StatusSchema.parse(JSON.parse((await app.inject({
+      method: "GET",
+      url: "/v1/status",
+    })).body))
+    expect(statusAfterArchive.acp.activeSessions).toBe(0)
   })
 
   test("archive succeeds when agent advertises session/close", async () => {

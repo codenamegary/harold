@@ -6,6 +6,7 @@ export type SpawnFakeAcpOptions = {
   sessionNewSessionId?: string
   sessionLoadSessionId?: string
   sessionCloseFails?: boolean
+  sessionLoadFails?: boolean
   emitPermissionRequest?: boolean
   emitPermissionRequestNoAllow?: boolean
   emitFsReadRequest?: boolean

@@ -7,6 +7,7 @@ export type FakeAcpConfig = FakeAcpCapabilities & {
   sessionNewSessionId: string
   sessionLoadSessionId: string
   sessionCloseFails: boolean
+  sessionLoadFails: boolean
   emitPermissionRequest: boolean
   emitPermissionRequestNoAllow: boolean
   emitFsReadRequest: boolean
@@ -45,6 +46,7 @@ export const readFakeAcpConfig = (
   sessionNewSessionId: readEnvString(env, "FAKE_ACP_SESSION_NEW_SESSION_ID", "fake-session-new"),
   sessionLoadSessionId: readEnvString(env, "FAKE_ACP_SESSION_LOAD_SESSION_ID", "fake-session-load"),
   sessionCloseFails: parseBooleanEnv(env.FAKE_ACP_SESSION_CLOSE_FAILS, false),
+  sessionLoadFails: parseBooleanEnv(env.FAKE_ACP_SESSION_LOAD_FAILS, false),
   emitPermissionRequest: parseBooleanEnv(env.FAKE_ACP_EMIT_PERMISSION_REQUEST, false),
   emitPermissionRequestNoAllow: parseBooleanEnv(env.FAKE_ACP_EMIT_PERMISSION_REQUEST_NO_ALLOW, false),
   emitFsReadRequest: parseBooleanEnv(env.FAKE_ACP_EMIT_FS_READ_REQUEST, false),
@@ -64,6 +66,7 @@ export type FakeAcpEnvOptions = {
   sessionNewSessionId?: string
   sessionLoadSessionId?: string
   sessionCloseFails?: boolean
+  sessionLoadFails?: boolean
   emitPermissionRequest?: boolean
   emitPermissionRequestNoAllow?: boolean
   emitFsReadRequest?: boolean
@@ -90,6 +93,7 @@ export const fakeAcpEnvFromCapabilities = (options: FakeAcpEnvOptions): Record<s
   ...stringEnv("FAKE_ACP_SESSION_NEW_SESSION_ID", options.sessionNewSessionId),
   ...stringEnv("FAKE_ACP_SESSION_LOAD_SESSION_ID", options.sessionLoadSessionId),
   ...optionalBooleanEnv("FAKE_ACP_SESSION_CLOSE_FAILS", options.sessionCloseFails),
+  ...optionalBooleanEnv("FAKE_ACP_SESSION_LOAD_FAILS", options.sessionLoadFails),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_PERMISSION_REQUEST", options.emitPermissionRequest),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_PERMISSION_REQUEST_NO_ALLOW", options.emitPermissionRequestNoAllow),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_FS_READ_REQUEST", options.emitFsReadRequest),

@@ -2,6 +2,8 @@ export type SessionBindingRegistry = {
   bind: (params: { acpSessionId: string; workspaceRoot: string }) => void
   unbind: (params: { acpSessionId: string }) => void
   getWorkspaceRoot: (acpSessionId: string) => string | undefined
+  count: () => number
+  clear: () => void
 }
 
 export const createSessionBindingRegistry = (): SessionBindingRegistry => {
@@ -15,5 +17,9 @@ export const createSessionBindingRegistry = (): SessionBindingRegistry => {
       bindings.delete(acpSessionId)
     },
     getWorkspaceRoot: (acpSessionId) => bindings.get(acpSessionId),
+    count: () => bindings.size,
+    clear: () => {
+      bindings.clear()
+    },
   }
 }
