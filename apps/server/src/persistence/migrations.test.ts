@@ -3,7 +3,7 @@ import { Database } from "bun:sqlite"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { openDatabase } from "./open-database"
+import { openDatabase } from "./database"
 
 const tempDirs: string[] = []
 

@@ -3,7 +3,7 @@ import {
   JOURNAL_SCHEMA_VERSION,
   journalPayloadSchemaByKind,
 } from "contracts/events/journal-record"
-import { ParsedJournalRecord } from "./event-journal-repository"
+import { ParsedJournalRecord } from "./journal.repository"
 
 export const lifecycleKinds = [
   "server.status",

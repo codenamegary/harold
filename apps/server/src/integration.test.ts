@@ -9,9 +9,9 @@ import {
   ProblemDetailsSchema,
   ValidationProblemSchema,
 } from "contracts/http/error"
-import { createServer } from "./bootstrap/create-server"
+import { createServer } from "./bootstrap/server"
 import { parseConfig } from "./config/config"
-import { openDatabase } from "./persistence/open-database"
+import { openDatabase } from "./persistence/database"
 import { createRuntime } from "./runtime/runtime"
 
 const tempDirs: string[] = []

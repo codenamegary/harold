@@ -2,9 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { openDatabase } from "../persistence/open-database"
+import { openDatabase } from "../persistence/database"
 import { workspaces } from "../persistence/schema/workspaces"
-import { createWorkspaceRepository } from "./workspace-repository"
+import { createWorkspaceRepository } from "./repository"
 import { encodeWorkspacePageCursor } from "./workspace-page-cursor"
 
 const tempDirs: string[] = []

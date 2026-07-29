@@ -12,9 +12,9 @@ import {
   AgentSettingsSchema,
   DetectAgentPathResponseSchema,
 } from "contracts/http/agent-settings"
-import { createServer } from "../bootstrap/create-server"
+import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
-import { openDatabase } from "../persistence/open-database"
+import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn, validateExecutablePath } from "../agent-settings/validate-agent-path"

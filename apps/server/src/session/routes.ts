@@ -10,8 +10,8 @@ import { FastifyInstance } from "fastify"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { AgentSettingsRepository } from "../agent-settings/agent-settings-repository"
 import { agentDefinitions } from "../agent-settings/agent-registry"
-import { WorkspaceRepository } from "../workspace/workspace-repository"
-import { SessionRepository } from "./session-repository"
+import { WorkspaceRepository } from "../workspace/repository"
+import { SessionRepository } from "./repository"
 import { SessionService } from "./service"
 import {
   buildAcpUnavailableProblem,

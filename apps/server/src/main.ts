@@ -1,8 +1,8 @@
 import packageJson from "../package.json"
-import { createServer } from "./bootstrap/create-server"
+import { createServer } from "./bootstrap/server"
 import { listen, registerShutdown } from "./bootstrap/shutdown"
 import { parseConfig } from "./config/config"
-import { openDatabase } from "./persistence/open-database"
+import { openDatabase } from "./persistence/database"
 import { createRuntime } from "./runtime/runtime"
 
 const main = async () => {

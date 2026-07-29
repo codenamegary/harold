@@ -9,7 +9,7 @@ import {
   JournalRecordKind,
   JournalRecordKindSchema,
 } from "contracts/events/journal-record"
-import { AgentDatabase, DbExecutor } from "../persistence/open-database"
+import { AgentDatabase, DbExecutor } from "../persistence/database"
 import { events } from "../persistence/schema/events"
 import {
   EventJournalCorruptionError,

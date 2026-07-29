@@ -5,7 +5,7 @@ import {
   Workspace,
   WorkspaceState,
 } from "contracts/http/workspace"
-import { AgentDatabase, DbExecutor } from "../persistence/open-database"
+import { AgentDatabase, DbExecutor } from "../persistence/database"
 import { workspaces } from "../persistence/schema/workspaces"
 import { canonicalizeWorkspacePath } from "./canonicalize-workspace-path"
 import { createWorkspaceId } from "./create-workspace-id"

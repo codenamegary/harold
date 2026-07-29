@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { SessionSchema } from "contracts/http/session"
-import { openDatabase } from "../persistence/open-database"
-import { createServer } from "../bootstrap/create-server"
+import { openDatabase } from "../persistence/database"
+import { createServer } from "../bootstrap/server"
 import { createRuntime } from "../runtime/runtime"
 import { parseConfig } from "../config/config"
 import {

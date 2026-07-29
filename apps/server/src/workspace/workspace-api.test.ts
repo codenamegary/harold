@@ -11,9 +11,9 @@ import {
   WorkspaceCollectionSchema,
   WorkspaceSchema,
 } from "contracts/http/workspace"
-import { createServer } from "../bootstrap/create-server"
+import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
-import { openDatabase } from "../persistence/open-database"
+import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
 import { encodeWorkspacePageCursor } from "./workspace-page-cursor"
 
