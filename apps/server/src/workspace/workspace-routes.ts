@@ -10,6 +10,7 @@ import { FastifyInstance } from "fastify"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { SessionRepository } from "../session/session-repository"
 import { WorkspaceRepository } from "./workspace-repository"
+import { WorkspaceService } from "./service"
 import {
   buildConflictProblem,
   buildInvalidCursorProblem,
@@ -27,12 +28,13 @@ const sendProblem = (
 export const registerWorkspaceRoutes = (
   app: FastifyInstance,
   repository: WorkspaceRepository,
+  workspaceService: WorkspaceService,
   sessionRepository: SessionRepository,
   acpSupervisor: AcpSupervisor,
 ) => {
   app.post("/v1/workspaces", async (request, reply) => {
     const body = CreateWorkspaceBodySchema.parse(request.body)
-    const result = repository.create(body)
+    const result = workspaceService.create(body)
 
     if (!result.ok) {
       if (result.error.kind === "path") {
@@ -79,7 +81,7 @@ export const registerWorkspaceRoutes = (
   app.patch("/v1/workspaces/:workspaceId", async (request, reply) => {
     const { workspaceId } = request.params as { workspaceId: string }
     const body = UpdateWorkspaceBodySchema.parse(request.body)
-    const result = repository.updateName({ id: workspaceId, ...body })
+    const result = workspaceService.updateName({ id: workspaceId, ...body })
 
     if (!result.ok) {
       return sendProblem(reply, 404, buildNotFoundProblem())
@@ -122,7 +124,7 @@ export const registerWorkspaceRoutes = (
       })
     }
 
-    const result = repository.delete({ id: workspaceId })
+    const result = workspaceService.delete({ id: workspaceId })
 
     if (!result.ok) {
       return sendProblem(reply, 404, buildNotFoundProblem())

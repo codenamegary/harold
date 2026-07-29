@@ -12,7 +12,10 @@ export type AgentDatabase = {
   close: () => void
 }
 
-export type DbExecutor = AgentDatabase["db"]
+type DrizzleDb = AgentDatabase["db"]
+type TransactionExecutor = Parameters<Parameters<DrizzleDb["transaction"]>[0]>[0]
+
+export type DbExecutor = DrizzleDb | TransactionExecutor
 
 export type OpenDatabaseOptions = {
   dataDir: string

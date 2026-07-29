@@ -11,6 +11,11 @@ import { createWorkspaceRepository } from "../workspace/workspace-repository"
 import { registerWorkspaceRoutes } from "../workspace/workspace-routes"
 import { createSessionRepository } from "../session/session-repository"
 import { registerSessionRoutes } from "../session/session-routes"
+import { createWorkspaceService } from "../workspace/service"
+import { createSessionService } from "../session/service"
+import { createEventJournalRepository } from "../event/event-journal-repository"
+import { createEventCommitPublisher } from "../event/commit.publisher"
+import { createRuntimeStatusService } from "../runtime/status.service"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
 import { createAcpSupervisor } from "../acp/supervisor/acp-supervisor"
@@ -81,13 +86,42 @@ export const createServer = async ({
     })
 
   registerStatusRoutes(app, runtime, config, acpSupervisor)
+  const eventJournal = createEventJournalRepository(database)
+  const commitPublisher = createEventCommitPublisher()
   const workspaceRepository = createWorkspaceRepository(database)
   const sessionRepository = createSessionRepository(database)
-  registerWorkspaceRoutes(app, workspaceRepository, sessionRepository, acpSupervisor)
+  const workspaceService = createWorkspaceService({
+    database,
+    workspaceRepository,
+    eventJournal,
+    commitPublisher,
+  })
+  const sessionService = createSessionService({
+    database,
+    sessionRepository,
+    eventJournal,
+    commitPublisher,
+  })
+  const runtimeStatusService = createRuntimeStatusService({
+    database,
+    runtime,
+    eventJournal,
+    commitPublisher,
+  })
+  runtimeStatusService.persistStarting()
+
+  registerWorkspaceRoutes(
+    app,
+    workspaceRepository,
+    workspaceService,
+    sessionRepository,
+    acpSupervisor,
+  )
   registerAgentSettingsRoutes(app, agentSettingsRepository, acpSupervisor)
   registerSessionRoutes(
     app,
     sessionRepository,
+    sessionService,
     workspaceRepository,
     agentSettingsRepository,
     acpSupervisor,
@@ -97,5 +131,5 @@ export const createServer = async ({
     registerTestRoutes(app)
   }
 
-  return { app, acpSupervisor }
+  return { app, acpSupervisor, eventJournal, commitPublisher, runtimeStatusService }
 }

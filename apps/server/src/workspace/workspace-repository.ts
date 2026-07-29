@@ -5,7 +5,7 @@ import {
   Workspace,
   WorkspaceState,
 } from "contracts/http/workspace"
-import { AgentDatabase } from "../persistence/open-database"
+import { AgentDatabase, DbExecutor } from "../persistence/open-database"
 import { workspaces } from "../persistence/schema/workspaces"
 import { canonicalizeWorkspacePath } from "./canonicalize-workspace-path"
 import { createWorkspaceId } from "./create-workspace-id"
@@ -34,15 +34,18 @@ export type GetWorkspaceByIdInput = {
 
 export type UpdateWorkspaceNameInput = {
   id: string
+  executor?: DbExecutor
 } & UpdateWorkspaceBody
 
 export type DeleteWorkspaceInput = {
   id: string
+  executor?: DbExecutor
 }
 
 export type TouchWorkspaceLastUsedInput = {
   id: string
   lastUsedAt: string
+  executor?: DbExecutor
 }
 
 export type WorkspaceListPage = {
@@ -163,7 +166,12 @@ const conditionBefore = (row: WorkspaceRow) =>
 
 const nowIso = (): string => new Date().toISOString()
 
+export type CreateWorkspaceInput = CreateWorkspaceBody & {
+  executor?: DbExecutor
+}
+
 export const createWorkspaceRepository = (database: AgentDatabase) => {
+  const resolveExecutor = (executor?: DbExecutor): DbExecutor => executor ?? database.db
   const countAll = (): number =>
     database.db.select({ value: count() }).from(workspaces).get()?.value ?? 0
 
@@ -245,8 +253,9 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
     return [...rows].sort((left, right) => compareWorkspaces(rowToWorkspace(left), rowToWorkspace(right)))
   }
 
-  const create = (input: CreateWorkspaceBody): WorkspaceRepositoryResult<Workspace> => {
-    const { name, path: inputPath } = input
+  const create = (input: CreateWorkspaceInput): WorkspaceRepositoryResult<Workspace> => {
+    const { name, path: inputPath, executor } = input
+    const db = resolveExecutor(executor)
     const canonicalizeResult = canonicalizeWorkspacePath(inputPath)
     if (!canonicalizeResult.ok) {
       return { ok: false, error: { kind: "path", error: canonicalizeResult.error } }
@@ -256,7 +265,7 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
     const id = createWorkspaceId()
 
     try {
-      database.db
+      db
         .insert(workspaces)
         .values({
           id,
@@ -396,9 +405,11 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
   const updateName = ({
     id,
     name,
+    executor,
   }: UpdateWorkspaceNameInput): WorkspaceRepositoryResult<Workspace> => {
+    const db = resolveExecutor(executor)
     const timestamp = nowIso()
-    const row = database.db
+    const row = db
       .update(workspaces)
       .set({ name, lastUsedAt: timestamp })
       .where(eq(workspaces.id, id))
@@ -412,8 +423,9 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
     return { ok: true, value: rowToWorkspace(row) }
   }
 
-  const deleteById = ({ id }: DeleteWorkspaceInput): WorkspaceRepositoryResult<void> => {
-    const row = database.db.delete(workspaces).where(eq(workspaces.id, id)).returning().get()
+  const deleteById = ({ id, executor }: DeleteWorkspaceInput): WorkspaceRepositoryResult<void> => {
+    const db = resolveExecutor(executor)
+    const row = db.delete(workspaces).where(eq(workspaces.id, id)).returning().get()
 
     if (row === undefined) {
       return { ok: false, error: { kind: "not_found" } }
@@ -425,8 +437,10 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
   const touchLastUsed = ({
     id,
     lastUsedAt,
+    executor,
   }: TouchWorkspaceLastUsedInput): WorkspaceRepositoryResult<Workspace> => {
-    const row = database.db
+    const db = resolveExecutor(executor)
+    const row = db
       .update(workspaces)
       .set({ lastUsedAt })
       .where(eq(workspaces.id, id))

@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, gt, lt, or, sql } from "drizzle-orm"
 import { AgentId, AgentIdSchema } from "contracts/http/agent-settings"
 import { Session, SessionState, SessionStateSchema, UpdateSessionBody } from "contracts/http/session"
-import { AgentDatabase } from "../persistence/open-database"
+import { AgentDatabase, DbExecutor } from "../persistence/open-database"
 import { sessions } from "../persistence/schema/sessions"
 import { createSessionId } from "./create-session-id"
 import { SessionRepositoryError } from "./session-errors"
@@ -20,6 +20,7 @@ export type CreateSessionInput = {
   name: string
   acpSessionId: string
   state?: SessionState
+  executor?: DbExecutor
 }
 
 export type SessionListOptions = {
@@ -34,25 +35,30 @@ export type GetSessionByIdInput = {
 
 export type RenameSessionInput = {
   id: string
+  executor?: DbExecutor
 } & UpdateSessionBody
 
 export type ArchiveSessionInput = {
   id: string
+  executor?: DbExecutor
 }
 
 export type SelectSessionInput = {
   id: string
   lastUsedAt?: string
+  executor?: DbExecutor
 }
 
 export type MarkSessionReadyInput = {
   id: string
   acpSessionId: string
   resumable: boolean
+  executor?: DbExecutor
 }
 
 export type MarkSessionErrorInput = {
   id: string
+  executor?: DbExecutor
 }
 
 export type GetSessionAcpBindingInput = {
@@ -112,6 +118,8 @@ const compareSessions = (left: Session, right: Session): number => {
 const nowIso = (): string => new Date().toISOString()
 
 export const createSessionRepository = (database: AgentDatabase) => {
+  const resolveExecutor = (executor?: DbExecutor): DbExecutor => executor ?? database.db
+
   const countByWorkspace = (workspaceId: string): number =>
     database.db
       .select({ value: count() })
@@ -222,11 +230,12 @@ export const createSessionRepository = (database: AgentDatabase) => {
   }
 
   const create = (input: CreateSessionInput): SessionRepositoryResult<Session> => {
+    const db = resolveExecutor(input.executor)
     const timestamp = nowIso()
     const id = createSessionId()
     const state = input.state ?? "idle"
 
-    database.db
+    db
       .insert(sessions)
       .values({
         id,
@@ -307,8 +316,9 @@ export const createSessionRepository = (database: AgentDatabase) => {
     return { ok: true, value: rowToSession(row) }
   }
 
-  const rename = ({ id, name }: RenameSessionInput): SessionRepositoryResult<Session> => {
-    const row = database.db
+  const rename = ({ id, name, executor }: RenameSessionInput): SessionRepositoryResult<Session> => {
+    const db = resolveExecutor(executor)
+    const row = db
       .update(sessions)
       .set({ name })
       .where(eq(sessions.id, id))
@@ -322,9 +332,14 @@ export const createSessionRepository = (database: AgentDatabase) => {
     return { ok: true, value: rowToSession(row) }
   }
 
-  const select = ({ id, lastUsedAt }: SelectSessionInput): SessionRepositoryResult<Session> => {
+  const select = ({
+    id,
+    lastUsedAt,
+    executor,
+  }: SelectSessionInput): SessionRepositoryResult<Session> => {
+    const db = resolveExecutor(executor)
     const timestamp = lastUsedAt ?? nowIso()
-    const row = database.db
+    const row = db
       .update(sessions)
       .set({ lastUsedAt: timestamp })
       .where(eq(sessions.id, id))
@@ -342,8 +357,10 @@ export const createSessionRepository = (database: AgentDatabase) => {
     id,
     acpSessionId,
     resumable,
+    executor,
   }: MarkSessionReadyInput): SessionRepositoryResult<Session> => {
-    const row = database.db
+    const db = resolveExecutor(executor)
+    const row = db
       .update(sessions)
       .set({ acpSessionId, state: "idle", resumable })
       .where(eq(sessions.id, id))
@@ -357,8 +374,9 @@ export const createSessionRepository = (database: AgentDatabase) => {
     return { ok: true, value: rowToSession(row) }
   }
 
-  const markError = ({ id }: MarkSessionErrorInput): SessionRepositoryResult<Session> => {
-    const row = database.db
+  const markError = ({ id, executor }: MarkSessionErrorInput): SessionRepositoryResult<Session> => {
+    const db = resolveExecutor(executor)
+    const row = db
       .update(sessions)
       .set({ state: "error" })
       .where(eq(sessions.id, id))
@@ -393,9 +411,10 @@ export const createSessionRepository = (database: AgentDatabase) => {
     }
   }
 
-  const archive = ({ id }: ArchiveSessionInput): SessionRepositoryResult<Session> => {
+  const archive = ({ id, executor }: ArchiveSessionInput): SessionRepositoryResult<Session> => {
+    const db = resolveExecutor(executor)
     const timestamp = nowIso()
-    const row = database.db
+    const row = db
       .update(sessions)
       .set({ state: "archived", archivedAt: timestamp })
       .where(eq(sessions.id, id))

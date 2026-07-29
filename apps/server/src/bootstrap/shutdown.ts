@@ -1,33 +1,32 @@
 import { FastifyInstance } from "fastify"
 import { Config } from "../config/config"
 import { AgentDatabase } from "../persistence/open-database"
-import { Runtime } from "../runtime/runtime"
+import { RuntimeStatusService } from "../runtime/status.service"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 
 export const listen = async (
   app: FastifyInstance,
   config: Config,
-  runtime: Runtime,
+  runtimeStatusService: RuntimeStatusService,
 ) => {
-  runtime.setState("starting")
   await app.listen({ host: config.host, port: config.port })
-  runtime.setState("online")
+  runtimeStatusService.persistOnline()
 }
 
 export const registerShutdown = (
   app: FastifyInstance,
-  runtime: Runtime,
   database: AgentDatabase,
   acpSupervisor: AcpSupervisor,
+  runtimeStatusService: RuntimeStatusService,
   signals: ReadonlyArray<NodeJS.Signals> = ["SIGINT", "SIGTERM"],
 ) => {
   const shutdown = async (signal: NodeJS.Signals) => {
     app.log.info({ signal }, "shutting down")
-    runtime.setState("shutting_down")
+    runtimeStatusService.persistShuttingDown()
     await acpSupervisor.stop()
     await app.close()
+    runtimeStatusService.persistOffline()
     database.close()
-    runtime.setState("offline")
     process.exit(0)
   }
 
