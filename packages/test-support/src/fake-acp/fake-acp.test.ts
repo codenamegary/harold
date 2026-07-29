@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import { readFakeAcpConfig } from "./config"
 import { handleJsonRpcRequest } from "./handlers"
+import { createFakeAcpPromptState } from "./prompt-state"
 import { parseJsonRpcLine, serializeJsonRpcMessage } from "./protocol"
+
+const createPromptState = () => createFakeAcpPromptState()
 
 describe("fake ACP protocol", () => {
   test("serializes one JSON-RPC message per line", () => {
@@ -37,6 +40,7 @@ describe("fake ACP protocol", () => {
         },
       },
       config,
+      createPromptState(),
     )
 
     expect(response).toEqual({
@@ -65,6 +69,7 @@ describe("fake ACP protocol", () => {
         params: { methodId: "cursor_login" },
       },
       config,
+      createPromptState(),
     )
 
     expect(response).toEqual({
@@ -87,6 +92,7 @@ describe("fake ACP protocol", () => {
         params: { cwd: "/tmp", mcpServers: [] },
       },
       config,
+      createPromptState(),
     )
 
     expect(response).toEqual({
@@ -107,6 +113,7 @@ describe("fake ACP protocol", () => {
         params: { sessionId: "session-test-1", cwd: "/tmp", mcpServers: [] },
       },
       config,
+      createPromptState(),
     )
 
     expect(response).toMatchObject({
@@ -130,6 +137,7 @@ describe("fake ACP protocol", () => {
         params: { sessionId: "session-test-1", cwd: "/tmp", mcpServers: [] },
       },
       config,
+      createPromptState(),
     )
 
     expect(response).toEqual({
@@ -150,6 +158,7 @@ describe("fake ACP protocol", () => {
         params: { sessionId: "session-test-1" },
       },
       config,
+      createPromptState(),
     )
 
     expect(response).toMatchObject({
@@ -170,6 +179,7 @@ describe("fake ACP protocol", () => {
         params: { sessionId: "session-test-1" },
       },
       config,
+      createPromptState(),
     )
 
     expect(response).toEqual({
@@ -193,6 +203,7 @@ describe("fake ACP protocol", () => {
         params: { cwd: "/tmp", mcpServers: [] },
       },
       config,
+      createPromptState(),
     )
 
     expect(response).toEqual({
@@ -212,5 +223,75 @@ describe("fake ACP protocol", () => {
         },
       },
     ])
+  })
+
+  test("session/prompt returns a result and emits scripted updates when enabled", () => {
+    const config = readFakeAcpConfig({
+      FAKE_ACP_EMIT_SESSION_UPDATES_ON_PROMPT: "true",
+    })
+    const promptState = createPromptState()
+
+    const { response, notifications, deferredNotifications } = handleJsonRpcRequest(
+      {
+        jsonrpc: "2.0",
+        id: 8,
+        method: "session/prompt",
+        params: {
+          sessionId: "session-test-1",
+          prompt: [{ type: "text", text: "hello" }],
+        },
+      },
+      config,
+      promptState,
+    )
+
+    expect(response).toEqual({
+      jsonrpc: "2.0",
+      id: 8,
+      result: { stopReason: "end_turn" },
+    })
+    expect(notifications).toHaveLength(1)
+    expect(notifications[0]?.method).toBe("session/update")
+    expect(deferredNotifications).toHaveLength(2)
+  })
+
+  test("session/cancel marks the active prompt as cancelled", () => {
+    const config = readFakeAcpConfig({
+      FAKE_ACP_EMIT_SESSION_UPDATES_ON_PROMPT: "true",
+    })
+    const promptState = createPromptState()
+
+    handleJsonRpcRequest(
+      {
+        jsonrpc: "2.0",
+        id: 9,
+        method: "session/prompt",
+        params: {
+          sessionId: "session-test-1",
+          prompt: [{ type: "text", text: "hello" }],
+        },
+      },
+      config,
+      promptState,
+    )
+
+    const { response } = handleJsonRpcRequest(
+      {
+        jsonrpc: "2.0",
+        id: 10,
+        method: "session/cancel",
+        params: { sessionId: "session-test-1" },
+      },
+      config,
+      promptState,
+    )
+
+    expect(response).toEqual({
+      jsonrpc: "2.0",
+      id: 10,
+      result: {},
+    })
+    expect(promptState.cancelled).toBe(true)
+    expect(promptState.activeSessionId).toBeNull()
   })
 })
