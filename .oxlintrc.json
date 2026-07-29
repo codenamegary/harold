@@ -71,7 +71,12 @@
           {
             "patterns": [
               {
-                "group": ["**/persistence/**", "../persistence/**"],
+                "group": [
+                  "**/persistence/**",
+                  "../persistence/**",
+                  "**/*.repository",
+                  "**/*.repository.*"
+                ],
                 "message": "Projectors must not depend on persistence modules."
               }
             ]
