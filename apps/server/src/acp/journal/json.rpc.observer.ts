@@ -1,4 +1,3 @@
-import { JournalPhase } from "contracts/events/journal-record"
 import { SessionBindingRegistry } from "../client/session-binding-registry"
 import { AcpJournalWriter } from "./acp.journal.writer"
 import { hashToolCallIdForLog } from "./hash.tool.call.id"
@@ -11,7 +10,7 @@ import {
   sanitizeSessionUpdate,
   shouldJournalAcpMethod,
 } from "./sanitize.acp.update"
-import { JsonRpcObserverEvent, AcpOperationContext } from "../transport/json-rpc-transport"
+import { JsonRpcObserverEvent } from "../transport/json-rpc-transport"
 
 const ACP_PROTOCOL_VERSION = 1
 

@@ -410,7 +410,7 @@ export const createAcpSupervisor = ({
 
     const occurredAt = nowIso()
     const baseRecord = {
-      schemaVersion: JOURNAL_SCHEMA_VERSION,
+      schemaVersion: 1 as const,
       occurredAt,
       workspaceId: params.binding.workspaceId,
       sessionId: params.binding.sessionId,
