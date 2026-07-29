@@ -65,3 +65,7 @@ export const parseLifecycleJournalRecord = (
     sessionId: record.sessionId,
     payload: record.payload,
   })
+
+export const parseLifecycleJournalRecords = (
+  records: ReadonlyArray<ParsedJournalRecord>,
+): LifecycleJournalRecord[] => records.map(parseLifecycleJournalRecord)

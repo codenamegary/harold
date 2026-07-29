@@ -1,11 +1,6 @@
 import { Event, EventSchema } from "contracts/events/event"
 import { eventCursorToString } from "./cursor"
-import { ParsedJournalRecord } from "./event-journal-repository"
-import {
-  LifecycleJournalRecord,
-  LifecycleKind,
-  parseLifecycleJournalRecord,
-} from "./lifecycle.models"
+import { LifecycleJournalRecord } from "./lifecycle.models"
 
 type ServerStatusRecord = Extract<LifecycleJournalRecord, { kind: "server.status" }>
 type WorkspaceChangedRecord = Extract<LifecycleJournalRecord, { kind: "workspace.changed" }>
@@ -74,27 +69,19 @@ const projectSessionState = (record: SessionStateRecord): Event =>
     },
   })
 
-const lifecycleProjectors = {
-  "server.status": projectServerStatus,
-  "workspace.changed": projectWorkspaceChanged,
-  "session.created": projectSessionCreated,
-  "session.state": projectSessionState,
-} satisfies {
-  [K in LifecycleKind]: (record: Extract<LifecycleJournalRecord, { kind: K }>) => Event
-}
-
 export const projectLifecycleEvent = (record: LifecycleJournalRecord): Event => {
   switch (record.kind) {
     case "server.status":
-      return lifecycleProjectors["server.status"](record)
+      return projectServerStatus(record)
     case "workspace.changed":
-      return lifecycleProjectors["workspace.changed"](record)
+      return projectWorkspaceChanged(record)
     case "session.created":
-      return lifecycleProjectors["session.created"](record)
+      return projectSessionCreated(record)
     case "session.state":
-      return lifecycleProjectors["session.state"](record)
+      return projectSessionState(record)
   }
 }
 
-export const projectLifecycleEvents = (records: ReadonlyArray<ParsedJournalRecord>): Event[] =>
-  records.map((record) => projectLifecycleEvent(parseLifecycleJournalRecord(record)))
+export const projectLifecycleEvents = (
+  records: ReadonlyArray<LifecycleJournalRecord>,
+): Event[] => records.map(projectLifecycleEvent)

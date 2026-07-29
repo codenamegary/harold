@@ -3,6 +3,7 @@ import { Event } from "contracts/events/event"
 import { AgentDatabase, DbExecutor } from "../persistence/open-database"
 import { EventCommitPublisher } from "./commit.publisher"
 import { EventJournalRepository, ParsedJournalRecord } from "./event-journal-repository"
+import { parseLifecycleJournalRecords } from "./lifecycle.models"
 import { projectLifecycleEvents } from "./lifecycle.projectors"
 
 export type TransactionalJournalError = { kind: "journal_append_failed" }
@@ -80,7 +81,9 @@ export const runTransactionalJournal = <T, E = TransactionalJournalError>(
       }
     })
 
-    const events: Event[] = projectLifecycleEvents(outcome.appendedRecords)
+    const events: Event[] = projectLifecycleEvents(
+      parseLifecycleJournalRecords(outcome.appendedRecords),
+    )
     context.commitPublisher.publish(events)
 
     return { ok: true, value: outcome.value }
