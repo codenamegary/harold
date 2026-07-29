@@ -3,11 +3,11 @@ import { mkdtemp, rm } from "node:fs/promises"
 import net from "node:net"
 import os from "node:os"
 import path from "node:path"
-import { createServer } from "./bootstrap/create-server"
-import { listen, registerShutdown } from "./bootstrap/shutdown"
-import { parseConfig } from "./config/config"
-import { openDatabase } from "./persistence/open-database"
-import { createRuntime } from "./runtime/runtime"
+import { createServer } from "../bootstrap/server"
+import { listen, registerShutdown } from "../bootstrap/shutdown"
+import { parseConfig } from "../config/config"
+import { openDatabase } from "./database"
+import { createRuntime } from "../runtime/runtime"
 
 const tempDirs: string[] = []
 

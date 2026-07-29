@@ -1,9 +1,9 @@
 import { AgentServerState } from "contracts/http/status"
 import { JOURNAL_SCHEMA_VERSION } from "contracts/events/journal-record"
-import { AgentDatabase } from "../persistence/open-database"
+import { AgentDatabase } from "../persistence/database"
 import { Runtime } from "./runtime"
 import { EventCommitPublisher } from "../event/commit.publisher"
-import { EventJournalRepository } from "../event/event-journal-repository"
+import { EventJournalRepository } from "../event/journal.repository"
 import { runTransactionalJournal } from "../event/journal.transactional"
 
 type RuntimeStatusServiceContext = {

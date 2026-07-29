@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, gt, lt, or, sql } from "drizzle-orm"
 import { AgentId, AgentIdSchema } from "contracts/http/agent-settings"
 import { Session, SessionState, SessionStateSchema, UpdateSessionBody } from "contracts/http/session"
-import { AgentDatabase, DbExecutor } from "../persistence/open-database"
+import { AgentDatabase, DbExecutor } from "../persistence/database"
 import { sessions } from "../persistence/schema/sessions"
 import { createSessionId } from "./create-session-id"
 import { SessionRepositoryError } from "./session-errors"

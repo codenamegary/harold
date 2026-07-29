@@ -3,10 +3,10 @@ import { ulid } from "ulid"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { openDatabase } from "../persistence/open-database"
+import { openDatabase } from "../persistence/database"
 import { events } from "../persistence/schema/events"
 import { eventCursorToString } from "./cursor"
-import { createEventJournalRepository } from "./event-journal-repository"
+import { createEventJournalRepository } from "./journal.repository"
 
 const tempDirs: string[] = []
 

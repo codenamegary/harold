@@ -8,10 +8,10 @@ import {
   enableAgent,
   seedWorkspace,
 } from "../test-support/create-test-app"
-import { createEventJournalRepository } from "./event-journal-repository"
+import { createEventJournalRepository } from "./journal.repository"
 import { parseLifecycleJournalRecord } from "./lifecycle.models"
 import { projectLifecycleEvent } from "./lifecycle.projectors"
-import { ParsedJournalRecord } from "./event-journal-repository"
+import { ParsedJournalRecord } from "./journal.repository"
 
 describe("projectLifecycleEvent", () => {
   const baseRecord = {
@@ -292,10 +292,10 @@ describe("lifecycle events integration", () => {
 
   test("session error appends session.state error", async () => {
     const dataDir = await createTempDataDir(resources)
-    const { openDatabase } = await import("../persistence/open-database")
+    const { openDatabase } = await import("../persistence/database")
     const { createSessionService } = await import("../session/service")
-    const { createSessionRepository } = await import("../session/session-repository")
-    const { createWorkspaceRepository } = await import("../workspace/workspace-repository")
+    const { createSessionRepository } = await import("../session/repository")
+    const { createWorkspaceRepository } = await import("../workspace/repository")
     const { createEventCommitPublisher } = await import("./commit.publisher")
     const { mkdir } = await import("node:fs/promises")
     const path = await import("node:path")
@@ -392,9 +392,9 @@ describe("lifecycle events integration", () => {
 
   test("rollback publishes nothing when workspace delete target is missing", async () => {
     const dataDir = await createTempDataDir(resources)
-    const { openDatabase } = await import("../persistence/open-database")
+    const { openDatabase } = await import("../persistence/database")
     const { createWorkspaceService } = await import("../workspace/service")
-    const { createWorkspaceRepository } = await import("../workspace/workspace-repository")
+    const { createWorkspaceRepository } = await import("../workspace/repository")
     const { createEventCommitPublisher } = await import("./commit.publisher")
 
     const database = openDatabase({ dataDir })
@@ -518,8 +518,8 @@ describe("lifecycle events integration", () => {
     const dataDir = await createTempDataDir(resources)
     const { parseConfig } = await import("../config/config")
     const { createRuntime } = await import("../runtime/runtime")
-    const { createServer } = await import("../bootstrap/create-server")
-    const { openDatabase } = await import("../persistence/open-database")
+    const { createServer } = await import("../bootstrap/server")
+    const { openDatabase } = await import("../persistence/database")
 
     const config = parseConfig({
       AGENT_SERVER_HOST: "127.0.0.1",
@@ -548,8 +548,8 @@ describe("lifecycle events integration", () => {
     const dataDir = await createTempDataDir(resources)
     const { parseConfig } = await import("../config/config")
     const { createRuntime } = await import("../runtime/runtime")
-    const { createServer } = await import("../bootstrap/create-server")
-    const { openDatabase } = await import("../persistence/open-database")
+    const { createServer } = await import("../bootstrap/server")
+    const { openDatabase } = await import("../persistence/database")
     const { listen, registerShutdown } = await import("../bootstrap/shutdown")
 
     const config = parseConfig({

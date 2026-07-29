@@ -1,8 +1,8 @@
 import { JournalAppendRecord } from "contracts/events/journal-record"
 import { Event } from "contracts/events/event"
-import { AgentDatabase, DbExecutor } from "../persistence/open-database"
+import { AgentDatabase, DbExecutor } from "../persistence/database"
 import { EventCommitPublisher } from "./commit.publisher"
-import { EventJournalRepository, ParsedJournalRecord } from "./event-journal-repository"
+import { EventJournalRepository, ParsedJournalRecord } from "./journal.repository"
 import { parseLifecycleJournalRecords } from "./lifecycle.models"
 import { projectLifecycleEvents } from "./lifecycle.projectors"
 

@@ -2,9 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { openDatabase } from "../persistence/open-database"
-import { createWorkspaceRepository } from "../workspace/workspace-repository"
-import { createSessionRepository } from "./session-repository"
+import { openDatabase } from "../persistence/database"
+import { createWorkspaceRepository } from "../workspace/repository"
+import { createSessionRepository } from "./repository"
 
 const tempDirs: string[] = []
 

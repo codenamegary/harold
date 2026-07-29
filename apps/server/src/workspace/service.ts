@@ -1,13 +1,13 @@
 import { CreateWorkspaceBody, Workspace } from "contracts/http/workspace"
 import { JOURNAL_SCHEMA_VERSION } from "contracts/events/journal-record"
-import { AgentDatabase } from "../persistence/open-database"
+import { AgentDatabase } from "../persistence/database"
 import { EventCommitPublisher } from "../event/commit.publisher"
-import { EventJournalRepository } from "../event/event-journal-repository"
+import { EventJournalRepository } from "../event/journal.repository"
 import { runTransactionalJournal, TransactionalJournalError } from "../event/journal.transactional"
 import {
   UpdateWorkspaceNameInput,
   WorkspaceRepository,
-} from "./workspace-repository"
+} from "./repository"
 import { WorkspaceRepositoryError } from "./workspace-errors"
 
 export type WorkspaceServiceResult<T> =

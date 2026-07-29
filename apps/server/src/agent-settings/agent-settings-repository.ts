@@ -4,7 +4,7 @@ import {
   AgentSettings,
   UpdateAgentSettingsBody,
 } from "contracts/http/agent-settings"
-import { AgentDatabase } from "../persistence/open-database"
+import { AgentDatabase } from "../persistence/database"
 import { agentSettings } from "../persistence/schema/agent-settings"
 import {
   agentDefinitionList,
