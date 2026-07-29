@@ -9,10 +9,10 @@ const main = async () => {
   const config = parseConfig(process.env)
   const database = openDatabase({ dataDir: config.dataDir })
   const runtime = createRuntime(packageJson.version)
-  const { app, acpSupervisor } = await createServer({ config, runtime, database })
+  const { app, acpSupervisor, runtimeStatusService } = await createServer({ config, runtime, database })
 
-  registerShutdown(app, runtime, database, acpSupervisor)
-  await listen(app, config, runtime)
+  registerShutdown(app, database, acpSupervisor, runtimeStatusService)
+  await listen(app, config, runtimeStatusService)
   app.log.info(
     { host: config.host, port: config.port, dataDir: config.dataDir },
     "agent server listening",

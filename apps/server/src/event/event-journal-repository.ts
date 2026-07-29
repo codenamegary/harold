@@ -47,6 +47,11 @@ export type ReadJournalAfterInput = {
   executor?: DbExecutor
 }
 
+export type DeleteJournalByWorkspaceInput = {
+  workspaceId: string
+  executor?: DbExecutor
+}
+
 type EventRow = typeof events.$inferSelect
 
 const sessionScopedKinds = new Set<JournalRecordKind>([
@@ -356,11 +361,17 @@ export const createEventJournalRepository = (database: AgentDatabase) => {
     return BigInt(row?.value ?? 0)
   }
 
+  const deleteByWorkspace = ({ workspaceId, executor }: DeleteJournalByWorkspaceInput): void => {
+    const db = resolveExecutor(executor)
+    db.delete(events).where(eq(events.workspaceId, workspaceId)).run()
+  }
+
   return {
     append,
     readAfter,
     getHighWaterCursor,
     parseRow,
+    deleteByWorkspace,
   }
 }
 

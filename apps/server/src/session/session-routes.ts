@@ -12,6 +12,7 @@ import { AgentSettingsRepository } from "../agent-settings/agent-settings-reposi
 import { agentDefinitions } from "../agent-settings/agent-registry"
 import { WorkspaceRepository } from "../workspace/workspace-repository"
 import { SessionRepository } from "./session-repository"
+import { SessionService } from "./session-service"
 import {
   buildAcpUnavailableProblem,
   buildAgentDisabledProblem,
@@ -64,6 +65,7 @@ const agentAdvertisesResumable = (acpSupervisor: AcpSupervisor): boolean =>
 export const registerSessionRoutes = (
   app: FastifyInstance,
   sessionRepository: SessionRepository,
+  sessionService: SessionService,
   workspaceRepository: WorkspaceRepository,
   agentSettingsRepository: AgentSettingsRepository,
   acpSupervisor: AcpSupervisor,
@@ -93,12 +95,10 @@ export const registerSessionRoutes = (
       return sendProblem(reply, 409, buildAgentDisabledProblem())
     }
 
-    const created = sessionRepository.create({
+    const created = sessionService.createStarting({
       workspaceId: body.workspaceId,
       agentId: body.agentId,
       name: body.name,
-      acpSessionId: "pending",
-      state: "starting",
     })
 
     if (!created.ok) {
@@ -107,7 +107,7 @@ export const registerSessionRoutes = (
 
     const supervisorReady = await ensureSupervisorReady(acpSupervisor, body.agentId)
     if (!supervisorReady) {
-      sessionRepository.markError({ id: created.value.id })
+      sessionService.markError({ id: created.value.id })
       return sendProblem(reply, 409, buildAcpUnavailableProblem())
     }
 
@@ -116,11 +116,11 @@ export const registerSessionRoutes = (
     })
 
     if (!acpResult.ok) {
-      sessionRepository.markError({ id: created.value.id })
+      sessionService.markError({ id: created.value.id })
       return sendProblem(reply, 409, buildAcpUnavailableProblem(acpResult.reason))
     }
 
-    const ready = sessionRepository.markReady({
+    const ready = sessionService.markReady({
       id: created.value.id,
       acpSessionId: acpResult.acpSessionId,
       resumable: agentAdvertisesResumable(acpSupervisor),
@@ -254,7 +254,7 @@ export const registerSessionRoutes = (
       })
     }
 
-    const archived = sessionRepository.archive({ id: sessionId })
+    const archived = sessionService.archive({ id: sessionId })
 
     if (!archived.ok) {
       return sendProblem(reply, 404, buildSessionNotFoundProblem())
@@ -307,7 +307,7 @@ export const registerSessionRoutes = (
       return sendProblem(reply, 409, buildSessionNotResumableProblem(loadResult.reason))
     }
 
-    const resumed = sessionRepository.markReady({
+    const resumed = sessionService.resume({
       id: sessionId,
       acpSessionId: loadResult.acpSessionId,
       resumable: true,
