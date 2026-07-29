@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { fireEvent, waitFor, within } from "@testing-library/react"
 import { AppRoutes } from "../shell/AppRouter"
-import { renderWithProviders } from "../query/renderWithProviders"
-import { fetchStatus } from "./fetchStatus"
+import { renderWithProviders } from "../query/render.with.providers"
+import { fetchStatus } from "./fetch.status"
 
 const validStatus = {
   version: "0.1.0",

@@ -7,9 +7,9 @@ import { TextInput } from "../design-system/TextInput"
 import {
   agentPathDetectErrorMessage,
   agentSettingsUpdateErrorMessage,
-} from "./agentSettingsMutationErrorMessage"
-import { detectAgentPath } from "./detectAgentPath"
-import { updateAgentSettings } from "./updateAgentSettings"
+} from "./agent.settings.mutation.error.message"
+import { detectAgentPath } from "./detect.agent.path"
+import { updateAgentSettings } from "./update.agent.settings"
 
 const textLinkClassName =
   "inline-flex min-h-9 items-center justify-center gap-3 rounded-[7px] bg-transparent px-0 text-sm font-semibold whitespace-nowrap text-body-soft transition-opacity duration-300 ease-out hover:text-lime cursor-pointer disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50"

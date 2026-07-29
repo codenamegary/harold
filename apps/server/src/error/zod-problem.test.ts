@@ -20,7 +20,7 @@ describe("zodIssueToCode", () => {
         message: "Required",
         input: undefined,
       },
-    ]).issues[0]!
+    ]).issues[0]
 
     expect(zodIssueToCode(issue)).toBe("validation.field.required")
   })
@@ -34,7 +34,7 @@ describe("zodIssueToCode", () => {
         message: "Expected string",
         input: 123,
       },
-    ]).issues[0]!
+    ]).issues[0]
 
     expect(zodIssueToCode(issue)).toBe("validation.field.invalid_type")
   })
@@ -48,7 +48,7 @@ describe("zodIssueToCode", () => {
         message: "Invalid ISO datetime",
         input: "not-a-date",
       },
-    ]).issues[0]!
+    ]).issues[0]
 
     expect(zodIssueToCode(issue)).toBe("validation.field.invalid_string")
   })

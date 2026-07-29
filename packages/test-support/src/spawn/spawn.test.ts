@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { spawnFakeAcp } from "./spawnFakeAcp"
-import { createJsonRpcClient } from "./jsonRpcClient"
+import { spawnFakeAcp } from "./spawn.fake.acp"
+import { createJsonRpcClient } from "./json.rpc.client"
 
 const spawnedProcesses: Array<{ kill: () => void }> = []
 

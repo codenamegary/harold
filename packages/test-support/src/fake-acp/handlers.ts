@@ -229,6 +229,7 @@ const handleSessionPrompt = (
   config: FakeAcpConfig,
   promptState: FakeAcpPromptState,
 ): HandlerResult => {
+  const mutablePromptState = promptState
   const sessionId = readSessionId(request.params)
   if (sessionId === undefined) {
     return {
@@ -237,8 +238,8 @@ const handleSessionPrompt = (
     }
   }
 
-  promptState.cancelled = false
-  promptState.activeSessionId = sessionId
+  mutablePromptState.cancelled = false
+  mutablePromptState.activeSessionId = sessionId
 
   if (!config.emitSessionUpdatesOnPrompt) {
     return {
@@ -263,6 +264,7 @@ const handleSessionCancel = (
   request: JsonRpcRequest,
   promptState: FakeAcpPromptState,
 ): HandlerResult => {
+  const mutablePromptState = promptState
   const sessionId = readSessionId(request.params)
   if (sessionId === undefined) {
     return {
@@ -272,8 +274,8 @@ const handleSessionCancel = (
   }
 
   if (promptState.activeSessionId === sessionId) {
-    promptState.cancelled = true
-    promptState.activeSessionId = null
+    mutablePromptState.cancelled = true
+    mutablePromptState.activeSessionId = null
   }
 
   return {

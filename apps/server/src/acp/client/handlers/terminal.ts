@@ -96,20 +96,21 @@ const readStreamToString = async (stream: ReadableStream<Uint8Array>): Promise<s
 }
 
 const appendOutput = (state: TerminalState, chunk: string) => {
+  const mutableState = state
   const combined = `${state.output}${chunk}`
   if (state.outputByteLimit === undefined) {
-    state.output = combined
+    mutableState.output = combined
     return
   }
 
   const encoded = new TextEncoder().encode(combined)
   if (encoded.byteLength <= state.outputByteLimit) {
-    state.output = combined
+    mutableState.output = combined
     return
   }
 
   const truncated = encoded.slice(encoded.byteLength - state.outputByteLimit)
-  state.output = new TextDecoder().decode(truncated)
+  mutableState.output = new TextDecoder().decode(truncated)
 }
 
 const buildShellCommand = (command: string, args?: string[]): string =>
@@ -179,8 +180,9 @@ export const createAcpTerminalHandlers = ({
   }
 
   const attachExitWatcher = (state: TerminalState) => {
+    const mutableState = state
     void state.process.exited.then((exitCode) => {
-      state.exitStatus = { exitCode, signal: null }
+      mutableState.exitStatus = { exitCode, signal: null }
     })
   }
 

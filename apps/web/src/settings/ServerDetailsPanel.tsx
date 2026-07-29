@@ -1,8 +1,8 @@
 import React from "react"
-import { useConnection } from "../connection/useConnection"
+import { useConnection } from "../connection/use.connection"
 import { Button } from "../design-system/Button"
 import { Panel } from "../design-system/Panel"
-import { serverDetailsDisplayByPhase } from "./serverDetailsDisplay"
+import { serverDetailsDisplayByPhase } from "./server.details.display"
 
 type DetailRowProps = {
   label: string

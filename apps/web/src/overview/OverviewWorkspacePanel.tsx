@@ -2,7 +2,7 @@ import React from "react"
 import { Link } from "react-router"
 import { Panel } from "../design-system/Panel"
 import { OverviewWorkspaceRow } from "./OverviewWorkspaceRow"
-import { useOverviewWorkspacesQuery } from "../workspace/useOverviewWorkspacesQuery"
+import { useOverviewWorkspacesQuery } from "../workspace/use.overview.workspaces.query"
 
 const textLinkClassName =
   "inline-flex min-h-9 items-center justify-center gap-3 rounded-[7px] bg-transparent px-3.5 text-base font-semibold whitespace-nowrap text-body-soft hover:text-lime"

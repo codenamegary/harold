@@ -153,13 +153,7 @@ export const createJsonRpcTransport = ({
 
     const message: unknown = JSON.parse(line)
     if (typeof message === "object" && message !== null) {
-      dispatchMessage(message as {
-        id?: string | number
-        method?: string
-        params?: unknown
-        result?: unknown
-        error?: { message: string }
-      })
+      dispatchMessage(message)
     }
 
     await pump()

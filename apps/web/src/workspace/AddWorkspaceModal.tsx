@@ -3,9 +3,9 @@ import { Button } from "../design-system/Button"
 import { FieldLabel } from "../design-system/FieldLabel"
 import { Modal } from "../design-system/Modal"
 import { TextInput } from "../design-system/TextInput"
-import { isWorkspaceCreateError } from "./createWorkspace"
-import { useCreateWorkspaceMutation } from "./useCreateWorkspaceMutation"
-import { workspaceMutationErrorMessage } from "./workspaceMutationErrorMessage"
+import { isWorkspaceCreateError } from "./create.workspace"
+import { useCreateWorkspaceMutation } from "./use.create.workspace.mutation"
+import { workspaceMutationErrorMessage } from "./workspace.mutation.error.message"
 
 type AddWorkspaceModalProps = {
   open: boolean

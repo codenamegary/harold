@@ -10,7 +10,7 @@
       "drizzle-orm": "^0.45.2",
       "typescript": "~6.0.2",
       "fastify": "^5.2.1",
-      "oxlint": "^1.71.0"
+      "oxlint": "^1.76.0"
     }
   },
   "scripts": {
@@ -24,6 +24,7 @@
     "db:generate": "bun run --filter server db:generate"
   },
   "devDependencies": {
-    "oxlint": "catalog:"
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "^7.0.2001"
   }
 }

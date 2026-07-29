@@ -174,8 +174,8 @@ describe("lifecycle events integration", () => {
 
     const workspaceEvents = records.value.filter((record) => record.kind === "workspace.changed")
     expect(workspaceEvents).toHaveLength(1)
-    expect(workspaceEvents[0]!.workspaceId).toBe(workspaceId)
-    expect(workspaceEvents[0]!.payload).toEqual({
+    expect(workspaceEvents[0].workspaceId).toBe(workspaceId)
+    expect(workspaceEvents[0].payload).toEqual({
       change: "created",
       state: "available",
     })
@@ -208,7 +208,7 @@ describe("lifecycle events integration", () => {
     const sessionStates = records.value.filter((record) => record.kind === "session.state")
 
     expect(sessionCreated).toHaveLength(1)
-    expect(sessionCreated[0]!.payload).toEqual({ name: "Lifecycle test" })
+    expect(sessionCreated[0].payload).toEqual({ name: "Lifecycle test" })
 
     expect(sessionStates.map((record) => (record.payload as { state: string }).state)).toEqual([
       "starting",
@@ -287,7 +287,7 @@ describe("lifecycle events integration", () => {
         (record.payload as { change: string }).change === "updated",
     )
     expect(updated).toHaveLength(1)
-    expect((updated[0]!.payload as { state: string }).state).toBe("available")
+    expect((updated[0].payload as { state: string }).state).toBe("available")
   })
 
   test("session error appends session.state error", async () => {
@@ -509,9 +509,9 @@ describe("lifecycle events integration", () => {
     }
 
     expect(afterDelete.value).toHaveLength(1)
-    expect(afterDelete.value[0]!.kind).toBe("workspace.changed")
-    expect(afterDelete.value[0]!.workspaceId).toBe(workspaceId)
-    expect(afterDelete.value[0]!.payload).toEqual({ change: "deleted" })
+    expect(afterDelete.value[0].kind).toBe("workspace.changed")
+    expect(afterDelete.value[0].workspaceId).toBe(workspaceId)
+    expect(afterDelete.value[0].payload).toEqual({ change: "deleted" })
   })
 
   test("commit publisher receives projected events after workspace create", async () => {

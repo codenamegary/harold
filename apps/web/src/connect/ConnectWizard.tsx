@@ -4,14 +4,14 @@ import { FieldLabel } from "../design-system/FieldLabel"
 import { StatusDot } from "../design-system/StatusDot"
 import { StatusPill } from "../design-system/StatusPill"
 import { TextInput } from "../design-system/TextInput"
-import { connectWizardSteps } from "./connectWizardSteps"
+import { connectWizardSteps } from "./connect.wizard.steps"
 import {
   defaultExternalHost,
   localAgentPort,
   proxyProviders,
   proxyTemplates,
   ProxyProvider,
-} from "./proxyTemplates"
+} from "./proxy.templates"
 
 type AccessMode = "local" | "cloud"
 

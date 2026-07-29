@@ -167,8 +167,8 @@ export const createSessionRepository = (database: AgentDatabase) => {
       return { nextCursor: undefined, previousCursor: undefined }
     }
 
-    const first = rows[0]!
-    const last = rows[rows.length - 1]!
+    const first = rows[0]
+    const last = rows[rows.length - 1]
 
     return {
       nextCursor: hasMoreAfter(workspaceId, last)

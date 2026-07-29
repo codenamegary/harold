@@ -1,8 +1,8 @@
 import React from "react"
 import { Link } from "react-router"
-import { useConnection } from "../connection/useConnection"
+import { useConnection } from "../connection/use.connection"
 import { SectionKicker } from "../design-system/SectionKicker"
-import { heroCopyByPhase } from "./overviewCopy"
+import { heroCopyByPhase } from "./overview.copy"
 
 const secondaryLinkClassName =
   "inline-flex min-h-9 items-center justify-center gap-3 rounded-[7px] border border-line-strong bg-panel-2 px-3.5 text-base font-semibold whitespace-nowrap text-body hover:border-line-hover-strong hover:bg-hover-surface-strong hover:text-white"

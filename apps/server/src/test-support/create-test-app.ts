@@ -44,10 +44,12 @@ export const createFakeSpawnFn = (
   resources: TestAppResources,
   fakeOptions: SpawnFakeAcpOptions = {},
 ) => {
+  const mutableResources = resources
+
   const spawnAgentProcessFn = (): SpawnedAgentProcess => {
     const fake = spawnFakeAcp(fakeOptions)
-    resources.fakeProcesses.push(fake)
-    resources.lastFake = fake
+    mutableResources.fakeProcesses.push(fake)
+    mutableResources.lastFake = fake
     return {
       stdin: fake.stdin,
       stdout: fake.stdout,
@@ -80,6 +82,7 @@ export const createTestApp = async (
     sessionLoadSessionId: "fake-session-new",
   },
 ): Promise<TestApp> => {
+  const mutableResources = resources
   const config = parseConfig({
     AGENT_SERVER_HOST: "127.0.0.1",
     AGENT_SERVER_PORT: "0",
@@ -96,15 +99,18 @@ export const createTestApp = async (
     validateExecutablePathFn,
     spawnAgentProcessFn,
   })
-  resources.apps.push(app)
+  mutableResources.apps.push(app)
   return { app, database, config, acpSupervisor, resources }
 }
 
 export const cleanupTestAppResources = async (resources: TestAppResources) => {
-  resources.fakeProcesses.splice(0).forEach((process) => process.kill())
-  await Promise.all(resources.apps.splice(0).map((app) => app.close()))
-  await Promise.all(resources.tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
-  resources.lastFake = null
+  const mutableResources = resources
+  mutableResources.fakeProcesses.splice(0).forEach((process) => process.kill())
+  await Promise.all(mutableResources.apps.splice(0).map((app) => app.close()))
+  await Promise.all(
+    mutableResources.tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
+  )
+  mutableResources.lastFake = null
 }
 
 export const seedWorkspace = async (
