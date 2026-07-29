@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { eventCursorToString, parseEventCursor } from "./cursor"
+import { eventCursorToString, isUnsafeEventCursor, MAX_SAFE_EVENT_CURSOR, parseEventCursor } from "./cursor"
 
 describe("event cursor", () => {
   test("serializes bigint cursors to decimal strings", () => {
@@ -13,5 +13,10 @@ describe("event cursor", () => {
     expect(parseEventCursor("42")).toBe(42n)
     expect(parseEventCursor("9007199254740991")).toBe(9007199254740991n)
     expect(parseEventCursor("evt_01")).toBeUndefined()
+  })
+
+  test("flags cursors above MAX_SAFE_INTEGER as unsafe", () => {
+    expect(isUnsafeEventCursor(MAX_SAFE_EVENT_CURSOR)).toBe(false)
+    expect(isUnsafeEventCursor(MAX_SAFE_EVENT_CURSOR + 1n)).toBe(true)
   })
 })

@@ -1,4 +1,5 @@
 import Fastify, { FastifyInstance } from "fastify"
+import websocket from "@fastify/websocket"
 import { z } from "zod"
 import { registerErrorHandler } from "../error/error-handler"
 import { Config } from "../config/config"
@@ -22,6 +23,7 @@ import { createAcpSupervisor } from "../acp/supervisor/acp-supervisor"
 import { createAcpJournalWriter } from "../acp/journal/acp.journal.writer"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { SpawnAgentProcessFn } from "../acp/supervisor/spawn-agent-process"
+import { registerEventStreamRoutes } from "../event/stream.routes"
 
 const TestBodySchema = z.object({
   name: z.string().min(1),
@@ -74,6 +76,13 @@ export const createServer = async ({
   })
 
   registerErrorHandler(app)
+
+  await app.register(websocket, {
+    options: {
+      perMessageDeflate: false,
+    },
+  })
+
   const agentSettingsRepository = createAgentSettingsRepository(database, {
     whichFn,
     validateExecutablePathFn,
@@ -85,6 +94,15 @@ export const createServer = async ({
     eventJournal,
     commitPublisher,
   })
+  const workspaceRepository = createWorkspaceRepository(database)
+  const sessionRepository = createSessionRepository(database)
+
+  registerEventStreamRoutes(app, {
+    eventJournal,
+    workspaceRepository,
+    sessionRepository,
+  })
+
   const acpSupervisor =
     providedAcpSupervisor ??
     createAcpSupervisor({
@@ -95,8 +113,6 @@ export const createServer = async ({
     })
 
   registerStatusRoutes(app, runtime, config, acpSupervisor)
-  const workspaceRepository = createWorkspaceRepository(database)
-  const sessionRepository = createSessionRepository(database)
   const workspaceService = createWorkspaceService({
     database,
     workspaceRepository,
