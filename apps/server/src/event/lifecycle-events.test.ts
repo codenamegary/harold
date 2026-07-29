@@ -9,7 +9,7 @@ import {
   seedWorkspace,
 } from "../test-support/create-test-app"
 import { createEventJournalRepository } from "./event-journal-repository"
-import { projectLifecycleEvent } from "./project-lifecycle-event"
+import { parseLifecycleJournalRecord, projectLifecycleEvent } from "./project-lifecycle-event"
 import { ParsedJournalRecord } from "./event-journal-repository"
 
 describe("projectLifecycleEvent", () => {
@@ -36,7 +36,7 @@ describe("projectLifecycleEvent", () => {
       payload: { change: "created", state: "available" },
     }
 
-    const event = projectLifecycleEvent(record)
+    const event = projectLifecycleEvent(parseLifecycleJournalRecord(record))
     expect(event).toEqual(
       EventSchema.parse({
         type: "workspace.changed",
@@ -58,7 +58,7 @@ describe("projectLifecycleEvent", () => {
       payload: { change: "deleted" },
     }
 
-    const event = projectLifecycleEvent(record)
+    const event = projectLifecycleEvent(parseLifecycleJournalRecord(record))
     expect(event).toEqual(
       EventSchema.parse({
         type: "workspace.changed",
@@ -78,7 +78,7 @@ describe("projectLifecycleEvent", () => {
       payload: { name: "Debug auth" },
     }
 
-    const event = projectLifecycleEvent(record)
+    const event = projectLifecycleEvent(parseLifecycleJournalRecord(record))
     expect(event).toEqual(
       EventSchema.parse({
         type: "session.created",
@@ -103,7 +103,7 @@ describe("projectLifecycleEvent", () => {
       payload: { state: "idle" },
     }
 
-    const event = projectLifecycleEvent(record)
+    const event = projectLifecycleEvent(parseLifecycleJournalRecord(record))
     expect(event).toEqual(
       EventSchema.parse({
         type: "session.state",
@@ -127,7 +127,7 @@ describe("projectLifecycleEvent", () => {
       payload: { state: "online" },
     }
 
-    const event = projectLifecycleEvent(record)
+    const event = projectLifecycleEvent(parseLifecycleJournalRecord(record))
     expect(event).toEqual(
       EventSchema.parse({
         type: "server.status",
@@ -136,6 +136,18 @@ describe("projectLifecycleEvent", () => {
         payload: { state: "online" },
       }),
     )
+  })
+
+  test("parseLifecycleJournalRecord rejects non-lifecycle kinds", () => {
+    const record: ParsedJournalRecord = {
+      ...baseRecord,
+      cursor: 2n,
+      kind: "turn.started",
+      turnId: "turn_test",
+      payload: {},
+    }
+
+    expect(() => parseLifecycleJournalRecord(record)).toThrow()
   })
 })
 

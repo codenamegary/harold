@@ -18,12 +18,18 @@ type TransactionalJournalContext = {
 }
 
 type TransactionWorkResult<T, E> =
-  | { ok: true; value: T }
+  | {
+      ok: true
+      value: T
+      appendedRecords: ReadonlyArray<ParsedJournalRecord>
+    }
   | { ok: false; error: E | TransactionalJournalError }
 
 type TransactionWork<T, E> = (params: {
   executor: DbExecutor
-  append: (records: JournalAppendRecord[]) => TransactionalJournalResult<void>
+  append: (
+    records: JournalAppendRecord[],
+  ) => TransactionalJournalResult<ReadonlyArray<ParsedJournalRecord>>
 }) => TransactionWorkResult<T, E>
 
 type TransactionAbort = {
@@ -41,22 +47,26 @@ const isTransactionAbort = (error: unknown): error is TransactionAbort =>
   error !== null &&
   (error as TransactionAbort).tag === "transaction_abort"
 
+type TransactionOutcome<T> = {
+  value: T
+  appendedRecords: ReadonlyArray<ParsedJournalRecord>
+}
+
 export const runTransactionalJournal = <T, E = TransactionalJournalError>(
   context: TransactionalJournalContext,
   work: TransactionWork<T, E>,
 ): TransactionalJournalResult<T, E> => {
-  const committedRecords: ParsedJournalRecord[] = []
-
   try {
-    const value = context.database.db.transaction((executor) => {
-      const append = (records: JournalAppendRecord[]): TransactionalJournalResult<void> => {
+    const outcome = context.database.db.transaction((executor): TransactionOutcome<T> => {
+      const append = (
+        records: JournalAppendRecord[],
+      ): TransactionalJournalResult<ReadonlyArray<ParsedJournalRecord>> => {
         const result = context.eventJournal.append({ records, executor })
         if (!result.ok) {
           return { ok: false, error: { kind: "journal_append_failed" } }
         }
 
-        committedRecords.push(...result.value)
-        return { ok: true, value: undefined }
+        return { ok: true, value: result.value }
       }
 
       const result = work({ executor, append })
@@ -64,13 +74,16 @@ export const runTransactionalJournal = <T, E = TransactionalJournalError>(
         throw transactionAbort(result.error)
       }
 
-      return result.value
+      return {
+        value: result.value,
+        appendedRecords: result.appendedRecords,
+      }
     })
 
-    const events: Event[] = projectLifecycleEvents(committedRecords)
+    const events: Event[] = projectLifecycleEvents(outcome.appendedRecords)
     context.commitPublisher.publish(events)
 
-    return { ok: true, value }
+    return { ok: true, value: outcome.value }
   } catch (error: unknown) {
     if (isTransactionAbort(error)) {
       return { ok: false, error: error.error as E | TransactionalJournalError }

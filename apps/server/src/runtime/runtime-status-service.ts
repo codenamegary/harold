@@ -39,7 +39,7 @@ export const createRuntimeStatusService = (context: RuntimeStatusServiceContext)
           return appendResult
         }
 
-        return { ok: true, value: undefined }
+        return { ok: true, value: undefined, appendedRecords: appendResult.value }
       },
     )
 

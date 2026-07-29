@@ -82,7 +82,7 @@ export const createSessionService = (context: SessionServiceContext) => {
         return appendResult
       }
 
-      return { ok: true, value: created.value }
+      return { ok: true, value: created.value, appendedRecords: appendResult.value }
     })
   }
 
@@ -115,7 +115,7 @@ export const createSessionService = (context: SessionServiceContext) => {
         return appendResult
       }
 
-      return { ok: true, value: ready.value }
+      return { ok: true, value: ready.value, appendedRecords: appendResult.value }
     })
   }
 
@@ -148,7 +148,7 @@ export const createSessionService = (context: SessionServiceContext) => {
         return appendResult
       }
 
-      return { ok: true, value: errored.value }
+      return { ok: true, value: errored.value, appendedRecords: appendResult.value }
     })
   }
 
@@ -181,7 +181,7 @@ export const createSessionService = (context: SessionServiceContext) => {
         return appendResult
       }
 
-      return { ok: true, value: archived.value }
+      return { ok: true, value: archived.value, appendedRecords: appendResult.value }
     })
   }
 

@@ -59,7 +59,7 @@ export const createWorkspaceService = (context: WorkspaceServiceContext) => {
         return appendResult
       }
 
-      return { ok: true, value: created.value }
+      return { ok: true, value: created.value, appendedRecords: appendResult.value }
     })
   }
 
@@ -91,7 +91,7 @@ export const createWorkspaceService = (context: WorkspaceServiceContext) => {
         return appendResult
       }
 
-      return { ok: true, value: updated.value }
+      return { ok: true, value: updated.value, appendedRecords: appendResult.value }
     })
   }
 
@@ -127,7 +127,7 @@ export const createWorkspaceService = (context: WorkspaceServiceContext) => {
         return appendResult
       }
 
-      return { ok: true, value: undefined }
+      return { ok: true, value: undefined, appendedRecords: appendResult.value }
     })
   }
 
