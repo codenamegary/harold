@@ -219,7 +219,7 @@ describe("fake ACP protocol", () => {
         params: {
           sessionId: "session-test-1",
           options: [{ optionId: "allow-once", name: "Allow once" }],
-          toolCall: { name: "fake-tool" },
+          toolCall: { toolCallId: "tool-call-permission", name: "fake-tool" },
         },
       },
     ])

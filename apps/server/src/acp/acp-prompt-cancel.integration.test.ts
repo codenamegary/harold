@@ -93,7 +93,11 @@ describe("ACP prompt, update, and cancel integration", () => {
     })
     await acpSupervisor.start("cursor")
 
-    const created = await acpSupervisor.createAcpSession({ workspaceCwd: "/tmp/ws" })
+    const created = await acpSupervisor.createAcpSession({
+      workspaceCwd: "/tmp/ws",
+      sessionId: "sess_test",
+      workspaceId: "ws_test",
+    })
     expect(created.ok).toBe(true)
     if (!created.ok) {
       throw new Error("expected session creation to succeed")
@@ -117,7 +121,7 @@ describe("ACP prompt, update, and cancel integration", () => {
     expect(sessionUpdates).toHaveLength(1)
     expect(sessionUpdates[0]).toEqual({
       acpSessionId: created.acpSessionId,
-      update: { kind: "agent_message_chunk", content: "Hello" },
+      update: { updateKind: "agent_message_chunk", text: "Hello" },
     })
 
     await app.close()

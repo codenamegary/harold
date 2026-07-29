@@ -1,4 +1,6 @@
 import { AgentId } from "contracts/http/agent-settings"
+import { FailureCode } from "contracts/events/primitives"
+import { JOURNAL_SCHEMA_VERSION, JournalAppendRecord } from "contracts/events/journal-record"
 import { resolveAgentProfile } from "../agent-profile"
 import { sanitizeAcpErrorMessage } from "../sanitize-acp-error"
 import {
@@ -17,10 +19,13 @@ import {
   createAcpStartError,
   LiveWorkspaceSession,
 } from "./acp-supervisor-types"
-import { createJsonRpcTransport, JsonRpcTransport } from "../transport/json-rpc-transport"
+import { AcpOperationContext, createJsonRpcTransport, JsonRpcTransport } from "../transport/json-rpc-transport"
 import { registerAcpClientHandlers } from "../client/register-handlers"
 import { createSessionBindingRegistry } from "../client/session-binding-registry"
 import { spawnAgentProcess, SpawnedAgentProcess } from "./spawn-agent-process"
+import { createAcpJsonRpcJournalObserver } from "../journal/json.rpc.observer"
+import { mapSanitizedErrorToFailureCode } from "../journal/sanitize.acp.update"
+import { createTurnId } from "../../session/create.turn.id"
 
 type SupervisorRuntime = {
   state: AcpSupervisorState
@@ -30,6 +35,8 @@ type SupervisorRuntime = {
   transport: JsonRpcTransport | null
   exitMonitor: Promise<void> | null
 }
+
+const nowIso = (): string => new Date().toISOString()
 
 const sanitizeFailureReason = (error: unknown, fallback: string): string => {
   const message = error instanceof Error ? error.message : fallback
@@ -50,6 +57,11 @@ const parseAgentCapabilities = (result: unknown): AgentCapabilities => {
       close: value.agentCapabilities?.sessionCapabilities?.close ?? false,
     },
   }
+}
+
+const parsePromptStopReason = (result: unknown): string | undefined => {
+  const value = result as { stopReason?: string }
+  return value.stopReason
 }
 
 const resolveStartConfig = (
@@ -92,9 +104,22 @@ const monitorProcessExit = async (
   }
 }
 
+const wireTransportObserver = (
+  transport: JsonRpcTransport,
+  journalWriter: NonNullable<CreateAcpSupervisorParams["journalWriter"]>,
+  sessionBindingRegistry: ReturnType<typeof createSessionBindingRegistry>,
+) => {
+  const observer = createAcpJsonRpcJournalObserver({
+    journalWriter,
+    sessionBindingRegistry,
+  })
+  transport.onObserverEvent(observer)
+}
+
 export const createAcpSupervisor = ({
   agentSettingsRepository,
   serverVersion,
+  journalWriter,
   onSessionUpdate = () => undefined,
   spawnAgentProcessFn = spawnAgentProcess,
   createTransportFn = (process) =>
@@ -164,6 +189,10 @@ export const createAcpSupervisor = ({
       runtime.transport = transport
       runtime.runningAgentId = agentId
 
+      if (journalWriter !== undefined) {
+        wireTransportObserver(transport, journalWriter, sessionBindingRegistry)
+      }
+
       registerAcpClientHandlers({
         transport,
         profile: resolved.profile,
@@ -211,23 +240,40 @@ export const createAcpSupervisor = ({
 
   const createAcpSession = async ({
     workspaceCwd,
+    sessionId,
+    workspaceId,
   }: {
     workspaceCwd: string
+    sessionId: string
+    workspaceId: string
   }): Promise<AcpSessionOperationResult> => {
     const transport = runtime.transport
     if (runtime.state !== "ready" || transport === null) {
       return { ok: false, reason: "ACP supervisor is not ready" }
     }
 
+    const operationContext: AcpOperationContext = {
+      sessionId,
+      workspaceId,
+      phase: "live",
+    }
+
     try {
-      const result = await transport.request<{ sessionId: string }>("session/new", {
-        cwd: workspaceCwd,
-        mcpServers: [],
-      })
+      const result = await transport.request<{ sessionId: string }>(
+        "session/new",
+        {
+          cwd: workspaceCwd,
+          mcpServers: [],
+        },
+        operationContext,
+      )
 
       sessionBindingRegistry.bind({
         acpSessionId: result.sessionId,
+        sessionId,
+        workspaceId,
         workspaceRoot: workspaceCwd,
+        phase: "live",
       })
 
       return { ok: true, acpSessionId: result.sessionId }
@@ -239,9 +285,13 @@ export const createAcpSupervisor = ({
   const loadAcpSession = async ({
     acpSessionId,
     workspaceCwd,
+    sessionId,
+    workspaceId,
   }: {
     acpSessionId: string
     workspaceCwd: string
+    sessionId: string
+    workspaceId: string
   }): Promise<AcpSessionOperationResult> => {
     const transport = runtime.transport
     const capabilities = runtime.agentCapabilities
@@ -254,21 +304,44 @@ export const createAcpSupervisor = ({
       return { ok: false, reason: "Agent does not support session/load" }
     }
 
-    try {
-      const result = await transport.request<{ sessionId: string }>("session/load", {
-        sessionId: acpSessionId,
-        cwd: workspaceCwd,
-        mcpServers: [],
-      })
+    sessionBindingRegistry.unbind({ acpSessionId })
+    sessionBindingRegistry.bind({
+      acpSessionId,
+      sessionId,
+      workspaceId,
+      workspaceRoot: workspaceCwd,
+      phase: "load_replay",
+    })
 
-      sessionBindingRegistry.unbind({ acpSessionId })
+    const operationContext: AcpOperationContext = {
+      sessionId,
+      workspaceId,
+      phase: "load_replay",
+    }
+
+    try {
+      const result = await transport.request<{ sessionId: string }>(
+        "session/load",
+        {
+          sessionId: acpSessionId,
+          cwd: workspaceCwd,
+          mcpServers: [],
+        },
+        operationContext,
+      )
+
+      sessionBindingRegistry.unbind({ acpSessionId: result.sessionId })
       sessionBindingRegistry.bind({
         acpSessionId: result.sessionId,
+        sessionId,
+        workspaceId,
         workspaceRoot: workspaceCwd,
+        phase: "live",
       })
 
       return { ok: true, acpSessionId: result.sessionId }
     } catch (error: unknown) {
+      sessionBindingRegistry.setPhase({ acpSessionId, phase: "live" })
       return { ok: false, reason: sanitizeFailureReason(error, "session/load failed") }
     }
   }
@@ -280,6 +353,7 @@ export const createAcpSupervisor = ({
   }): Promise<AcpSessionCloseResult> => {
     const transport = runtime.transport
     const capabilities = runtime.agentCapabilities
+    const binding = sessionBindingRegistry.getBinding(acpSessionId)
 
     if (runtime.state !== "ready" || transport === null) {
       return { ok: false, reason: "ACP supervisor is not ready" }
@@ -289,8 +363,17 @@ export const createAcpSupervisor = ({
       return { ok: false, reason: "Agent does not support session/close" }
     }
 
+    const operationContext: AcpOperationContext | undefined =
+      binding === undefined
+        ? undefined
+        : {
+            sessionId: binding.sessionId,
+            workspaceId: binding.workspaceId,
+            phase: binding.phase,
+          }
+
     try {
-      await transport.request("session/close", { sessionId: acpSessionId })
+      await transport.request("session/close", { sessionId: acpSessionId }, operationContext)
       sessionBindingRegistry.unbind({ acpSessionId })
       return { ok: true }
     } catch (error: unknown) {
@@ -300,12 +383,63 @@ export const createAcpSupervisor = ({
 
   const requireBoundSession = (
     acpSessionId: string,
-  ): { ok: true } | { ok: false; reason: string } => {
-    if (sessionBindingRegistry.getWorkspaceRoot(acpSessionId) === undefined) {
+  ): { ok: true; binding: NonNullable<ReturnType<typeof sessionBindingRegistry.getBinding>> } | { ok: false; reason: string } => {
+    const binding = sessionBindingRegistry.getBinding(acpSessionId)
+    if (binding === undefined) {
       return { ok: false as const, reason: "Session is not bound" }
     }
 
-    return { ok: true as const }
+    return { ok: true as const, binding }
+  }
+
+  const terminalTurnIds = new Set<string>()
+
+  const appendTurnLifecycle = (params: {
+    binding: NonNullable<ReturnType<typeof sessionBindingRegistry.getBinding>>
+    turnId: string
+    kind: "turn.started" | "turn.completed" | "turn.failed" | "turn.cancelled"
+    failureCode?: FailureCode
+  }) => {
+    if (terminalTurnIds.has(params.turnId)) {
+      return { ok: true as const }
+    }
+
+    if (journalWriter === undefined) {
+      return { ok: true as const }
+    }
+
+    const occurredAt = nowIso()
+    const baseRecord = {
+      schemaVersion: JOURNAL_SCHEMA_VERSION,
+      occurredAt,
+      workspaceId: params.binding.workspaceId,
+      sessionId: params.binding.sessionId,
+      turnId: params.turnId,
+    }
+
+    const records: JournalAppendRecord[] =
+      params.kind === "turn.failed"
+        ? [
+            {
+              ...baseRecord,
+              kind: "turn.failed",
+              payload: {
+                failureCode: params.failureCode ?? "agent_error",
+              },
+            },
+          ]
+        : params.kind === "turn.started"
+          ? [{ ...baseRecord, kind: "turn.started", payload: {} }]
+          : params.kind === "turn.completed"
+            ? [{ ...baseRecord, kind: "turn.completed", payload: {} }]
+            : [{ ...baseRecord, kind: "turn.cancelled", payload: {} }]
+
+    const result = journalWriter.appendAndPublish(records)
+    if (result.ok && params.kind !== "turn.started") {
+      terminalTurnIds.add(params.turnId)
+    }
+
+    return result
   }
 
   const promptAcpSession = async ({
@@ -325,14 +459,93 @@ export const createAcpSupervisor = ({
       return bound
     }
 
-    try {
-      const result = await transport.request("session/prompt", {
-        sessionId: acpSessionId,
-        prompt,
+    const turnId = createTurnId()
+    const promptRequestId = transport.allocateRequestId()
+    const operationContext: AcpOperationContext = {
+      sessionId: bound.binding.sessionId,
+      workspaceId: bound.binding.workspaceId,
+      turnId,
+      phase: bound.binding.phase,
+    }
+
+    if (journalWriter !== undefined) {
+      const transactional = journalWriter.runTransactional((params) => {
+        const appendResult = params.append([
+          {
+            schemaVersion: JOURNAL_SCHEMA_VERSION,
+            kind: "turn.started",
+            occurredAt: nowIso(),
+            workspaceId: bound.binding.workspaceId,
+            sessionId: bound.binding.sessionId,
+            turnId,
+            payload: {},
+          },
+          {
+            schemaVersion: JOURNAL_SCHEMA_VERSION,
+            kind: "acp.request",
+            occurredAt: nowIso(),
+            workspaceId: bound.binding.workspaceId,
+            sessionId: bound.binding.sessionId,
+            turnId,
+            protocolVersion: 1,
+            direction: "agent_server_to_agent",
+            method: "session/prompt",
+            phase: bound.binding.phase,
+            payload: { jsonRpcId: promptRequestId },
+          },
+        ])
+
+        if (!appendResult.ok) {
+          return appendResult
+        }
+
+        return { ok: true, value: undefined, appendedRecords: appendResult.value }
       })
+
+      if (!transactional.ok) {
+        return { ok: false, reason: "Failed to journal turn start" }
+      }
+    }
+
+    sessionBindingRegistry.setActiveTurnId({ acpSessionId, turnId })
+
+    try {
+      const result = await transport.request(
+        "session/prompt",
+        {
+          sessionId: acpSessionId,
+          prompt,
+        },
+        operationContext,
+        { requestId: promptRequestId },
+      )
+
+      const stopReason = parsePromptStopReason(result)
+      if (stopReason === "cancelled") {
+        appendTurnLifecycle({ binding: bound.binding, turnId, kind: "turn.cancelled" })
+      } else if (stopReason === "end_turn") {
+        appendTurnLifecycle({ binding: bound.binding, turnId, kind: "turn.completed" })
+      } else {
+        appendTurnLifecycle({
+          binding: bound.binding,
+          turnId,
+          kind: "turn.failed",
+          failureCode: "prompt_failed",
+        })
+      }
+
+      sessionBindingRegistry.setActiveTurnId({ acpSessionId, turnId: undefined })
       return { ok: true, result }
     } catch (error: unknown) {
-      return { ok: false, reason: sanitizeFailureReason(error, "session/prompt failed") }
+      const reason = sanitizeFailureReason(error, "session/prompt failed")
+      appendTurnLifecycle({
+        binding: bound.binding,
+        turnId,
+        kind: "turn.failed",
+        failureCode: mapSanitizedErrorToFailureCode(reason),
+      })
+      sessionBindingRegistry.setActiveTurnId({ acpSessionId, turnId: undefined })
+      return { ok: false, reason }
     }
   }
 
@@ -351,8 +564,22 @@ export const createAcpSupervisor = ({
       return bound
     }
 
+    const turnId = bound.binding.activeTurnId
+    const operationContext: AcpOperationContext = {
+      sessionId: bound.binding.sessionId,
+      workspaceId: bound.binding.workspaceId,
+      turnId,
+      phase: bound.binding.phase,
+    }
+
     try {
-      await transport.request("session/cancel", { sessionId: acpSessionId })
+      await transport.request("session/cancel", { sessionId: acpSessionId }, operationContext)
+
+      if (turnId !== undefined) {
+        appendTurnLifecycle({ binding: bound.binding, turnId, kind: "turn.cancelled" })
+        sessionBindingRegistry.setActiveTurnId({ acpSessionId, turnId: undefined })
+      }
+
       return { ok: true }
     } catch (error: unknown) {
       return { ok: false, reason: sanitizeFailureReason(error, "session/cancel failed") }

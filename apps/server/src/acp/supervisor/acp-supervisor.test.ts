@@ -7,8 +7,13 @@ import { SpawnedAgentProcess } from "./spawn-agent-process"
 const createMockTransport = () => {
   const handlers = new Map<string, (params: unknown) => unknown>()
   const notifications = new Map<string, Array<(params: unknown) => void>>()
+  const requestIds = [0]
 
   const transport: JsonRpcTransport = {
+    allocateRequestId: () => {
+      requestIds[0] += 1
+      return requestIds[0]
+    },
     request: async <T>(method: string, params?: unknown): Promise<T> => {
       const handler = handlers.get(method)
       if (!handler) {
@@ -22,6 +27,7 @@ const createMockTransport = () => {
     },
     onRequest: () => undefined,
     onUnhandledRequest: () => undefined,
+    onObserverEvent: () => undefined,
     respond: () => undefined,
     respondError: () => undefined,
     close: () => undefined,
@@ -224,7 +230,11 @@ describe("createAcpSupervisor", () => {
     await supervisor.start("cursor")
     expect(supervisor.getStatus().activeSessions).toBe(0)
 
-    const created = await supervisor.createAcpSession({ workspaceCwd: "/tmp/ws" })
+    const created = await supervisor.createAcpSession({
+      workspaceCwd: "/tmp/ws",
+      sessionId: "sess_test",
+      workspaceId: "ws_test",
+    })
     expect(created.ok).toBe(true)
     expect(supervisor.getStatus().activeSessions).toBe(1)
 
@@ -254,7 +264,11 @@ describe("createAcpSupervisor", () => {
     supervisors.push(supervisor)
 
     await supervisor.start("cursor")
-    await supervisor.createAcpSession({ workspaceCwd: "/tmp/ws" })
+    await supervisor.createAcpSession({
+      workspaceCwd: "/tmp/ws",
+      sessionId: "sess_test",
+      workspaceId: "ws_test",
+    })
     expect(supervisor.getStatus().activeSessions).toBe(1)
 
     await supervisor.stop()
@@ -312,7 +326,11 @@ describe("createAcpSupervisor", () => {
     supervisors.push(supervisor)
 
     await supervisor.start("cursor")
-    await supervisor.createAcpSession({ workspaceCwd: "/tmp/ws" })
+    await supervisor.createAcpSession({
+      workspaceCwd: "/tmp/ws",
+      sessionId: "sess_test",
+      workspaceId: "ws_test",
+    })
 
     const prompt = [{ type: "text", text: "hello" }]
     const result = await supervisor.promptAcpSession({
@@ -350,7 +368,11 @@ describe("createAcpSupervisor", () => {
     supervisors.push(supervisor)
 
     await supervisor.start("cursor")
-    await supervisor.createAcpSession({ workspaceCwd: "/tmp/ws" })
+    await supervisor.createAcpSession({
+      workspaceCwd: "/tmp/ws",
+      sessionId: "sess_test",
+      workspaceId: "ws_test",
+    })
 
     const result = await supervisor.cancelAcpSession({ acpSessionId: "acp-session-cancel" })
 

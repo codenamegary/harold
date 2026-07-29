@@ -17,6 +17,8 @@ export type FakeAcpConfig = FakeAcpCapabilities & {
   emitCursorCreatePlan: boolean
   emitUnknownExtension: boolean
   emitSessionUpdatesOnPrompt: boolean
+  emitToolUpdatesOnPrompt: boolean
+  emitLoadReplayUpdates: boolean
   fsReadPath: string
   fsWritePath: string
   fsWriteContent: string
@@ -57,6 +59,8 @@ export const readFakeAcpConfig = (
   emitCursorCreatePlan: parseBooleanEnv(env.FAKE_ACP_EMIT_CURSOR_CREATE_PLAN, false),
   emitUnknownExtension: parseBooleanEnv(env.FAKE_ACP_EMIT_UNKNOWN_EXTENSION, false),
   emitSessionUpdatesOnPrompt: parseBooleanEnv(env.FAKE_ACP_EMIT_SESSION_UPDATES_ON_PROMPT, false),
+  emitToolUpdatesOnPrompt: parseBooleanEnv(env.FAKE_ACP_EMIT_TOOL_UPDATES_ON_PROMPT, false),
+  emitLoadReplayUpdates: parseBooleanEnv(env.FAKE_ACP_EMIT_LOAD_REPLAY_UPDATES, false),
   fsReadPath: readEnvString(env, "FAKE_ACP_FS_READ_PATH", "readme.txt"),
   fsWritePath: readEnvString(env, "FAKE_ACP_FS_WRITE_PATH", "output.txt"),
   fsWriteContent: readEnvString(env, "FAKE_ACP_FS_WRITE_CONTENT", "written-by-fake-acp"),
@@ -78,6 +82,8 @@ export type FakeAcpEnvOptions = {
   emitCursorCreatePlan?: boolean
   emitUnknownExtension?: boolean
   emitSessionUpdatesOnPrompt?: boolean
+  emitToolUpdatesOnPrompt?: boolean
+  emitLoadReplayUpdates?: boolean
   fsReadPath?: string
   fsWritePath?: string
   fsWriteContent?: string
@@ -106,6 +112,8 @@ export const fakeAcpEnvFromCapabilities = (options: FakeAcpEnvOptions): Record<s
   ...optionalBooleanEnv("FAKE_ACP_EMIT_CURSOR_CREATE_PLAN", options.emitCursorCreatePlan),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_UNKNOWN_EXTENSION", options.emitUnknownExtension),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_SESSION_UPDATES_ON_PROMPT", options.emitSessionUpdatesOnPrompt),
+  ...optionalBooleanEnv("FAKE_ACP_EMIT_TOOL_UPDATES_ON_PROMPT", options.emitToolUpdatesOnPrompt),
+  ...optionalBooleanEnv("FAKE_ACP_EMIT_LOAD_REPLAY_UPDATES", options.emitLoadReplayUpdates),
   ...stringEnv("FAKE_ACP_FS_READ_PATH", options.fsReadPath),
   ...stringEnv("FAKE_ACP_FS_WRITE_PATH", options.fsWritePath),
   ...stringEnv("FAKE_ACP_FS_WRITE_CONTENT", options.fsWriteContent),

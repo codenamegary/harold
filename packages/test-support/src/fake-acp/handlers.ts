@@ -34,20 +34,67 @@ const scriptedSessionUpdates = (sessionId: string): JsonRpcNotification[] => [
   {
     jsonrpc: "2.0",
     method: "session/update",
-    params: { sessionId, update: { kind: "agent_message_chunk", content: "Hello" } },
+    params: {
+      sessionId,
+      update: { updateKind: "agent_message_chunk", text: "Hello" },
+    },
   },
   {
     jsonrpc: "2.0",
     method: "session/update",
-    params: { sessionId, update: { kind: "agent_message_chunk", content: " world" } },
+    params: {
+      sessionId,
+      update: { updateKind: "agent_message_chunk", text: " world" },
+    },
   },
   {
     jsonrpc: "2.0",
     method: "session/update",
-    params: { sessionId, update: { kind: "turn_complete" } },
+    params: { sessionId, update: { updateKind: "user_message_chunk" } },
   },
 ]
 
+const loadReplayUpdates = (sessionId: string): JsonRpcNotification[] => [
+  {
+    jsonrpc: "2.0",
+    method: "session/update",
+    params: {
+      sessionId,
+      update: { updateKind: "agent_message_chunk", text: "Replayed" },
+    },
+  },
+]
+
+const toolCallUpdates = (sessionId: string): JsonRpcNotification[] => [
+  {
+    jsonrpc: "2.0",
+    method: "session/update",
+    params: {
+      sessionId,
+      update: {
+        updateKind: "tool_call",
+        toolCallId: "tool-call-1",
+        toolName: "read_file",
+        toolKind: "read",
+        status: "pending",
+      },
+    },
+  },
+  {
+    jsonrpc: "2.0",
+    method: "session/update",
+    params: {
+      sessionId,
+      update: {
+        updateKind: "tool_call_update",
+        toolCallId: "tool-call-1",
+        toolName: "read_file",
+        toolKind: "read",
+        status: "completed",
+      },
+    },
+  },
+]
 const PERMISSION_REQUEST_ID = 1000
 const FS_READ_REQUEST_ID = 1001
 const FS_WRITE_REQUEST_ID = 1002
@@ -56,14 +103,17 @@ const CURSOR_ASK_QUESTION_ID = 1004
 const CURSOR_CREATE_PLAN_ID = 1005
 const UNKNOWN_EXTENSION_ID = 1006
 
-const permissionRequest = (sessionId: string, options: Array<{ optionId: string; name: string }>): JsonRpcRequest => ({
+const permissionRequest = (
+  sessionId: string,
+  options: Array<{ optionId: string; name: string }>,
+): JsonRpcRequest => ({
   jsonrpc: "2.0",
   id: PERMISSION_REQUEST_ID,
   method: "session/request_permission",
   params: {
     sessionId,
     options,
-    toolCall: { name: "fake-tool" },
+    toolCall: { toolCallId: "tool-call-permission", name: "fake-tool" },
   },
 })
 
@@ -199,7 +249,11 @@ const handleSessionLoad = (request: JsonRpcRequest, config: FakeAcpConfig): Hand
 
   return {
     response: jsonRpcResult(request.id, { sessionId: config.sessionLoadSessionId }),
-    ...emptyHandlerExtras(),
+    notifications: config.emitLoadReplayUpdates
+      ? loadReplayUpdates(config.sessionLoadSessionId)
+      : [],
+    outbound: [],
+    deferredNotifications: [],
   }
 }
 
@@ -239,14 +293,18 @@ const handleSessionPrompt = (
 
   promptState.start(sessionId)
 
-  if (!config.emitSessionUpdatesOnPrompt) {
+  const updates = [
+    ...(config.emitSessionUpdatesOnPrompt ? scriptedSessionUpdates(sessionId) : []),
+    ...(config.emitToolUpdatesOnPrompt ? toolCallUpdates(sessionId) : []),
+  ]
+
+  if (updates.length === 0) {
     return {
       response: jsonRpcResult(request.id, { stopReason: "end_turn" }),
       ...emptyHandlerExtras(),
     }
   }
 
-  const updates = scriptedSessionUpdates(sessionId)
   return {
     response: jsonRpcResult(request.id, { stopReason: "end_turn" }),
     outbound: [],
