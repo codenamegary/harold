@@ -10,7 +10,7 @@ import { FastifyInstance } from "fastify"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { SessionRepository } from "../session/session-repository"
 import { WorkspaceRepository } from "./workspace-repository"
-import { WorkspaceService } from "./workspace-service"
+import { WorkspaceService } from "./service"
 import {
   buildConflictProblem,
   buildInvalidCursorProblem,

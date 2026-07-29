@@ -12,7 +12,7 @@ import { AgentSettingsRepository } from "../agent-settings/agent-settings-reposi
 import { agentDefinitions } from "../agent-settings/agent-registry"
 import { WorkspaceRepository } from "../workspace/workspace-repository"
 import { SessionRepository } from "./session-repository"
-import { SessionService } from "./session-service"
+import { SessionService } from "./service"
 import {
   buildAcpUnavailableProblem,
   buildAgentDisabledProblem,

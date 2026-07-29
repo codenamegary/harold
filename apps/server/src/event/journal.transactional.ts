@@ -1,9 +1,9 @@
 import { JournalAppendRecord } from "contracts/events/journal-record"
 import { Event } from "contracts/events/event"
 import { AgentDatabase, DbExecutor } from "../persistence/open-database"
-import { EventCommitPublisher } from "./event-commit-publisher"
+import { EventCommitPublisher } from "./commit.publisher"
 import { EventJournalRepository, ParsedJournalRecord } from "./event-journal-repository"
-import { projectLifecycleEvents } from "./project-lifecycle-event"
+import { projectLifecycleEvents } from "./lifecycle.projectors"
 
 export type TransactionalJournalError = { kind: "journal_append_failed" }
 

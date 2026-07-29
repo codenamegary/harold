@@ -1,9 +1,9 @@
 import { AgentId } from "contracts/http/agent-settings"
 import { JOURNAL_SCHEMA_VERSION } from "contracts/events/journal-record"
 import { AgentDatabase } from "../persistence/open-database"
-import { EventCommitPublisher } from "../event/event-commit-publisher"
+import { EventCommitPublisher } from "../event/commit.publisher"
 import { EventJournalRepository } from "../event/event-journal-repository"
-import { runTransactionalJournal, TransactionalJournalError } from "../event/transactional-journal"
+import { runTransactionalJournal, TransactionalJournalError } from "../event/journal.transactional"
 import { Session } from "contracts/http/session"
 import {
   ArchiveSessionInput,

@@ -9,7 +9,8 @@ import {
   seedWorkspace,
 } from "../test-support/create-test-app"
 import { createEventJournalRepository } from "./event-journal-repository"
-import { parseLifecycleJournalRecord, projectLifecycleEvent } from "./project-lifecycle-event"
+import { parseLifecycleJournalRecord } from "./lifecycle.models"
+import { projectLifecycleEvent } from "./lifecycle.projectors"
 import { ParsedJournalRecord } from "./event-journal-repository"
 
 describe("projectLifecycleEvent", () => {
@@ -292,10 +293,10 @@ describe("lifecycle events integration", () => {
   test("session error appends session.state error", async () => {
     const dataDir = await createTempDataDir(resources)
     const { openDatabase } = await import("../persistence/open-database")
-    const { createSessionService } = await import("../session/session-service")
+    const { createSessionService } = await import("../session/service")
     const { createSessionRepository } = await import("../session/session-repository")
     const { createWorkspaceRepository } = await import("../workspace/workspace-repository")
-    const { createEventCommitPublisher } = await import("./event-commit-publisher")
+    const { createEventCommitPublisher } = await import("./commit.publisher")
     const { mkdir } = await import("node:fs/promises")
     const path = await import("node:path")
 
@@ -392,9 +393,9 @@ describe("lifecycle events integration", () => {
   test("rollback publishes nothing when workspace delete target is missing", async () => {
     const dataDir = await createTempDataDir(resources)
     const { openDatabase } = await import("../persistence/open-database")
-    const { createWorkspaceService } = await import("../workspace/workspace-service")
+    const { createWorkspaceService } = await import("../workspace/service")
     const { createWorkspaceRepository } = await import("../workspace/workspace-repository")
-    const { createEventCommitPublisher } = await import("./event-commit-publisher")
+    const { createEventCommitPublisher } = await import("./commit.publisher")
 
     const database = openDatabase({ dataDir })
     const eventJournal = createEventJournalRepository(database)
