@@ -73,7 +73,7 @@ describe("session restart and resume API", () => {
       validateExecutablePathFn: acceptTestExecutablePath,
       spawnAgentProcessFn,
     })
-    resources.apps.push(secondApp)
+    resources.addApp(secondApp)
 
     const getBeforeResume = await secondApp.inject({
       method: "GET",

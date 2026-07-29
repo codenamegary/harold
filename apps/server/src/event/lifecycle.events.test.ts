@@ -529,7 +529,7 @@ describe("lifecycle events integration", () => {
     const database = openDatabase({ dataDir: config.dataDir })
     const runtime = createRuntime("0.1.0")
     const { app, commitPublisher } = await createServer({ config, runtime, database })
-    resources.apps.push(app)
+    resources.addApp(app)
 
     const received: string[] = []
     commitPublisher.subscribe((events) => {
