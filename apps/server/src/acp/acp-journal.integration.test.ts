@@ -136,6 +136,8 @@ describe("ACP journal integration", () => {
     expect(published).toContain("session.output.complete")
     expect(published).toContain("turn.completed")
 
+    await acpSupervisor.stop()
+    await new Promise((resolve) => setTimeout(resolve, 100))
     await app.close()
     database.close()
   })
@@ -218,6 +220,7 @@ describe("ACP journal integration", () => {
 
     expect(published.filter((type) => type === "session.output.delta")).toHaveLength(0)
 
+    await acpSupervisor.stop()
     database.close()
   })
 })
