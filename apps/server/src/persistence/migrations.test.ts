@@ -64,7 +64,7 @@ describe("drizzle migrations", () => {
       .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM __drizzle_migrations")
       .get()?.count
 
-    expect(migrationCount).toBe(3)
+    expect(migrationCount).toBe(4)
 
     const seededAgents = database.sqlite
       .query<{ agent_id: string; enabled: number }, []>(
@@ -121,6 +121,52 @@ describe("drizzle migrations", () => {
     database.close()
   })
 
+  test("creates events table with constraints and indexes", async () => {
+    const dataDir = await createTempDataDir()
+    const database = openDatabase({ dataDir })
+
+    const tables = tableNames(database.sqlite)
+    expect(tables).toContain("events")
+
+    const columns = database.sqlite
+      .query<{ name: string }, []>("PRAGMA table_info(events)")
+      .all()
+      .map((row) => row.name)
+
+    expect(columns).toEqual([
+      "cursor",
+      "schema_version",
+      "kind",
+      "occurred_at",
+      "workspace_id",
+      "session_id",
+      "session_sequence",
+      "turn_id",
+      "protocol_version",
+      "direction",
+      "method",
+      "phase",
+      "payload",
+    ])
+
+    const indexes = database.sqlite
+      .query<{ name: string }, []>(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'events' ORDER BY name",
+      )
+      .all()
+      .map((row) => row.name)
+
+    expect(indexes).toEqual([
+      "events_session_id_cursor_idx",
+      "events_session_id_session_sequence_idx",
+      "events_session_id_session_sequence_unique",
+      "events_turn_id_cursor_idx",
+      "events_workspace_id_cursor_idx",
+    ])
+
+    database.close()
+  })
+
   test("second open is idempotent", async () => {
     const dataDir = await createTempDataDir()
     const first = openDatabase({ dataDir })
@@ -132,7 +178,7 @@ describe("drizzle migrations", () => {
       .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM __drizzle_migrations")
       .get()?.count
 
-    expect(migrationCount).toBe(3)
+    expect(migrationCount).toBe(4)
     second.close()
   })
 })
@@ -164,7 +210,7 @@ describe("openDatabase", () => {
       .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM __drizzle_migrations")
       .get()?.count
 
-    expect(migrationCount).toBe(3)
+    expect(migrationCount).toBe(4)
     second.close()
   })
 

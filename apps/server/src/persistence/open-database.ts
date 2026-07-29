@@ -12,6 +12,8 @@ export type AgentDatabase = {
   close: () => void
 }
 
+export type DbExecutor = AgentDatabase["db"]
+
 export type OpenDatabaseOptions = {
   dataDir: string
 }
