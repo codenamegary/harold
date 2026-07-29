@@ -3,6 +3,7 @@ import { AgentProfile } from "../agent-profile"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
 import { SpawnedAgentProcess } from "./spawn-agent-process"
 import { SessionBindingRegistry } from "../client/session-binding-registry"
+import { AcpJournalWriter } from "../journal/acp.journal.writer"
 
 export type AcpSupervisorState = "stopped" | "starting" | "ready" | "error"
 
@@ -62,10 +63,16 @@ export type AcpSupervisor = {
   start: (agentId: AgentId) => Promise<void>
   stop: () => Promise<void>
   handleAgentDisabled: (agentId: AgentId) => Promise<void>
-  createAcpSession: (params: { workspaceCwd: string }) => Promise<AcpSessionOperationResult>
+  createAcpSession: (params: {
+    workspaceCwd: string
+    sessionId: string
+    workspaceId: string
+  }) => Promise<AcpSessionOperationResult>
   loadAcpSession: (params: {
     acpSessionId: string
     workspaceCwd: string
+    sessionId: string
+    workspaceId: string
   }) => Promise<AcpSessionOperationResult>
   closeAcpSession: (params: { acpSessionId: string }) => Promise<AcpSessionCloseResult>
   promptAcpSession: (params: {
@@ -92,6 +99,7 @@ export type AgentSettingsReader = {
 export type CreateAcpSupervisorParams = {
   agentSettingsRepository: AgentSettingsReader
   serverVersion: string
+  journalWriter?: AcpJournalWriter
   onSessionUpdate?: SessionUpdateHandler
   spawnAgentProcessFn?: (input: {
     profile: AgentProfile

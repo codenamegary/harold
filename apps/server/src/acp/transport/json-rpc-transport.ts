@@ -1,6 +1,10 @@
+import { JournalPhase } from "contracts/events/journal-record"
+
 type PendingRequest = {
   resolve: (value: unknown) => void
   reject: (error: Error) => void
+  method: string
+  context?: AcpOperationContext
 }
 
 type NotificationHandler = (params: unknown) => void
@@ -16,11 +20,53 @@ type UnhandledRequestHandler = (input: {
   params: unknown
 }) => void | Promise<void>
 
+export type AcpOperationContext = {
+  sessionId: string
+  workspaceId: string
+  turnId?: string
+  phase: JournalPhase
+}
+
+export type JsonRpcObserverEvent =
+  | {
+      kind: "outbound_request"
+      id: number
+      method: string
+      context?: AcpOperationContext
+    }
+  | {
+      kind: "inbound_response"
+      id: number
+      method: string
+      success: boolean
+      context?: AcpOperationContext
+    }
+  | {
+      kind: "inbound_notification"
+      method: string
+      params: unknown
+    }
+  | {
+      kind: "inbound_request"
+      id: string | number
+      method: string
+      params: unknown
+    }
+
+type JsonRpcObserver = (event: JsonRpcObserverEvent) => void
+
 export type JsonRpcTransport = {
-  request: <T = unknown>(method: string, params?: unknown) => Promise<T>
+  allocateRequestId: () => number
+  request: <T = unknown>(
+    method: string,
+    params?: unknown,
+    context?: AcpOperationContext,
+    options?: { requestId?: number },
+  ) => Promise<T>
   onNotification: (method: string, handler: NotificationHandler) => void
   onRequest: (method: string, handler: InboundRequestHandler) => void
   onUnhandledRequest: (handler: UnhandledRequestHandler) => void
+  onObserverEvent: (handler: JsonRpcObserver) => void
   respond: (id: string | number, result: unknown) => void
   respondError: (id: string | number, code: number, message: string) => void
   close: () => void
@@ -70,7 +116,12 @@ export const createJsonRpcTransport = ({
   const notificationHandlers = new Map<string, NotificationHandler[]>()
   const requestHandlers = new Map<string, InboundRequestHandler[]>()
   const unhandledRequestHandlers: UnhandledRequestHandler[] = []
+  const observerHandlers: JsonRpcObserver[] = []
   const closed = { value: false }
+
+  const emitObserver = (event: JsonRpcObserverEvent) => {
+    observerHandlers.forEach((handler) => handler(event))
+  }
 
   const nextRequestId = (() => {
     const ids = [0]
@@ -85,6 +136,13 @@ export const createJsonRpcTransport = ({
     method: string
     params?: unknown
   }) => {
+    emitObserver({
+      kind: "inbound_request",
+      id: message.id,
+      method: message.method,
+      params: message.params,
+    })
+
     const handlers = requestHandlers.get(message.method) ?? []
     if (handlers.length > 0) {
       await Promise.all(handlers.map((handler) => handler({
@@ -118,6 +176,11 @@ export const createJsonRpcTransport = ({
     }
 
     if (message.method !== undefined && message.id === undefined) {
+      emitObserver({
+        kind: "inbound_notification",
+        method: message.method,
+        params: message.params,
+      })
       const handlers = notificationHandlers.get(message.method) ?? []
       handlers.forEach((handler) => handler(message.params))
       return
@@ -133,6 +196,15 @@ export const createJsonRpcTransport = ({
     }
 
     pendingRequests.delete(message.id)
+    const success = message.error === undefined
+    emitObserver({
+      kind: "inbound_response",
+      id: Number(message.id),
+      method: pending.method,
+      success,
+      context: pending.context,
+    })
+
     if (message.error) {
       pending.reject(new Error(message.error.message))
       return
@@ -161,12 +233,25 @@ export const createJsonRpcTransport = ({
 
   void pump()
 
-  const request = <T = unknown>(method: string, params?: unknown): Promise<T> =>
+  const request = <T = unknown>(
+    method: string,
+    params?: unknown,
+    context?: AcpOperationContext,
+    options?: { requestId?: number },
+  ): Promise<T> =>
     new Promise<T>((resolve, reject) => {
-      const id = nextRequestId()
+      const id = options?.requestId ?? nextRequestId()
       pendingRequests.set(id, {
         resolve: (value) => resolve(value as T),
         reject,
+        method,
+        context,
+      })
+      emitObserver({
+        kind: "outbound_request",
+        id,
+        method,
+        context,
       })
       void stdin.write(
         `${JSON.stringify({
@@ -190,6 +275,10 @@ export const createJsonRpcTransport = ({
 
   const onUnhandledRequest = (handler: UnhandledRequestHandler) => {
     unhandledRequestHandlers.push(handler)
+  }
+
+  const onObserverEvent = (handler: JsonRpcObserver) => {
+    observerHandlers.push(handler)
   }
 
   const respond = (id: string | number, result: unknown) => {
@@ -222,10 +311,12 @@ export const createJsonRpcTransport = ({
   }
 
   return {
+    allocateRequestId: nextRequestId,
     request,
     onNotification,
     onRequest,
     onUnhandledRequest,
+    onObserverEvent,
     respond,
     respondError,
     close,

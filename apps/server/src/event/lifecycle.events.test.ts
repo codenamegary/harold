@@ -252,7 +252,11 @@ describe("lifecycle events integration", () => {
     expect(records.value.map((record) => record.kind)).toEqual([
       "session.created",
       "session.state",
+      "acp.request",
+      "acp.response",
       "session.state",
+      "acp.request",
+      "acp.response",
       "session.state",
     ])
     expect(
@@ -469,7 +473,7 @@ describe("lifecycle events integration", () => {
     )
 
     Object.values(sequencesBySession).forEach((sequences) => {
-      expect(sequences).toEqual([1, 2, 3])
+      expect(sequences).toEqual([1, 2, 3, 4, 5])
     })
   })
 

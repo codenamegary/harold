@@ -19,6 +19,7 @@ import { createRuntimeStatusService } from "../runtime/status.service"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
 import { createAcpSupervisor } from "../acp/supervisor/acp-supervisor"
+import { createAcpJournalWriter } from "../acp/journal/acp.journal.writer"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { SpawnAgentProcessFn } from "../acp/supervisor/spawn-agent-process"
 
@@ -77,17 +78,23 @@ export const createServer = async ({
     whichFn,
     validateExecutablePathFn,
   })
+  const eventJournal = createEventJournalRepository(database)
+  const commitPublisher = createEventCommitPublisher()
+  const journalWriter = createAcpJournalWriter({
+    database,
+    eventJournal,
+    commitPublisher,
+  })
   const acpSupervisor =
     providedAcpSupervisor ??
     createAcpSupervisor({
       agentSettingsRepository,
       serverVersion: runtime.version,
+      journalWriter,
       spawnAgentProcessFn,
     })
 
   registerStatusRoutes(app, runtime, config, acpSupervisor)
-  const eventJournal = createEventJournalRepository(database)
-  const commitPublisher = createEventCommitPublisher()
   const workspaceRepository = createWorkspaceRepository(database)
   const sessionRepository = createSessionRepository(database)
   const workspaceService = createWorkspaceService({

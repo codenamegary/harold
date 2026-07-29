@@ -3,8 +3,49 @@ import { Event } from "contracts/events/event"
 import { AgentDatabase, DbExecutor } from "../persistence/database"
 import { EventCommitPublisher } from "./commit.publisher"
 import { EventJournalRepository, ParsedJournalRecord } from "./journal.repository"
+import { parseAcpJournalRecords, isAcpJournalKind } from "./acp.models"
+import { projectAcpEvents } from "./acp.projectors"
 import { parseLifecycleJournalRecords } from "./lifecycle.models"
 import { projectLifecycleEvents } from "./lifecycle.projectors"
+import { lifecycleKinds } from "./lifecycle.models"
+
+const isLifecycleKind = (kind: string): boolean =>
+  (lifecycleKinds as ReadonlyArray<string>).includes(kind)
+
+export const loadTurnOutputContext = (
+  records: ReadonlyArray<ParsedJournalRecord>,
+  turnId: string,
+): ParsedJournalRecord[] =>
+  records.filter(
+    (record) =>
+      record.kind === "acp.notification" &&
+      record.turnId === turnId &&
+      typeof record.payload === "object" &&
+      record.payload !== null &&
+      (record.payload as { updateKind?: string }).updateKind === "agent_message_chunk",
+  )
+
+export const projectJournalEvents = (params: {
+  appendedRecords: ReadonlyArray<ParsedJournalRecord>
+  contextRecords?: ReadonlyArray<ParsedJournalRecord>
+}): Event[] => {
+  const { appendedRecords, contextRecords = [] } = params
+
+  const lifecycleRecords = parseLifecycleJournalRecords(
+    appendedRecords.filter((record) => isLifecycleKind(record.kind)),
+  )
+  const acpAppended = parseAcpJournalRecords(
+    appendedRecords.filter((record) => isAcpJournalKind(record.kind)),
+  )
+  const acpContext = parseAcpJournalRecords(
+    contextRecords.filter((record) => isAcpJournalKind(record.kind)),
+  )
+
+  return [
+    ...projectLifecycleEvents(lifecycleRecords),
+    ...projectAcpEvents(acpAppended, acpContext),
+  ]
+}
 
 export type TransactionalJournalError = { kind: "journal_append_failed" }
 
@@ -81,9 +122,26 @@ export const runTransactionalJournal = <T, E = TransactionalJournalError>(
       }
     })
 
-    const events: Event[] = projectLifecycleEvents(
-      parseLifecycleJournalRecords(outcome.appendedRecords),
-    )
+    const contextRecords = outcome.appendedRecords
+      .filter((record) => record.kind === "turn.completed" && record.turnId !== null)
+      .flatMap((record) => {
+        const turnId = record.turnId as string
+        const readResult = context.eventJournal.readAfter({
+          cursor: 0n,
+          limit: 10_000,
+          turnId,
+        })
+        if (!readResult.ok) {
+          return []
+        }
+
+        return loadTurnOutputContext(readResult.value, turnId)
+      })
+
+    const events: Event[] = projectJournalEvents({
+      appendedRecords: outcome.appendedRecords,
+      contextRecords,
+    })
     context.commitPublisher.publish(events)
 
     return { ok: true, value: outcome.value }

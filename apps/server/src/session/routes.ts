@@ -113,6 +113,8 @@ export const registerSessionRoutes = (
 
     const acpResult = await acpSupervisor.createAcpSession({
       workspaceCwd: workspace.value.path,
+      sessionId: created.value.id,
+      workspaceId: body.workspaceId,
     })
 
     if (!acpResult.ok) {
@@ -301,6 +303,8 @@ export const registerSessionRoutes = (
     const loadResult = await acpSupervisor.loadAcpSession({
       acpSessionId: binding.value.acpSessionId,
       workspaceCwd: workspace.value.path,
+      sessionId,
+      workspaceId: binding.value.workspaceId,
     })
 
     if (!loadResult.ok) {

@@ -111,12 +111,18 @@ const UserMessageChunkNotificationPayloadSchema = z.strictObject({
   updateKind: z.literal("user_message_chunk"),
 })
 
+const UnknownUpdateNotificationPayloadSchema = z.strictObject({
+  updateKind: z.literal("unknown"),
+  sourceKind: z.string().min(1),
+})
+
 const AcpNotificationPayloadSchema = z.discriminatedUnion("updateKind", [
   AgentMessageChunkNotificationPayloadSchema,
   ToolCallNotificationPayloadSchema,
   ToolCallUpdateNotificationPayloadSchema,
   SessionInfoUpdateNotificationPayloadSchema,
   UserMessageChunkNotificationPayloadSchema,
+  UnknownUpdateNotificationPayloadSchema,
 ])
 
 const JournalAppendBaseSchema = z.strictObject({
