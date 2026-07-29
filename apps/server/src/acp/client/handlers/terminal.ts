@@ -32,11 +32,16 @@ type TerminalSessionParams = {
   terminalId?: string
 }
 
+type TerminalExitStatus = {
+  exitCode: number | null
+  signal: string | null
+}
+
 type TerminalState = {
   process: TerminalProcess
   output: string
   outputByteLimit?: number
-  exitStatus?: { exitCode: number | null; signal: string | null }
+  exitStatus?: TerminalExitStatus
   released: boolean
 }
 
@@ -95,21 +100,19 @@ const readStreamToString = async (stream: ReadableStream<Uint8Array>): Promise<s
   return chunks.join("")
 }
 
-const appendOutput = (state: TerminalState, chunk: string) => {
+const appendOutput = (state: TerminalState, chunk: string): string => {
   const combined = `${state.output}${chunk}`
   if (state.outputByteLimit === undefined) {
-    state.output = combined
-    return
+    return combined
   }
 
   const encoded = new TextEncoder().encode(combined)
   if (encoded.byteLength <= state.outputByteLimit) {
-    state.output = combined
-    return
+    return combined
   }
 
   const truncated = encoded.slice(encoded.byteLength - state.outputByteLimit)
-  state.output = new TextDecoder().decode(truncated)
+  return new TextDecoder().decode(truncated)
 }
 
 const buildShellCommand = (command: string, args?: string[]): string =>
@@ -157,7 +160,10 @@ export const createAcpTerminalHandlers = ({
     return { ok: true, state }
   }
 
-  const attachOutputReaders = (state: TerminalState) => {
+  const attachOutputReaders = (
+    process: TerminalProcess,
+    onOutput: (chunk: string) => void,
+  ) => {
     const readStream = async (stream: ReadableStream<Uint8Array>) => {
       const reader = stream.getReader()
       const decoder = new TextDecoder()
@@ -167,20 +173,23 @@ export const createAcpTerminalHandlers = ({
         if (done) {
           return
         }
-        appendOutput(state, decoder.decode(value, { stream: true }))
+        onOutput(decoder.decode(value, { stream: true }))
         await readNext()
       }
 
       await readNext()
     }
 
-    void readStream(state.process.stdout)
-    void readStream(state.process.stderr)
+    void readStream(process.stdout)
+    void readStream(process.stderr)
   }
 
-  const attachExitWatcher = (state: TerminalState) => {
-    void state.process.exited.then((exitCode) => {
-      state.exitStatus = { exitCode, signal: null }
+  const attachExitWatcher = (
+    process: TerminalProcess,
+    onExit: (exitStatus: TerminalExitStatus) => void,
+  ) => {
+    void process.exited.then((exitCode) => {
+      onExit({ exitCode, signal: null })
     })
   }
 
@@ -219,8 +228,12 @@ export const createAcpTerminalHandlers = ({
       }
 
       terminals.set(terminalId, state)
-      attachOutputReaders(state)
-      attachExitWatcher(state)
+      attachOutputReaders(process, (chunk) => {
+        state.output = appendOutput(state, chunk)
+      })
+      attachExitWatcher(process, (exitStatus) => {
+        state.exitStatus = exitStatus
+      })
 
       return { terminalId }
     },

@@ -3,11 +3,11 @@ import React, { useState } from "react"
 import { InlineEditableText } from "../design-system/InlineEditableText"
 import { Panel } from "../design-system/Panel"
 import { StatusDot } from "../design-system/StatusDot"
-import { isWorkspaceUpdateError } from "./updateWorkspace"
+import { isWorkspaceUpdateError } from "./update.workspace"
 import { UnregisterWorkspaceModal } from "./UnregisterWorkspaceModal"
-import { useUpdateWorkspaceMutation } from "./useUpdateWorkspaceMutation"
-import { workspaceMutationErrorMessage } from "./workspaceMutationErrorMessage"
-import { workspaceStateDisplayByState } from "./workspaceStateDisplay"
+import { useUpdateWorkspaceMutation } from "./use.update.workspace.mutation"
+import { workspaceMutationErrorMessage } from "./workspace.mutation.error.message"
+import { workspaceStateDisplayByState } from "./workspace.state.display"
 
 type WorkspaceCardProps = {
   workspace: Workspace

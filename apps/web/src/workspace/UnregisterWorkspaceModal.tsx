@@ -1,9 +1,9 @@
 import React, { useState } from "react"
 import { Button } from "../design-system/Button"
 import { Modal } from "../design-system/Modal"
-import { isWorkspaceDeleteError } from "./deleteWorkspace"
-import { useDeleteWorkspaceMutation } from "./useDeleteWorkspaceMutation"
-import { workspaceMutationErrorMessage } from "./workspaceMutationErrorMessage"
+import { isWorkspaceDeleteError } from "./delete.workspace"
+import { useDeleteWorkspaceMutation } from "./use.delete.workspace.mutation"
+import { workspaceMutationErrorMessage } from "./workspace.mutation.error.message"
 
 type UnregisterWorkspaceModalProps = {
   workspaceId: string

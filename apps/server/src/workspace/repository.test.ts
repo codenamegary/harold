@@ -348,10 +348,10 @@ describe("workspace repository", () => {
     const database = openDatabase({ dataDir })
     const repository = createWorkspaceRepository(database)
 
-    repository.create({ name: "Agent One", path: dirs[0]! })
-    repository.create({ name: "Agent Two", path: dirs[1]! })
-    repository.create({ name: "Other", path: dirs[2]! })
-    await rm(dirs[1]!, { recursive: true, force: true })
+    repository.create({ name: "Agent One", path: dirs[0] })
+    repository.create({ name: "Agent Two", path: dirs[1] })
+    repository.create({ name: "Other", path: dirs[2] })
+    await rm(dirs[1], { recursive: true, force: true })
 
     const firstPage = repository.list({ q: "agent-one", state: "available", limit: 1 })
     expect(firstPage.ok).toBe(true)

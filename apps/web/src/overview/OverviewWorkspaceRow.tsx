@@ -1,10 +1,10 @@
 import { Workspace } from "contracts/http/workspace"
 import { useAtomValue } from "jotai"
 import React from "react"
-import { nowAtom } from "../connection/nowAtom"
+import { nowAtom } from "../connection/now.atom"
 import { StatusDot } from "../design-system/StatusDot"
-import { formatRelativeLastUsed } from "../workspace/formatRelativeLastUsed"
-import { workspaceStateDisplayByState } from "../workspace/workspaceStateDisplay"
+import { formatRelativeLastUsed } from "../workspace/format.relative.last.used"
+import { workspaceStateDisplayByState } from "../workspace/workspace.state.display"
 
 type OverviewWorkspaceRowProps = {
   workspace: Workspace

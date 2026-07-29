@@ -1,6 +1,9 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "oxc", "unicorn"],
+  "options": {
+    "typeAware": true
+  },
+  "plugins": ["typescript", "oxc", "unicorn", "import", "react"],
   "rules": {
     "typescript/consistent-type-imports": [
       "error",
@@ -8,11 +11,94 @@
     ],
     "typescript/consistent-type-definitions": ["error", "type"],
     "typescript/no-explicit-any": "error",
+    "typescript/no-unnecessary-type-assertion": "error",
     "max-classes-per-file": ["error", { "max": 0 }],
     "typescript/no-extraneous-class": "error",
     "oxc/no-barrel-file": ["error", { "threshold": 0 }],
+    "import/no-default-export": "error",
+    "react/function-component-definition": [
+      "error",
+      {
+        "namedComponents": "arrow-function",
+        "unnamedComponents": "arrow-function"
+      }
+    ],
     "unicorn/no-abusive-eslint-disable": "error",
+    // Lowercase blocks uppercase letters. Dot separators remain a review convention.
+    "unicorn/filename-case": ["error", { "case": "lowercase" }],
     "prefer-const": "error",
     "no-var": "error"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["*.{ts,tsx}"],
+      "rules": {
+        "no-param-reassign": ["error", { "props": true }]
+      }
+    },
+    {
+      "files": ["**/*.tsx"],
+      "rules": {
+        "unicorn/filename-case": [
+          "error",
+          {
+            "case": "pascalCase"
+          }
+        ]
+      }
+    },
+    {
+      "files": ["main.tsx", "*.test.tsx", "render.with.providers.tsx"],
+      "rules": {
+        "unicorn/filename-case": ["error", { "case": "lowercase" }]
+      }
+    },
+    {
+      // Vite and Drizzle require default-exported configuration.
+      "files": [
+        "**/drizzle.config.ts",
+        "**/vite.config.ts"
+      ],
+      "rules": {
+        "import/no-default-export": "off"
+      }
+    },
+    {
+      "files": ["**/*.projectors.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/persistence/**",
+                  "../persistence/**",
+                  "**/*.repository",
+                  "**/*.repository.*"
+                ],
+                "message": "Projectors must not depend on persistence modules."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["**/apps/web/src/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "jotai-tanstack-query",
+                "message": "Use React Query hooks for remote state."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

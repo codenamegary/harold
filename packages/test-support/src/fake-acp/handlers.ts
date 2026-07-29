@@ -237,8 +237,7 @@ const handleSessionPrompt = (
     }
   }
 
-  promptState.cancelled = false
-  promptState.activeSessionId = sessionId
+  promptState.start(sessionId)
 
   if (!config.emitSessionUpdatesOnPrompt) {
     return {
@@ -271,10 +270,7 @@ const handleSessionCancel = (
     }
   }
 
-  if (promptState.activeSessionId === sessionId) {
-    promptState.cancelled = true
-    promptState.activeSessionId = null
-  }
+  promptState.cancel(sessionId)
 
   return {
     response: jsonRpcResult(request.id, {}),
@@ -331,4 +327,4 @@ export const handleJsonRpcMessage = (
 export const shouldEmitDeferredNotification = (
   promptState: FakeAcpPromptState,
   sessionId: string,
-): boolean => !promptState.cancelled && promptState.activeSessionId === sessionId
+): boolean => promptState.shouldEmit(sessionId)

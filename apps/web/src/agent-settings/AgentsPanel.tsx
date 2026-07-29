@@ -1,12 +1,12 @@
 import React from "react"
-import { useConnection } from "../connection/useConnection"
+import { useConnection } from "../connection/use.connection"
 import { Panel } from "../design-system/Panel"
 import { SectionKicker } from "../design-system/SectionKicker"
 import { StatusPill } from "../design-system/StatusPill"
 import { AgentSettingsCard } from "./AgentSettingsCard"
-import { useAgentSettingsQuery } from "./useAgentSettingsQuery"
-import { useDetectAgentPathMutation } from "./useDetectAgentPathMutation"
-import { useUpdateAgentSettingsMutation } from "./useUpdateAgentSettingsMutation"
+import { useAgentSettingsQuery } from "./use.agent.settings.query"
+import { useDetectAgentPathMutation } from "./use.detect.agent.path.mutation"
+import { useUpdateAgentSettingsMutation } from "./use.update.agent.settings.mutation"
 
 export const AgentsPanel: React.FC = () => {
   const { connection } = useConnection()

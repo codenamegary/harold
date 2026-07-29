@@ -59,10 +59,10 @@ describe("event journal repository", () => {
       return
     }
 
-    expect(first.value[0]!.cursor).toBe(1n)
-    expect(second.value[0]!.cursor).toBe(2n)
-    expect(second.value[0]!.cursor > first.value[0]!.cursor).toBe(true)
-    expect(eventCursorToString(second.value[0]!.cursor)).toBe("2")
+    expect(first.value[0].cursor).toBe(1n)
+    expect(second.value[0].cursor).toBe(2n)
+    expect(second.value[0].cursor > first.value[0].cursor).toBe(true)
+    expect(eventCursorToString(second.value[0].cursor)).toBe("2")
 
     database.close()
   })
@@ -144,7 +144,7 @@ describe("event journal repository", () => {
       return
     }
 
-    expect(appended.value[0]!.sessionSequence).toBe(2)
+    expect(appended.value[0].sessionSequence).toBe(2)
 
     database.close()
   })
@@ -298,7 +298,7 @@ describe("event journal repository", () => {
     }
 
     expect(read.value).toHaveLength(1)
-    expect(read.value[0]!.turnId).toBe(firstTurnId)
+    expect(read.value[0].turnId).toBe(firstTurnId)
 
     database.close()
   })
@@ -353,8 +353,8 @@ describe("event journal repository", () => {
       return
     }
 
-    expect(read.value[0]!.cursor).toBe(largeCursor)
-    expect(eventCursorToString(read.value[0]!.cursor)).toBe("9007199254740991")
+    expect(read.value[0].cursor).toBe(largeCursor)
+    expect(eventCursorToString(read.value[0].cursor)).toBe("9007199254740991")
 
     database.close()
   })

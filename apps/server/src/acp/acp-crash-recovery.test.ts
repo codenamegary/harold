@@ -57,7 +57,7 @@ describe("ACP crash recovery", () => {
     })
     expect(createResponse.statusCode).toBe(201)
 
-    const fake = resources.lastFake
+    const fake = resources.getLastFake()
     if (!fake) {
       throw new Error("expected fake ACP process to be tracked")
     }

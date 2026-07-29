@@ -250,7 +250,7 @@ export const createEventJournalRepository = (database: AgentDatabase) => {
         const sessionId = readSessionId(record)
         const sessionSequence =
           sessionId !== undefined && sessionScopedKinds.has(record.kind)
-            ? sessionSequences[index]!
+            ? sessionSequences[index]
             : null
 
         try {

@@ -12,23 +12,37 @@ import { SpawnedAgentProcess } from "../acp/supervisor/spawn-agent-process"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { Config } from "../config/config"
 
+type TestServerApp = Awaited<ReturnType<typeof createServer>>["app"]
+
 export type TestAppResources = {
-  tempDirs: string[]
-  apps: Awaited<ReturnType<typeof createServer>>["app"][]
-  fakeProcesses: Array<{ kill: () => void }>
-  lastFake: SpawnedFakeAcp | null
+  addTempDir: (dir: string) => void
+  addApp: (app: TestServerApp) => void
+  addFakeProcess: (fake: SpawnedFakeAcp) => void
+  getLastFake: () => SpawnedFakeAcp | null
+  takeTempDirs: () => string[]
+  takeApps: () => TestServerApp[]
+  takeFakeProcesses: () => SpawnedFakeAcp[]
 }
 
-export const createTestAppResources = (): TestAppResources => ({
-  tempDirs: [],
-  apps: [],
-  fakeProcesses: [],
-  lastFake: null,
-})
+export const createTestAppResources = (): TestAppResources => {
+  const tempDirs: string[] = []
+  const apps: TestServerApp[] = []
+  const fakeProcesses: SpawnedFakeAcp[] = []
+
+  return {
+    addTempDir: (dir) => tempDirs.push(dir),
+    addApp: (app) => apps.push(app),
+    addFakeProcess: (fake) => fakeProcesses.push(fake),
+    getLastFake: () => fakeProcesses.at(-1) ?? null,
+    takeTempDirs: () => tempDirs.splice(0),
+    takeApps: () => apps.splice(0),
+    takeFakeProcesses: () => fakeProcesses.splice(0),
+  }
+}
 
 export const createTempDataDir = async (resources: TestAppResources) => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-test-"))
-  resources.tempDirs.push(dir)
+  resources.addTempDir(dir)
   return dir
 }
 
@@ -46,8 +60,7 @@ export const createFakeSpawnFn = (
 ) => {
   const spawnAgentProcessFn = (): SpawnedAgentProcess => {
     const fake = spawnFakeAcp(fakeOptions)
-    resources.fakeProcesses.push(fake)
-    resources.lastFake = fake
+    resources.addFakeProcess(fake)
     return {
       stdin: fake.stdin,
       stdout: fake.stdout,
@@ -96,15 +109,16 @@ export const createTestApp = async (
     validateExecutablePathFn,
     spawnAgentProcessFn,
   })
-  resources.apps.push(app)
+  resources.addApp(app)
   return { app, database, config, acpSupervisor, resources }
 }
 
 export const cleanupTestAppResources = async (resources: TestAppResources) => {
-  resources.fakeProcesses.splice(0).forEach((process) => process.kill())
-  await Promise.all(resources.apps.splice(0).map((app) => app.close()))
-  await Promise.all(resources.tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
-  resources.lastFake = null
+  resources.takeFakeProcesses().forEach((process) => process.kill())
+  await Promise.all(resources.takeApps().map((app) => app.close()))
+  await Promise.all(
+    resources.takeTempDirs().map((dir) => rm(dir, { recursive: true, force: true })),
+  )
 }
 
 export const seedWorkspace = async (
