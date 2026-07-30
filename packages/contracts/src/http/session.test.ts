@@ -3,6 +3,7 @@ import {
   CancelSessionBodySchema,
   CancelSessionResponseSchema,
   CreateSessionBodySchema,
+  CreateSessionResponseSchema,
   ListSessionsQuerySchema,
   PromptSessionBodySchema,
   PromptSessionResponseSchema,
@@ -51,11 +52,11 @@ describe("SessionSchema", () => {
 })
 
 describe("CreateSessionBodySchema", () => {
-  test("accepts a valid create body", () => {
+  test("accepts a valid create body with prompt text", () => {
     const body = {
       workspaceId: "ws-agent-server",
       agentId: "cursor",
-      name: "Auth flow",
+      text: "Explain the auth flow",
     }
 
     expect(CreateSessionBodySchema.parse(body)).toEqual(body)
@@ -66,27 +67,38 @@ describe("CreateSessionBodySchema", () => {
       CreateSessionBodySchema.parse({
         workspaceId: "ws-agent-server",
         agentId: "agent-auth",
+        text: "Explain the auth flow",
+      }),
+    ).toThrow()
+  })
+
+  test("rejects empty text", () => {
+    expect(() =>
+      CreateSessionBodySchema.parse({
+        workspaceId: "ws-agent-server",
+        agentId: "cursor",
+        text: "",
+      }),
+    ).toThrow()
+  })
+
+  test("rejects text over 32768 characters", () => {
+    expect(() =>
+      CreateSessionBodySchema.parse({
+        workspaceId: "ws-agent-server",
+        agentId: "cursor",
+        text: "a".repeat(32_769),
+      }),
+    ).toThrow()
+  })
+
+  test("rejects client name field", () => {
+    expect(() =>
+      CreateSessionBodySchema.parse({
+        workspaceId: "ws-agent-server",
+        agentId: "cursor",
+        text: "Explain the auth flow",
         name: "Auth flow",
-      }),
-    ).toThrow()
-  })
-
-  test("rejects empty name", () => {
-    expect(() =>
-      CreateSessionBodySchema.parse({
-        workspaceId: "ws-agent-server",
-        agentId: "cursor",
-        name: "",
-      }),
-    ).toThrow()
-  })
-
-  test("rejects name over 120 characters", () => {
-    expect(() =>
-      CreateSessionBodySchema.parse({
-        workspaceId: "ws-agent-server",
-        agentId: "cursor",
-        name: "a".repeat(121),
       }),
     ).toThrow()
   })
@@ -96,7 +108,7 @@ describe("CreateSessionBodySchema", () => {
       CreateSessionBodySchema.parse({
         workspaceId: "ws-agent-server",
         agentId: "cursor",
-        name: "Auth flow",
+        text: "Explain the auth flow",
         acpSessionId: "acp-session-1",
       }),
     ).toThrow()
@@ -107,10 +119,25 @@ describe("CreateSessionBodySchema", () => {
       CreateSessionBodySchema.parse({
         workspaceId: "ws-agent-server",
         agentId: "cursor",
-        name: "Auth flow",
+        text: "Explain the auth flow",
         state: "idle",
       }),
     ).toThrow()
+  })
+})
+
+describe("CreateSessionResponseSchema", () => {
+  test("accepts session fields plus turnId", () => {
+    const body = {
+      ...validSession,
+      turnId: validTurnId,
+    }
+
+    expect(CreateSessionResponseSchema.parse(body)).toEqual(body)
+  })
+
+  test("rejects response without turnId", () => {
+    expect(() => CreateSessionResponseSchema.parse(validSession)).toThrow()
   })
 })
 

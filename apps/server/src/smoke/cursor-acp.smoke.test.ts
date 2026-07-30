@@ -3,7 +3,8 @@ import { execSync } from "node:child_process"
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { SessionSchema } from "contracts/http/session"
+import { CreateSessionResponseSchema,
+  SessionSchema } from "contracts/http/session"
 import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/database"
@@ -82,7 +83,7 @@ describe("cursor ACP smoke", () => {
         payload: {
           workspaceId: workspace.id,
           agentId: "cursor",
-          name: "Smoke session",
+          text: "Smoke session",
         },
       })
       expect(sessionResponse.statusCode).toBe(201)
@@ -149,7 +150,7 @@ describe("cursor ACP smoke", () => {
           payload: {
             workspaceId: workspace.id,
             agentId: "cursor",
-            name: "Smoke session",
+            text: "Smoke session",
           },
         })
         expect(sessionResponse.statusCode).toBe(201)

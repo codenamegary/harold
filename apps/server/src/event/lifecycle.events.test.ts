@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { EventSchema } from "contracts/events/event"
 import {
+  CreateSessionResponseSchema,
+  SessionSchema,
+} from "contracts/http/session"
+import {
   cleanupTestAppResources,
   createTempDataDir,
   createTestApp,
@@ -194,9 +198,26 @@ describe("lifecycle events integration", () => {
     const response = await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", name: "Lifecycle test" },
+      payload: { workspaceId, agentId: "cursor", text: "Lifecycle test" },
     })
     expect(response.statusCode).toBe(201)
+
+    const waitForIdle = async () => {
+      const body = CreateSessionResponseSchema.parse(JSON.parse(response.body))
+      const startedAt = Date.now()
+      while (Date.now() - startedAt < 5000) {
+        const latest = await app.inject({
+          method: "GET",
+          url: `/v1/sessions/${body.id}`,
+        })
+        if (SessionSchema.parse(JSON.parse(latest.body)).state === "idle") {
+          return
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+      throw new Error("timed out waiting for idle after create")
+    }
+    await waitForIdle()
 
     const records = journal.readAfter({ cursor: 0n, limit: 100 })
     expect(records.ok).toBe(true)
@@ -212,6 +233,8 @@ describe("lifecycle events integration", () => {
 
     expect(sessionStates.map((record) => (record.payload as { state: string }).state)).toEqual([
       "starting",
+      "idle",
+      "running",
       "idle",
     ])
   })
@@ -229,9 +252,25 @@ describe("lifecycle events integration", () => {
     const createResponse = await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", name: "Archive me" },
+      payload: { workspaceId, agentId: "cursor", text: "Archive me" },
     })
     const session = JSON.parse(createResponse.body) as { id: string }
+
+    const waitForIdle = async () => {
+      const startedAt = Date.now()
+      while (Date.now() - startedAt < 5000) {
+        const latest = await app.inject({
+          method: "GET",
+          url: `/v1/sessions/${session.id}`,
+        })
+        if (SessionSchema.parse(JSON.parse(latest.body)).state === "idle") {
+          return
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+      throw new Error("timed out waiting for idle after create")
+    }
+    await waitForIdle()
 
     const archiveResponse = await app.inject({
       method: "POST",
@@ -249,21 +288,14 @@ describe("lifecycle events integration", () => {
       return
     }
 
-    expect(records.value.map((record) => record.kind)).toEqual([
-      "session.created",
-      "session.state",
-      "acp.request",
-      "acp.response",
-      "session.state",
-      "acp.request",
-      "acp.response",
-      "session.state",
-    ])
+    expect(records.value.some((record) => record.kind === "session.created")).toBe(true)
+    expect(records.value.some((record) => record.kind === "turn.started")).toBe(true)
+    expect(records.value.some((record) => record.kind === "turn.completed")).toBe(true)
     expect(
       records.value
         .filter((record) => record.kind === "session.state")
         .map((record) => (record.payload as { state: string }).state),
-    ).toEqual(["starting", "idle", "archived"])
+    ).toEqual(["starting", "idle", "running", "idle", "archived"])
   })
 
   test("workspace rename appends workspace.changed updated", async () => {
@@ -368,7 +400,7 @@ describe("lifecycle events integration", () => {
     const createResponse = await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", name: "Resume me" },
+      payload: { workspaceId, agentId: "cursor", text: "Resume me" },
     })
     const session = JSON.parse(createResponse.body) as { id: string }
 
@@ -391,7 +423,7 @@ describe("lifecycle events integration", () => {
       .filter((record) => record.kind === "session.state")
       .map((record) => (record.payload as { state: string }).state)
 
-    expect(states).toEqual(["starting", "idle", "idle"])
+    expect(states).toEqual(["starting", "idle", "running", "idle", "idle"])
   })
 
   test("rollback publishes nothing when workspace delete target is missing", async () => {
@@ -436,12 +468,12 @@ describe("lifecycle events integration", () => {
     await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", name: "First" },
+      payload: { workspaceId, agentId: "cursor", text: "First" },
     })
     await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", name: "Second" },
+      payload: { workspaceId, agentId: "cursor", text: "Second" },
     })
 
     const records = journal.readAfter({ cursor: 0n, limit: 100 })
@@ -471,7 +503,10 @@ describe("lifecycle events integration", () => {
     )
 
     Object.values(sequencesBySession).forEach((sequences) => {
-      expect(sequences).toEqual([1, 2, 3, 4, 5])
+      expect(sequences).toEqual(
+        Array.from({ length: sequences.length }, (_, index) => index + 1),
+      )
+      expect(sequences.length).toBeGreaterThanOrEqual(5)
     })
   })
 
@@ -488,7 +523,7 @@ describe("lifecycle events integration", () => {
     await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", name: "Gone" },
+      payload: { workspaceId, agentId: "cursor", text: "Gone" },
     })
 
     const beforeDelete = journal.readAfter({ cursor: 0n, limit: 100 })

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { WorkspaceActiveSessionsProblemSchema } from "contracts/http/error"
-import { SessionCollectionSchema, SessionSchema } from "contracts/http/session"
+import { SessionCollectionSchema, CreateSessionResponseSchema,
+  SessionSchema } from "contracts/http/session"
 import {
   cleanupTestAppResources,
   createTempDataDir,
@@ -37,10 +38,10 @@ describe("DELETE /v1/workspaces/:id cascade", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Cascade session",
+        text: "Cascade session",
       },
     })
-    const created = SessionSchema.parse(JSON.parse(createResponse.body))
+    const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
     expect(createResponse.statusCode).toBe(201)
 
     const deleteResponse = await app.inject({
@@ -88,7 +89,7 @@ describe("DELETE /v1/workspaces/:id cascade", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Force delete session",
+        text: "Force delete session",
       },
     })
     expect(createResponse.statusCode).toBe(201)

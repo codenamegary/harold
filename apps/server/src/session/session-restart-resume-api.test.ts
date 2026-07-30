@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { SessionSchema } from "contracts/http/session"
+import { CreateSessionResponseSchema,
+  SessionSchema } from "contracts/http/session"
 import { openDatabase } from "../persistence/database"
 import { createServer } from "../bootstrap/server"
 import { createRuntime } from "../runtime/runtime"
@@ -42,11 +43,27 @@ describe("session restart and resume API", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Restart me",
+        text: "Restart me",
       },
     })
-    const created = SessionSchema.parse(JSON.parse(createResponse.body))
+    const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
     expect(createResponse.statusCode).toBe(201)
+
+    const waitForIdle = async () => {
+      const startedAt = Date.now()
+      while (Date.now() - startedAt < 5000) {
+        const latest = await firstApp.app.inject({
+          method: "GET",
+          url: `/v1/sessions/${created.id}`,
+        })
+        if (SessionSchema.parse(JSON.parse(latest.body)).state === "idle") {
+          return
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+      throw new Error("timed out waiting for idle after create")
+    }
+    await waitForIdle()
 
     await firstApp.app.close()
     firstApp.database.close()

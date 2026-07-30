@@ -252,7 +252,7 @@ describe("GET /v1/events websocket replay", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Session A",
+        text: "Session A",
       },
     })
     const sessionA = JSON.parse(createResponse.body) as { id: string }
@@ -263,7 +263,7 @@ describe("GET /v1/events websocket replay", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Session B",
+        text: "Session B",
       },
     })
     const sessionB = JSON.parse(createSecondResponse.body) as { id: string }
@@ -315,7 +315,7 @@ describe("GET /v1/events websocket replay", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Filtered",
+        text: "Filtered",
       },
     })
     expect(createResponse.statusCode).toBe(201)
@@ -517,7 +517,7 @@ describe("GET /v1/events websocket handshake validation", () => {
       payload: {
         workspaceId: firstWorkspace.workspaceId,
         agentId: "cursor",
-        name: "Mismatch test",
+        text: "Mismatch test",
       },
     })
     const session = JSON.parse(createResponse.body) as { id: string }

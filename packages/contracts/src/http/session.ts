@@ -29,7 +29,11 @@ export const SessionSchema = z.strictObject({
 export const CreateSessionBodySchema = z.strictObject({
   workspaceId: IdSchema,
   agentId: AgentIdSchema,
-  name: z.string().min(1).max(120),
+  text: z.string().min(1).max(32_768),
+})
+
+export const CreateSessionResponseSchema = SessionSchema.extend({
+  turnId: TurnIdSchema,
 })
 
 export const UpdateSessionBodySchema = z.strictObject({
@@ -61,6 +65,7 @@ export const CancelSessionResponseSchema = z.strictObject({
 export type Session = z.infer<typeof SessionSchema>
 export type SessionState = z.infer<typeof SessionStateSchema>
 export type CreateSessionBody = z.infer<typeof CreateSessionBodySchema>
+export type CreateSessionResponse = z.infer<typeof CreateSessionResponseSchema>
 export type UpdateSessionBody = z.infer<typeof UpdateSessionBodySchema>
 export type SessionCollection = z.infer<typeof SessionCollectionSchema>
 export type ListSessionsQuery = z.infer<typeof ListSessionsQuerySchema>

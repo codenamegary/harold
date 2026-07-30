@@ -7,6 +7,7 @@ import {
 } from "contracts/http/error"
 import {
   CancelSessionResponseSchema,
+  CreateSessionResponseSchema,
   PromptSessionResponseSchema,
   SessionCollectionSchema,
   SessionSchema,
@@ -31,7 +32,7 @@ afterEach(async () => {
 })
 
 describe("POST /v1/sessions", () => {
-  test("returns 201 with SessionSchema when workspace and agent are valid", async () => {
+  test("returns 201 with session fields plus turnId and derived name", async () => {
     const dataDir = await createTempDataDir(resources)
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
@@ -47,17 +48,18 @@ describe("POST /v1/sessions", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Debug auth",
+        text: "Debug auth",
       },
     })
 
-    const body = SessionSchema.parse(JSON.parse(response.body))
+    const body = CreateSessionResponseSchema.parse(JSON.parse(response.body))
 
     expect(response.statusCode).toBe(201)
     expect(body.workspaceId).toBe(workspaceId)
     expect(body.agentId).toBe("cursor")
     expect(body.name).toBe("Debug auth")
-    expect(body.state).toBe("idle")
+    expect(body.state).toBe("running")
+    expect(body.turnId).toMatch(/^turn_[0-9A-HJKMNP-TV-Z]{26}$/)
     expect(body.id).toMatch(/^sess_[0-9A-HJKMNP-TV-Z]{26}$/)
     expect("acpSessionId" in body).toBe(false)
   })
@@ -73,7 +75,7 @@ describe("POST /v1/sessions", () => {
       payload: {
         workspaceId,
         agentId: "unknown",
-        name: "Debug auth",
+        text: "Debug auth",
       },
     })
 
@@ -99,7 +101,7 @@ describe("POST /v1/sessions", () => {
       payload: {
         workspaceId: "ws_01J0000000000000000000000",
         agentId: "cursor",
-        name: "Debug auth",
+        text: "Debug auth",
       },
     })
 
@@ -120,7 +122,7 @@ describe("POST /v1/sessions", () => {
       payload: {
         workspaceId,
         agentId: "claude",
-        name: "Claude session",
+        text: "Claude session",
       },
     })
 
@@ -141,7 +143,7 @@ describe("POST /v1/sessions", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Debug auth",
+        text: "Debug auth",
       },
     })
 
@@ -151,7 +153,7 @@ describe("POST /v1/sessions", () => {
     expect(body.title).toBe("Agent is disabled")
   })
 
-  test("returns 400 for empty name", async () => {
+  test("returns 400 for empty text", async () => {
     const dataDir = await createTempDataDir(resources)
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
@@ -167,7 +169,32 @@ describe("POST /v1/sessions", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "",
+        text: "",
+      },
+    })
+
+    expect(response.statusCode).toBe(400)
+    ValidationProblemSchema.parse(JSON.parse(response.body))
+  })
+
+  test("returns 400 when client sends name", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { app } = await createTestApp(resources, dataDir, whichFn)
+    const { workspaceId } = await seedWorkspace(app, dataDir)
+
+    await enableAgent(app, "cursor", whichFn)
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: {
+        workspaceId,
+        agentId: "cursor",
+        text: "Debug auth",
+        name: "Client name",
       },
     })
 
@@ -185,6 +212,29 @@ describe("POST /v1/sessions", () => {
 })
 
 describe("session lifecycle", () => {
+  const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 5000) => {
+    const startedAt = Date.now()
+    while (!(await predicate())) {
+      if (Date.now() - startedAt > timeoutMs) {
+        throw new Error("timed out waiting for condition")
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+  }
+
+  const waitForSessionIdle = async (
+    app: { inject: (opts: { method: string; url: string }) => Promise<{ body: string }> },
+    sessionId: string,
+  ) => {
+    await waitFor(async () => {
+      const latest = await app.inject({
+        method: "GET",
+        url: `/v1/sessions/${sessionId}`,
+      })
+      return SessionSchema.parse(JSON.parse(latest.body)).state === "idle"
+    })
+  }
+
   test("create, list, get, rename, select, archive, and resume conflicts", async () => {
     const dataDir = await createTempDataDir(resources)
     const detectedPath = "/usr/local/bin/agent"
@@ -210,12 +260,14 @@ describe("session lifecycle", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Lifecycle session",
+        text: "Lifecycle session",
       },
     })
-    const created = SessionSchema.parse(JSON.parse(createResponse.body))
+    const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
     expect(createResponse.statusCode).toBe(201)
-    expect(created.state).toBe("idle")
+    expect(created.state).toBe("running")
+    expect(created.turnId).toMatch(/^turn_[0-9A-HJKMNP-TV-Z]{26}$/)
+    expect(created.name).toBe("Lifecycle session")
 
     const listResponse = await app.inject({
       method: "GET",
@@ -304,10 +356,10 @@ describe("session lifecycle", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Resumable",
+        text: "Resumable",
       },
     })
-    const created = SessionSchema.parse(JSON.parse(createResponse.body))
+    const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
 
     const resumeResponse = await app.inject({
       method: "POST",
@@ -336,10 +388,12 @@ describe("session lifecycle", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Non-resumable",
+        text: "Non-resumable",
       },
     })
-    const created = SessionSchema.parse(JSON.parse(createResponse.body))
+    const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
+
+    await waitForSessionIdle(app, created.id)
 
     const resumeResponse = await app.inject({
       method: "POST",
@@ -380,10 +434,12 @@ describe("session lifecycle", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Load fail",
+        text: "Load fail",
       },
     })
-    const created = SessionSchema.parse(JSON.parse(createResponse.body))
+    const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
+
+    await waitForSessionIdle(app, created.id)
 
     const resumeResponse = await app.inject({
       method: "POST",
@@ -433,10 +489,10 @@ describe("session lifecycle", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Active binding",
+        text: "Active binding",
       },
     })
-    const created = SessionSchema.parse(JSON.parse(createResponse.body))
+    const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
     expect(createResponse.statusCode).toBe(201)
 
     const statusAfterCreate = StatusSchema.parse(JSON.parse((await app.inject({
@@ -476,10 +532,10 @@ describe("session lifecycle", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Close on archive",
+        text: "Close on archive",
       },
     })
-    const created = SessionSchema.parse(JSON.parse(createResponse.body))
+    const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
     expect(createResponse.statusCode).toBe(201)
 
     const archiveResponse = await app.inject({
@@ -510,10 +566,10 @@ describe("session lifecycle", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Close fail",
+        text: "Close fail",
       },
     })
-    const created = SessionSchema.parse(JSON.parse(createResponse.body))
+    const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
 
     const archiveResponse = await app.inject({
       method: "POST",
@@ -548,10 +604,10 @@ describe("session lifecycle", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Metadata archive",
+        text: "Metadata archive",
       },
     })
-    const created = SessionSchema.parse(JSON.parse(createResponse.body))
+    const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
 
     const archiveResponse = await app.inject({
       method: "POST",
@@ -623,9 +679,17 @@ describe("POST /v1/sessions/:sessionId/prompt", () => {
     const created = await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", name: "Prompt api" },
+      payload: { workspaceId, agentId: "cursor", text: "Prompt api" },
     })
-    const session = SessionSchema.parse(JSON.parse(created.body))
+    const session = CreateSessionResponseSchema.parse(JSON.parse(created.body))
+
+    await waitFor(async () => {
+      const latest = await app.inject({
+        method: "GET",
+        url: `/v1/sessions/${session.id}`,
+      })
+      return SessionSchema.parse(JSON.parse(latest.body)).state === "idle"
+    })
 
     const response = await app.inject({
       method: "POST",
@@ -669,16 +733,10 @@ describe("POST /v1/sessions/:sessionId/prompt", () => {
     const created = await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", name: "Busy prompt" },
+      payload: { workspaceId, agentId: "cursor", text: "Busy prompt" },
     })
-    const session = SessionSchema.parse(JSON.parse(created.body))
-
-    const first = await app.inject({
-      method: "POST",
-      url: `/v1/sessions/${session.id}/prompt`,
-      payload: { text: "first" },
-    })
-    expect(first.statusCode).toBe(202)
+    const session = CreateSessionResponseSchema.parse(JSON.parse(created.body))
+    expect(session.state).toBe("running")
 
     const second = await app.inject({
       method: "POST",
@@ -702,9 +760,9 @@ describe("POST /v1/sessions/:sessionId/prompt", () => {
     const created = await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", name: "Archive prompt" },
+      payload: { workspaceId, agentId: "cursor", text: "Archive prompt" },
     })
-    const session = SessionSchema.parse(JSON.parse(created.body))
+    const session = CreateSessionResponseSchema.parse(JSON.parse(created.body))
 
     await app.inject({
       method: "POST",
@@ -733,9 +791,17 @@ describe("POST /v1/sessions/:sessionId/prompt", () => {
     const created = await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", name: "Unbound prompt" },
+      payload: { workspaceId, agentId: "cursor", text: "Unbound prompt" },
     })
-    const session = SessionSchema.parse(JSON.parse(created.body))
+    const session = CreateSessionResponseSchema.parse(JSON.parse(created.body))
+
+    await waitFor(async () => {
+      const latest = await app.inject({
+        method: "GET",
+        url: `/v1/sessions/${session.id}`,
+      })
+      return SessionSchema.parse(JSON.parse(latest.body)).state === "idle"
+    })
 
     const binding = acpSupervisor
       .getSessionBindingRegistry()
@@ -786,17 +852,10 @@ describe("POST /v1/sessions/:sessionId/cancel", () => {
     const created = await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", name: "Cancel api" },
+      payload: { workspaceId, agentId: "cursor", text: "Cancel api" },
     })
-    const session = SessionSchema.parse(JSON.parse(created.body))
-
-    const prompt = await app.inject({
-      method: "POST",
-      url: `/v1/sessions/${session.id}/prompt`,
-      payload: { text: "cancel me" },
-    })
-    expect(prompt.statusCode).toBe(202)
-    const promptBody = PromptSessionResponseSchema.parse(JSON.parse(prompt.body))
+    const session = CreateSessionResponseSchema.parse(JSON.parse(created.body))
+    expect(session.state).toBe("running")
 
     const cancel = await app.inject({
       method: "POST",
@@ -804,7 +863,7 @@ describe("POST /v1/sessions/:sessionId/cancel", () => {
     })
     expect(cancel.statusCode).toBe(202)
     const cancelBody = CancelSessionResponseSchema.parse(JSON.parse(cancel.body))
-    expect(cancelBody.turnId).toBe(promptBody.turnId)
+    expect(cancelBody.turnId).toBe(session.turnId)
 
     await waitFor(async () => {
       const latest = await app.inject({
@@ -831,10 +890,17 @@ describe("POST /v1/sessions/:sessionId/cancel", () => {
     const created = await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", name: "Cancel idle" },
+      payload: { workspaceId, agentId: "cursor", text: "Cancel idle" },
     })
-    const session = SessionSchema.parse(JSON.parse(created.body))
-    expect(session.state).toBe("idle")
+    const session = CreateSessionResponseSchema.parse(JSON.parse(created.body))
+
+    await waitFor(async () => {
+      const latest = await app.inject({
+        method: "GET",
+        url: `/v1/sessions/${session.id}`,
+      })
+      return SessionSchema.parse(JSON.parse(latest.body)).state === "idle"
+    })
 
     const response = await app.inject({
       method: "POST",
@@ -857,9 +923,9 @@ describe("POST /v1/sessions/:sessionId/cancel", () => {
     const created = await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", name: "Archive cancel" },
+      payload: { workspaceId, agentId: "cursor", text: "Archive cancel" },
     })
-    const session = SessionSchema.parse(JSON.parse(created.body))
+    const session = CreateSessionResponseSchema.parse(JSON.parse(created.body))
 
     await app.inject({
       method: "POST",
@@ -892,16 +958,10 @@ describe("POST /v1/sessions/:sessionId/cancel", () => {
     const created = await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", name: "Cancel twice" },
+      payload: { workspaceId, agentId: "cursor", text: "Cancel twice" },
     })
-    const session = SessionSchema.parse(JSON.parse(created.body))
-
-    const prompt = await app.inject({
-      method: "POST",
-      url: `/v1/sessions/${session.id}/prompt`,
-      payload: { text: "still running" },
-    })
-    const promptBody = PromptSessionResponseSchema.parse(JSON.parse(prompt.body))
+    const session = CreateSessionResponseSchema.parse(JSON.parse(created.body))
+    expect(session.state).toBe("running")
 
     const firstCancel = await app.inject({
       method: "POST",
@@ -915,7 +975,7 @@ describe("POST /v1/sessions/:sessionId/cancel", () => {
     })
     expect(secondCancel.statusCode).toBe(202)
     const secondBody = CancelSessionResponseSchema.parse(JSON.parse(secondCancel.body))
-    expect(secondBody.turnId).toBe(promptBody.turnId)
+    expect(secondBody.turnId).toBe(session.turnId)
 
     await waitFor(async () => {
       const latest = await app.inject({

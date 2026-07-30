@@ -3,6 +3,7 @@ import { EventFrameSchema } from "contracts/events/stream"
 import { Event } from "contracts/events/event"
 import {
   PromptSessionResponseSchema,
+  CreateSessionResponseSchema,
   SessionSchema,
 } from "contracts/http/session"
 import { WebSocket } from "ws"
@@ -123,11 +124,19 @@ describe("HTTP prompt accept-and-stream", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Prompt stream",
+        text: "Prompt stream",
       },
     })
-    const session = SessionSchema.parse(JSON.parse(created.body))
-    expect(session.state).toBe("idle")
+    const session = CreateSessionResponseSchema.parse(JSON.parse(created.body))
+    expect(session.state).toBe("running")
+
+    await waitFor(async () => {
+      const latest = await app.inject({
+        method: "GET",
+        url: `/v1/sessions/${session.id}`,
+      })
+      return SessionSchema.parse(JSON.parse(latest.body)).state === "idle"
+    })
 
     const { httpBase, wsUrl } = await getListeningUrl(app, config)
     const { eventsPromise, whenOpen } = collectEventsUntil({

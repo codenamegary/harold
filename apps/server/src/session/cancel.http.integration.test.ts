@@ -4,6 +4,7 @@ import { Event } from "contracts/events/event"
 import {
   CancelSessionResponseSchema,
   PromptSessionResponseSchema,
+  CreateSessionResponseSchema,
   SessionSchema,
 } from "contracts/http/session"
 import { WebSocket } from "ws"
@@ -124,11 +125,19 @@ describe("HTTP cancel accept-and-stream", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Cancel stream",
+        text: "Cancel stream",
       },
     })
-    const session = SessionSchema.parse(JSON.parse(created.body))
-    expect(session.state).toBe("idle")
+    const session = CreateSessionResponseSchema.parse(JSON.parse(created.body))
+    expect(session.state).toBe("running")
+
+    await waitFor(async () => {
+      const latest = await app.inject({
+        method: "GET",
+        url: `/v1/sessions/${session.id}`,
+      })
+      return SessionSchema.parse(JSON.parse(latest.body)).state === "idle"
+    })
 
     const { httpBase, wsUrl } = await getListeningUrl(app, config)
     const { eventsPromise, whenOpen } = collectEventsUntil({
