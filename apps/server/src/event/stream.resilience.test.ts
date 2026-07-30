@@ -294,11 +294,12 @@ describe("event stream resilience", () => {
     })
     const database = openDatabase({ dataDir: config.dataDir })
     const runtime = createRuntime("0.1.0")
-    const { app, acpSupervisor, runtimeStatusService } = await createServer({
-      config,
-      runtime,
-      database,
-    })
+    const { app, acpSupervisor, runtimeStatusService, sessionService, disposeOfflineOnBindingClear } =
+      await createServer({
+        config,
+        runtime,
+        database,
+      })
 
     await listen(app, config, runtimeStatusService)
 
@@ -321,6 +322,8 @@ describe("event stream resilience", () => {
       database,
       acpSupervisor,
       runtimeStatusService,
+      sessionService,
+      disposeOfflineOnBindingClear,
       exit: () => {
         throw new Error("shutdown-exit")
       },

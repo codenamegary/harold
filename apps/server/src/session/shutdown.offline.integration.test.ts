@@ -52,14 +52,15 @@ describe("session offline on shutdown", () => {
       sessionLoadSessionId: "fake-session-shutdown-offline",
       emitSessionUpdatesOnPrompt: true,
     })
-    const { app, acpSupervisor, runtimeStatusService } = await createServer({
-      config,
-      runtime,
-      database,
-      whichFn,
-      validateExecutablePathFn: () => true,
-      spawnAgentProcessFn,
-    })
+    const { app, acpSupervisor, runtimeStatusService, sessionService, disposeOfflineOnBindingClear } =
+      await createServer({
+        config,
+        runtime,
+        database,
+        whichFn,
+        validateExecutablePathFn: () => true,
+        spawnAgentProcessFn,
+      })
     resources.addApp(app)
 
     await listen(app, config, runtimeStatusService)
@@ -105,6 +106,8 @@ describe("session offline on shutdown", () => {
       database,
       acpSupervisor,
       runtimeStatusService,
+      sessionService,
+      disposeOfflineOnBindingClear,
       exit: () => {
         throw new Error("shutdown-exit")
       },

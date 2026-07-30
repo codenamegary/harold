@@ -112,6 +112,11 @@ export const createServer = async ({
     sessionRepository,
   })
 
+  const offlineOnBindingClear = { enabled: true }
+  const disposeOfflineOnBindingClear = () => {
+    offlineOnBindingClear.enabled = false
+  }
+
   const acpSupervisor =
     providedAcpSupervisor ??
     createAcpSupervisor({
@@ -120,16 +125,12 @@ export const createServer = async ({
       journalWriter,
       spawnAgentProcessFn,
       onBeforeClearRuntime: () => {
-        try {
-          sessionService.markLiveSessionsOffline()
-        } catch (error: unknown) {
-          if (
-            error instanceof RangeError &&
-            error.message.includes("closed database")
-          ) {
-            return
-          }
-          throw error
+        if (!offlineOnBindingClear.enabled) {
+          return
+        }
+        const marked = sessionService.markLiveSessionsOffline()
+        if (!marked.ok) {
+          throw new Error("failed to mark live sessions offline")
         }
       },
     })
@@ -170,5 +171,13 @@ export const createServer = async ({
     registerTestRoutes(app)
   }
 
-  return { app, acpSupervisor, eventJournal, commitPublisher, runtimeStatusService }
+  return {
+    app,
+    acpSupervisor,
+    eventJournal,
+    commitPublisher,
+    runtimeStatusService,
+    sessionService,
+    disposeOfflineOnBindingClear,
+  }
 }

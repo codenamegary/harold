@@ -594,11 +594,12 @@ describe("lifecycle events integration", () => {
     })
     const database = openDatabase({ dataDir: config.dataDir })
     const runtime = createRuntime("0.1.0")
-    const { app, acpSupervisor, runtimeStatusService } = await createServer({
-      config,
-      runtime,
-      database,
-    })
+    const { app, acpSupervisor, runtimeStatusService, sessionService, disposeOfflineOnBindingClear } =
+      await createServer({
+        config,
+        runtime,
+        database,
+      })
     const journal = createEventJournalRepository(database)
 
     const startingRecords = journal.readAfter({ cursor: 0n, limit: 10 })
@@ -614,7 +615,15 @@ describe("lifecycle events integration", () => {
       ),
     ).toHaveLength(1)
 
-    registerShutdown(app, database, acpSupervisor, runtimeStatusService, [])
+    registerShutdown(
+      app,
+      database,
+      acpSupervisor,
+      runtimeStatusService,
+      sessionService,
+      disposeOfflineOnBindingClear,
+      [],
+    )
     await listen(app, config, runtimeStatusService)
 
     const onlineRecords = journal.readAfter({ cursor: 0n, limit: 10 })

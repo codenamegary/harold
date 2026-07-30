@@ -239,16 +239,21 @@ export const createSessionService = (context: SessionServiceContext) => {
     const live = context.sessionRepository.listLiveNonArchived()
     const toMark = live.filter((session) => session.state !== "offline")
 
-    const marked: Session[] = []
-    for (const session of toMark) {
-      const result = markOffline({ id: session.id })
-      if (!result.ok) {
-        return result
-      }
-      marked.push(result.value)
-    }
+    return toMark.reduce<SessionServiceResult<ReadonlyArray<Session>>>(
+      (acc, session) => {
+        if (!acc.ok) {
+          return acc
+        }
 
-    return { ok: true, value: marked }
+        const result = markOffline({ id: session.id })
+        if (!result.ok) {
+          return result
+        }
+
+        return { ok: true, value: [...acc.value, result.value] }
+      },
+      { ok: true, value: [] },
+    )
   }
 
   return {
