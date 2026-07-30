@@ -21,13 +21,14 @@ jobs:
           bun-version: 1.3.14
 
       - name: Install dependencies
+        id: install
         run: bun install --frozen-lockfile
 
       - name: Run check
         run: bun run check
 
       - name: Run coverage
-        if: always()
+        if: always() && steps.install.outcome == 'success'
         run: |
           set -o pipefail
           {
@@ -39,7 +40,7 @@ jobs:
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage
-        if: always()
+        if: always() && steps.install.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: coverage
