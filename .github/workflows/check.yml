@@ -20,6 +20,9 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      - name: Setup LCOV
+        uses: hrishikesh-kadam/setup-lcov@v1
+
       - name: Install dependencies
         id: install
         run: bun install --frozen-lockfile
@@ -28,21 +31,55 @@ jobs:
         run: bun run check
 
       - name: Run coverage
+        id: coverage
         if: always() && steps.install.outcome == 'success'
+        run: bun run test:coverage
+
+      - name: Build HTML coverage report
+        if: always() && steps.install.outcome == 'success' && steps.coverage.outcome == 'success'
         run: |
-          set -o pipefail
+          mkdir -p coverage/html/server coverage/html/web
+          (
+            cd apps/server
+            genhtml ../../coverage/server/lcov.info \
+              --output-directory ../../coverage/html/server \
+              --title "apps/server" \
+              --legend \
+              --show-details
+          )
+          (
+            cd apps/web
+            genhtml ../../coverage/web/lcov.info \
+              --output-directory ../../coverage/html/web \
+              --title "apps/web" \
+              --legend \
+              --show-details
+          )
           {
             echo "## Test coverage"
             echo ""
+            echo "Download the \`coverage\` artifact."
+            echo "Open \`html/server/index.html\` or \`html/web/index.html\`."
+            echo ""
+            echo "### apps/server"
+            echo ""
             echo '```'
-            bun run test:coverage
+            lcov --summary coverage/server/lcov.info
             echo '```'
-          } | tee -a "$GITHUB_STEP_SUMMARY"
+            echo ""
+            echo "### apps/web"
+            echo ""
+            echo '```'
+            lcov --summary coverage/web/lcov.info
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage
         if: always() && steps.install.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: coverage
-          path: coverage/
+          path: |
+            coverage/**/lcov.info
+            coverage/html/
           if-no-files-found: warn
