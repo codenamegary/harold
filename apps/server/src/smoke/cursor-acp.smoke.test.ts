@@ -198,11 +198,14 @@ describe("cursor ACP smoke", () => {
           }
           expect(problem.title).toBe("Session is not resumable")
           expect(problem.type).toContain("conflict")
-          expect(problem.detail).toBe(
-            "Cursor could not load this session. Start a new session.",
-          )
+          // Cursor may put a useful session-not-found string in error.data.message.
+          // Prefer that. Bare Invalid params maps to the actionable fallback.
           expect(problem.detail).not.toBe("Invalid params")
           expect(problem.detail).not.toContain("Invalid params")
+          expect(
+            problem.detail === "Cursor could not load this session. Start a new session."
+              || /not found/i.test(problem.detail),
+          ).toBe(true)
 
           const intactResponse = await restarted.app.inject({
             method: "GET",
