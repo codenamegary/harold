@@ -85,6 +85,30 @@ const readToolName = (fields: Record<string, unknown>): string | undefined => {
   return undefined
 }
 
+export const sanitizeOperatorPromptText = (prompt: unknown): string => {
+  if (!Array.isArray(prompt)) {
+    return ""
+  }
+
+  return prompt
+    .flatMap((block) => {
+      if (typeof block !== "object" || block === null) {
+        return []
+      }
+
+      if (!("type" in block) || !("text" in block)) {
+        return []
+      }
+
+      if (block.type !== "text" || typeof block.text !== "string") {
+        return []
+      }
+
+      return [block.text]
+    })
+    .join("")
+}
+
 export const sanitizeSessionUpdate = (update: unknown): SanitizedNotificationPayload | undefined => {
   const envelope = readUpdateEnvelope(update)
   if (envelope === undefined) {
@@ -100,6 +124,13 @@ export const sanitizeSessionUpdate = (update: unknown): SanitizedNotificationPay
         return undefined
       }
       return { updateKind: "agent_message_chunk", text }
+    }
+    case "agent_thought_chunk": {
+      const text = readChunkText(fields)
+      if (text === undefined) {
+        return undefined
+      }
+      return { updateKind: "agent_thought_chunk", text }
     }
     case "tool_call": {
       const toolCallId = typeof fields.toolCallId === "string" ? fields.toolCallId : undefined

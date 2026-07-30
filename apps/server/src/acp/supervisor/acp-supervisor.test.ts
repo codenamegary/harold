@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { AgentId } from "contracts/http/agent-settings"
 import { createAcpSupervisor } from "./acp-supervisor"
+import { AcpJournalWriter } from "../journal/acp.journal.writer"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
 import { SpawnedAgentProcess } from "./spawn-agent-process"
 
@@ -347,6 +348,63 @@ describe("createAcpSupervisor", () => {
     expect(promptCalls).toEqual([
       { sessionId: "acp-session-prompt", prompt },
     ])
+  })
+
+  test("promptAcpSession journals turn.started with sanitized prompt text", async () => {
+    const mock = createMockTransport()
+    const appended: Array<{ kind: string; payload?: unknown }> = []
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+    mock.setHandler("session/new", () => ({ sessionId: "acp-session-prompt-journal" }))
+    mock.setHandler("session/prompt", () => ({ stopReason: "end_turn" }))
+
+    const journalWriter: AcpJournalWriter = {
+      appendAndPublish: (records) => {
+        appended.push(...records)
+        return { ok: true }
+      },
+      runTransactional: (work) => {
+        const result = work({
+          executor: {} as never,
+          append: (records) => {
+            appended.push(...records)
+            return { ok: true, value: [] }
+          },
+        })
+        if (!result.ok) {
+          return result
+        }
+        return { ok: true, value: result.value }
+      },
+    }
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      journalWriter,
+      spawnAgentProcessFn: () => createMockProcess(),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    await supervisor.createAcpSession({
+      workspaceCwd: "/tmp/ws",
+      sessionId: "sess_test",
+      workspaceId: "ws_test",
+    })
+
+    await supervisor.promptAcpSession({
+      acpSessionId: "acp-session-prompt-journal",
+      prompt: [{ type: "text", text: "operator prompt" }],
+    })
+
+    const turnStarted = appended.find((record) => record.kind === "turn.started")
+    expect(turnStarted?.payload).toEqual({ text: "operator prompt" })
   })
 
   test("cancelAcpSession sends session/cancel as a notification", async () => {

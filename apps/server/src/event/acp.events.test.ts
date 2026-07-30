@@ -41,6 +41,70 @@ describe("projectAcpEvent", () => {
     ])
   })
 
+  test("maps turn.started to public turn.started with text", () => {
+    const record: ParsedJournalRecord = {
+      ...baseRecord,
+      cursor: 9n,
+      kind: "turn.started",
+      turnId,
+      phase: null,
+      protocolVersion: null,
+      direction: null,
+      payload: { text: "operator prompt" },
+    }
+
+    const events = projectAcpEvent(parseAcpJournalRecord(record), { outputChunksByTurnId: {} })
+    expect(events).toEqual([
+      EventSchema.parse({
+        type: "turn.started",
+        cursor: "9",
+        occurredAt: "2026-07-24T12:00:00.000Z",
+        workspaceId: "ws_test",
+        sessionId: "sess_test",
+        payload: { turnId, text: "operator prompt" },
+      }),
+    ])
+  })
+
+  test("maps missing turn.started text to empty string", () => {
+    const record: ParsedJournalRecord = {
+      ...baseRecord,
+      cursor: 8n,
+      kind: "turn.started",
+      turnId,
+      phase: null,
+      protocolVersion: null,
+      direction: null,
+      payload: {},
+    }
+
+    const events = projectAcpEvent(parseAcpJournalRecord(record), { outputChunksByTurnId: {} })
+    expect(events[0]?.payload).toEqual({ turnId, text: "" })
+  })
+
+  test("maps agent_thought_chunk to session.thought.delta", () => {
+    const record: ParsedJournalRecord = {
+      ...baseRecord,
+      cursor: 10n,
+      kind: "acp.notification",
+      turnId,
+      phase: "live",
+      payload: { updateKind: "agent_thought_chunk", text: "thinking" },
+    }
+
+    const events = projectAcpEvent(parseAcpJournalRecord(record), { outputChunksByTurnId: {} })
+    expect(events).toEqual([
+      EventSchema.parse({
+        type: "session.thought.delta",
+        cursor: "10",
+        occurredAt: "2026-07-24T12:00:00.000Z",
+        workspaceId: "ws_test",
+        sessionId: "sess_test",
+        payload: { turnId, text: "thinking" },
+      }),
+    ])
+  })
+
   test("maps tool_call and tool_call_update to tool events", () => {
     const started: ParsedJournalRecord = {
       ...baseRecord,
