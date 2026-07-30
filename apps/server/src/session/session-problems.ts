@@ -78,3 +78,13 @@ export const buildAcpUnavailableProblem = (detail = "ACP agent is unavailable") 
     status: 409,
     detail: sanitizeAcpErrorMessage(detail),
   })
+
+export const buildTurnInProgressProblem = (
+  detail = "A turn is already running for this session",
+) =>
+  ConflictProblemSchema.parse({
+    type: PROBLEM_TYPES.conflict,
+    title: "Turn already in progress",
+    status: 409,
+    detail,
+  })

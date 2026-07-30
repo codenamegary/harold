@@ -4,7 +4,11 @@ import {
   NotFoundProblemSchema,
   ValidationProblemSchema,
 } from "contracts/http/error"
-import { SessionCollectionSchema, SessionSchema } from "contracts/http/session"
+import {
+  PromptSessionResponseSchema,
+  SessionCollectionSchema,
+  SessionSchema,
+} from "contracts/http/session"
 import { StatusSchema } from "contracts/http/status"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { buildAcpUnavailableProblem } from "./session-problems"
@@ -583,5 +587,168 @@ describe("session lifecycle", () => {
     const body = ValidationProblemSchema.parse(JSON.parse(response.body))
     expect(response.statusCode).toBe(400)
     expect(body.errors[0]?.pointer).toBe("#/cursor")
+  })
+})
+
+describe("POST /v1/sessions/:sessionId/prompt", () => {
+  const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 5000) => {
+    const startedAt = Date.now()
+    while (!(await predicate())) {
+      if (Date.now() - startedAt > timeoutMs) {
+        throw new Error("timed out waiting for condition")
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+  }
+
+  test("returns 202 with turnId and leaves session idle after turn completes", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { app } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
+      capabilities: { loadSession: true, sessionClose: true },
+      sessionNewSessionId: "fake-session-prompt-api",
+      sessionLoadSessionId: "fake-session-prompt-api",
+      emitSessionUpdatesOnPrompt: true,
+    })
+    const { workspaceId } = await seedWorkspace(app, dataDir)
+    await enableAgent(app, "cursor", whichFn)
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { workspaceId, agentId: "cursor", name: "Prompt api" },
+    })
+    const session = SessionSchema.parse(JSON.parse(created.body))
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${session.id}/prompt`,
+      payload: { text: "hello from http" },
+    })
+
+    expect(response.statusCode).toBe(202)
+    const body = PromptSessionResponseSchema.parse(JSON.parse(response.body))
+    expect(body.turnId).toMatch(/^turn_[0-9A-HJKMNP-TV-Z]{26}$/)
+
+    const running = await app.inject({
+      method: "GET",
+      url: `/v1/sessions/${session.id}`,
+    })
+    expect(SessionSchema.parse(JSON.parse(running.body)).state).toBe("running")
+
+    await waitFor(async () => {
+      const latest = await app.inject({
+        method: "GET",
+        url: `/v1/sessions/${session.id}`,
+      })
+      return SessionSchema.parse(JSON.parse(latest.body)).state === "idle"
+    })
+  })
+
+  test("returns 409 when a turn is already running", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { app } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
+      capabilities: { loadSession: true, sessionClose: true },
+      sessionNewSessionId: "fake-session-prompt-busy",
+      sessionLoadSessionId: "fake-session-prompt-busy",
+      emitSessionUpdatesOnPrompt: true,
+    })
+    const { workspaceId } = await seedWorkspace(app, dataDir)
+    await enableAgent(app, "cursor", whichFn)
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { workspaceId, agentId: "cursor", name: "Busy prompt" },
+    })
+    const session = SessionSchema.parse(JSON.parse(created.body))
+
+    const first = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${session.id}/prompt`,
+      payload: { text: "first" },
+    })
+    expect(first.statusCode).toBe(202)
+
+    const second = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${session.id}/prompt`,
+      payload: { text: "second" },
+    })
+    const body = ConflictProblemSchema.parse(JSON.parse(second.body))
+    expect(second.statusCode).toBe(409)
+    expect(body.title).toBe("Turn already in progress")
+  })
+
+  test("returns 409 for archived sessions", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { app } = await createTestApp(resources, dataDir, whichFn)
+    const { workspaceId } = await seedWorkspace(app, dataDir)
+    await enableAgent(app, "cursor", whichFn)
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { workspaceId, agentId: "cursor", name: "Archive prompt" },
+    })
+    const session = SessionSchema.parse(JSON.parse(created.body))
+
+    await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${session.id}/archive`,
+    })
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${session.id}/prompt`,
+      payload: { text: "too late" },
+    })
+    const body = ConflictProblemSchema.parse(JSON.parse(response.body))
+    expect(response.statusCode).toBe(409)
+    expect(body.title).toBe("Session is archived")
+  })
+
+  test("returns 409 for unbound sessions", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { app, acpSupervisor } = await createTestApp(resources, dataDir, whichFn)
+    const { workspaceId } = await seedWorkspace(app, dataDir)
+    await enableAgent(app, "cursor", whichFn)
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { workspaceId, agentId: "cursor", name: "Unbound prompt" },
+    })
+    const session = SessionSchema.parse(JSON.parse(created.body))
+
+    const binding = acpSupervisor
+      .getSessionBindingRegistry()
+      .getBinding("fake-session-new")
+    expect(binding).toBeDefined()
+    if (binding !== undefined) {
+      acpSupervisor.getSessionBindingRegistry().unbind({
+        acpSessionId: binding.acpSessionId,
+      })
+    }
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${session.id}/prompt`,
+      payload: { text: "no binding" },
+    })
+    const body = ConflictProblemSchema.parse(JSON.parse(response.body))
+    expect(response.statusCode).toBe(409)
+    expect(body.title).toBe("ACP unavailable")
   })
 })

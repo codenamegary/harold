@@ -2,6 +2,8 @@ import { AgentId } from "contracts/http/agent-settings"
 import {
   CreateSessionBodySchema,
   ListSessionsQuerySchema,
+  PromptSessionBodySchema,
+  PromptSessionResponseSchema,
   SessionCollectionSchema,
   SessionSchema,
   UpdateSessionBodySchema,
@@ -22,6 +24,7 @@ import {
   buildSessionArchivedProblem,
   buildSessionNotFoundProblem,
   buildSessionNotResumableProblem,
+  buildTurnInProgressProblem,
   buildWorkspaceNotFoundProblem,
 } from "./session-problems"
 
@@ -322,5 +325,66 @@ export const registerSessionRoutes = (
     }
 
     return reply.status(200).send(SessionSchema.parse(resumed.value))
+  })
+
+  app.post("/v1/sessions/:sessionId/prompt", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string }
+    const body = PromptSessionBodySchema.parse(request.body)
+
+    const existing = sessionRepository.getById({ id: sessionId })
+    if (!existing.ok) {
+      return sendProblem(reply, 404, buildSessionNotFoundProblem())
+    }
+
+    if (isArchivedSession(existing.value)) {
+      return sendProblem(reply, 409, buildSessionArchivedProblem())
+    }
+
+    if (existing.value.state === "running") {
+      return sendProblem(reply, 409, buildTurnInProgressProblem())
+    }
+
+    const binding = sessionRepository.getAcpBinding({ id: sessionId })
+    if (!binding.ok) {
+      return sendProblem(reply, 404, buildSessionNotFoundProblem())
+    }
+
+    if (binding.value.acpSessionId === "pending") {
+      return sendProblem(reply, 409, buildAcpUnavailableProblem("Session is not bound"))
+    }
+
+    const liveBinding = acpSupervisor
+      .getSessionBindingRegistry()
+      .getBinding(binding.value.acpSessionId)
+
+    if (liveBinding === undefined) {
+      return sendProblem(reply, 409, buildAcpUnavailableProblem("Session is not bound"))
+    }
+
+    const supervisorReady = await ensureSupervisorReady(acpSupervisor, binding.value.agentId)
+    if (!supervisorReady) {
+      return sendProblem(reply, 409, buildAcpUnavailableProblem())
+    }
+
+    const running = sessionService.markRunning({ id: sessionId })
+    if (!running.ok) {
+      return sendProblem(reply, 404, buildSessionNotFoundProblem())
+    }
+
+    const started = await acpSupervisor.startPromptAcpSession({
+      acpSessionId: binding.value.acpSessionId,
+      prompt: [{ type: "text", text: body.text }],
+    })
+
+    if (!started.ok) {
+      sessionService.markIdle({ id: sessionId })
+      return sendProblem(reply, 409, buildAcpUnavailableProblem(started.reason))
+    }
+
+    void started.completion.finally(() => {
+      sessionService.markIdle({ id: sessionId })
+    })
+
+    return reply.status(202).send(PromptSessionResponseSchema.parse({ turnId: started.turnId }))
   })
 }

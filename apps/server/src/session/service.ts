@@ -10,6 +10,7 @@ import {
   MarkSessionErrorInput,
   MarkSessionReadyInput,
   SessionRepository,
+  SetSessionStateInput,
 } from "./repository"
 import { SessionRepositoryError } from "./session-errors"
 
@@ -189,12 +190,55 @@ export const createSessionService = (context: SessionServiceContext) => {
     input: MarkSessionReadyInput,
   ): SessionServiceResult<Session> => markReady(input)
 
+  const setTurnState = (
+    input: SetSessionStateInput,
+  ): SessionServiceResult<Session> => {
+    const occurredAt = nowIso()
+
+    return transactional((params) => {
+      const updated = context.sessionRepository.setState({
+        ...input,
+        executor: params.executor,
+      })
+      if (!updated.ok) {
+        return updated
+      }
+
+      const appendResult = params.append([
+        {
+          schemaVersion: JOURNAL_SCHEMA_VERSION,
+          kind: "session.state",
+          occurredAt,
+          workspaceId: updated.value.workspaceId,
+          sessionId: updated.value.id,
+          payload: { state: input.state },
+        },
+      ])
+
+      if (!appendResult.ok) {
+        return appendResult
+      }
+
+      return { ok: true, value: updated.value, appendedRecords: appendResult.value }
+    })
+  }
+
+  const markRunning = (
+    input: { id: string },
+  ): SessionServiceResult<Session> => setTurnState({ id: input.id, state: "running" })
+
+  const markIdle = (
+    input: { id: string },
+  ): SessionServiceResult<Session> => setTurnState({ id: input.id, state: "idle" })
+
   return {
     createStarting,
     markReady,
     markError,
     archive,
     resume,
+    markRunning,
+    markIdle,
   }
 }
 
