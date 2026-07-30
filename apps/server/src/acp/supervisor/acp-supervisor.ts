@@ -10,6 +10,7 @@ import {
   AcpSessionCancelResult,
   AcpSessionOperationResult,
   AcpSessionPromptResult,
+  AcpSessionPromptStartResult,
   AcpSupervisor,
   AcpSupervisorState,
   AcpSupervisorStatus,
@@ -453,13 +454,13 @@ export const createAcpSupervisor = ({
     return result
   }
 
-  const promptAcpSession = async ({
+  const startPromptAcpSession = async ({
     acpSessionId,
     prompt,
   }: {
     acpSessionId: string
     prompt: unknown
-  }): Promise<AcpSessionPromptResult> => {
+  }): Promise<AcpSessionPromptStartResult> => {
     const transport = runtime.transport
     if (runtime.state !== "ready" || transport === null) {
       return { ok: false, reason: "ACP supervisor is not ready" }
@@ -520,44 +521,63 @@ export const createAcpSupervisor = ({
 
     sessionBindingRegistry.setActiveTurnId({ acpSessionId, turnId })
 
-    try {
-      const result = await transport.request(
-        "session/prompt",
-        {
-          sessionId: acpSessionId,
-          prompt,
-        },
-        operationContext,
-        { requestId: promptRequestId },
-      )
+    const completion = (async (): Promise<AcpSessionPromptResult> => {
+      try {
+        const result = await transport.request(
+          "session/prompt",
+          {
+            sessionId: acpSessionId,
+            prompt,
+          },
+          operationContext,
+          { requestId: promptRequestId },
+        )
 
-      const stopReason = parsePromptStopReason(result)
-      if (stopReason === "cancelled") {
-        appendTurnLifecycle({ binding: bound.binding, turnId, kind: "turn.cancelled" })
-      } else if (stopReason === "end_turn") {
-        appendTurnLifecycle({ binding: bound.binding, turnId, kind: "turn.completed" })
-      } else {
+        const stopReason = parsePromptStopReason(result)
+        if (stopReason === "cancelled") {
+          appendTurnLifecycle({ binding: bound.binding, turnId, kind: "turn.cancelled" })
+        } else if (stopReason === "end_turn") {
+          appendTurnLifecycle({ binding: bound.binding, turnId, kind: "turn.completed" })
+        } else {
+          appendTurnLifecycle({
+            binding: bound.binding,
+            turnId,
+            kind: "turn.failed",
+            failureCode: "prompt_failed",
+          })
+        }
+
+        sessionBindingRegistry.setActiveTurnId({ acpSessionId, turnId: undefined })
+        return { ok: true, result }
+      } catch (error: unknown) {
+        const reason = sanitizeFailureReason(error, "session/prompt failed")
         appendTurnLifecycle({
           binding: bound.binding,
           turnId,
           kind: "turn.failed",
-          failureCode: "prompt_failed",
+          failureCode: mapSanitizedErrorToFailureCode(reason),
         })
+        sessionBindingRegistry.setActiveTurnId({ acpSessionId, turnId: undefined })
+        return { ok: false, reason }
       }
+    })()
 
-      sessionBindingRegistry.setActiveTurnId({ acpSessionId, turnId: undefined })
-      return { ok: true, result }
-    } catch (error: unknown) {
-      const reason = sanitizeFailureReason(error, "session/prompt failed")
-      appendTurnLifecycle({
-        binding: bound.binding,
-        turnId,
-        kind: "turn.failed",
-        failureCode: mapSanitizedErrorToFailureCode(reason),
-      })
-      sessionBindingRegistry.setActiveTurnId({ acpSessionId, turnId: undefined })
-      return { ok: false, reason }
+    return { ok: true, turnId, completion }
+  }
+
+  const promptAcpSession = async ({
+    acpSessionId,
+    prompt,
+  }: {
+    acpSessionId: string
+    prompt: unknown
+  }): Promise<AcpSessionPromptResult> => {
+    const started = await startPromptAcpSession({ acpSessionId, prompt })
+    if (!started.ok) {
+      return started
     }
+
+    return started.completion
   }
 
   const cancelAcpSession = async ({
@@ -657,6 +677,7 @@ export const createAcpSupervisor = ({
     loadAcpSession,
     closeAcpSession,
     promptAcpSession,
+    startPromptAcpSession,
     cancelAcpSession,
     closeWorkspaceSessions,
     unbindWorkspaceSessions,

@@ -213,6 +213,37 @@ describe("session repository", () => {
     database.close()
   })
 
+  test("setState updates running and idle turn states", async () => {
+    const dataDir = await createTempDataDir()
+    const { database, workspaceId } = await seedWorkspace(dataDir)
+    const repository = createSessionRepository(database)
+
+    const created = repository.create({
+      workspaceId,
+      agentId: "cursor",
+      name: "Turn state",
+      acpSessionId: "acp-turn-state",
+    })
+    expect(created.ok).toBe(true)
+    if (!created.ok) {
+      return
+    }
+
+    const running = repository.setState({ id: created.value.id, state: "running" })
+    expect(running.ok).toBe(true)
+    if (running.ok) {
+      expect(running.value.state).toBe("running")
+    }
+
+    const idle = repository.setState({ id: created.value.id, state: "idle" })
+    expect(idle.ok).toBe(true)
+    if (idle.ok) {
+      expect(idle.value.state).toBe("idle")
+    }
+
+    database.close()
+  })
+
   test("pages forward with opaque cursors and count scoped to workspace", async () => {
     const dataDir = await createTempDataDir()
     const { database, workspaceId } = await seedWorkspace(dataDir)

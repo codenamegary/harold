@@ -61,6 +61,12 @@ export type MarkSessionErrorInput = {
   executor?: DbExecutor
 }
 
+export type SetSessionStateInput = {
+  id: string
+  state: SessionState
+  executor?: DbExecutor
+}
+
 export type GetSessionAcpBindingInput = {
   id: string
 }
@@ -390,6 +396,26 @@ export const createSessionRepository = (database: AgentDatabase) => {
     return { ok: true, value: rowToSession(row) }
   }
 
+  const setState = ({
+    id,
+    state,
+    executor,
+  }: SetSessionStateInput): SessionRepositoryResult<Session> => {
+    const db = resolveExecutor(executor)
+    const row = db
+      .update(sessions)
+      .set({ state })
+      .where(eq(sessions.id, id))
+      .returning()
+      .get()
+
+    if (row === undefined) {
+      return { ok: false, error: { kind: "not_found" } }
+    }
+
+    return { ok: true, value: rowToSession(row) }
+  }
+
   const getAcpBinding = ({
     id,
   }: GetSessionAcpBindingInput): SessionRepositoryResult<SessionAcpBinding> => {
@@ -462,6 +488,7 @@ export const createSessionRepository = (database: AgentDatabase) => {
     archive,
     markReady,
     markError,
+    setState,
     getAcpBinding,
     listLiveByWorkspace,
   }

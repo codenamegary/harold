@@ -31,6 +31,10 @@ export type AcpSessionPromptResult =
   | { ok: true; result: unknown }
   | { ok: false; reason: string }
 
+export type AcpSessionPromptStartResult =
+  | { ok: true; turnId: string; completion: Promise<AcpSessionPromptResult> }
+  | { ok: false; reason: string }
+
 export type AcpSessionCancelResult =
   | { ok: true }
   | { ok: false; reason: string }
@@ -79,6 +83,10 @@ export type AcpSupervisor = {
     acpSessionId: string
     prompt: unknown
   }) => Promise<AcpSessionPromptResult>
+  startPromptAcpSession: (params: {
+    acpSessionId: string
+    prompt: unknown
+  }) => Promise<AcpSessionPromptStartResult>
   cancelAcpSession: (params: { acpSessionId: string }) => Promise<AcpSessionCancelResult>
   closeWorkspaceSessions: (params: {
     sessions: ReadonlyArray<LiveWorkspaceSession>
