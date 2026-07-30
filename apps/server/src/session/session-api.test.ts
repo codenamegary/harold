@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import {
   ConflictProblemSchema,
   NotFoundProblemSchema,
+  PROBLEM_TYPES,
   ValidationProblemSchema,
 } from "contracts/http/error"
 import { SessionCollectionSchema, SessionSchema } from "contracts/http/session"
@@ -386,7 +387,10 @@ describe("session lifecycle", () => {
     const body = ConflictProblemSchema.parse(JSON.parse(resumeResponse.body))
     expect(resumeResponse.statusCode).toBe(409)
     expect(body.title).toBe("Session is not resumable")
-    expect(body.detail).toContain("session load failed")
+    expect(body.type).toBe(PROBLEM_TYPES.conflict)
+    expect(body.detail).toBe("Cursor could not load this session. Start a new session.")
+    expect(body.detail).not.toBe("Invalid params")
+    expect(body.detail).not.toContain("Invalid params")
 
     const getResponse = await app.inject({
       method: "GET",

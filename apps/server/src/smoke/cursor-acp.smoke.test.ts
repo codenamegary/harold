@@ -191,9 +191,18 @@ describe("cursor ACP smoke", () => {
             url: `/v1/sessions/${session.id}/resume`,
           })
           expect(resumeResponse.statusCode).toBe(409)
-          const problem = JSON.parse(resumeResponse.body) as { title: string; detail: string }
+          const problem = JSON.parse(resumeResponse.body) as {
+            title: string
+            detail: string
+            type: string
+          }
           expect(problem.title).toBe("Session is not resumable")
-          expect(problem.detail.length).toBeGreaterThan(0)
+          expect(problem.type).toContain("conflict")
+          expect(problem.detail).toBe(
+            "Cursor could not load this session. Start a new session.",
+          )
+          expect(problem.detail).not.toBe("Invalid params")
+          expect(problem.detail).not.toContain("Invalid params")
 
           const intactResponse = await restarted.app.inject({
             method: "GET",
