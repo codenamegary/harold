@@ -8,6 +8,7 @@ import { SpawnedAgentProcess } from "./spawn-agent-process"
 const createMockTransport = () => {
   const handlers = new Map<string, (params: unknown) => unknown>()
   const notifications = new Map<string, Array<(params: unknown) => void>>()
+  const notifyCalls: Array<{ method: string; params?: unknown }> = []
   const requestIds = [0]
 
   const transport: JsonRpcTransport = {
@@ -21,6 +22,9 @@ const createMockTransport = () => {
         throw new Error(`no handler for ${method}`)
       }
       return handler(params) as T
+    },
+    notify: (method, params) => {
+      notifyCalls.push({ method, params })
     },
     onNotification: (method, handler) => {
       const existing = notifications.get(method) ?? []
@@ -36,6 +40,7 @@ const createMockTransport = () => {
 
   return {
     transport,
+    notifyCalls,
     setHandler: (method: string, handler: (params: unknown) => unknown) => {
       handlers.set(method, handler)
     },
@@ -402,18 +407,13 @@ describe("createAcpSupervisor", () => {
     expect(turnStarted?.payload).toEqual({ text: "operator prompt" })
   })
 
-  test("cancelAcpSession forwards session/cancel for bound sessions", async () => {
+  test("cancelAcpSession sends session/cancel as a notification", async () => {
     const mock = createMockTransport()
-    const cancelCalls: unknown[] = []
     mock.setHandler("initialize", () => ({
       agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
     }))
     mock.setHandler("authenticate", () => ({}))
     mock.setHandler("session/new", () => ({ sessionId: "acp-session-cancel" }))
-    mock.setHandler("session/cancel", (params) => {
-      cancelCalls.push(params)
-      return {}
-    })
 
     const supervisor = createAcpSupervisor({
       agentSettingsRepository: createRepository([
@@ -435,7 +435,9 @@ describe("createAcpSupervisor", () => {
     const result = await supervisor.cancelAcpSession({ acpSessionId: "acp-session-cancel" })
 
     expect(result).toEqual({ ok: true })
-    expect(cancelCalls).toEqual([{ sessionId: "acp-session-cancel" }])
+    expect(mock.notifyCalls).toEqual([
+      { method: "session/cancel", params: { sessionId: "acp-session-cancel" } },
+    ])
   })
 
   test("cancelAcpSession rejects unknown sessions", async () => {

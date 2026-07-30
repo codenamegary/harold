@@ -48,7 +48,7 @@ const readUpdateEnvelope = (
   return { updateKind, fields: value }
 }
 
-const extractChunkText = (fields: Record<string, unknown>): string | undefined => {
+const readChunkText = (fields: Record<string, unknown>): string | undefined => {
   if (typeof fields.text === "string") {
     return fields.text
   }
@@ -57,11 +57,29 @@ const extractChunkText = (fields: Record<string, unknown>): string | undefined =
     return fields.content
   }
 
-  if (typeof fields.content === "object" && fields.content !== null) {
-    const content = fields.content as Record<string, unknown>
-    if (typeof content.text === "string") {
-      return content.text
-    }
+  if (typeof fields.content !== "object" || fields.content === null) {
+    return undefined
+  }
+
+  const nested = fields.content
+  if (!("text" in nested) || typeof nested.text !== "string") {
+    return undefined
+  }
+
+  return nested.text
+}
+
+const readToolName = (fields: Record<string, unknown>): string | undefined => {
+  if (typeof fields.toolName === "string") {
+    return fields.toolName
+  }
+
+  if (typeof fields.name === "string") {
+    return fields.name
+  }
+
+  if (typeof fields.title === "string") {
+    return fields.title
   }
 
   return undefined
@@ -78,12 +96,15 @@ export const sanitizeOperatorPromptText = (prompt: unknown): string => {
         return []
       }
 
-      const value = block as Record<string, unknown>
-      if (value.type !== "text" || typeof value.text !== "string") {
+      if (!("type" in block) || !("text" in block)) {
         return []
       }
 
-      return [value.text]
+      if (block.type !== "text" || typeof block.text !== "string") {
+        return []
+      }
+
+      return [block.text]
     })
     .join("")
 }
@@ -98,14 +119,14 @@ export const sanitizeSessionUpdate = (update: unknown): SanitizedNotificationPay
 
   switch (updateKind) {
     case "agent_message_chunk": {
-      const text = extractChunkText(fields)
+      const text = readChunkText(fields)
       if (text === undefined) {
         return undefined
       }
       return { updateKind: "agent_message_chunk", text }
     }
     case "agent_thought_chunk": {
-      const text = extractChunkText(fields)
+      const text = readChunkText(fields)
       if (text === undefined) {
         return undefined
       }
@@ -113,12 +134,7 @@ export const sanitizeSessionUpdate = (update: unknown): SanitizedNotificationPay
     }
     case "tool_call": {
       const toolCallId = typeof fields.toolCallId === "string" ? fields.toolCallId : undefined
-      const toolName =
-        typeof fields.toolName === "string"
-          ? fields.toolName
-          : typeof fields.name === "string"
-            ? fields.name
-            : undefined
+      const toolName = readToolName(fields)
       if (toolCallId === undefined || toolName === undefined) {
         return undefined
       }
@@ -132,12 +148,12 @@ export const sanitizeSessionUpdate = (update: unknown): SanitizedNotificationPay
     }
     case "tool_call_update": {
       const toolCallId = typeof fields.toolCallId === "string" ? fields.toolCallId : undefined
-      const toolName = typeof fields.toolName === "string" ? fields.toolName : undefined
+      const toolName = readToolName(fields)
       const status = fields.status
       if (
-        toolCallId === undefined ||
-        toolName === undefined ||
-        (status !== "in_progress" && status !== "completed" && status !== "failed")
+        toolCallId === undefined
+        || toolName === undefined
+        || (status !== "in_progress" && status !== "completed" && status !== "failed")
       ) {
         return undefined
       }
@@ -145,7 +161,7 @@ export const sanitizeSessionUpdate = (update: unknown): SanitizedNotificationPay
         updateKind: "tool_call_update",
         toolCallId,
         toolName,
-        toolKind: parseToolKind(fields.toolKind),
+        toolKind: parseToolKind(fields.toolKind ?? fields.kind),
         status,
       }
     }

@@ -567,22 +567,8 @@ export const createAcpSupervisor = ({
       return bound
     }
 
-    const turnId = bound.binding.activeTurnId
-    const operationContext: AcpOperationContext = {
-      sessionId: bound.binding.sessionId,
-      workspaceId: bound.binding.workspaceId,
-      turnId,
-      phase: bound.binding.phase,
-    }
-
     try {
-      await transport.request("session/cancel", { sessionId: acpSessionId }, operationContext)
-
-      if (turnId !== undefined) {
-        appendTurnLifecycle({ binding: bound.binding, turnId, kind: "turn.cancelled" })
-        sessionBindingRegistry.setActiveTurnId({ acpSessionId, turnId: undefined })
-      }
-
+      transport.notify("session/cancel", { sessionId: acpSessionId })
       return { ok: true }
     } catch (error: unknown) {
       return { ok: false, reason: sanitizeFailureReason(error, "session/cancel failed") }

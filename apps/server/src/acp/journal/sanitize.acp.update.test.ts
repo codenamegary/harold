@@ -15,6 +15,18 @@ describe("sanitizeSessionUpdate", () => {
     })
   })
 
+  test("maps wire-shaped sessionUpdate agent_message_chunk", () => {
+    expect(
+      sanitizeSessionUpdate({
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: "Hello" },
+      }),
+    ).toEqual({
+      updateKind: "agent_message_chunk",
+      text: "Hello",
+    })
+  })
+
   test("maps legacy fake-acp kind/content shape", () => {
     expect(sanitizeSessionUpdate({ kind: "agent_message_chunk", content: "legacy" })).toEqual({
       updateKind: "agent_message_chunk",
