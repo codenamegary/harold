@@ -120,7 +120,17 @@ export const createServer = async ({
       journalWriter,
       spawnAgentProcessFn,
       onBeforeClearRuntime: () => {
-        sessionService.markLiveSessionsOffline()
+        try {
+          sessionService.markLiveSessionsOffline()
+        } catch (error: unknown) {
+          if (
+            error instanceof RangeError &&
+            error.message.includes("closed database")
+          ) {
+            return
+          }
+          throw error
+        }
       },
     })
 
