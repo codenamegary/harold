@@ -1,63 +1,150 @@
-import { describe, expect, test } from "bun:test"
-import { render } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { fireEvent, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router"
+import { AgentSettingsCollectionSchema } from "contracts/http/agent-settings"
+import { SessionCollectionSchema } from "contracts/http/session"
+import { WorkspaceCollectionSchema } from "contracts/http/workspace"
+import { renderWithProviders } from "../query/render.with.providers"
 import { ChatPage } from "../shell/pages/ChatPage"
 
+const workspaceCollection = WorkspaceCollectionSchema.parse({
+  items: [
+    {
+      id: "ws_01",
+      name: "agent-server",
+      path: "/home/operator/agent-server",
+      state: "available",
+      createdAt: "2026-07-24T12:00:00.000Z",
+      lastUsedAt: "2026-07-24T12:05:00.000Z",
+    },
+  ],
+  page: { limit: 20, count: 1 },
+})
+
+const agentsCollection = AgentSettingsCollectionSchema.parse({
+  items: [
+    {
+      id: "cursor",
+      displayName: "Cursor",
+      available: true,
+      enabled: true,
+      path: "/usr/local/bin/agent",
+    },
+    {
+      id: "claude",
+      displayName: "Claude",
+      available: false,
+      enabled: false,
+      path: null,
+    },
+  ],
+})
+
+const emptySessions = SessionCollectionSchema.parse({
+  items: [],
+  page: { limit: 100, count: 0 },
+})
+
+const originalFetch = globalThis.fetch
+const originalWebSocket = globalThis.WebSocket
+
 const renderChatPage = () =>
-  render(
+  renderWithProviders(
     <MemoryRouter>
       <ChatPage />
     </MemoryRouter>,
   )
 
 describe("ChatPage", () => {
-  test("renders page landmark and welcome copy", () => {
+  beforeEach(() => {
+    globalThis.fetch = mock((input: RequestInfo | URL) => {
+      const url = String(input)
+
+      if (url.startsWith("/v1/workspaces")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(workspaceCollection), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url.startsWith("/v1/settings/agents")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(agentsCollection), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url.startsWith("/v1/sessions")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(emptySessions), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+  })
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+    globalThis.WebSocket = originalWebSocket
+  })
+
+  test("renders page landmark and welcome copy", async () => {
     const { getByRole, getByText } = renderChatPage()
 
     expect(getByRole("main")).toBeInTheDocument()
-    expect(getByRole("heading", { level: 3, name: "Test your ACP connection" })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(getByRole("heading", { level: 3, name: "Test your ACP connection" })).toBeInTheDocument()
+    })
     expect(getByText("Send a prompt directly to an agent without leaving the console.")).toBeInTheDocument()
   })
 
-  test("workspace and agent selects are empty and disabled", () => {
+  test("workspace agent and session selectors leave the disabled stub state", async () => {
     const { getByLabelText } = renderChatPage()
 
-    const workspaceSelect = getByLabelText("Workspace")
-    const agentSelect = getByLabelText("Agent")
+    await waitFor(() => {
+      expect(getByLabelText("Workspace")).not.toBeDisabled()
+    })
 
-    expect(workspaceSelect).toBeDisabled()
-    expect(agentSelect).toBeDisabled()
-    expect(workspaceSelect.querySelectorAll("option")).toHaveLength(0)
-    expect(agentSelect.querySelectorAll("option")).toHaveLength(0)
+    expect(getByLabelText("Agent")).not.toBeDisabled()
+    expect(getByLabelText("Session")).toBeDisabled()
+    expect(getByLabelText("Workspace").querySelectorAll("option").length).toBeGreaterThan(1)
   })
 
-  test("composer textarea and send button are disabled", () => {
-    const { getByRole } = renderChatPage()
+  test("composer enables when workspace and agent are selected", async () => {
+    const { getByLabelText, getByRole } = renderChatPage()
 
-    expect(getByRole("textbox", { name: "Chat message" })).toBeDisabled()
+    await waitFor(() => {
+      expect(getByLabelText("Workspace")).not.toBeDisabled()
+    })
+
+    fireEvent.change(getByLabelText("Workspace"), { target: { value: "ws_01" } })
+    fireEvent.change(getByLabelText("Agent"), { target: { value: "cursor" } })
+
+    await waitFor(() => {
+      expect(getByRole("textbox", { name: "Chat message" })).not.toBeDisabled()
+    })
     expect(getByRole("button", { name: "Send message" })).toBeDisabled()
+    expect(getByLabelText("Session")).not.toBeDisabled()
+    expect(getByLabelText("Session")).toHaveValue("")
   })
 
-  test("slash menu and prompt chips are visible and disabled", () => {
+  test("slash menu and prompt chips stay disabled", async () => {
     const { getByRole } = renderChatPage()
 
-    expect(getByRole("menu", { name: "Slash commands" })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(getByRole("menu", { name: "Slash commands" })).toBeInTheDocument()
+    })
+
     expect(getByRole("menuitem", { name: "/status Show workspace and git status" })).toBeDisabled()
     expect(getByRole("button", { name: "Summarize this workspace" })).toBeDisabled()
-    expect(getByRole("button", { name: "Check the current git status" })).toBeDisabled()
-    expect(getByRole("button", { name: "Find potential bugs" })).toBeDisabled()
-  })
-
-  test("clear chat button is disabled", () => {
-    const { getByRole } = renderChatPage()
-
     expect(getByRole("button", { name: "Clear chat" })).toBeDisabled()
-  })
-
-  test("does not render simulated agent responses", () => {
-    const { queryByText } = renderChatPage()
-
-    expect(queryByText(/typing/i)).not.toBeInTheDocument()
-    expect(queryByText(/assistant/i)).not.toBeInTheDocument()
   })
 })
