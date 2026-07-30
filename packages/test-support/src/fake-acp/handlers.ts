@@ -230,12 +230,19 @@ const handleAuthenticate = (request: JsonRpcRequest): HandlerResult => ({
   ...emptyHandlerExtras(),
 })
 
-const handleSessionNew = (request: JsonRpcRequest, config: FakeAcpConfig): HandlerResult => ({
-  response: jsonRpcResult(request.id, { sessionId: config.sessionNewSessionId }),
-  outbound: outboundAfterSessionNew(config.sessionNewSessionId, config),
-  notifications: [],
-  deferredNotifications: [],
-})
+const handleSessionNew = (
+  request: JsonRpcRequest,
+  config: FakeAcpConfig,
+  promptState: FakeAcpPromptState,
+): HandlerResult => {
+  const sessionId = config.sessionNewSessionId ?? promptState.allocateSessionId()
+  return {
+    response: jsonRpcResult(request.id, { sessionId }),
+    outbound: outboundAfterSessionNew(sessionId, config),
+    notifications: [],
+    deferredNotifications: [],
+  }
+}
 
 const handleSessionLoad = (request: JsonRpcRequest, config: FakeAcpConfig): HandlerResult => {
   if (!config.loadSession) {
@@ -334,7 +341,8 @@ type RequestHandler = (
 const requestHandlers: Record<string, RequestHandler> = {
   initialize: (request, config) => handleInitialize(request, config),
   authenticate: (request) => handleAuthenticate(request),
-  "session/new": (request, config) => handleSessionNew(request, config),
+  "session/new": (request, config, promptState) =>
+    handleSessionNew(request, config, promptState),
   "session/load": (request, config) => handleSessionLoad(request, config),
   "session/close": (request, config) => handleSessionClose(request, config),
   "session/prompt": (request, config, promptState) =>

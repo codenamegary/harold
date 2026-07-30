@@ -4,7 +4,7 @@ export type FakeAcpCapabilities = {
 }
 
 export type FakeAcpConfig = FakeAcpCapabilities & {
-  sessionNewSessionId: string
+  sessionNewSessionId: string | undefined
   sessionLoadSessionId: string
   sessionCloseFails: boolean
   sessionLoadFails: boolean
@@ -46,7 +46,8 @@ export const readFakeAcpConfig = (
 ): FakeAcpConfig => ({
   loadSession: parseBooleanEnv(env.FAKE_ACP_LOAD_SESSION, false),
   sessionClose: parseBooleanEnv(env.FAKE_ACP_SESSION_CLOSE, false),
-  sessionNewSessionId: readEnvString(env, "FAKE_ACP_SESSION_NEW_SESSION_ID", "fake-session-new"),
+  sessionNewSessionId: env.FAKE_ACP_SESSION_NEW_SESSION_ID,
+
   sessionLoadSessionId: readEnvString(env, "FAKE_ACP_SESSION_LOAD_SESSION_ID", "fake-session-load"),
   sessionCloseFails: parseBooleanEnv(env.FAKE_ACP_SESSION_CLOSE_FAILS, false),
   sessionLoadFails: parseBooleanEnv(env.FAKE_ACP_SESSION_LOAD_FAILS, false),

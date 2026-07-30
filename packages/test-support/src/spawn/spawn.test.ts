@@ -149,4 +149,49 @@ describe("spawnFakeAcp", () => {
       outcome: { outcome: "selected", optionId: "allow-once" },
     })
   })
+
+  test("overlapping prompts on two sessions complete independently", async () => {
+    const fake = spawnFakeAcp({
+      emitSessionUpdatesOnPrompt: true,
+    })
+    spawnedProcesses.push(fake)
+
+    const client = createJsonRpcClient(fake.stdin, fake.stdout)
+    await client.request("initialize", {
+      protocolVersion: 1,
+      clientCapabilities: {},
+      clientInfo: { name: "integration-test", version: "0.0.0" },
+    })
+
+    const first = await client.request<{ sessionId: string }>("session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+    })
+    const second = await client.request<{ sessionId: string }>("session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+    })
+    expect(first.sessionId).not.toBe(second.sessionId)
+
+    const promptA = client.request<{ stopReason: string }>("session/prompt", {
+      sessionId: first.sessionId,
+      prompt: [{ type: "text", text: "hello a" }],
+    })
+    const promptB = client.request<{ stopReason: string }>("session/prompt", {
+      sessionId: second.sessionId,
+      prompt: [{ type: "text", text: "hello b" }],
+    })
+
+    fake.stdin.write(
+      `${JSON.stringify({
+        jsonrpc: "2.0",
+        method: "session/cancel",
+        params: { sessionId: first.sessionId },
+      })}\n`,
+    )
+
+    const [resultA, resultB] = await Promise.all([promptA, promptB])
+    expect(resultA.stopReason).toBe("cancelled")
+    expect(resultB.stopReason).toBe("end_turn")
+  })
 })
