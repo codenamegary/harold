@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { SessionSchema } from "contracts/http/session"
+import { CreateSessionResponseSchema } from "contracts/http/session"
 import {
   acceptTestExecutablePath,
   cleanupTestAppResources,
@@ -52,7 +52,7 @@ describe("ACP crash recovery", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "Before crash",
+        text: "Before crash",
       },
     })
     expect(createResponse.statusCode).toBe(201)
@@ -71,10 +71,10 @@ describe("ACP crash recovery", () => {
       payload: {
         workspaceId,
         agentId: "cursor",
-        name: "After crash",
+        text: "After crash",
       },
     })
-    const recovered = SessionSchema.parse(JSON.parse(recoveryResponse.body))
+    const recovered = CreateSessionResponseSchema.parse(JSON.parse(recoveryResponse.body))
     expect(recoveryResponse.statusCode).toBe(201)
     expect(recovered.name).toBe("After crash")
     expect(acpSupervisor.getStatus().state).toBe("ready")

@@ -45,6 +45,25 @@ const waitForShellReady = async (getByRole: ReturnType<typeof renderWithProvider
   })
 }
 
+const emptyAgentCollection = {
+  items: [
+    {
+      id: "cursor",
+      displayName: "Cursor",
+      available: true,
+      enabled: false,
+      path: null,
+    },
+    {
+      id: "claude",
+      displayName: "Claude",
+      available: false,
+      enabled: false,
+      path: null,
+    },
+  ],
+}
+
 describe("shell honesty", () => {
   beforeEach(() => {
     globalThis.fetch = mock((input: RequestInfo | URL) => {
@@ -56,6 +75,30 @@ describe("shell honesty", () => {
             status: 200,
             headers: { "Content-Type": "application/json" },
           }),
+        )
+      }
+
+      if (url.startsWith("/v1/settings/agents")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(emptyAgentCollection), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url.startsWith("/v1/sessions")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              items: [],
+              page: { limit: 100, count: 0 },
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
         )
       }
 
@@ -211,13 +254,14 @@ describe("shell honesty", () => {
   })
 
   describe("chat disabled honesty", () => {
-    test("selects, composer, send, and clear chat are disabled", async () => {
+    test("composer send and clear stay gated until workspace and agent are chosen", async () => {
       const { getByRole } = renderShellRoute("/chat")
 
       await waitForShellReady(getByRole)
 
-      expect(getByRole("combobox", { name: "Workspace" })).toBeDisabled()
-      expect(getByRole("combobox", { name: "Agent" })).toBeDisabled()
+      expect(getByRole("combobox", { name: "Workspace" })).not.toBeDisabled()
+      expect(getByRole("combobox", { name: "Agent" })).not.toBeDisabled()
+      expect(getByRole("combobox", { name: "Session" })).toBeDisabled()
       expect(getByRole("textbox", { name: "Chat message" })).toBeDisabled()
       expect(getByRole("button", { name: "Send message" })).toBeDisabled()
       expect(getByRole("button", { name: "Clear chat" })).toBeDisabled()

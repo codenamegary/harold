@@ -3,7 +3,7 @@ import { execSync } from "node:child_process"
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { SessionSchema } from "contracts/http/session"
+import { CreateSessionResponseSchema, SessionSchema } from "contracts/http/session"
 import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/database"
@@ -82,11 +82,11 @@ describe("cursor ACP smoke", () => {
         payload: {
           workspaceId: workspace.id,
           agentId: "cursor",
-          name: "Smoke session",
+          text: "Smoke session",
         },
       })
       expect(sessionResponse.statusCode).toBe(201)
-      const session = SessionSchema.parse(JSON.parse(sessionResponse.body))
+      const session = CreateSessionResponseSchema.parse(JSON.parse(sessionResponse.body))
 
       const archiveResponse = await app.inject({
         method: "POST",
@@ -149,11 +149,11 @@ describe("cursor ACP smoke", () => {
           payload: {
             workspaceId: workspace.id,
             agentId: "cursor",
-            name: "Smoke session",
+            text: "Smoke session",
           },
         })
         expect(sessionResponse.statusCode).toBe(201)
-        const session = SessionSchema.parse(JSON.parse(sessionResponse.body))
+        const session = CreateSessionResponseSchema.parse(JSON.parse(sessionResponse.body))
 
         await acpSupervisor.stop()
         await app.close()
