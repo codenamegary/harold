@@ -412,10 +412,8 @@ describe("lifecycle events integration", () => {
     })
 
     const received: string[] = []
-    commitPublisher.subscribe((events) => {
-      events.forEach((event) => {
-        received.push(event.type)
-      })
+    commitPublisher.subscribe((record) => {
+      received.push(record.kind)
     })
 
     const result = workspaceService.delete({ id: "ws_missing" })
@@ -536,10 +534,8 @@ describe("lifecycle events integration", () => {
     resources.addApp(app)
 
     const received: string[] = []
-    commitPublisher.subscribe((events) => {
-      events.forEach((event) => {
-        received.push(event.type)
-      })
+    commitPublisher.subscribe((record) => {
+      received.push(record.kind)
     })
 
     await seedWorkspace(app, dataDir)

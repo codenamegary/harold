@@ -14,8 +14,14 @@ type ReplayJournalEventsParams = {
   socket: WebSocket
   eventJournal: EventJournalRepository
   requestedCursor: bigint
+  highWaterCursor?: bigint
   filters: EventStreamFilters
   log: FastifyBaseLogger
+}
+
+export type ReplayJournalEventsResult = {
+  status: "complete" | "corruption"
+  lastReplayedCursor: bigint
 }
 
 const logJournalCorruption = (
@@ -79,10 +85,11 @@ const sendFrame = (socket: WebSocket, events: Event[]): Promise<void> =>
 
 export const replayJournalEvents = async (
   params: ReplayJournalEventsParams,
-): Promise<"complete" | "corruption"> => {
+): Promise<ReplayJournalEventsResult> => {
   const pendingEvents: Event[] = []
   const contextByTurnId = new Map<string, ParsedJournalRecord[]>()
   let journalCursor = params.requestedCursor
+  let lastReplayedCursor = params.requestedCursor
 
   const flushFullFrames = async (): Promise<void> => {
     while (pendingEvents.length >= MAX_FRAME_EVENTS) {
@@ -112,11 +119,18 @@ export const replayJournalEvents = async (
       await flushRemaining()
       logJournalCorruption(params.log, readResult.error)
       params.socket.close(1011, "journal corruption")
-      return "corruption"
+      return { status: "corruption", lastReplayedCursor }
     }
 
     const record = readResult.value[0]
     if (record === undefined) {
+      break
+    }
+
+    if (
+      params.highWaterCursor !== undefined &&
+      record.cursor > params.highWaterCursor
+    ) {
       break
     }
 
@@ -130,8 +144,9 @@ export const replayJournalEvents = async (
     pendingEvents.push(...projectReplayRecord(record, contextByTurnId))
     await flushFullFrames()
     journalCursor = record.cursor
+    lastReplayedCursor = record.cursor
   }
 
   await flushRemaining()
-  return "complete"
+  return { status: "complete", lastReplayedCursor }
 }

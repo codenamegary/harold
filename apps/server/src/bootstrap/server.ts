@@ -14,7 +14,7 @@ import { createSessionRepository } from "../session/repository"
 import { registerSessionRoutes } from "../session/routes"
 import { createWorkspaceService } from "../workspace/service"
 import { createSessionService } from "../session/service"
-import { createEventJournalRepository } from "../event/journal.repository"
+import { createEventJournalRepository, EventJournalRepository } from "../event/journal.repository"
 import { createEventCommitPublisher } from "../event/commit.publisher"
 import { createRuntimeStatusService } from "../runtime/status.service"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
@@ -44,6 +44,7 @@ export type CreateServerOptions = {
   config: Config
   runtime: Runtime
   database: AgentDatabase
+  eventJournal?: EventJournalRepository
   registerTestRoutes?: boolean
   whichFn?: WhichFn
   validateExecutablePathFn?: ValidateExecutablePathFn
@@ -55,6 +56,7 @@ export const createServer = async ({
   config,
   runtime,
   database,
+  eventJournal: providedEventJournal,
   registerTestRoutes: withTestRoutes = false,
   whichFn,
   validateExecutablePathFn,
@@ -87,7 +89,7 @@ export const createServer = async ({
     whichFn,
     validateExecutablePathFn,
   })
-  const eventJournal = createEventJournalRepository(database)
+  const eventJournal = providedEventJournal ?? createEventJournalRepository(database)
   const commitPublisher = createEventCommitPublisher()
   const journalWriter = createAcpJournalWriter({
     database,
@@ -99,6 +101,7 @@ export const createServer = async ({
 
   registerEventStreamRoutes(app, {
     eventJournal,
+    commitPublisher,
     workspaceRepository,
     sessionRepository,
   })

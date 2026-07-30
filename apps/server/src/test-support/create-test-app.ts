@@ -79,6 +79,7 @@ export type TestApp = {
   database: AgentDatabase
   config: Config
   acpSupervisor: AcpSupervisor
+  commitPublisher: Awaited<ReturnType<typeof createServer>>["commitPublisher"]
   resources: TestAppResources
 }
 
@@ -101,7 +102,7 @@ export const createTestApp = async (
   const database = openDatabase({ dataDir: config.dataDir })
   const runtime = createRuntime("0.1.0")
   const { spawnAgentProcessFn } = createFakeSpawnFn(resources, fakeAcpOptions)
-  const { app, acpSupervisor } = await createServer({
+  const { app, acpSupervisor, commitPublisher } = await createServer({
     config,
     runtime,
     database,
@@ -110,7 +111,7 @@ export const createTestApp = async (
     spawnAgentProcessFn,
   })
   resources.addApp(app)
-  return { app, database, config, acpSupervisor, resources }
+  return { app, database, config, acpSupervisor, commitPublisher, resources }
 }
 
 export const cleanupTestAppResources = async (resources: TestAppResources) => {

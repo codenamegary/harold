@@ -1,18 +1,19 @@
-import { FastifyInstance, FastifyRequest } from "fastify"
-import { WebSocket } from "ws"
+import { FastifyInstance } from "fastify"
 import { SessionRepository } from "../session/repository"
 import { WorkspaceRepository } from "../workspace/repository"
+import { EventCommitPublisher } from "./commit.publisher"
 import { EventJournalRepository } from "./journal.repository"
+import { runStreamConnection } from "./stream.connection"
 import {
   validateEventStreamHandshake,
   ValidatedEventStreamHandshake,
 } from "./stream.handshake"
-import { replayJournalEvents } from "./stream.replay"
 
 const eventStreamHandshakes = new WeakMap<object, ValidatedEventStreamHandshake>()
 
 type RegisterEventStreamRoutesParams = {
   eventJournal: EventJournalRepository
+  commitPublisher: EventCommitPublisher
   workspaceRepository: WorkspaceRepository
   sessionRepository: SessionRepository
 }
@@ -24,21 +25,6 @@ const sendProblem = (
   status: number,
   problem: unknown,
 ) => reply.status(status).type("application/problem+json").send(problem)
-
-const runReplay = async (
-  socket: WebSocket,
-  request: FastifyRequest,
-  eventJournal: EventJournalRepository,
-  handshake: Extract<ValidatedEventStreamHandshake, { mode: "replay" }>,
-): Promise<void> => {
-  await replayJournalEvents({
-    socket,
-    eventJournal,
-    requestedCursor: handshake.replayCursor,
-    filters: handshake.filters,
-    log: request.log,
-  })
-}
 
 export const registerEventStreamRoutes = (
   app: FastifyInstance,
@@ -71,11 +57,13 @@ export const registerEventStreamRoutes = (
         return
       }
 
-      if (handshake.mode === "live-only") {
-        return
-      }
-
-      void runReplay(socket, request, params.eventJournal, handshake)
+      void runStreamConnection({
+        socket,
+        eventJournal: params.eventJournal,
+        commitPublisher: params.commitPublisher,
+        handshake,
+        log: request.log,
+      })
     },
   })
 }
