@@ -33,6 +33,7 @@ const emptyWorkspaceCollection = WorkspaceCollectionSchema.parse({
 })
 
 const originalFetch = globalThis.fetch
+const originalWebSocket = globalThis.WebSocket
 
 const renderShellRoute = (path: string) =>
   renderWithProviders(<AppRoutes />, {
@@ -66,6 +67,16 @@ const emptyAgentCollection = {
 
 describe("shell honesty", () => {
   beforeEach(() => {
+    globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
+      return {
+        url: String(url),
+        readyState: 1,
+        close: () => undefined,
+        send: () => undefined,
+        addEventListener: () => undefined,
+      }
+    } as unknown as typeof WebSocket
+
     globalThis.fetch = mock((input: RequestInfo | URL) => {
       const url = String(input)
 
@@ -113,6 +124,7 @@ describe("shell honesty", () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch
+    globalThis.WebSocket = originalWebSocket
   })
 
   describe("forbidden labels", () => {

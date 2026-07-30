@@ -92,7 +92,9 @@ export const ChatSelectors: React.FC<ChatSelectorsProps> = ({
           <option value={NEW_SESSION_VALUE}>New</option>
           {sessionOptions.map((session) => (
             <option key={session.id} value={session.id}>
-              {session.name}
+              {"state" in session
+                ? `${session.name} · ${session.state}`
+                : session.name}
             </option>
           ))}
         </select>

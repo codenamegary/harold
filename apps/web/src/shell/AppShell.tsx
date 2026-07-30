@@ -4,6 +4,7 @@ import { connectionPhaseChromeByPhase } from "../connection/connection.phase"
 import { useConnection } from "../connection/use.connection"
 import { IconButton } from "../design-system/IconButton"
 import { StatusDot } from "../design-system/StatusDot"
+import { useAppEventStream } from "../session/use.app.event.stream"
 import { SidebarNavLink } from "./SidebarNavLink"
 
 type RouteMeta = {
@@ -24,6 +25,7 @@ export const AppShell: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { pathname } = useLocation()
   const { connection, refetch } = useConnection()
+  useAppEventStream({ enabled: connection.phase === "online" })
   const routeMeta = routeMetaByPath[pathname]
   const eyebrow = routeMeta?.eyebrow ?? ""
   const title = routeMeta?.title ?? ""
