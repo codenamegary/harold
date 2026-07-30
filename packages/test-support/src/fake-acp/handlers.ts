@@ -247,7 +247,7 @@ const handleSessionLoad = (request: JsonRpcRequest, config: FakeAcpConfig): Hand
 
   if (config.sessionLoadFails) {
     return {
-      response: jsonRpcError(request.id, -32000, "session load failed"),
+      response: jsonRpcError(request.id, -32602, "Invalid params"),
       ...emptyHandlerExtras(),
     }
   }

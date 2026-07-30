@@ -2,7 +2,7 @@ import { AgentId } from "contracts/http/agent-settings"
 import { FailureCode } from "contracts/events/primitives"
 import { JOURNAL_SCHEMA_VERSION, JournalAppendRecord } from "contracts/events/journal-record"
 import { resolveAgentProfile } from "../agent-profile"
-import { sanitizeAcpErrorMessage } from "../sanitize-acp-error"
+import { sanitizeAcpRejection } from "../sanitize-acp-error"
 import {
   AgentCapabilities,
   AgentSettingsReader,
@@ -19,6 +19,7 @@ import {
   createAcpStartError,
   LiveWorkspaceSession,
 } from "./acp-supervisor-types"
+import { isAcpJsonRpcError } from "../transport/json-rpc-error"
 import { AcpOperationContext, createJsonRpcTransport, JsonRpcTransport } from "../transport/json-rpc-transport"
 import { registerAcpClientHandlers } from "../client/register-handlers"
 import { createSessionBindingRegistry } from "../client/session-binding-registry"
@@ -42,8 +43,15 @@ type SupervisorRuntime = {
 const nowIso = (): string => new Date().toISOString()
 
 const sanitizeFailureReason = (error: unknown, fallback: string): string => {
+  if (isAcpJsonRpcError(error)) {
+    return sanitizeAcpRejection({
+      message: error.message,
+      data: error.data,
+    })
+  }
+
   const message = error instanceof Error ? error.message : fallback
-  return sanitizeAcpErrorMessage(message)
+  return sanitizeAcpRejection({ message })
 }
 
 const parseAgentCapabilities = (result: unknown): AgentCapabilities => {

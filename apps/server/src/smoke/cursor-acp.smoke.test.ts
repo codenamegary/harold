@@ -191,9 +191,21 @@ describe("cursor ACP smoke", () => {
             url: `/v1/sessions/${session.id}/resume`,
           })
           expect(resumeResponse.statusCode).toBe(409)
-          const problem = JSON.parse(resumeResponse.body) as { title: string; detail: string }
+          const problem = JSON.parse(resumeResponse.body) as {
+            title: string
+            detail: string
+            type: string
+          }
           expect(problem.title).toBe("Session is not resumable")
-          expect(problem.detail.length).toBeGreaterThan(0)
+          expect(problem.type).toContain("conflict")
+          // Cursor may put a useful session-not-found string in error.data.message.
+          // Prefer that. Bare Invalid params maps to the actionable fallback.
+          expect(problem.detail).not.toBe("Invalid params")
+          expect(problem.detail).not.toContain("Invalid params")
+          expect(
+            problem.detail === "Cursor could not load this session. Start a new session."
+              || /not found/i.test(problem.detail),
+          ).toBe(true)
 
           const intactResponse = await restarted.app.inject({
             method: "GET",
