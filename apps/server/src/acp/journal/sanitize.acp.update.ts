@@ -57,12 +57,29 @@ const readChunkText = (fields: Record<string, unknown>): string | undefined => {
     return fields.content
   }
 
-  if (
-    typeof fields.content === "object"
-    && fields.content !== null
-    && typeof (fields.content as { text?: unknown }).text === "string"
-  ) {
-    return (fields.content as { text: string }).text
+  if (typeof fields.content !== "object" || fields.content === null) {
+    return undefined
+  }
+
+  const nested = fields.content
+  if (!("text" in nested) || typeof nested.text !== "string") {
+    return undefined
+  }
+
+  return nested.text
+}
+
+const readToolName = (fields: Record<string, unknown>): string | undefined => {
+  if (typeof fields.toolName === "string") {
+    return fields.toolName
+  }
+
+  if (typeof fields.name === "string") {
+    return fields.name
+  }
+
+  if (typeof fields.title === "string") {
+    return fields.title
   }
 
   return undefined
@@ -86,14 +103,7 @@ export const sanitizeSessionUpdate = (update: unknown): SanitizedNotificationPay
     }
     case "tool_call": {
       const toolCallId = typeof fields.toolCallId === "string" ? fields.toolCallId : undefined
-      const toolName =
-        typeof fields.toolName === "string"
-          ? fields.toolName
-          : typeof fields.name === "string"
-            ? fields.name
-            : typeof fields.title === "string"
-              ? fields.title
-              : undefined
+      const toolName = readToolName(fields)
       if (toolCallId === undefined || toolName === undefined) {
         return undefined
       }
@@ -107,12 +117,7 @@ export const sanitizeSessionUpdate = (update: unknown): SanitizedNotificationPay
     }
     case "tool_call_update": {
       const toolCallId = typeof fields.toolCallId === "string" ? fields.toolCallId : undefined
-      const toolName =
-        typeof fields.toolName === "string"
-          ? fields.toolName
-          : typeof fields.title === "string"
-            ? fields.title
-            : undefined
+      const toolName = readToolName(fields)
       const status = fields.status
       if (
         toolCallId === undefined

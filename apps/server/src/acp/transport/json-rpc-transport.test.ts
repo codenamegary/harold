@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { isAcpJsonRpcError } from "./json-rpc-error"
+import { isAcpJsonRpcError, readSafeJsonRpcErrorData } from "./json-rpc-error"
 import { createJsonRpcTransport } from "./json-rpc-transport"
 
 describe("createJsonRpcTransport", () => {
@@ -207,5 +207,12 @@ describe("createJsonRpcTransport", () => {
 
     await writer.close()
     transport.close()
+  })
+
+  test("drops unsafe JSON-RPC error.data values", () => {
+    expect(readSafeJsonRpcErrorData({ message: "ok" })).toEqual({ message: "ok" })
+    expect(readSafeJsonRpcErrorData(() => "secret")).toBeUndefined()
+    expect(readSafeJsonRpcErrorData({ nested: { fn: () => 1 } })).toBeUndefined()
+    expect(readSafeJsonRpcErrorData(Symbol("x"))).toBeUndefined()
   })
 })
