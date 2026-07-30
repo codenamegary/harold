@@ -1,4 +1,5 @@
 import { JournalPhase } from "contracts/events/journal-record"
+import { createAcpJsonRpcError, readSafeJsonRpcErrorData } from "./json-rpc-error"
 
 type PendingRequest = {
   resolve: (value: unknown) => void
@@ -63,6 +64,7 @@ export type JsonRpcTransport = {
     context?: AcpOperationContext,
     options?: { requestId?: number },
   ) => Promise<T>
+  notify: (method: string, params?: unknown) => void
   onNotification: (method: string, handler: NotificationHandler) => void
   onRequest: (method: string, handler: InboundRequestHandler) => void
   onUnhandledRequest: (handler: UnhandledRequestHandler) => void
@@ -164,7 +166,7 @@ export const createJsonRpcTransport = ({
     method?: string
     params?: unknown
     result?: unknown
-    error?: { message: string }
+    error?: { code?: number; message: string; data?: unknown }
   }) => {
     if (message.method !== undefined && message.id !== undefined) {
       void dispatchInboundRequest({
@@ -206,7 +208,14 @@ export const createJsonRpcTransport = ({
     })
 
     if (message.error) {
-      pending.reject(new Error(message.error.message))
+      const safeData = readSafeJsonRpcErrorData(message.error.data)
+      pending.reject(
+        createAcpJsonRpcError({
+          message: message.error.message,
+          code: message.error.code ?? -32000,
+          ...(safeData !== undefined ? { data: safeData } : {}),
+        }),
+      )
       return
     }
 
@@ -263,6 +272,16 @@ export const createJsonRpcTransport = ({
       )
     })
 
+  const notify = (method: string, params?: unknown) => {
+    void stdin.write(
+      `${JSON.stringify({
+        jsonrpc: "2.0",
+        method,
+        params,
+      })}\n`,
+    )
+  }
+
   const onNotification = (method: string, handler: NotificationHandler) => {
     const handlers = notificationHandlers.get(method) ?? []
     notificationHandlers.set(method, [...handlers, handler])
@@ -313,6 +332,7 @@ export const createJsonRpcTransport = ({
   return {
     allocateRequestId: nextRequestId,
     request,
+    notify,
     onNotification,
     onRequest,
     onUnhandledRequest,

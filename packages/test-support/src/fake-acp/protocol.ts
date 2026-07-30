@@ -18,15 +18,15 @@ export type JsonRpcResponse = {
   }
 }
 
-export type JsonRpcMessage = JsonRpcRequest | JsonRpcResponse
-
 export type JsonRpcNotification = {
   jsonrpc: "2.0"
   method: string
   params?: unknown
 }
 
-export const serializeJsonRpcMessage = (message: JsonRpcMessage | JsonRpcNotification): string =>
+export type JsonRpcMessage = JsonRpcRequest | JsonRpcResponse | JsonRpcNotification
+
+export const serializeJsonRpcMessage = (message: JsonRpcMessage): string =>
   `${JSON.stringify(message)}\n`
 
 export const parseJsonRpcLine = (line: string): JsonRpcMessage => {
@@ -47,4 +47,7 @@ export const parseJsonRpcLine = (line: string): JsonRpcMessage => {
 }
 
 export const isJsonRpcRequest = (message: JsonRpcMessage): message is JsonRpcRequest =>
-  "method" in message
+  "method" in message && "id" in message
+
+export const isJsonRpcNotification = (message: JsonRpcMessage): message is JsonRpcNotification =>
+  "method" in message && !("id" in message)

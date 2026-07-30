@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { AgentId } from "contracts/http/agent-settings"
 import { createAcpSupervisor } from "./acp-supervisor"
+import { AcpJournalWriter } from "../journal/acp.journal.writer"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
 import { SpawnedAgentProcess } from "./spawn-agent-process"
 
 const createMockTransport = () => {
   const handlers = new Map<string, (params: unknown) => unknown>()
   const notifications = new Map<string, Array<(params: unknown) => void>>()
+  const notifyCalls: Array<{ method: string; params?: unknown }> = []
   const requestIds = [0]
 
   const transport: JsonRpcTransport = {
@@ -20,6 +22,9 @@ const createMockTransport = () => {
         throw new Error(`no handler for ${method}`)
       }
       return handler(params) as T
+    },
+    notify: (method, params) => {
+      notifyCalls.push({ method, params })
     },
     onNotification: (method, handler) => {
       const existing = notifications.get(method) ?? []
@@ -35,6 +40,7 @@ const createMockTransport = () => {
 
   return {
     transport,
+    notifyCalls,
     setHandler: (method: string, handler: (params: unknown) => unknown) => {
       handlers.set(method, handler)
     },
@@ -344,18 +350,70 @@ describe("createAcpSupervisor", () => {
     ])
   })
 
-  test("cancelAcpSession forwards session/cancel for bound sessions", async () => {
+  test("promptAcpSession journals turn.started with sanitized prompt text", async () => {
     const mock = createMockTransport()
-    const cancelCalls: unknown[] = []
+    const appended: Array<{ kind: string; payload?: unknown }> = []
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+    mock.setHandler("session/new", () => ({ sessionId: "acp-session-prompt-journal" }))
+    mock.setHandler("session/prompt", () => ({ stopReason: "end_turn" }))
+
+    const journalWriter: AcpJournalWriter = {
+      appendAndPublish: (records) => {
+        appended.push(...records)
+        return { ok: true }
+      },
+      runTransactional: (work) => {
+        const result = work({
+          executor: {} as never,
+          append: (records) => {
+            appended.push(...records)
+            return { ok: true, value: [] }
+          },
+        })
+        if (!result.ok) {
+          return result
+        }
+        return { ok: true, value: result.value }
+      },
+    }
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      journalWriter,
+      spawnAgentProcessFn: () => createMockProcess(),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    await supervisor.createAcpSession({
+      workspaceCwd: "/tmp/ws",
+      sessionId: "sess_test",
+      workspaceId: "ws_test",
+    })
+
+    await supervisor.promptAcpSession({
+      acpSessionId: "acp-session-prompt-journal",
+      prompt: [{ type: "text", text: "operator prompt" }],
+    })
+
+    const turnStarted = appended.find((record) => record.kind === "turn.started")
+    expect(turnStarted?.payload).toEqual({ text: "operator prompt" })
+  })
+
+  test("cancelAcpSession sends session/cancel as a notification", async () => {
+    const mock = createMockTransport()
     mock.setHandler("initialize", () => ({
       agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
     }))
     mock.setHandler("authenticate", () => ({}))
     mock.setHandler("session/new", () => ({ sessionId: "acp-session-cancel" }))
-    mock.setHandler("session/cancel", (params) => {
-      cancelCalls.push(params)
-      return {}
-    })
 
     const supervisor = createAcpSupervisor({
       agentSettingsRepository: createRepository([
@@ -377,7 +435,9 @@ describe("createAcpSupervisor", () => {
     const result = await supervisor.cancelAcpSession({ acpSessionId: "acp-session-cancel" })
 
     expect(result).toEqual({ ok: true })
-    expect(cancelCalls).toEqual([{ sessionId: "acp-session-cancel" }])
+    expect(mock.notifyCalls).toEqual([
+      { method: "session/cancel", params: { sessionId: "acp-session-cancel" } },
+    ])
   })
 
   test("cancelAcpSession rejects unknown sessions", async () => {

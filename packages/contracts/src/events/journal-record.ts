@@ -57,7 +57,9 @@ const SessionStatePayloadSchema = z.strictObject({
   state: SessionStateSchema,
 })
 
-const TurnStartedPayloadSchema = z.strictObject({})
+const TurnStartedPayloadSchema = z.strictObject({
+  text: z.string().default(""),
+})
 
 const TurnCompletedPayloadSchema = z.strictObject({})
 
@@ -83,6 +85,11 @@ const AcpPermissionPayloadSchema = z.strictObject({
 
 const AgentMessageChunkNotificationPayloadSchema = z.strictObject({
   updateKind: z.literal("agent_message_chunk"),
+  text: z.string(),
+})
+
+const AgentThoughtChunkNotificationPayloadSchema = z.strictObject({
+  updateKind: z.literal("agent_thought_chunk"),
   text: z.string(),
 })
 
@@ -118,6 +125,7 @@ const UnknownUpdateNotificationPayloadSchema = z.strictObject({
 
 const AcpNotificationPayloadSchema = z.discriminatedUnion("updateKind", [
   AgentMessageChunkNotificationPayloadSchema,
+  AgentThoughtChunkNotificationPayloadSchema,
   ToolCallNotificationPayloadSchema,
   ToolCallUpdateNotificationPayloadSchema,
   SessionInfoUpdateNotificationPayloadSchema,

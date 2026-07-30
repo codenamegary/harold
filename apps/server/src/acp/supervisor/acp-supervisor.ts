@@ -24,7 +24,10 @@ import { registerAcpClientHandlers } from "../client/register-handlers"
 import { createSessionBindingRegistry } from "../client/session-binding-registry"
 import { spawnAgentProcess, SpawnedAgentProcess } from "./spawn-agent-process"
 import { createAcpJsonRpcJournalObserver } from "../journal/json.rpc.observer"
-import { mapSanitizedErrorToFailureCode } from "../journal/sanitize.acp.update"
+import {
+  mapSanitizedErrorToFailureCode,
+  sanitizeOperatorPromptText,
+} from "../journal/sanitize.acp.update"
 import { createTurnId } from "../../session/create.turn.id"
 
 type SupervisorRuntime = {
@@ -429,7 +432,7 @@ export const createAcpSupervisor = ({
             },
           ]
         : params.kind === "turn.started"
-          ? [{ ...baseRecord, kind: "turn.started", payload: {} }]
+          ? [{ ...baseRecord, kind: "turn.started", payload: { text: "" } }]
           : params.kind === "turn.completed"
             ? [{ ...baseRecord, kind: "turn.completed", payload: {} }]
             : [{ ...baseRecord, kind: "turn.cancelled", payload: {} }]
@@ -478,7 +481,7 @@ export const createAcpSupervisor = ({
             workspaceId: bound.binding.workspaceId,
             sessionId: bound.binding.sessionId,
             turnId,
-            payload: {},
+            payload: { text: sanitizeOperatorPromptText(prompt) },
           },
           {
             schemaVersion: JOURNAL_SCHEMA_VERSION,
@@ -564,22 +567,8 @@ export const createAcpSupervisor = ({
       return bound
     }
 
-    const turnId = bound.binding.activeTurnId
-    const operationContext: AcpOperationContext = {
-      sessionId: bound.binding.sessionId,
-      workspaceId: bound.binding.workspaceId,
-      turnId,
-      phase: bound.binding.phase,
-    }
-
     try {
-      await transport.request("session/cancel", { sessionId: acpSessionId }, operationContext)
-
-      if (turnId !== undefined) {
-        appendTurnLifecycle({ binding: bound.binding, turnId, kind: "turn.cancelled" })
-        sessionBindingRegistry.setActiveTurnId({ acpSessionId, turnId: undefined })
-      }
-
+      transport.notify("session/cancel", { sessionId: acpSessionId })
       return { ok: true }
     } catch (error: unknown) {
       return { ok: false, reason: sanitizeFailureReason(error, "session/cancel failed") }

@@ -73,6 +73,13 @@ export const EventSchema = z.discriminatedUnion("type", [
     }),
   }),
   EventScopeSchema.extend({
+    type: z.literal("session.thought.delta"),
+    payload: z.strictObject({
+      turnId: TurnIdSchema,
+      text: z.string(),
+    }),
+  }),
+  EventScopeSchema.extend({
     type: z.literal("session.tool.started"),
     payload: z.strictObject({
       turnId: TurnIdSchema,
@@ -97,6 +104,13 @@ export const EventSchema = z.discriminatedUnion("type", [
       turnId: TurnIdSchema,
       toolCallId: ToolCallIdSchema,
       toolName: z.string().min(1),
+    }),
+  }),
+  EventScopeSchema.extend({
+    type: z.literal("turn.started"),
+    payload: z.strictObject({
+      turnId: TurnIdSchema,
+      text: z.string(),
     }),
   }),
   EventScopeSchema.extend({

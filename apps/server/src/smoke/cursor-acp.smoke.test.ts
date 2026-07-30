@@ -57,7 +57,7 @@ describe("cursor ACP smoke", () => {
     })
     const database = openDatabase({ dataDir: config.dataDir })
     const runtime = createRuntime("0.1.0")
-    const { app } = await createServer({ config, runtime, database, whichFn })
+    const { app, acpSupervisor } = await createServer({ config, runtime, database, whichFn })
     await app.listen({ host: config.host, port: config.port })
 
     try {
@@ -96,6 +96,7 @@ describe("cursor ACP smoke", () => {
       const archived = SessionSchema.parse(JSON.parse(archiveResponse.body))
       expect(archived.state).toBe("archived")
     } finally {
+      await acpSupervisor.stop()
       await app.close()
       database.close()
       await rm(dataDir, { recursive: true, force: true })
@@ -123,7 +124,7 @@ describe("cursor ACP smoke", () => {
       })
       const database = openDatabase({ dataDir: config.dataDir })
       const runtime = createRuntime("0.1.0")
-      const { app } = await createServer({ config, runtime, database, whichFn })
+      const { app, acpSupervisor } = await createServer({ config, runtime, database, whichFn })
       await app.listen({ host: config.host, port: config.port })
 
       try {
@@ -154,6 +155,7 @@ describe("cursor ACP smoke", () => {
         expect(sessionResponse.statusCode).toBe(201)
         const session = SessionSchema.parse(JSON.parse(sessionResponse.body))
 
+        await acpSupervisor.stop()
         await app.close()
         database.close()
 
@@ -208,6 +210,7 @@ describe("cursor ACP smoke", () => {
           const archived = SessionSchema.parse(JSON.parse(archiveResponse.body))
           expect(archived.state).toBe("archived")
         } finally {
+          await restarted.acpSupervisor.stop()
           await restarted.app.close()
           restartedDatabase.close()
         }

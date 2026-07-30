@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { JournalAppendRecordSchema } from "contracts/events/journal-record"
 import {
+  sanitizeOperatorPromptText,
   sanitizePermissionRequest,
   sanitizeSessionUpdate,
   shouldJournalAcpMethod,
@@ -14,10 +15,58 @@ describe("sanitizeSessionUpdate", () => {
     })
   })
 
+  test("maps wire-shaped sessionUpdate agent_message_chunk", () => {
+    expect(
+      sanitizeSessionUpdate({
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: "Hello" },
+      }),
+    ).toEqual({
+      updateKind: "agent_message_chunk",
+      text: "Hello",
+    })
+  })
+
   test("maps legacy fake-acp kind/content shape", () => {
     expect(sanitizeSessionUpdate({ kind: "agent_message_chunk", content: "legacy" })).toEqual({
       updateKind: "agent_message_chunk",
       text: "legacy",
+    })
+  })
+
+  test("maps Cursor sessionUpdate with nested content text", () => {
+    expect(
+      sanitizeSessionUpdate({
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: "wire text" },
+      }),
+    ).toEqual({
+      updateKind: "agent_message_chunk",
+      text: "wire text",
+    })
+  })
+
+  test("maps agent_thought_chunk with nested content text", () => {
+    expect(
+      sanitizeSessionUpdate({
+        sessionUpdate: "agent_thought_chunk",
+        content: { type: "text", text: "thinking" },
+      }),
+    ).toEqual({
+      updateKind: "agent_thought_chunk",
+      text: "thinking",
+    })
+  })
+
+  test("maps flat agent_thought_chunk text", () => {
+    expect(
+      sanitizeSessionUpdate({
+        updateKind: "agent_thought_chunk",
+        text: "flat thought",
+      }),
+    ).toEqual({
+      updateKind: "agent_thought_chunk",
+      text: "flat thought",
     })
   })
 
@@ -52,6 +101,28 @@ describe("sanitizeSessionUpdate", () => {
         payload: { ...payload, rawPrompt: "secret" },
       }),
     ).toThrow()
+  })
+})
+
+describe("sanitizeOperatorPromptText", () => {
+  test("joins text content blocks", () => {
+    expect(
+      sanitizeOperatorPromptText([
+        { type: "text", text: "hello " },
+        { type: "text", text: "world" },
+      ]),
+    ).toBe("hello world")
+  })
+
+  test("skips non-text blocks and non-arrays", () => {
+    expect(
+      sanitizeOperatorPromptText([
+        { type: "image", data: "secret" },
+        { type: "text", text: "kept" },
+      ]),
+    ).toBe("kept")
+    expect(sanitizeOperatorPromptText(undefined)).toBe("")
+    expect(sanitizeOperatorPromptText("raw")).toBe("")
   })
 })
 
