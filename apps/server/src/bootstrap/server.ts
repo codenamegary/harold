@@ -128,9 +128,22 @@ export const createServer = async ({
         if (!offlineOnBindingClear.enabled) {
           return
         }
-        const marked = sessionService.markLiveSessionsOffline()
-        if (!marked.ok) {
-          throw new Error("failed to mark live sessions offline")
+        try {
+          const marked = sessionService.markLiveSessionsOffline()
+          if (!marked.ok) {
+            throw new Error("failed to mark live sessions offline")
+          }
+        } catch (error: unknown) {
+          if (!offlineOnBindingClear.enabled) {
+            return
+          }
+          if (
+            error instanceof RangeError &&
+            error.message.includes("closed database")
+          ) {
+            return
+          }
+          throw error
         }
       },
     })
