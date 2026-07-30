@@ -1,5 +1,4 @@
 import { Event } from "contracts/events/event"
-import { EventFrameSchema } from "contracts/events/stream"
 import { FastifyBaseLogger } from "fastify"
 import { WebSocket } from "ws"
 import { eventCursorToString } from "./cursor"
@@ -7,6 +6,7 @@ import { EventJournalCorruptionError } from "./event-journal-errors"
 import { EventJournalRepository, ParsedJournalRecord } from "./journal.repository"
 import { loadTurnOutputContext, projectJournalEvents } from "./journal.transactional"
 import { EventStreamFilters } from "./stream.handshake"
+import { sendStreamFrame } from "./stream.send"
 
 const MAX_FRAME_EVENTS = 500
 
@@ -70,43 +70,33 @@ const projectReplayRecord = (
   })
 }
 
-const sendFrame = (socket: WebSocket, events: Event[]): Promise<void> =>
-  new Promise((resolve, reject) => {
-    const frame = EventFrameSchema.parse(events)
-    socket.send(JSON.stringify(frame), (error) => {
-      if (error !== undefined) {
-        reject(error)
-        return
-      }
-
-      resolve()
-    })
-  })
-
 export const replayJournalEvents = async (
   params: ReplayJournalEventsParams,
 ): Promise<ReplayJournalEventsResult> => {
   const pendingEvents: Event[] = []
   const contextByTurnId = new Map<string, ParsedJournalRecord[]>()
-  let journalCursor = params.requestedCursor
-  let lastReplayedCursor = params.requestedCursor
+  const journalCursorState = { value: params.requestedCursor }
+  const lastReplayedCursorState = { value: params.requestedCursor }
 
   const flushFullFrames = async (): Promise<void> => {
     while (pendingEvents.length >= MAX_FRAME_EVENTS) {
       const frame = pendingEvents.splice(0, MAX_FRAME_EVENTS)
-      await sendFrame(params.socket, frame)
+      await sendStreamFrame({ socket: params.socket, events: frame })
     }
   }
 
   const flushRemaining = async (): Promise<void> => {
     if (pendingEvents.length > 0) {
-      await sendFrame(params.socket, pendingEvents.splice(0, pendingEvents.length))
+      await sendStreamFrame({
+        socket: params.socket,
+        events: pendingEvents.splice(0, pendingEvents.length),
+      })
     }
   }
 
   while (true) {
     const readResult = params.eventJournal.readAfter({
-      cursor: journalCursor,
+      cursor: journalCursorState.value,
       limit: 1,
       ...params.filters,
     })
@@ -119,7 +109,7 @@ export const replayJournalEvents = async (
       await flushRemaining()
       logJournalCorruption(params.log, readResult.error)
       params.socket.close(1011, "journal corruption")
-      return { status: "corruption", lastReplayedCursor }
+      return { status: "corruption", lastReplayedCursor: lastReplayedCursorState.value }
     }
 
     const record = readResult.value[0]
@@ -143,10 +133,10 @@ export const replayJournalEvents = async (
 
     pendingEvents.push(...projectReplayRecord(record, contextByTurnId))
     await flushFullFrames()
-    journalCursor = record.cursor
-    lastReplayedCursor = record.cursor
+    journalCursorState.value = record.cursor
+    lastReplayedCursorState.value = record.cursor
   }
 
   await flushRemaining()
-  return { status: "complete", lastReplayedCursor }
+  return { status: "complete", lastReplayedCursor: lastReplayedCursorState.value }
 }
