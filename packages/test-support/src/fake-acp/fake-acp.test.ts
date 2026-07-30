@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import { readFakeAcpConfig } from "./config"
-import { handleJsonRpcRequest } from "./handlers"
+import { handleJsonRpcNotification, handleJsonRpcRequest } from "./handlers"
 import { createFakeAcpPromptState } from "./prompt-state"
 import { parseJsonRpcLine, serializeJsonRpcMessage } from "./protocol"
+
 
 const createPromptState = () => createFakeAcpPromptState()
 
@@ -225,37 +226,46 @@ describe("fake ACP protocol", () => {
     ])
   })
 
-  test("session/prompt returns a result and emits scripted updates when enabled", () => {
+  test("session/prompt holds the response and emits wire-shaped updates when enabled", () => {
     const config = readFakeAcpConfig({
       FAKE_ACP_EMIT_SESSION_UPDATES_ON_PROMPT: "true",
     })
     const promptState = createPromptState()
 
-    const { response, notifications, deferredNotifications } = handleJsonRpcRequest(
-      {
-        jsonrpc: "2.0",
-        id: 8,
-        method: "session/prompt",
-        params: {
-          sessionId: "session-test-1",
-          prompt: [{ type: "text", text: "hello" }],
+    const { response, holdPromptResponse, notifications, deferredNotifications } =
+      handleJsonRpcRequest(
+        {
+          jsonrpc: "2.0",
+          id: 8,
+          method: "session/prompt",
+          params: {
+            sessionId: "session-test-1",
+            prompt: [{ type: "text", text: "hello" }],
+          },
+        },
+        config,
+        promptState,
+      )
+
+    expect(response).toBeUndefined()
+    expect(holdPromptResponse).toBe(true)
+    expect(promptState.pendingRequestId).toBe(8)
+    expect(notifications).toHaveLength(1)
+    expect(notifications[0]).toEqual({
+      jsonrpc: "2.0",
+      method: "session/update",
+      params: {
+        sessionId: "session-test-1",
+        update: {
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text: "Hello" },
         },
       },
-      config,
-      promptState,
-    )
-
-    expect(response).toEqual({
-      jsonrpc: "2.0",
-      id: 8,
-      result: { stopReason: "end_turn" },
     })
-    expect(notifications).toHaveLength(1)
-    expect(notifications[0]?.method).toBe("session/update")
     expect(deferredNotifications).toHaveLength(2)
   })
 
-  test("session/cancel marks the active prompt as cancelled", () => {
+  test("session/cancel notification completes the pending prompt with cancelled", () => {
     const config = readFakeAcpConfig({
       FAKE_ACP_EMIT_SESSION_UPDATES_ON_PROMPT: "true",
     })
@@ -275,6 +285,29 @@ describe("fake ACP protocol", () => {
       promptState,
     )
 
+    const { promptResponse } = handleJsonRpcNotification(
+      {
+        jsonrpc: "2.0",
+        method: "session/cancel",
+        params: { sessionId: "session-test-1" },
+      },
+      promptState,
+    )
+
+    expect(promptResponse).toEqual({
+      jsonrpc: "2.0",
+      id: 9,
+      result: { stopReason: "cancelled" },
+    })
+    expect(promptState.cancelled).toBe(true)
+    expect(promptState.activeSessionId).toBeNull()
+    expect(promptState.pendingRequestId).toBeNull()
+  })
+
+  test("session/cancel as a request is method not found", () => {
+    const config = readFakeAcpConfig({})
+    const promptState = createPromptState()
+
     const { response } = handleJsonRpcRequest(
       {
         jsonrpc: "2.0",
@@ -286,12 +319,10 @@ describe("fake ACP protocol", () => {
       promptState,
     )
 
-    expect(response).toEqual({
+    expect(response).toMatchObject({
       jsonrpc: "2.0",
       id: 10,
-      result: {},
+      error: { code: -32601 },
     })
-    expect(promptState.cancelled).toBe(true)
-    expect(promptState.activeSessionId).toBeNull()
   })
 })

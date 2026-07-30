@@ -1,7 +1,17 @@
 import { readFakeAcpConfig } from "./config"
-import { handleJsonRpcMessage, shouldEmitDeferredNotification } from "./handlers"
+import {
+  completePromptIfActive,
+  handleJsonRpcMessage,
+  shouldEmitDeferredNotification,
+} from "./handlers"
 import { createFakeAcpPromptState } from "./prompt-state"
-import { isJsonRpcRequest, JsonRpcNotification, parseJsonRpcLine, serializeJsonRpcMessage } from "./protocol"
+import {
+  isJsonRpcNotification,
+  isJsonRpcRequest,
+  JsonRpcNotification,
+  parseJsonRpcLine,
+  serializeJsonRpcMessage,
+} from "./protocol"
 
 export const runFakeAcpStdio = (
   input: NodeJS.ReadableStream = process.stdin,
@@ -31,21 +41,43 @@ export const runFakeAcpStdio = (
     })
   }
 
+  const schedulePromptCompletion = (sessionId: string, delayMs: number) => {
+    setTimeout(() => {
+      const response = completePromptIfActive(promptState, sessionId)
+      if (response === undefined) {
+        return
+      }
+
+      output.write(serializeJsonRpcMessage(response))
+    }, delayMs)
+  }
+
   const flushLine = (line: string) => {
     const message = parseJsonRpcLine(line)
+
+    if (isJsonRpcNotification(message)) {
+      const handled = handleJsonRpcMessage(message, config, promptState)
+      if (handled !== undefined && "promptResponse" in handled && handled.promptResponse) {
+        output.write(serializeJsonRpcMessage(handled.promptResponse))
+      }
+      return
+    }
+
     if (!isJsonRpcRequest(message)) {
       return
     }
 
     const handled = handleJsonRpcMessage(message, config, promptState)
-    if (!handled) {
+    if (!handled || !("outbound" in handled)) {
       return
     }
 
     handled.notifications.forEach((notification) => {
       output.write(serializeJsonRpcMessage(notification))
     })
-    output.write(serializeJsonRpcMessage(handled.response))
+    if (handled.response !== undefined) {
+      output.write(serializeJsonRpcMessage(handled.response))
+    }
     handled.outbound.forEach((outboundMessage) => {
       output.write(serializeJsonRpcMessage(outboundMessage))
     })
@@ -56,6 +88,13 @@ export const runFakeAcpStdio = (
         : undefined
     if (promptSessionId !== undefined && handled.deferredNotifications.length > 0) {
       scheduleDeferredNotifications(promptSessionId, handled.deferredNotifications)
+    }
+    if (
+      promptSessionId !== undefined
+      && handled.holdPromptResponse === true
+      && handled.promptCompletionDelayMs !== undefined
+    ) {
+      schedulePromptCompletion(promptSessionId, handled.promptCompletionDelayMs)
     }
   }
 

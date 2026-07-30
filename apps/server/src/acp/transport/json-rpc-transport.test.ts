@@ -1,7 +1,28 @@
 import { describe, expect, test } from "bun:test"
+import { isAcpJsonRpcError } from "./json-rpc-error"
 import { createJsonRpcTransport } from "./json-rpc-transport"
 
 describe("createJsonRpcTransport", () => {
+  test("sends notifications without id and does not wait for a response", async () => {
+    const written: string[] = []
+    const stdin = { write: (chunk: string) => written.push(chunk) }
+    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
+    const writer = writable.getWriter()
+    const transport = createJsonRpcTransport({ stdin, stdout: readable })
+
+    transport.notify("session/cancel", { sessionId: "sess-1" })
+
+    expect(written).toHaveLength(1)
+    expect(JSON.parse(written[0]?.trim() ?? "{}")).toEqual({
+      jsonrpc: "2.0",
+      method: "session/cancel",
+      params: { sessionId: "sess-1" },
+    })
+
+    await writer.close()
+    transport.close()
+  })
+
   test("correlates request and response by id", async () => {
     const written: string[] = []
     const stdin = {
@@ -141,6 +162,49 @@ describe("createJsonRpcTransport", () => {
     )
 
     await expect(responsePromise).rejects.toThrow("auth failed")
+    await writer.close()
+    transport.close()
+  })
+
+  test("preserves safe JSON-RPC error.data on inbound error responses", async () => {
+    const stdin = { write: () => undefined }
+    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
+    const writer = writable.getWriter()
+    const transport = createJsonRpcTransport({ stdin, stdout: readable })
+
+    const responsePromise = transport.request("session/load", {
+      sessionId: "missing",
+      cwd: "/tmp",
+      mcpServers: [],
+    })
+
+    await writer.write(
+      new TextEncoder().encode(
+        `${JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          error: {
+            code: -32602,
+            message: "Invalid params",
+            data: { message: 'Session "missing" not found' },
+          },
+        })}\n`,
+      ),
+    )
+
+    try {
+      await responsePromise
+      throw new Error("expected request to reject")
+    } catch (error: unknown) {
+      expect(isAcpJsonRpcError(error)).toBe(true)
+      if (!isAcpJsonRpcError(error)) {
+        return
+      }
+      expect(error.message).toBe("Invalid params")
+      expect(error.code).toBe(-32602)
+      expect(error.data).toEqual({ message: 'Session "missing" not found' })
+    }
+
     await writer.close()
     transport.close()
   })
