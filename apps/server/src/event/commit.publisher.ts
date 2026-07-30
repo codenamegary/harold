@@ -1,29 +1,71 @@
-import { Event } from "contracts/events/event"
+import { ParsedJournalRecord } from "./journal.repository"
+import { EventStreamFilters } from "./stream.handshake"
 
-export type EventCommitListener = (events: Event[]) => void
+export type RecordCommitListener = (record: ParsedJournalRecord) => void
 
-export type EventCommitPublisher = {
-  subscribe: (listener: EventCommitListener) => () => void
-  publish: (events: Event[]) => void
+type SubscriberEntry = {
+  filters: EventStreamFilters | undefined
+  listener: RecordCommitListener
 }
 
-export const createEventCommitPublisher = (): EventCommitPublisher => {
-  const listeners = new Set<EventCommitListener>()
+export type EventCommitPublisher = {
+  subscribe: (
+    filtersOrListener: EventStreamFilters | RecordCommitListener,
+    maybeListener?: RecordCommitListener,
+  ) => () => void
+  publish: (records: ParsedJournalRecord[]) => void
+}
 
-  const subscribe = (listener: EventCommitListener) => {
-    listeners.add(listener)
+const recordMatchesFilters = (
+  record: ParsedJournalRecord,
+  filters: EventStreamFilters,
+): boolean => {
+  if (filters.workspaceId !== undefined && record.workspaceId !== filters.workspaceId) {
+    return false
+  }
+
+  if (filters.sessionId !== undefined && record.sessionId !== filters.sessionId) {
+    return false
+  }
+
+  return true
+}
+
+const matchesSubscriber = (record: ParsedJournalRecord, entry: SubscriberEntry): boolean =>
+  entry.filters === undefined ? true : recordMatchesFilters(record, entry.filters)
+
+export const createEventCommitPublisher = (): EventCommitPublisher => {
+  const subscribers = new Set<SubscriberEntry>()
+
+  const subscribe = (
+    filtersOrListener: EventStreamFilters | RecordCommitListener,
+    maybeListener?: RecordCommitListener,
+  ) => {
+    const entry: SubscriberEntry =
+      typeof filtersOrListener === "function"
+        ? { filters: undefined, listener: filtersOrListener }
+        : {
+            filters: filtersOrListener,
+            listener: maybeListener as RecordCommitListener,
+          }
+
+    subscribers.add(entry)
     return () => {
-      listeners.delete(listener)
+      subscribers.delete(entry)
     }
   }
 
-  const publish = (events: Event[]) => {
-    if (events.length === 0) {
+  const publish = (records: ParsedJournalRecord[]) => {
+    if (records.length === 0) {
       return
     }
 
-    listeners.forEach((listener) => {
-      listener(events)
+    records.forEach((record) => {
+      subscribers.forEach((entry) => {
+        if (matchesSubscriber(record, entry)) {
+          entry.listener(record)
+        }
+      })
     })
   }
 

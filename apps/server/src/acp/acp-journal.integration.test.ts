@@ -9,6 +9,7 @@ import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
 import { createEventCommitPublisher } from "../event/commit.publisher"
 import { createEventJournalRepository } from "../event/journal.repository"
+import { projectJournalEvents } from "../event/journal.transactional"
 import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
 import { createAcpSupervisor } from "./supervisor/acp-supervisor"
@@ -55,8 +56,10 @@ describe("ACP journal integration", () => {
     const commitPublisher = createEventCommitPublisher()
     const journalWriter = createAcpJournalWriter({ database, eventJournal, commitPublisher })
     const published: string[] = []
-    commitPublisher.subscribe((events) => {
-      events.forEach((event) => published.push(event.type))
+    commitPublisher.subscribe((record) => {
+      projectJournalEvents({ appendedRecords: [record] }).forEach((event) => {
+        published.push(event.type)
+      })
     })
 
     const spawnAgentProcessFn = (): SpawnedAgentProcess => {
@@ -155,8 +158,10 @@ describe("ACP journal integration", () => {
     const commitPublisher = createEventCommitPublisher()
     const journalWriter = createAcpJournalWriter({ database, eventJournal, commitPublisher })
     const published: string[] = []
-    commitPublisher.subscribe((events) => {
-      events.forEach((event) => published.push(event.type))
+    commitPublisher.subscribe((record) => {
+      projectJournalEvents({ appendedRecords: [record] }).forEach((event) => {
+        published.push(event.type)
+      })
     })
 
     const spawnAgentProcessFn = (): SpawnedAgentProcess => {

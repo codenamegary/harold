@@ -122,27 +122,7 @@ export const runTransactionalJournal = <T, E = TransactionalJournalError>(
       }
     })
 
-    const contextRecords = outcome.appendedRecords
-      .filter((record) => record.kind === "turn.completed" && record.turnId !== null)
-      .flatMap((record) => {
-        const turnId = record.turnId as string
-        const readResult = context.eventJournal.readAfter({
-          cursor: 0n,
-          limit: 10_000,
-          turnId,
-        })
-        if (!readResult.ok) {
-          return []
-        }
-
-        return loadTurnOutputContext(readResult.value, turnId)
-      })
-
-    const events: Event[] = projectJournalEvents({
-      appendedRecords: outcome.appendedRecords,
-      contextRecords,
-    })
-    context.commitPublisher.publish(events)
+    context.commitPublisher.publish([...outcome.appendedRecords])
 
     return { ok: true, value: outcome.value }
   } catch (error: unknown) {
