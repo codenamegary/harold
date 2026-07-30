@@ -27,16 +27,18 @@ jobs:
         id: install
         run: bun install --frozen-lockfile
 
-      - name: Run check
-        run: bun run check
+      - name: Lint
+        run: bun run lint
 
-      - name: Run coverage
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test with coverage
         id: coverage
-        if: always() && steps.install.outcome == 'success'
         run: bun run test:coverage
 
       - name: Build HTML coverage report
-        if: always() && steps.install.outcome == 'success' && steps.coverage.outcome == 'success'
+        if: always() && steps.coverage.outcome == 'success'
         run: |
           mkdir -p coverage/html/server coverage/html/web
           (
@@ -75,7 +77,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage
-        if: always() && steps.install.outcome == 'success'
+        if: always() && steps.coverage.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: coverage
