@@ -1,11 +1,17 @@
 import { describe, expect, test } from "bun:test"
 import {
+  CancelSessionBodySchema,
+  CancelSessionResponseSchema,
   CreateSessionBodySchema,
   ListSessionsQuerySchema,
+  PromptSessionBodySchema,
+  PromptSessionResponseSchema,
   SessionCollectionSchema,
   SessionSchema,
   UpdateSessionBodySchema,
 } from "./session"
+
+const validTurnId = "turn_01JFC8C7E77NQCFH0RF9Z22JHH"
 
 const validSession = {
   id: "session-auth",
@@ -196,6 +202,109 @@ describe("SessionCollectionSchema", () => {
       SessionCollectionSchema.parse({
         items: [validSession],
         page: { limit: 20, hasMore: true },
+      }),
+    ).toThrow()
+  })
+})
+
+describe("PromptSessionBodySchema", () => {
+  test("accepts non-empty text", () => {
+    const body = { text: "Fix the login bug" }
+
+    expect(PromptSessionBodySchema.parse(body)).toEqual(body)
+  })
+
+  test("accepts text at max length 32768", () => {
+    const body = { text: "a".repeat(32_768) }
+
+    expect(PromptSessionBodySchema.parse(body)).toEqual(body)
+  })
+
+  test("rejects empty text", () => {
+    expect(() => PromptSessionBodySchema.parse({ text: "" })).toThrow()
+  })
+
+  test("rejects text over 32768 characters", () => {
+    expect(() =>
+      PromptSessionBodySchema.parse({ text: "a".repeat(32_769) }),
+    ).toThrow()
+  })
+
+  test("rejects missing text", () => {
+    expect(() => PromptSessionBodySchema.parse({})).toThrow()
+  })
+
+  test("rejects extra fields", () => {
+    expect(() =>
+      PromptSessionBodySchema.parse({
+        text: "Fix the login bug",
+        commandId: "cmd-1",
+      }),
+    ).toThrow()
+  })
+})
+
+describe("PromptSessionResponseSchema", () => {
+  test("accepts turnId", () => {
+    const response = { turnId: validTurnId }
+
+    expect(PromptSessionResponseSchema.parse(response)).toEqual(response)
+  })
+
+  test("rejects missing turnId", () => {
+    expect(() => PromptSessionResponseSchema.parse({})).toThrow()
+  })
+
+  test("rejects invalid turnId", () => {
+    expect(() =>
+      PromptSessionResponseSchema.parse({ turnId: "not-a-turn-id" }),
+    ).toThrow()
+  })
+
+  test("rejects extra fields", () => {
+    expect(() =>
+      PromptSessionResponseSchema.parse({
+        turnId: validTurnId,
+        status: "accepted",
+      }),
+    ).toThrow()
+  })
+})
+
+describe("CancelSessionBodySchema", () => {
+  test("accepts empty body", () => {
+    expect(CancelSessionBodySchema.parse({})).toEqual({})
+  })
+
+  test("rejects extra fields", () => {
+    expect(() =>
+      CancelSessionBodySchema.parse({ turnId: validTurnId }),
+    ).toThrow()
+  })
+})
+
+describe("CancelSessionResponseSchema", () => {
+  test("accepts turnId", () => {
+    const response = { turnId: validTurnId }
+
+    expect(CancelSessionResponseSchema.parse(response)).toEqual(response)
+  })
+
+  test("rejects missing turnId", () => {
+    expect(() => CancelSessionResponseSchema.parse({})).toThrow()
+  })
+
+  test("rejects invalid turnId", () => {
+    expect(() =>
+      CancelSessionResponseSchema.parse({ turnId: "not-a-turn-id" }),
+    ).toThrow()
+  })
+
+  test("rejects extra fields", () => {
+    expect(() =>
+      CancelSessionResponseSchema.parse({
+        turnId: validTurnId,
+        status: "cancelled",
       }),
     ).toThrow()
   })
