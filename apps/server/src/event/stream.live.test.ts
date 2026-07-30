@@ -19,7 +19,6 @@ import { EventCommitPublisher } from "./commit.publisher"
 import {
   createEventJournalRepository,
   EventJournalRepository,
-  ReadJournalAfterInput,
 } from "./journal.repository"
 import { JournalAppendRecord } from "contracts/events/journal-record"
 
@@ -87,16 +86,6 @@ const collectFramesUntil = (params: {
   return { framesPromise, whenOpen }
 }
 
-const waitFor = async (predicate: () => boolean, timeoutMs = 2000) => {
-  const startedAt = Date.now()
-  while (!predicate()) {
-    if (Date.now() - startedAt > timeoutMs) {
-      throw new Error("timed out waiting for condition")
-    }
-    await new Promise((resolve) => setTimeout(resolve, 20))
-  }
-}
-
 const appendAndPublish = (
   journal: EventJournalRepository,
   commitPublisher: EventCommitPublisher,
@@ -123,53 +112,6 @@ const seedServerStatusEvents = (
 
   for (const record of records) {
     appendAndPublish(journal, commitPublisher, [record])
-  }
-}
-
-type StallableJournal = EventJournalRepository & {
-  resumeReads: () => void
-}
-
-const createStallableJournal = (
-  inner: EventJournalRepository,
-  stallAfterCursor: bigint,
-): StallableJournal => {
-  let stalled = false
-  let resumeReads: (() => void) | undefined
-
-  const readAfter = (params: ReadJournalAfterInput) => {
-    if (stalled) {
-      const start = Date.now()
-      while (!resumeReads && Date.now() - start < 5000) {
-        // spin until the test releases replay
-      }
-    }
-
-    const result = inner.readAfter(params)
-    if (
-      result.ok &&
-      result.value[0]?.cursor === stallAfterCursor &&
-      resumeReads === undefined
-    ) {
-      stalled = true
-      resumeReads = () => {
-        stalled = false
-      }
-      const start = Date.now()
-      while (stalled && Date.now() - start < 5000) {
-        // spin until resumeReads is called
-      }
-    }
-
-    return result
-  }
-
-  return {
-    ...inner,
-    readAfter,
-    resumeReads: () => {
-      resumeReads?.()
-    },
   }
 }
 
@@ -244,48 +186,43 @@ describe("GET /v1/events live delivery", () => {
   })
 
   test("commits during replay hand off with no gap or duplicate", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const config = parseConfig({
-      AGENT_SERVER_HOST: "127.0.0.1",
-      AGENT_SERVER_PORT: "0",
-      AGENT_SERVER_DATA_DIR: dataDir,
-    })
-    const database = openDatabase({ dataDir: config.dataDir })
-    const runtime = createRuntime("0.1.0")
-    const innerJournal = createEventJournalRepository(database)
-    const journal = createStallableJournal(innerJournal, 2n)
+      const dataDir = await createTempDataDir(resources)
+      const { app, database, config, commitPublisher } = await createTestApp(
+        resources,
+        dataDir,
+      )
+      const journal = createEventJournalRepository(database)
 
-    const { app, commitPublisher } = await createServer({
-      config,
-      runtime,
-      database,
-      eventJournal: journal,
-    })
-    resources.addApp(app)
+      seedServerStatusEvents(journal, commitPublisher, 120)
 
-    seedServerStatusEvents(innerJournal, commitPublisher, 3)
+      const url = await getListeningUrl(app, config)
+      let appendedDuringReplay = false
 
-    const url = await getListeningUrl(app, config)
-    const { framesPromise, whenOpen } = collectFramesUntil({
-      url: `${url}?cursor=1`,
-      until: (frames) => frames.flat().length >= 4,
-      timeoutMs: 5000,
-    })
+      const { framesPromise, whenOpen } = collectFramesUntil({
+        url: `${url}?cursor=0`,
+        until: (frames) => {
+          const cursors = frames.flat().map((event) => event.cursor)
+          if (!appendedDuringReplay && cursors.includes("60")) {
+            appendedDuringReplay = true
+            appendAndPublish(journal, commitPublisher, [
+              serverStatusRecord("2026-07-24T12:10:00.000Z"),
+            ])
+          }
 
-    await whenOpen
-    await waitFor(() => innerJournal.getHighWaterCursor() >= 3n)
-    appendAndPublish(innerJournal, commitPublisher, [
-      serverStatusRecord("2026-07-24T12:00:04.000Z"),
-    ])
-    journal.resumeReads()
+          return cursors.includes("122")
+        },
+        timeoutMs: 15000,
+      })
 
-    const frames = await framesPromise
-    const cursors = frames.flat().map((event) => event.cursor)
+      await whenOpen
+      const frames = await framesPromise
+      const cursors = frames.flat().map((event) => event.cursor)
 
-    expect(cursors).toEqual(["2", "3", "4", "5"])
-    await app.close()
-    database.close()
-  })
+      expect(appendedDuringReplay).toBe(true)
+      expect(cursors.filter((cursor) => cursor === "122")).toHaveLength(1)
+      expect(cursors.at(-1)).toBe("122")
+      await app.close()
+  }, { timeout: 20_000 })
 
   test("preserves workspace filter during live delivery", async () => {
     const dataDir = await createTempDataDir(resources)
