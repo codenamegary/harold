@@ -1,5 +1,7 @@
 import { AgentId } from "contracts/http/agent-settings"
 import {
+  CancelSessionBodySchema,
+  CancelSessionResponseSchema,
   CreateSessionBodySchema,
   ListSessionsQuerySchema,
   PromptSessionBodySchema,
@@ -21,6 +23,7 @@ import {
   buildAgentNotFoundProblem,
   buildAgentUnavailableProblem,
   buildInvalidCursorProblem,
+  buildNoActiveTurnProblem,
   buildSessionArchivedProblem,
   buildSessionNotFoundProblem,
   buildSessionNotResumableProblem,
@@ -390,5 +393,56 @@ export const registerSessionRoutes = (
     })
 
     return reply.status(202).send(PromptSessionResponseSchema.parse({ turnId: started.turnId }))
+  })
+
+  app.post("/v1/sessions/:sessionId/cancel", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string }
+    CancelSessionBodySchema.parse(request.body ?? {})
+
+    const existing = sessionRepository.getById({ id: sessionId })
+    if (!existing.ok) {
+      return sendProblem(reply, 404, buildSessionNotFoundProblem())
+    }
+
+    if (isArchivedSession(existing.value)) {
+      return sendProblem(reply, 409, buildSessionArchivedProblem())
+    }
+
+    const binding = sessionRepository.getAcpBinding({ id: sessionId })
+    if (!binding.ok) {
+      return sendProblem(reply, 404, buildSessionNotFoundProblem())
+    }
+
+    if (binding.value.acpSessionId === "pending") {
+      return sendProblem(reply, 409, buildAcpUnavailableProblem("Session is not bound"))
+    }
+
+    const liveBinding = acpSupervisor
+      .getSessionBindingRegistry()
+      .getBinding(binding.value.acpSessionId)
+
+    if (liveBinding === undefined) {
+      return sendProblem(reply, 409, buildAcpUnavailableProblem("Session is not bound"))
+    }
+
+    const supervisorReady = await ensureSupervisorReady(acpSupervisor, binding.value.agentId)
+    if (!supervisorReady) {
+      return sendProblem(reply, 409, buildAcpUnavailableProblem())
+    }
+
+    const activeTurnId = liveBinding.activeTurnId
+    if (activeTurnId === undefined) {
+      return sendProblem(reply, 409, buildNoActiveTurnProblem())
+    }
+
+    const cancelled = await acpSupervisor.cancelAcpSession({
+      acpSessionId: binding.value.acpSessionId,
+    })
+
+    if (!cancelled.ok) {
+      return sendProblem(reply, 409, buildAcpUnavailableProblem(cancelled.reason))
+    }
+
+    return reply.status(202).send(CancelSessionResponseSchema.parse({ turnId: activeTurnId }))
   })
 }

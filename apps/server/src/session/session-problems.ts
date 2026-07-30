@@ -88,3 +88,11 @@ export const buildTurnInProgressProblem = (
     status: 409,
     detail,
   })
+
+export const buildNoActiveTurnProblem = (detail = "No turn in progress") =>
+  ConflictProblemSchema.parse({
+    type: PROBLEM_TYPES.conflict,
+    title: "No turn in progress",
+    status: 409,
+    detail,
+  })
