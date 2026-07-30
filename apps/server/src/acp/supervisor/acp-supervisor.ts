@@ -133,6 +133,7 @@ export const createAcpSupervisor = ({
   serverVersion,
   journalWriter,
   onSessionUpdate = () => undefined,
+  onBeforeClearRuntime = () => undefined,
   spawnAgentProcessFn = spawnAgentProcess,
   createTransportFn = (process) =>
     createJsonRpcTransport({
@@ -151,6 +152,7 @@ export const createAcpSupervisor = ({
   }
 
   const clearRuntime = () => {
+    onBeforeClearRuntime()
     runtime.transport?.close()
     runtime.process?.kill()
     runtime.transport = null

@@ -98,6 +98,12 @@ export const createServer = async ({
   })
   const workspaceRepository = createWorkspaceRepository(database)
   const sessionRepository = createSessionRepository(database)
+  const sessionService = createSessionService({
+    database,
+    sessionRepository,
+    eventJournal,
+    commitPublisher,
+  })
 
   registerEventStreamRoutes(app, {
     eventJournal,
@@ -113,18 +119,15 @@ export const createServer = async ({
       serverVersion: runtime.version,
       journalWriter,
       spawnAgentProcessFn,
+      onBeforeClearRuntime: () => {
+        sessionService.markLiveSessionsOffline()
+      },
     })
 
   registerStatusRoutes(app, runtime, config, acpSupervisor)
   const workspaceService = createWorkspaceService({
     database,
     workspaceRepository,
-    eventJournal,
-    commitPublisher,
-  })
-  const sessionService = createSessionService({
-    database,
-    sessionRepository,
     eventJournal,
     commitPublisher,
   })

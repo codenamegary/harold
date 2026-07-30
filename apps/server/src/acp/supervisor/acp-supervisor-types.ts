@@ -109,6 +109,7 @@ export type CreateAcpSupervisorParams = {
   serverVersion: string
   journalWriter?: AcpJournalWriter
   onSessionUpdate?: SessionUpdateHandler
+  onBeforeClearRuntime?: () => void
   spawnAgentProcessFn?: (input: {
     profile: AgentProfile
     executablePath: string

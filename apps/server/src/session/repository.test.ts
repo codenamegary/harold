@@ -411,4 +411,56 @@ describe("session repository", () => {
 
     database.close()
   })
+
+  test("listLiveNonArchived returns non-archived sessions across workspaces", async () => {
+    const dataDir = await createTempDataDir()
+    const { database, workspaceId } = await seedWorkspace(dataDir)
+    const otherWorkspaceDir = await createWorkspaceDir(dataDir, "other")
+    const workspaceRepository = createWorkspaceRepository(database)
+    const otherWorkspace = workspaceRepository.create({
+      name: "Other",
+      path: otherWorkspaceDir,
+    })
+    expect(otherWorkspace.ok).toBe(true)
+    if (!otherWorkspace.ok) {
+      return
+    }
+
+    const repository = createSessionRepository(database)
+
+    const running = repository.create({
+      workspaceId,
+      agentId: "cursor",
+      name: "Running",
+      acpSessionId: "acp-running",
+      state: "running",
+    })
+    const idle = repository.create({
+      workspaceId: otherWorkspace.value.id,
+      agentId: "cursor",
+      name: "Idle",
+      acpSessionId: "acp-idle",
+      state: "idle",
+    })
+    const archived = repository.create({
+      workspaceId,
+      agentId: "cursor",
+      name: "Archived",
+      acpSessionId: "acp-archived",
+    })
+    expect(running.ok && idle.ok && archived.ok).toBe(true)
+    if (!running.ok || !idle.ok || !archived.ok) {
+      return
+    }
+
+    repository.archive({ id: archived.value.id })
+
+    const live = repository.listLiveNonArchived()
+    const liveIds = live.map((session) => session.id).sort()
+
+    expect(liveIds).toEqual([idle.value.id, running.value.id].sort())
+    expect(live.every((session) => session.state !== "archived")).toBe(true)
+
+    database.close()
+  })
 })

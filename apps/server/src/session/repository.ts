@@ -479,6 +479,19 @@ export const createSessionRepository = (database: AgentDatabase) => {
         agentId: AgentIdSchema.parse(row.agentId),
       }))
 
+  const listLiveNonArchived = (): Session[] =>
+    database.db
+      .select()
+      .from(sessions)
+      .where(
+        and(
+          sql`${sessions.archivedAt} IS NULL`,
+          sql`${sessions.state} != 'archived'`,
+        ),
+      )
+      .all()
+      .map(rowToSession)
+
   return {
     create,
     list,
@@ -491,6 +504,7 @@ export const createSessionRepository = (database: AgentDatabase) => {
     setState,
     getAcpBinding,
     listLiveByWorkspace,
+    listLiveNonArchived,
   }
 }
 

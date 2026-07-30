@@ -113,7 +113,10 @@ export const registerSessionRoutes = (
     }
 
     void started.completion.finally(() => {
-      sessionService.markIdle({ id: params.sessionId })
+      const current = sessionRepository.getById({ id: params.sessionId })
+      if (current.ok && current.value.state === "running") {
+        sessionService.markIdle({ id: params.sessionId })
+      }
     })
 
     return {
