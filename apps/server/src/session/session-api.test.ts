@@ -6,6 +6,7 @@ import {
   ValidationProblemSchema,
 } from "contracts/http/error"
 import {
+  CancelSessionResponseSchema,
   PromptSessionResponseSchema,
   SessionCollectionSchema,
   SessionSchema,
@@ -754,5 +755,174 @@ describe("POST /v1/sessions/:sessionId/prompt", () => {
     const body = ConflictProblemSchema.parse(JSON.parse(response.body))
     expect(response.statusCode).toBe(409)
     expect(body.title).toBe("ACP unavailable")
+  })
+})
+
+describe("POST /v1/sessions/:sessionId/cancel", () => {
+  const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 5000) => {
+    const startedAt = Date.now()
+    while (!(await predicate())) {
+      if (Date.now() - startedAt > timeoutMs) {
+        throw new Error("timed out waiting for condition")
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+  }
+
+  test("returns 202 with turnId while a turn is running", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { app } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
+      capabilities: { loadSession: true, sessionClose: true },
+      sessionNewSessionId: "fake-session-cancel-api",
+      sessionLoadSessionId: "fake-session-cancel-api",
+      emitSessionUpdatesOnPrompt: true,
+    })
+    const { workspaceId } = await seedWorkspace(app, dataDir)
+    await enableAgent(app, "cursor", whichFn)
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { workspaceId, agentId: "cursor", name: "Cancel api" },
+    })
+    const session = SessionSchema.parse(JSON.parse(created.body))
+
+    const prompt = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${session.id}/prompt`,
+      payload: { text: "cancel me" },
+    })
+    expect(prompt.statusCode).toBe(202)
+    const promptBody = PromptSessionResponseSchema.parse(JSON.parse(prompt.body))
+
+    const cancel = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${session.id}/cancel`,
+    })
+    expect(cancel.statusCode).toBe(202)
+    const cancelBody = CancelSessionResponseSchema.parse(JSON.parse(cancel.body))
+    expect(cancelBody.turnId).toBe(promptBody.turnId)
+
+    await waitFor(async () => {
+      const latest = await app.inject({
+        method: "GET",
+        url: `/v1/sessions/${session.id}`,
+      })
+      return SessionSchema.parse(JSON.parse(latest.body)).state === "idle"
+    })
+  })
+
+  test("returns 409 when no turn is in progress", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { app } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
+      capabilities: { loadSession: true, sessionClose: true },
+      sessionNewSessionId: "fake-session-cancel-idle",
+      sessionLoadSessionId: "fake-session-cancel-idle",
+    })
+    const { workspaceId } = await seedWorkspace(app, dataDir)
+    await enableAgent(app, "cursor", whichFn)
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { workspaceId, agentId: "cursor", name: "Cancel idle" },
+    })
+    const session = SessionSchema.parse(JSON.parse(created.body))
+    expect(session.state).toBe("idle")
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${session.id}/cancel`,
+    })
+    const body = ConflictProblemSchema.parse(JSON.parse(response.body))
+    expect(response.statusCode).toBe(409)
+    expect(body.title).toBe("No turn in progress")
+  })
+
+  test("returns 409 for archived sessions", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { app } = await createTestApp(resources, dataDir, whichFn)
+    const { workspaceId } = await seedWorkspace(app, dataDir)
+    await enableAgent(app, "cursor", whichFn)
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { workspaceId, agentId: "cursor", name: "Archive cancel" },
+    })
+    const session = SessionSchema.parse(JSON.parse(created.body))
+
+    await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${session.id}/archive`,
+    })
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${session.id}/cancel`,
+    })
+    const body = ConflictProblemSchema.parse(JSON.parse(response.body))
+    expect(response.statusCode).toBe(409)
+    expect(body.title).toBe("Session is archived")
+  })
+
+  test("re-notifies and returns the same turnId on a second cancel", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { app } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
+      capabilities: { loadSession: true, sessionClose: true },
+      sessionNewSessionId: "fake-session-cancel-twice",
+      sessionLoadSessionId: "fake-session-cancel-twice",
+      emitSessionUpdatesOnPrompt: true,
+    })
+    const { workspaceId } = await seedWorkspace(app, dataDir)
+    await enableAgent(app, "cursor", whichFn)
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { workspaceId, agentId: "cursor", name: "Cancel twice" },
+    })
+    const session = SessionSchema.parse(JSON.parse(created.body))
+
+    const prompt = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${session.id}/prompt`,
+      payload: { text: "still running" },
+    })
+    const promptBody = PromptSessionResponseSchema.parse(JSON.parse(prompt.body))
+
+    const firstCancel = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${session.id}/cancel`,
+    })
+    expect(firstCancel.statusCode).toBe(202)
+
+    const secondCancel = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${session.id}/cancel`,
+    })
+    expect(secondCancel.statusCode).toBe(202)
+    const secondBody = CancelSessionResponseSchema.parse(JSON.parse(secondCancel.body))
+    expect(secondBody.turnId).toBe(promptBody.turnId)
+
+    await waitFor(async () => {
+      const latest = await app.inject({
+        method: "GET",
+        url: `/v1/sessions/${session.id}`,
+      })
+      return SessionSchema.parse(JSON.parse(latest.body)).state === "idle"
+    })
   })
 })
