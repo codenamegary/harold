@@ -130,11 +130,16 @@ describe("ACP journal integration", () => {
     expect(records.value.some((record) => record.kind === "acp.response")).toBe(true)
     expect(records.value.some((record) => record.kind === "turn.completed")).toBe(true)
 
-    const serialized = records.value
+    const turnStarted = records.value.find((record) => record.kind === "turn.started")
+    expect(turnStarted?.payload).toEqual({ text: "secret prompt" })
+
+    const acpSerialized = records.value
+      .filter((record) => record.kind.startsWith("acp."))
       .map((record) => `${record.kind}:${JSON.stringify(record.payload)}`)
       .join("|")
-    expect(serialized.includes("secret prompt")).toBe(false)
+    expect(acpSerialized.includes("secret prompt")).toBe(false)
 
+    expect(published).toContain("turn.started")
     expect(published).toContain("session.output.delta")
     expect(published).toContain("session.output.complete")
     expect(published).toContain("turn.completed")

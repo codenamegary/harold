@@ -33,17 +33,59 @@ const readUpdateEnvelope = (
 
   const value = update as Record<string, unknown>
   const updateKind =
-    typeof value.updateKind === "string"
-      ? value.updateKind
-      : typeof value.kind === "string"
-        ? value.kind
-        : undefined
+    typeof value.sessionUpdate === "string"
+      ? value.sessionUpdate
+      : typeof value.updateKind === "string"
+        ? value.updateKind
+        : typeof value.kind === "string"
+          ? value.kind
+          : undefined
 
   if (updateKind === undefined) {
     return undefined
   }
 
   return { updateKind, fields: value }
+}
+
+const extractChunkText = (fields: Record<string, unknown>): string | undefined => {
+  if (typeof fields.text === "string") {
+    return fields.text
+  }
+
+  if (typeof fields.content === "string") {
+    return fields.content
+  }
+
+  if (typeof fields.content === "object" && fields.content !== null) {
+    const content = fields.content as Record<string, unknown>
+    if (typeof content.text === "string") {
+      return content.text
+    }
+  }
+
+  return undefined
+}
+
+export const sanitizeOperatorPromptText = (prompt: unknown): string => {
+  if (!Array.isArray(prompt)) {
+    return ""
+  }
+
+  return prompt
+    .flatMap((block) => {
+      if (typeof block !== "object" || block === null) {
+        return []
+      }
+
+      const value = block as Record<string, unknown>
+      if (value.type !== "text" || typeof value.text !== "string") {
+        return []
+      }
+
+      return [value.text]
+    })
+    .join("")
 }
 
 export const sanitizeSessionUpdate = (update: unknown): SanitizedNotificationPayload | undefined => {
@@ -56,16 +98,18 @@ export const sanitizeSessionUpdate = (update: unknown): SanitizedNotificationPay
 
   switch (updateKind) {
     case "agent_message_chunk": {
-      const text =
-        typeof fields.text === "string"
-          ? fields.text
-          : typeof fields.content === "string"
-            ? fields.content
-            : undefined
+      const text = extractChunkText(fields)
       if (text === undefined) {
         return undefined
       }
       return { updateKind: "agent_message_chunk", text }
+    }
+    case "agent_thought_chunk": {
+      const text = extractChunkText(fields)
+      if (text === undefined) {
+        return undefined
+      }
+      return { updateKind: "agent_thought_chunk", text }
     }
     case "tool_call": {
       const toolCallId = typeof fields.toolCallId === "string" ? fields.toolCallId : undefined

@@ -270,7 +270,7 @@ describe("event journal repository", () => {
           workspaceId: "ws-1",
           sessionId: "sess-a",
           turnId: firstTurnId,
-          payload: {},
+          payload: { text: "" },
         },
         {
           schemaVersion: 1,
@@ -279,7 +279,7 @@ describe("event journal repository", () => {
           workspaceId: "ws-1",
           sessionId: "sess-a",
           turnId: secondTurnId,
-          payload: {},
+          payload: { text: "" },
         },
       ],
     })

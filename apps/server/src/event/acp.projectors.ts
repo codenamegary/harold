@@ -13,6 +13,7 @@ type AcpProjectionContext = {
 
 type AcpNotificationRecord = Extract<AcpJournalRecord, { kind: "acp.notification" }>
 type PermissionRecord = Extract<AcpJournalRecord, { kind: "acp.permission" }>
+type TurnStartedRecord = Extract<AcpJournalRecord, { kind: "turn.started" }>
 type TurnCompletedRecord = Extract<AcpJournalRecord, { kind: "turn.completed" }>
 type TurnFailedRecord = Extract<AcpJournalRecord, { kind: "turn.failed" }>
 type TurnCancelledRecord = Extract<AcpJournalRecord, { kind: "turn.cancelled" }>
@@ -45,6 +46,14 @@ const projectNotification = (record: AcpNotificationRecord): Event[] => {
         EventSchema.parse({
           ...baseEvent,
           type: "session.output.delta",
+          payload: { turnId, text: record.payload.text },
+        }),
+      ]
+    case "agent_thought_chunk":
+      return [
+        EventSchema.parse({
+          ...baseEvent,
+          type: "session.thought.delta",
           payload: { turnId, text: record.payload.text },
         }),
       ]
@@ -93,6 +102,19 @@ const projectPermissionRequested = (record: PermissionRecord): Event =>
       turnId: record.turnId,
       toolCallId: record.payload.toolCallId,
       toolName: record.payload.toolName,
+    },
+  })
+
+const projectTurnStarted = (record: TurnStartedRecord): Event =>
+  EventSchema.parse({
+    type: "turn.started",
+    cursor: eventCursorToString(record.cursor),
+    occurredAt: record.occurredAt,
+    workspaceId: record.workspaceId,
+    sessionId: record.sessionId,
+    payload: {
+      turnId: record.turnId,
+      text: record.payload.text ?? "",
     },
   })
 
@@ -162,6 +184,7 @@ export const projectAcpEvent = (
 ): Event[] => {
   switch (record.kind) {
     case "turn.started":
+      return [projectTurnStarted(record)]
     case "acp.request":
     case "acp.response":
       return []

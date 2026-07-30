@@ -31,6 +31,38 @@ describe("EventSchema", () => {
     expect(EventSchema.parse(event)).toEqual(event)
   })
 
+  test("accepts turn.started with turnId and text", () => {
+    const event = {
+      cursor: "10",
+      type: "turn.started",
+      occurredAt: "2026-07-24T12:01:00.000Z",
+      workspaceId: "ws-agent-server",
+      sessionId: "session-auth",
+      payload: {
+        turnId: "turn_01JFC8C7E77NQCFH0RF9Z22JHH",
+        text: "operator prompt",
+      },
+    }
+
+    expect(EventSchema.parse(event)).toEqual(event)
+  })
+
+  test("accepts session.thought.delta with turnId and text", () => {
+    const event = {
+      cursor: "11",
+      type: "session.thought.delta",
+      occurredAt: "2026-07-24T12:01:00.000Z",
+      workspaceId: "ws-agent-server",
+      sessionId: "session-auth",
+      payload: {
+        turnId: "turn_01JFC8C7E77NQCFH0RF9Z22JHH",
+        text: "thinking aloud",
+      },
+    }
+
+    expect(EventSchema.parse(event)).toEqual(event)
+  })
+
   test("accepts workspace.changed deleted without state", () => {
     const event = {
       cursor: "7",
