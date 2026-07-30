@@ -5,6 +5,12 @@ import { Workspace } from "contracts/http/workspace"
 
 const NEW_SESSION_VALUE = ""
 
+type SessionOption = {
+  id: string
+  name: string
+  state?: Session["state"]
+}
+
 type ChatSelectorsProps = {
   workspaces: ReadonlyArray<Workspace>
   agents: ReadonlyArray<{ id: AgentId; displayName: string; enabled: boolean }>
@@ -16,6 +22,9 @@ type ChatSelectorsProps = {
   onAgentChange: (agentId: AgentId | "") => void
   onSessionChange: (sessionId: string) => void
 }
+
+const sessionOptionLabel = (session: SessionOption) =>
+  session.state === undefined ? session.name : `${session.name} · ${session.state}`
 
 export const ChatSelectors: React.FC<ChatSelectorsProps> = ({
   workspaces,
@@ -34,14 +43,13 @@ export const ChatSelectors: React.FC<ChatSelectorsProps> = ({
       ? sessions
       : sessions.filter((session) => session.agentId === agentId)
 
-  const sessionOptions =
+  const sessionOptions: ReadonlyArray<SessionOption> =
     sessionId !== "" && !filteredSessions.some((session) => session.id === sessionId)
       ? [
           ...filteredSessions,
           {
             id: sessionId,
             name: "Current session",
-            agentId: agentId === "" ? ("cursor" as AgentId) : agentId,
           },
         ]
       : filteredSessions
@@ -92,9 +100,7 @@ export const ChatSelectors: React.FC<ChatSelectorsProps> = ({
           <option value={NEW_SESSION_VALUE}>New</option>
           {sessionOptions.map((session) => (
             <option key={session.id} value={session.id}>
-              {"state" in session
-                ? `${session.name} · ${session.state}`
-                : session.name}
+              {sessionOptionLabel(session)}
             </option>
           ))}
         </select>

@@ -1,5 +1,5 @@
 import { Event } from "contracts/events/event"
-import { SessionCollection, SessionCollectionSchema, SessionState } from "contracts/http/session"
+import { SessionCollection, SessionState } from "contracts/http/session"
 
 export const applySessionListEvents = (params: {
   collection: SessionCollection
@@ -27,7 +27,7 @@ export const applySessionListEvents = (params: {
     return params.collection
   }
 
-  return SessionCollectionSchema.parse({
+  return {
     items: params.collection.items.map((item) => {
       const nextState = stateBySessionId.get(item.id)
       if (nextState === undefined) {
@@ -40,5 +40,5 @@ export const applySessionListEvents = (params: {
       }
     }),
     page: params.collection.page,
-  })
+  }
 }

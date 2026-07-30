@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Event } from "contracts/events/event"
-import { SessionCollectionSchema } from "contracts/http/session"
+import { SessionCollection } from "contracts/http/session"
 import { queryKeys } from "../query/query.keys"
-import { applySessionListEvents } from "./apply.session.list.events"
+import { applySessionListEvents } from "./apply.list.events"
 import { openAppEventStream } from "./open.app.event.stream"
 
 type UseAppEventStreamParams = {
@@ -38,7 +38,7 @@ export const useAppEventStream = (params: UseAppEventStreamParams) => {
       handlers: {
         onEvents: (events) => {
           const client = queryClientRef.current
-          const sessionQueries = client.getQueriesData({
+          const sessionQueries = client.getQueriesData<SessionCollection>({
             queryKey: queryKeys.sessionsRoot,
           })
 
@@ -47,9 +47,8 @@ export const useAppEventStream = (params: UseAppEventStreamParams) => {
               return
             }
 
-            const collection = SessionCollectionSchema.parse(data)
-            const next = applySessionListEvents({ collection, events })
-            if (next !== collection) {
+            const next = applySessionListEvents({ collection: data, events })
+            if (next !== data) {
               client.setQueryData(key, next)
             }
           })

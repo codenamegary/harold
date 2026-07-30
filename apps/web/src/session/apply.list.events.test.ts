@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Event } from "contracts/events/event"
 import { SessionCollectionSchema } from "contracts/http/session"
-import { applySessionListEvents } from "./apply.session.list.events"
+import { applySessionListEvents } from "./apply.list.events"
 
 const collection = SessionCollectionSchema.parse({
   items: [
