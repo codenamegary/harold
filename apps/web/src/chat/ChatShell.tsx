@@ -101,7 +101,7 @@ export const ChatShell: React.FC = () => {
   }
 
   const handleSend = (text: string) => {
-    if (text.length === 0 || !composerEnabled || agentId === "") {
+    if (text.length === 0 || workspaceId === "" || agentId === "") {
       return
     }
 

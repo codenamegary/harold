@@ -16,6 +16,8 @@ export const useCreateSessionMutation = () => {
       const existing = queryClient.getQueryData(key)
       if (existing !== undefined) {
         const collection = SessionCollectionSchema.parse(existing)
+        const withoutCreated = collection.items.filter((item) => item.id !== session.id)
+        const nextCount = withoutCreated.length + 1
         queryClient.setQueryData(
           key,
           SessionCollectionSchema.parse({
@@ -30,13 +32,11 @@ export const useCreateSessionMutation = () => {
                 lastUsedAt: session.lastUsedAt,
                 archivedAt: session.archivedAt,
               },
-              ...collection.items.filter((item) => item.id !== session.id),
+              ...withoutCreated,
             ],
             page: {
               ...collection.page,
-              count: collection.items.some((item) => item.id === session.id)
-                ? collection.page.count
-                : collection.page.count + 1,
+              count: nextCount,
             },
           }),
         )

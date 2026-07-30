@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { CreateSessionResponseSchema,
-  SessionSchema } from "contracts/http/session"
+import { CreateSessionResponseSchema } from "contracts/http/session"
 import {
   acceptTestExecutablePath,
   cleanupTestAppResources,

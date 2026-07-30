@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { WorkspaceActiveSessionsProblemSchema } from "contracts/http/error"
-import { SessionCollectionSchema, CreateSessionResponseSchema,
-  SessionSchema } from "contracts/http/session"
+import { SessionCollectionSchema, CreateSessionResponseSchema } from "contracts/http/session"
 import {
   cleanupTestAppResources,
   createTempDataDir,

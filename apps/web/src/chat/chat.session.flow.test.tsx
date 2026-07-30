@@ -105,12 +105,10 @@ describe("Chat session flow", () => {
   beforeEach(() => {
     sockets.length = 0
 
-    globalThis.WebSocket = class {
-      constructor(url: string | URL) {
-        const socket = createFakeSocket(String(url))
-        sockets.push(socket)
-        return socket as unknown as WebSocket
-      }
+    globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
+      const socket = createFakeSocket(String(url))
+      sockets.push(socket)
+      return socket
     } as unknown as typeof WebSocket
 
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
