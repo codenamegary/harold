@@ -194,4 +194,41 @@ describe("spawnFakeAcp", () => {
     expect(resultA.stopReason).toBe("cancelled")
     expect(resultB.stopReason).toBe("end_turn")
   })
+
+  test("two overlapping prompts both complete naturally", async () => {
+    const fake = spawnFakeAcp({
+      emitSessionUpdatesOnPrompt: true,
+    })
+    spawnedProcesses.push(fake)
+
+    const client = createJsonRpcClient(fake.stdin, fake.stdout)
+    await client.request("initialize", {
+      protocolVersion: 1,
+      clientCapabilities: {},
+      clientInfo: { name: "integration-test", version: "0.0.0" },
+    })
+
+    const first = await client.request<{ sessionId: string }>("session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+    })
+    const second = await client.request<{ sessionId: string }>("session/new", {
+      cwd: "/tmp",
+      mcpServers: [],
+    })
+
+    const [resultA, resultB] = await Promise.all([
+      client.request<{ stopReason: string }>("session/prompt", {
+        sessionId: first.sessionId,
+        prompt: [{ type: "text", text: "hello a" }],
+      }),
+      client.request<{ stopReason: string }>("session/prompt", {
+        sessionId: second.sessionId,
+        prompt: [{ type: "text", text: "hello b" }],
+      }),
+    ])
+
+    expect(resultA.stopReason).toBe("end_turn")
+    expect(resultB.stopReason).toBe("end_turn")
+  })
 })

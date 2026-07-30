@@ -11,11 +11,27 @@ import { parseJsonRpcLine, serializeJsonRpcMessage } from "./protocol"
 const createPromptState = () => createFakeAcpPromptState()
 
 const sessionIdFrom = (response: { result?: unknown } | undefined): string => {
-  const result = response?.result as { sessionId?: string } | undefined
-  if (result?.sessionId === undefined) {
+  if (
+    typeof response?.result !== "object"
+    || response.result === null
+    || !("sessionId" in response.result)
+    || typeof response.result.sessionId !== "string"
+  ) {
     throw new Error("expected sessionId in response")
   }
-  return result.sessionId
+  return response.result.sessionId
+}
+
+const notificationSessionId = (params: unknown): string | undefined => {
+  if (
+    typeof params !== "object"
+    || params === null
+    || !("sessionId" in params)
+    || typeof params.sessionId !== "string"
+  ) {
+    return undefined
+  }
+  return params.sessionId
 }
 
 describe("fake ACP protocol", () => {
@@ -438,6 +454,25 @@ describe("fake ACP protocol", () => {
     expect(promptState.shouldEmit("session-b")).toBe(true)
     expect(first.notifications[0]?.params).toMatchObject({ sessionId: "session-a" })
     expect(second.notifications[0]?.params).toMatchObject({ sessionId: "session-b" })
+    expect(first.deferredNotifications).toHaveLength(2)
+    expect(second.deferredNotifications).toHaveLength(2)
+    expect(first.deferredNotifications.every((item) =>
+      notificationSessionId(item.notification.params) === "session-a"
+    )).toBe(true)
+    expect(second.deferredNotifications.every((item) =>
+      notificationSessionId(item.notification.params) === "session-b"
+    )).toBe(true)
+
+    expect(completePromptIfActive(promptState, "session-a")).toEqual({
+      jsonrpc: "2.0",
+      id: 15,
+      result: { stopReason: "end_turn" },
+    })
+    expect(completePromptIfActive(promptState, "session-b")).toEqual({
+      jsonrpc: "2.0",
+      id: 16,
+      result: { stopReason: "end_turn" },
+    })
   })
 
   test("session/cancel for one session does not cancel the other", () => {

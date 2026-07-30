@@ -47,7 +47,6 @@ export const readFakeAcpConfig = (
   loadSession: parseBooleanEnv(env.FAKE_ACP_LOAD_SESSION, false),
   sessionClose: parseBooleanEnv(env.FAKE_ACP_SESSION_CLOSE, false),
   sessionNewSessionId: env.FAKE_ACP_SESSION_NEW_SESSION_ID,
-
   sessionLoadSessionId: readEnvString(env, "FAKE_ACP_SESSION_LOAD_SESSION_ID", "fake-session-load"),
   sessionCloseFails: parseBooleanEnv(env.FAKE_ACP_SESSION_CLOSE_FAILS, false),
   sessionLoadFails: parseBooleanEnv(env.FAKE_ACP_SESSION_LOAD_FAILS, false),
