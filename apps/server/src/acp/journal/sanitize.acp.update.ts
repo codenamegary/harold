@@ -33,17 +33,56 @@ const readUpdateEnvelope = (
 
   const value = update as Record<string, unknown>
   const updateKind =
-    typeof value.updateKind === "string"
-      ? value.updateKind
-      : typeof value.kind === "string"
-        ? value.kind
-        : undefined
+    typeof value.sessionUpdate === "string"
+      ? value.sessionUpdate
+      : typeof value.updateKind === "string"
+        ? value.updateKind
+        : typeof value.kind === "string"
+          ? value.kind
+          : undefined
 
   if (updateKind === undefined) {
     return undefined
   }
 
   return { updateKind, fields: value }
+}
+
+const readChunkText = (fields: Record<string, unknown>): string | undefined => {
+  if (typeof fields.text === "string") {
+    return fields.text
+  }
+
+  if (typeof fields.content === "string") {
+    return fields.content
+  }
+
+  if (typeof fields.content !== "object" || fields.content === null) {
+    return undefined
+  }
+
+  const nested = fields.content
+  if (!("text" in nested) || typeof nested.text !== "string") {
+    return undefined
+  }
+
+  return nested.text
+}
+
+const readToolName = (fields: Record<string, unknown>): string | undefined => {
+  if (typeof fields.toolName === "string") {
+    return fields.toolName
+  }
+
+  if (typeof fields.name === "string") {
+    return fields.name
+  }
+
+  if (typeof fields.title === "string") {
+    return fields.title
+  }
+
+  return undefined
 }
 
 export const sanitizeSessionUpdate = (update: unknown): SanitizedNotificationPayload | undefined => {
@@ -56,12 +95,7 @@ export const sanitizeSessionUpdate = (update: unknown): SanitizedNotificationPay
 
   switch (updateKind) {
     case "agent_message_chunk": {
-      const text =
-        typeof fields.text === "string"
-          ? fields.text
-          : typeof fields.content === "string"
-            ? fields.content
-            : undefined
+      const text = readChunkText(fields)
       if (text === undefined) {
         return undefined
       }
@@ -69,12 +103,7 @@ export const sanitizeSessionUpdate = (update: unknown): SanitizedNotificationPay
     }
     case "tool_call": {
       const toolCallId = typeof fields.toolCallId === "string" ? fields.toolCallId : undefined
-      const toolName =
-        typeof fields.toolName === "string"
-          ? fields.toolName
-          : typeof fields.name === "string"
-            ? fields.name
-            : undefined
+      const toolName = readToolName(fields)
       if (toolCallId === undefined || toolName === undefined) {
         return undefined
       }
@@ -88,12 +117,12 @@ export const sanitizeSessionUpdate = (update: unknown): SanitizedNotificationPay
     }
     case "tool_call_update": {
       const toolCallId = typeof fields.toolCallId === "string" ? fields.toolCallId : undefined
-      const toolName = typeof fields.toolName === "string" ? fields.toolName : undefined
+      const toolName = readToolName(fields)
       const status = fields.status
       if (
-        toolCallId === undefined ||
-        toolName === undefined ||
-        (status !== "in_progress" && status !== "completed" && status !== "failed")
+        toolCallId === undefined
+        || toolName === undefined
+        || (status !== "in_progress" && status !== "completed" && status !== "failed")
       ) {
         return undefined
       }
@@ -101,7 +130,7 @@ export const sanitizeSessionUpdate = (update: unknown): SanitizedNotificationPay
         updateKind: "tool_call_update",
         toolCallId,
         toolName,
-        toolKind: parseToolKind(fields.toolKind),
+        toolKind: parseToolKind(fields.toolKind ?? fields.kind),
         status,
       }
     }

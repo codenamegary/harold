@@ -1,15 +1,28 @@
 import { FakeAcpConfig } from "./config"
 import { FakeAcpPromptState } from "./prompt-state"
-import { JsonRpcMessage, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse } from "./protocol"
+import {
+  isJsonRpcNotification,
+  isJsonRpcRequest,
+  JsonRpcMessage,
+  JsonRpcNotification,
+  JsonRpcRequest,
+  JsonRpcResponse,
+} from "./protocol"
 
 export type HandlerResult = {
-  response: JsonRpcResponse
+  response?: JsonRpcResponse
+  holdPromptResponse?: boolean
+  promptCompletionDelayMs?: number
   outbound: JsonRpcRequest[]
   notifications: JsonRpcNotification[]
   deferredNotifications: ReadonlyArray<{
     delayMs: number
     notification: JsonRpcNotification
   }>
+}
+
+export type NotificationHandlerResult = {
+  promptResponse?: JsonRpcResponse
 }
 
 const emptyHandlerExtras = () => ({
@@ -30,39 +43,30 @@ const jsonRpcResult = (id: JsonRpcRequest["id"], result: unknown): JsonRpcRespon
   result,
 })
 
+const agentMessageChunk = (sessionId: string, text: string): JsonRpcNotification => ({
+  jsonrpc: "2.0",
+  method: "session/update",
+  params: {
+    sessionId,
+    update: {
+      sessionUpdate: "agent_message_chunk",
+      content: { type: "text", text },
+    },
+  },
+})
+
 const scriptedSessionUpdates = (sessionId: string): JsonRpcNotification[] => [
+  agentMessageChunk(sessionId, "Hello"),
+  agentMessageChunk(sessionId, " world"),
   {
     jsonrpc: "2.0",
     method: "session/update",
-    params: {
-      sessionId,
-      update: { updateKind: "agent_message_chunk", text: "Hello" },
-    },
-  },
-  {
-    jsonrpc: "2.0",
-    method: "session/update",
-    params: {
-      sessionId,
-      update: { updateKind: "agent_message_chunk", text: " world" },
-    },
-  },
-  {
-    jsonrpc: "2.0",
-    method: "session/update",
-    params: { sessionId, update: { updateKind: "user_message_chunk" } },
+    params: { sessionId, update: { sessionUpdate: "user_message_chunk" } },
   },
 ]
 
 const loadReplayUpdates = (sessionId: string): JsonRpcNotification[] => [
-  {
-    jsonrpc: "2.0",
-    method: "session/update",
-    params: {
-      sessionId,
-      update: { updateKind: "agent_message_chunk", text: "Replayed" },
-    },
-  },
+  agentMessageChunk(sessionId, "Replayed"),
 ]
 
 const toolCallUpdates = (sessionId: string): JsonRpcNotification[] => [
@@ -72,10 +76,11 @@ const toolCallUpdates = (sessionId: string): JsonRpcNotification[] => [
     params: {
       sessionId,
       update: {
-        updateKind: "tool_call",
+        sessionUpdate: "tool_call",
         toolCallId: "tool-call-1",
+        title: "read_file",
         toolName: "read_file",
-        toolKind: "read",
+        kind: "read",
         status: "pending",
       },
     },
@@ -86,10 +91,10 @@ const toolCallUpdates = (sessionId: string): JsonRpcNotification[] => [
     params: {
       sessionId,
       update: {
-        updateKind: "tool_call_update",
+        sessionUpdate: "tool_call_update",
         toolCallId: "tool-call-1",
         toolName: "read_file",
-        toolKind: "read",
+        kind: "read",
         status: "completed",
       },
     },
@@ -291,7 +296,7 @@ const handleSessionPrompt = (
     }
   }
 
-  promptState.start(sessionId)
+  promptState.start({ sessionId, requestId: request.id })
 
   const updates = [
     ...(config.emitSessionUpdatesOnPrompt ? scriptedSessionUpdates(sessionId) : []),
@@ -299,40 +304,24 @@ const handleSessionPrompt = (
   ]
 
   if (updates.length === 0) {
+    const requestId = promptState.completeNatural(sessionId)
     return {
-      response: jsonRpcResult(request.id, { stopReason: "end_turn" }),
+      response: jsonRpcResult(requestId ?? request.id, { stopReason: "end_turn" }),
       ...emptyHandlerExtras(),
     }
   }
 
+  const lastDeferredDelayMs = updates.length > 1 ? (updates.length - 1) * 20 : 0
+
   return {
-    response: jsonRpcResult(request.id, { stopReason: "end_turn" }),
+    holdPromptResponse: true,
+    promptCompletionDelayMs: lastDeferredDelayMs + 20,
     outbound: [],
     notifications: updates.slice(0, 1),
     deferredNotifications: updates.slice(1).map((notification, index) => ({
       delayMs: (index + 1) * 20,
       notification,
     })),
-  }
-}
-
-const handleSessionCancel = (
-  request: JsonRpcRequest,
-  promptState: FakeAcpPromptState,
-): HandlerResult => {
-  const sessionId = readSessionId(request.params)
-  if (sessionId === undefined) {
-    return {
-      response: jsonRpcError(request.id, -32602, "sessionId is required"),
-      ...emptyHandlerExtras(),
-    }
-  }
-
-  promptState.cancel(sessionId)
-
-  return {
-    response: jsonRpcResult(request.id, {}),
-    ...emptyHandlerExtras(),
   }
 }
 
@@ -350,8 +339,6 @@ const requestHandlers: Record<string, RequestHandler> = {
   "session/close": (request, config) => handleSessionClose(request, config),
   "session/prompt": (request, config, promptState) =>
     handleSessionPrompt(request, config, promptState),
-  "session/cancel": (request, _config, promptState) =>
-    handleSessionCancel(request, promptState),
 }
 
 export const handleJsonRpcRequest = (
@@ -370,12 +357,39 @@ export const handleJsonRpcRequest = (
   return handler(request, config, promptState)
 }
 
+export const handleJsonRpcNotification = (
+  notification: JsonRpcNotification,
+  promptState: FakeAcpPromptState,
+): NotificationHandlerResult => {
+  if (notification.method !== "session/cancel") {
+    return {}
+  }
+
+  const sessionId = readSessionId(notification.params)
+  if (sessionId === undefined) {
+    return {}
+  }
+
+  const requestId = promptState.cancel(sessionId)
+  if (requestId === undefined) {
+    return {}
+  }
+
+  return {
+    promptResponse: jsonRpcResult(requestId, { stopReason: "cancelled" }),
+  }
+}
+
 export const handleJsonRpcMessage = (
   message: JsonRpcMessage,
   config: FakeAcpConfig,
   promptState: FakeAcpPromptState,
-): HandlerResult | undefined => {
-  if (!("method" in message)) {
+): HandlerResult | NotificationHandlerResult | undefined => {
+  if (isJsonRpcNotification(message)) {
+    return handleJsonRpcNotification(message, promptState)
+  }
+
+  if (!isJsonRpcRequest(message)) {
     return undefined
   }
 
@@ -386,3 +400,15 @@ export const shouldEmitDeferredNotification = (
   promptState: FakeAcpPromptState,
   sessionId: string,
 ): boolean => promptState.shouldEmit(sessionId)
+
+export const completePromptIfActive = (
+  promptState: FakeAcpPromptState,
+  sessionId: string,
+): JsonRpcResponse | undefined => {
+  const requestId = promptState.completeNatural(sessionId)
+  if (requestId === undefined) {
+    return undefined
+  }
+
+  return jsonRpcResult(requestId, { stopReason: "end_turn" })
+}

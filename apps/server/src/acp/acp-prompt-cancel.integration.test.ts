@@ -115,13 +115,16 @@ describe("ACP prompt, update, and cancel integration", () => {
     expect(cancelResult).toEqual({ ok: true })
 
     const promptResult = await promptPromise
-    expect(promptResult).toEqual({ ok: true, result: { stopReason: "end_turn" } })
+    expect(promptResult).toEqual({ ok: true, result: { stopReason: "cancelled" } })
 
     await new Promise((resolve) => setTimeout(resolve, 80))
     expect(sessionUpdates).toHaveLength(1)
     expect(sessionUpdates[0]).toEqual({
       acpSessionId: created.acpSessionId,
-      update: { updateKind: "agent_message_chunk", text: "Hello" },
+      update: {
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: "Hello" },
+      },
     })
 
     await app.close()
