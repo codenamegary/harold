@@ -4,3 +4,4 @@ node_modules/
 .cursor/tmp/
 .worktrees/
 .tmp/
+coverage/

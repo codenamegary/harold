@@ -20,8 +20,68 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      - name: Setup LCOV
+        uses: hrishikesh-kadam/setup-lcov@v1
+
       - name: Install dependencies
+        id: install
         run: bun install --frozen-lockfile
 
-      - name: Run check
-        run: bun run check
+      - name: Lint
+        run: bun run lint
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test with coverage
+        id: coverage
+        run: bun run test:coverage
+
+      - name: Build HTML coverage report
+        if: always() && steps.coverage.outcome == 'success'
+        run: |
+          mkdir -p coverage/html/server coverage/html/web
+          (
+            cd apps/server
+            genhtml ../../coverage/server/lcov.info \
+              --output-directory ../../coverage/html/server \
+              --title "apps/server" \
+              --legend \
+              --show-details
+          )
+          (
+            cd apps/web
+            genhtml ../../coverage/web/lcov.info \
+              --output-directory ../../coverage/html/web \
+              --title "apps/web" \
+              --legend \
+              --show-details
+          )
+          {
+            echo "## Test coverage"
+            echo ""
+            echo "Download the \`coverage\` artifact."
+            echo "Open \`html/server/index.html\` or \`html/web/index.html\`."
+            echo ""
+            echo "### apps/server"
+            echo ""
+            echo '```'
+            lcov --summary coverage/server/lcov.info
+            echo '```'
+            echo ""
+            echo "### apps/web"
+            echo ""
+            echo '```'
+            lcov --summary coverage/web/lcov.info
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage
+        if: always() && steps.coverage.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: |
+            coverage/**/lcov.info
+            coverage/html/
+          if-no-files-found: warn
