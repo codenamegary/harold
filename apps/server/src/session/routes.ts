@@ -344,6 +344,10 @@ export const registerSessionRoutes = (
       return sendProblem(reply, 409, buildTurnInProgressProblem())
     }
 
+    if (existing.value.state !== "idle") {
+      return sendProblem(reply, 409, buildAcpUnavailableProblem("Session is not ready for prompts"))
+    }
+
     const binding = sessionRepository.getAcpBinding({ id: sessionId })
     if (!binding.ok) {
       return sendProblem(reply, 404, buildSessionNotFoundProblem())
