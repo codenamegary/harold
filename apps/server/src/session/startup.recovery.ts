@@ -14,7 +14,12 @@ export type RunStartupRecoveryParams = {
 export const runStartupRecovery = async (
   params: RunStartupRecoveryParams,
 ): Promise<void> => {
-  const candidates = params.sessionRepository.listNeedsStartupRecovery()
+  const healed = params.sessionService.markLiveSessionsOffline()
+  if (!healed.ok) {
+    throw new Error("failed to heal stale running sessions for startup recovery")
+  }
+
+  const candidates = params.sessionRepository.listOfflineResumable()
 
   for (const candidate of candidates) {
     await maybeAutoResumeSession({
@@ -24,7 +29,5 @@ export const runStartupRecovery = async (
       workspaceRepository: params.workspaceRepository,
       acpSupervisor: params.acpSupervisor,
     })
-
-    params.sessionRepository.clearNeedsStartupRecovery({ id: candidate.id })
   }
 }

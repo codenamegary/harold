@@ -2,9 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { eq } from "drizzle-orm"
 import { openDatabase } from "../persistence/database"
-import { sessions } from "../persistence/schema/sessions"
 import { createEventJournalRepository } from "../event/journal.repository"
 import { createEventCommitPublisher } from "../event/commit.publisher"
 import { createWorkspaceRepository } from "../workspace/repository"
@@ -24,7 +22,7 @@ afterEach(async () => {
 })
 
 describe("session service markLiveSessionsOffline", () => {
-  test("marks live non-archived sessions offline and journals session.state", async () => {
+  test("marks running sessions offline and leaves idle sessions idle", async () => {
     const dataDir = await createTempDataDir()
     const database = openDatabase({ dataDir })
     const workspaceDir = path.join(dataDir, "project")
@@ -80,10 +78,8 @@ describe("session service markLiveSessionsOffline", () => {
       return
     }
 
-    expect(marked.value.map((session) => session.id).sort()).toEqual(
-      [running.value.id, idle.value.id].sort(),
-    )
-    expect(marked.value.every((session) => session.state === "offline")).toBe(true)
+    expect(marked.value.map((session) => session.id)).toEqual([running.value.id])
+    expect(marked.value[0]?.state).toBe("offline")
 
     const runningAfter = sessionRepository.getById({ id: running.value.id })
     const idleAfter = sessionRepository.getById({ id: idle.value.id })
@@ -94,21 +90,8 @@ describe("session service markLiveSessionsOffline", () => {
     }
 
     expect(runningAfter.value.state).toBe("offline")
-    expect(idleAfter.value.state).toBe("offline")
+    expect(idleAfter.value.state).toBe("idle")
     expect(archivedAfter.value.state).toBe("archived")
-
-    const runningRow = database.db
-      .select()
-      .from(sessions)
-      .where(eq(sessions.id, running.value.id))
-      .get()
-    const idleRow = database.db
-      .select()
-      .from(sessions)
-      .where(eq(sessions.id, idle.value.id))
-      .get()
-    expect(runningRow?.needsStartupRecovery).toBe(true)
-    expect(idleRow?.needsStartupRecovery).toBe(false)
 
     const records = eventJournal.readAfter({ cursor: 0n, limit: 50 })
     expect(records.ok).toBe(true)
@@ -121,10 +104,8 @@ describe("session service markLiveSessionsOffline", () => {
         record.kind === "session.state" &&
         (record.payload as { state: string }).state === "offline",
     )
-    expect(offlineStates).toHaveLength(2)
-    expect(offlineStates.map((record) => record.sessionId).sort()).toEqual(
-      [running.value.id, idle.value.id].sort(),
-    )
+    expect(offlineStates).toHaveLength(1)
+    expect(offlineStates[0]?.sessionId).toBe(running.value.id)
 
     database.close()
   })

@@ -266,7 +266,7 @@ export const createSessionService = (context: SessionServiceContext) => {
 
   const markLiveSessionsOffline = (): SessionServiceResult<ReadonlyArray<Session>> => {
     const live = context.sessionRepository.listLiveNonArchived()
-    const toMark = live.filter((session) => session.state !== "offline")
+    const toMark = live.filter((session) => session.state === "running")
 
     return toMark.reduce<SessionServiceResult<ReadonlyArray<Session>>>(
       (acc, session) => {

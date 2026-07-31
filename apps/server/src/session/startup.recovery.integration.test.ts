@@ -116,7 +116,9 @@ const shutdownServer = async (params: {
   acpSupervisor: Awaited<ReturnType<typeof createServer>>["acpSupervisor"]
   runtimeStatusService: Awaited<ReturnType<typeof createServer>>["runtimeStatusService"]
   sessionService: Awaited<ReturnType<typeof createServer>>["sessionService"]
-  disposeOfflineOnBindingClear: Awaited<ReturnType<typeof createServer>>["disposeOfflineOnBindingClear"]
+  disposeOfflineOnBindingClear: Awaited<
+    ReturnType<typeof createServer>
+  >["disposeOfflineOnBindingClear"]
 }) => {
   const { runShutdown } = await import("../bootstrap/shutdown")
   await runShutdown({
@@ -175,13 +177,6 @@ describe("startup recovery for former-running sessions", () => {
       return
     }
     expect(offline.value.state).toBe("offline")
-
-    const row = readDatabase.db
-      .select()
-      .from(sessions)
-      .where(eq(sessions.id, created.id))
-      .get()
-    expect(row?.needsStartupRecovery).toBe(true)
     readDatabase.close()
 
     const second = await createRestartedServer(dataDir)
@@ -199,18 +194,9 @@ describe("startup recovery for former-running sessions", () => {
         .getSessionBindingRegistry()
         .getBinding("startup-recovery-session-loaded"),
     ).toBeDefined()
-
-    const cleared = openDatabase({ dataDir })
-    const clearedRow = cleared.db
-      .select()
-      .from(sessions)
-      .where(eq(sessions.id, created.id))
-      .get()
-    expect(clearedRow?.needsStartupRecovery).toBe(false)
-    cleared.close()
   })
 
-  test("does not auto-load idle offline sessions at boot", async () => {
+  test("does not auto-load idle sessions at boot", async () => {
     const dataDir = await createTempDataDir(resources)
     const first = await createFirstServer(dataDir)
     const { workspaceId } = await seedWorkspace(first.app, dataDir)
@@ -246,8 +232,7 @@ describe("startup recovery for former-running sessions", () => {
       .from(sessions)
       .where(eq(sessions.id, created.id))
       .get()
-    expect(row?.state).toBe("offline")
-    expect(row?.needsStartupRecovery).toBe(false)
+    expect(row?.state).toBe("idle")
     readDatabase.close()
 
     const second = await createRestartedServer(dataDir)
@@ -261,7 +246,7 @@ describe("startup recovery for former-running sessions", () => {
         (await second.app.inject({ method: "GET", url: `/v1/sessions/${created.id}` })).body,
       ),
     )
-    expect(after.state).toBe("offline")
+    expect(after.state).toBe("idle")
     expect(
       second.acpSupervisor
         .getSessionBindingRegistry()
@@ -269,7 +254,72 @@ describe("startup recovery for former-running sessions", () => {
     ).toBeUndefined()
   })
 
-  test("failed load marks error, clears resumable and recovery flag, and keeps history", async () => {
+  test("heals stale running on boot then auto-loads to idle", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const first = await createFirstServer(dataDir)
+    const { workspaceId } = await seedWorkspace(first.app, dataDir)
+    await enableAgent(first.app, "cursor", whichFn)
+
+    const created = CreateSessionResponseSchema.parse(
+      JSON.parse(
+        (
+          await first.app.inject({
+            method: "POST",
+            url: "/v1/sessions",
+            payload: {
+              workspaceId,
+              agentId: "cursor",
+              text: "Hard kill mid turn",
+            },
+          })
+        ).body,
+      ),
+    )
+
+    await waitForSessionState({
+      app: first.app,
+      sessionId: created.id,
+      expected: "idle",
+    })
+
+    first.disposeOfflineOnBindingClear()
+    await first.acpSupervisor.stop()
+    await first.app.close()
+    first.database.close()
+
+    const staleDatabase = openDatabase({ dataDir })
+    staleDatabase.db
+      .update(sessions)
+      .set({ state: "running" })
+      .where(eq(sessions.id, created.id))
+      .run()
+    const staleRow = staleDatabase.db
+      .select()
+      .from(sessions)
+      .where(eq(sessions.id, created.id))
+      .get()
+    expect(staleRow?.state).toBe("running")
+    expect(staleRow?.resumable).toBe(true)
+    staleDatabase.close()
+
+    const second = await createRestartedServer(dataDir)
+    await enableAgent(second.app, "cursor", whichFn)
+    await second.acpSupervisor.start("cursor")
+
+    await waitForSessionState({
+      app: second.app,
+      sessionId: created.id,
+      expected: "idle",
+    })
+
+    expect(
+      second.acpSupervisor
+        .getSessionBindingRegistry()
+        .getBinding("startup-recovery-session-loaded"),
+    ).toBeDefined()
+  })
+
+  test("failed load marks error, clears resumable, and keeps history", async () => {
     const dataDir = await createTempDataDir(resources)
     const first = await createFirstServer(dataDir)
     const { workspaceId } = await seedWorkspace(first.app, dataDir)
@@ -331,7 +381,6 @@ describe("startup recovery for former-running sessions", () => {
       .where(eq(sessions.id, created.id))
       .get()
     expect(row?.resumable).toBe(false)
-    expect(row?.needsStartupRecovery).toBe(false)
 
     const journalAfter = createEventJournalRepository(readDatabase)
     const recordsAfter = journalAfter.readAfter({ cursor: 0n, limit: 200 })
