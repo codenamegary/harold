@@ -138,6 +138,7 @@ export const createAcpSupervisor = ({
   journalWriter,
   onSessionUpdate = () => undefined,
   onBeforeClearRuntime = () => undefined,
+  onSupervisorReady = () => undefined,
   restartBackoffMs = DEFAULT_ACP_RESTART_BACKOFF_MS,
   sleepFn = defaultSleep,
   spawnAgentProcessFn = spawnAgentProcess,
@@ -260,6 +261,7 @@ export const createAcpSupervisor = ({
 
     runtime.state = "ready"
     attachExitMonitor(process)
+    void Promise.resolve(onSupervisorReady())
   }
 
   const beginBoundedRestart = (agentId: AgentId) => {

@@ -67,6 +67,15 @@ export type SetSessionStateInput = {
   executor?: DbExecutor
 }
 
+export type MarkSessionOfflineInput = {
+  id: string
+  executor?: DbExecutor
+}
+
+export type StartupRecoveryCandidate = {
+  id: string
+}
+
 export type GetSessionAcpBindingInput = {
   id: string
 }
@@ -396,6 +405,25 @@ export const createSessionRepository = (database: AgentDatabase) => {
     return { ok: true, value: rowToSession(row) }
   }
 
+  const markOffline = ({
+    id,
+    executor,
+  }: MarkSessionOfflineInput): SessionRepositoryResult<Session> => {
+    const db = resolveExecutor(executor)
+    const row = db
+      .update(sessions)
+      .set({ state: "offline" })
+      .where(eq(sessions.id, id))
+      .returning()
+      .get()
+
+    if (row === undefined) {
+      return { ok: false, error: { kind: "not_found" } }
+    }
+
+    return { ok: true, value: rowToSession(row) }
+  }
+
   const setState = ({
     id,
     state,
@@ -454,6 +482,19 @@ export const createSessionRepository = (database: AgentDatabase) => {
     return { ok: true, value: rowToSession(row) }
   }
 
+  const listOfflineResumable = (): ReadonlyArray<StartupRecoveryCandidate> =>
+    database.db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.state, "offline"),
+          eq(sessions.resumable, true),
+          sql`${sessions.archivedAt} IS NULL`,
+        ),
+      )
+      .all()
+
   const listLiveByWorkspace = ({
     workspaceId,
   }: ListLiveSessionsByWorkspaceInput): LiveSessionBinding[] =>
@@ -501,8 +542,10 @@ export const createSessionRepository = (database: AgentDatabase) => {
     archive,
     markReady,
     markError,
+    markOffline,
     setState,
     getAcpBinding,
+    listOfflineResumable,
     listLiveByWorkspace,
     listLiveNonArchived,
   }
