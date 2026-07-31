@@ -266,8 +266,8 @@ describe("shell honesty", () => {
   })
 
   describe("chat disabled honesty", () => {
-    test("composer send and clear stay gated until workspace and agent are chosen", async () => {
-      const { getByRole } = renderShellRoute("/chat")
+    test("composer send stays gated until workspace and agent are chosen", async () => {
+      const { getByRole, queryByRole, queryByText } = renderShellRoute("/chat")
 
       await waitForShellReady(getByRole)
 
@@ -276,7 +276,20 @@ describe("shell honesty", () => {
       expect(getByRole("combobox", { name: "Session" })).toBeDisabled()
       expect(getByRole("textbox", { name: "Chat message" })).toBeDisabled()
       expect(getByRole("button", { name: "Send message" })).toBeDisabled()
-      expect(getByRole("button", { name: "Clear chat" })).toBeDisabled()
+      expect(queryByRole("menu", { name: "Slash commands" })).not.toBeInTheDocument()
+      expect(queryByRole("button", { name: "Add attachment" })).not.toBeInTheDocument()
+      expect(queryByText("ACP v0.8")).not.toBeInTheDocument()
+    })
+  })
+
+  describe("shell status chrome", () => {
+    test("status pill tooltip is Status, not JSON Server", async () => {
+      const { getByRole, getByTitle, queryByTitle } = renderShellRoute("/")
+
+      await waitForShellReady(getByRole)
+
+      expect(getByTitle("Status")).toBeInTheDocument()
+      expect(queryByTitle("JSON Server API status")).not.toBeInTheDocument()
     })
   })
 })

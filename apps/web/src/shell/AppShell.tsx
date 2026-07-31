@@ -136,7 +136,7 @@ export const AppShell: React.FC = () => {
                   ? "border-danger/25 bg-danger/5 text-danger"
                   : "border-line text-muted"
               }`}
-              title="JSON Server API status"
+              title="Status"
             >
               <StatusDot variant={phaseChrome.sidebarDotVariant} />
               <span>{phaseChrome.topbarLabel}</span>

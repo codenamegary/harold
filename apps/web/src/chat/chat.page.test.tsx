@@ -136,15 +136,20 @@ describe("ChatPage", () => {
     expect(getByLabelText("Session")).toHaveValue("")
   })
 
-  test("slash menu and prompt chips stay disabled", async () => {
-    const { getByRole } = renderChatPage()
+  test("prototype slash menu, prompt chips, and attach are gone", async () => {
+    const { getByRole, queryByRole, queryByText } = renderChatPage()
 
     await waitFor(() => {
-      expect(getByRole("menu", { name: "Slash commands" })).toBeInTheDocument()
+      expect(getByRole("heading", { level: 3, name: "Test your ACP connection" })).toBeInTheDocument()
     })
 
-    expect(getByRole("menuitem", { name: "/status Show workspace and git status" })).toBeDisabled()
-    expect(getByRole("button", { name: "Summarize this workspace" })).toBeDisabled()
-    expect(getByRole("button", { name: "Clear chat" })).toBeDisabled()
+    expect(queryByRole("menu", { name: "Slash commands" })).not.toBeInTheDocument()
+    expect(queryByRole("button", { name: "Summarize this workspace" })).not.toBeInTheDocument()
+    expect(queryByRole("button", { name: "Add attachment" })).not.toBeInTheDocument()
+    expect(queryByText("ACP v0.8")).not.toBeInTheDocument()
+    expect(getByRole("textbox", { name: "Chat message" })).toHaveAttribute(
+      "placeholder",
+      "Ask the agent…",
+    )
   })
 })
