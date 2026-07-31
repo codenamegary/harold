@@ -1,5 +1,4 @@
 import React from "react"
-import { PromptChips } from "./PromptChips"
 
 export const WelcomeMessage: React.FC = () => (
   <div className="mx-auto my-[70px] max-w-[430px] text-center max-[820px]:my-10">
@@ -13,6 +12,5 @@ export const WelcomeMessage: React.FC = () => (
     <p className="text-sm text-muted">
       Send a prompt directly to an agent without leaving the console.
     </p>
-    <PromptChips />
   </div>
 )
