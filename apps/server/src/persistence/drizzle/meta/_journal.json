@@ -29,6 +29,13 @@
       "when": 1785295988011,
       "tag": "0003_add_events_table",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1785505743290,
+      "tag": "0004_add_devices_and_pairing_codes_tables",
+      "breakpoints": true
     }
   ]
 }
