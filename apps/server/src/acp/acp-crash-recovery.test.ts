@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { CreateSessionResponseSchema } from "contracts/http/session"
+import { CreateSessionResponseSchema, SessionSchema } from "contracts/http/session"
 import {
   acceptTestExecutablePath,
   cleanupTestAppResources,
@@ -16,7 +16,7 @@ const resources = createTestAppResources()
 const waitForSupervisorState = async (
   getState: () => string,
   expected: string,
-  timeoutMs = 5000,
+  timeoutMs = 10_000,
 ) => {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
@@ -28,21 +28,49 @@ const waitForSupervisorState = async (
   throw new Error(`timed out waiting for supervisor state ${expected}, got ${getState()}`)
 }
 
+const waitForSessionState = async (params: {
+  app: Awaited<ReturnType<typeof createTestApp>>["app"]
+  sessionId: string
+  expected: string
+  timeoutMs?: number
+}) => {
+  const timeoutMs = params.timeoutMs ?? 10_000
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const response = await params.app.inject({
+      method: "GET",
+      url: `/v1/sessions/${params.sessionId}`,
+    })
+    const session = SessionSchema.parse(JSON.parse(response.body))
+    if (session.state === params.expected) {
+      return session
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  throw new Error(`timed out waiting for session state ${params.expected}`)
+}
+
 afterEach(async () => {
   await cleanupTestAppResources(resources)
 })
 
 describe("ACP crash recovery", () => {
-  test("recovers on next session create after fake ACP subprocess exits", async () => {
+  test("kills fake ACP, marks session offline, recovers via bounded backoff", async () => {
     const dataDir = await createTempDataDir(resources)
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app, acpSupervisor } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
-      capabilities: { loadSession: true, sessionClose: false },
-      sessionNewSessionId: "crash-session",
-      sessionLoadSessionId: "crash-session-loaded",
-    })
+    const { app, acpSupervisor } = await createTestApp(
+      resources,
+      dataDir,
+      whichFn,
+      acceptTestExecutablePath,
+      {
+        capabilities: { loadSession: true, sessionClose: false },
+        sessionNewSessionId: "crash-session",
+        sessionLoadSessionId: "crash-session-loaded",
+      },
+    )
     const { workspaceId } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
@@ -56,6 +84,7 @@ describe("ACP crash recovery", () => {
       },
     })
     expect(createResponse.statusCode).toBe(201)
+    const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
 
     const fake = resources.getLastFake()
     if (!fake) {
@@ -63,7 +92,13 @@ describe("ACP crash recovery", () => {
     }
     fake.kill()
 
-    await waitForSupervisorState(() => acpSupervisor.getStatus().state, "error")
+    await waitForSessionState({
+      app,
+      sessionId: created.id,
+      expected: "offline",
+    })
+    await waitForSupervisorState(() => acpSupervisor.getStatus().state, "ready")
+    expect(acpSupervisor.getStatus().state).toBe("ready")
 
     const recoveryResponse = await app.inject({
       method: "POST",

@@ -211,22 +211,28 @@ describe("createAcpSupervisor", () => {
 
     const exitResolvers: Array<(code: number | null) => void> = []
     const clearCalls: number[] = []
+    const spawnCount = { value: 0 }
 
     const supervisor = createAcpSupervisor({
       agentSettingsRepository: createRepository([
         { id: "cursor", enabled: true, path: "/bin/agent" },
       ]),
       serverVersion: "0.1.0",
+      restartBackoffMs: [0],
+      sleepFn: async () => undefined,
       onBeforeClearRuntime: () => {
         clearCalls.push(supervisor.getSessionBindingRegistry().count())
       },
-      spawnAgentProcessFn: () => ({
-        ...createMockProcess(),
-        waitForExit: () =>
-          new Promise<number | null>((resolve) => {
-            exitResolvers.push(resolve)
-          }),
-      }),
+      spawnAgentProcessFn: () => {
+        spawnCount.value += 1
+        return {
+          ...createMockProcess(),
+          waitForExit: () =>
+            new Promise<number | null>((resolve) => {
+              exitResolvers.push(resolve)
+            }),
+        }
+      },
       createTransportFn: () => mock.transport,
     })
     supervisors.push(supervisor)
@@ -260,9 +266,200 @@ describe("createAcpSupervisor", () => {
     expect(resolveExit).toBeDefined()
     resolveExit?.(1)
 
-    await waitFor(() => supervisor.getStatus().state === "error")
+    await waitFor(() => supervisor.getStatus().state === "ready" && spawnCount.value >= 3)
     expect(clearCalls).toEqual([1])
     expect(supervisor.getSessionBindingRegistry().count()).toBe(0)
+  })
+
+  test("unexpected exit retries spawn with bounded backoff then reaches ready", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+
+    const exitResolvers: Array<(code: number | null) => void> = []
+    const sleeps: number[] = []
+    const spawnCount = { value: 0 }
+    const clearCalls: number[] = []
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      restartBackoffMs: [10, 20],
+      sleepFn: async (ms) => {
+        sleeps.push(ms)
+      },
+      onBeforeClearRuntime: () => {
+        clearCalls.push(supervisor.getSessionBindingRegistry().count())
+      },
+      spawnAgentProcessFn: () => {
+        spawnCount.value += 1
+        if (spawnCount.value === 2) {
+          throw new Error("spawn failed once")
+        }
+        return {
+          ...createMockProcess(),
+          waitForExit: () =>
+            new Promise<number | null>((resolve) => {
+              exitResolvers.push(resolve)
+            }),
+        }
+      },
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    expect(spawnCount.value).toBe(1)
+
+    exitResolvers[0]?.(1)
+    await waitFor(() => supervisor.getStatus().state === "ready" && spawnCount.value >= 3)
+
+    expect(sleeps).toEqual([10, 20])
+    expect(spawnCount.value).toBe(3)
+    expect(clearCalls).toEqual([0])
+    expect(supervisor.getStatus().state).toBe("ready")
+  })
+
+  test("exhausted restart backoff leaves supervisor in error until later start", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+
+    const exitResolvers: Array<(code: number | null) => void> = []
+    const sleeps: number[] = []
+    const spawnCount = { value: 0 }
+    const clearCalls: number[] = []
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      restartBackoffMs: [5, 5, 5],
+      sleepFn: async (ms) => {
+        sleeps.push(ms)
+      },
+      onBeforeClearRuntime: () => {
+        clearCalls.push(1)
+      },
+      spawnAgentProcessFn: () => {
+        spawnCount.value += 1
+        if (spawnCount.value >= 2 && spawnCount.value <= 4) {
+          throw new Error("spawn unavailable")
+        }
+        return {
+          ...createMockProcess(),
+          waitForExit: () =>
+            new Promise<number | null>((resolve) => {
+              exitResolvers.push(resolve)
+            }),
+        }
+      },
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    exitResolvers[0]?.(null)
+
+    await waitFor(() => supervisor.getStatus().state === "error")
+    expect(sleeps).toEqual([5, 5, 5])
+    expect(spawnCount.value).toBe(4)
+    expect(clearCalls).toEqual([1])
+
+    await supervisor.start("cursor")
+    expect(supervisor.getStatus().state).toBe("ready")
+    expect(spawnCount.value).toBe(5)
+  })
+
+  test("restart sets starting during backoff attempts", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+
+    const exitResolvers: Array<(code: number | null) => void> = []
+    const releaseSleep = { resolve: null as (() => void) | null }
+    const seenStarting = { value: false }
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      restartBackoffMs: [1],
+      sleepFn: async () => {
+        seenStarting.value = supervisor.getStatus().state === "starting"
+        await new Promise<void>((resolve) => {
+          releaseSleep.resolve = resolve
+        })
+      },
+      spawnAgentProcessFn: () => ({
+        ...createMockProcess(),
+        waitForExit: () =>
+          new Promise<number | null>((resolve) => {
+            exitResolvers.push(resolve)
+          }),
+      }),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    exitResolvers[0]?.(1)
+
+    await waitFor(() => releaseSleep.resolve !== null)
+    expect(supervisor.getStatus().state).toBe("starting")
+    expect(seenStarting.value).toBe(true)
+
+    releaseSleep.resolve?.()
+    await waitFor(() => supervisor.getStatus().state === "ready")
+  })
+
+  test("dead-process exit with null code clears and restarts", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+
+    const exitResolvers: Array<(code: number | null) => void> = []
+    const clearCalls: number[] = []
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      restartBackoffMs: [0],
+      sleepFn: async () => undefined,
+      onBeforeClearRuntime: () => {
+        clearCalls.push(1)
+      },
+      spawnAgentProcessFn: () => ({
+        ...createMockProcess(),
+        waitForExit: () =>
+          new Promise<number | null>((resolve) => {
+            exitResolvers.push(resolve)
+          }),
+      }),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    exitResolvers[0]?.(null)
+
+    await waitFor(() => clearCalls.length === 1)
+    await waitFor(() => supervisor.getStatus().state === "ready")
+    expect(clearCalls).toEqual([1])
   })
 
   test("handleAgentDisabled stops a running matching agent", async () => {
