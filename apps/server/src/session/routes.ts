@@ -19,6 +19,11 @@ import { WorkspaceRepository } from "../workspace/repository"
 import { deriveSessionNameFromPrompt } from "./derive.session.name"
 import { SessionRepository } from "./repository"
 import { maybeAutoResumeSession, resumeSession } from "./resume.session"
+import {
+  agentAdvertisesResumable,
+  ensureSupervisorReady,
+  isArchivedSession,
+} from "./session.acp.ready"
 import { SessionService } from "./service"
 import {
   buildAcpUnavailableProblem,
@@ -45,31 +50,6 @@ const sendProblem = (
 ) => reply.status(status).type("application/problem+json").send(problem)
 
 const isRegisteredAgent = (agentId: AgentId): boolean => agentId in agentDefinitions
-
-const isArchivedSession = (session: { archivedAt: string | null; state: string }): boolean =>
-  session.archivedAt !== null || session.state === "archived"
-
-const ensureSupervisorReady = async (
-  acpSupervisor: AcpSupervisor,
-  agentId: AgentId,
-): Promise<boolean> => {
-  const runningAgentId = acpSupervisor.getRunningAgentId()
-  const status = acpSupervisor.getStatus()
-
-  if (status.state === "ready" && runningAgentId === agentId) {
-    return true
-  }
-
-  try {
-    await acpSupervisor.start(agentId)
-    return acpSupervisor.getStatus().state === "ready"
-  } catch {
-    return false
-  }
-}
-
-const agentAdvertisesResumable = (acpSupervisor: AcpSupervisor): boolean =>
-  acpSupervisor.getAgentCapabilities()?.loadSession === true
 
 export const registerSessionRoutes = (
   app: FastifyInstance,

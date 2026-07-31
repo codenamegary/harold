@@ -1,8 +1,12 @@
-import { AgentId } from "contracts/http/agent-settings"
 import { Session } from "contracts/http/session"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { WorkspaceRepository } from "../workspace/repository"
 import { SessionRepository } from "./repository"
+import {
+  agentAdvertisesResumable,
+  ensureSupervisorReady,
+  isArchivedSession,
+} from "./session.acp.ready"
 import { SessionService } from "./service"
 
 export type ResumeSessionParams = {
@@ -23,33 +27,6 @@ export type ResumeSessionResult =
   | { kind: "not-resumable"; session: Session; reason?: string }
   | { kind: "acp-unavailable"; session?: Session; reason?: string }
   | { kind: "load-failed"; session: Session; reason: string }
-
-const isArchivedSession = (session: {
-  archivedAt: string | null
-  state: string
-}): boolean => session.archivedAt !== null || session.state === "archived"
-
-const ensureSupervisorReady = async (
-  acpSupervisor: AcpSupervisor,
-  agentId: AgentId,
-): Promise<boolean> => {
-  const runningAgentId = acpSupervisor.getRunningAgentId()
-  const status = acpSupervisor.getStatus()
-
-  if (status.state === "ready" && runningAgentId === agentId) {
-    return true
-  }
-
-  try {
-    await acpSupervisor.start(agentId)
-    return acpSupervisor.getStatus().state === "ready"
-  } catch {
-    return false
-  }
-}
-
-const agentAdvertisesResumable = (acpSupervisor: AcpSupervisor): boolean =>
-  acpSupervisor.getAgentCapabilities()?.loadSession === true
 
 export const resumeSession = async (
   params: ResumeSessionParams,
