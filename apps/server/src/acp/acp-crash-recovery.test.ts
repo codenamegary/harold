@@ -28,25 +28,26 @@ const waitForSupervisorState = async (
   throw new Error(`timed out waiting for supervisor state ${expected}, got ${getState()}`)
 }
 
-const waitForSessionState = async (
-  app: Awaited<ReturnType<typeof createTestApp>>["app"],
-  sessionId: string,
-  expected: string,
-  timeoutMs = 10_000,
-) => {
+const waitForSessionState = async (params: {
+  app: Awaited<ReturnType<typeof createTestApp>>["app"]
+  sessionId: string
+  expected: string
+  timeoutMs?: number
+}) => {
+  const timeoutMs = params.timeoutMs ?? 10_000
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
-    const response = await app.inject({
+    const response = await params.app.inject({
       method: "GET",
-      url: `/v1/sessions/${sessionId}`,
+      url: `/v1/sessions/${params.sessionId}`,
     })
     const session = SessionSchema.parse(JSON.parse(response.body))
-    if (session.state === expected) {
+    if (session.state === params.expected) {
       return session
     }
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
-  throw new Error(`timed out waiting for session state ${expected}`)
+  throw new Error(`timed out waiting for session state ${params.expected}`)
 }
 
 afterEach(async () => {
@@ -91,7 +92,11 @@ describe("ACP crash recovery", () => {
     }
     fake.kill()
 
-    await waitForSessionState(app, created.id, "offline")
+    await waitForSessionState({
+      app,
+      sessionId: created.id,
+      expected: "offline",
+    })
     await waitForSupervisorState(() => acpSupervisor.getStatus().state, "ready")
     expect(acpSupervisor.getStatus().state).toBe("ready")
 

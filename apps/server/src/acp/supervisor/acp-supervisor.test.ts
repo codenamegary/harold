@@ -423,7 +423,7 @@ describe("createAcpSupervisor", () => {
     await waitFor(() => supervisor.getStatus().state === "ready")
   })
 
-  test("dead-process exit with code 0 still clears and restarts", async () => {
+  test("dead-process exit with null code clears and restarts", async () => {
     const mock = createMockTransport()
     mock.setHandler("initialize", () => ({
       agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
@@ -455,7 +455,7 @@ describe("createAcpSupervisor", () => {
     supervisors.push(supervisor)
 
     await supervisor.start("cursor")
-    exitResolvers[0]?.(0)
+    exitResolvers[0]?.(null)
 
     await waitFor(() => clearCalls.length === 1)
     await waitFor(() => supervisor.getStatus().state === "ready")

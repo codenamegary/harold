@@ -107,12 +107,14 @@ const monitorProcessExit = async (
   process: SpawnedAgentProcess,
   onUnexpectedExit: () => void,
 ) => {
-  await process.waitForExit()
+  const exitCode = await process.waitForExit()
   if (runtime.process !== process) {
     return
   }
 
-  onUnexpectedExit()
+  if (exitCode !== 0) {
+    onUnexpectedExit()
+  }
 }
 
 const defaultSleep = (ms: number): Promise<void> =>
