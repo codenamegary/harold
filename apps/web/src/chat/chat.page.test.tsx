@@ -146,6 +146,7 @@ describe("ChatPage", () => {
     expect(queryByRole("menu", { name: "Slash commands" })).not.toBeInTheDocument()
     expect(queryByRole("button", { name: "Summarize this workspace" })).not.toBeInTheDocument()
     expect(queryByRole("button", { name: "Add attachment" })).not.toBeInTheDocument()
+    expect(queryByRole("button", { name: "Clear chat" })).not.toBeInTheDocument()
     expect(queryByText("ACP v0.8")).not.toBeInTheDocument()
     expect(getByRole("textbox", { name: "Chat message" })).toHaveAttribute(
       "placeholder",

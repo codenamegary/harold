@@ -31,7 +31,7 @@ const collection = SessionCollectionSchema.parse({
 
 const sessionStateEvent = (params: {
   sessionId: string
-  state: "idle" | "running" | "error"
+  state: "idle" | "running" | "error" | "archived"
   cursor: string
 }): Event => ({
   type: "session.state",
@@ -61,6 +61,23 @@ describe("applySessionListEvents", () => {
     expect(next.items[0]?.state).toBe("idle")
     expect(next.items[1]?.state).toBe("running")
     expect(next.items[1]?.name).toBe("Background chat")
+  })
+
+  test("removes sessions that become archived", () => {
+    const next = applySessionListEvents({
+      collection,
+      events: [
+        sessionStateEvent({
+          sessionId: "sess_01OTHER00000000000000002",
+          state: "archived",
+          cursor: "14",
+        }),
+      ],
+    })
+
+    expect(next.items).toHaveLength(1)
+    expect(next.items[0]?.id).toBe("sess_01SELECTED000000000000001")
+    expect(next.page.count).toBe(1)
   })
 
   test("ignores session.state for sessions not in the collection", () => {

@@ -42,10 +42,13 @@ export const ChatSelectors: React.FC<ChatSelectorsProps> = ({
   onSessionChange,
 }) => {
   const enabledAgents = agents.filter((agent) => agent.enabled)
+  const liveSessions = sessions.filter(
+    (session) => session.state !== "archived" && session.archivedAt === null,
+  )
   const filteredSessions =
     agentId === ""
-      ? sessions
-      : sessions.filter((session) => session.agentId === agentId)
+      ? liveSessions
+      : liveSessions.filter((session) => session.agentId === agentId)
 
   const sessionOptions: ReadonlyArray<SessionOption> =
     sessionId !== "" && !filteredSessions.some((session) => session.id === sessionId)

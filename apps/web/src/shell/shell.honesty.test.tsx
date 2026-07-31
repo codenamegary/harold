@@ -278,6 +278,7 @@ describe("shell honesty", () => {
       expect(getByRole("button", { name: "Send message" })).toBeDisabled()
       expect(queryByRole("menu", { name: "Slash commands" })).not.toBeInTheDocument()
       expect(queryByRole("button", { name: "Add attachment" })).not.toBeInTheDocument()
+      expect(queryByRole("button", { name: "Clear chat" })).not.toBeInTheDocument()
       expect(queryByText("ACP v0.8")).not.toBeInTheDocument()
     })
   })
