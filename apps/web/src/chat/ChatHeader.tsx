@@ -1,4 +1,5 @@
 import React from "react"
+import { SessionState } from "contracts/http/session"
 import { IconButton } from "../design-system/IconButton"
 import { ChatSelectors } from "./ChatSelectors"
 import { AgentId } from "contracts/http/agent-settings"
@@ -12,6 +13,7 @@ type ChatHeaderProps = {
   workspaceId: string
   agentId: AgentId | ""
   sessionId: string
+  selectedSessionState: SessionState | null
   onWorkspaceChange: (workspaceId: string) => void
   onAgentChange: (agentId: AgentId | "") => void
   onSessionChange: (sessionId: string) => void
