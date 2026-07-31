@@ -133,6 +133,7 @@ export const createAcpSupervisor = ({
   serverVersion,
   journalWriter,
   onSessionUpdate = () => undefined,
+  onBeforeClearRuntime = () => undefined,
   spawnAgentProcessFn = spawnAgentProcess,
   createTransportFn = (process) =>
     createJsonRpcTransport({
@@ -149,24 +150,37 @@ export const createAcpSupervisor = ({
     transport: null,
     exitMonitor: null,
   }
+  const acceptUnexpectedExit = { value: false }
 
   const clearRuntime = () => {
-    runtime.transport?.close()
-    runtime.process?.kill()
+    acceptUnexpectedExit.value = false
+    const process = runtime.process
+    const transport = runtime.transport
     runtime.transport = null
     runtime.process = null
     runtime.exitMonitor = null
     runtime.runningAgentId = null
     runtime.agentCapabilities = null
     sessionBindingRegistry.clear()
+    transport?.close()
+    process?.kill()
   }
 
   const transitionToError = () => {
+    if (runtime.state !== "ready" && runtime.state !== "starting") {
+      clearRuntime()
+      runtime.state = "error"
+      return
+    }
+    onBeforeClearRuntime()
     clearRuntime()
     runtime.state = "error"
   }
 
   const stop = async (): Promise<void> => {
+    if (runtime.state === "ready") {
+      onBeforeClearRuntime()
+    }
     clearRuntime()
     runtime.state = "stopped"
   }
@@ -223,7 +237,13 @@ export const createAcpSupervisor = ({
         })
       })
 
-      runtime.exitMonitor = monitorProcessExit(runtime, process, transitionToError)
+      acceptUnexpectedExit.value = true
+      runtime.exitMonitor = monitorProcessExit(runtime, process, () => {
+        if (!acceptUnexpectedExit.value) {
+          return
+        }
+        transitionToError()
+      })
 
       const initResult = await transport.request("initialize", {
         protocolVersion: 1,

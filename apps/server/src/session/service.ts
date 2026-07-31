@@ -231,6 +231,31 @@ export const createSessionService = (context: SessionServiceContext) => {
     input: { id: string },
   ): SessionServiceResult<Session> => setTurnState({ id: input.id, state: "idle" })
 
+  const markOffline = (
+    input: { id: string },
+  ): SessionServiceResult<Session> => setTurnState({ id: input.id, state: "offline" })
+
+  const markLiveSessionsOffline = (): SessionServiceResult<ReadonlyArray<Session>> => {
+    const live = context.sessionRepository.listLiveNonArchived()
+    const toMark = live.filter((session) => session.state !== "offline")
+
+    return toMark.reduce<SessionServiceResult<ReadonlyArray<Session>>>(
+      (acc, session) => {
+        if (!acc.ok) {
+          return acc
+        }
+
+        const result = markOffline({ id: session.id })
+        if (!result.ok) {
+          return result
+        }
+
+        return { ok: true, value: [...acc.value, result.value] }
+      },
+      { ok: true, value: [] },
+    )
+  }
+
   return {
     createStarting,
     markReady,
@@ -239,6 +264,8 @@ export const createSessionService = (context: SessionServiceContext) => {
     resume,
     markRunning,
     markIdle,
+    markOffline,
+    markLiveSessionsOffline,
   }
 }
 

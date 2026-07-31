@@ -9,9 +9,22 @@ const main = async () => {
   const config = parseConfig(process.env)
   const database = openDatabase({ dataDir: config.dataDir })
   const runtime = createRuntime(packageJson.version)
-  const { app, acpSupervisor, runtimeStatusService } = await createServer({ config, runtime, database })
+  const {
+    app,
+    acpSupervisor,
+    runtimeStatusService,
+    sessionService,
+    disposeOfflineOnBindingClear,
+  } = await createServer({ config, runtime, database })
 
-  registerShutdown(app, database, acpSupervisor, runtimeStatusService)
+  registerShutdown(
+    app,
+    database,
+    acpSupervisor,
+    runtimeStatusService,
+    sessionService,
+    disposeOfflineOnBindingClear,
+  )
   await listen(app, config, runtimeStatusService)
   app.log.info(
     { host: config.host, port: config.port, dataDir: config.dataDir },

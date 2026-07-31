@@ -98,6 +98,12 @@ export const createServer = async ({
   })
   const workspaceRepository = createWorkspaceRepository(database)
   const sessionRepository = createSessionRepository(database)
+  const sessionService = createSessionService({
+    database,
+    sessionRepository,
+    eventJournal,
+    commitPublisher,
+  })
 
   registerEventStreamRoutes(app, {
     eventJournal,
@@ -106,6 +112,11 @@ export const createServer = async ({
     sessionRepository,
   })
 
+  const offlineOnBindingClear = { enabled: true }
+  const disposeOfflineOnBindingClear = () => {
+    offlineOnBindingClear.enabled = false
+  }
+
   const acpSupervisor =
     providedAcpSupervisor ??
     createAcpSupervisor({
@@ -113,18 +124,34 @@ export const createServer = async ({
       serverVersion: runtime.version,
       journalWriter,
       spawnAgentProcessFn,
+      onBeforeClearRuntime: () => {
+        if (!offlineOnBindingClear.enabled) {
+          return
+        }
+        try {
+          const marked = sessionService.markLiveSessionsOffline()
+          if (!marked.ok) {
+            throw new Error("failed to mark live sessions offline")
+          }
+        } catch (error: unknown) {
+          if (!offlineOnBindingClear.enabled) {
+            return
+          }
+          if (
+            error instanceof RangeError &&
+            error.message.includes("closed database")
+          ) {
+            return
+          }
+          throw error
+        }
+      },
     })
 
   registerStatusRoutes(app, runtime, config, acpSupervisor)
   const workspaceService = createWorkspaceService({
     database,
     workspaceRepository,
-    eventJournal,
-    commitPublisher,
-  })
-  const sessionService = createSessionService({
-    database,
-    sessionRepository,
     eventJournal,
     commitPublisher,
   })
@@ -157,5 +184,13 @@ export const createServer = async ({
     registerTestRoutes(app)
   }
 
-  return { app, acpSupervisor, eventJournal, commitPublisher, runtimeStatusService }
+  return {
+    app,
+    acpSupervisor,
+    eventJournal,
+    commitPublisher,
+    runtimeStatusService,
+    sessionService,
+    disposeOfflineOnBindingClear,
+  }
 }

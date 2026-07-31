@@ -18,25 +18,30 @@ export type TestAppResources = {
   addTempDir: (dir: string) => void
   addApp: (app: TestServerApp) => void
   addFakeProcess: (fake: SpawnedFakeAcp) => void
+  addTeardown: (teardown: () => Promise<void>) => void
   getLastFake: () => SpawnedFakeAcp | null
   takeTempDirs: () => string[]
   takeApps: () => TestServerApp[]
   takeFakeProcesses: () => SpawnedFakeAcp[]
+  takeTeardowns: () => Array<() => Promise<void>>
 }
 
 export const createTestAppResources = (): TestAppResources => {
   const tempDirs: string[] = []
   const apps: TestServerApp[] = []
   const fakeProcesses: SpawnedFakeAcp[] = []
+  const teardowns: Array<() => Promise<void>> = []
 
   return {
     addTempDir: (dir) => tempDirs.push(dir),
     addApp: (app) => apps.push(app),
     addFakeProcess: (fake) => fakeProcesses.push(fake),
+    addTeardown: (teardown) => teardowns.push(teardown),
     getLastFake: () => fakeProcesses.at(-1) ?? null,
     takeTempDirs: () => tempDirs.splice(0),
     takeApps: () => apps.splice(0),
     takeFakeProcesses: () => fakeProcesses.splice(0),
+    takeTeardowns: () => teardowns.splice(0),
   }
 }
 
@@ -102,7 +107,7 @@ export const createTestApp = async (
   const database = openDatabase({ dataDir: config.dataDir })
   const runtime = createRuntime("0.1.0")
   const { spawnAgentProcessFn } = createFakeSpawnFn(resources, fakeAcpOptions)
-  const { app, acpSupervisor, commitPublisher } = await createServer({
+  const { app, acpSupervisor, commitPublisher, disposeOfflineOnBindingClear } = await createServer({
     config,
     runtime,
     database,
@@ -111,10 +116,21 @@ export const createTestApp = async (
     spawnAgentProcessFn,
   })
   resources.addApp(app)
+  resources.addTeardown(async () => {
+    disposeOfflineOnBindingClear()
+    await acpSupervisor.stop()
+    await Promise.resolve()
+    try {
+      database.close()
+    } catch {
+      // Test may already have closed the database.
+    }
+  })
   return { app, database, config, acpSupervisor, commitPublisher, resources }
 }
 
 export const cleanupTestAppResources = async (resources: TestAppResources) => {
+  await Promise.all(resources.takeTeardowns().map((teardown) => teardown()))
   resources.takeFakeProcesses().forEach((process) => process.kill())
   await Promise.all(resources.takeApps().map((app) => app.close()))
   await Promise.all(

@@ -66,6 +66,16 @@ const createRepository = (agents: Array<{
   list: () => agents,
 })
 
+const waitFor = async (predicate: () => boolean, timeoutMs = 2000) => {
+  const startedAt = Date.now()
+  while (!predicate()) {
+    if (Date.now() - startedAt > timeoutMs) {
+      throw new Error("timed out waiting for condition")
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
+
 describe("createAcpSupervisor", () => {
   const supervisors: Awaited<ReturnType<typeof createAcpSupervisor>>[] = []
 
@@ -189,6 +199,70 @@ describe("createAcpSupervisor", () => {
 
     expect(killed.value).toBe(true)
     expect(supervisor.getStatus().state).toBe("stopped")
+  })
+
+  test("stop and crash clearRuntime invoke onBeforeClearRuntime before bindings drop", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: { loadSession: true, sessionCapabilities: { close: false } },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+    mock.setHandler("session/new", () => ({ sessionId: "acp-bound-1" }))
+
+    const exitResolvers: Array<(code: number | null) => void> = []
+    const clearCalls: number[] = []
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      onBeforeClearRuntime: () => {
+        clearCalls.push(supervisor.getSessionBindingRegistry().count())
+      },
+      spawnAgentProcessFn: () => ({
+        ...createMockProcess(),
+        waitForExit: () =>
+          new Promise<number | null>((resolve) => {
+            exitResolvers.push(resolve)
+          }),
+      }),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    const created = await supervisor.createAcpSession({
+      workspaceCwd: "/tmp/ws",
+      sessionId: "sess_1",
+      workspaceId: "ws_1",
+    })
+    expect(created.ok).toBe(true)
+    expect(supervisor.getSessionBindingRegistry().count()).toBe(1)
+    clearCalls.length = 0
+
+    await supervisor.stop()
+    expect(clearCalls).toEqual([1])
+    expect(supervisor.getSessionBindingRegistry().count()).toBe(0)
+    clearCalls.length = 0
+
+    await supervisor.start("cursor")
+    const recreated = await supervisor.createAcpSession({
+      workspaceCwd: "/tmp/ws",
+      sessionId: "sess_2",
+      workspaceId: "ws_1",
+    })
+    expect(recreated.ok).toBe(true)
+    expect(supervisor.getSessionBindingRegistry().count()).toBe(1)
+    clearCalls.length = 0
+
+    const resolveExit = exitResolvers.at(-1)
+    expect(resolveExit).toBeDefined()
+    resolveExit?.(1)
+
+    await waitFor(() => supervisor.getStatus().state === "error")
+    expect(clearCalls).toEqual([1])
+    expect(supervisor.getSessionBindingRegistry().count()).toBe(0)
   })
 
   test("handleAgentDisabled stops a running matching agent", async () => {
