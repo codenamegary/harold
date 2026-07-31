@@ -1,7 +1,9 @@
 import React from "react"
 import { AgentId } from "contracts/http/agent-settings"
-import { Session } from "contracts/http/session"
+import { Session, SessionState } from "contracts/http/session"
 import { Workspace } from "contracts/http/workspace"
+import { StatusDot } from "../design-system/StatusDot"
+import { sessionStatusDotVariant } from "./session.status.dot.variant"
 
 const NEW_SESSION_VALUE = ""
 
@@ -18,6 +20,7 @@ type ChatSelectorsProps = {
   workspaceId: string
   agentId: AgentId | ""
   sessionId: string
+  selectedSessionState: SessionState | null
   onWorkspaceChange: (workspaceId: string) => void
   onAgentChange: (agentId: AgentId | "") => void
   onSessionChange: (sessionId: string) => void
@@ -33,6 +36,7 @@ export const ChatSelectors: React.FC<ChatSelectorsProps> = ({
   workspaceId,
   agentId,
   sessionId,
+  selectedSessionState,
   onWorkspaceChange,
   onAgentChange,
   onSessionChange,
@@ -50,9 +54,13 @@ export const ChatSelectors: React.FC<ChatSelectorsProps> = ({
           {
             id: sessionId,
             name: "Current session",
+            state: selectedSessionState ?? undefined,
           },
         ]
       : filteredSessions
+
+  const selectedStatusDotVariant =
+    selectedSessionState === null ? null : sessionStatusDotVariant(selectedSessionState)
 
   return (
     <div className="flex items-center gap-2">
@@ -105,6 +113,9 @@ export const ChatSelectors: React.FC<ChatSelectorsProps> = ({
           ))}
         </select>
       </label>
+      {selectedStatusDotVariant !== null ? (
+        <StatusDot variant={selectedStatusDotVariant} />
+      ) : null}
     </div>
   )
 }

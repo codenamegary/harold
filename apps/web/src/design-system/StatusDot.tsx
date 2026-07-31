@@ -1,6 +1,6 @@
 import React, { ComponentPropsWithoutRef } from "react"
 
-type StatusDotVariant = "online" | "warning" | "offline"
+export type StatusDotVariant = "online" | "warning" | "offline"
 
 type StatusDotProps = {
   variant: StatusDotVariant

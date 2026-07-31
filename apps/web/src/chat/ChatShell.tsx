@@ -19,6 +19,11 @@ import {
   foldTranscriptEvents,
   TranscriptState,
 } from "./transcript.reducer"
+import {
+  composerBlockedMessage,
+  isComposerPromptable,
+  resolveEffectiveSessionState,
+} from "./chat.promptability"
 
 export const ChatShell: React.FC = () => {
   const [workspaceId, setWorkspaceId] = useState("")
@@ -56,16 +61,24 @@ export const ChatShell: React.FC = () => {
   })
 
   const selectedSession = sessions.find((session) => session.id === sessionId)
-  const runningFromSession =
-    transcript.sessionState === null
-      ? selectedSession?.state === "running"
-      : transcript.sessionState === "running"
+  const effectiveSessionState = resolveEffectiveSessionState({
+    sessionId,
+    transcriptSessionState: transcript.sessionState,
+    listSessionState: selectedSession?.state,
+  })
+  const runningFromSession = effectiveSessionState === "running"
   const running =
     runningFromSession ||
     createSessionMutation.isPending ||
     promptSessionMutation.isPending
 
-  const composerEnabled = workspaceId !== "" && agentId !== ""
+  const composerEnabled = isComposerPromptable({
+    workspaceId,
+    agentId,
+    sessionId,
+    sessionState: effectiveSessionState,
+  })
+  const blockedMessage = composerBlockedMessage(effectiveSessionState)
 
   const handleWorkspaceChange = (nextWorkspaceId: string) => {
     setWorkspaceId(nextWorkspaceId)
@@ -146,6 +159,7 @@ export const ChatShell: React.FC = () => {
         workspaceId={workspaceId}
         agentId={agentId}
         sessionId={sessionId}
+        selectedSessionState={effectiveSessionState}
         onWorkspaceChange={handleWorkspaceChange}
         onAgentChange={handleAgentChange}
         onSessionChange={handleSessionChange}
@@ -157,6 +171,7 @@ export const ChatShell: React.FC = () => {
         <ChatComposer
           disabled={!composerEnabled}
           running={running}
+          blockedMessage={blockedMessage}
           onSend={handleSend}
           onCancel={handleCancel}
         />

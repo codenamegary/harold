@@ -5,6 +5,7 @@ import { SlashMenu } from "./SlashMenu"
 type ChatComposerProps = {
   disabled: boolean
   running: boolean
+  blockedMessage: string | null
   onSend: (text: string) => void
   onCancel: () => void
 }
@@ -12,6 +13,7 @@ type ChatComposerProps = {
 export const ChatComposer: React.FC<ChatComposerProps> = ({
   disabled,
   running,
+  blockedMessage,
   onSend,
   onCancel,
 }) => {
@@ -100,7 +102,11 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
       </div>
       <div className="flex h-[30px] items-center justify-between font-mono text-2xs text-[#414a56]">
         <span>ACP v0.8</span>
-        <span>Prompts run locally on this machine</span>
+        {blockedMessage !== null ? (
+          <span className="text-body-soft">{blockedMessage}</span>
+        ) : (
+          <span>Prompts run locally on this machine</span>
+        )}
       </div>
     </div>
   )
