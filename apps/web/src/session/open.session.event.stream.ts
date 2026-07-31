@@ -3,6 +3,8 @@ import { Event } from "contracts/events/event"
 
 export type SessionEventStreamHandlers = {
   onEvents: (events: ReadonlyArray<Event>) => void
+  onClose?: () => void
+  onError?: () => void
 }
 
 export type SessionEventStream = {
@@ -27,14 +29,31 @@ export const openSessionEventStream = (params: {
     buildEventsUrl({ sessionId: params.sessionId, cursor: params.cursor }),
   )
 
+  const intentionalClose = { value: false }
+
   socket.addEventListener("message", (message) => {
     const payload: unknown = JSON.parse(String(message.data))
     const frame = EventFrameSchema.parse(payload)
     params.handlers.onEvents(frame)
   })
 
+  socket.addEventListener("close", () => {
+    if (intentionalClose.value) {
+      return
+    }
+    params.handlers.onClose?.()
+  })
+
+  socket.addEventListener("error", () => {
+    if (intentionalClose.value) {
+      return
+    }
+    params.handlers.onError?.()
+  })
+
   return {
     close: () => {
+      intentionalClose.value = true
       socket.close()
     },
   }
