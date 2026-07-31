@@ -137,7 +137,7 @@ describe("ChatPage", () => {
   })
 
   test("slash menu and prompt chips stay disabled", async () => {
-    const { getByRole } = renderChatPage()
+    const { getByRole, queryByRole } = renderChatPage()
 
     await waitFor(() => {
       expect(getByRole("menu", { name: "Slash commands" })).toBeInTheDocument()
@@ -145,6 +145,6 @@ describe("ChatPage", () => {
 
     expect(getByRole("menuitem", { name: "/status Show workspace and git status" })).toBeDisabled()
     expect(getByRole("button", { name: "Summarize this workspace" })).toBeDisabled()
-    expect(getByRole("button", { name: "Clear chat" })).toBeDisabled()
+    expect(queryByRole("button", { name: "Clear chat" })).not.toBeInTheDocument()
   })
 })

@@ -266,8 +266,8 @@ describe("shell honesty", () => {
   })
 
   describe("chat disabled honesty", () => {
-    test("composer send and clear stay gated until workspace and agent are chosen", async () => {
-      const { getByRole } = renderShellRoute("/chat")
+    test("composer send stays gated until workspace and agent are chosen", async () => {
+      const { getByRole, queryByRole } = renderShellRoute("/chat")
 
       await waitForShellReady(getByRole)
 
@@ -276,7 +276,7 @@ describe("shell honesty", () => {
       expect(getByRole("combobox", { name: "Session" })).toBeDisabled()
       expect(getByRole("textbox", { name: "Chat message" })).toBeDisabled()
       expect(getByRole("button", { name: "Send message" })).toBeDisabled()
-      expect(getByRole("button", { name: "Clear chat" })).toBeDisabled()
+      expect(queryByRole("button", { name: "Clear chat" })).not.toBeInTheDocument()
     })
   })
 })

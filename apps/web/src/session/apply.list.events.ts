@@ -1,6 +1,8 @@
 import { Event } from "contracts/events/event"
 import { SessionCollection, SessionState } from "contracts/http/session"
 
+const isArchivedState = (state: SessionState) => state === "archived"
+
 export const applySessionListEvents = (params: {
   collection: SessionCollection
   events: ReadonlyArray<Event>
@@ -27,18 +29,29 @@ export const applySessionListEvents = (params: {
     return params.collection
   }
 
-  return {
-    items: params.collection.items.map((item) => {
-      const nextState = stateBySessionId.get(item.id)
-      if (nextState === undefined) {
-        return item
-      }
+  const items = params.collection.items.flatMap((item) => {
+    const nextState = stateBySessionId.get(item.id)
+    if (nextState === undefined) {
+      return [item]
+    }
 
-      return {
+    if (isArchivedState(nextState)) {
+      return []
+    }
+
+    return [
+      {
         ...item,
         state: nextState,
-      }
-    }),
-    page: params.collection.page,
+      },
+    ]
+  })
+
+  return {
+    items,
+    page: {
+      ...params.collection.page,
+      count: items.length,
+    },
   }
 }

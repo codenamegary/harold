@@ -43,7 +43,9 @@ export const ChatShell: React.FC = () => {
   const workspaces =
     workspacesQuery.data?.pages.flatMap((page) => page.items) ?? []
   const agents = agentsQuery.data?.items ?? []
-  const sessions = sessionsQuery.data?.items ?? []
+  const sessions = (sessionsQuery.data?.items ?? []).filter(
+    (session) => session.state !== "archived" && session.archivedAt === null,
+  )
 
   const handleEvents = (events: ReadonlyArray<Event>) => {
     setTranscript((current) => foldTranscriptEvents(current, events))
@@ -61,6 +63,11 @@ export const ChatShell: React.FC = () => {
   })
 
   const selectedSession = sessions.find((session) => session.id === sessionId)
+
+  const handleSessionArchived = () => {
+    setSessionId("")
+    setTranscript(emptyTranscript)
+  }
   const effectiveSessionState = resolveEffectiveSessionState({
     sessionId,
     transcriptSessionState: transcript.sessionState,
@@ -159,10 +166,12 @@ export const ChatShell: React.FC = () => {
         workspaceId={workspaceId}
         agentId={agentId}
         sessionId={sessionId}
+        selectedSession={selectedSession}
         selectedSessionState={effectiveSessionState}
         onWorkspaceChange={handleWorkspaceChange}
         onAgentChange={handleAgentChange}
         onSessionChange={handleSessionChange}
+        onSessionArchived={handleSessionArchived}
       />
       <div className="flex-1 overflow-y-auto px-[max(25px,calc((100%-800px)/2))] py-[25px] [scrollbar-color:#252b34_transparent] max-[820px]:px-[13px] max-[820px]:py-[18px]">
         {showWelcome ? <WelcomeMessage /> : <ChatTranscript rows={transcript.rows} />}
