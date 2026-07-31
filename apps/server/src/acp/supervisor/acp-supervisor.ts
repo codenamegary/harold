@@ -18,6 +18,7 @@ import {
   CloseWorkspaceSessionsResult,
   CreateAcpSupervisorParams,
   createAcpStartError,
+  DEFAULT_ACP_RESTART_BACKOFF_MS,
   LiveWorkspaceSession,
 } from "./acp-supervisor-types"
 import { isAcpJsonRpcError } from "../transport/json-rpc-error"
@@ -106,15 +107,16 @@ const monitorProcessExit = async (
   process: SpawnedAgentProcess,
   onUnexpectedExit: () => void,
 ) => {
-  const exitCode = await process.waitForExit()
+  await process.waitForExit()
   if (runtime.process !== process) {
     return
   }
 
-  if (exitCode !== 0 && exitCode !== null) {
-    onUnexpectedExit()
-  }
+  onUnexpectedExit()
 }
+
+const defaultSleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms))
 
 const wireTransportObserver = (
   transport: JsonRpcTransport,
@@ -134,6 +136,8 @@ export const createAcpSupervisor = ({
   journalWriter,
   onSessionUpdate = () => undefined,
   onBeforeClearRuntime = () => undefined,
+  restartBackoffMs = DEFAULT_ACP_RESTART_BACKOFF_MS,
+  sleepFn = defaultSleep,
   spawnAgentProcessFn = spawnAgentProcess,
   createTransportFn = (process) =>
     createJsonRpcTransport({
@@ -151,6 +155,7 @@ export const createAcpSupervisor = ({
     exitMonitor: null,
   }
   const acceptUnexpectedExit = { value: false }
+  const restartGeneration = { value: 0 }
 
   const clearRuntime = () => {
     acceptUnexpectedExit.value = false
@@ -166,7 +171,12 @@ export const createAcpSupervisor = ({
     process?.kill()
   }
 
+  const cancelRestart = () => {
+    restartGeneration.value += 1
+  }
+
   const transitionToError = () => {
+    cancelRestart()
     if (runtime.state !== "ready" && runtime.state !== "starting") {
       clearRuntime()
       runtime.state = "error"
@@ -178,11 +188,128 @@ export const createAcpSupervisor = ({
   }
 
   const stop = async (): Promise<void> => {
+    cancelRestart()
     if (runtime.state === "ready") {
       onBeforeClearRuntime()
     }
     clearRuntime()
     runtime.state = "stopped"
+  }
+
+  const attachExitMonitor = (process: SpawnedAgentProcess) => {
+    acceptUnexpectedExit.value = true
+    runtime.exitMonitor = monitorProcessExit(runtime, process, () => {
+      if (!acceptUnexpectedExit.value) {
+        return
+      }
+      handleUnexpectedExit()
+    })
+  }
+
+  const spawnAndInitialize = async (agentId: AgentId): Promise<void> => {
+    const resolved = resolveStartConfig(agentSettingsRepository, agentId)
+    if (!resolved.ok) {
+      throw createAcpStartError(resolved.reason)
+    }
+
+    const process = spawnAgentProcessFn({
+      profile: resolved.profile,
+      executablePath: resolved.executablePath,
+    })
+    const transport = createTransportFn(process)
+
+    runtime.process = process
+    runtime.transport = transport
+    runtime.runningAgentId = agentId
+
+    if (journalWriter !== undefined) {
+      wireTransportObserver(transport, journalWriter, sessionBindingRegistry)
+    }
+
+    registerAcpClientHandlers({
+      transport,
+      profile: resolved.profile,
+      sessionBindingRegistry,
+    })
+
+    transport.onNotification("session/update", (params) => {
+      const value = params as { sessionId?: string; update?: unknown }
+      if (value.sessionId === undefined) {
+        return
+      }
+
+      onSessionUpdate({
+        acpSessionId: value.sessionId,
+        update: value.update,
+      })
+    })
+
+    const initResult = await transport.request("initialize", {
+      protocolVersion: 1,
+      clientCapabilities: resolved.profile.clientCapabilities,
+      clientInfo: { name: "agent-server", version: serverVersion },
+    })
+
+    runtime.agentCapabilities = parseAgentCapabilities(initResult)
+
+    await transport.request("authenticate", {
+      methodId: resolved.profile.authMethodId,
+    })
+
+    runtime.state = "ready"
+    attachExitMonitor(process)
+  }
+
+  const beginBoundedRestart = (agentId: AgentId) => {
+    restartGeneration.value += 1
+    const generation = restartGeneration.value
+    runtime.state = "starting"
+
+    void (async () => {
+      for (const delayMs of restartBackoffMs) {
+        if (generation !== restartGeneration.value) {
+          return
+        }
+
+        await sleepFn(delayMs)
+
+        if (generation !== restartGeneration.value) {
+          return
+        }
+
+        try {
+          clearRuntime()
+          runtime.state = "starting"
+          await spawnAndInitialize(agentId)
+          return
+        } catch {
+          clearRuntime()
+          runtime.state = "starting"
+        }
+      }
+
+      if (generation === restartGeneration.value) {
+        runtime.state = "error"
+      }
+    })()
+  }
+
+  const handleUnexpectedExit = () => {
+    acceptUnexpectedExit.value = false
+    const agentId = runtime.runningAgentId
+    const wasReady = runtime.state === "ready"
+
+    if (!wasReady) {
+      return
+    }
+
+    onBeforeClearRuntime()
+    clearRuntime()
+    if (agentId !== null) {
+      beginBoundedRestart(agentId)
+      return
+    }
+    runtime.state = "error"
   }
 
   const start = async (agentId: AgentId): Promise<void> => {
@@ -205,59 +332,7 @@ export const createAcpSupervisor = ({
     runtime.state = "starting"
 
     try {
-      const process = spawnAgentProcessFn({
-        profile: resolved.profile,
-        executablePath: resolved.executablePath,
-      })
-      const transport = createTransportFn(process)
-
-      runtime.process = process
-      runtime.transport = transport
-      runtime.runningAgentId = agentId
-
-      if (journalWriter !== undefined) {
-        wireTransportObserver(transport, journalWriter, sessionBindingRegistry)
-      }
-
-      registerAcpClientHandlers({
-        transport,
-        profile: resolved.profile,
-        sessionBindingRegistry,
-      })
-
-      transport.onNotification("session/update", (params) => {
-        const value = params as { sessionId?: string; update?: unknown }
-        if (value.sessionId === undefined) {
-          return
-        }
-
-        onSessionUpdate({
-          acpSessionId: value.sessionId,
-          update: value.update,
-        })
-      })
-
-      acceptUnexpectedExit.value = true
-      runtime.exitMonitor = monitorProcessExit(runtime, process, () => {
-        if (!acceptUnexpectedExit.value) {
-          return
-        }
-        transitionToError()
-      })
-
-      const initResult = await transport.request("initialize", {
-        protocolVersion: 1,
-        clientCapabilities: resolved.profile.clientCapabilities,
-        clientInfo: { name: "agent-server", version: serverVersion },
-      })
-
-      runtime.agentCapabilities = parseAgentCapabilities(initResult)
-
-      await transport.request("authenticate", {
-        methodId: resolved.profile.authMethodId,
-      })
-
-      runtime.state = "ready"
+      await spawnAndInitialize(agentId)
     } catch (error: unknown) {
       transitionToError()
       throw createAcpStartError(sanitizeFailureReason(error, "ACP supervisor failed to start"))

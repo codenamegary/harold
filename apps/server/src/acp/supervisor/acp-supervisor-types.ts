@@ -104,12 +104,16 @@ export type AgentSettingsReader = {
   }>
 }
 
+export const DEFAULT_ACP_RESTART_BACKOFF_MS = [250, 500, 1000, 2000, 4000] as const
+
 export type CreateAcpSupervisorParams = {
   agentSettingsRepository: AgentSettingsReader
   serverVersion: string
   journalWriter?: AcpJournalWriter
   onSessionUpdate?: SessionUpdateHandler
   onBeforeClearRuntime?: () => void
+  restartBackoffMs?: ReadonlyArray<number>
+  sleepFn?: (ms: number) => Promise<void>
   spawnAgentProcessFn?: (input: {
     profile: AgentProfile
     executablePath: string
