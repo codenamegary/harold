@@ -1,6 +1,6 @@
 import React from "react"
 import { BrowserRouter, Route, Routes } from "react-router"
-import { AppShell } from "./AppShell"
+import { AppShell } from "./app.shell"
 import { ChatPage } from "./pages/ChatPage"
 import { ConnectPage } from "./pages/ConnectPage"
 import { DevicesPage } from "./pages/DevicesPage"
