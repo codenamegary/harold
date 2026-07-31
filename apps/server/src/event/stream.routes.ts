@@ -1,6 +1,9 @@
 import { FastifyInstance } from "fastify"
 import { SessionRepository } from "../session/repository"
+import { SessionService } from "../session/service"
 import { WorkspaceRepository } from "../workspace/repository"
+import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
+import { maybeAutoResumeSession } from "../session/resume.session"
 import { EventCommitPublisher } from "./commit.publisher"
 import { EventJournalRepository } from "./journal.repository"
 import { runStreamConnection } from "./stream.connection"
@@ -16,6 +19,8 @@ type RegisterEventStreamRoutesParams = {
   commitPublisher: EventCommitPublisher
   workspaceRepository: WorkspaceRepository
   sessionRepository: SessionRepository
+  sessionService: SessionService
+  acpSupervisor: AcpSupervisor
 }
 
 const sendProblem = (
@@ -43,6 +48,17 @@ export const registerEventStreamRoutes = (
 
       if (!handshakeResult.ok) {
         return sendProblem(reply, handshakeResult.status, handshakeResult.problem)
+      }
+
+      const sessionId = handshakeResult.handshake.filters.sessionId
+      if (sessionId !== undefined) {
+        await maybeAutoResumeSession({
+          sessionId,
+          sessionRepository: params.sessionRepository,
+          sessionService: params.sessionService,
+          workspaceRepository: params.workspaceRepository,
+          acpSupervisor: params.acpSupervisor,
+        })
       }
 
       eventStreamHandshakes.set(request, handshakeResult.handshake)

@@ -13,7 +13,9 @@ import {
   SessionSchema,
 } from "contracts/http/session"
 import { StatusSchema } from "contracts/http/status"
+import { eq } from "drizzle-orm"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
+import { sessions } from "../persistence/schema/sessions"
 import { buildAcpUnavailableProblem } from "./session-problems"
 import {
   acceptTestExecutablePath,
@@ -342,7 +344,7 @@ describe("session lifecycle", () => {
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
+    const { app, acpSupervisor } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
       capabilities: { loadSession: true, sessionClose: false },
       sessionNewSessionId: "resumable-session",
       sessionLoadSessionId: "resumable-session",
@@ -360,6 +362,15 @@ describe("session lifecycle", () => {
       },
     })
     const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
+    await waitForSessionIdle(app, created.id)
+
+    const live = acpSupervisor.getSessionBindingRegistry().getBinding("resumable-session")
+    expect(live).toBeDefined()
+    if (live !== undefined) {
+      acpSupervisor.getSessionBindingRegistry().unbind({
+        acpSessionId: live.acpSessionId,
+      })
+    }
 
     const resumeResponse = await app.inject({
       method: "POST",
@@ -414,12 +425,12 @@ describe("session lifecycle", () => {
     expect(persisted.state).toBe("idle")
   })
 
-  test("resume returns 409 when session/load fails and metadata stays intact", async () => {
+  test("resume returns 409 when session/load fails, marks error, and keeps metadata", async () => {
     const dataDir = await createTempDataDir(resources)
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
+    const { app, acpSupervisor, database } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
       capabilities: { loadSession: true, sessionClose: false },
       sessionNewSessionId: "load-fail-session",
       sessionLoadSessionId: "load-fail-session-loaded",
@@ -441,6 +452,14 @@ describe("session lifecycle", () => {
 
     await waitForSessionIdle(app, created.id)
 
+    const live = acpSupervisor.getSessionBindingRegistry().getBinding("load-fail-session")
+    expect(live).toBeDefined()
+    if (live !== undefined) {
+      acpSupervisor.getSessionBindingRegistry().unbind({
+        acpSessionId: live.acpSessionId,
+      })
+    }
+
     const resumeResponse = await app.inject({
       method: "POST",
       url: `/v1/sessions/${created.id}/resume`,
@@ -461,7 +480,10 @@ describe("session lifecycle", () => {
     expect(getResponse.statusCode).toBe(200)
     expect(persisted.id).toBe(created.id)
     expect(persisted.name).toBe("Load fail")
-    expect(persisted.state).toBe("idle")
+    expect(persisted.state).toBe("error")
+
+    const row = database.db.select().from(sessions).where(eq(sessions.id, created.id)).get()
+    expect(row?.resumable).toBe(false)
   })
 
   test("status reports activeSessions for live bindings", async () => {
@@ -779,12 +801,21 @@ describe("POST /v1/sessions/:sessionId/prompt", () => {
     expect(body.title).toBe("Session is archived")
   })
 
-  test("returns 409 for unbound sessions", async () => {
+  test("returns 409 for unbound non-resumable sessions", async () => {
     const dataDir = await createTempDataDir(resources)
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app, acpSupervisor } = await createTestApp(resources, dataDir, whichFn)
+    const { app, acpSupervisor } = await createTestApp(
+      resources,
+      dataDir,
+      whichFn,
+      acceptTestExecutablePath,
+      {
+        capabilities: { loadSession: false, sessionClose: false },
+        sessionNewSessionId: "fake-session-unbound",
+      },
+    )
     const { workspaceId } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
@@ -805,7 +836,7 @@ describe("POST /v1/sessions/:sessionId/prompt", () => {
 
     const binding = acpSupervisor
       .getSessionBindingRegistry()
-      .getBinding("fake-session-new")
+      .getBinding("fake-session-unbound")
     expect(binding).toBeDefined()
     if (binding !== undefined) {
       acpSupervisor.getSessionBindingRegistry().unbind({

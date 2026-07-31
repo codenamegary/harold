@@ -392,7 +392,7 @@ describe("lifecycle events integration", () => {
     const detectedPath = "/usr/local/bin/agent"
     const whichFn = (binaryName: string) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app, database } = await createTestApp(resources, dataDir, whichFn)
+    const { app, database, acpSupervisor } = await createTestApp(resources, dataDir, whichFn)
     const journal = createEventJournalRepository(database)
     const { workspaceId } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
@@ -403,6 +403,30 @@ describe("lifecycle events integration", () => {
       payload: { workspaceId, agentId: "cursor", text: "Resume me" },
     })
     const session = JSON.parse(createResponse.body) as { id: string }
+
+    const waitForIdle = async () => {
+      const startedAt = Date.now()
+      while (Date.now() - startedAt < 5000) {
+        const latest = await app.inject({
+          method: "GET",
+          url: `/v1/sessions/${session.id}`,
+        })
+        if ((JSON.parse(latest.body) as { state: string }).state === "idle") {
+          return
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+      throw new Error("timed out waiting for idle")
+    }
+    await waitForIdle()
+
+    const live = acpSupervisor.getSessionBindingRegistry().getBinding("fake-session-new")
+    expect(live).toBeDefined()
+    if (live !== undefined) {
+      acpSupervisor.getSessionBindingRegistry().unbind({
+        acpSessionId: live.acpSessionId,
+      })
+    }
 
     await app.inject({
       method: "POST",

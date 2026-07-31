@@ -18,6 +18,12 @@ import { agentDefinitions } from "../agent-settings/agent-registry"
 import { WorkspaceRepository } from "../workspace/repository"
 import { deriveSessionNameFromPrompt } from "./derive.session.name"
 import { SessionRepository } from "./repository"
+import { maybeAutoResumeSession, resumeSession } from "./resume.session"
+import {
+  agentAdvertisesResumable,
+  ensureSupervisorReady,
+  isArchivedSession,
+} from "./session.acp.ready"
 import { SessionService } from "./service"
 import {
   buildAcpUnavailableProblem,
@@ -44,31 +50,6 @@ const sendProblem = (
 ) => reply.status(status).type("application/problem+json").send(problem)
 
 const isRegisteredAgent = (agentId: AgentId): boolean => agentId in agentDefinitions
-
-const isArchivedSession = (session: { archivedAt: string | null; state: string }): boolean =>
-  session.archivedAt !== null || session.state === "archived"
-
-const ensureSupervisorReady = async (
-  acpSupervisor: AcpSupervisor,
-  agentId: AgentId,
-): Promise<boolean> => {
-  const runningAgentId = acpSupervisor.getRunningAgentId()
-  const status = acpSupervisor.getStatus()
-
-  if (status.state === "ready" && runningAgentId === agentId) {
-    return true
-  }
-
-  try {
-    await acpSupervisor.start(agentId)
-    return acpSupervisor.getStatus().state === "ready"
-  } catch {
-    return false
-  }
-}
-
-const agentAdvertisesResumable = (acpSupervisor: AcpSupervisor): boolean =>
-  acpSupervisor.getAgentCapabilities()?.loadSession === true
 
 export const registerSessionRoutes = (
   app: FastifyInstance,
@@ -268,9 +249,22 @@ export const registerSessionRoutes = (
       return sendProblem(reply, 409, buildSessionArchivedProblem())
     }
 
+    await maybeAutoResumeSession({
+      sessionId,
+      sessionRepository,
+      sessionService,
+      workspaceRepository,
+      acpSupervisor,
+    })
+
+    const afterResume = sessionRepository.getById({ id: sessionId })
+    if (!afterResume.ok) {
+      return sendProblem(reply, 404, buildSessionNotFoundProblem())
+    }
+
     const timestamp = new Date().toISOString()
     const workspaceTouch = workspaceRepository.touchLastUsed({
-      id: existing.value.workspaceId,
+      id: afterResume.value.workspaceId,
       lastUsedAt: timestamp,
     })
 
@@ -340,61 +334,31 @@ export const registerSessionRoutes = (
 
   app.post("/v1/sessions/:sessionId/resume", async (request, reply) => {
     const { sessionId } = request.params as { sessionId: string }
-    const existing = sessionRepository.getById({ id: sessionId })
-
-    if (!existing.ok) {
-      return sendProblem(reply, 404, buildSessionNotFoundProblem())
-    }
-
-    if (isArchivedSession(existing.value)) {
-      return sendProblem(reply, 409, buildSessionArchivedProblem())
-    }
-
-    const binding = sessionRepository.getAcpBinding({ id: sessionId })
-    if (!binding.ok) {
-      return sendProblem(reply, 404, buildSessionNotFoundProblem())
-    }
-
-    if (!binding.value.resumable) {
-      return sendProblem(reply, 409, buildSessionNotResumableProblem())
-    }
-
-    const workspace = workspaceRepository.getById({ id: binding.value.workspaceId })
-    if (!workspace.ok) {
-      return sendProblem(reply, 404, buildWorkspaceNotFoundProblem())
-    }
-
-    const supervisorReady = await ensureSupervisorReady(acpSupervisor, binding.value.agentId)
-    if (!supervisorReady) {
-      return sendProblem(reply, 409, buildAcpUnavailableProblem())
-    }
-
-    if (!agentAdvertisesResumable(acpSupervisor)) {
-      return sendProblem(reply, 409, buildSessionNotResumableProblem())
-    }
-
-    const loadResult = await acpSupervisor.loadAcpSession({
-      acpSessionId: binding.value.acpSessionId,
-      workspaceCwd: workspace.value.path,
+    const result = await resumeSession({
       sessionId,
-      workspaceId: binding.value.workspaceId,
+      sessionRepository,
+      sessionService,
+      workspaceRepository,
+      acpSupervisor,
+      mode: "explicit",
     })
 
-    if (!loadResult.ok) {
-      return sendProblem(reply, 409, buildSessionNotResumableProblem(loadResult.reason))
+    switch (result.kind) {
+      case "ok":
+      case "already-bound":
+        return reply.status(200).send(SessionSchema.parse(result.session))
+      case "not-found":
+        return sendProblem(reply, 404, buildSessionNotFoundProblem())
+      case "archived":
+        return sendProblem(reply, 409, buildSessionArchivedProblem())
+      case "acp-unavailable":
+        return sendProblem(reply, 409, buildAcpUnavailableProblem(result.reason))
+      case "not-resumable":
+      case "load-failed":
+        return sendProblem(reply, 409, buildSessionNotResumableProblem(result.reason))
+      case "skipped":
+        return sendProblem(reply, 409, buildSessionNotResumableProblem())
     }
-
-    const resumed = sessionService.resume({
-      id: sessionId,
-      acpSessionId: loadResult.acpSessionId,
-      resumable: true,
-    })
-
-    if (!resumed.ok) {
-      return sendProblem(reply, 404, buildSessionNotFoundProblem())
-    }
-
-    return reply.status(200).send(SessionSchema.parse(resumed.value))
   })
 
   app.post("/v1/sessions/:sessionId/prompt", async (request, reply) => {
@@ -414,7 +378,28 @@ export const registerSessionRoutes = (
       return sendProblem(reply, 409, buildTurnInProgressProblem())
     }
 
-    if (existing.value.state !== "idle") {
+    const autoResume = await maybeAutoResumeSession({
+      sessionId,
+      sessionRepository,
+      sessionService,
+      workspaceRepository,
+      acpSupervisor,
+    })
+
+    if (autoResume.kind === "load-failed") {
+      return sendProblem(reply, 409, buildSessionNotResumableProblem(autoResume.reason))
+    }
+
+    if (autoResume.kind === "acp-unavailable") {
+      return sendProblem(reply, 409, buildAcpUnavailableProblem(autoResume.reason))
+    }
+
+    const current = sessionRepository.getById({ id: sessionId })
+    if (!current.ok) {
+      return sendProblem(reply, 404, buildSessionNotFoundProblem())
+    }
+
+    if (current.value.state !== "idle") {
       return sendProblem(reply, 409, buildAcpUnavailableProblem("Session is not ready for prompts"))
     }
 

@@ -105,13 +105,6 @@ export const createServer = async ({
     commitPublisher,
   })
 
-  registerEventStreamRoutes(app, {
-    eventJournal,
-    commitPublisher,
-    workspaceRepository,
-    sessionRepository,
-  })
-
   const offlineOnBindingClear = { enabled: true }
   const disposeOfflineOnBindingClear = () => {
     offlineOnBindingClear.enabled = false
@@ -147,6 +140,15 @@ export const createServer = async ({
         }
       },
     })
+
+  registerEventStreamRoutes(app, {
+    eventJournal,
+    commitPublisher,
+    workspaceRepository,
+    sessionRepository,
+    sessionService,
+    acpSupervisor,
+  })
 
   registerStatusRoutes(app, runtime, config, acpSupervisor)
   const workspaceService = createWorkspaceService({
