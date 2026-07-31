@@ -462,6 +462,8 @@ describe("fake ACP protocol", () => {
     expect(second.deferredNotifications.every((item) =>
       notificationSessionId(item.notification.params) === "session-b"
     )).toBe(true)
+    expect(first.promptCompletionDelayMs).toBe(60)
+    expect(second.promptCompletionDelayMs).toBe(60)
 
     expect(completePromptIfActive(promptState, "session-a")).toEqual({
       jsonrpc: "2.0",
@@ -473,6 +475,30 @@ describe("fake ACP protocol", () => {
       id: 16,
       result: { stopReason: "end_turn" },
     })
+  })
+
+  test("prompt completion delay env lengthens held prompts", () => {
+    const config = readFakeAcpConfig({
+      FAKE_ACP_EMIT_SESSION_UPDATES_ON_PROMPT: "true",
+      FAKE_ACP_PROMPT_COMPLETION_DELAY_MS: "500",
+    })
+
+    const { holdPromptResponse, promptCompletionDelayMs } = handleJsonRpcRequest(
+      {
+        jsonrpc: "2.0",
+        id: 20,
+        method: "session/prompt",
+        params: {
+          sessionId: "session-slow",
+          prompt: [{ type: "text", text: "slow" }],
+        },
+      },
+      config,
+      createPromptState(),
+    )
+
+    expect(holdPromptResponse).toBe(true)
+    expect(promptCompletionDelayMs).toBe(500)
   })
 
   test("session/cancel for one session does not cancel the other", () => {
