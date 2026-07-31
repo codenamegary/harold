@@ -16,6 +16,7 @@ export type SpawnFakeAcpOptions = {
   emitCursorCreatePlan?: boolean
   emitUnknownExtension?: boolean
   emitSessionUpdatesOnPrompt?: boolean
+  promptCompletionDelayMs?: number
   fsReadPath?: string
   fsWritePath?: string
   fsWriteContent?: string

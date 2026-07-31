@@ -19,6 +19,7 @@ export type FakeAcpConfig = FakeAcpCapabilities & {
   emitSessionUpdatesOnPrompt: boolean
   emitToolUpdatesOnPrompt: boolean
   emitLoadReplayUpdates: boolean
+  promptCompletionDelayMs: number | undefined
   fsReadPath: string
   fsWritePath: string
   fsWriteContent: string
@@ -30,6 +31,19 @@ const parseBooleanEnv = (value: string | undefined, defaultValue: boolean): bool
     return defaultValue
   }
   return value === "true" || value === "1"
+}
+
+const parseOptionalNonNegativeIntEnv = (value: string | undefined): number | undefined => {
+  if (value === undefined) {
+    return undefined
+  }
+
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return undefined
+  }
+
+  return parsed
 }
 
 const readEnvString = (
@@ -61,6 +75,7 @@ export const readFakeAcpConfig = (
   emitSessionUpdatesOnPrompt: parseBooleanEnv(env.FAKE_ACP_EMIT_SESSION_UPDATES_ON_PROMPT, false),
   emitToolUpdatesOnPrompt: parseBooleanEnv(env.FAKE_ACP_EMIT_TOOL_UPDATES_ON_PROMPT, false),
   emitLoadReplayUpdates: parseBooleanEnv(env.FAKE_ACP_EMIT_LOAD_REPLAY_UPDATES, false),
+  promptCompletionDelayMs: parseOptionalNonNegativeIntEnv(env.FAKE_ACP_PROMPT_COMPLETION_DELAY_MS),
   fsReadPath: readEnvString(env, "FAKE_ACP_FS_READ_PATH", "readme.txt"),
   fsWritePath: readEnvString(env, "FAKE_ACP_FS_WRITE_PATH", "output.txt"),
   fsWriteContent: readEnvString(env, "FAKE_ACP_FS_WRITE_CONTENT", "written-by-fake-acp"),
@@ -84,6 +99,7 @@ export type FakeAcpEnvOptions = {
   emitSessionUpdatesOnPrompt?: boolean
   emitToolUpdatesOnPrompt?: boolean
   emitLoadReplayUpdates?: boolean
+  promptCompletionDelayMs?: number
   fsReadPath?: string
   fsWritePath?: string
   fsWriteContent?: string
@@ -93,6 +109,12 @@ export type FakeAcpEnvOptions = {
 const optionalBooleanEnv = (
   key: string,
   value: boolean | undefined,
+): Record<string, string> | undefined =>
+  value === undefined ? undefined : { [key]: String(value) }
+
+const optionalNumberEnv = (
+  key: string,
+  value: number | undefined,
 ): Record<string, string> | undefined =>
   value === undefined ? undefined : { [key]: String(value) }
 
@@ -114,6 +136,7 @@ export const fakeAcpEnvFromCapabilities = (options: FakeAcpEnvOptions): Record<s
   ...optionalBooleanEnv("FAKE_ACP_EMIT_SESSION_UPDATES_ON_PROMPT", options.emitSessionUpdatesOnPrompt),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_TOOL_UPDATES_ON_PROMPT", options.emitToolUpdatesOnPrompt),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_LOAD_REPLAY_UPDATES", options.emitLoadReplayUpdates),
+  ...optionalNumberEnv("FAKE_ACP_PROMPT_COMPLETION_DELAY_MS", options.promptCompletionDelayMs),
   ...stringEnv("FAKE_ACP_FS_READ_PATH", options.fsReadPath),
   ...stringEnv("FAKE_ACP_FS_WRITE_PATH", options.fsWritePath),
   ...stringEnv("FAKE_ACP_FS_WRITE_CONTENT", options.fsWriteContent),

@@ -319,10 +319,11 @@ const handleSessionPrompt = (
   }
 
   const lastDeferredDelayMs = updates.length > 1 ? (updates.length - 1) * 20 : 0
+  const configuredDelayMs = config.promptCompletionDelayMs ?? 0
 
   return {
     holdPromptResponse: true,
-    promptCompletionDelayMs: lastDeferredDelayMs + 20,
+    promptCompletionDelayMs: Math.max(lastDeferredDelayMs + 20, configuredDelayMs),
     outbound: [],
     notifications: updates.slice(0, 1),
     deferredNotifications: updates.slice(1).map((notification, index) => ({
