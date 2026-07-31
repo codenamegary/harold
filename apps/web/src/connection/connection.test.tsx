@@ -17,6 +17,19 @@ const validStatus = {
 } as const
 
 const originalFetch = globalThis.fetch
+const originalWebSocket = globalThis.WebSocket
+
+const stubWebSocket = () => {
+  globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
+    return {
+      url: String(url),
+      readyState: 1,
+      close: () => undefined,
+      send: () => undefined,
+      addEventListener: () => undefined,
+    }
+  } as unknown as typeof WebSocket
+}
 
 describe("fetchStatus", () => {
   afterEach(() => {
@@ -49,6 +62,7 @@ describe("fetchStatus", () => {
 
 describe("connection shell wiring", () => {
   beforeEach(() => {
+    stubWebSocket()
     globalThis.fetch = mock(() =>
       Promise.resolve(
         new Response(JSON.stringify(validStatus), {
@@ -61,6 +75,7 @@ describe("connection shell wiring", () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch
+    globalThis.WebSocket = originalWebSocket
   })
 
   test("sidebar and topbar show live status when API is online", async () => {

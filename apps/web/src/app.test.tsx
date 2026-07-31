@@ -25,6 +25,7 @@ const routePages = [
 ] as const
 
 const originalFetch = globalThis.fetch
+const originalWebSocket = globalThis.WebSocket
 
 const renderAppRoute = async (path: string) => {
   const view = renderWithProviders(<AppRoutes />, {
@@ -40,6 +41,16 @@ const renderAppRoute = async (path: string) => {
 
 describe("routing", () => {
   beforeEach(() => {
+    globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
+      return {
+        url: String(url),
+        readyState: 1,
+        close: () => undefined,
+        send: () => undefined,
+        addEventListener: () => undefined,
+      }
+    } as unknown as typeof WebSocket
+
     globalThis.fetch = mock(() =>
       Promise.resolve(
         new Response(JSON.stringify(validStatus), {
@@ -52,6 +63,7 @@ describe("routing", () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch
+    globalThis.WebSocket = originalWebSocket
   })
 
   routePages.forEach(({ path, heading }) => {
