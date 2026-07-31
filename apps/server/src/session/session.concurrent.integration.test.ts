@@ -86,16 +86,15 @@ const createIdleSession = async (
       payload?: Record<string, string>
     }) => Promise<{ body: string; statusCode: number }>
   },
-  workspaceId: string,
-  text: string,
+  params: { workspaceId: string; text: string },
 ) => {
   const created = await app.inject({
     method: "POST",
     url: "/v1/sessions",
     payload: {
-      workspaceId,
+      workspaceId: params.workspaceId,
       agentId: "cursor",
-      text,
+      text: params.text,
     },
   })
   const session = CreateSessionResponseSchema.parse(JSON.parse(created.body))
@@ -171,8 +170,14 @@ describe("concurrent session routing isolation", () => {
     const { workspaceId } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const sessionA = await createIdleSession(app, workspaceId, "Session A seed")
-    const sessionB = await createIdleSession(app, workspaceId, "Session B seed")
+    const sessionA = await createIdleSession(app, {
+      workspaceId,
+      text: "Session A seed",
+    })
+    const sessionB = await createIdleSession(app, {
+      workspaceId,
+      text: "Session B seed",
+    })
     expect(sessionA.id).not.toBe(sessionB.id)
 
     const { httpBase, wsUrl } = await getListeningUrl(app, config)
@@ -251,14 +256,10 @@ describe("concurrent session routing isolation", () => {
     expect(hasTurnCancelled(collectedA, promptA.turnId)).toBe(false)
 
     expect(
-      collectedA.every(
-        (event) => event.sessionId === null || event.sessionId === sessionA.id,
-      ),
+      collectedA.every((event) => event.sessionId === sessionA.id),
     ).toBe(true)
     expect(
-      collectedB.every(
-        (event) => event.sessionId === null || event.sessionId === sessionB.id,
-      ),
+      collectedB.every((event) => event.sessionId === sessionB.id),
     ).toBe(true)
 
     const turnStartedA = collectedA.find((event) => event.type === "turn.started")
@@ -281,7 +282,7 @@ describe("concurrent session routing isolation", () => {
     expect(journalA.ok).toBe(true)
     expect(journalB.ok).toBe(true)
     if (!journalA.ok || !journalB.ok) {
-      return
+      throw new Error("expected journal reads to succeed")
     }
 
     expect(journalA.value.every((record) => record.sessionId === sessionA.id)).toBe(true)
@@ -329,8 +330,14 @@ describe("concurrent session routing isolation", () => {
     const { workspaceId } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const sessionA = await createIdleSession(app, workspaceId, "Cancel A seed")
-    const sessionB = await createIdleSession(app, workspaceId, "Cancel B seed")
+    const sessionA = await createIdleSession(app, {
+      workspaceId,
+      text: "Cancel A seed",
+    })
+    const sessionB = await createIdleSession(app, {
+      workspaceId,
+      text: "Cancel B seed",
+    })
 
     const { httpBase, wsUrl } = await getListeningUrl(app, config)
     const eventsA = collectEventsUntil({
@@ -376,21 +383,35 @@ describe("concurrent session routing isolation", () => {
     expect(hasTurnCompleted(collectedB, promptB.turnId)).toBe(true)
     expect(hasTurnCancelled(collectedB, promptB.turnId)).toBe(false)
     expect(hasTurnCompleted(collectedA, promptA.turnId)).toBe(false)
+    expect(collectedA.every((event) => event.sessionId === sessionA.id)).toBe(true)
+    expect(collectedB.every((event) => event.sessionId === sessionB.id)).toBe(true)
+    expect(collectedA.some((event) => event.type === "turn.cancelled" && event.payload.turnId === promptB.turnId)).toBe(false)
+    expect(collectedB.some((event) => event.type === "turn.cancelled")).toBe(false)
 
     await waitForIdle(app, sessionA.id)
     await waitForIdle(app, sessionB.id)
 
     const journal = createEventJournalRepository(database)
+    const journalA = journal.readAfter({ cursor: 0n, limit: 200, sessionId: sessionA.id })
     const journalB = journal.readAfter({ cursor: 0n, limit: 200, sessionId: sessionB.id })
+    expect(journalA.ok).toBe(true)
     expect(journalB.ok).toBe(true)
-    if (journalB.ok) {
-      expect(journalB.value.some((record) => record.kind === "turn.cancelled")).toBe(false)
-      expect(
-        journalB.value.some(
-          (record) => record.kind === "turn.completed" && record.turnId === promptB.turnId,
-        ),
-      ).toBe(true)
+    if (!journalA.ok || !journalB.ok) {
+      throw new Error("expected journal reads to succeed")
     }
+
+    expect(
+      journalA.value.some(
+        (record) => record.kind === "turn.cancelled" && record.turnId === promptA.turnId,
+      ),
+    ).toBe(true)
+    expect(journalA.value.some((record) => record.turnId === promptB.turnId)).toBe(false)
+    expect(journalB.value.some((record) => record.kind === "turn.cancelled")).toBe(false)
+    expect(
+      journalB.value.some(
+        (record) => record.kind === "turn.completed" && record.turnId === promptB.turnId,
+      ),
+    ).toBe(true)
 
     database.close()
   })
@@ -408,7 +429,10 @@ describe("concurrent session routing isolation", () => {
     const { workspaceId } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const session = await createIdleSession(app, workspaceId, "Double prompt seed")
+    const session = await createIdleSession(app, {
+      workspaceId,
+      text: "Double prompt seed",
+    })
 
     const [first, second] = await Promise.all([
       app.inject({
@@ -428,10 +452,8 @@ describe("concurrent session routing isolation", () => {
 
     const conflict = first.statusCode === 409 ? first : second
     const accepted = first.statusCode === 202 ? first : second
-    ConflictProblemSchema.parse(JSON.parse(conflict.body))
-    expect(ConflictProblemSchema.parse(JSON.parse(conflict.body)).title).toBe(
-      "Turn already in progress",
-    )
+    const conflictBody = ConflictProblemSchema.parse(JSON.parse(conflict.body))
+    expect(conflictBody.title).toBe("Turn already in progress")
     PromptSessionResponseSchema.parse(JSON.parse(accepted.body))
 
     await waitForIdle(app, session.id)
@@ -452,8 +474,14 @@ describe("concurrent session routing isolation", () => {
     const { workspaceId } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const sessionA = await createIdleSession(app, workspaceId, "Select side A")
-    const sessionB = await createIdleSession(app, workspaceId, "Select side B")
+    const sessionA = await createIdleSession(app, {
+      workspaceId,
+      text: "Select side A",
+    })
+    const sessionB = await createIdleSession(app, {
+      workspaceId,
+      text: "Select side B",
+    })
 
     const promptA = await app.inject({
       method: "POST",
@@ -486,14 +514,15 @@ describe("concurrent session routing isolation", () => {
     const journal = createEventJournalRepository(database)
     const journalA = journal.readAfter({ cursor: 0n, limit: 200, sessionId: sessionA.id })
     expect(journalA.ok).toBe(true)
-    if (journalA.ok) {
-      expect(
-        journalA.value.some(
-          (record) => record.kind === "turn.completed" && record.turnId === turnA.turnId,
-        ),
-      ).toBe(true)
-      expect(journalA.value.some((record) => record.kind === "turn.cancelled")).toBe(false)
+    if (!journalA.ok) {
+      throw new Error("expected journal A read to succeed")
     }
+    expect(
+      journalA.value.some(
+        (record) => record.kind === "turn.completed" && record.turnId === turnA.turnId,
+      ),
+    ).toBe(true)
+    expect(journalA.value.some((record) => record.kind === "turn.cancelled")).toBe(false)
 
     database.close()
   })
