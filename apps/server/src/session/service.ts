@@ -233,7 +233,36 @@ export const createSessionService = (context: SessionServiceContext) => {
 
   const markOffline = (
     input: { id: string },
-  ): SessionServiceResult<Session> => setTurnState({ id: input.id, state: "offline" })
+  ): SessionServiceResult<Session> => {
+    const occurredAt = nowIso()
+
+    return transactional((params) => {
+      const updated = context.sessionRepository.markOffline({
+        id: input.id,
+        executor: params.executor,
+      })
+      if (!updated.ok) {
+        return updated
+      }
+
+      const appendResult = params.append([
+        {
+          schemaVersion: JOURNAL_SCHEMA_VERSION,
+          kind: "session.state",
+          occurredAt,
+          workspaceId: updated.value.workspaceId,
+          sessionId: updated.value.id,
+          payload: { state: "offline" },
+        },
+      ])
+
+      if (!appendResult.ok) {
+        return appendResult
+      }
+
+      return { ok: true, value: updated.value, appendedRecords: appendResult.value }
+    })
+  }
 
   const markLiveSessionsOffline = (): SessionServiceResult<ReadonlyArray<Session>> => {
     const live = context.sessionRepository.listLiveNonArchived()

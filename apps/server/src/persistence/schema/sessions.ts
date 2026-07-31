@@ -14,4 +14,7 @@ export const sessions = sqliteTable("sessions", {
   lastUsedAt: text("last_used_at").notNull(),
   archivedAt: text("archived_at"),
   resumable: integer("resumable", { mode: "boolean" }).notNull().default(false),
+  needsStartupRecovery: integer("needs_startup_recovery", { mode: "boolean" })
+    .notNull()
+    .default(false),
 })

@@ -29,6 +29,13 @@
       "when": 1785295988011,
       "tag": "0003_add_events_table",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1785295988012,
+      "tag": "0004_add_needs_startup_recovery",
+      "breakpoints": true
     }
   ]
 }

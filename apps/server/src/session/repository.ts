@@ -67,6 +67,20 @@ export type SetSessionStateInput = {
   executor?: DbExecutor
 }
 
+export type MarkSessionOfflineInput = {
+  id: string
+  executor?: DbExecutor
+}
+
+export type ClearNeedsStartupRecoveryInput = {
+  id: string
+  executor?: DbExecutor
+}
+
+export type StartupRecoveryCandidate = {
+  id: string
+}
+
 export type GetSessionAcpBindingInput = {
   id: string
 }
@@ -254,6 +268,7 @@ export const createSessionRepository = (database: AgentDatabase) => {
         lastUsedAt: timestamp,
         archivedAt: null,
         resumable: false,
+        needsStartupRecovery: false,
       })
       .run()
 
@@ -270,6 +285,7 @@ export const createSessionRepository = (database: AgentDatabase) => {
         lastUsedAt: timestamp,
         archivedAt: null,
         resumable: false,
+        needsStartupRecovery: false,
       }),
     }
   }
@@ -396,6 +412,34 @@ export const createSessionRepository = (database: AgentDatabase) => {
     return { ok: true, value: rowToSession(row) }
   }
 
+  const markOffline = ({
+    id,
+    executor,
+  }: MarkSessionOfflineInput): SessionRepositoryResult<Session> => {
+    const db = resolveExecutor(executor)
+    const existing = getRowById(id)
+
+    if (existing === undefined) {
+      return { ok: false, error: { kind: "not_found" } }
+    }
+
+    const row = db
+      .update(sessions)
+      .set({
+        state: "offline",
+        needsStartupRecovery: existing.state === "running",
+      })
+      .where(eq(sessions.id, id))
+      .returning()
+      .get()
+
+    if (row === undefined) {
+      return { ok: false, error: { kind: "not_found" } }
+    }
+
+    return { ok: true, value: rowToSession(row) }
+  }
+
   const setState = ({
     id,
     state,
@@ -454,6 +498,39 @@ export const createSessionRepository = (database: AgentDatabase) => {
     return { ok: true, value: rowToSession(row) }
   }
 
+  const listNeedsStartupRecovery = (): ReadonlyArray<StartupRecoveryCandidate> =>
+    database.db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.state, "offline"),
+          eq(sessions.resumable, true),
+          eq(sessions.needsStartupRecovery, true),
+          sql`${sessions.archivedAt} IS NULL`,
+        ),
+      )
+      .all()
+
+  const clearNeedsStartupRecovery = ({
+    id,
+    executor,
+  }: ClearNeedsStartupRecoveryInput): SessionRepositoryResult<void> => {
+    const db = resolveExecutor(executor)
+    const row = db
+      .update(sessions)
+      .set({ needsStartupRecovery: false })
+      .where(eq(sessions.id, id))
+      .returning()
+      .get()
+
+    if (row === undefined) {
+      return { ok: false, error: { kind: "not_found" } }
+    }
+
+    return { ok: true, value: undefined }
+  }
+
   const listLiveByWorkspace = ({
     workspaceId,
   }: ListLiveSessionsByWorkspaceInput): LiveSessionBinding[] =>
@@ -501,8 +578,11 @@ export const createSessionRepository = (database: AgentDatabase) => {
     archive,
     markReady,
     markError,
+    markOffline,
     setState,
     getAcpBinding,
+    listNeedsStartupRecovery,
+    clearNeedsStartupRecovery,
     listLiveByWorkspace,
     listLiveNonArchived,
   }

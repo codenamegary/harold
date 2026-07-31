@@ -24,6 +24,7 @@ import { createAcpJournalWriter } from "../acp/journal/acp.journal.writer"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { SpawnAgentProcessFn } from "../acp/supervisor/spawn-agent-process"
 import { registerEventStreamRoutes } from "../event/stream.routes"
+import { runStartupRecovery } from "../session/startup.recovery"
 
 const TestBodySchema = z.object({
   name: z.string().min(1),
@@ -110,6 +111,8 @@ export const createServer = async ({
     offlineOnBindingClear.enabled = false
   }
 
+  const supervisorRef: { current: AcpSupervisor | null } = { current: null }
+
   const acpSupervisor =
     providedAcpSupervisor ??
     createAcpSupervisor({
@@ -139,7 +142,22 @@ export const createServer = async ({
           throw error
         }
       },
+      onSupervisorReady: () => {
+        const supervisor = supervisorRef.current
+        if (supervisor === null) {
+          return
+        }
+
+        return runStartupRecovery({
+          sessionRepository,
+          sessionService,
+          workspaceRepository,
+          acpSupervisor: supervisor,
+        })
+      },
     })
+
+  supervisorRef.current = acpSupervisor
 
   registerEventStreamRoutes(app, {
     eventJournal,

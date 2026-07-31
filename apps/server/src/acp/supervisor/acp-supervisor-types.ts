@@ -112,6 +112,7 @@ export type CreateAcpSupervisorParams = {
   journalWriter?: AcpJournalWriter
   onSessionUpdate?: SessionUpdateHandler
   onBeforeClearRuntime?: () => void
+  onSupervisorReady?: () => void | Promise<void>
   restartBackoffMs?: ReadonlyArray<number>
   sleepFn?: (ms: number) => Promise<void>
   spawnAgentProcessFn?: (input: {

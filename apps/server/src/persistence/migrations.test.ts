@@ -64,7 +64,7 @@ describe("drizzle migrations", () => {
       .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM __drizzle_migrations")
       .get()?.count
 
-    expect(migrationCount).toBe(4)
+    expect(migrationCount).toBe(5)
 
     const seededAgents = database.sqlite
       .query<{ agent_id: string; enabled: number }, []>(
@@ -102,10 +102,14 @@ describe("drizzle migrations", () => {
       "last_used_at",
       "archived_at",
       "resumable",
+      "needs_startup_recovery",
     ])
 
     const resumable = columns.find((row) => row.name === "resumable")
     expect(resumable?.dflt_value).toBe("false")
+
+    const needsStartupRecovery = columns.find((row) => row.name === "needs_startup_recovery")
+    expect(needsStartupRecovery?.dflt_value).toBe("false")
 
     const foreignKeys = database.sqlite
       .query<{ table: string; on_delete: string }, []>("PRAGMA foreign_key_list(sessions)")
@@ -178,7 +182,7 @@ describe("drizzle migrations", () => {
       .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM __drizzle_migrations")
       .get()?.count
 
-    expect(migrationCount).toBe(4)
+    expect(migrationCount).toBe(5)
     second.close()
   })
 })
@@ -210,7 +214,7 @@ describe("openDatabase", () => {
       .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM __drizzle_migrations")
       .get()?.count
 
-    expect(migrationCount).toBe(4)
+    expect(migrationCount).toBe(5)
     second.close()
   })
 
