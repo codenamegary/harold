@@ -384,7 +384,7 @@ export const createSessionRepository = (database: AgentDatabase) => {
     const db = resolveExecutor(executor)
     const row = db
       .update(sessions)
-      .set({ state: "error" })
+      .set({ state: "error", resumable: false })
       .where(eq(sessions.id, id))
       .returning()
       .get()
