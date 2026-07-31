@@ -6,6 +6,7 @@ import {
 
 export type SessionProblemDetails = {
   detail: string
+  fieldError?: string
 }
 
 export const parseSessionProblem = async (
@@ -15,7 +16,14 @@ export const parseSessionProblem = async (
 
   if (response.status === 400) {
     const problem = ValidationProblemSchema.parse(payload)
-    return { detail: problem.title }
+    const firstError = problem.errors[0]
+
+    return {
+      detail: problem.title,
+      fieldError: firstError
+        ? `${firstError.pointer}: ${firstError.code}`
+        : undefined,
+    }
   }
 
   if (response.status === 404) {
