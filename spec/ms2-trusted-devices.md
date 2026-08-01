@@ -22,18 +22,15 @@ revokes access immediately when asked.
 
 ## Delivery structure
 
-Milestone 2 is delivered as seven independently verifiable epics on GitHub.
-Epic numbers are logical order, not GitHub issue numbers.
+Milestone 2 is delivered as seven independently verifiable epics on GitHub:
 
-| Epic | Title | Delivers |
-|------|-------|----------|
-| 01 | Device contracts and persistence | Shared device and pairing schemas. SQLite tables and migrations. |
-| 02 | Pairing codes and credential issuance | Create code. Claim once. Receive durable device credential. |
-| 03 | Device authentication and authorization middleware | Bearer auth on HTTP and `/v1/events`. Authenticate → authorize middleware. Host loopback operator kept. Flat full-operator only. |
-| 04 | Device registry and presence | List devices. Online, offline, and last-seen. Device lifecycle events. |
-| 05 | Revocation | Revoke device. Invalidate credential. Drop active connections now. |
-| 06 | Devices console slice | Wire Devices page and Connect pair step to the real API and event stream. |
-| 07 | Second-client lifecycle and hardening | Local end-to-end proof: pair, reconnect, operate, revoke. Polish and honesty gaps. |
+1. [Device contracts and persistence](https://github.com/codenamegary/agent-server/issues/149)
+2. [Pairing codes and credential issuance](https://github.com/codenamegary/agent-server/issues/150)
+3. [Device authentication and authorization middleware](https://github.com/codenamegary/agent-server/issues/151)
+4. [Device registry and presence](https://github.com/codenamegary/agent-server/issues/152)
+5. [Revocation](https://github.com/codenamegary/agent-server/issues/153)
+6. [Devices console slice](https://github.com/codenamegary/agent-server/issues/154)
+7. [Second-client lifecycle and hardening](https://github.com/codenamegary/agent-server/issues/155)
 
 Each epic must satisfy its own acceptance, verification, migration, error, and
 recovery criteria before the next dependent epic is considered complete.
