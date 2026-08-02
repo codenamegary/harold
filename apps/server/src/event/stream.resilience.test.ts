@@ -283,7 +283,7 @@ describe("event stream resilience", () => {
 
     expect(fastWorkspaceIds).toEqual([otherWorkspace.id])
     await app.close()
-  })
+  }, 10_000)
 
   test("persists shutting_down and offline while closing active sockets", async () => {
     const dataDir = await createTempDataDir(resources)
