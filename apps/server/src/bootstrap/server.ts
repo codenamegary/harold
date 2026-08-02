@@ -174,6 +174,7 @@ export const createServer = async ({
   supervisorRef.current = acpSupervisor
 
   registerEventStreamRoutes(app, {
+    database,
     eventJournal,
     commitPublisher,
     workspaceRepository,
@@ -220,6 +221,8 @@ export const createServer = async ({
   const deviceService = createDeviceService({
     database,
     deviceRepository,
+    eventJournal,
+    commitPublisher,
     config,
   })
   registerDeviceRoutes(app, deviceService)

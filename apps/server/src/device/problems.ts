@@ -2,6 +2,7 @@ import {
   ConflictProblemSchema,
   NotFoundProblemSchema,
   PROBLEM_TYPES,
+  ValidationProblemSchema,
 } from "contracts/http/error"
 
 export const buildPairingCodeNotFoundProblem = (
@@ -42,4 +43,13 @@ export const buildPairingCodeRevokedProblem = (
     title: "Pairing code revoked",
     status: 409,
     detail,
+  })
+
+export const buildInvalidCursorProblem = () =>
+  ValidationProblemSchema.parse({
+    type: PROBLEM_TYPES.validationError,
+    title: "Request validation failed",
+    status: 400,
+    code: "validation.request.invalid",
+    errors: [{ pointer: "#/cursor", code: "validation.query.cursor.invalid" }],
   })

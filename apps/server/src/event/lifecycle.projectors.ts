@@ -6,6 +6,10 @@ type ServerStatusRecord = Extract<LifecycleJournalRecord, { kind: "server.status
 type WorkspaceChangedRecord = Extract<LifecycleJournalRecord, { kind: "workspace.changed" }>
 type SessionCreatedRecord = Extract<LifecycleJournalRecord, { kind: "session.created" }>
 type SessionStateRecord = Extract<LifecycleJournalRecord, { kind: "session.state" }>
+type DevicePairedRecord = Extract<LifecycleJournalRecord, { kind: "device.paired" }>
+type DeviceConnectedRecord = Extract<LifecycleJournalRecord, { kind: "device.connected" }>
+type DeviceDisconnectedRecord = Extract<LifecycleJournalRecord, { kind: "device.disconnected" }>
+type DeviceRevokedRecord = Extract<LifecycleJournalRecord, { kind: "device.revoked" }>
 
 const projectServerStatus = (record: ServerStatusRecord): Event =>
   EventSchema.parse({
@@ -69,6 +73,42 @@ const projectSessionState = (record: SessionStateRecord): Event =>
     },
   })
 
+const projectDevicePaired = (record: DevicePairedRecord): Event =>
+  EventSchema.parse({
+    type: "device.paired",
+    cursor: eventCursorToString(record.cursor),
+    occurredAt: record.occurredAt,
+    payload: {
+      deviceId: record.payload.deviceId,
+      name: record.payload.name,
+      platform: record.payload.platform,
+    },
+  })
+
+const projectDeviceConnected = (record: DeviceConnectedRecord): Event =>
+  EventSchema.parse({
+    type: "device.connected",
+    cursor: eventCursorToString(record.cursor),
+    occurredAt: record.occurredAt,
+    payload: { deviceId: record.payload.deviceId },
+  })
+
+const projectDeviceDisconnected = (record: DeviceDisconnectedRecord): Event =>
+  EventSchema.parse({
+    type: "device.disconnected",
+    cursor: eventCursorToString(record.cursor),
+    occurredAt: record.occurredAt,
+    payload: { deviceId: record.payload.deviceId },
+  })
+
+const projectDeviceRevoked = (record: DeviceRevokedRecord): Event =>
+  EventSchema.parse({
+    type: "device.revoked",
+    cursor: eventCursorToString(record.cursor),
+    occurredAt: record.occurredAt,
+    payload: { deviceId: record.payload.deviceId },
+  })
+
 export const projectLifecycleEvent = (record: LifecycleJournalRecord): Event => {
   switch (record.kind) {
     case "server.status":
@@ -79,6 +119,14 @@ export const projectLifecycleEvent = (record: LifecycleJournalRecord): Event => 
       return projectSessionCreated(record)
     case "session.state":
       return projectSessionState(record)
+    case "device.paired":
+      return projectDevicePaired(record)
+    case "device.connected":
+      return projectDeviceConnected(record)
+    case "device.disconnected":
+      return projectDeviceDisconnected(record)
+    case "device.revoked":
+      return projectDeviceRevoked(record)
   }
 }
 

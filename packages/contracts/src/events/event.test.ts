@@ -91,15 +91,40 @@ describe("EventSchema", () => {
     ).toThrow()
   })
 
-  test("rejects milestone 2 device events", () => {
-    expect(() =>
-      EventSchema.parse({
-        cursor: "1",
-        type: "device.connected",
-        occurredAt: "2026-07-24T12:01:00.000Z",
-        payload: { deviceId: "device-1" },
-      }),
-    ).toThrow()
+  test("accepts device lifecycle events", () => {
+    const paired = {
+      cursor: "1",
+      type: "device.paired",
+      occurredAt: "2026-07-24T12:01:00.000Z",
+      payload: {
+        deviceId: "device_1",
+        name: "Paired device",
+        platform: "android",
+      },
+    }
+    const connected = {
+      cursor: "2",
+      type: "device.connected",
+      occurredAt: "2026-07-24T12:01:00.000Z",
+      payload: { deviceId: "device_1" },
+    }
+    const disconnected = {
+      cursor: "3",
+      type: "device.disconnected",
+      occurredAt: "2026-07-24T12:01:01.000Z",
+      payload: { deviceId: "device_1" },
+    }
+    const revoked = {
+      cursor: "4",
+      type: "device.revoked",
+      occurredAt: "2026-07-24T12:01:02.000Z",
+      payload: { deviceId: "device_1" },
+    }
+
+    expect(EventSchema.parse(paired)).toEqual(paired)
+    expect(EventSchema.parse(connected)).toEqual(connected)
+    expect(EventSchema.parse(disconnected)).toEqual(disconnected)
+    expect(EventSchema.parse(revoked)).toEqual(revoked)
   })
 })
 

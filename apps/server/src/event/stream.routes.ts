@@ -13,7 +13,10 @@ import {
   waitForAuthFrame,
 } from "../auth/ws.auth"
 import { hostPrincipal, Principal } from "../auth/principal"
+import { emitDeviceConnectionLifecycle } from "../device/connection.lifecycle"
 import { DeviceRepository } from "../device/repository"
+import { registerDevicePresence } from "../device/presence"
+import { AgentDatabase } from "../persistence/database"
 import { EventCommitPublisher } from "./commit.publisher"
 import { EventJournalRepository } from "./journal.repository"
 import { runStreamConnection } from "./stream.connection"
@@ -26,6 +29,7 @@ const eventStreamHandshakes = new WeakMap<object, ValidatedEventStreamHandshake>
 const autoResumeCompleted = new WeakSet<object>()
 
 type RegisterEventStreamRoutesParams = {
+  database: AgentDatabase
   eventJournal: EventJournalRepository
   commitPublisher: EventCommitPublisher
   workspaceRepository: WorkspaceRepository
@@ -74,6 +78,59 @@ const resolveStreamPrincipal = async (params: {
   }
 
   return frameResult.principal
+}
+
+const attachDevicePresence = (params: {
+  principal: Principal
+  socket: WebSocket
+  database: AgentDatabase
+  eventJournal: EventJournalRepository
+  commitPublisher: EventCommitPublisher
+  deviceRepository: DeviceRepository
+}): void => {
+  if (params.principal.kind !== "device") {
+    return
+  }
+
+  const deviceId = params.principal.deviceId
+  const connected = emitDeviceConnectionLifecycle({
+    database: params.database,
+    eventJournal: params.eventJournal,
+    commitPublisher: params.commitPublisher,
+    deviceRepository: params.deviceRepository,
+    deviceId,
+    kind: "device.connected",
+  })
+
+  if (!connected.ok) {
+    params.socket.close(1011, "device connect event failed")
+    return
+  }
+
+  const unregisterPresence = registerDevicePresence({
+    deviceId,
+    connection: params.socket,
+  })
+  const closedConnections = new WeakSet<object>()
+
+  const onClose = () => {
+    if (closedConnections.has(params.socket)) {
+      return
+    }
+    closedConnections.add(params.socket)
+    unregisterPresence()
+    emitDeviceConnectionLifecycle({
+      database: params.database,
+      eventJournal: params.eventJournal,
+      commitPublisher: params.commitPublisher,
+      deviceRepository: params.deviceRepository,
+      deviceId,
+      kind: "device.disconnected",
+    })
+  }
+
+  params.socket.on("close", onClose)
+  params.socket.on("error", onClose)
 }
 
 export const registerEventStreamRoutes = (
@@ -153,6 +210,15 @@ export const registerEventStreamRoutes = (
             acpSupervisor: params.acpSupervisor,
           })
         }
+
+        attachDevicePresence({
+          principal,
+          socket,
+          database: params.database,
+          eventJournal: params.eventJournal,
+          commitPublisher: params.commitPublisher,
+          deviceRepository: params.deviceRepository,
+        })
 
         await runStreamConnection({
           socket,

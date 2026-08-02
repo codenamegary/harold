@@ -100,6 +100,74 @@ describe("projectLifecycleEvent", () => {
     )
   })
 
+  test("maps device.paired", () => {
+    const record: ParsedJournalRecord = {
+      ...baseRecord,
+      cursor: 12n,
+      kind: "device.paired",
+      workspaceId: null,
+      sessionId: null,
+      sessionSequence: null,
+      payload: {
+        deviceId: "device_1",
+        name: "Pixel",
+        platform: "android",
+      },
+    }
+
+    const event = projectLifecycleEvent(parseLifecycleJournalRecord(record))
+    expect(event).toEqual(
+      EventSchema.parse({
+        type: "device.paired",
+        cursor: "12",
+        occurredAt: "2026-07-24T12:00:00.000Z",
+        payload: {
+          deviceId: "device_1",
+          name: "Pixel",
+          platform: "android",
+        },
+      }),
+    )
+  })
+
+  test("maps device.connected and device.disconnected", () => {
+    const connectedRecord: ParsedJournalRecord = {
+      ...baseRecord,
+      cursor: 13n,
+      kind: "device.connected",
+      workspaceId: null,
+      sessionId: null,
+      sessionSequence: null,
+      payload: { deviceId: "device_1" },
+    }
+    const disconnectedRecord: ParsedJournalRecord = {
+      ...baseRecord,
+      cursor: 14n,
+      kind: "device.disconnected",
+      workspaceId: null,
+      sessionId: null,
+      sessionSequence: null,
+      payload: { deviceId: "device_1" },
+    }
+
+    expect(projectLifecycleEvent(parseLifecycleJournalRecord(connectedRecord))).toEqual(
+      EventSchema.parse({
+        type: "device.connected",
+        cursor: "13",
+        occurredAt: "2026-07-24T12:00:00.000Z",
+        payload: { deviceId: "device_1" },
+      }),
+    )
+    expect(projectLifecycleEvent(parseLifecycleJournalRecord(disconnectedRecord))).toEqual(
+      EventSchema.parse({
+        type: "device.disconnected",
+        cursor: "14",
+        occurredAt: "2026-07-24T12:00:00.000Z",
+        payload: { deviceId: "device_1" },
+      }),
+    )
+  })
+
   test("maps session.state", () => {
     const record: ParsedJournalRecord = {
       ...baseRecord,

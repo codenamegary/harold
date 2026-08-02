@@ -10,6 +10,10 @@ export const lifecycleKinds = [
   "workspace.changed",
   "session.created",
   "session.state",
+  "device.paired",
+  "device.connected",
+  "device.disconnected",
+  "device.revoked",
 ] as const
 
 export const LifecycleKindSchema = z.enum(lifecycleKinds)
@@ -48,6 +52,30 @@ export const LifecycleJournalRecordSchema = z.discriminatedUnion("kind", [
     workspaceId: ScopeIdSchema,
     sessionId: ScopeIdSchema,
     payload: journalPayloadSchemaByKind["session.state"],
+  }),
+  LifecycleJournalRecordBaseSchema.extend({
+    kind: z.literal("device.paired"),
+    workspaceId: z.null(),
+    sessionId: z.null(),
+    payload: journalPayloadSchemaByKind["device.paired"],
+  }),
+  LifecycleJournalRecordBaseSchema.extend({
+    kind: z.literal("device.connected"),
+    workspaceId: z.null(),
+    sessionId: z.null(),
+    payload: journalPayloadSchemaByKind["device.connected"],
+  }),
+  LifecycleJournalRecordBaseSchema.extend({
+    kind: z.literal("device.disconnected"),
+    workspaceId: z.null(),
+    sessionId: z.null(),
+    payload: journalPayloadSchemaByKind["device.disconnected"],
+  }),
+  LifecycleJournalRecordBaseSchema.extend({
+    kind: z.literal("device.revoked"),
+    workspaceId: z.null(),
+    sessionId: z.null(),
+    payload: journalPayloadSchemaByKind["device.revoked"],
   }),
 ])
 
