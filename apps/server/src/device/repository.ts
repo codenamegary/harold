@@ -267,6 +267,45 @@ export const createDeviceRepository = (database: AgentDatabase) => {
       .run()
   }
 
+  const revoke = (params: {
+    deviceId: string
+    revokedAt: string
+    executor?: DbExecutor
+  }): DeviceRepositoryResult<{ newlyRevoked: boolean; device: Device }> => {
+    const executor = executorOf(params.executor)
+    const row = executor
+      .select()
+      .from(devices)
+      .where(eq(devices.id, params.deviceId))
+      .get()
+
+    if (row === undefined) {
+      return { ok: false, error: { kind: "device_not_found" } }
+    }
+
+    if (row.revokedAt !== null) {
+      return { ok: true, value: { newlyRevoked: false, device: rowToDevice(row) } }
+    }
+
+    executor
+      .update(devices)
+      .set({ revokedAt: params.revokedAt })
+      .where(and(eq(devices.id, params.deviceId), isNull(devices.revokedAt)))
+      .run()
+
+    const updated = executor
+      .select()
+      .from(devices)
+      .where(eq(devices.id, params.deviceId))
+      .get()
+
+    if (updated === undefined) {
+      return { ok: false, error: { kind: "device_not_found" } }
+    }
+
+    return { ok: true, value: { newlyRevoked: true, device: rowToDevice(updated) } }
+  }
+
   const conditionAfter = (row: DeviceRow) =>
     or(
       lt(devices.pairedAt, row.pairedAt),
@@ -475,6 +514,7 @@ export const createDeviceRepository = (database: AgentDatabase) => {
     getPairingCodeById,
     getByCredentialHash,
     touchLastSeen,
+    revoke,
     list,
   }
 }

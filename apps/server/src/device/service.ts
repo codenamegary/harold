@@ -15,6 +15,7 @@ import { DeviceError } from "./errors"
 import { generatePairingCode, normalizePairingCode } from "./generate.pairing.code"
 import { hashDeviceCredential } from "./hash.device.credential"
 import { hashPairingCode, verifyPairingCode } from "./hash.pairing.code"
+import { closeDeviceConnections } from "./presence"
 import { DeviceListResult, DeviceRepository, PairingCodeRow } from "./repository"
 
 const PAIRING_CODE_TTL_MS = 10 * 60 * 1000
@@ -237,10 +238,63 @@ export const createDeviceService = (context: DeviceServiceContext) => {
   const list = (query: ListDevicesQuery): DeviceServiceResult<DeviceCollection> =>
     toCollection(listDevices(query))
 
+  const revoke = (params: {
+    deviceId: string
+  }): DeviceServiceResult<{ newlyRevoked: boolean }> => {
+    const now = nowIso()
+
+    const result = transactional<{ newlyRevoked: boolean }, DeviceError>((txParams) => {
+      const revoked = context.deviceRepository.revoke({
+        deviceId: params.deviceId,
+        revokedAt: now,
+        executor: txParams.executor,
+      })
+
+      if (!revoked.ok) {
+        return revoked
+      }
+
+      if (!revoked.value.newlyRevoked) {
+        return {
+          ok: true,
+          value: { newlyRevoked: false },
+          appendedRecords: [],
+        }
+      }
+
+      const appendResult = txParams.append([
+        {
+          schemaVersion: JOURNAL_SCHEMA_VERSION,
+          kind: "device.revoked",
+          occurredAt: now,
+          payload: { deviceId: params.deviceId },
+        },
+      ])
+
+      if (!appendResult.ok) {
+        return appendResult
+      }
+
+      return {
+        ok: true,
+        value: { newlyRevoked: true },
+        appendedRecords: appendResult.value,
+      }
+    })
+
+    if (!result.ok) {
+      return result
+    }
+
+    closeDeviceConnections(params.deviceId)
+    return result
+  }
+
   return {
     createPairingCode,
     claimPairingCode,
     list,
+    revoke,
   }
 }
 

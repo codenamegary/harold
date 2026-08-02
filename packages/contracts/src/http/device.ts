@@ -4,6 +4,8 @@ import { CursorSchema, IdSchema, TimestampSchema } from "./primitives"
 
 export const DEVICES_PATH = "/v1/devices" as const
 
+export const devicePath = (deviceId: string) => `${DEVICES_PATH}/${deviceId}`
+
 export const DeviceStateSchema = z.enum(["online", "offline", "revoked"])
 
 export const DeviceSchema = z.strictObject({

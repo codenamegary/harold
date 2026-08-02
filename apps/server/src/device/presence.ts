@@ -1,9 +1,19 @@
 const connectionsByDeviceId = new Map<string, Set<object>>()
 
+const REVOKE_CLOSE_CODE = 1008
+const REVOKE_CLOSE_REASON = "unauthorized"
+
 export type RegisterDevicePresenceParams = {
   deviceId: string
   connection: object
 }
+
+type CloseableConnection = {
+  close: (code?: number, reason?: string) => void
+}
+
+const isCloseableConnection = (connection: object): connection is CloseableConnection =>
+  "close" in connection && typeof Reflect.get(connection, "close") === "function"
 
 export const registerDevicePresence = (
   params: RegisterDevicePresenceParams,
@@ -32,6 +42,19 @@ export const registerDevicePresence = (
 export const isDeviceOnline = (deviceId: string): boolean => {
   const connections = connectionsByDeviceId.get(deviceId)
   return connections !== undefined && connections.size > 0
+}
+
+export const closeDeviceConnections = (deviceId: string): void => {
+  const connections = connectionsByDeviceId.get(deviceId)
+  if (connections === undefined) {
+    return
+  }
+
+  for (const connection of [...connections]) {
+    if (isCloseableConnection(connection)) {
+      connection.close(REVOKE_CLOSE_CODE, REVOKE_CLOSE_REASON)
+    }
+  }
 }
 
 export const clearDevicePresence = (): void => {

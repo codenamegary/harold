@@ -53,3 +53,11 @@ export const buildInvalidCursorProblem = () =>
     code: "validation.request.invalid",
     errors: [{ pointer: "#/cursor", code: "validation.query.cursor.invalid" }],
   })
+
+export const buildDeviceNotFoundProblem = (detail = "Unknown device id") =>
+  NotFoundProblemSchema.parse({
+    type: PROBLEM_TYPES.notFound,
+    title: "Device not found",
+    status: 404,
+    detail,
+  })

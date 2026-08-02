@@ -9,11 +9,13 @@ import {
 import {
   DeviceCollectionSchema,
   DEVICES_PATH,
+  devicePath,
   ListDevicesQuerySchema,
 } from "contracts/http/device"
 import { FastifyInstance } from "fastify"
 import { DeviceService } from "./service"
 import {
+  buildDeviceNotFoundProblem,
   buildInvalidCursorProblem,
   buildPairingCodeClaimedProblem,
   buildPairingCodeExpiredProblem,
@@ -36,6 +38,8 @@ const problemForError = (error: DeviceError) => {
   switch (error.kind) {
     case "pairing_code_not_found":
       return { status: 404, problem: buildPairingCodeNotFoundProblem() }
+    case "device_not_found":
+      return { status: 404, problem: buildDeviceNotFoundProblem() }
     case "pairing_code_claimed":
     case "pairing_code_race":
       return { status: 409, problem: buildPairingCodeClaimedProblem() }
@@ -49,6 +53,7 @@ const problemForError = (error: DeviceError) => {
 const isDeviceError = (error: { kind: string }): error is DeviceError => {
   switch (error.kind) {
     case "pairing_code_not_found":
+    case "device_not_found":
     case "pairing_code_claimed":
     case "pairing_code_race":
     case "pairing_code_expired":
@@ -107,5 +112,20 @@ export const registerDeviceRoutes = (app: FastifyInstance, service: DeviceServic
     }
 
     return reply.status(200).send(DeviceCollectionSchema.parse(result.value))
+  })
+
+  app.delete(devicePath(":deviceId"), async (request, reply) => {
+    const { deviceId } = request.params as { deviceId: string }
+    const result = service.revoke({ deviceId })
+
+    if (!result.ok) {
+      if (isDeviceError(result.error)) {
+        const mapped = problemForError(result.error)
+        return sendProblem(reply, mapped.status, mapped.problem)
+      }
+      return sendProblem(reply, 500, { title: "Internal error", status: 500 })
+    }
+
+    return reply.status(204).send()
   })
 }

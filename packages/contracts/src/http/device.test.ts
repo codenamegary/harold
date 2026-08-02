@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
   DEVICES_PATH,
+  devicePath,
   DeviceCollectionSchema,
   DeviceCredentialResponseSchema,
   DeviceSchema,
@@ -19,6 +20,14 @@ const validDevice = {
 describe("DEVICES_PATH", () => {
   test("is the public devices resource", () => {
     expect(DEVICES_PATH).toBe("/v1/devices")
+  })
+})
+
+describe("devicePath", () => {
+  test("builds the device resource path", () => {
+    expect(devicePath("device_01JFC8C7E77NQCFH0RF9Z22JHH")).toBe(
+      "/v1/devices/device_01JFC8C7E77NQCFH0RF9Z22JHH",
+    )
   })
 })
 
