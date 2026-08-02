@@ -193,9 +193,22 @@ describe("device auth HTTP", () => {
     })
     const { httpBase } = await getListeningHttpBase(app, config)
 
-    const response = await fetch(`${httpBase}/v1/workspaces`)
-    expect(response.status).toBe(401)
-    expect(response.headers.get("www-authenticate")).toBe(BEARER_CHALLENGE)
+    const workspaces = await fetch(`${httpBase}/v1/workspaces`)
+    expect(workspaces.status).toBe(401)
+    expect(workspaces.headers.get("www-authenticate")).toBe(BEARER_CHALLENGE)
+
+    const sessions = await fetch(`${httpBase}/v1/sessions`)
+    expect(sessions.status).toBe(401)
+
+    const agents = await fetch(`${httpBase}/v1/settings/agents`)
+    expect(agents.status).toBe(401)
+
+    const pairingCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    expect(pairingCreate.status).toBe(401)
   })
 })
 

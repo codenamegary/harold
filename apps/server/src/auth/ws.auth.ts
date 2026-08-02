@@ -1,4 +1,4 @@
-import { EventStreamAuthFrameSchema } from "contracts/events/stream-auth"
+import { EventStreamAuthFrameSchema } from "contracts/events/stream.auth"
 import { WebSocket } from "ws"
 import { authenticate, AuthenticateParams } from "./authenticate"
 import { Principal } from "./principal"
@@ -15,18 +15,41 @@ export type WsAuthFrameResult =
   | { ok: true; principal: Principal }
   | { ok: false; reason: "timeout" | "invalid" | "closed" }
 
+const authenticateAuthFrameMessage = (params: {
+  data: WebSocket.RawData
+  lookupByCredentialHash: AuthenticateParams["lookupByCredentialHash"]
+}): WsAuthFrameResult => {
+  const parsedJson: unknown = JSON.parse(String(params.data))
+  const frameResult = EventStreamAuthFrameSchema.safeParse(parsedJson)
+  if (!frameResult.success) {
+    return { ok: false, reason: "invalid" }
+  }
+
+  const authResult = authenticate({
+    authorization: frameResult.data.authorization,
+    isLoopback: false,
+    lookupByCredentialHash: params.lookupByCredentialHash,
+  })
+
+  if (authResult.principal.kind === "unauthenticated") {
+    return { ok: false, reason: "invalid" }
+  }
+
+  return { ok: true, principal: authResult.principal }
+}
+
 export const waitForAuthFrame = (
   params: WaitForAuthFrameParams,
 ): Promise<WsAuthFrameResult> =>
   new Promise((resolve) => {
     const { socket, timeoutMs, lookupByCredentialHash } = params
-    let settled = false
+    const done = { current: false }
 
     const finish = (result: WsAuthFrameResult) => {
-      if (settled) {
+      if (done.current) {
         return
       }
-      settled = true
+      done.current = true
       clearTimeout(timer)
       socket.off("message", onMessage)
       socket.off("close", onClose)
@@ -38,32 +61,11 @@ export const waitForAuthFrame = (
     }
 
     const onMessage = (data: WebSocket.RawData) => {
-      const parsedJson: unknown = (() => {
-        try {
-          return JSON.parse(String(data))
-        } catch {
-          return undefined
-        }
-      })()
-
-      const frameResult = EventStreamAuthFrameSchema.safeParse(parsedJson)
-      if (!frameResult.success) {
+      try {
+        finish(authenticateAuthFrameMessage({ data, lookupByCredentialHash }))
+      } catch {
         finish({ ok: false, reason: "invalid" })
-        return
       }
-
-      const authResult = authenticate({
-        authorization: frameResult.data.authorization,
-        isLoopback: false,
-        lookupByCredentialHash,
-      })
-
-      if (authResult.principal.kind === "unauthenticated") {
-        finish({ ok: false, reason: "invalid" })
-        return
-      }
-
-      finish({ ok: true, principal: authResult.principal })
     }
 
     const timer = setTimeout(() => {

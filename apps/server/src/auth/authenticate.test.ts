@@ -19,6 +19,13 @@ describe("parseAuthorizationHeader", () => {
     })
   })
 
+  test("Bearer scheme is case-insensitive", () => {
+    expect(parseAuthorizationHeader("bearer secret-token")).toEqual({
+      presented: true,
+      credential: "secret-token",
+    })
+  })
+
   test("non-Bearer scheme is invalid presentation", () => {
     expect(parseAuthorizationHeader("Basic abc")).toEqual({
       presented: true,

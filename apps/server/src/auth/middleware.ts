@@ -36,7 +36,8 @@ export const registerAuthMiddleware = (
 ) => {
   const resolveLoopback = deps.isLoopbackRequest ?? isLoopbackRequest
 
-  app.addHook("preHandler", async (request, reply) => {
+  // preValidation so auth runs before route handshake / auto-resume work.
+  app.addHook("preValidation", async (request, reply) => {
     const routerPath = request.routeOptions.url
     if (routerPath === undefined) {
       return
@@ -51,21 +52,12 @@ export const registerAuthMiddleware = (
 
     setRequestPrincipal(request, authResult.principal)
 
-    if (isOpenRoute({ method: request.method, routerPath })) {
-      if (
-        authResult.credentialPresented &&
-        authResult.principal.kind === "unauthenticated"
-      ) {
-        return sendUnauthorized(reply)
-      }
-      return
-    }
+    const rejectPresentedInvalid =
+      authResult.credentialPresented &&
+      authResult.principal.kind === "unauthenticated"
 
-    if (routerPath === EVENTS_PATH) {
-      if (
-        authResult.credentialPresented &&
-        authResult.principal.kind === "unauthenticated"
-      ) {
+    if (isOpenRoute({ method: request.method, routerPath }) || routerPath === EVENTS_PATH) {
+      if (rejectPresentedInvalid) {
         return sendUnauthorized(reply)
       }
       return

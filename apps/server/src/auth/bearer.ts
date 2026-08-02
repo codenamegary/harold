@@ -3,7 +3,7 @@ export type ParsedBearer =
   | { presented: true; credential: string }
   | { presented: true; invalid: true }
 
-const BEARER_PREFIX = "Bearer "
+const BEARER_PREFIX = /^Bearer\s+/i
 
 export const parseAuthorizationHeader = (
   authorization: string | string[] | undefined,
@@ -17,11 +17,12 @@ export const parseAuthorizationHeader = (
     return { presented: false }
   }
 
-  if (!value.startsWith(BEARER_PREFIX)) {
+  const match = BEARER_PREFIX.exec(value)
+  if (match === null) {
     return { presented: true, invalid: true }
   }
 
-  const credential = value.slice(BEARER_PREFIX.length).trim()
+  const credential = value.slice(match[0].length).trim()
   if (credential.length === 0) {
     return { presented: true, invalid: true }
   }

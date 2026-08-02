@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { EventStreamAuthFrameSchema } from "contracts/events/stream-auth"
+import { EventStreamAuthFrameSchema } from "contracts/events/stream.auth"
 import { WebSocket, WebSocketServer } from "ws"
 import { hashDeviceCredential } from "../device/hash.device.credential"
 import { waitForAuthFrame } from "./ws.auth"

@@ -97,17 +97,6 @@ export const registerEventStreamRoutes = (
         return sendProblem(reply, handshakeResult.status, handshakeResult.problem)
       }
 
-      const sessionId = handshakeResult.handshake.filters.sessionId
-      if (sessionId !== undefined) {
-        await maybeAutoResumeSession({
-          sessionId,
-          sessionRepository: params.sessionRepository,
-          sessionService: params.sessionService,
-          workspaceRepository: params.workspaceRepository,
-          acpSupervisor: params.acpSupervisor,
-        })
-      }
-
       eventStreamHandshakes.set(request, handshakeResult.handshake)
     },
     handler: (_request, reply) => {
@@ -134,6 +123,17 @@ export const registerEventStreamRoutes = (
             socket.close(1008, "unauthorized")
           }
           return
+        }
+
+        const sessionId = handshake.filters.sessionId
+        if (sessionId !== undefined) {
+          await maybeAutoResumeSession({
+            sessionId,
+            sessionRepository: params.sessionRepository,
+            sessionService: params.sessionService,
+            workspaceRepository: params.workspaceRepository,
+            acpSupervisor: params.acpSupervisor,
+          })
         }
 
         await runStreamConnection({
