@@ -79,6 +79,14 @@ export const createFakeSpawnFn = (
   return { spawnAgentProcessFn }
 }
 
+export type TestAppOptions = {
+  whichFn?: WhichFn
+  validateExecutablePathFn?: ValidateExecutablePathFn
+  fakeAcpOptions?: SpawnFakeAcpOptions
+  isLoopbackRequest?: (request: { ip: string }) => boolean
+  wsAuthFrameTimeoutMs?: number
+}
+
 export type TestApp = {
   app: Awaited<ReturnType<typeof createServer>>["app"]
   database: AgentDatabase
@@ -91,7 +99,7 @@ export type TestApp = {
 export const createTestApp = async (
   resources: TestAppResources,
   dataDir: string,
-  whichFn?: WhichFn,
+  whichFnOrOptions?: WhichFn | TestAppOptions,
   validateExecutablePathFn: ValidateExecutablePathFn = acceptTestExecutablePath,
   fakeAcpOptions: SpawnFakeAcpOptions = {
     capabilities: { loadSession: true, sessionClose: true },
@@ -99,6 +107,23 @@ export const createTestApp = async (
     sessionLoadSessionId: "fake-session-new",
   },
 ): Promise<TestApp> => {
+  const options: TestAppOptions =
+    typeof whichFnOrOptions === "function" || whichFnOrOptions === undefined
+      ? {
+          whichFn: whichFnOrOptions,
+          validateExecutablePathFn,
+          fakeAcpOptions,
+        }
+      : {
+          validateExecutablePathFn: acceptTestExecutablePath,
+          fakeAcpOptions: {
+            capabilities: { loadSession: true, sessionClose: true },
+            sessionNewSessionId: "fake-session-new",
+            sessionLoadSessionId: "fake-session-new",
+          },
+          ...whichFnOrOptions,
+        }
+
   const config = parseConfig({
     AGENT_SERVER_HOST: "127.0.0.1",
     AGENT_SERVER_PORT: "0",
@@ -106,14 +131,23 @@ export const createTestApp = async (
   })
   const database = openDatabase({ dataDir: config.dataDir })
   const runtime = createRuntime("0.1.0")
-  const { spawnAgentProcessFn } = createFakeSpawnFn(resources, fakeAcpOptions)
+  const { spawnAgentProcessFn } = createFakeSpawnFn(
+    resources,
+    options.fakeAcpOptions ?? {
+      capabilities: { loadSession: true, sessionClose: true },
+      sessionNewSessionId: "fake-session-new",
+      sessionLoadSessionId: "fake-session-new",
+    },
+  )
   const { app, acpSupervisor, commitPublisher, disposeOfflineOnBindingClear } = await createServer({
     config,
     runtime,
     database,
-    whichFn,
-    validateExecutablePathFn,
+    whichFn: options.whichFn,
+    validateExecutablePathFn: options.validateExecutablePathFn ?? acceptTestExecutablePath,
     spawnAgentProcessFn,
+    isLoopbackRequest: options.isLoopbackRequest,
+    wsAuthFrameTimeoutMs: options.wsAuthFrameTimeoutMs,
   })
   resources.addApp(app)
   resources.addTeardown(async () => {

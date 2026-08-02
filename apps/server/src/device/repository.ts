@@ -198,6 +198,15 @@ export const createDeviceRepository = (database: AgentDatabase) => {
   const getPairingCodeById = (params: { id: string }): PairingCodeRow | undefined =>
     database.db.select().from(pairingCodes).where(eq(pairingCodes.id, params.id)).get()
 
+  const getByCredentialHash = (params: {
+    credentialHash: string
+  }): DeviceRow | undefined =>
+    database.db
+      .select()
+      .from(devices)
+      .where(eq(devices.credentialHash, params.credentialHash))
+      .get()
+
   return {
     insertPairingCode,
     listActivePairingCodes,
@@ -206,6 +215,7 @@ export const createDeviceRepository = (database: AgentDatabase) => {
     markExpiredActiveBefore,
     claimPairingCode,
     getPairingCodeById,
+    getByCredentialHash,
   }
 }
 

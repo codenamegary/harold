@@ -1,4 +1,4 @@
-import Fastify, { FastifyInstance } from "fastify"
+import Fastify, { FastifyInstance, FastifyRequest } from "fastify"
 import websocket from "@fastify/websocket"
 import { z } from "zod"
 import { registerErrorHandler } from "../error/error-handler"
@@ -28,6 +28,7 @@ import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { SpawnAgentProcessFn } from "../acp/supervisor/spawn-agent-process"
 import { registerEventStreamRoutes } from "../event/stream.routes"
 import { runStartupRecovery } from "../session/startup.recovery"
+import { registerAuthMiddleware } from "../auth/middleware"
 
 const TestBodySchema = z.object({
   name: z.string().min(1),
@@ -54,6 +55,8 @@ export type CreateServerOptions = {
   validateExecutablePathFn?: ValidateExecutablePathFn
   acpSupervisor?: AcpSupervisor
   spawnAgentProcessFn?: SpawnAgentProcessFn
+  isLoopbackRequest?: (request: FastifyRequest) => boolean
+  wsAuthFrameTimeoutMs?: number
 }
 
 export const createServer = async ({
@@ -66,6 +69,8 @@ export const createServer = async ({
   validateExecutablePathFn,
   acpSupervisor: providedAcpSupervisor,
   spawnAgentProcessFn,
+  isLoopbackRequest,
+  wsAuthFrameTimeoutMs,
 }: CreateServerOptions) => {
   const app = Fastify({
     logger: {
@@ -87,6 +92,12 @@ export const createServer = async ({
     options: {
       perMessageDeflate: false,
     },
+  })
+
+  const deviceRepository = createDeviceRepository(database)
+  registerAuthMiddleware(app, {
+    deviceRepository,
+    isLoopbackRequest,
   })
 
   const agentSettingsRepository = createAgentSettingsRepository(database, {
@@ -169,6 +180,9 @@ export const createServer = async ({
     sessionRepository,
     sessionService,
     acpSupervisor,
+    deviceRepository,
+    isLoopbackRequest,
+    wsAuthFrameTimeoutMs,
   })
 
   registerStatusRoutes(app, runtime, config, acpSupervisor)
@@ -203,7 +217,6 @@ export const createServer = async ({
     acpSupervisor,
   )
 
-  const deviceRepository = createDeviceRepository(database)
   const deviceService = createDeviceService({
     database,
     deviceRepository,
