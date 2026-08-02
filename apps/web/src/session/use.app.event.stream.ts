@@ -1,7 +1,13 @@
 import { useEffect, useRef } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Event } from "contracts/events/event"
+import { DeviceCollection } from "contracts/http/device"
 import { SessionCollection } from "contracts/http/session"
+import {
+  applyDeviceEvents,
+  hasDeviceEvents,
+  hasDevicePairedEvents,
+} from "../devices/apply.device.events"
 import { queryKeys } from "../query/query.keys"
 import { applySessionListEvents } from "./apply.list.events"
 import { openAppEventStream } from "./open.app.event.stream"
@@ -66,6 +72,27 @@ export const useAppEventStream = (params: UseAppEventStreamParams) => {
         }
       })
 
+      const deviceQueries = client.getQueriesData<DeviceCollection>({
+        queryKey: queryKeys.devicesRoot,
+      })
+
+      deviceQueries.forEach(([key, data]) => {
+        if (data === undefined) {
+          return
+        }
+
+        const next = applyDeviceEvents({ collection: data, events })
+        if (next !== data) {
+          client.setQueryData(key, next)
+        }
+      })
+
+      if (hasDevicePairedEvents(events) || hasDeviceEvents(events)) {
+        void client.invalidateQueries({
+          queryKey: queryKeys.devicesRoot,
+        })
+      }
+
       workspaceIdsFromCreatedEvents(events).forEach((workspaceId) => {
         void client.invalidateQueries({
           queryKey: queryKeys.sessions(workspaceId),
@@ -83,6 +110,9 @@ export const useAppEventStream = (params: UseAppEventStreamParams) => {
       if (isReconnect) {
         void queryClientRef.current.invalidateQueries({
           queryKey: queryKeys.status,
+        })
+        void queryClientRef.current.invalidateQueries({
+          queryKey: queryKeys.devicesRoot,
         })
       }
 

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
+import { DeviceCollectionSchema } from "contracts/http/device"
 import { fireEvent, waitFor, within } from "@testing-library/react"
 import { renderWithProviders } from "../query/render.with.providers"
 import { AppRoutes } from "./AppRouter"
@@ -32,6 +33,20 @@ const emptyWorkspaceCollection = WorkspaceCollectionSchema.parse({
   page: { limit: 20, count: 0 },
 })
 
+const emptyDeviceCollection = DeviceCollectionSchema.parse({
+  items: [],
+  page: { limit: 100, count: 0 },
+})
+
+const pairingCode = {
+  id: "pair_01",
+  code: "J7K-9P2",
+  endpoint: "http://127.0.0.1:3847",
+  state: "active",
+  createdAt: "2026-08-02T21:00:00.000Z",
+  expiresAt: "2026-08-02T21:10:00.000Z",
+} as const
+
 const originalFetch = globalThis.fetch
 const originalWebSocket = globalThis.WebSocket
 
@@ -39,6 +54,18 @@ const renderShellRoute = (path: string) =>
   renderWithProviders(<AppRoutes />, {
     initialEntries: [path],
   })
+
+const requestUrl = (input: RequestInfo | URL): string => {
+  if (typeof input === "string") {
+    return input
+  }
+
+  if (input instanceof URL) {
+    return input.href
+  }
+
+  return input.url
+}
 
 const waitForShellReady = async (getByRole: ReturnType<typeof renderWithProviders>["getByRole"]) => {
   await waitFor(() => {
@@ -77,13 +104,32 @@ describe("shell honesty", () => {
       }
     } as unknown as typeof WebSocket
 
-    globalThis.fetch = mock((input: RequestInfo | URL) => {
-      const url = String(input)
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
 
       if (url.startsWith("/v1/workspaces")) {
         return Promise.resolve(
           new Response(JSON.stringify(emptyWorkspaceCollection), {
             status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url.startsWith("/v1/devices")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(emptyDeviceCollection), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/pairing-codes" && method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify(pairingCode), {
+            status: 201,
             headers: { "Content-Type": "application/json" },
           }),
         )
@@ -163,7 +209,7 @@ describe("shell honesty", () => {
   })
 
   describe("connect wizard disabled honesty", () => {
-    test("test connection and pair device actions are disabled", async () => {
+    test("test connection is disabled while pair uses real claim gating", async () => {
       const { getByRole } = renderShellRoute("/connect")
 
       await waitForShellReady(getByRole)
@@ -172,7 +218,9 @@ describe("shell honesty", () => {
       expect(getByRole("button", { name: /run connection test/i })).toBeDisabled()
 
       fireEvent.click(getByRole("button", { name: /pair device/i }))
-      expect(getByRole("button", { name: /regenerate/i })).toBeDisabled()
+      await waitFor(() => {
+        expect(getByRole("button", { name: /regenerate/i })).toBeEnabled()
+      })
       expect(getByRole("button", { name: /view paired devices/i })).toBeDisabled()
     })
   })
@@ -211,7 +259,7 @@ describe("shell honesty", () => {
       })
 
       globalThis.fetch = mock((input: RequestInfo | URL) => {
-        const url = String(input)
+        const url = requestUrl(input)
 
         if (url.startsWith("/v1/workspaces")) {
           return Promise.resolve(
@@ -241,12 +289,12 @@ describe("shell honesty", () => {
   })
 
   describe("devices disabled honesty", () => {
-    test("pair action is disabled and revoke actions are absent", async () => {
+    test("pair action is enabled and empty lists do not invent revoke actions", async () => {
       const { getByRole, queryByRole } = renderShellRoute("/devices")
 
       await waitForShellReady(getByRole)
 
-      expect(getByRole("button", { name: "+ Pair new device" })).toBeDisabled()
+      expect(getByRole("button", { name: "+ Pair new device" })).toBeEnabled()
       expect(queryByRole("button", { name: /revoke/i })).not.toBeInTheDocument()
     })
   })

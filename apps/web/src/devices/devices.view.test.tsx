@@ -1,33 +1,183 @@
-import { describe, expect, test } from "bun:test"
-import { render } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test"
+import { fireEvent, waitFor } from "@testing-library/react"
+import { Device, DeviceCollectionSchema } from "contracts/http/device"
+import React from "react"
+import { useLocation } from "react-router"
+import { renderWithProviders } from "../query/render.with.providers"
 import { DevicesView } from "./DevicesView"
 
+const originalFetch = globalThis.fetch
+
+const desktop = {
+  id: "dev_desktop",
+  name: "Studio Desktop",
+  platform: "macOS",
+  state: "online",
+  pairedAt: "2026-08-02T18:00:00.000Z",
+  lastSeenAt: "2026-08-02T20:55:00.000Z",
+} satisfies Device
+
+const tablet = {
+  id: "dev_tablet",
+  name: "Kitchen tablet",
+  platform: null,
+  state: "offline",
+  pairedAt: "2026-08-01T18:00:00.000Z",
+  lastSeenAt: null,
+} satisfies Device
+
+const collection = (items: ReadonlyArray<Device>) =>
+  DeviceCollectionSchema.parse({
+    items,
+    page: { limit: 100, count: items.length },
+  })
+
+const requestUrl = (input: RequestInfo | URL): string => {
+  if (typeof input === "string") {
+    return input
+  }
+
+  if (input instanceof URL) {
+    return input.href
+  }
+
+  return input.url
+}
+
+const LocationProbe: React.FC = () => {
+  const location = useLocation()
+  return <output aria-label="Current route">{`${location.pathname}${location.search}`}</output>
+}
+
 describe("DevicesView", () => {
-  test("disables pair new device button", () => {
-    const { getByRole } = render(<DevicesView />)
-
-    expect(getByRole("button", { name: "+ Pair new device" })).toBeDisabled()
+  beforeEach(() => {
+    setSystemTime(new Date("2026-08-02T21:00:00.000Z"))
   })
 
-  test("shows honest empty device summary counts", () => {
-    const { getByText } = render(<DevicesView />)
-
-    expect(getByText("0 devices online")).toBeInTheDocument()
-    expect(getByText("of 0 paired")).toBeInTheDocument()
+  afterEach(() => {
+    setSystemTime()
+    globalThis.fetch = originalFetch
   })
 
-  test("renders table headers without device rows or revoke controls", () => {
-    const { getByText, queryByRole } = render(<DevicesView />)
+  test("loads paired devices with summary counts and platform column", async () => {
+    globalThis.fetch = mock((input: RequestInfo | URL) => {
+      const url = requestUrl(input)
 
-    expect(getByText("DEVICE")).toBeInTheDocument()
-    expect(getByText("LAST SEEN")).toBeInTheDocument()
-    expect(getByText("LOCATION")).toBeInTheDocument()
-    expect(getByText("STATUS")).toBeInTheDocument()
-    expect(queryByRole("button", { name: /revoke/i })).not.toBeInTheDocument()
+      if (url.startsWith("/v1/devices")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(collection([desktop, tablet])), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const { getByRole, getByText } = renderWithProviders(<DevicesView />, {
+      initialEntries: ["/devices"],
+    })
+
+    await waitFor(() => {
+      expect(getByText("1 device online")).toBeInTheDocument()
+    })
+
+    expect(getByText("of 2 paired")).toBeInTheDocument()
+    expect(getByText("Last new pairing")).toBeInTheDocument()
+    expect(getByText("3h ago")).toBeInTheDocument()
+    expect(getByText("Authentication")).toBeInTheDocument()
+    expect(getByText("Device credentials")).toBeInTheDocument()
+    expect(getByText("Bearer tokens")).toBeInTheDocument()
+    expect(getByText("PLATFORM")).toBeInTheDocument()
+    expect(getByText("Studio Desktop")).toBeInTheDocument()
+    expect(getByText("macOS")).toBeInTheDocument()
+    expect(getByText("5m ago")).toBeInTheDocument()
+    expect(getByText("Kitchen tablet")).toBeInTheDocument()
+    expect(getByText("—")).toBeInTheDocument()
+    expect(getByRole("button", { name: "Revoke Studio Desktop" })).toBeEnabled()
+  })
+
+  test("navigates pair action to connect flow", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(
+        new Response(JSON.stringify(collection([])), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    ) as typeof fetch
+
+    const { getByLabelText, getByRole } = renderWithProviders(
+      <>
+        <DevicesView />
+        <LocationProbe />
+      </>,
+      { initialEntries: ["/devices"] },
+    )
+
+    await waitFor(() => {
+      expect(getByRole("button", { name: "+ Pair new device" })).toBeEnabled()
+    })
+    fireEvent.click(getByRole("button", { name: "+ Pair new device" }))
+    expect(getByLabelText("Current route")).toHaveTextContent("/connect?step=pair")
+  })
+
+  test("revokes a device and refreshes the list", async () => {
+    const state = { revoked: false }
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/devices/dev_desktop" && method === "DELETE") {
+        state.revoked = true
+        return Promise.resolve(new Response(null, { status: 204 }))
+      }
+
+      if (url.startsWith("/v1/devices")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(collection(state.revoked ? [tablet] : [desktop, tablet])),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const { getByRole, queryByText } = renderWithProviders(<DevicesView />, {
+      initialEntries: ["/devices"],
+    })
+
+    await waitFor(() => {
+      expect(getByRole("button", { name: "Revoke Studio Desktop" })).toBeEnabled()
+    })
+
+    fireEvent.click(getByRole("button", { name: "Revoke Studio Desktop" }))
+
+    await waitFor(() => {
+      expect(queryByText("Studio Desktop")).not.toBeInTheDocument()
+    })
+    expect(queryByText("Kitchen tablet")).toBeInTheDocument()
   })
 
   test("shows static danger note help text", () => {
-    const { getByText } = render(<DevicesView />)
+    globalThis.fetch = mock(() =>
+      Promise.resolve(
+        new Response(JSON.stringify(collection([])), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    ) as typeof fetch
+
+    const { getByText } = renderWithProviders(<DevicesView />, {
+      initialEntries: ["/devices"],
+    })
 
     expect(getByText("Lost a device?")).toBeInTheDocument()
     expect(
