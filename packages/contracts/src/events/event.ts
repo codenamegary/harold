@@ -135,6 +135,32 @@ export const EventSchema = z.discriminatedUnion("type", [
       sessionId: IdSchema,
     }),
   }),
+  EventScopeSchema.extend({
+    type: z.literal("device.paired"),
+    payload: z.strictObject({
+      deviceId: IdSchema,
+      name: z.string().min(1),
+      platform: z.string().min(1).nullable(),
+    }),
+  }),
+  EventScopeSchema.extend({
+    type: z.literal("device.connected"),
+    payload: z.strictObject({
+      deviceId: IdSchema,
+    }),
+  }),
+  EventScopeSchema.extend({
+    type: z.literal("device.disconnected"),
+    payload: z.strictObject({
+      deviceId: IdSchema,
+    }),
+  }),
+  EventScopeSchema.extend({
+    type: z.literal("device.revoked"),
+    payload: z.strictObject({
+      deviceId: IdSchema,
+    }),
+  }),
 ])
 
 export type Event = z.infer<typeof EventSchema>

@@ -79,7 +79,7 @@ describe("pairing HTTP integration", () => {
     expect(claimed.device.id).toMatch(/^device_/)
     expect(claimed.device.name).toBe("Paired device")
     expect(claimed.device.platform).toBe("test-client")
-    expect(claimed.device.state).toBe("online")
+    expect(claimed.device.state).toBe("offline")
     expect(claimed.credential).toMatch(/^devcred_/)
     expect(claimed.credential.includes(created.code)).toBe(false)
 

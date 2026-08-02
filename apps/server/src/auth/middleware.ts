@@ -30,6 +30,20 @@ const sendUnauthorized = (reply: FastifyReply) =>
 
 const EVENTS_PATH = "/v1/events"
 
+const touchDeviceLastSeen = (params: {
+  principal: Principal
+  deviceRepository: DeviceRepository
+}): void => {
+  if (params.principal.kind !== "device") {
+    return
+  }
+
+  params.deviceRepository.touchLastSeen({
+    deviceId: params.principal.deviceId,
+    lastSeenAt: new Date().toISOString(),
+  })
+}
+
 export const registerAuthMiddleware = (
   app: FastifyInstance,
   deps: AuthMiddlewareDeps,
@@ -60,6 +74,10 @@ export const registerAuthMiddleware = (
       if (rejectPresentedInvalid) {
         return sendUnauthorized(reply)
       }
+      touchDeviceLastSeen({
+        principal: authResult.principal,
+        deviceRepository: deps.deviceRepository,
+      })
       return
     }
 
@@ -70,5 +88,10 @@ export const registerAuthMiddleware = (
     if (!authorizeActiveFullOperator(authResult.principal)) {
       return sendUnauthorized(reply)
     }
+
+    touchDeviceLastSeen({
+      principal: authResult.principal,
+      deviceRepository: deps.deviceRepository,
+    })
   })
 }

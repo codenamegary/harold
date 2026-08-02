@@ -27,6 +27,10 @@ export const JournalRecordKindSchema = z.enum([
   "acp.response",
   "acp.notification",
   "acp.permission",
+  "device.paired",
+  "device.connected",
+  "device.disconnected",
+  "device.revoked",
 ])
 
 export const JournalDirectionSchema = z.enum(["agent_server_to_agent", "agent_to_agent_server"])
@@ -51,6 +55,16 @@ const WorkspaceChangedPayloadSchema = z.discriminatedUnion("change", [
 
 const SessionCreatedPayloadSchema = z.strictObject({
   name: z.string().min(1),
+})
+
+const DevicePairedPayloadSchema = z.strictObject({
+  deviceId: IdSchema,
+  name: z.string().min(1),
+  platform: z.string().min(1).nullable(),
+})
+
+const DeviceIdPayloadSchema = z.strictObject({
+  deviceId: IdSchema,
 })
 
 const SessionStatePayloadSchema = z.strictObject({
@@ -231,6 +245,22 @@ export const JournalAppendRecordSchema = z.discriminatedUnion("kind", [
     phase: JournalPhaseSchema,
     payload: AcpPermissionPayloadSchema,
   }),
+  JournalAppendBaseSchema.extend({
+    kind: z.literal("device.paired"),
+    payload: DevicePairedPayloadSchema,
+  }),
+  JournalAppendBaseSchema.extend({
+    kind: z.literal("device.connected"),
+    payload: DeviceIdPayloadSchema,
+  }),
+  JournalAppendBaseSchema.extend({
+    kind: z.literal("device.disconnected"),
+    payload: DeviceIdPayloadSchema,
+  }),
+  JournalAppendBaseSchema.extend({
+    kind: z.literal("device.revoked"),
+    payload: DeviceIdPayloadSchema,
+  }),
 ])
 
 export const JournalStoredPayloadSchema = z.union([
@@ -246,6 +276,8 @@ export const JournalStoredPayloadSchema = z.union([
   AcpResponsePayloadSchema,
   AcpNotificationPayloadSchema,
   AcpPermissionPayloadSchema,
+  DevicePairedPayloadSchema,
+  DeviceIdPayloadSchema,
 ])
 
 export const journalPayloadSchemaByKind = {
@@ -261,6 +293,10 @@ export const journalPayloadSchemaByKind = {
   "acp.response": AcpResponsePayloadSchema,
   "acp.notification": AcpNotificationPayloadSchema,
   "acp.permission": AcpPermissionPayloadSchema,
+  "device.paired": DevicePairedPayloadSchema,
+  "device.connected": DeviceIdPayloadSchema,
+  "device.disconnected": DeviceIdPayloadSchema,
+  "device.revoked": DeviceIdPayloadSchema,
 } as const satisfies Record<z.infer<typeof JournalRecordKindSchema>, z.ZodType>
 
 export type JournalRecordKind = z.infer<typeof JournalRecordKindSchema>
