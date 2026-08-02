@@ -14,6 +14,9 @@ import { createSessionRepository } from "../session/repository"
 import { registerSessionRoutes } from "../session/routes"
 import { createWorkspaceService } from "../workspace/service"
 import { createSessionService } from "../session/service"
+import { createDeviceRepository } from "../device/repository"
+import { createDeviceService } from "../device/service"
+import { registerDeviceRoutes } from "../device/routes"
 import { createEventJournalRepository, EventJournalRepository } from "../event/journal.repository"
 import { createEventCommitPublisher } from "../event/commit.publisher"
 import { createRuntimeStatusService } from "../runtime/status.service"
@@ -199,6 +202,14 @@ export const createServer = async ({
     agentSettingsRepository,
     acpSupervisor,
   )
+
+  const deviceRepository = createDeviceRepository(database)
+  const deviceService = createDeviceService({
+    database,
+    deviceRepository,
+    config,
+  })
+  registerDeviceRoutes(app, deviceService)
 
   if (withTestRoutes) {
     registerTestRoutes(app)
