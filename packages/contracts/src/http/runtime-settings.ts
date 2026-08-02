@@ -97,15 +97,45 @@ export const HttpsAbsoluteUrlSchema = z
       if (!value.startsWith("https://")) {
         return false
       }
+
       const withoutScheme = value.slice("https://".length)
-      if (withoutScheme.length === 0) {
+      if (withoutScheme.length === 0 || /[\s<>"{}|\\^`]/.test(withoutScheme)) {
         return false
       }
-      if (withoutScheme.includes(" ") || withoutScheme.includes("\n")) {
-        return false
-      }
+
       const authority = withoutScheme.split(/[/?#]/, 2)[0] ?? ""
-      return authority.length > 0
+      if (authority.length === 0) {
+        return false
+      }
+
+      if (authority.startsWith("[")) {
+        if (!authority.includes("]")) {
+          return false
+        }
+        const closing = authority.indexOf("]")
+        const host = authority.slice(1, closing)
+        const rest = authority.slice(closing + 1)
+        if (!isIpv6Address(host)) {
+          return false
+        }
+        return rest === "" || /^:\d{1,5}$/.test(rest)
+      }
+
+      const hostPort = authority.split(":")
+      if (hostPort.length > 2) {
+        return false
+      }
+
+      const host = hostPort[0] ?? ""
+      const port = hostPort[1]
+      if (host.length === 0 || host.includes("[") || host.includes("]")) {
+        return false
+      }
+      if (port !== undefined && !/^\d{1,5}$/.test(port)) {
+        return false
+      }
+
+      return true
     },
     { message: "must be an absolute https URL" },
   )

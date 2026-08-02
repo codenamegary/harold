@@ -150,36 +150,11 @@ describe("drizzle migrations", () => {
       "updated_at",
     ])
 
-    const seededRuntime = database.sqlite
-      .query<
-        {
-          id: number
-          advertised_url: string | null
-          trusted_proxies_json: string
-          bind_host: string
-          bind_port: number
-          log_level: string
-          log_path: string | null
-          allowed_roots_json: string
-        },
-        []
-      >(
-        `SELECT id, advertised_url, trusted_proxies_json, bind_host, bind_port,
-                log_level, log_path, allowed_roots_json
-         FROM runtime_settings`,
-      )
-      .get()
+    const runtimeRowCount = database.sqlite
+      .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM runtime_settings")
+      .get()?.count
 
-    expect(seededRuntime).toEqual({
-      id: 1,
-      advertised_url: null,
-      trusted_proxies_json: "[]",
-      bind_host: "127.0.0.1",
-      bind_port: 3847,
-      log_level: "info",
-      log_path: null,
-      allowed_roots_json: "[]",
-    })
+    expect(runtimeRowCount).toBe(0)
 
     database.close()
   })

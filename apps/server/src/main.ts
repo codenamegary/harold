@@ -4,13 +4,18 @@ import { createServer } from "./bootstrap/server"
 import { listen, registerShutdown } from "./bootstrap/shutdown"
 import { ConfigSchema, parseConfig } from "./config/config"
 import { openDatabase } from "./persistence/database"
-import { createRuntimeSettingsRepository } from "./runtime-settings/repository"
+import {
+  createRuntimeSettingsRepository,
+  seedDefaultsFromConfig,
+} from "./runtime-settings/repository"
 import { createRuntime } from "./runtime/runtime"
 
 const main = async () => {
   const envConfig = parseConfig(process.env)
   const database = openDatabase({ dataDir: envConfig.dataDir })
-  const runtimeSettingsRepository = createRuntimeSettingsRepository(database)
+  const runtimeSettingsRepository = createRuntimeSettingsRepository(database, {
+    seedDefaults: seedDefaultsFromConfig(envConfig),
+  })
   const runtimeSettings = runtimeSettingsRepository.get()
   const config = ConfigSchema.parse({
     host: runtimeSettings.bindHost,

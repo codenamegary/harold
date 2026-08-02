@@ -9,25 +9,3 @@ CREATE TABLE `runtime_settings` (
 	`allowed_roots_json` text NOT NULL,
 	`updated_at` text NOT NULL
 );
---> statement-breakpoint
-INSERT INTO `runtime_settings` (
-	`id`,
-	`advertised_url`,
-	`trusted_proxies_json`,
-	`bind_host`,
-	`bind_port`,
-	`log_level`,
-	`log_path`,
-	`allowed_roots_json`,
-	`updated_at`
-) VALUES (
-	1,
-	NULL,
-	'[]',
-	'127.0.0.1',
-	3847,
-	'info',
-	NULL,
-	'[]',
-	datetime('now')
-);

@@ -11,6 +11,10 @@ import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
+import {
+  createRuntimeSettingsRepository,
+  seedDefaultsFromConfig,
+} from "./repository"
 
 const tempDirs: string[] = []
 const apps: Awaited<ReturnType<typeof createServer>>["app"][] = []
@@ -306,5 +310,21 @@ describe("runtime settings durability", () => {
     expect(body.trustedProxies).toEqual(["192.168.0.0/16"])
 
     secondDatabase.close()
+  })
+
+  test("seeds empty DB bind port from env config defaults", async () => {
+    const dataDir = await createTempDataDir()
+    const config = parseConfig({
+      AGENT_SERVER_HOST: "127.0.0.1",
+      AGENT_SERVER_PORT: "4123",
+      AGENT_SERVER_DATA_DIR: dataDir,
+    })
+    const database = openDatabase({ dataDir: config.dataDir })
+    const repository = createRuntimeSettingsRepository(database, {
+      seedDefaults: seedDefaultsFromConfig(config),
+    })
+
+    expect(repository.get().bindPort).toBe(4123)
+    database.close()
   })
 })

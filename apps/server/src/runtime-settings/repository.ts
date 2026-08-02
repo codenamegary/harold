@@ -1,12 +1,13 @@
 import { eq } from "drizzle-orm"
 import {
-  LogLevelSchema,
   normalizeAdvertisedUrl,
   RuntimeSettings,
   RuntimeSettingsSchema,
   UpdateRuntimeSettingsBody,
+  UpdateRuntimeSettingsResponse,
 } from "contracts/http/runtime-settings"
 import { z } from "zod"
+import { Config } from "../config/config"
 import { AgentDatabase } from "../persistence/database"
 import { runtimeSettings } from "../persistence/schema/runtime-settings"
 
@@ -16,20 +17,57 @@ const StringArraySchema = z.array(z.string())
 
 type RuntimeSettingsRow = typeof runtimeSettings.$inferSelect
 
-export type RuntimeSettingsUpdateResult = {
-  settings: RuntimeSettings
-  restartRequired: boolean
+export type RuntimeSettingsSeedDefaults = {
+  bindHost: "127.0.0.1"
+  bindPort: number
+  logLevel: RuntimeSettings["logLevel"]
+  logPath: string | null
+  advertisedUrl: string | null
+  trustedProxies: string[]
+  allowedRoots: string[]
 }
 
 export type RuntimeSettingsRepository = {
   get: () => RuntimeSettings
-  update: (body: UpdateRuntimeSettingsBody) => RuntimeSettingsUpdateResult
+  update: (body: UpdateRuntimeSettingsBody) => UpdateRuntimeSettingsResponse
+}
+
+export type CreateRuntimeSettingsRepositoryOptions = {
+  seedDefaults?: RuntimeSettingsSeedDefaults
 }
 
 const nowIso = () => new Date().toISOString()
 
-const parseJsonStringArray = (value: string): string[] =>
-  StringArraySchema.parse(JSON.parse(value))
+const defaultSeedFromConfig = (config: Config): RuntimeSettingsSeedDefaults => ({
+  bindHost: config.host,
+  bindPort: config.port,
+  logLevel: "info",
+  logPath: null,
+  advertisedUrl: null,
+  trustedProxies: [],
+  allowedRoots: [],
+})
+
+const fallbackSeedDefaults: RuntimeSettingsSeedDefaults = {
+  bindHost: "127.0.0.1",
+  bindPort: 3847,
+  logLevel: "info",
+  logPath: null,
+  advertisedUrl: null,
+  trustedProxies: [],
+  allowedRoots: [],
+}
+
+const parseJsonStringArray = (value: string): string[] => {
+  const parsed: unknown = (() => {
+    try {
+      return JSON.parse(value)
+    } catch {
+      throw new Error("runtime_settings JSON column is not valid JSON")
+    }
+  })()
+  return StringArraySchema.parse(parsed)
+}
 
 const rowToSettings = (row: RuntimeSettingsRow): RuntimeSettings =>
   RuntimeSettingsSchema.parse({
@@ -37,7 +75,7 @@ const rowToSettings = (row: RuntimeSettingsRow): RuntimeSettings =>
     trustedProxies: parseJsonStringArray(row.trustedProxiesJson),
     bindHost: row.bindHost,
     bindPort: row.bindPort,
-    logLevel: LogLevelSchema.parse(row.logLevel),
+    logLevel: row.logLevel,
     logPath: row.logPath,
     allowedRoots: parseJsonStringArray(row.allowedRootsJson),
   })
@@ -54,9 +92,45 @@ const requiresRestart = (params: {
   )
 }
 
+const ensureSeeded = (
+  database: AgentDatabase,
+  seedDefaults: RuntimeSettingsSeedDefaults,
+) => {
+  const existing = database.db
+    .select()
+    .from(runtimeSettings)
+    .where(eq(runtimeSettings.id, SINGLETON_ID))
+    .get()
+
+  if (existing) {
+    return
+  }
+
+  const seeded = RuntimeSettingsSchema.parse(seedDefaults)
+
+  database.db
+    .insert(runtimeSettings)
+    .values({
+      id: SINGLETON_ID,
+      advertisedUrl: seeded.advertisedUrl,
+      trustedProxiesJson: JSON.stringify(seeded.trustedProxies),
+      bindHost: seeded.bindHost,
+      bindPort: seeded.bindPort,
+      logLevel: seeded.logLevel,
+      logPath: seeded.logPath,
+      allowedRootsJson: JSON.stringify(seeded.allowedRoots),
+      updatedAt: nowIso(),
+    })
+    .run()
+}
+
 export const createRuntimeSettingsRepository = (
   database: AgentDatabase,
+  options: CreateRuntimeSettingsRepositoryOptions = {},
 ): RuntimeSettingsRepository => {
+  const seedDefaults = options.seedDefaults ?? fallbackSeedDefaults
+  ensureSeeded(database, seedDefaults)
+
   const get = (): RuntimeSettings => {
     const row = database.db
       .select()
@@ -71,7 +145,9 @@ export const createRuntimeSettingsRepository = (
     return rowToSettings(row)
   }
 
-  const update = (body: UpdateRuntimeSettingsBody): RuntimeSettingsUpdateResult => {
+  const update = (
+    body: UpdateRuntimeSettingsBody,
+  ): UpdateRuntimeSettingsResponse => {
     const current = get()
     const advertisedUrl = normalizeAdvertisedUrl(body.advertisedUrl)
 
@@ -112,3 +188,5 @@ export const createRuntimeSettingsRepository = (
     update,
   }
 }
+
+export const seedDefaultsFromConfig = defaultSeedFromConfig

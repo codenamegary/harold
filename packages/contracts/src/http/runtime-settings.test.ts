@@ -65,6 +65,15 @@ describe("RuntimeSettingsSchema", () => {
     ).toThrow()
   })
 
+  test("rejects malformed https advertised URL", () => {
+    expect(() =>
+      RuntimeSettingsSchema.parse({
+        ...validSettings,
+        advertisedUrl: "https://[",
+      }),
+    ).toThrow()
+  })
+
   test("rejects non-loopback bind host", () => {
     expect(() =>
       RuntimeSettingsSchema.parse({
