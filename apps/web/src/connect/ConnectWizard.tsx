@@ -405,6 +405,14 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack }) => {
     )
   }
 
+  const handleCopyCode = () => {
+    if (pairingCode === null) {
+      return
+    }
+
+    void navigator.clipboard.writeText(pairingCode.code)
+  }
+
   const codeLabel = pairingCode?.code ?? "—"
   const expiresLabel =
     pairingCode === null ? "Waiting for code…" : `Expires at ${pairingCode.expiresAt}`
@@ -455,6 +463,7 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack }) => {
               variant="secondary"
               disabled={pairingCode === null}
               className="min-h-7 px-2.5"
+              onClick={handleCopyCode}
             >
               Copy
             </Button>

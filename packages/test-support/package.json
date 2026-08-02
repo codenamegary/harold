@@ -8,7 +8,12 @@
   },
   "exports": {
     "./spawn": "./src/spawn/spawn.fake.acp.ts",
-    "./json-rpc-client": "./src/spawn/json.rpc.client.ts"
+    "./json-rpc-client": "./src/spawn/json.rpc.client.ts",
+    "./second-client": "./src/second-client/second.client.ts",
+    "./second-client/pairing": "./src/second-client/second.client.pairing.ts",
+    "./second-client/streams": "./src/second-client/second.client.streams.ts",
+    "./second-client/endpoint": "./src/second-client/second.client.endpoint.ts",
+    "./second-client/log-capture": "./src/second-client/log.capture.ts"
   },
   "scripts": {
     "lint": "oxlint",
@@ -16,8 +21,11 @@
     "test": "bun test"
   },
   "devDependencies": {
+    "@types/ws": "^8.18.1",
     "bun-types": "^1.3.1",
+    "contracts": "workspace:*",
     "oxlint": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "ws": "^8.18.1"
   }
 }

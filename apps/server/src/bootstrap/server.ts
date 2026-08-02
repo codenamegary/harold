@@ -1,4 +1,5 @@
 import Fastify, { FastifyInstance, FastifyRequest } from "fastify"
+import { Writable } from "node:stream"
 import websocket from "@fastify/websocket"
 import { z } from "zod"
 import { registerErrorHandler } from "../error/error-handler"
@@ -29,6 +30,7 @@ import { SpawnAgentProcessFn } from "../acp/supervisor/spawn-agent-process"
 import { registerEventStreamRoutes } from "../event/stream.routes"
 import { runStartupRecovery } from "../session/startup.recovery"
 import { registerAuthMiddleware } from "../auth/middleware"
+import { redactPairingCodeInUrl } from "../device/redact.pairing.code.in.url"
 
 const TestBodySchema = z.object({
   name: z.string().min(1),
@@ -57,6 +59,36 @@ export type CreateServerOptions = {
   spawnAgentProcessFn?: SpawnAgentProcessFn
   isLoopbackRequest?: (request: FastifyRequest) => boolean
   wsAuthFrameTimeoutMs?: number
+  logStream?: Writable
+}
+
+const loggerRedactPaths = [
+  "req.headers.authorization",
+  "req.headers.cookie",
+  "req.headers['x-api-key']",
+] as const
+
+const buildLoggerOptions = (logStream?: Writable) => {
+  const base = {
+    level: "info" as const,
+    redact: {
+      paths: [...loggerRedactPaths],
+      remove: true,
+    },
+    serializers: {
+      req(request: FastifyRequest) {
+        return {
+          method: request.method,
+          url: redactPairingCodeInUrl(request.url),
+          host: request.host,
+          remoteAddress: request.ip,
+          remotePort: request.socket.remotePort,
+        }
+      },
+    },
+  }
+
+  return logStream === undefined ? base : { ...base, stream: logStream }
 }
 
 export const createServer = async ({
@@ -71,19 +103,10 @@ export const createServer = async ({
   spawnAgentProcessFn,
   isLoopbackRequest,
   wsAuthFrameTimeoutMs,
+  logStream,
 }: CreateServerOptions) => {
   const app = Fastify({
-    logger: {
-      level: "info",
-      redact: {
-        paths: [
-          "req.headers.authorization",
-          "req.headers.cookie",
-          "req.headers['x-api-key']",
-        ],
-        remove: true,
-      },
-    },
+    logger: buildLoggerOptions(logStream),
   })
 
   registerErrorHandler(app)
