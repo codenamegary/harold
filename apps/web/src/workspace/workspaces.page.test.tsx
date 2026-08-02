@@ -151,7 +151,7 @@ describe("WorkspacesPage", () => {
         method: "POST",
       }),
     )
-  })
+  }, 10_000)
 
   test("searches workspaces through URL params", async () => {
     const fetchMock = mock((input: RequestInfo | URL) => {

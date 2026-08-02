@@ -1,9 +1,13 @@
-import React, { useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
+import { QRCodeSVG } from "qrcode.react"
+import { CreatePairingCodeResponse } from "contracts/http/pairing-code"
+import { useNavigate, useSearchParams } from "react-router"
 import { Button } from "../design-system/Button"
 import { FieldLabel } from "../design-system/FieldLabel"
 import { StatusDot } from "../design-system/StatusDot"
 import { StatusPill } from "../design-system/StatusPill"
 import { TextInput } from "../design-system/TextInput"
+import { openAppEventStream } from "../session/open.app.event.stream"
 import { connectWizardSteps } from "./connect.wizard.steps"
 import {
   defaultExternalHost,
@@ -12,8 +16,12 @@ import {
   proxyTemplates,
   ProxyProvider,
 } from "./proxy.templates"
+import { useCreatePairingCodeMutation } from "./use.create.pairing.code.mutation"
 
 type AccessMode = "local" | "cloud"
+
+const initialStepFromSearchParam = (step: string | null): number =>
+  step === "pair" ? 4 : 1
 
 type ConnectWizardStepRailProps = {
   currentStep: number
@@ -223,7 +231,7 @@ const ExternalUrlStep: React.FC<ExternalUrlStepProps> = ({
       >
         <div className="flex items-center justify-between border-b border-line-soft px-3.5 py-2.5">
           <span className="font-mono text-2xs text-muted">{template.label}</span>
-          <Button variant="secondary" aria-disabled className="min-h-7 px-2.5">
+          <Button variant="secondary" disabled className="min-h-7 px-2.5">
             Copy
           </Button>
         </div>
@@ -238,7 +246,7 @@ const ExternalUrlStep: React.FC<ExternalUrlStepProps> = ({
         <Button variant="secondary" onClick={onBack}>
           Back
         </Button>
-        <Button onClick={onContinue}>
+        <Button disabled onClick={onContinue}>
           Save &amp; continue <span aria-hidden>→</span>
         </Button>
       </div>
@@ -254,17 +262,17 @@ const testChecks = [
   {
     id: "dns",
     title: "DNS & reachability",
-    detail: "Public endpoint resolves successfully",
+    detail: "Milestone 3 will check public endpoint reachability",
   },
   {
     id: "tls",
     title: "TLS certificate",
-    detail: "Certificate is valid and trusted",
+    detail: "Milestone 3 will validate certificates",
   },
   {
     id: "acp",
     title: "ACP handshake",
-    detail: "Protocol version is compatible",
+    detail: "Milestone 3 will test protocol discovery",
   },
 ] as const
 
@@ -277,7 +285,7 @@ const TestConnectionStep: React.FC<TestConnectionStepProps> = ({ onBack }) => (
       <div>
         <h2 className="m-0 text-lg font-semibold">Test your connection</h2>
         <p className="m-0 mt-1.5 text-sm text-muted">
-          We&apos;ll verify TLS, ACP discovery, and authentication.
+          Reachability, TLS, and external URL validation are disabled until Milestone 3.
         </p>
       </div>
     </div>
@@ -299,15 +307,15 @@ const TestConnectionStep: React.FC<TestConnectionStepProps> = ({ onBack }) => (
             <strong className="block text-sm font-medium text-body">{check.title}</strong>
             <small className="mt-1 block text-xs text-dim">{check.detail}</small>
           </div>
-          <em className="text-2xs text-dim not-italic">Waiting</em>
+          <em className="text-2xs text-dim not-italic">Disabled</em>
         </div>
       ))}
     </div>
 
     <div className="mt-4 rounded-lg border border-line-soft bg-panel-2 px-3.5 py-3">
-      <span className="block text-xs text-body">Ready when you are</span>
+      <span className="block text-xs text-body">Not available in Milestone 2</span>
       <small className="mt-1 block text-2xs text-dim">
-        Tests run locally and take about 3 seconds.
+        No simulated success is shown for external reachability or TLS.
       </small>
     </div>
 
@@ -326,84 +334,188 @@ type PairDeviceStepProps = {
   onBack: () => void
 }
 
-const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack }) => (
-  <div>
-    <div className="mb-[25px] flex items-center gap-[13px]">
-      <span className="grid size-10 place-items-center rounded-[9px] border border-line bg-panel-2 text-lg">
-        ◇
-      </span>
-      <div>
-        <h2 className="m-0 text-lg font-semibold">Pair an Android device</h2>
-        <p className="m-0 mt-1.5 text-sm text-muted">
-          Scan the code or enter the six-character code in the Agent Server app.
-        </p>
-      </div>
-    </div>
+const qrPayload = (pairingCode: CreatePairingCodeResponse): string =>
+  JSON.stringify({
+    code: pairingCode.code,
+    endpoint: pairingCode.endpoint,
+  })
 
-    <div className="grid items-center gap-7 md:grid-cols-[205px_1fr] max-[640px]:justify-items-center">
-      <div
-        aria-label="Decorative QR pairing code"
-        className="relative size-[205px] rounded-[9px] bg-[#c8cdc4] p-3.5"
-      >
-        <div className="size-full rounded bg-[#b8bdb4]" />
-        <span className="absolute top-1/2 left-1/2 grid size-10 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-lg bg-white text-sm font-semibold text-lime-ink">
-          A
+const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack }) => {
+  const createPairingCodeMutation = useCreatePairingCodeMutation()
+  const { mutateAsync, isError } = createPairingCodeMutation
+  const initialPairingCodePromise = useRef<Promise<CreatePairingCodeResponse> | null>(null)
+  const navigate = useNavigate()
+  const [pairingCode, setPairingCode] = useState<CreatePairingCodeResponse | null>(null)
+  const [pairedDeviceName, setPairedDeviceName] = useState<string | null>(null)
+  const [isCreatingPairingCode, setIsCreatingPairingCode] = useState(true)
+
+  useEffect(() => {
+    const active = { value: true }
+    const promise = initialPairingCodePromise.current ?? mutateAsync()
+    initialPairingCodePromise.current = promise
+
+    void promise.then(
+      (created) => {
+        if (active.value) {
+          setPairingCode(created)
+          setIsCreatingPairingCode(false)
+        }
+      },
+      () => {
+        if (active.value) {
+          setIsCreatingPairingCode(false)
+        }
+      },
+    )
+
+    return () => {
+      active.value = false
+    }
+  }, [mutateAsync])
+
+  useEffect(() => {
+    const stream = openAppEventStream({
+      handlers: {
+        onEvents: (events) => {
+          const paired = events.find((event) => event.type === "device.paired")
+          if (paired?.type === "device.paired") {
+            setPairedDeviceName(paired.payload.name)
+          }
+        },
+      },
+    })
+
+    return () => {
+      stream.close()
+    }
+  }, [])
+
+  const handleRegenerate = () => {
+    setPairedDeviceName(null)
+    setIsCreatingPairingCode(true)
+    const promise = mutateAsync()
+    void promise.then(
+      (created) => {
+        setPairingCode(created)
+        setIsCreatingPairingCode(false)
+      },
+      () => {
+        setIsCreatingPairingCode(false)
+      },
+    )
+  }
+
+  const codeLabel = pairingCode?.code ?? "—"
+  const expiresLabel =
+    pairingCode === null ? "Waiting for code…" : `Expires at ${pairingCode.expiresAt}`
+  const canViewDevices = pairedDeviceName !== null
+
+  return (
+    <div>
+      <div className="mb-[25px] flex items-center gap-[13px]">
+        <span className="grid size-10 place-items-center rounded-[9px] border border-line bg-panel-2 text-lg">
+          ◇
         </span>
-      </div>
-
-      <div>
-        <p className="m-0 font-mono text-2xs tracking-[0.12em] text-dim">PAIRING CODE</p>
-        <div className="mt-2 flex items-center gap-2">
-          <span
-            role="status"
-            aria-label="Pairing code"
-            className="font-mono text-2xl font-semibold tracking-[0.08em] text-body"
-          >
-            —
-          </span>
-          <Button variant="secondary" aria-disabled className="min-h-7 px-2.5">
-            Copy
-          </Button>
+        <div>
+          <h2 className="m-0 text-lg font-semibold">Pair a device</h2>
+          <p className="m-0 mt-1.5 text-sm text-muted">
+            Enter the six-character code in a trusted client. The QR includes the same code plus
+            the local endpoint for convenience.
+          </p>
         </div>
-        <p className="mt-3 text-xs leading-[1.55] text-muted">
-          Expires in <strong className="text-body">—</strong>. Keep this page open until pairing is
-          complete.
-        </p>
-        <ol className="mt-4 space-y-2 pl-4 text-xs leading-[1.55] text-body-soft">
-          <li>Open Agent Server on Android</li>
-          <li>
-            Select <strong className="text-body">Pair a server</strong>
-          </li>
-          <li>Scan this code or enter the pairing code</li>
-        </ol>
+      </div>
+
+      <div className="grid items-center gap-7 md:grid-cols-[205px_1fr] max-[640px]:justify-items-center">
+        <div className="relative grid size-[205px] place-items-center rounded-[9px] bg-white p-3.5">
+          {pairingCode === null ? (
+            <span className="text-sm text-lime-ink">Waiting for code</span>
+          ) : (
+            <QRCodeSVG
+              value={qrPayload(pairingCode)}
+              size={176}
+              bgColor="#ffffff"
+              fgColor="#10150c"
+              role="img"
+              aria-label="QR pairing payload"
+            />
+          )}
+        </div>
+
+        <div>
+          <p className="m-0 font-mono text-2xs tracking-[0.12em] text-dim">PAIRING CODE</p>
+          <div className="mt-2 flex items-center gap-2">
+            <span
+              role="status"
+              aria-label="Pairing code"
+              className="font-mono text-2xl font-semibold tracking-[0.08em] text-body"
+            >
+              {codeLabel}
+            </span>
+            <Button
+              variant="secondary"
+              disabled={pairingCode === null}
+              className="min-h-7 px-2.5"
+            >
+              Copy
+            </Button>
+          </div>
+          <p className="mt-3 text-xs leading-[1.55] text-muted">
+            <strong className="text-body">{expiresLabel}</strong>. Keep this page open until
+            pairing is complete.
+          </p>
+          <ol className="mt-4 space-y-2 pl-4 text-xs leading-[1.55] text-body-soft">
+            <li>Open a compatible Agent Server client</li>
+            <li>
+              Select <strong className="text-body">Pair a server</strong>
+            </li>
+            <li>Enter the pairing code, or scan the QR as a shortcut</li>
+          </ol>
+        </div>
+      </div>
+
+      <div className="mt-5 flex items-center gap-3 rounded-lg border border-line-soft bg-panel-2 px-3.5 py-3">
+        <div className="flex-1">
+          <strong className="block text-xs text-body">
+            {pairedDeviceName === null
+              ? "Waiting for a device…"
+              : `${pairedDeviceName} paired`}
+          </strong>
+          <small className="mt-1 block text-2xs text-dim">
+            Listening on this local Agent Server endpoint
+          </small>
+        </div>
+        <Button
+          variant="text"
+          disabled={isCreatingPairingCode}
+          onClick={handleRegenerate}
+        >
+          Regenerate
+        </Button>
+      </div>
+
+      {isError ? (
+        <div className="mt-4 rounded-lg border border-danger/25 bg-danger/5 px-3.5 py-3 text-xs text-danger" role="alert">
+          Could not create a pairing code.
+        </div>
+      ) : null}
+
+      <div className="mt-6 flex items-center justify-between border-t border-line-soft pt-[18px]">
+        <Button variant="secondary" onClick={onBack}>
+          Back
+        </Button>
+        <Button disabled={!canViewDevices} onClick={() => void navigate("/devices")}>
+          View paired devices <span aria-hidden>→</span>
+        </Button>
       </div>
     </div>
-
-    <div className="mt-5 flex items-center gap-3 rounded-lg border border-line-soft bg-panel-2 px-3.5 py-3">
-      <div className="flex-1">
-        <strong className="block text-xs text-body">Waiting for a device…</strong>
-        <small className="mt-1 block text-2xs text-dim">
-          Listening securely on your external endpoint
-        </small>
-      </div>
-      <Button variant="text" disabled>
-        Regenerate
-      </Button>
-    </div>
-
-    <div className="mt-6 flex items-center justify-between border-t border-line-soft pt-[18px]">
-      <Button variant="secondary" onClick={onBack}>
-        Back
-      </Button>
-      <Button disabled>
-        View paired devices <span aria-hidden>→</span>
-      </Button>
-    </div>
-  </div>
-)
+  )
+}
 
 export const ConnectWizard: React.FC = () => {
-  const [currentStep, setCurrentStep] = useState(1)
+  const [searchParams] = useSearchParams()
+  const [currentStep, setCurrentStep] = useState(() =>
+    initialStepFromSearchParam(searchParams.get("step")),
+  )
   const [accessMode, setAccessMode] = useState<AccessMode>("local")
   const [proxyProvider, setProxyProvider] = useState<ProxyProvider>("caddy")
 
@@ -415,7 +527,7 @@ export const ConnectWizard: React.FC = () => {
     <div>
       <div className="mb-[22px] flex items-start justify-between gap-4">
         <p className="m-0 max-w-2xl text-sm text-muted">
-          Choose how your Android app reaches this local agent server.
+          Choose how devices reach this local agent server.
         </p>
         <div
           role="status"

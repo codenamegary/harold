@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { eq } from "drizzle-orm"
 import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -82,6 +83,17 @@ describe("workspace repository", () => {
     if (!first.ok || !second.ok || !third.ok) {
       return
     }
+
+    database.db
+      .update(workspaces)
+      .set({ lastUsedAt: "2026-01-01T00:00:00.000Z" })
+      .where(eq(workspaces.id, first.value.id))
+      .run()
+    database.db
+      .update(workspaces)
+      .set({ lastUsedAt: "2026-01-01T00:01:00.000Z" })
+      .where(eq(workspaces.id, third.value.id))
+      .run()
 
     const renamed = repository.updateName({ id: second.value.id, name: "Beta Renamed" })
     expect(renamed.ok).toBe(true)
