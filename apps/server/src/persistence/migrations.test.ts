@@ -9,7 +9,7 @@ import { openDatabase } from "./database"
 const tempDirs: string[] = []
 const migrationsFolder = path.join(import.meta.dir, "drizzle")
 const ms1MigrationCount = 4
-const currentMigrationCount = 5
+const currentMigrationCount = 6
 
 const createTempDataDir = async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-test-"))
@@ -92,6 +92,7 @@ describe("drizzle migrations", () => {
     expect(tables).toContain("__drizzle_migrations")
     expect(tables).toContain("workspaces")
     expect(tables).toContain("agent_settings")
+    expect(tables).toContain("runtime_settings")
     expect(tables).not.toContain("schema_migrations")
 
     const columns = database.sqlite
@@ -131,6 +132,54 @@ describe("drizzle migrations", () => {
       { agent_id: "claude", enabled: 0 },
       { agent_id: "cursor", enabled: 0 },
     ])
+
+    const runtimeSettingsColumns = database.sqlite
+      .query<{ name: string }, []>("PRAGMA table_info(runtime_settings)")
+      .all()
+      .map((row) => row.name)
+
+    expect(runtimeSettingsColumns).toEqual([
+      "id",
+      "advertised_url",
+      "trusted_proxies_json",
+      "bind_host",
+      "bind_port",
+      "log_level",
+      "log_path",
+      "allowed_roots_json",
+      "updated_at",
+    ])
+
+    const seededRuntime = database.sqlite
+      .query<
+        {
+          id: number
+          advertised_url: string | null
+          trusted_proxies_json: string
+          bind_host: string
+          bind_port: number
+          log_level: string
+          log_path: string | null
+          allowed_roots_json: string
+        },
+        []
+      >(
+        `SELECT id, advertised_url, trusted_proxies_json, bind_host, bind_port,
+                log_level, log_path, allowed_roots_json
+         FROM runtime_settings`,
+      )
+      .get()
+
+    expect(seededRuntime).toEqual({
+      id: 1,
+      advertised_url: null,
+      trusted_proxies_json: "[]",
+      bind_host: "127.0.0.1",
+      bind_port: 3847,
+      log_level: "info",
+      log_path: null,
+      allowed_roots_json: "[]",
+    })
 
     database.close()
   })
@@ -329,6 +378,7 @@ describe("drizzle migrations", () => {
     expect(migrationCount(database.sqlite)).toBe(currentMigrationCount)
     expect(tableNames(database.sqlite)).toContain("devices")
     expect(tableNames(database.sqlite)).toContain("pairing_codes")
+    expect(tableNames(database.sqlite)).toContain("runtime_settings")
 
     const workspace = database.sqlite
       .query<{ id: string; name: string }, []>(

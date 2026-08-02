@@ -1,6 +1,7 @@
 export { sessions } from "./sessions"
 export { workspaces } from "./workspaces"
 export { agentSettings } from "./agent-settings"
+export { runtimeSettings } from "./runtime-settings"
 export { events } from "./events"
 export { devices } from "./devices"
 export { pairingCodes } from "./pairing-codes"
