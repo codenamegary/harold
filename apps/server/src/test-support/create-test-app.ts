@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { Writable } from "node:stream"
 import { spawnFakeAcp, SpawnFakeAcpOptions, SpawnedFakeAcp } from "test-support/spawn"
 import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
@@ -85,6 +86,7 @@ export type TestAppOptions = {
   fakeAcpOptions?: SpawnFakeAcpOptions
   isLoopbackRequest?: (request: { ip: string }) => boolean
   wsAuthFrameTimeoutMs?: number
+  logStream?: Writable
 }
 
 export type TestApp = {
@@ -148,6 +150,7 @@ export const createTestApp = async (
     spawnAgentProcessFn,
     isLoopbackRequest: options.isLoopbackRequest,
     wsAuthFrameTimeoutMs: options.wsAuthFrameTimeoutMs,
+    logStream: options.logStream,
   })
   resources.addApp(app)
   resources.addTeardown(async () => {

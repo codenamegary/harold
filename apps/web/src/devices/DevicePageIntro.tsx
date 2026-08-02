@@ -8,7 +8,7 @@ export const DevicePageIntro: React.FC = () => {
 
   return (
     <PageIntro
-      description="Review sessions and revoke access instantly."
+      description="Review paired devices and revoke access instantly."
       action={<Button onClick={() => void navigate("/connect?step=pair")}>+ Pair new device</Button>}
     />
   )
