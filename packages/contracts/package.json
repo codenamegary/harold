@@ -16,6 +16,7 @@
     "./events/event": "./src/events/event.ts",
     "./events/primitives": "./src/events/primitives.ts",
     "./events/stream": "./src/events/stream.ts",
+    "./events/stream.auth": "./src/events/stream.auth.ts",
     "./events/journal-record": "./src/events/journal-record.ts"
   },
   "scripts": {
