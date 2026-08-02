@@ -100,6 +100,17 @@ describe("session repository", () => {
       return
     }
 
+    database.db
+      .update(sessions)
+      .set({ lastUsedAt: "2026-01-01T00:00:00.000Z" })
+      .where(eq(sessions.id, first.value.id))
+      .run()
+    database.db
+      .update(sessions)
+      .set({ lastUsedAt: "2026-01-01T00:01:00.000Z" })
+      .where(eq(sessions.id, third.value.id))
+      .run()
+
     const selected = repository.select({ id: second.value.id })
     expect(selected.ok).toBe(true)
 
