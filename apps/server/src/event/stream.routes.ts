@@ -23,6 +23,7 @@ import {
 } from "./stream.handshake"
 
 const eventStreamHandshakes = new WeakMap<object, ValidatedEventStreamHandshake>()
+const autoResumeCompleted = new WeakSet<object>()
 
 type RegisterEventStreamRoutesParams = {
   eventJournal: EventJournalRepository
@@ -97,6 +98,23 @@ export const registerEventStreamRoutes = (
         return sendProblem(reply, handshakeResult.status, handshakeResult.problem)
       }
 
+      const sessionId = handshakeResult.handshake.filters.sessionId
+      const principal = getRequestPrincipal(request)
+      if (
+        sessionId !== undefined &&
+        principal !== undefined &&
+        authorizeActiveFullOperator(principal)
+      ) {
+        await maybeAutoResumeSession({
+          sessionId,
+          sessionRepository: params.sessionRepository,
+          sessionService: params.sessionService,
+          workspaceRepository: params.workspaceRepository,
+          acpSupervisor: params.acpSupervisor,
+        })
+        autoResumeCompleted.add(request)
+      }
+
       eventStreamHandshakes.set(request, handshakeResult.handshake)
     },
     handler: (_request, reply) => {
@@ -126,7 +144,7 @@ export const registerEventStreamRoutes = (
         }
 
         const sessionId = handshake.filters.sessionId
-        if (sessionId !== undefined) {
+        if (sessionId !== undefined && !autoResumeCompleted.has(request)) {
           await maybeAutoResumeSession({
             sessionId,
             sessionRepository: params.sessionRepository,
