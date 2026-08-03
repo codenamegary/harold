@@ -12,6 +12,7 @@
     "./http/device": "./src/http/device.ts",
     "./http/pairing-code": "./src/http/pairing-code.ts",
     "./http/agent-settings": "./src/http/agent-settings.ts",
+    "./http/runtime-settings": "./src/http/runtime-settings.ts",
 
     "./events/event": "./src/events/event.ts",
     "./events/primitives": "./src/events/primitives.ts",

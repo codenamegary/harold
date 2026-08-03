@@ -2,6 +2,7 @@ import Fastify, { FastifyInstance, FastifyRequest } from "fastify"
 import { Writable } from "node:stream"
 import websocket from "@fastify/websocket"
 import { z } from "zod"
+import { LogLevel } from "contracts/http/runtime-settings"
 import { registerErrorHandler } from "../error/error-handler"
 import { Config } from "../config/config"
 import { AgentDatabase } from "../persistence/database"
@@ -9,6 +10,11 @@ import { Runtime } from "../runtime/runtime"
 import { registerStatusRoutes } from "../status/status-routes"
 import { createAgentSettingsRepository } from "../agent-settings/agent-settings-repository"
 import { registerAgentSettingsRoutes } from "../agent-settings/agent-settings-routes"
+import {
+  createRuntimeSettingsRepository,
+  RuntimeSettingsRepository,
+} from "../runtime-settings/repository"
+import { registerRuntimeSettingsRoutes } from "../runtime-settings/routes"
 import { createWorkspaceRepository } from "../workspace/repository"
 import { registerWorkspaceRoutes } from "../workspace/routes"
 import { createSessionRepository } from "../session/repository"
@@ -60,6 +66,8 @@ export type CreateServerOptions = {
   isLoopbackRequest?: (request: FastifyRequest) => boolean
   wsAuthFrameTimeoutMs?: number
   logStream?: Writable
+  logLevel?: LogLevel
+  runtimeSettingsRepository?: RuntimeSettingsRepository
 }
 
 const loggerRedactPaths = [
@@ -68,9 +76,15 @@ const loggerRedactPaths = [
   "req.headers['x-api-key']",
 ] as const
 
-const buildLoggerOptions = (logStream?: Writable) => {
+type BuildLoggerOptionsParams = {
+  logStream?: Writable
+  logLevel?: LogLevel
+}
+
+const buildLoggerOptions = (params: BuildLoggerOptionsParams = {}) => {
+  const { logStream, logLevel = "info" } = params
   const base = {
-    level: "info" as const,
+    level: logLevel,
     redact: {
       paths: [...loggerRedactPaths],
       remove: true,
@@ -104,9 +118,11 @@ export const createServer = async ({
   isLoopbackRequest,
   wsAuthFrameTimeoutMs,
   logStream,
+  logLevel,
+  runtimeSettingsRepository: providedRuntimeSettingsRepository,
 }: CreateServerOptions) => {
   const app = Fastify({
-    logger: buildLoggerOptions(logStream),
+    logger: buildLoggerOptions({ logStream, logLevel }),
   })
 
   registerErrorHandler(app)
@@ -127,6 +143,9 @@ export const createServer = async ({
     whichFn,
     validateExecutablePathFn,
   })
+  const runtimeSettingsRepository =
+    providedRuntimeSettingsRepository ??
+    createRuntimeSettingsRepository({ dataDir: config.dataDir })
   const eventJournal = providedEventJournal ?? createEventJournalRepository(database)
   const commitPublisher = createEventCommitPublisher()
   const journalWriter = createAcpJournalWriter({
@@ -232,6 +251,11 @@ export const createServer = async ({
     acpSupervisor,
   )
   registerAgentSettingsRoutes(app, agentSettingsRepository, acpSupervisor)
+  registerRuntimeSettingsRoutes(app, runtimeSettingsRepository, {
+    onLogLevelChanged: (nextLevel) => {
+      app.log.level = nextLevel
+    },
+  })
   registerSessionRoutes(
     app,
     sessionRepository,
@@ -261,6 +285,7 @@ export const createServer = async ({
     commitPublisher,
     runtimeStatusService,
     sessionService,
+    runtimeSettingsRepository,
     disposeOfflineOnBindingClear,
   }
 }
