@@ -36,13 +36,6 @@
       "when": 1785505743290,
       "tag": "0004_add_devices_and_pairing_codes_tables",
       "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "6",
-      "when": 1785713978888,
-      "tag": "0005_add_runtime_settings_table",
-      "breakpoints": true
     }
   ]
 }

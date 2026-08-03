@@ -13,7 +13,8 @@ import { createRuntime } from "./runtime/runtime"
 const main = async () => {
   const envConfig = parseConfig(process.env)
   const database = openDatabase({ dataDir: envConfig.dataDir })
-  const runtimeSettingsRepository = createRuntimeSettingsRepository(database, {
+  const runtimeSettingsRepository = createRuntimeSettingsRepository({
+    dataDir: envConfig.dataDir,
     seedDefaults: seedDefaultsFromConfig(envConfig),
   })
   const runtimeSettings = runtimeSettingsRepository.get()
@@ -37,6 +38,7 @@ const main = async () => {
     config,
     runtime,
     database,
+    runtimeSettingsRepository,
     logLevel: runtimeSettings.logLevel,
     logStream,
   })

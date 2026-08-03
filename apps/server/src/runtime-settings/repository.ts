@@ -1,4 +1,3 @@
-import { eq } from "drizzle-orm"
 import {
   normalizeAdvertisedUrl,
   RuntimeSettings,
@@ -6,16 +5,13 @@ import {
   UpdateRuntimeSettingsBody,
   UpdateRuntimeSettingsResponse,
 } from "contracts/http/runtime-settings"
-import { z } from "zod"
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs"
+import path from "node:path"
+import YAML from "yaml"
+import { ZodError } from "zod"
 import { Config } from "../config/config"
-import { AgentDatabase } from "../persistence/database"
-import { runtimeSettings } from "../persistence/schema/runtime-settings"
 
-const SINGLETON_ID = 1
-
-const StringArraySchema = z.array(z.string())
-
-type RuntimeSettingsRow = typeof runtimeSettings.$inferSelect
+export const settingsFileName = "settings.yml"
 
 export type RuntimeSettingsSeedDefaults = {
   bindHost: "127.0.0.1"
@@ -33,20 +29,9 @@ export type RuntimeSettingsRepository = {
 }
 
 export type CreateRuntimeSettingsRepositoryOptions = {
+  dataDir: string
   seedDefaults?: RuntimeSettingsSeedDefaults
 }
-
-const nowIso = () => new Date().toISOString()
-
-const defaultSeedFromConfig = (config: Config): RuntimeSettingsSeedDefaults => ({
-  bindHost: config.host,
-  bindPort: config.port,
-  logLevel: "info",
-  logPath: null,
-  advertisedUrl: null,
-  trustedProxies: [],
-  allowedRoots: [],
-})
 
 const fallbackSeedDefaults: RuntimeSettingsSeedDefaults = {
   bindHost: "127.0.0.1",
@@ -58,27 +43,61 @@ const fallbackSeedDefaults: RuntimeSettingsSeedDefaults = {
   allowedRoots: [],
 }
 
-const parseJsonStringArray = (value: string): string[] => {
-  const parsed: unknown = (() => {
-    try {
-      return JSON.parse(value)
-    } catch {
-      throw new Error("runtime_settings JSON column is not valid JSON")
-    }
-  })()
-  return StringArraySchema.parse(parsed)
+const settingsPathFor = (dataDir: string): string =>
+  path.join(dataDir, settingsFileName)
+
+const formatLoadError = (params: {
+  filePath: string
+  cause: unknown
+}): Error => {
+  const { filePath, cause } = params
+  if (cause instanceof ZodError) {
+    return new Error(
+      `Invalid settings.yml at ${filePath}: schema validation failed`,
+      { cause },
+    )
+  }
+  if (cause instanceof Error) {
+    return new Error(`Invalid settings.yml at ${filePath}: ${cause.message}`, {
+      cause,
+    })
+  }
+  return new Error(`Invalid settings.yml at ${filePath}`)
 }
 
-const rowToSettings = (row: RuntimeSettingsRow): RuntimeSettings =>
-  RuntimeSettingsSchema.parse({
-    advertisedUrl: row.advertisedUrl,
-    trustedProxies: parseJsonStringArray(row.trustedProxiesJson),
-    bindHost: row.bindHost,
-    bindPort: row.bindPort,
-    logLevel: row.logLevel,
-    logPath: row.logPath,
-    allowedRoots: parseJsonStringArray(row.allowedRootsJson),
-  })
+const parseSettingsDocument = (params: {
+  filePath: string
+  raw: string
+}): RuntimeSettings => {
+  const { filePath, raw } = params
+  const parsed: unknown = (() => {
+    try {
+      return YAML.parse(raw)
+    } catch (cause: unknown) {
+      throw formatLoadError({ filePath, cause })
+    }
+  })()
+
+  try {
+    return RuntimeSettingsSchema.parse(parsed)
+  } catch (cause: unknown) {
+    throw formatLoadError({ filePath, cause })
+  }
+}
+
+const serializeSettings = (settings: RuntimeSettings): string =>
+  YAML.stringify(settings)
+
+const writeSettingsAtomic = (params: {
+  filePath: string
+  settings: RuntimeSettings
+}) => {
+  const { filePath, settings } = params
+  const content = serializeSettings(settings)
+  const tempPath = `${filePath}.${process.pid}.tmp`
+  writeFileSync(tempPath, content, "utf8")
+  renameSync(tempPath, filePath)
+}
 
 const requiresRestart = (params: {
   current: RuntimeSettings
@@ -92,58 +111,32 @@ const requiresRestart = (params: {
   )
 }
 
-const ensureSeeded = (
-  database: AgentDatabase,
-  seedDefaults: RuntimeSettingsSeedDefaults,
-) => {
-  const existing = database.db
-    .select()
-    .from(runtimeSettings)
-    .where(eq(runtimeSettings.id, SINGLETON_ID))
-    .get()
+const loadOrSeed = (params: {
+  filePath: string
+  seedDefaults: RuntimeSettingsSeedDefaults
+}): RuntimeSettings => {
+  const { filePath, seedDefaults } = params
 
-  if (existing) {
-    return
+  if (!existsSync(filePath)) {
+    const seeded = RuntimeSettingsSchema.parse(seedDefaults)
+    writeSettingsAtomic({ filePath, settings: seeded })
+    return seeded
   }
 
-  const seeded = RuntimeSettingsSchema.parse(seedDefaults)
-
-  database.db
-    .insert(runtimeSettings)
-    .values({
-      id: SINGLETON_ID,
-      advertisedUrl: seeded.advertisedUrl,
-      trustedProxiesJson: JSON.stringify(seeded.trustedProxies),
-      bindHost: seeded.bindHost,
-      bindPort: seeded.bindPort,
-      logLevel: seeded.logLevel,
-      logPath: seeded.logPath,
-      allowedRootsJson: JSON.stringify(seeded.allowedRoots),
-      updatedAt: nowIso(),
-    })
-    .run()
+  const raw = readFileSync(filePath, "utf8")
+  return parseSettingsDocument({ filePath, raw })
 }
 
 export const createRuntimeSettingsRepository = (
-  database: AgentDatabase,
-  options: CreateRuntimeSettingsRepositoryOptions = {},
+  options: CreateRuntimeSettingsRepositoryOptions,
 ): RuntimeSettingsRepository => {
   const seedDefaults = options.seedDefaults ?? fallbackSeedDefaults
-  ensureSeeded(database, seedDefaults)
-
-  const get = (): RuntimeSettings => {
-    const row = database.db
-      .select()
-      .from(runtimeSettings)
-      .where(eq(runtimeSettings.id, SINGLETON_ID))
-      .get()
-
-    if (!row) {
-      throw new Error("runtime_settings singleton row is missing")
-    }
-
-    return rowToSettings(row)
+  const filePath = settingsPathFor(options.dataDir)
+  const cache: { settings: RuntimeSettings } = {
+    settings: loadOrSeed({ filePath, seedDefaults }),
   }
+
+  const get = (): RuntimeSettings => cache.settings
 
   const update = (
     body: UpdateRuntimeSettingsBody,
@@ -162,20 +155,8 @@ export const createRuntimeSettingsRepository = (
       allowedRoots: body.allowedRoots ?? current.allowedRoots,
     })
 
-    database.db
-      .update(runtimeSettings)
-      .set({
-        advertisedUrl: next.advertisedUrl,
-        trustedProxiesJson: JSON.stringify(next.trustedProxies),
-        bindHost: next.bindHost,
-        bindPort: next.bindPort,
-        logLevel: next.logLevel,
-        logPath: next.logPath,
-        allowedRootsJson: JSON.stringify(next.allowedRoots),
-        updatedAt: nowIso(),
-      })
-      .where(eq(runtimeSettings.id, SINGLETON_ID))
-      .run()
+    writeSettingsAtomic({ filePath, settings: next })
+    cache.settings = next
 
     return {
       settings: next,
@@ -189,4 +170,14 @@ export const createRuntimeSettingsRepository = (
   }
 }
 
-export const seedDefaultsFromConfig = defaultSeedFromConfig
+export const seedDefaultsFromConfig = (
+  config: Config,
+): RuntimeSettingsSeedDefaults => ({
+  bindHost: config.host,
+  bindPort: config.port,
+  logLevel: "info",
+  logPath: null,
+  advertisedUrl: null,
+  trustedProxies: [],
+  allowedRoots: [],
+})

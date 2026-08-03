@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdtemp, readFile, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { ValidationProblemSchema } from "contracts/http/error"
@@ -7,6 +7,7 @@ import {
   RuntimeSettingsSchema,
   UpdateRuntimeSettingsResponseSchema,
 } from "contracts/http/runtime-settings"
+import YAML from "yaml"
 import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/database"
@@ -14,6 +15,7 @@ import { createRuntime } from "../runtime/runtime"
 import {
   createRuntimeSettingsRepository,
   seedDefaultsFromConfig,
+  settingsFileName,
 } from "./repository"
 
 const tempDirs: string[] = []
@@ -48,7 +50,7 @@ afterEach(async () => {
 })
 
 describe("GET /v1/settings/runtime", () => {
-  test("returns seeded defaults", async () => {
+  test("returns seeded defaults and writes settings.yml", async () => {
     const dataDir = await createTempDataDir()
     const { app } = await createTestApp(dataDir)
 
@@ -69,6 +71,9 @@ describe("GET /v1/settings/runtime", () => {
       logPath: null,
       allowedRoots: [],
     })
+
+    const fileRaw = await readFile(path.join(dataDir, settingsFileName), "utf8")
+    expect(RuntimeSettingsSchema.parse(YAML.parse(fileRaw))).toEqual(body)
   })
 })
 
@@ -259,7 +264,7 @@ describe("PATCH /v1/settings/runtime", () => {
 })
 
 describe("runtime settings durability", () => {
-  test("keeps settings across server restart", async () => {
+  test("keeps settings across server restart via settings.yml", async () => {
     const dataDir = await createTempDataDir()
 
     const firstConfig = parseConfig({
@@ -312,19 +317,20 @@ describe("runtime settings durability", () => {
     secondDatabase.close()
   })
 
-  test("seeds empty DB bind port from env config defaults", async () => {
+  test("seeds missing settings.yml bind port from env config defaults", async () => {
     const dataDir = await createTempDataDir()
     const config = parseConfig({
       AGENT_SERVER_HOST: "127.0.0.1",
       AGENT_SERVER_PORT: "4123",
       AGENT_SERVER_DATA_DIR: dataDir,
     })
-    const database = openDatabase({ dataDir: config.dataDir })
-    const repository = createRuntimeSettingsRepository(database, {
+    const repository = createRuntimeSettingsRepository({
+      dataDir: config.dataDir,
       seedDefaults: seedDefaultsFromConfig(config),
     })
 
     expect(repository.get().bindPort).toBe(4123)
-    database.close()
+    const fileRaw = await readFile(path.join(dataDir, settingsFileName), "utf8")
+    expect(fileRaw).toContain("bindPort: 4123")
   })
 })

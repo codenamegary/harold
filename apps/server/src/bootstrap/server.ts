@@ -10,7 +10,10 @@ import { Runtime } from "../runtime/runtime"
 import { registerStatusRoutes } from "../status/status-routes"
 import { createAgentSettingsRepository } from "../agent-settings/agent-settings-repository"
 import { registerAgentSettingsRoutes } from "../agent-settings/agent-settings-routes"
-import { createRuntimeSettingsRepository } from "../runtime-settings/repository"
+import {
+  createRuntimeSettingsRepository,
+  RuntimeSettingsRepository,
+} from "../runtime-settings/repository"
 import { registerRuntimeSettingsRoutes } from "../runtime-settings/routes"
 import { createWorkspaceRepository } from "../workspace/repository"
 import { registerWorkspaceRoutes } from "../workspace/routes"
@@ -64,6 +67,7 @@ export type CreateServerOptions = {
   wsAuthFrameTimeoutMs?: number
   logStream?: Writable
   logLevel?: LogLevel
+  runtimeSettingsRepository?: RuntimeSettingsRepository
 }
 
 const loggerRedactPaths = [
@@ -115,6 +119,7 @@ export const createServer = async ({
   wsAuthFrameTimeoutMs,
   logStream,
   logLevel,
+  runtimeSettingsRepository: providedRuntimeSettingsRepository,
 }: CreateServerOptions) => {
   const app = Fastify({
     logger: buildLoggerOptions({ logStream, logLevel }),
@@ -138,7 +143,9 @@ export const createServer = async ({
     whichFn,
     validateExecutablePathFn,
   })
-  const runtimeSettingsRepository = createRuntimeSettingsRepository(database)
+  const runtimeSettingsRepository =
+    providedRuntimeSettingsRepository ??
+    createRuntimeSettingsRepository({ dataDir: config.dataDir })
   const eventJournal = providedEventJournal ?? createEventJournalRepository(database)
   const commitPublisher = createEventCommitPublisher()
   const journalWriter = createAcpJournalWriter({
