@@ -299,6 +299,18 @@ const hasTurnStarted = (events: Event[], turnId: string) =>
 const hasTerminalTurn = (events: Event[], turnId: string) =>
   hasTurnCompleted(events, turnId) || hasTurnCancelled(events, turnId)
 
+const allowWorkspaceRoots = async (
+  app: Awaited<ReturnType<typeof createServer>>["app"],
+  roots: string[],
+) => {
+  const response = await app.inject({
+    method: "PATCH",
+    url: "/v1/settings/runtime",
+    payload: { allowedRoots: roots },
+  })
+  expect(response.statusCode).toBe(200)
+}
+
 describe("cursor ACP smoke", () => {
   test.skipIf(!shouldRunSmoke)("enables cursor, creates workspace and session, then archives", async () => {
     const dataDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-cursor-smoke-"))
@@ -326,6 +338,8 @@ describe("cursor ACP smoke", () => {
         payload: { enabled: true, path: detectedPath },
       })
       expect(enableResponse.statusCode).toBe(200)
+
+      await allowWorkspaceRoots(app, [dataDir])
 
       const workspaceResponse = await app.inject({
         method: "POST",
@@ -393,6 +407,8 @@ describe("cursor ACP smoke", () => {
           payload: { enabled: true, path: detectedPath },
         })
         expect(enableResponse.statusCode).toBe(200)
+
+        await allowWorkspaceRoots(app, [dataDir])
 
         const workspaceResponse = await app.inject({
           method: "POST",
@@ -517,6 +533,8 @@ describe("cursor ACP smoke", () => {
           payload: { enabled: true, path: detectedPath },
         })
         expect(enableResponse.statusCode).toBe(200)
+
+        await allowWorkspaceRoots(app, [dataDir])
 
         const workspaceResponse = await app.inject({
           method: "POST",
@@ -669,6 +687,8 @@ describe("cursor ACP smoke", () => {
           payload: { enabled: true, path: detectedPath },
         })
         expect(enableResponse.statusCode).toBe(200)
+
+        await allowWorkspaceRoots(app, [dataDir])
 
         const workspaceResponse = await app.inject({
           method: "POST",

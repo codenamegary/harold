@@ -22,6 +22,11 @@ const createWorkspaceDir = async (parent: string, name: string) => {
   return dir
 }
 
+const createRepository = (database: ReturnType<typeof openDatabase>, dataDir: string) =>
+  createWorkspaceRepository(database, {
+    getAllowedRoots: () => [path.resolve(dataDir)],
+  })
+
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
@@ -31,7 +36,7 @@ describe("workspace repository", () => {
     const dataDir = await createTempDataDir()
     const workspaceDir = await createWorkspaceDir(dataDir, "project")
     const database = openDatabase({ dataDir })
-    const repository = createWorkspaceRepository(database)
+    const repository = createRepository(database, dataDir)
 
     const result = repository.create({ name: "My Project", path: workspaceDir })
 
@@ -53,7 +58,7 @@ describe("workspace repository", () => {
     const link = path.join(dataDir, "link")
     await symlink(target, link)
     const database = openDatabase({ dataDir })
-    const repository = createWorkspaceRepository(database)
+    const repository = createRepository(database, dataDir)
 
     const first = repository.create({ name: "First", path: target })
     const second = repository.create({ name: "Second", path: link })
@@ -73,7 +78,7 @@ describe("workspace repository", () => {
     const beta = await createWorkspaceDir(dataDir, "beta")
     const gamma = await createWorkspaceDir(dataDir, "gamma")
     const database = openDatabase({ dataDir })
-    const repository = createWorkspaceRepository(database)
+    const repository = createRepository(database, dataDir)
 
     const first = repository.create({ name: "Alpha", path: alpha })
     const second = repository.create({ name: "Beta", path: beta })
@@ -118,7 +123,7 @@ describe("workspace repository", () => {
     const alpha = await createWorkspaceDir(dataDir, "alpha")
     const beta = await createWorkspaceDir(dataDir, "beta")
     const database = openDatabase({ dataDir })
-    const repository = createWorkspaceRepository(database)
+    const repository = createRepository(database, dataDir)
     const timestamp = "2026-01-01T00:00:00.000Z"
 
     database.db
@@ -159,7 +164,7 @@ describe("workspace repository", () => {
     const dataDir = await createTempDataDir()
     const workspaceDir = await createWorkspaceDir(dataDir, "project")
     const database = openDatabase({ dataDir })
-    const repository = createWorkspaceRepository(database)
+    const repository = createRepository(database, dataDir)
 
     const created = repository.create({ name: "Original", path: workspaceDir })
     expect(created.ok).toBe(true)
@@ -201,7 +206,7 @@ describe("workspace repository", () => {
       createWorkspaceDir(dataDir, "three"),
     ])
     const database = openDatabase({ dataDir })
-    const repository = createWorkspaceRepository(database)
+    const repository = createRepository(database, dataDir)
 
     for (const [index, dir] of dirs.entries()) {
       const created = repository.create({ name: `Workspace ${index + 1}`, path: dir })
@@ -252,7 +257,7 @@ describe("workspace repository", () => {
       createWorkspaceDir(dataDir, "three"),
     ])
     const database = openDatabase({ dataDir })
-    const repository = createWorkspaceRepository(database)
+    const repository = createRepository(database, dataDir)
 
     for (const [index, dir] of dirs.entries()) {
       const created = repository.create({ name: `Workspace ${index + 1}`, path: dir })
@@ -295,7 +300,7 @@ describe("workspace repository", () => {
     const alpha = await createWorkspaceDir(dataDir, "alpha-project")
     const beta = await createWorkspaceDir(dataDir, "beta-other")
     const database = openDatabase({ dataDir })
-    const repository = createWorkspaceRepository(database)
+    const repository = createRepository(database, dataDir)
 
     repository.create({ name: "Alpha Project", path: alpha })
     repository.create({ name: "Beta Other", path: beta })
@@ -322,7 +327,7 @@ describe("workspace repository", () => {
     const availableDir = await createWorkspaceDir(dataDir, "available")
     const missingDir = await createWorkspaceDir(dataDir, "missing")
     const database = openDatabase({ dataDir })
-    const repository = createWorkspaceRepository(database)
+    const repository = createRepository(database, dataDir)
 
     const available = repository.create({ name: "Available", path: availableDir })
     const missing = repository.create({ name: "Missing", path: missingDir })
@@ -358,7 +363,7 @@ describe("workspace repository", () => {
       createWorkspaceDir(dataDir, "other"),
     ])
     const database = openDatabase({ dataDir })
-    const repository = createWorkspaceRepository(database)
+    const repository = createRepository(database, dataDir)
 
     repository.create({ name: "Agent One", path: dirs[0] })
     repository.create({ name: "Agent Two", path: dirs[1] })
@@ -381,7 +386,7 @@ describe("workspace repository", () => {
   test("returns not_found for missing ids", async () => {
     const dataDir = await createTempDataDir()
     const database = openDatabase({ dataDir })
-    const repository = createWorkspaceRepository(database)
+    const repository = createRepository(database, dataDir)
 
     const getResult = repository.getById({ id: "ws_01J0000000000000000000000" })
     const updateResult = repository.updateName({
@@ -405,7 +410,7 @@ describe("workspace repository", () => {
     const dataDir = await createTempDataDir()
     const workspaceDir = await createWorkspaceDir(dataDir, "ephemeral")
     const database = openDatabase({ dataDir })
-    const repository = createWorkspaceRepository(database)
+    const repository = createRepository(database, dataDir)
 
     const created = repository.create({ name: "Ephemeral", path: workspaceDir })
     expect(created.ok).toBe(true)

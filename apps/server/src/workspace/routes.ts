@@ -15,9 +15,11 @@ import {
   buildConflictProblem,
   buildInvalidCursorProblem,
   buildNotFoundProblem,
+  buildOutsideAllowedRootProblem,
   buildPathValidationProblem,
   buildWorkspaceActiveSessionsProblem,
 } from "./workspace-problems"
+import { deleteWorkspaceWithCascade } from "./delete.workspace.cascade"
 
 const sendProblem = (
   reply: { status: (code: number) => { type: (type: string) => { send: (body: unknown) => unknown } } },
@@ -39,6 +41,9 @@ export const registerWorkspaceRoutes = (
     if (!result.ok) {
       if (result.error.kind === "path") {
         return sendProblem(reply, 400, buildPathValidationProblem(result.error.error))
+      }
+      if (result.error.kind === "outside_allowed_root") {
+        return sendProblem(reply, 400, buildOutsideAllowedRootProblem())
       }
       return sendProblem(reply, 409, buildConflictProblem())
     }
@@ -100,33 +105,19 @@ export const registerWorkspaceRoutes = (
       return sendProblem(reply, 404, buildNotFoundProblem())
     }
 
-    const liveSessions = sessionRepository.listLiveByWorkspace({ workspaceId })
-    const closeResult = await acpSupervisor.closeWorkspaceSessions({
-      sessions: liveSessions.map((session) => ({
-        acpSessionId: session.acpSessionId,
-        agentId: session.agentId,
-      })),
+    const deleted = await deleteWorkspaceWithCascade({
+      workspaceId,
+      force,
+      workspaceRepository: repository,
+      workspaceService,
+      sessionRepository,
+      acpSupervisor,
     })
 
-    if (closeResult.failures.length > 0 && !force) {
-      const detail = closeResult.failures.map((failure) => failure.reason).join("; ")
-      return sendProblem(reply, 409, buildWorkspaceActiveSessionsProblem(detail))
-    }
-
-    if (closeResult.failures.length > 0) {
-      acpSupervisor.unbindWorkspaceSessions({
-        sessions: closeResult.failures.map((failure) => ({
-          acpSessionId: failure.acpSessionId,
-          agentId:
-            liveSessions.find((session) => session.acpSessionId === failure.acpSessionId)?.agentId ??
-            "cursor",
-        })),
-      })
-    }
-
-    const result = workspaceService.delete({ id: workspaceId })
-
-    if (!result.ok) {
+    if (!deleted.ok) {
+      if (deleted.kind === "active_sessions") {
+        return sendProblem(reply, 409, buildWorkspaceActiveSessionsProblem(deleted.detail))
+      }
       return sendProblem(reply, 404, buildNotFoundProblem())
     }
 

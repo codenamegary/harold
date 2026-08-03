@@ -58,3 +58,12 @@ export const buildWorkspaceActiveSessionsProblem = (
     detail: sanitizeAcpErrorMessage(detail),
     forceDeleteAvailable: true,
   })
+
+export const buildOutsideAllowedRootProblem = () =>
+  ValidationProblemSchema.parse({
+    type: PROBLEM_TYPES.validationError,
+    title: "Request validation failed",
+    status: 400,
+    code: "validation.request.invalid",
+    errors: [{ pointer: "#/path", code: "validation.field.path.outside_allowed_root" }],
+  })

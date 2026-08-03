@@ -175,11 +175,27 @@ export const cleanupTestAppResources = async (resources: TestAppResources) => {
   )
 }
 
+export const allowWorkspaceRoots = async (
+  app: Awaited<ReturnType<typeof createServer>>["app"],
+  roots: string[],
+) => {
+  const response = await app.inject({
+    method: "PATCH",
+    url: "/v1/settings/runtime",
+    payload: { allowedRoots: roots },
+  })
+
+  if (response.statusCode !== 200) {
+    throw new Error(`failed to allow workspace roots: ${response.body}`)
+  }
+}
+
 export const seedWorkspace = async (
   app: Awaited<ReturnType<typeof createServer>>["app"],
   dataDir: string,
 ) => {
   const workspaceDir = await createWorkspaceDir(dataDir, "project")
+  await allowWorkspaceRoots(app, [dataDir])
   const response = await app.inject({
     method: "POST",
     url: "/v1/workspaces",

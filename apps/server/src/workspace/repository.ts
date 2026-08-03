@@ -9,6 +9,7 @@ import { AgentDatabase, DbExecutor } from "../persistence/database"
 import { workspaces } from "../persistence/schema/workspaces"
 import { canonicalizeWorkspacePath } from "./canonicalize-workspace-path"
 import { createWorkspaceId } from "./create-workspace-id"
+import { isPathUnderAllowedRoot } from "./is.path.under.allowed.root"
 import { probeWorkspaceState } from "./probe-workspace-state"
 import { WorkspaceRepositoryError } from "./workspace-errors"
 import {
@@ -170,7 +171,14 @@ export type CreateWorkspaceInput = CreateWorkspaceBody & {
   executor?: DbExecutor
 }
 
-export const createWorkspaceRepository = (database: AgentDatabase) => {
+export type WorkspaceRepositoryOptions = {
+  getAllowedRoots?: () => readonly string[]
+}
+
+export const createWorkspaceRepository = (
+  database: AgentDatabase,
+  options: WorkspaceRepositoryOptions = {},
+) => {
   const resolveExecutor = (executor?: DbExecutor): DbExecutor => executor ?? database.db
   const countAll = (): number =>
     database.db.select({ value: count() }).from(workspaces).get()?.value ?? 0
@@ -259,6 +267,21 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
     const canonicalizeResult = canonicalizeWorkspacePath(inputPath)
     if (!canonicalizeResult.ok) {
       return { ok: false, error: { kind: "path", error: canonicalizeResult.error } }
+    }
+
+    const allowedRoots = options.getAllowedRoots?.() ?? []
+    if (allowedRoots.length === 0) {
+      return { ok: false, error: { kind: "outside_allowed_root" } }
+    }
+
+    const isAllowed = allowedRoots.some((allowedRoot) =>
+      isPathUnderAllowedRoot({
+        allowedRoot,
+        candidatePath: canonicalizeResult.canonicalPath,
+      }),
+    )
+    if (!isAllowed) {
+      return { ok: false, error: { kind: "outside_allowed_root" } }
     }
 
     const timestamp = nowIso()
@@ -454,9 +477,18 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
     return { ok: true, value: rowToWorkspace(row) }
   }
 
+  const listAll = (): Workspace[] =>
+    database.db
+      .select()
+      .from(workspaces)
+      .orderBy(desc(workspaces.lastUsedAt), asc(workspaces.id))
+      .all()
+      .map(rowToWorkspace)
+
   return {
     create,
     list,
+    listAll,
     getById,
     updateName,
     delete: deleteById,

@@ -27,7 +27,9 @@ const createWorkspaceDir = async (parent: string, name: string) => {
 const seedWorkspace = async (dataDir: string, name = "Project") => {
   const workspaceDir = await createWorkspaceDir(dataDir, "workspace")
   const database = openDatabase({ dataDir })
-  const workspaceRepository = createWorkspaceRepository(database)
+  const workspaceRepository = createWorkspaceRepository(database, {
+    getAllowedRoots: () => [path.resolve(dataDir)],
+  })
   const created = workspaceRepository.create({ name, path: workspaceDir })
   if (!created.ok) {
     throw new Error("failed to seed workspace")
@@ -259,7 +261,9 @@ describe("session repository", () => {
     const dataDir = await createTempDataDir()
     const { database, workspaceId } = await seedWorkspace(dataDir)
     const otherWorkspaceDir = await createWorkspaceDir(dataDir, "other")
-    const workspaceRepository = createWorkspaceRepository(database)
+    const workspaceRepository = createWorkspaceRepository(database, {
+      getAllowedRoots: () => [path.resolve(dataDir)],
+    })
     const otherWorkspace = workspaceRepository.create({
       name: "Other",
       path: otherWorkspaceDir,
@@ -427,7 +431,9 @@ describe("session repository", () => {
     const dataDir = await createTempDataDir()
     const { database, workspaceId } = await seedWorkspace(dataDir)
     const otherWorkspaceDir = await createWorkspaceDir(dataDir, "other")
-    const workspaceRepository = createWorkspaceRepository(database)
+    const workspaceRepository = createWorkspaceRepository(database, {
+      getAllowedRoots: () => [path.resolve(dataDir)],
+    })
     const otherWorkspace = workspaceRepository.create({
       name: "Other",
       path: otherWorkspaceDir,

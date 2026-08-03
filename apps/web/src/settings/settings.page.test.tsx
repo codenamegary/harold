@@ -15,6 +15,16 @@ const validStatus = {
   },
 } as const
 
+const validRuntimeSettings = {
+  advertisedUrl: null,
+  trustedProxies: [],
+  bindHost: "127.0.0.1",
+  bindPort: 3847,
+  logLevel: "info",
+  logPath: null,
+  allowedRoots: [],
+} as const
+
 const originalFetch = globalThis.fetch
 
 const renderSettingsPage = async () => {
@@ -33,14 +43,25 @@ const renderSettingsPage = async () => {
 
 describe("SettingsPage", () => {
   beforeEach(() => {
-    globalThis.fetch = mock(() =>
-      Promise.resolve(
+    globalThis.fetch = mock((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url
+
+      if (url.startsWith("/v1/settings/runtime")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(validRuntimeSettings), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(
         new Response(JSON.stringify(validStatus), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
-      ),
-    ) as typeof fetch
+      )
+    }) as typeof fetch
   })
 
   afterEach(() => {
@@ -53,12 +74,14 @@ describe("SettingsPage", () => {
     expect(getByText("Configure runtime behavior and diagnostics.")).toBeInTheDocument()
   })
 
-  test("filesystem provider is read-only with zero configured roots", async () => {
+  test("filesystem provider lists roots with add controls", async () => {
     const { getByText, getByRole } = await renderSettingsPage()
 
     expect(getByText("0 configured")).toBeInTheDocument()
     expect(getByText("Local filesystem")).toBeInTheDocument()
-    expect(getByRole("button", { name: "+ Allow another folder" })).toBeDisabled()
+    expect(getByText("No allowed roots configured yet.")).toBeInTheDocument()
+    expect(getByRole("button", { name: "Add root" })).toBeEnabled()
+    expect(getByRole("textbox", { name: "Allowed root path" })).toBeEnabled()
   })
 
   test("github and gitlab providers are greyed with coming soon", async () => {

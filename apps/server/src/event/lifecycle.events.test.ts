@@ -407,7 +407,9 @@ describe("lifecycle events integration", () => {
     const database = openDatabase({ dataDir })
     const workspaceDir = path.join(dataDir, "project")
     await mkdir(workspaceDir)
-    const workspaceRepository = createWorkspaceRepository(database)
+    const workspaceRepository = createWorkspaceRepository(database, {
+      getAllowedRoots: () => [path.resolve(dataDir)],
+    })
     const workspace = workspaceRepository.create({ name: "Project", path: workspaceDir })
     expect(workspace.ok).toBe(true)
     if (!workspace.ok) {

@@ -75,6 +75,13 @@ describe("second-client journey", () => {
     expect(reconnectProbe.status).toBe(200)
 
     const workspaceDir = await createWorkspaceDir(dataDir, "journey-workspace")
+    const allowRootsResponse = await reconnected.fetch("/v1/settings/runtime", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ allowedRoots: [dataDir] }),
+    })
+    expect(allowRootsResponse.status).toBe(200)
+
     const workspaceResponse = await reconnected.fetch("/v1/workspaces", {
       method: "POST",
       headers: { "content-type": "application/json" },

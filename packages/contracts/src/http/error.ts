@@ -7,6 +7,8 @@ export const PROBLEM_TYPES = {
   conflict: "https://agent-server.local/problems/conflict",
   unauthorized: "https://agent-server.local/problems/unauthorized",
   workspaceActiveSessions: "https://agent-server.local/problems/workspace-has-active-sessions",
+  allowedRootHasWorkspaces:
+    "https://agent-server.local/problems/allowed-root-has-workspaces",
 } as const
 
 export const ProblemErrorSchema = z.strictObject({
@@ -60,6 +62,12 @@ export const WorkspaceActiveSessionsProblemSchema = z.strictObject({
   forceDeleteAvailable: z.literal(true),
 })
 
+export const AllowedRootHasWorkspacesProblemSchema = z.strictObject({
+  ...InternalProblemFieldsSchema.shape,
+  type: z.literal(PROBLEM_TYPES.allowedRootHasWorkspaces),
+  forceDeleteAvailable: z.literal(true),
+})
+
 export const ProblemDetailsSchema = z.discriminatedUnion("type", [
   ValidationProblemSchema,
   InternalProblemSchema,
@@ -67,6 +75,7 @@ export const ProblemDetailsSchema = z.discriminatedUnion("type", [
   ConflictProblemSchema,
   UnauthorizedProblemSchema,
   WorkspaceActiveSessionsProblemSchema,
+  AllowedRootHasWorkspacesProblemSchema,
 ])
 
 export type ProblemError = z.infer<typeof ProblemErrorSchema>
@@ -77,5 +86,8 @@ export type ConflictProblem = z.infer<typeof ConflictProblemSchema>
 export type UnauthorizedProblem = z.infer<typeof UnauthorizedProblemSchema>
 export type WorkspaceActiveSessionsProblem = z.infer<
   typeof WorkspaceActiveSessionsProblemSchema
+>
+export type AllowedRootHasWorkspacesProblem = z.infer<
+  typeof AllowedRootHasWorkspacesProblemSchema
 >
 export type ProblemDetails = z.infer<typeof ProblemDetailsSchema>

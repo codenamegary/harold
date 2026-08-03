@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { mkdtemp, readFile, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { ValidationProblemSchema } from "contracts/http/error"
@@ -80,6 +80,8 @@ describe("GET /v1/settings/runtime", () => {
 describe("PATCH /v1/settings/runtime", () => {
   test("persists live fields without restartRequired", async () => {
     const dataDir = await createTempDataDir()
+    const allowedDir = path.join(dataDir, "allowed")
+    await mkdir(allowedDir)
     const { app } = await createTestApp(dataDir)
 
     const response = await app.inject({
@@ -89,7 +91,7 @@ describe("PATCH /v1/settings/runtime", () => {
         advertisedUrl: "https://agents.example.com",
         trustedProxies: ["10.0.0.0/8", "::1"],
         logLevel: "debug",
-        allowedRoots: ["/tmp/allowed"],
+        allowedRoots: [allowedDir],
       },
     })
 
@@ -100,7 +102,7 @@ describe("PATCH /v1/settings/runtime", () => {
     expect(body.settings.advertisedUrl).toBe("https://agents.example.com")
     expect(body.settings.trustedProxies).toEqual(["10.0.0.0/8", "::1"])
     expect(body.settings.logLevel).toBe("debug")
-    expect(body.settings.allowedRoots).toEqual(["/tmp/allowed"])
+    expect(body.settings.allowedRoots).toEqual([path.resolve(allowedDir)])
     expect(app.log.level).toBe("debug")
 
     const getResponse = await app.inject({

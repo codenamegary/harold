@@ -30,7 +30,9 @@ describe("session persistence restart durability", () => {
     const workspaceDir = await createWorkspaceDir(dataDir, "project")
 
     const firstDatabase = openDatabase({ dataDir })
-    const workspaceRepository = createWorkspaceRepository(firstDatabase)
+    const workspaceRepository = createWorkspaceRepository(firstDatabase, {
+      getAllowedRoots: () => [path.resolve(dataDir)],
+    })
     const sessionRepository = createSessionRepository(firstDatabase)
 
     const workspace = workspaceRepository.create({ name: "Project", path: workspaceDir })

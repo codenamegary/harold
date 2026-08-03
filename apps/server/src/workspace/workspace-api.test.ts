@@ -45,6 +45,30 @@ const createTestApp = async (dataDir: string) => {
   return { app, database, config }
 }
 
+const allowRoots = async (
+  app: Awaited<ReturnType<typeof createServer>>["app"],
+  roots: string[],
+) => {
+  await app.inject({
+    method: "PATCH",
+    url: "/v1/settings/runtime",
+    payload: { allowedRoots: roots },
+  })
+}
+
+const registerWorkspace = async (
+  app: Awaited<ReturnType<typeof createServer>>["app"],
+  dataDir: string,
+  payload: { name: string; path: string },
+) => {
+  await allowRoots(app, [dataDir])
+  return app.inject({
+    method: "POST",
+    url: "/v1/workspaces",
+    payload,
+  })
+}
+
 afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()))
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
@@ -56,10 +80,9 @@ describe("POST /v1/workspaces", () => {
     const workspaceDir = await createWorkspaceDir(dataDir, "project")
     const { app } = await createTestApp(dataDir)
 
-    const response = await app.inject({
-      method: "POST",
-      url: "/v1/workspaces",
-      payload: { name: "My Project", path: workspaceDir },
+    const response = await registerWorkspace(app, dataDir, {
+      name: "My Project",
+      path: workspaceDir,
     })
 
     const body = WorkspaceSchema.parse(JSON.parse(response.body))
@@ -119,16 +142,8 @@ describe("POST /v1/workspaces", () => {
     await symlink(target, link)
     const { app } = await createTestApp(dataDir)
 
-    const first = await app.inject({
-      method: "POST",
-      url: "/v1/workspaces",
-      payload: { name: "First", path: target },
-    })
-    const second = await app.inject({
-      method: "POST",
-      url: "/v1/workspaces",
-      payload: { name: "Second", path: link },
-    })
+    const first = await registerWorkspace(app, dataDir, { name: "First", path: target })
+    const second = await registerWorkspace(app, dataDir, { name: "Second", path: link })
 
     const body = ConflictProblemSchema.parse(JSON.parse(second.body))
 
@@ -145,16 +160,8 @@ describe("GET /v1/workspaces", () => {
     const beta = await createWorkspaceDir(dataDir, "beta")
     const { app } = await createTestApp(dataDir)
 
-    await app.inject({
-      method: "POST",
-      url: "/v1/workspaces",
-      payload: { name: "Alpha", path: alpha },
-    })
-    await app.inject({
-      method: "POST",
-      url: "/v1/workspaces",
-      payload: { name: "Beta", path: beta },
-    })
+    await registerWorkspace(app, dataDir, { name: "Alpha", path: alpha })
+    await registerWorkspace(app, dataDir, { name: "Beta", path: beta })
 
     const response = await app.inject({
       method: "GET",
@@ -180,10 +187,9 @@ describe("GET /v1/workspaces", () => {
     const { app } = await createTestApp(dataDir)
 
     for (const [index, dir] of dirs.entries()) {
-      await app.inject({
-        method: "POST",
-        url: "/v1/workspaces",
-        payload: { name: `Workspace ${index + 1}`, path: dir },
+      await registerWorkspace(app, dataDir, {
+        name: `Workspace ${index + 1}`,
+        path: dir,
       })
     }
 
@@ -258,16 +264,8 @@ describe("GET /v1/workspaces", () => {
     const beta = await createWorkspaceDir(dataDir, "beta-other")
     const { app } = await createTestApp(dataDir)
 
-    await app.inject({
-      method: "POST",
-      url: "/v1/workspaces",
-      payload: { name: "Alpha Project", path: alpha },
-    })
-    await app.inject({
-      method: "POST",
-      url: "/v1/workspaces",
-      payload: { name: "Beta Other", path: beta },
-    })
+    await registerWorkspace(app, dataDir, { name: "Alpha Project", path: alpha })
+    await registerWorkspace(app, dataDir, { name: "Beta Other", path: beta })
     await rm(beta, { recursive: true, force: true })
 
     const searchResponse = await app.inject({
@@ -298,10 +296,9 @@ describe("GET /v1/workspaces/:workspaceId", () => {
     const workspaceDir = await createWorkspaceDir(dataDir, "live")
     const { app } = await createTestApp(dataDir)
 
-    const created = await app.inject({
-      method: "POST",
-      url: "/v1/workspaces",
-      payload: { name: "Live", path: workspaceDir },
+    const created = await registerWorkspace(app, dataDir, {
+      name: "Live",
+      path: workspaceDir,
     })
     const workspace = WorkspaceSchema.parse(JSON.parse(created.body))
 
@@ -339,10 +336,9 @@ describe("PATCH /v1/workspaces/:workspaceId", () => {
     const workspaceDir = await createWorkspaceDir(dataDir, "rename")
     const { app } = await createTestApp(dataDir)
 
-    const created = await app.inject({
-      method: "POST",
-      url: "/v1/workspaces",
-      payload: { name: "Original", path: workspaceDir },
+    const created = await registerWorkspace(app, dataDir, {
+      name: "Original",
+      path: workspaceDir,
     })
     const workspace = WorkspaceSchema.parse(JSON.parse(created.body))
 
@@ -380,10 +376,9 @@ describe("DELETE /v1/workspaces/:workspaceId", () => {
     const workspaceDir = await createWorkspaceDir(dataDir, "delete-me")
     const { app } = await createTestApp(dataDir)
 
-    const created = await app.inject({
-      method: "POST",
-      url: "/v1/workspaces",
-      payload: { name: "Delete Me", path: workspaceDir },
+    const created = await registerWorkspace(app, dataDir, {
+      name: "Delete Me",
+      path: workspaceDir,
     })
     const workspace = WorkspaceSchema.parse(JSON.parse(created.body))
 
@@ -422,10 +417,9 @@ describe("workspace state transitions", () => {
     const workspaceDir = await createWorkspaceDir(dataDir, "ephemeral")
     const { app } = await createTestApp(dataDir)
 
-    const created = await app.inject({
-      method: "POST",
-      url: "/v1/workspaces",
-      payload: { name: "Ephemeral", path: workspaceDir },
+    const created = await registerWorkspace(app, dataDir, {
+      name: "Ephemeral",
+      path: workspaceDir,
     })
     const workspace = WorkspaceSchema.parse(JSON.parse(created.body))
 
@@ -459,10 +453,9 @@ describe("restart durability", () => {
       database: firstDatabase,
     })
 
-    const created = await firstApp.inject({
-      method: "POST",
-      url: "/v1/workspaces",
-      payload: { name: "Durable", path: workspaceDir },
+    const created = await registerWorkspace(firstApp, dataDir, {
+      name: "Durable",
+      path: workspaceDir,
     })
     const workspace = WorkspaceSchema.parse(JSON.parse(created.body))
 
