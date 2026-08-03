@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react"
 import { QRCodeSVG } from "qrcode.react"
-import { HttpsAbsoluteUrlSchema } from "contracts/http/runtime-settings"
+import { ConnectionCheckId, ConnectionTestResponse } from "contracts/http/connection-test"
 import { CreatePairingCodeResponse } from "contracts/http/pairing-code"
 import { useNavigate, useSearchParams } from "react-router"
 import { Button } from "../design-system/Button"
@@ -23,6 +23,8 @@ import {
   proxyTemplates,
   ProxyProvider,
 } from "./proxy.templates"
+import { HttpsAbsoluteUrlSchema } from "contracts/http/runtime-settings"
+import { useRunConnectionTestMutation } from "../connection-test/use.run.connection.test.mutation"
 import { useCreatePairingCodeMutation } from "./use.create.pairing.code.mutation"
 
 type AccessMode = "local" | "cloud"
@@ -372,32 +374,129 @@ type TestConnectionStepProps = {
   onContinue: () => void
 }
 
-const testChecks = [
-  {
-    id: "dns",
-    title: "DNS & reachability",
-    detail: "Connection tests are not available yet",
-  },
-  {
-    id: "tls",
-    title: "TLS certificate",
-    detail: "Certificate validation will run here in a later release",
-  },
-  {
-    id: "device-auth",
-    title: "Device authentication",
-    detail: "Device-auth probe checks will run here in a later release",
-  },
-] as const
+const connectionCheckTitles: Record<ConnectionCheckId, string> = {
+  dns: "DNS & reachability",
+  tls: "TLS certificate",
+  "device-auth": "Device authentication",
+}
+
+const connectionCheckOrder: ConnectionCheckId[] = ["dns", "tls", "device-auth"]
+
+const statusLabelForCheck = (
+  status: ConnectionTestResponse["checks"][number]["status"] | undefined,
+  isRunning: boolean,
+): string => {
+  if (isRunning) {
+    return "Running"
+  }
+
+  switch (status) {
+    case "pass":
+      return "Passed"
+    case "warn":
+      return "Warning"
+    case "fail":
+      return "Failed"
+    default:
+      return "Pending"
+  }
+}
+
+const statusDotForSummary = (
+  result: ConnectionTestResponse | undefined,
+  isRunning: boolean,
+): React.ComponentProps<typeof StatusDot>["variant"] => {
+  if (isRunning) {
+    return "warning"
+  }
+
+  if (result?.canContinue === true) {
+    return "online"
+  }
+
+  if (result?.canContinueAnyway === true) {
+    return "warning"
+  }
+
+  return "offline"
+}
 
 const TestConnectionStep: React.FC<TestConnectionStepProps> = ({
   onBack,
   onContinue,
 }) => {
   const runtimeSettingsQuery = useRuntimeSettingsQuery()
+  const connectionTestMutation = useRunConnectionTestMutation()
+  const [result, setResult] = useState<ConnectionTestResponse | null>(null)
+  const [runError, setRunError] = useState<string | null>(null)
+  const autoRunStarted = useRef(false)
+
   const advertisedUrl = runtimeSettingsQuery.data?.advertisedUrl ?? null
   const endpointLabel =
     advertisedUrl ?? `https://127.0.0.1:${localAgentPort}`
+
+  const runTest = () => {
+    setRunError(null)
+    void connectionTestMutation.mutateAsync().then(
+      (response) => {
+        setResult(response)
+      },
+      () => {
+        setRunError("Connection test failed. Check the advertised URL and try again.")
+        setResult(null)
+      },
+    )
+  }
+
+  useEffect(() => {
+    if (autoRunStarted.current || advertisedUrl === null) {
+      return
+    }
+
+    autoRunStarted.current = true
+    setRunError(null)
+    void connectionTestMutation.mutateAsync().then(
+      (response) => {
+        setResult(response)
+      },
+      () => {
+        setRunError("Connection test failed. Check the advertised URL and try again.")
+        setResult(null)
+      },
+    )
+  }, [advertisedUrl, connectionTestMutation])
+
+  const checksById = new Map(result?.checks.map((check) => [check.id, check]) ?? [])
+  const isRunning = connectionTestMutation.isPending
+  const canContinue = result?.canContinue === true
+  const canContinueAnyway = result?.canContinueAnyway === true
+
+  if (runtimeSettingsQuery.isPending) {
+    return (
+      <div>
+        <h2 className="m-0 text-lg font-semibold">Test your connection</h2>
+        <p className="m-0 mt-1.5 text-sm text-muted" role="status">
+          Loading saved URL…
+        </p>
+      </div>
+    )
+  }
+
+  if (advertisedUrl === null) {
+    return (
+      <div>
+        <h2 className="m-0 text-lg font-semibold">Test your connection</h2>
+        <p className="m-0 mt-1.5 text-sm text-danger" role="alert">
+          Save an external URL before running connection tests.
+        </p>
+        <div className="mt-6">
+          <Button variant="secondary" onClick={onBack}>
+            Back
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -408,47 +507,80 @@ const TestConnectionStep: React.FC<TestConnectionStepProps> = ({
         <div>
           <h2 className="m-0 text-lg font-semibold">Test your connection</h2>
           <p className="m-0 mt-1.5 text-sm text-muted">
-            Automated checks are not wired yet. Continue to pair once your proxy is configured.
+            DNS, TLS, and device authentication are checked against your advertised URL.
           </p>
         </div>
       </div>
 
       <div className="flex items-center gap-2.5 rounded-lg border border-line-soft bg-panel-2 px-3.5 py-3">
-        <StatusDot variant="warning" />
+        <StatusDot variant={statusDotForSummary(result ?? undefined, isRunning)} />
         <code className="font-mono text-sm text-body">{endpointLabel}</code>
         <span className="ml-auto text-2xs text-dim">External endpoint</span>
       </div>
 
       <div className="mt-4 flex flex-col gap-2">
-        {testChecks.map((check) => (
-          <div
-            key={check.id}
-            className="flex items-center gap-3 rounded-lg border border-line-soft bg-[#0b0e13] px-3.5 py-3"
-          >
-            <span className="font-mono text-sm text-dim">·</span>
-            <div className="flex-1">
-              <strong className="block text-sm font-medium text-body">{check.title}</strong>
-              <small className="mt-1 block text-xs text-dim">{check.detail}</small>
+        {connectionCheckOrder.map((checkId) => {
+          const check = checksById.get(checkId)
+          const title = connectionCheckTitles[checkId]
+
+          return (
+            <div
+              key={checkId}
+              className="flex items-center gap-3 rounded-lg border border-line-soft bg-[#0b0e13] px-3.5 py-3"
+            >
+              <StatusDot
+                variant={
+                  isRunning && check === undefined
+                    ? "warning"
+                    : check?.status === "pass"
+                      ? "online"
+                      : check?.status === "warn"
+                        ? "warning"
+                        : check?.status === "fail"
+                          ? "offline"
+                          : "warning"
+                }
+              />
+              <div className="flex-1">
+                <strong className="block text-sm font-medium text-body">{title}</strong>
+                <small className="mt-1 block text-xs text-dim">
+                  {check?.message ?? "Waiting to run…"}
+                </small>
+              </div>
+              <em className="text-2xs text-dim not-italic">
+                {statusLabelForCheck(check?.status, isRunning && check === undefined)}
+              </em>
             </div>
-            <em className="text-2xs text-dim not-italic">Not available</em>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
-      <div className="mt-4 rounded-lg border border-line-soft bg-panel-2 px-3.5 py-3">
-        <span className="block text-xs text-body">Connection tests coming soon</span>
-        <small className="mt-1 block text-2xs text-dim">
-          No simulated success is shown for external reachability or TLS.
-        </small>
+      {runError !== null ? (
+        <p className="mt-4 text-xs text-danger" role="alert">
+          {runError}
+        </p>
+      ) : null}
+
+      <div className="mt-4 flex items-center justify-end">
+        <Button variant="secondary" disabled={isRunning} onClick={runTest}>
+          Run
+        </Button>
       </div>
 
       <div className="mt-6 flex items-center justify-between border-t border-line-soft pt-[18px]">
         <Button variant="secondary" onClick={onBack}>
           Back
         </Button>
-        <Button onClick={onContinue}>
-          Continue <span aria-hidden>→</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          {canContinueAnyway ? (
+            <Button variant="secondary" onClick={onContinue}>
+              Continue anyway
+            </Button>
+          ) : null}
+          <Button disabled={!canContinue || isRunning} onClick={onContinue}>
+            Continue <span aria-hidden>→</span>
+          </Button>
+        </div>
       </div>
     </div>
   )

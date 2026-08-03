@@ -24,6 +24,8 @@ import { createSessionService } from "../session/service"
 import { createDeviceRepository } from "../device/repository"
 import { createDeviceService } from "../device/service"
 import { registerDeviceRoutes } from "../device/routes"
+import { createConnectionTestService } from "../connection-test/connection.test.service"
+import { registerConnectionTestRoutes } from "../connection-test/routes"
 import { createEventJournalRepository, EventJournalRepository } from "../event/journal.repository"
 import { createEventCommitPublisher } from "../event/commit.publisher"
 import { createRuntimeStatusService } from "../runtime/status.service"
@@ -277,6 +279,12 @@ export const createServer = async ({
     runtimeSettingsRepository,
   })
   registerDeviceRoutes(app, deviceService)
+
+  const connectionTestService = createConnectionTestService({
+    runtimeSettingsRepository,
+    deviceService,
+  })
+  registerConnectionTestRoutes(app, connectionTestService)
 
   if (withTestRoutes) {
     registerTestRoutes(app)

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { DeviceCollectionSchema } from "contracts/http/device"
-import { fireEvent, waitFor, within } from "@testing-library/react"
+import { fireEvent, waitFor, within, act } from "@testing-library/react"
 import { renderWithProviders } from "../query/render.with.providers"
 import { AppRoutes } from "./AppRouter"
 
@@ -93,7 +93,27 @@ const emptyAgentCollection = {
 }
 
 describe("shell honesty", () => {
+  let runtimeSettings = {
+    advertisedUrl: null as string | null,
+    trustedProxies: [] as string[],
+    bindHost: "127.0.0.1",
+    bindPort: 3847,
+    logLevel: "info",
+    logPath: null as string | null,
+    allowedRoots: [] as string[],
+  }
+
   beforeEach(() => {
+    runtimeSettings = {
+      advertisedUrl: null,
+      trustedProxies: [],
+      bindHost: "127.0.0.1",
+      bindPort: 3847,
+      logLevel: "info",
+      logPath: null,
+      allowedRoots: [],
+    }
+
     globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
       return {
         url: String(url),
@@ -161,16 +181,25 @@ describe("shell honesty", () => {
 
       if (url === "/v1/settings/runtime" && method === "GET") {
         return Promise.resolve(
+          new Response(JSON.stringify(runtimeSettings), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/runtime" && method === "PATCH") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          advertisedUrl?: string | null
+        }
+        runtimeSettings = {
+          ...runtimeSettings,
+          advertisedUrl:
+            body.advertisedUrl === undefined ? runtimeSettings.advertisedUrl : body.advertisedUrl,
+        }
+        return Promise.resolve(
           new Response(
-            JSON.stringify({
-              advertisedUrl: null,
-              trustedProxies: [],
-              bindHost: "127.0.0.1",
-              bindPort: 3847,
-              logLevel: "info",
-              logPath: null,
-              allowedRoots: [],
-            }),
+            JSON.stringify({ settings: runtimeSettings, restartRequired: false }),
             {
               status: 200,
               headers: { "Content-Type": "application/json" },
@@ -179,23 +208,20 @@ describe("shell honesty", () => {
         )
       }
 
-      if (url === "/v1/settings/runtime" && method === "PATCH") {
-        const body = JSON.parse(String(init?.body ?? "{}")) as {
-          advertisedUrl?: string | null
-        }
-        const settings = {
-          advertisedUrl:
-            body.advertisedUrl === undefined ? null : body.advertisedUrl,
-          trustedProxies: [],
-          bindHost: "127.0.0.1",
-          bindPort: 3847,
-          logLevel: "info",
-          logPath: null,
-          allowedRoots: [],
-        }
+      if (url === "/v1/connection-test" && method === "POST") {
         return Promise.resolve(
           new Response(
-            JSON.stringify({ settings, restartRequired: false }),
+            JSON.stringify({
+              advertisedUrl: "https://agents.example.com",
+              checkedAt: "2026-08-03T12:00:00.000Z",
+              checks: [
+                { id: "dns", status: "pass", message: "Resolved agents.example.com" },
+                { id: "tls", status: "pass", message: "TLS certificate is valid" },
+                { id: "device-auth", status: "pass", message: "Bearer authentication succeeded" },
+              ],
+              canContinue: true,
+              canContinueAnyway: false,
+            }),
             {
               status: 200,
               headers: { "Content-Type": "application/json" },
@@ -253,9 +279,9 @@ describe("shell honesty", () => {
     })
   })
 
-  describe("connect wizard disabled honesty", () => {
-    test("test connection is disabled while pair uses real claim gating", async () => {
-      const { getByRole, getAllByText } = renderShellRoute("/connect")
+  describe("connect wizard functional honesty", () => {
+    test("test connection gates continue while pair uses real claim gating", async () => {
+      const { getByRole } = renderShellRoute("/connect")
 
       await waitForShellReady(getByRole)
 
@@ -267,12 +293,19 @@ describe("shell honesty", () => {
       fireEvent.input(getByRole("textbox", { name: /public server url/i }), {
         target: { value: "agents.example.com" },
       })
-      fireEvent.click(getByRole("button", { name: /save & continue/i }))
+      await act(async () => {
+        fireEvent.click(getByRole("button", { name: /save & continue/i }))
+      })
 
       await waitFor(() => {
         expect(getByRole("heading", { name: /test your connection/i })).toBeInTheDocument()
       })
-      expect(getAllByText(/not available/i).length).toBeGreaterThan(0)
+      await waitFor(() => {
+        expect(getByRole("button", { name: /^Run$/i })).toBeInTheDocument()
+      })
+      await waitFor(() => {
+        expect(getByRole("button", { name: /^Continue$/ })).toBeEnabled()
+      }, { timeout: 5000 })
 
       fireEvent.click(getByRole("button", { name: /^Continue$/ }))
       await waitFor(() => {

@@ -43,11 +43,20 @@ export type ClaimDeviceInput = {
   executor?: DbExecutor
 }
 
+export type InsertProbeDeviceInput = {
+  name: string
+  platform: string | null
+  credentialHash: string
+  pairedAt: string
+  executor?: DbExecutor
+}
+
 export type TouchLastSeenInput = {
   deviceId: string
   lastSeenAt: string
   executor?: DbExecutor
 }
+
 
 export type DeviceListPage = {
   items: Device[]
@@ -257,6 +266,33 @@ export const createDeviceRepository = (database: AgentDatabase) => {
 
   const getRowById = (id: string): DeviceRow | undefined =>
     database.db.select().from(devices).where(eq(devices.id, id)).get()
+
+  const insertProbeDevice = (
+    input: InsertProbeDeviceInput,
+  ): DeviceRepositoryResult<Device> => {
+    const executor = executorOf(input.executor)
+    const deviceId = createDeviceId()
+
+    executor
+      .insert(devices)
+      .values({
+        id: deviceId,
+        name: input.name,
+        platform: input.platform,
+        credentialHash: input.credentialHash,
+        pairedAt: input.pairedAt,
+        lastSeenAt: input.pairedAt,
+        revokedAt: null,
+      })
+      .run()
+
+    const row = executor.select().from(devices).where(eq(devices.id, deviceId)).get()
+    if (row === undefined) {
+      throw new Error("probe device insert did not persist")
+    }
+
+    return { ok: true, value: rowToDevice(row) }
+  }
 
   const touchLastSeen = (input: TouchLastSeenInput): void => {
     const executor = executorOf(input.executor)
@@ -511,6 +547,7 @@ export const createDeviceRepository = (database: AgentDatabase) => {
     markPairingCodeExpired,
     markExpiredActiveBefore,
     claimPairingCode,
+    insertProbeDevice,
     getPairingCodeById,
     getByCredentialHash,
     touchLastSeen,
