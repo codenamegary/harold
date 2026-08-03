@@ -31,6 +31,7 @@ type DeviceServiceContext = {
   eventJournal: EventJournalRepository
   commitPublisher: EventCommitPublisher
   config: Config
+  getAdvertisedUrl: () => string | null
 }
 
 const nowIso = (): string => new Date().toISOString()
@@ -83,12 +84,14 @@ export const createDeviceService = (context: DeviceServiceContext) => {
       return inserted
     }
 
+    const advertisedUrl = context.getAdvertisedUrl()
+
     return {
       ok: true,
       value: {
         id: inserted.value.id,
         code,
-        endpoint: loopbackEndpoint(context.config),
+        endpoint: advertisedUrl ?? loopbackEndpoint(context.config),
         state: "active",
         createdAt: inserted.value.createdAt,
         expiresAt: inserted.value.expiresAt,

@@ -11,6 +11,8 @@ export const queryKeys = {
     [...queryKeys.devicesRoot, filters] as const,
   agentSettingsRoot: ["agentSettings"] as const,
   agentSettings: () => [...queryKeys.agentSettingsRoot] as const,
+  runtimeSettingsRoot: ["runtimeSettings"] as const,
+  runtimeSettings: () => [...queryKeys.runtimeSettingsRoot] as const,
   sessionsRoot: ["sessions"] as const,
   sessions: (workspaceId: string) =>
     [...queryKeys.sessionsRoot, workspaceId] as const,

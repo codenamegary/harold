@@ -7,10 +7,18 @@ import { FieldLabel } from "../design-system/FieldLabel"
 import { StatusDot } from "../design-system/StatusDot"
 import { StatusPill } from "../design-system/StatusPill"
 import { TextInput } from "../design-system/TextInput"
+import { useRuntimeSettingsQuery } from "../runtime-settings/use.runtime.settings.query"
+import { useUpdateRuntimeSettingsMutation } from "../runtime-settings/use.update.runtime.settings.mutation"
 import { openAppEventStream } from "../session/open.app.event.stream"
-import { connectWizardSteps } from "./connect.wizard.steps"
 import {
-  defaultExternalHost,
+  advertisedUrlFromHost,
+  CloudWizardStepId,
+  cloudWizardStepIndex,
+  cloudWizardSteps,
+  hostFromAdvertisedUrl,
+  WizardView,
+} from "./connect.wizard.steps"
+import {
   localAgentPort,
   proxyProviders,
   proxyTemplates,
@@ -20,59 +28,65 @@ import { useCreatePairingCodeMutation } from "./use.create.pairing.code.mutation
 
 type AccessMode = "local" | "cloud"
 
-const initialStepFromSearchParam = (step: string | null): number =>
-  step === "pair" ? 4 : 1
+const initialViewFromSearchParam = (step: string | null): WizardView =>
+  step === "pair" ? { kind: "local-pair" } : { kind: "mode" }
 
 type ConnectWizardStepRailProps = {
-  currentStep: number
-  onStepSelect: (step: number) => void
+  currentStep: CloudWizardStepId
+  onStepSelect: (step: CloudWizardStepId) => void
 }
 
 const ConnectWizardStepRail: React.FC<ConnectWizardStepRailProps> = ({
   currentStep,
   onStepSelect,
-}) => (
-  <aside
-    aria-label="Connection wizard steps"
-    className="relative flex flex-col pt-1 max-[820px]:flex-row max-[820px]:justify-center max-[820px]:before:hidden before:absolute before:top-[30px] before:bottom-[31px] before:left-[17px] before:w-px before:bg-line"
-  >
-    {connectWizardSteps.map((step) => {
-      const isActive = step.id === currentStep
-      const isComplete = step.id < currentStep
+}) => {
+  const currentIndex = cloudWizardStepIndex(currentStep)
 
-      return (
-        <button
-          key={step.id}
-          type="button"
-          aria-current={isActive ? "step" : undefined}
-          onClick={() => onStepSelect(step.id)}
-          className={`relative flex gap-[11px] border-0 bg-transparent py-[9px] text-left cursor-pointer max-[820px]:px-[5px] max-[820px]:py-0 ${isActive ? "text-body" : "text-[#657080]"}`}
-        >
-          <b
-            className={`text-2xs z-[1] grid size-[35px] shrink-0 place-items-center rounded-full border font-mono ${isActive ? "border-lime bg-lime text-lime-ink shadow-[0_0_0_4px_rgba(182,243,107,0.08)]" : isComplete ? "border-lime/35 text-lime text-[0px] after:text-2xs after:content-['✓']" : "border-line bg-ink"}`}
+  return (
+    <aside
+      aria-label="Connection wizard steps"
+      className="relative flex flex-col pt-1 max-[820px]:flex-row max-[820px]:justify-center max-[820px]:before:hidden before:absolute before:top-[30px] before:bottom-[31px] before:left-[17px] before:w-px before:bg-line"
+    >
+      {cloudWizardSteps.map((step, index) => {
+        const isActive = step.id === currentStep
+        const isComplete = index < currentIndex
+
+        return (
+          <button
+            key={step.id}
+            type="button"
+            aria-current={isActive ? "step" : undefined}
+            onClick={() => onStepSelect(step.id)}
+            className={`relative flex gap-[11px] border-0 bg-transparent py-[9px] text-left cursor-pointer max-[820px]:px-[5px] max-[820px]:py-0 ${isActive ? "text-body" : "text-[#657080]"}`}
           >
-            {isComplete ? "" : step.number}
-          </b>
-          <span className="pt-[3px] max-[820px]:hidden">
-            <strong className="block text-sm font-medium">{step.title}</strong>
-            <small className="mt-[5px] block text-xs text-[#505966]">{step.subtitle}</small>
-          </span>
-        </button>
-      )
-    })}
-  </aside>
-)
+            <b
+              className={`text-2xs z-[1] grid size-[35px] shrink-0 place-items-center rounded-full border font-mono ${isActive ? "border-lime bg-lime text-lime-ink shadow-[0_0_0_4px_rgba(182,243,107,0.08)]" : isComplete ? "border-lime/35 text-lime text-[0px] after:text-2xs after:content-['✓']" : "border-line bg-ink"}`}
+            >
+              {isComplete ? "" : step.number}
+            </b>
+            <span className="pt-[3px] max-[820px]:hidden">
+              <strong className="block text-sm font-medium">{step.title}</strong>
+              <small className="mt-[5px] block text-xs text-[#505966]">{step.subtitle}</small>
+            </span>
+          </button>
+        )
+      })}
+    </aside>
+  )
+}
 
 type AccessModeStepProps = {
   accessMode: AccessMode
   onAccessModeChange: (mode: AccessMode) => void
   onContinue: () => void
+  isContinuing: boolean
 }
 
 const AccessModeStep: React.FC<AccessModeStepProps> = ({
   accessMode,
   onAccessModeChange,
   onContinue,
+  isContinuing,
 }) => (
   <div>
     <div className="mb-[25px] flex items-center gap-[13px]">
@@ -154,7 +168,7 @@ const AccessModeStep: React.FC<AccessModeStepProps> = ({
     </div>
 
     <div className="mt-6 flex items-center justify-end border-t border-line-soft pt-[18px]">
-      <Button onClick={onContinue}>
+      <Button onClick={onContinue} disabled={isContinuing}>
         Continue <span aria-hidden>→</span>
       </Button>
     </div>
@@ -174,8 +188,43 @@ const ExternalUrlStep: React.FC<ExternalUrlStepProps> = ({
   onBack,
   onContinue,
 }) => {
+  const runtimeSettingsQuery = useRuntimeSettingsQuery()
+  const updateRuntimeSettingsMutation = useUpdateRuntimeSettingsMutation()
+  const hostInputRef = useRef<HTMLInputElement>(null)
+  const seededHost =
+    runtimeSettingsQuery.data === undefined
+      ? null
+      : hostFromAdvertisedUrl(runtimeSettingsQuery.data.advertisedUrl)
+  const [hostDraft, setHostDraft] = useState<string | null>(null)
+  const [validationError, setValidationError] = useState<string | null>(null)
+  const host = hostDraft ?? seededHost ?? ""
+  const settingsReady = seededHost !== null
+
   const template = proxyTemplates[proxyProvider]
-  const fullUrl = `https://${defaultExternalHost}`
+  const previewUrl = advertisedUrlFromHost(host.length === 0 ? "example.com" : host)
+  const saveError =
+    updateRuntimeSettingsMutation.isError
+      ? "Could not save the advertised URL."
+      : null
+
+  const handleSave = () => {
+    const trimmed = (hostInputRef.current?.value ?? host).trim()
+    if (trimmed.length === 0) {
+      setValidationError("Enter a host for the public HTTPS URL.")
+      return
+    }
+
+    setHostDraft(trimmed)
+    setValidationError(null)
+    updateRuntimeSettingsMutation.mutate(
+      { advertisedUrl: advertisedUrlFromHost(trimmed) },
+      {
+        onSuccess: () => {
+          onContinue()
+        },
+      },
+    )
+  }
 
   return (
     <div>
@@ -196,13 +245,24 @@ const ExternalUrlStep: React.FC<ExternalUrlStepProps> = ({
       <div className="flex items-center gap-2 rounded-md border border-line-input bg-surface-deep px-[11px]">
         <span className="text-sm text-dim">https://</span>
         <TextInput
+          ref={hostInputRef}
           id="external-url"
           aria-label="Public server URL"
-          readOnly
-          value={defaultExternalHost}
+          value={host}
+          onChange={(event) => {
+            setHostDraft(event.target.value)
+            if (validationError !== null) {
+              setValidationError(null)
+            }
+          }}
           className="border-0 bg-transparent px-0 focus:border-0"
         />
       </div>
+      {validationError !== null || saveError !== null ? (
+        <p className="mt-2 text-xs text-danger" role="alert">
+          {validationError ?? saveError}
+        </p>
+      ) : null}
 
       <div role="tablist" aria-label="Proxy templates" className="mt-[22px] flex border-b border-line">
         {proxyProviders.map((provider) => {
@@ -236,7 +296,7 @@ const ExternalUrlStep: React.FC<ExternalUrlStepProps> = ({
           </Button>
         </div>
         <pre className="m-0 overflow-x-auto p-3.5 font-mono text-sm leading-[1.6] text-body-soft">
-          {template.code(fullUrl)}
+          {template.code(previewUrl)}
         </pre>
       </div>
 
@@ -246,7 +306,10 @@ const ExternalUrlStep: React.FC<ExternalUrlStepProps> = ({
         <Button variant="secondary" onClick={onBack}>
           Back
         </Button>
-        <Button disabled onClick={onContinue}>
+        <Button
+          onClick={handleSave}
+          disabled={updateRuntimeSettingsMutation.isPending || !settingsReady}
+        >
           Save &amp; continue <span aria-hidden>→</span>
         </Button>
       </div>
@@ -255,28 +318,34 @@ const ExternalUrlStep: React.FC<ExternalUrlStepProps> = ({
 }
 
 type TestConnectionStepProps = {
+  advertisedUrl: string | null
   onBack: () => void
+  onContinue: () => void
 }
 
 const testChecks = [
   {
     id: "dns",
     title: "DNS & reachability",
-    detail: "Milestone 3 will check public endpoint reachability",
+    detail: "Public endpoint reachability checks are not yet available",
   },
   {
     id: "tls",
     title: "TLS certificate",
-    detail: "Milestone 3 will validate certificates",
+    detail: "Certificate validation is not yet available",
   },
   {
     id: "acp",
     title: "ACP handshake",
-    detail: "Milestone 3 will test protocol discovery",
+    detail: "Protocol discovery checks are not yet available",
   },
 ] as const
 
-const TestConnectionStep: React.FC<TestConnectionStepProps> = ({ onBack }) => (
+const TestConnectionStep: React.FC<TestConnectionStepProps> = ({
+  advertisedUrl,
+  onBack,
+  onContinue,
+}) => (
   <div>
     <div className="mb-[25px] flex items-center gap-[13px]">
       <span className="grid size-10 place-items-center rounded-[9px] border border-line bg-panel-2 text-lg">
@@ -285,14 +354,17 @@ const TestConnectionStep: React.FC<TestConnectionStepProps> = ({ onBack }) => (
       <div>
         <h2 className="m-0 text-lg font-semibold">Test your connection</h2>
         <p className="m-0 mt-1.5 text-sm text-muted">
-          Reachability, TLS, and external URL validation are disabled until Milestone 3.
+          Reachability, TLS, and handshake checks are not yet available. You can continue to
+          pairing.
         </p>
       </div>
     </div>
 
     <div className="flex items-center gap-2.5 rounded-lg border border-line-soft bg-panel-2 px-3.5 py-3">
       <StatusDot variant="warning" />
-      <code className="font-mono text-sm text-body">https://{defaultExternalHost}</code>
+      <code className="font-mono text-sm text-body">
+        {advertisedUrl ?? "No advertised URL configured"}
+      </code>
       <span className="ml-auto text-2xs text-dim">External endpoint</span>
     </div>
 
@@ -313,9 +385,10 @@ const TestConnectionStep: React.FC<TestConnectionStepProps> = ({ onBack }) => (
     </div>
 
     <div className="mt-4 rounded-lg border border-line-soft bg-panel-2 px-3.5 py-3">
-      <span className="block text-xs text-body">Not available in Milestone 2</span>
+      <span className="block text-xs text-body">Connection tests not yet available</span>
       <small className="mt-1 block text-2xs text-dim">
-        No simulated success is shown for external reachability or TLS.
+        Checks stay disabled until the connection test API ships. Continue to pair when your proxy
+        is ready.
       </small>
     </div>
 
@@ -323,9 +396,14 @@ const TestConnectionStep: React.FC<TestConnectionStepProps> = ({ onBack }) => (
       <Button variant="secondary" onClick={onBack}>
         Back
       </Button>
-      <Button disabled>
-        Run connection test <span aria-hidden>⌁</span>
-      </Button>
+      <div className="flex items-center gap-3">
+        <Button disabled>
+          Run connection test <span aria-hidden>⌁</span>
+        </Button>
+        <Button onClick={onContinue}>
+          Continue <span aria-hidden>→</span>
+        </Button>
+      </div>
     </div>
   </div>
 )
@@ -428,7 +506,7 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack }) => {
           <h2 className="m-0 text-lg font-semibold">Pair a device</h2>
           <p className="m-0 mt-1.5 text-sm text-muted">
             Enter the six-character code in a trusted client. The QR includes the same code plus
-            the local endpoint for convenience.
+            the endpoint for convenience.
           </p>
         </div>
       </div>
@@ -490,7 +568,7 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack }) => {
               : `${pairedDeviceName} paired`}
           </strong>
           <small className="mt-1 block text-2xs text-dim">
-            Listening on this local Agent Server endpoint
+            Listening for a pairing claim on this Agent Server
           </small>
         </div>
         <Button
@@ -522,15 +600,39 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack }) => {
 
 export const ConnectWizard: React.FC = () => {
   const [searchParams] = useSearchParams()
-  const [currentStep, setCurrentStep] = useState(() =>
-    initialStepFromSearchParam(searchParams.get("step")),
+  const [view, setView] = useState<WizardView>(() =>
+    initialViewFromSearchParam(searchParams.get("step")),
   )
   const [accessMode, setAccessMode] = useState<AccessMode>("local")
   const [proxyProvider, setProxyProvider] = useState<ProxyProvider>("caddy")
+  const updateRuntimeSettingsMutation = useUpdateRuntimeSettingsMutation()
+  const runtimeSettingsQuery = useRuntimeSettingsQuery()
 
-  const goToStep = (step: number) => setCurrentStep(step)
-  const goToNextStep = () => setCurrentStep((step) => Math.min(step + 1, connectWizardSteps.length))
-  const goToPreviousStep = () => setCurrentStep((step) => Math.max(step - 1, 1))
+  const handleModeContinue = () => {
+    if (accessMode === "local") {
+      updateRuntimeSettingsMutation.mutate(
+        { advertisedUrl: null },
+        {
+          onSuccess: () => {
+            setView({ kind: "local-pair" })
+          },
+        },
+      )
+      return
+    }
+
+    setView({ kind: "cloud", step: "external" })
+  }
+
+  const cloudProgress =
+    view.kind === "cloud"
+      ? `${cloudWizardStepIndex(view.step) + 1} / ${cloudWizardSteps.length}`
+      : null
+
+  const showRail = view.kind === "cloud"
+  const gridClass = showRail
+    ? "grid items-start justify-center gap-[22px] max-[820px]:grid-cols-1 md:grid-cols-[205px_minmax(0,800px)]"
+    : "grid items-start justify-center gap-[22px]"
 
   return (
     <div>
@@ -538,38 +640,57 @@ export const ConnectWizard: React.FC = () => {
         <p className="m-0 max-w-2xl text-sm text-muted">
           Choose how devices reach this local agent server.
         </p>
-        <div
-          role="status"
-          aria-label="Wizard progress"
-          className="shrink-0 rounded-lg border border-line-soft bg-panel-2 px-3 py-2 font-mono text-2xs text-muted"
-        >
-          {currentStep} / {connectWizardSteps.length}
-        </div>
+        {cloudProgress !== null ? (
+          <div
+            role="status"
+            aria-label="Wizard progress"
+            className="shrink-0 rounded-lg border border-line-soft bg-panel-2 px-3 py-2 font-mono text-2xs text-muted"
+          >
+            {cloudProgress}
+          </div>
+        ) : null}
       </div>
 
-      <div className="grid items-start justify-center gap-[22px] max-[820px]:grid-cols-1 md:grid-cols-[205px_minmax(0,800px)]">
-        <ConnectWizardStepRail currentStep={currentStep} onStepSelect={goToStep} />
+      <div className={gridClass}>
+        {showRail ? (
+          <ConnectWizardStepRail
+            currentStep={view.step}
+            onStepSelect={(step) => setView({ kind: "cloud", step })}
+          />
+        ) : null}
 
         <section className="min-h-[540px] rounded-[10px] border border-line bg-panel p-7 max-[640px]:min-h-0 max-[640px]:p-[19px_15px]">
-          {currentStep === 1 ? (
+          {view.kind === "mode" ? (
             <AccessModeStep
               accessMode={accessMode}
               onAccessModeChange={setAccessMode}
-              onContinue={goToNextStep}
+              onContinue={handleModeContinue}
+              isContinuing={
+                accessMode === "local" && updateRuntimeSettingsMutation.isPending
+              }
             />
           ) : null}
-          {currentStep === 2 ? (
+          {view.kind === "cloud" && view.step === "external" ? (
             <ExternalUrlStep
               proxyProvider={proxyProvider}
               onProxyProviderChange={setProxyProvider}
-              onBack={goToPreviousStep}
-              onContinue={goToNextStep}
+              onBack={() => setView({ kind: "mode" })}
+              onContinue={() => setView({ kind: "cloud", step: "test" })}
             />
           ) : null}
-          {currentStep === 3 ? (
-            <TestConnectionStep onBack={goToPreviousStep} />
+          {view.kind === "cloud" && view.step === "test" ? (
+            <TestConnectionStep
+              advertisedUrl={runtimeSettingsQuery.data?.advertisedUrl ?? null}
+              onBack={() => setView({ kind: "cloud", step: "external" })}
+              onContinue={() => setView({ kind: "cloud", step: "pair" })}
+            />
           ) : null}
-          {currentStep === 4 ? <PairDeviceStep onBack={goToPreviousStep} /> : null}
+          {view.kind === "cloud" && view.step === "pair" ? (
+            <PairDeviceStep onBack={() => setView({ kind: "cloud", step: "test" })} />
+          ) : null}
+          {view.kind === "local-pair" ? (
+            <PairDeviceStep onBack={() => setView({ kind: "mode" })} />
+          ) : null}
         </section>
       </div>
     </div>

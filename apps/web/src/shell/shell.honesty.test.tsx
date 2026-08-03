@@ -47,6 +47,16 @@ const pairingCode = {
   expiresAt: "2026-08-02T21:10:00.000Z",
 } as const
 
+const runtimeSettings = {
+  advertisedUrl: "https://agents.example.com" as string | null,
+  trustedProxies: [] as string[],
+  bindHost: "127.0.0.1" as const,
+  bindPort: 3847,
+  logLevel: "info" as const,
+  logPath: null as string | null,
+  allowedRoots: [] as string[],
+}
+
 const originalFetch = globalThis.fetch
 const originalWebSocket = globalThis.WebSocket
 
@@ -94,6 +104,8 @@ const emptyAgentCollection = {
 
 describe("shell honesty", () => {
   beforeEach(() => {
+    runtimeSettings.advertisedUrl = "https://agents.example.com"
+
     globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
       return {
         url: String(url),
@@ -132,6 +144,37 @@ describe("shell honesty", () => {
             status: 201,
             headers: { "Content-Type": "application/json" },
           }),
+        )
+      }
+
+      if (url === "/v1/settings/runtime" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(runtimeSettings), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/runtime" && method === "PATCH") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          advertisedUrl?: string | null
+        }
+        if (body.advertisedUrl !== undefined) {
+          runtimeSettings.advertisedUrl =
+            body.advertisedUrl === "" ? null : body.advertisedUrl
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              settings: runtimeSettings,
+              restartRequired: false,
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
         )
       }
 
@@ -210,14 +253,28 @@ describe("shell honesty", () => {
 
   describe("connect wizard disabled honesty", () => {
     test("test connection is disabled while pair uses real claim gating", async () => {
-      const { getByRole } = renderShellRoute("/connect")
+      const { getByRole, container } = renderShellRoute("/connect")
 
       await waitForShellReady(getByRole)
 
-      fireEvent.click(getByRole("button", { name: /test connection/i }))
-      expect(getByRole("button", { name: /run connection test/i })).toBeDisabled()
+      fireEvent.click(getByRole("button", { name: /cloud proxy/i }))
+      fireEvent.click(getByRole("button", { name: /continue/i }))
 
-      fireEvent.click(getByRole("button", { name: /pair device/i }))
+      await waitFor(() => {
+        expect(getByRole("textbox", { name: /public server url/i })).toHaveValue(
+          "agents.example.com",
+        )
+      })
+      fireEvent.click(getByRole("button", { name: /save & continue/i }))
+
+      await waitFor(() => {
+        expect(getByRole("heading", { name: /test your connection/i })).toBeInTheDocument()
+      })
+      expect(getByRole("button", { name: /run connection test/i })).toBeDisabled()
+      expect(container.textContent ?? "").toMatch(/not yet available/i)
+      expect(container.textContent ?? "").not.toMatch(/milestone 3/i)
+
+      fireEvent.click(getByRole("button", { name: /^continue/i }))
       await waitFor(() => {
         expect(getByRole("button", { name: /regenerate/i })).toBeEnabled()
       })
