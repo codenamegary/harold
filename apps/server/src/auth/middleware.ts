@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { DeviceRepository } from "../device/repository"
 import { authenticate } from "./authenticate"
 import { authorizeActiveFullOperator } from "./authorize"
-import { isLoopbackRequest } from "./loopback"
+import { isHostPrincipalRequest } from "./request.origin"
 import { BEARER_CHALLENGE, buildUnauthorizedProblem } from "./problems"
 import { Principal } from "./principal"
 import { isOpenRoute } from "./route.policy"
@@ -18,6 +18,7 @@ export const setRequestPrincipal = (request: object, principal: Principal): void
 
 export type AuthMiddlewareDeps = {
   deviceRepository: DeviceRepository
+  getTrustedProxies?: () => readonly string[]
   isLoopbackRequest?: (request: FastifyRequest) => boolean
 }
 
@@ -48,7 +49,10 @@ export const registerAuthMiddleware = (
   app: FastifyInstance,
   deps: AuthMiddlewareDeps,
 ) => {
-  const resolveLoopback = deps.isLoopbackRequest ?? isLoopbackRequest
+  const resolveHostPrincipal =
+    deps.isLoopbackRequest ??
+    ((request: FastifyRequest) =>
+      isHostPrincipalRequest(request, deps.getTrustedProxies?.() ?? []))
 
   // preValidation so auth runs before route handshake / auto-resume work.
   app.addHook("preValidation", async (request, reply) => {
@@ -59,7 +63,7 @@ export const registerAuthMiddleware = (
 
     const authResult = authenticate({
       authorization: request.headers.authorization,
-      isLoopback: resolveLoopback(request),
+      isLoopback: resolveHostPrincipal(request),
       lookupByCredentialHash: (credentialHash) =>
         deps.deviceRepository.getByCredentialHash({ credentialHash }),
     })

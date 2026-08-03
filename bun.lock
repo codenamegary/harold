@@ -17,7 +17,7 @@
         "drizzle-orm": "catalog:",
         "fastify": "catalog:",
         "ulid": "^3.0.2",
-        "yaml": "^2.8.0",
+        "yaml": "^2.9.0",
         "zod": "catalog:",
       },
       "devDependencies": {
