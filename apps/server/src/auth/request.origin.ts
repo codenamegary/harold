@@ -1,5 +1,5 @@
-import ipaddr from "ipaddr.js"
 import { isLoopbackRequest, LoopbackRequest } from "./loopback"
+import { ipMatchesAllowlist } from "./ip.match"
 
 export type ForwardedHeaderRequest = {
   headers: Record<string, string | string[] | undefined>
@@ -43,27 +43,6 @@ export const hasHonoredForwardedHeaders = (
   return forwardedHeaderPresenceChecks.some((check) => check(request.headers))
 }
 
-const parseTcpPeer = (tcpPeer: string): ipaddr.IPv4 | ipaddr.IPv6 | undefined => {
-  try {
-    return ipaddr.process(tcpPeer)
-  } catch {
-    return undefined
-  }
-}
-
-const peerMatchesTrustedProxy = (
-  peer: ipaddr.IPv4 | ipaddr.IPv6,
-  trustedProxy: string,
-): boolean => {
-  if (trustedProxy.includes("/")) {
-    const [network, prefix] = ipaddr.parseCIDR(trustedProxy)
-    return peer.match(network, prefix)
-  }
-
-  const allowed = ipaddr.process(trustedProxy)
-  return peer.toNormalizedString() === allowed.toNormalizedString()
-}
-
 export const isTrustedProxyPeer = (
   tcpPeer: string,
   trustedProxies: readonly string[],
@@ -72,14 +51,7 @@ export const isTrustedProxyPeer = (
     return false
   }
 
-  const peer = parseTcpPeer(tcpPeer)
-  if (peer === undefined) {
-    return false
-  }
-
-  return trustedProxies.some((trustedProxy) =>
-    peerMatchesTrustedProxy(peer, trustedProxy),
-  )
+  return ipMatchesAllowlist(tcpPeer, trustedProxies)
 }
 
 export type HostPrincipalRequest = LoopbackRequest & ForwardedHeaderRequest
