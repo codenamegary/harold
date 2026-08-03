@@ -33,6 +33,17 @@ const defaultRuntimeSettings = {
   allowedRoots: [],
 } as const
 
+const wrapRuntimeSettingsView = (settings: typeof defaultRuntimeSettings) => ({
+  settings,
+  restartRequired: false,
+  effective: {
+    bindHost: settings.bindHost,
+    bindPort: settings.bindPort,
+    logPath: settings.logPath,
+  },
+  overrides: {},
+})
+
 const firstPairingCode = {
   id: "pair_01",
   code: "J7K-9P2",
@@ -193,7 +204,7 @@ describe("ConnectWizard", () => {
       if (url === "/v1/settings/runtime" && method === "GET") {
         runtimeSettingsRequests.push("GET")
         return Promise.resolve(
-          new Response(JSON.stringify(runtimeSettings), {
+          new Response(JSON.stringify(wrapRuntimeSettingsView(runtimeSettings)), {
             status: 200,
             headers: { "Content-Type": "application/json" },
           }),
@@ -212,13 +223,10 @@ describe("ConnectWizard", () => {
             body.advertisedUrl === undefined ? runtimeSettings.advertisedUrl : body.advertisedUrl,
         }
         return Promise.resolve(
-          new Response(
-            JSON.stringify({ settings: runtimeSettings, restartRequired: false }),
-            {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            },
-          ),
+          new Response(JSON.stringify(wrapRuntimeSettingsView(runtimeSettings)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
         )
       }
 

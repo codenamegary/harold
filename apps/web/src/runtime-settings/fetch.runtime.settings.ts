@@ -1,6 +1,6 @@
 import {
   RUNTIME_SETTINGS_PATH,
-  RuntimeSettingsSchema,
+  RuntimeSettingsViewSchema,
 } from "contracts/http/runtime-settings"
 
 export const fetchRuntimeSettings = async () => {
@@ -11,5 +11,5 @@ export const fetchRuntimeSettings = async () => {
   }
 
   const payload: unknown = await response.json()
-  return RuntimeSettingsSchema.parse(payload)
+  return RuntimeSettingsViewSchema.parse(payload)
 }

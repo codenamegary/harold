@@ -105,12 +105,12 @@ describe("createRuntimeSettingsRepository", () => {
       logLevel: "warn",
     })
 
-    expect(result.restartRequired).toBe(false)
+    expect(result.logLevel).toBe("warn")
     expect(repository.get().logLevel).toBe("warn")
 
     const parsed = YAML.parse(
       await readFile(path.join(dataDir, settingsFileName), "utf8"),
     )
-    expect(parsed).toEqual(result.settings)
+    expect(parsed).toEqual(result)
   })
 })

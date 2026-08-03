@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   isIpOrCidr,
   RuntimeSettingsSchema,
+  RuntimeSettingsViewSchema,
   UpdateRuntimeSettingsBodySchema,
   UpdateRuntimeSettingsResponseSchema,
 } from "./runtime-settings"
@@ -120,12 +121,35 @@ describe("UpdateRuntimeSettingsBodySchema", () => {
 })
 
 describe("UpdateRuntimeSettingsResponseSchema", () => {
-  test("includes restartRequired", () => {
+  test("includes restartRequired and effective values", () => {
     const response = {
       settings: validSettings,
       restartRequired: true,
+      effective: {
+        bindHost: "127.0.0.1",
+        bindPort: 3847,
+        logPath: null,
+      },
+      overrides: {},
     }
 
     expect(UpdateRuntimeSettingsResponseSchema.parse(response)).toEqual(response)
+  })
+})
+
+describe("RuntimeSettingsViewSchema", () => {
+  test("accepts wrapped runtime settings view", () => {
+    const view = {
+      settings: validSettings,
+      restartRequired: false,
+      effective: {
+        bindHost: "127.0.0.1",
+        bindPort: 3847,
+        logPath: null,
+      },
+      overrides: { bindPort: "env" as const },
+    }
+
+    expect(RuntimeSettingsViewSchema.parse(view)).toEqual(view)
   })
 })

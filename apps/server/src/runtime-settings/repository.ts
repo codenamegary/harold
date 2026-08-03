@@ -3,7 +3,6 @@ import {
   RuntimeSettings,
   RuntimeSettingsSchema,
   UpdateRuntimeSettingsBody,
-  UpdateRuntimeSettingsResponse,
 } from "contracts/http/runtime-settings"
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import path from "node:path"
@@ -15,7 +14,7 @@ export const settingsFileName = "settings.yml"
 
 export type RuntimeSettingsRepository = {
   get: () => RuntimeSettings
-  update: (body: UpdateRuntimeSettingsBody) => UpdateRuntimeSettingsResponse
+  update: (body: UpdateRuntimeSettingsBody) => RuntimeSettings
 }
 
 export type CreateRuntimeSettingsRepositoryOptions = {
@@ -89,18 +88,6 @@ const writeSettingsAtomic = (params: {
   renameSync(tempPath, filePath)
 }
 
-const requiresRestart = (params: {
-  current: RuntimeSettings
-  next: RuntimeSettings
-}): boolean => {
-  const { current, next } = params
-  return (
-    current.bindHost !== next.bindHost ||
-    current.bindPort !== next.bindPort ||
-    current.logPath !== next.logPath
-  )
-}
-
 const loadOrSeed = (params: {
   filePath: string
   seedDefaults: RuntimeSettings
@@ -127,9 +114,7 @@ export const createRuntimeSettingsRepository = (
 
   const get = (): RuntimeSettings => cache.settings
 
-  const update = (
-    body: UpdateRuntimeSettingsBody,
-  ): UpdateRuntimeSettingsResponse => {
+  const update = (body: UpdateRuntimeSettingsBody): RuntimeSettings => {
     const current = get()
     const advertisedUrl = normalizeAdvertisedUrl(body.advertisedUrl)
 
@@ -147,10 +132,7 @@ export const createRuntimeSettingsRepository = (
     writeSettingsAtomic({ filePath, settings: next })
     cache.settings = next
 
-    return {
-      settings: next,
-      restartRequired: requiresRestart({ current, next }),
-    }
+    return next
   }
 
   return {

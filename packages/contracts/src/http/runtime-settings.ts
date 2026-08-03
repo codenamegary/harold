@@ -164,10 +164,27 @@ export const UpdateRuntimeSettingsBodySchema = z.strictObject({
   allowedRoots: z.array(z.string().min(1)).optional(),
 })
 
-export const UpdateRuntimeSettingsResponseSchema = z.strictObject({
+export const RuntimeSettingsOverrideSourceSchema = z.enum(["env"])
+
+export const RuntimeSettingsOverridesSchema = z.strictObject({
+  bindHost: RuntimeSettingsOverrideSourceSchema.optional(),
+  bindPort: RuntimeSettingsOverrideSourceSchema.optional(),
+})
+
+export const RuntimeSettingsEffectiveSchema = z.strictObject({
+  bindHost: z.literal("127.0.0.1"),
+  bindPort: z.number().int().nonnegative().max(65535),
+  logPath: z.string().min(1).nullable(),
+})
+
+export const RuntimeSettingsViewSchema = z.strictObject({
   settings: RuntimeSettingsSchema,
   restartRequired: z.boolean(),
+  effective: RuntimeSettingsEffectiveSchema,
+  overrides: RuntimeSettingsOverridesSchema,
 })
+
+export const UpdateRuntimeSettingsResponseSchema = RuntimeSettingsViewSchema
 
 export const PatchRuntimeSettingsQuerySchema = z.strictObject({
   force: z
@@ -178,9 +195,13 @@ export const PatchRuntimeSettingsQuerySchema = z.strictObject({
 
 export type RuntimeSettings = z.infer<typeof RuntimeSettingsSchema>
 export type UpdateRuntimeSettingsBody = z.infer<typeof UpdateRuntimeSettingsBodySchema>
-export type UpdateRuntimeSettingsResponse = z.infer<
-  typeof UpdateRuntimeSettingsResponseSchema
+export type RuntimeSettingsOverrideSource = z.infer<
+  typeof RuntimeSettingsOverrideSourceSchema
 >
+export type RuntimeSettingsOverrides = z.infer<typeof RuntimeSettingsOverridesSchema>
+export type RuntimeSettingsEffective = z.infer<typeof RuntimeSettingsEffectiveSchema>
+export type RuntimeSettingsView = z.infer<typeof RuntimeSettingsViewSchema>
+export type UpdateRuntimeSettingsResponse = RuntimeSettingsView
 export type PatchRuntimeSettingsQuery = z.infer<typeof PatchRuntimeSettingsQuerySchema>
 
 export const normalizeAdvertisedUrl = (

@@ -1,11 +1,11 @@
 import {
   LogLevel,
   PatchRuntimeSettingsQuerySchema,
-  RuntimeSettingsSchema,
+  RuntimeSettingsViewSchema,
   UpdateRuntimeSettingsBodySchema,
-  UpdateRuntimeSettingsResponseSchema,
 } from "contracts/http/runtime-settings"
 import { FastifyInstance } from "fastify"
+import { EnvBindOverrides } from "../config/env.bind.overrides"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { SessionRepository } from "../session/repository"
 import { deleteWorkspaceWithCascade } from "../workspace/delete.workspace.cascade"
@@ -18,6 +18,8 @@ import {
   buildAllowedRootHasWorkspacesProblem,
   buildAllowedRootValidationProblem,
 } from "./runtime.settings.problems"
+import { AppliedRuntimeSettingsHolder } from "./applied.runtime.settings"
+import { buildRuntimeSettingsView } from "./resolve.runtime.settings.state"
 
 export type RegisterRuntimeSettingsRoutesOptions = {
   onLogLevelChanged?: (logLevel: LogLevel) => void
@@ -25,6 +27,8 @@ export type RegisterRuntimeSettingsRoutesOptions = {
   workspaceService?: WorkspaceService
   sessionRepository?: SessionRepository
   acpSupervisor?: AcpSupervisor
+  appliedRuntimeSettings?: AppliedRuntimeSettingsHolder
+  envBindOverrides?: EnvBindOverrides
 }
 
 const sendProblem = (
@@ -43,8 +47,19 @@ export const registerRuntimeSettingsRoutes = (
   options: RegisterRuntimeSettingsRoutesOptions = {},
 ) => {
   app.get("/v1/settings/runtime", async (_request, reply) => {
-    const settings = RuntimeSettingsSchema.parse(repository.get())
-    return reply.status(200).send(settings)
+    const persisted = repository.get()
+    const applied = options.appliedRuntimeSettings?.get() ?? {
+      bindHost: persisted.bindHost,
+      bindPort: persisted.bindPort,
+      logPath: persisted.logPath,
+    }
+    const view = buildRuntimeSettingsView({
+      persisted,
+      applied,
+      envOverrides: options.envBindOverrides ?? {},
+    })
+
+    return reply.status(200).send(RuntimeSettingsViewSchema.parse(view))
   })
 
   app.patch("/v1/settings/runtime", async (request, reply) => {
@@ -127,18 +142,27 @@ export const registerRuntimeSettingsRoutes = (
       }
     }
 
-    const result = repository.update(resolvedBody)
+    const nextSettings = repository.update(resolvedBody)
 
     if (
       body.logLevel !== undefined &&
       body.logLevel !== previous.logLevel &&
       options.onLogLevelChanged
     ) {
-      options.onLogLevelChanged(result.settings.logLevel)
+      options.onLogLevelChanged(nextSettings.logLevel)
     }
 
-    return reply.status(200).send(
-      UpdateRuntimeSettingsResponseSchema.parse(result),
-    )
+    const applied = options.appliedRuntimeSettings?.get() ?? {
+      bindHost: nextSettings.bindHost,
+      bindPort: nextSettings.bindPort,
+      logPath: nextSettings.logPath,
+    }
+    const view = buildRuntimeSettingsView({
+      persisted: nextSettings,
+      applied,
+      envOverrides: options.envBindOverrides ?? {},
+    })
+
+    return reply.status(200).send(RuntimeSettingsViewSchema.parse(view))
   })
 }

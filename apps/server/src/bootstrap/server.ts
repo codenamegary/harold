@@ -5,6 +5,7 @@ import { z } from "zod"
 import { LogLevel } from "contracts/http/runtime-settings"
 import { registerErrorHandler } from "../error/error-handler"
 import { Config } from "../config/config"
+import { EnvBindOverrides } from "../config/env.bind.overrides"
 import { AgentDatabase } from "../persistence/database"
 import { Runtime } from "../runtime/runtime"
 import { registerStatusRoutes } from "../status/status-routes"
@@ -15,6 +16,7 @@ import {
   RuntimeSettingsRepository,
 } from "../runtime-settings/repository"
 import { registerRuntimeSettingsRoutes } from "../runtime-settings/routes"
+import { AppliedRuntimeSettingsHolder } from "../runtime-settings/applied.runtime.settings"
 import { createWorkspaceRepository } from "../workspace/repository"
 import { registerWorkspaceRoutes } from "../workspace/routes"
 import { createSessionRepository } from "../session/repository"
@@ -70,6 +72,8 @@ export type CreateServerOptions = {
   logStream?: Writable
   logLevel?: LogLevel
   runtimeSettingsRepository?: RuntimeSettingsRepository
+  appliedRuntimeSettings?: AppliedRuntimeSettingsHolder
+  envBindOverrides?: EnvBindOverrides
 }
 
 const loggerRedactPaths = [
@@ -122,6 +126,8 @@ export const createServer = async ({
   logStream,
   logLevel,
   runtimeSettingsRepository: providedRuntimeSettingsRepository,
+  appliedRuntimeSettings,
+  envBindOverrides,
 }: CreateServerOptions) => {
   const app = Fastify({
     logger: buildLoggerOptions({ logStream, logLevel }),
@@ -266,6 +272,8 @@ export const createServer = async ({
     workspaceService,
     sessionRepository,
     acpSupervisor,
+    appliedRuntimeSettings,
+    envBindOverrides,
   })
   registerSessionRoutes(
     app,
