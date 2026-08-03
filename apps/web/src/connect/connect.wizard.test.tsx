@@ -55,6 +55,29 @@ const secondPairingCode = {
   expiresAt: "2026-08-02T21:11:00.000Z",
 } as const
 
+const passingConnectionTest = {
+  advertisedUrl: "https://agents.example.com",
+  checkedAt: "2026-08-03T12:00:00.000Z",
+  checks: [
+    { id: "dns", status: "pass", message: "Resolved agents.example.com and reached port 443" },
+    { id: "tls", status: "pass", message: "TLS certificate is valid" },
+    { id: "device-auth", status: "pass", message: "Bearer authentication succeeded" },
+  ],
+  canContinue: true,
+  canContinueAnyway: false,
+} as const
+
+const warningTlsConnectionTest = {
+  ...passingConnectionTest,
+  checks: [
+    passingConnectionTest.checks[0],
+    { id: "tls", status: "warn", message: "Certificate is self-signed" },
+    passingConnectionTest.checks[2],
+  ],
+  canContinue: false,
+  canContinueAnyway: true,
+} as const
+
 const createFakeSocket = (url: string): FakeSocket => {
   const listeners = new Map<string, Array<(event: { data?: string }) => void>>()
 
@@ -126,6 +149,14 @@ const saveCloudExternalUrl = async (
   })
 }
 
+const waitForConnectionTestContinue = async (
+  getByRole: ReturnType<typeof renderWithProviders>["getByRole"],
+) => {
+  await waitFor(() => {
+    expect(getByRole("button", { name: continueButtonName })).toBeEnabled()
+  })
+}
+
 const renderConnectWizard = () =>
   renderWithProviders(<ConnectWizard />, {
     initialEntries: ["/connect"],
@@ -136,6 +167,8 @@ describe("ConnectWizard", () => {
   const pairingRequests: string[] = []
   const runtimeSettingsRequests: string[] = []
   const runtimeSettingsUpdates: Array<{ advertisedUrl?: string | null }> = []
+  const connectionTestRequests: string[] = []
+  let connectionTestResponse: typeof passingConnectionTest = passingConnectionTest
   let runtimeSettings = { ...defaultRuntimeSettings }
 
   beforeEach(() => {
@@ -143,6 +176,8 @@ describe("ConnectWizard", () => {
     pairingRequests.length = 0
     runtimeSettingsRequests.length = 0
     runtimeSettingsUpdates.length = 0
+    connectionTestRequests.length = 0
+    connectionTestResponse = passingConnectionTest
     runtimeSettings = { ...defaultRuntimeSettings }
 
     globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
@@ -184,6 +219,16 @@ describe("ConnectWizard", () => {
               headers: { "Content-Type": "application/json" },
             },
           ),
+        )
+      }
+
+      if (url === "/v1/connection-test" && method === "POST") {
+        connectionTestRequests.push(url)
+        return Promise.resolve(
+          new Response(JSON.stringify(connectionTestResponse), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
         )
       }
 
@@ -288,19 +333,34 @@ describe("ConnectWizard", () => {
     expect(getByText(/enter a public hostname/i)).toBeInTheDocument()
   })
 
-  test("cloud test step is pass-through with honest copy", async () => {
+  test("cloud test step auto-runs connection test and gates continue", async () => {
     const { getByRole, getByText } = renderConnectWizard()
 
     await goToCloudExternalUrl(getByRole)
     await saveCloudExternalUrl(getByRole, "agents.example.com")
 
     expect(runtimeSettingsRequests).toContain("PATCH")
-
-    expect(getByText(/connection tests coming soon/i)).toBeInTheDocument()
-    expect(getByText(/no simulated success/i)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(connectionTestRequests).toHaveLength(1)
+    })
+    expect(getByText(/resolved agents\.example\.com/i)).toBeInTheDocument()
+    expect(getByRole("button", { name: continueButtonName })).toBeEnabled()
 
     fireEvent.click(getByRole("button", { name: continueButtonName }))
     expect(getByRole("heading", { name: /pair a device/i })).toBeInTheDocument()
+  })
+
+  test("cloud test step shows continue anyway for self-signed TLS warning", async () => {
+    connectionTestResponse = warningTlsConnectionTest
+    const { getByRole } = renderConnectWizard()
+
+    await goToCloudExternalUrl(getByRole)
+    await saveCloudExternalUrl(getByRole, "agents.example.com")
+
+    await waitFor(() => {
+      expect(getByRole("button", { name: /continue anyway/i })).toBeInTheDocument()
+    })
+    expect(getByRole("button", { name: continueButtonName })).toBeDisabled()
   })
 
   test("cloud pair uses advertised endpoint label", async () => {
@@ -308,6 +368,7 @@ describe("ConnectWizard", () => {
 
     await goToCloudExternalUrl(getByRole)
     await saveCloudExternalUrl(getByRole, "agents.example.com")
+    await waitForConnectionTestContinue(getByRole)
     fireEvent.click(getByRole("button", { name: continueButtonName }))
 
     await waitFor(() => {
@@ -363,13 +424,16 @@ describe("ConnectWizard", () => {
     expect(within(panel).getByText(/service: http:\/\/127\.0\.0\.1:3847/)).toBeInTheDocument()
   })
 
-  test("cloud test step shows disabled checks", async () => {
+  test("cloud test step shows live check results", async () => {
     const { getByRole, getAllByText } = renderConnectWizard()
 
     await goToCloudExternalUrl(getByRole)
     await saveCloudExternalUrl(getByRole, "agents.example.com")
 
-    expect(getAllByText(/not available/i).length).toBeGreaterThan(0)
+    await waitFor(() => {
+      expect(getAllByText(/passed/i).length).toBeGreaterThanOrEqual(3)
+    })
+    expect(getByRole("button", { name: /^Run$/i })).toBeInTheDocument()
   })
 
   test("creates one pairing code on entering pair step under StrictMode", async () => {

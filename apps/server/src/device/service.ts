@@ -21,6 +21,8 @@ import { DeviceListResult, DeviceRepository, PairingCodeRow } from "./repository
 
 const PAIRING_CODE_TTL_MS = 10 * 60 * 1000
 const DEFAULT_DEVICE_NAME = "Paired device"
+const PROBE_DEVICE_NAME = "Connection test probe"
+
 
 export type DeviceServiceResult<T> =
   | { ok: true; value: T }
@@ -301,9 +303,58 @@ export const createDeviceService = (context: DeviceServiceContext) => {
     return result
   }
 
+  const createProbeDevice = (): DeviceServiceResult<DeviceCredentialResponse> => {
+    const now = nowIso()
+    const credential = createDeviceCredential()
+    const credentialHash = hashDeviceCredential(credential)
+
+    const inserted = transactional<DeviceCredentialResponse, DeviceError>((txParams) => {
+      const result = context.deviceRepository.insertProbeDevice({
+        name: PROBE_DEVICE_NAME,
+        platform: null,
+        credentialHash,
+        pairedAt: now,
+        executor: txParams.executor,
+      })
+
+      if (!result.ok) {
+        return result
+      }
+
+      const appendResult = txParams.append([
+        {
+          schemaVersion: JOURNAL_SCHEMA_VERSION,
+          kind: "device.paired",
+          occurredAt: now,
+          payload: {
+            deviceId: result.value.id,
+            name: result.value.name,
+            platform: result.value.platform,
+          },
+        },
+      ])
+
+      if (!appendResult.ok) {
+        return appendResult
+      }
+
+      return {
+        ok: true,
+        value: {
+          device: result.value,
+          credential,
+        },
+        appendedRecords: appendResult.value,
+      }
+    })
+
+    return inserted
+  }
+
   return {
     createPairingCode,
     claimPairingCode,
+    createProbeDevice,
     list,
     revoke,
   }
