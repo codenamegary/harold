@@ -134,8 +134,13 @@ export const createServer = async ({
   })
 
   const deviceRepository = createDeviceRepository(database)
+  const runtimeSettingsRepository =
+    providedRuntimeSettingsRepository ??
+    createRuntimeSettingsRepository({ dataDir: config.dataDir })
+
   registerAuthMiddleware(app, {
     deviceRepository,
+    getTrustedProxies: () => runtimeSettingsRepository.get().trustedProxies,
     isLoopbackRequest,
   })
 
@@ -143,9 +148,6 @@ export const createServer = async ({
     whichFn,
     validateExecutablePathFn,
   })
-  const runtimeSettingsRepository =
-    providedRuntimeSettingsRepository ??
-    createRuntimeSettingsRepository({ dataDir: config.dataDir })
   const eventJournal = providedEventJournal ?? createEventJournalRepository(database)
   const commitPublisher = createEventCommitPublisher()
   const journalWriter = createAcpJournalWriter({
@@ -224,6 +226,7 @@ export const createServer = async ({
     sessionService,
     acpSupervisor,
     deviceRepository,
+    getTrustedProxies: () => runtimeSettingsRepository.get().trustedProxies,
     isLoopbackRequest,
     wsAuthFrameTimeoutMs,
   })

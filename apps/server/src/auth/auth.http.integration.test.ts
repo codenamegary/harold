@@ -212,6 +212,94 @@ describe("device auth HTTP", () => {
   })
 })
 
+describe("trusted proxy host principal", () => {
+  const patchTrustedProxies = async (httpBase: string, trustedProxies: string[]) => {
+    const response = await fetch(`${httpBase}/v1/settings/runtime`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ trustedProxies }),
+    })
+    expect(response.status).toBe(200)
+  }
+
+  test("direct loopback without forwarded headers stays host", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app, config } = await createTestApp(resources, dataDir)
+    const { httpBase } = await getListeningHttpBase(app, config)
+    await patchTrustedProxies(httpBase, ["127.0.0.1"])
+
+    const response = await fetch(`${httpBase}/v1/workspaces`)
+    expect(response.status).toBe(200)
+  })
+
+  test("trusted loopback peer with forwarded headers is not host", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app, config } = await createTestApp(resources, dataDir)
+    const { httpBase } = await getListeningHttpBase(app, config)
+    await patchTrustedProxies(httpBase, ["127.0.0.1"])
+
+    const response = await fetch(`${httpBase}/v1/workspaces`, {
+      headers: {
+        "x-forwarded-for": "203.0.113.5",
+      },
+    })
+
+    expect(response.status).toBe(401)
+    expect(response.headers.get("www-authenticate")).toBe(BEARER_CHALLENGE)
+  })
+
+  test("spoofed forwarded headers from untrusted loopback stay host", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app, config } = await createTestApp(resources, dataDir)
+    const { httpBase } = await getListeningHttpBase(app, config)
+
+    const response = await fetch(`${httpBase}/v1/workspaces`, {
+      headers: {
+        "x-forwarded-for": "203.0.113.5",
+      },
+    })
+
+    expect(response.status).toBe(200)
+  })
+
+  test("hot-reloads trusted proxies after PATCH", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app, config } = await createTestApp(resources, dataDir)
+    const { httpBase } = await getListeningHttpBase(app, config)
+
+    const beforePatch = await fetch(`${httpBase}/v1/workspaces`, {
+      headers: {
+        "x-forwarded-for": "203.0.113.5",
+      },
+    })
+    expect(beforePatch.status).toBe(200)
+
+    await patchTrustedProxies(httpBase, ["127.0.0.1"])
+
+    const afterPatch = await fetch(`${httpBase}/v1/workspaces`, {
+      headers: {
+        "x-forwarded-for": "203.0.113.5",
+      },
+    })
+    expect(afterPatch.status).toBe(401)
+  })
+
+  test("allowlist miss ignores forwarded headers on loopback", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app, config } = await createTestApp(resources, dataDir)
+    const { httpBase } = await getListeningHttpBase(app, config)
+    await patchTrustedProxies(httpBase, ["10.0.0.0/8"])
+
+    const response = await fetch(`${httpBase}/v1/workspaces`, {
+      headers: {
+        "x-forwarded-for": "203.0.113.5",
+      },
+    })
+
+    expect(response.status).toBe(200)
+  })
+})
+
 describe("device auth WebSocket", () => {
   test("loopback without Bearer connects as host", async () => {
     const dataDir = await createTempDataDir(resources)

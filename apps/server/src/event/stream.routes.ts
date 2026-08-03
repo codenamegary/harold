@@ -7,7 +7,7 @@ import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { maybeAutoResumeSession } from "../session/resume.session"
 import { authorizeActiveFullOperator } from "../auth/authorize"
 import { getRequestPrincipal } from "../auth/middleware"
-import { isLoopbackRequest } from "../auth/loopback"
+import { isHostPrincipalRequest } from "../auth/request.origin"
 import {
   DEFAULT_WS_AUTH_FRAME_TIMEOUT_MS,
   waitForAuthFrame,
@@ -37,6 +37,7 @@ type RegisterEventStreamRoutesParams = {
   sessionService: SessionService
   acpSupervisor: AcpSupervisor
   deviceRepository: DeviceRepository
+  getTrustedProxies?: () => readonly string[]
   isLoopbackRequest?: (request: FastifyRequest) => boolean
   wsAuthFrameTimeoutMs?: number
 }
@@ -137,7 +138,10 @@ export const registerEventStreamRoutes = (
   app: FastifyInstance,
   params: RegisterEventStreamRoutesParams,
 ) => {
-  const resolveLoopback = params.isLoopbackRequest ?? isLoopbackRequest
+  const resolveHostPrincipal =
+    params.isLoopbackRequest ??
+    ((request: FastifyRequest) =>
+      isHostPrincipalRequest(request, params.getTrustedProxies?.() ?? []))
   const timeoutMs = params.wsAuthFrameTimeoutMs ?? DEFAULT_WS_AUTH_FRAME_TIMEOUT_MS
 
   app.route({
@@ -189,7 +193,7 @@ export const registerEventStreamRoutes = (
           request,
           socket,
           deviceRepository: params.deviceRepository,
-          isLoopback: resolveLoopback(request),
+          isLoopback: resolveHostPrincipal(request),
           timeoutMs,
         })
 
