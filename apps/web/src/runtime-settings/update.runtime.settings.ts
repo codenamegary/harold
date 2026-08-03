@@ -1,10 +1,11 @@
 import {
+  RUNTIME_SETTINGS_PATH,
   UpdateRuntimeSettingsBody,
   UpdateRuntimeSettingsResponseSchema,
 } from "contracts/http/runtime-settings"
 
 export const updateRuntimeSettings = async (body: UpdateRuntimeSettingsBody) => {
-  const response = await fetch("/v1/settings/runtime", {
+  const response = await fetch(RUNTIME_SETTINGS_PATH, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

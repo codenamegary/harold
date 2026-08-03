@@ -1,7 +1,10 @@
-import { RuntimeSettingsSchema } from "contracts/http/runtime-settings"
+import {
+  RUNTIME_SETTINGS_PATH,
+  RuntimeSettingsSchema,
+} from "contracts/http/runtime-settings"
 
 export const fetchRuntimeSettings = async () => {
-  const response = await fetch("/v1/settings/runtime")
+  const response = await fetch(RUNTIME_SETTINGS_PATH)
 
   if (!response.ok) {
     throw new Error(`Runtime settings fetch failed with ${response.status}`)

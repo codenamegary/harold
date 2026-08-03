@@ -8,7 +8,7 @@ export const useUpdateRuntimeSettingsMutation = () => {
 
   return useMutation({
     mutationFn: (body: UpdateRuntimeSettingsBody) => updateRuntimeSettings(body),
-    onSettled: async () => {
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.runtimeSettingsRoot })
     },
   })

@@ -274,7 +274,7 @@ export const createServer = async ({
     eventJournal,
     commitPublisher,
     config,
-    getAdvertisedUrl: () => runtimeSettingsRepository.get().advertisedUrl,
+    runtimeSettingsRepository,
   })
   registerDeviceRoutes(app, deviceService)
 

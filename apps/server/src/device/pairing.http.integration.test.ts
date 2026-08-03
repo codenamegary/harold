@@ -175,6 +175,29 @@ describe("pairing HTTP integration", () => {
     NotFoundProblemSchema.parse(await claimResponse.json())
   })
 
+  test("create pairing code uses advertised URL when set", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app, config } = await createTestApp(resources, dataDir)
+    const httpBase = await getListeningHttpBase(app, config)
+
+    const patchResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ advertisedUrl: "https://agents.example.com" }),
+    })
+    expect(patchResponse.status).toBe(200)
+
+    const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    })
+
+    expect(createResponse.status).toBe(201)
+    const created = CreatePairingCodeResponseSchema.parse(await createResponse.json())
+    expect(created.endpoint).toBe("https://agents.example.com")
+  })
+
   test("claim accepts display name", async () => {
     const dataDir = await createTempDataDir(resources)
     const { app, config } = await createTestApp(resources, dataDir)

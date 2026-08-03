@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+export const RUNTIME_SETTINGS_PATH = "/v1/settings/runtime" as const
+
 export const logLevels = [
   "fatal",
   "error",
