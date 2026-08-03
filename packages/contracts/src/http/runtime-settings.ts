@@ -169,11 +169,19 @@ export const UpdateRuntimeSettingsResponseSchema = z.strictObject({
   restartRequired: z.boolean(),
 })
 
+export const PatchRuntimeSettingsQuerySchema = z.strictObject({
+  force: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value === "true"),
+})
+
 export type RuntimeSettings = z.infer<typeof RuntimeSettingsSchema>
 export type UpdateRuntimeSettingsBody = z.infer<typeof UpdateRuntimeSettingsBodySchema>
 export type UpdateRuntimeSettingsResponse = z.infer<
   typeof UpdateRuntimeSettingsResponseSchema
 >
+export type PatchRuntimeSettingsQuery = z.infer<typeof PatchRuntimeSettingsQuerySchema>
 
 export const normalizeAdvertisedUrl = (
   value: string | null | undefined,

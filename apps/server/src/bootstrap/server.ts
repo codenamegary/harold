@@ -157,7 +157,9 @@ export const createServer = async ({
     eventJournal,
     commitPublisher,
   })
-  const workspaceRepository = createWorkspaceRepository(database)
+  const workspaceRepository = createWorkspaceRepository(database, {
+    getAllowedRoots: () => runtimeSettingsRepository.get().allowedRoots,
+  })
   const sessionRepository = createSessionRepository(database)
   const sessionService = createSessionService({
     database,
@@ -260,6 +262,10 @@ export const createServer = async ({
     onLogLevelChanged: (nextLevel) => {
       app.log.level = nextLevel
     },
+    workspaceRepository,
+    workspaceService,
+    sessionRepository,
+    acpSupervisor,
   })
   registerSessionRoutes(
     app,

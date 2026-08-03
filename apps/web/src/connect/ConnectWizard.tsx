@@ -228,7 +228,7 @@ const ExternalUrlForm: React.FC<ExternalUrlFormProps> = ({
     }
 
     try {
-      await updateRuntimeSettingsMutation.mutateAsync({ advertisedUrl })
+      await updateRuntimeSettingsMutation.mutateAsync({ body: { advertisedUrl } })
       onContinue()
     } catch {
       setSaveError("Could not save the external URL. Check the hostname and try again.")
@@ -798,7 +798,7 @@ export const ConnectWizard: React.FC = () => {
     if (accessMode === "local") {
       if (returnedFromCloud) {
         void updateRuntimeSettingsMutation
-          .mutateAsync({ advertisedUrl: null })
+          .mutateAsync({ body: { advertisedUrl: null } })
           .then(() => {
             setReturnedFromCloud(false)
             setView({ kind: "local-pair" })

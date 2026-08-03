@@ -1,8 +1,13 @@
-import React from "react"
+import React, { useState } from "react"
 import { Button } from "../design-system/Button"
+import { Modal } from "../design-system/Modal"
 import { Panel } from "../design-system/Panel"
 import { SectionKicker } from "../design-system/SectionKicker"
 import { StatusPill } from "../design-system/StatusPill"
+import { TextInput } from "../design-system/TextInput"
+import { isRuntimeSettingsUpdateError } from "../runtime-settings/update.runtime.settings"
+import { useRuntimeSettingsQuery } from "../runtime-settings/use.runtime.settings.query"
+import { useUpdateRuntimeSettingsMutation } from "../runtime-settings/use.update.runtime.settings.mutation"
 
 const FilesystemIcon: React.FC = () => (
   <svg viewBox="0 0 24 24" aria-hidden className="size-5 fill-current">
@@ -65,84 +70,302 @@ const ActiveState: React.FC = () => (
   </span>
 )
 
-export const ProviderPanel: React.FC = () => (
-  <Panel className="mb-[25px] p-[22px]">
-    <div className="mb-[22px] flex items-start justify-between gap-4 max-[820px]:flex-col">
-      <div>
-        <SectionKicker>WORKSPACE SOURCES</SectionKicker>
-        <h3 className="m-0 text-lg font-semibold">Workspace provider</h3>
-        <p className="m-0 mt-2 max-w-2xl text-sm text-muted">
-          Control where Agent Server can create workspaces and which folders agents are allowed to
-          access.
-        </p>
-      </div>
-      <StatusPill variant="success">0 configured</StatusPill>
-    </div>
+type RemoveRootModalProps = {
+  rootPath: string
+  open: boolean
+  errorMessage?: string
+  pending: boolean
+  onClose: () => void
+  onConfirm: () => void
+}
 
-    <div className="grid gap-3.5 lg:grid-cols-3">
+const RemoveRootModal: React.FC<RemoveRootModalProps> = ({
+  rootPath,
+  open,
+  errorMessage,
+  pending,
+  onClose,
+  onConfirm,
+}) => (
+  <Modal
+    open={open}
+    onClose={onClose}
+    title="Remove allowed root?"
+    actions={
+      <>
+        <Button variant="secondary" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          className="border-red-500/40 bg-red-500/15 text-red-300 hover:border-red-400 hover:bg-red-500/25 hover:text-red-200"
+          disabled={pending}
+          onClick={onConfirm}
+        >
+          Remove root and unregister workspaces
+        </Button>
+      </>
+    }
+  >
+    <p className="m-0 text-sm text-body-soft">
+      Removing <code className="text-[#b8c0cb]">{rootPath}</code> unregisters workspaces under
+      this root. Workspace files are not deleted.
+    </p>
+    {errorMessage ? (
+      <p className="mt-4 text-sm text-red-400" role="alert">
+        {errorMessage}
+      </p>
+    ) : null}
+  </Modal>
+)
+
+const LocalFilesystemProviderCard: React.FC = () => {
+  const runtimeSettingsQuery = useRuntimeSettingsQuery()
+  const updateRuntimeSettingsMutation = useUpdateRuntimeSettingsMutation()
+  const [draftPath, setDraftPath] = useState("")
+  const [formError, setFormError] = useState<string | undefined>(undefined)
+  const [confirmRemoveRoot, setConfirmRemoveRoot] = useState<string | undefined>(undefined)
+  const [removeError, setRemoveError] = useState<string | undefined>(undefined)
+
+  const allowedRoots = runtimeSettingsQuery.data?.allowedRoots ?? []
+  const pending = updateRuntimeSettingsMutation.isPending
+
+  const saveRoots = async (nextRoots: string[], force = false) => {
+    await updateRuntimeSettingsMutation.mutateAsync({
+      body: { allowedRoots: nextRoots },
+      force,
+    })
+  }
+
+  const handleAddRoot = async () => {
+    const trimmed = draftPath.trim()
+    if (trimmed.length === 0) {
+      setFormError("Enter an absolute path.")
+      return
+    }
+
+    setFormError(undefined)
+
+    try {
+      await saveRoots([...allowedRoots, trimmed])
+      setDraftPath("")
+    } catch (error: unknown) {
+      setFormError(
+        isRuntimeSettingsUpdateError(error)
+          ? error.message
+          : "Could not add allowed root.",
+      )
+    }
+  }
+
+  const handleRemoveRoot = async (root: string) => {
+    setRemoveError(undefined)
+
+    try {
+      await saveRoots(
+        allowedRoots.filter((allowedRoot) => allowedRoot !== root),
+      )
+    } catch (error: unknown) {
+      if (
+        isRuntimeSettingsUpdateError(error) &&
+        error.problem?.forceDeleteAvailable === true
+      ) {
+        setConfirmRemoveRoot(root)
+        return
+      }
+
+      setRemoveError(
+        isRuntimeSettingsUpdateError(error)
+          ? error.message
+          : "Could not remove allowed root.",
+      )
+    }
+  }
+
+  const handleConfirmRemoveRoot = async () => {
+    if (confirmRemoveRoot === undefined) {
+      return
+    }
+
+    setRemoveError(undefined)
+
+    try {
+      await saveRoots(
+        allowedRoots.filter((allowedRoot) => allowedRoot !== confirmRemoveRoot),
+        true,
+      )
+      setConfirmRemoveRoot(undefined)
+    } catch (error: unknown) {
+      setRemoveError(
+        isRuntimeSettingsUpdateError(error)
+          ? error.message
+          : "Could not remove allowed root.",
+      )
+    }
+  }
+
+  return (
+    <>
       <ProviderCard
         title="Local filesystem"
         description="Register folders from this machine. Paths outside these roots remain unavailable to remote clients."
         icon={<FilesystemIcon />}
         stateLabel={<ActiveState />}
-        action={
-          <Button variant="secondary" className="mt-4 w-full" disabled>
-            + Allow another folder
-          </Button>
-        }
+      >
+        <div className="mt-4 space-y-2">
+          {allowedRoots.length === 0 ? (
+            <p className="m-0 text-xs text-muted">No allowed roots configured yet.</p>
+          ) : (
+            <ul className="m-0 list-none space-y-2 p-0">
+              {allowedRoots.map((root) => (
+                <li
+                  key={root}
+                  className="flex items-center justify-between gap-3 rounded-[7px] border border-line-soft bg-panel-elevated px-3 py-2"
+                >
+                  <code className="truncate text-xs text-body-soft">{root}</code>
+                  <Button
+                    variant="secondary"
+                    className="shrink-0 px-2 py-1 text-xs"
+                    disabled={pending}
+                    onClick={() => {
+                      void handleRemoveRoot(root)
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="flex items-center gap-2">
+            <TextInput
+              aria-label="Allowed root path"
+              value={draftPath}
+              placeholder="/home/you/projects"
+              disabled={pending}
+              onInput={(event) => {
+                setDraftPath(event.currentTarget.value)
+                setFormError(undefined)
+              }}
+              className="min-w-0 flex-1"
+            />
+            <Button
+              variant="secondary"
+              disabled={pending}
+              onClick={() => {
+                void handleAddRoot()
+              }}
+            >
+              Add root
+            </Button>
+          </div>
+
+          {formError ? (
+            <p className="m-0 text-xs text-danger" role="alert">
+              {formError}
+            </p>
+          ) : null}
+
+          {removeError && confirmRemoveRoot === undefined ? (
+            <p className="m-0 text-xs text-danger" role="alert">
+              {removeError}
+            </p>
+          ) : null}
+        </div>
+      </ProviderCard>
+
+      <RemoveRootModal
+        rootPath={confirmRemoveRoot ?? ""}
+        open={confirmRemoveRoot !== undefined}
+        errorMessage={removeError}
+        pending={pending}
+        onClose={() => {
+          setConfirmRemoveRoot(undefined)
+          setRemoveError(undefined)
+        }}
+        onConfirm={() => {
+          void handleConfirmRemoveRoot()
+        }}
       />
+    </>
+  )
+}
 
-      <ProviderCard
-        title="GitHub"
-        description="Choose repositories, clone them locally, and create isolated workspaces from branches or pull requests."
-        icon={<GitHubIcon />}
-        stateLabel={<StatusPill>Coming soon</StatusPill>}
-        disabled
-        action={
-          <Button variant="secondary" className="mt-4 w-full" disabled>
-            Connect GitHub
-          </Button>
-        }
-      >
-        <div className="mt-4 flex flex-wrap gap-2">
-          <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
-            Repository sync
-          </span>
-          <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
-            Pull request context
-          </span>
+export const ProviderPanel: React.FC = () => {
+  const runtimeSettingsQuery = useRuntimeSettingsQuery()
+  const configuredCount = runtimeSettingsQuery.data?.allowedRoots.length ?? 0
+
+  return (
+    <Panel className="mb-[25px] p-[22px]">
+      <div className="mb-[22px] flex items-start justify-between gap-4 max-[820px]:flex-col">
+        <div>
+          <SectionKicker>WORKSPACE SOURCES</SectionKicker>
+          <h3 className="m-0 text-lg font-semibold">Workspace provider</h3>
+          <p className="m-0 mt-2 max-w-2xl text-sm text-muted">
+            Control where Agent Server can create workspaces and which folders agents are allowed to
+            access.
+          </p>
         </div>
-      </ProviderCard>
+        <StatusPill variant="success">
+          {configuredCount} configured
+        </StatusPill>
+      </div>
 
-      <ProviderCard
-        title="GitLab"
-        description="Connect self-managed or hosted GitLab projects and launch workspaces from merge requests."
-        icon={<GitLabIcon />}
-        stateLabel={<StatusPill>Coming soon</StatusPill>}
-        disabled
-        action={
-          <Button variant="secondary" className="mt-4 w-full" disabled>
-            Connect GitLab
-          </Button>
-        }
-      >
-        <div className="mt-4 flex flex-wrap gap-2">
-          <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
-            Project sync
-          </span>
-          <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
-            Merge request context
-          </span>
-        </div>
-      </ProviderCard>
-    </div>
+      <div className="grid gap-3.5 lg:grid-cols-3">
+        <LocalFilesystemProviderCard />
 
-    <div className="mt-[18px] flex gap-2.5 rounded-[7px] border border-line-soft bg-panel-elevated p-3.5 text-xs leading-[1.55] text-muted">
-      <span aria-hidden>⌾</span>
-      <p className="m-0">
-        Allowed roots are enforced by the server after canonicalizing paths and resolving symlinks.
-        Removing a root unregisters access. It never deletes files.
-      </p>
-    </div>
-  </Panel>
-)
+        <ProviderCard
+          title="GitHub"
+          description="Choose repositories, clone them locally, and create isolated workspaces from branches or pull requests."
+          icon={<GitHubIcon />}
+          stateLabel={<StatusPill>Coming soon</StatusPill>}
+          disabled
+          action={
+            <Button variant="secondary" className="mt-4 w-full" disabled>
+              Connect GitHub
+            </Button>
+          }
+        >
+          <div className="mt-4 flex flex-wrap gap-2">
+            <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
+              Repository sync
+            </span>
+            <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
+              Pull request context
+            </span>
+          </div>
+        </ProviderCard>
+
+        <ProviderCard
+          title="GitLab"
+          description="Connect self-managed or hosted GitLab projects and launch workspaces from merge requests."
+          icon={<GitLabIcon />}
+          stateLabel={<StatusPill>Coming soon</StatusPill>}
+          disabled
+          action={
+            <Button variant="secondary" className="mt-4 w-full" disabled>
+              Connect GitLab
+            </Button>
+          }
+        >
+          <div className="mt-4 flex flex-wrap gap-2">
+            <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
+              Project sync
+            </span>
+            <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
+              Merge request context
+            </span>
+          </div>
+        </ProviderCard>
+      </div>
+
+      <div className="mt-[18px] flex gap-2.5 rounded-[7px] border border-line-soft bg-panel-elevated p-3.5 text-xs leading-[1.55] text-muted">
+        <span aria-hidden>⌾</span>
+        <p className="m-0">
+          Allowed roots are enforced by the server after canonicalizing paths and resolving symlinks.
+          Removing a root unregisters access. It never deletes files.
+        </p>
+      </div>
+    </Panel>
+  )
+}
