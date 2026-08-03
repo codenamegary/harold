@@ -175,6 +175,29 @@ describe("pairing HTTP integration", () => {
     NotFoundProblemSchema.parse(await claimResponse.json())
   })
 
+  test("create pairing code uses advertised URL when set", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app, config } = await createTestApp(resources, dataDir)
+    const httpBase = await getListeningHttpBase(app, config)
+
+    const patchResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ advertisedUrl: "https://agents.example.com" }),
+    })
+    expect(patchResponse.status).toBe(200)
+
+    const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    })
+
+    expect(createResponse.status).toBe(201)
+    const created = CreatePairingCodeResponseSchema.parse(await createResponse.json())
+    expect(created.endpoint).toBe("https://agents.example.com")
+  })
+
   test("claim accepts display name", async () => {
     const dataDir = await createTempDataDir(resources)
     const { app, config } = await createTestApp(resources, dataDir)
@@ -200,5 +223,55 @@ describe("pairing HTTP integration", () => {
     const claimed = ClaimPairingCodeResponseSchema.parse(await claimResponse.json())
     expect(claimed.device.name).toBe("Pixel 8")
     expect(claimed.device.platform).toBe("android")
+  })
+
+  test("pairing endpoint uses advertised URL when set, otherwise loopback", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app, config } = await createTestApp(resources, dataDir)
+    const httpBase = await getListeningHttpBase(app, config)
+
+    const loopbackCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    const loopbackPairing = CreatePairingCodeResponseSchema.parse(
+      await loopbackCreate.json(),
+    )
+    expect(loopbackPairing.endpoint).toBe(`http://${config.host}:${config.port}`)
+
+    const patchResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ advertisedUrl: "https://agents.example.com" }),
+    })
+    expect(patchResponse.status).toBe(200)
+
+    const advertisedCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    const advertisedPairing = CreatePairingCodeResponseSchema.parse(
+      await advertisedCreate.json(),
+    )
+    expect(advertisedPairing.endpoint).toBe("https://agents.example.com")
+
+    const clearResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ advertisedUrl: null }),
+    })
+    expect(clearResponse.status).toBe(200)
+
+    const clearedCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    const clearedPairing = CreatePairingCodeResponseSchema.parse(
+      await clearedCreate.json(),
+    )
+    expect(clearedPairing.endpoint).toBe(`http://${config.host}:${config.port}`)
   })
 })

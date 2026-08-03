@@ -39,6 +39,4 @@ export const proxyTemplates: Record<ProxyProvider, ProxyTemplate> = {
   },
 }
 
-export const defaultExternalHost = "acp.gary.dev"
-
 export const localAgentPort = 3847

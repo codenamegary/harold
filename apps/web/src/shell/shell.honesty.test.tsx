@@ -159,6 +159,51 @@ describe("shell honesty", () => {
         )
       }
 
+      if (url === "/v1/settings/runtime" && method === "GET") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              advertisedUrl: null,
+              trustedProxies: [],
+              bindHost: "127.0.0.1",
+              bindPort: 3847,
+              logLevel: "info",
+              logPath: null,
+              allowedRoots: [],
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        )
+      }
+
+      if (url === "/v1/settings/runtime" && method === "PATCH") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          advertisedUrl?: string | null
+        }
+        const settings = {
+          advertisedUrl:
+            body.advertisedUrl === undefined ? null : body.advertisedUrl,
+          trustedProxies: [],
+          bindHost: "127.0.0.1",
+          bindPort: 3847,
+          logLevel: "info",
+          logPath: null,
+          allowedRoots: [],
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ settings, restartRequired: false }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        )
+      }
+
       return Promise.resolve(
         new Response(JSON.stringify(validStatus), {
           status: 200,
@@ -210,14 +255,26 @@ describe("shell honesty", () => {
 
   describe("connect wizard disabled honesty", () => {
     test("test connection is disabled while pair uses real claim gating", async () => {
-      const { getByRole } = renderShellRoute("/connect")
+      const { getByRole, getAllByText } = renderShellRoute("/connect")
 
       await waitForShellReady(getByRole)
 
-      fireEvent.click(getByRole("button", { name: /test connection/i }))
-      expect(getByRole("button", { name: /run connection test/i })).toBeDisabled()
+      fireEvent.click(getByRole("button", { name: /cloud proxy/i }))
+      fireEvent.click(getByRole("button", { name: /^Continue$/ }))
+      await waitFor(() => {
+        expect(getByRole("textbox", { name: /public server url/i })).toBeInTheDocument()
+      })
+      fireEvent.input(getByRole("textbox", { name: /public server url/i }), {
+        target: { value: "agents.example.com" },
+      })
+      fireEvent.click(getByRole("button", { name: /save & continue/i }))
 
-      fireEvent.click(getByRole("button", { name: /pair device/i }))
+      await waitFor(() => {
+        expect(getByRole("heading", { name: /test your connection/i })).toBeInTheDocument()
+      })
+      expect(getAllByText(/not available/i).length).toBeGreaterThan(0)
+
+      fireEvent.click(getByRole("button", { name: /^Continue$/ }))
       await waitFor(() => {
         expect(getByRole("button", { name: /regenerate/i })).toBeEnabled()
       })

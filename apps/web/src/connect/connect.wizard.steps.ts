@@ -5,9 +5,8 @@ export type ConnectWizardStep = {
   subtitle: string
 }
 
-export const connectWizardSteps: readonly ConnectWizardStep[] = [
-  { id: 1, number: "01", title: "Access mode", subtitle: "Choose your network" },
-  { id: 2, number: "02", title: "External URL", subtitle: "Set the endpoint" },
-  { id: 3, number: "03", title: "Test connection", subtitle: "Verify access" },
-  { id: 4, number: "04", title: "Pair device", subtitle: "Connect device" },
+export const cloudWizardSteps: readonly ConnectWizardStep[] = [
+  { id: 1, number: "01", title: "External URL", subtitle: "Set the endpoint" },
+  { id: 2, number: "02", title: "Test connection", subtitle: "Verify access" },
+  { id: 3, number: "03", title: "Pair device", subtitle: "Connect device" },
 ]

@@ -6,6 +6,7 @@ import {
 import { DeviceCollection, DeviceCredentialResponse, ListDevicesQuery } from "contracts/http/device"
 import { JOURNAL_SCHEMA_VERSION } from "contracts/events/journal-record"
 import { Config } from "../config/config"
+import { RuntimeSettingsRepository } from "../runtime-settings/repository"
 import { AgentDatabase } from "../persistence/database"
 import { EventCommitPublisher } from "../event/commit.publisher"
 import { EventJournalRepository } from "../event/journal.repository"
@@ -31,12 +32,22 @@ type DeviceServiceContext = {
   eventJournal: EventJournalRepository
   commitPublisher: EventCommitPublisher
   config: Config
+  runtimeSettingsRepository: RuntimeSettingsRepository
 }
 
 const nowIso = (): string => new Date().toISOString()
 
 const loopbackEndpoint = (config: Config): string =>
   `http://${config.host}:${config.port}`
+
+const resolvePairingEndpoint = (context: DeviceServiceContext): string => {
+  const advertisedUrl = context.runtimeSettingsRepository.get().advertisedUrl
+  if (advertisedUrl !== null) {
+    return advertisedUrl
+  }
+
+  return loopbackEndpoint(context.config)
+}
 
 const findMatchingPairingCode = async (params: {
   code: string
@@ -88,7 +99,7 @@ export const createDeviceService = (context: DeviceServiceContext) => {
       value: {
         id: inserted.value.id,
         code,
-        endpoint: loopbackEndpoint(context.config),
+        endpoint: resolvePairingEndpoint(context),
         state: "active",
         createdAt: inserted.value.createdAt,
         expiresAt: inserted.value.expiresAt,
