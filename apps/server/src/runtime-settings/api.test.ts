@@ -5,18 +5,22 @@ import path from "node:path"
 import { ValidationProblemSchema } from "contracts/http/error"
 import {
   RuntimeSettingsSchema,
+  RuntimeSettingsViewSchema,
   UpdateRuntimeSettingsResponseSchema,
 } from "contracts/http/runtime-settings"
 import YAML from "yaml"
 import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
+import { readEnvBindOverrides } from "../config/env.bind.overrides"
 import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
+import { createAppliedRuntimeSettingsHolder } from "./applied.runtime.settings"
 import {
   createRuntimeSettingsRepository,
   seedDefaultsFromConfig,
   settingsFileName,
 } from "./repository"
+import { buildAppliedRuntimeSettings } from "./resolve.runtime.settings.state"
 
 const tempDirs: string[] = []
 const apps: Awaited<ReturnType<typeof createServer>>["app"][] = []
@@ -27,7 +31,11 @@ const createTempDataDir = async () => {
   return dir
 }
 
-const createTestApp = async (dataDir: string) => {
+const createTestApp = async (
+  dataDir: string,
+  options?: { envBindOverrides?: ReturnType<typeof readEnvBindOverrides> },
+) => {
+  const envBindOverrides = options?.envBindOverrides ?? readEnvBindOverrides({})
   const config = parseConfig({
     AGENT_SERVER_HOST: "127.0.0.1",
     AGENT_SERVER_PORT: "0",
@@ -35,13 +43,28 @@ const createTestApp = async (dataDir: string) => {
   })
   const database = openDatabase({ dataDir: config.dataDir })
   const runtime = createRuntime("0.1.0")
-  const { app, runtimeSettingsRepository } = await createServer({
-    config,
+  const runtimeSettingsRepository = createRuntimeSettingsRepository({
+    dataDir: config.dataDir,
+  })
+  const persisted = runtimeSettingsRepository.get()
+  const appliedRuntimeSettings = createAppliedRuntimeSettingsHolder(
+    buildAppliedRuntimeSettings({ persisted, envOverrides: envBindOverrides }),
+  )
+  const applied = appliedRuntimeSettings.get()
+  const { app } = await createServer({
+    config: {
+      host: applied.bindHost,
+      port: applied.bindPort,
+      dataDir: config.dataDir,
+    },
     runtime,
     database,
+    runtimeSettingsRepository,
+    appliedRuntimeSettings,
+    envBindOverrides,
   })
   apps.push(app)
-  return { app, database, config, runtimeSettingsRepository }
+  return { app, database, config, runtimeSettingsRepository, appliedRuntimeSettings }
 }
 
 afterEach(async () => {
@@ -59,10 +82,10 @@ describe("GET /v1/settings/runtime", () => {
       url: "/v1/settings/runtime",
     })
 
-    const body = RuntimeSettingsSchema.parse(JSON.parse(response.body))
+    const body = RuntimeSettingsViewSchema.parse(JSON.parse(response.body))
 
     expect(response.statusCode).toBe(200)
-    expect(body).toEqual({
+    expect(body.settings).toEqual({
       advertisedUrl: null,
       trustedProxies: [],
       bindHost: "127.0.0.1",
@@ -71,9 +94,35 @@ describe("GET /v1/settings/runtime", () => {
       logPath: null,
       allowedRoots: [],
     })
+    expect(body.restartRequired).toBe(false)
+    expect(body.effective).toEqual({
+      bindHost: "127.0.0.1",
+      bindPort: 3847,
+      logPath: null,
+    })
+    expect(body.overrides).toEqual({})
 
     const fileRaw = await readFile(path.join(dataDir, settingsFileName), "utf8")
-    expect(RuntimeSettingsSchema.parse(YAML.parse(fileRaw))).toEqual(body)
+    expect(RuntimeSettingsSchema.parse(YAML.parse(fileRaw))).toEqual(body.settings)
+  })
+
+  test("reports env bind port override on GET", async () => {
+    const dataDir = await createTempDataDir()
+    const { app } = await createTestApp(dataDir, {
+      envBindOverrides: { bindPort: 4123 },
+    })
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/settings/runtime",
+    })
+
+    const body = RuntimeSettingsViewSchema.parse(JSON.parse(response.body))
+
+    expect(body.settings.bindPort).toBe(3847)
+    expect(body.effective.bindPort).toBe(4123)
+    expect(body.overrides).toEqual({ bindPort: "env" })
+    expect(body.restartRequired).toBe(true)
   })
 })
 
@@ -109,8 +158,8 @@ describe("PATCH /v1/settings/runtime", () => {
       method: "GET",
       url: "/v1/settings/runtime",
     })
-    const getBody = RuntimeSettingsSchema.parse(JSON.parse(getResponse.body))
-    expect(getBody).toEqual(body.settings)
+    const getBody = RuntimeSettingsViewSchema.parse(JSON.parse(getResponse.body))
+    expect(getBody.settings).toEqual(body.settings)
   })
 
   test("sets restartRequired when bind port changes", async () => {
@@ -128,6 +177,7 @@ describe("PATCH /v1/settings/runtime", () => {
     expect(response.statusCode).toBe(200)
     expect(body.restartRequired).toBe(true)
     expect(body.settings.bindPort).toBe(4000)
+    expect(body.effective.bindPort).toBe(3847)
   })
 
   test("sets restartRequired when log path changes", async () => {
@@ -276,10 +326,25 @@ describe("runtime settings durability", () => {
     })
     const firstDatabase = openDatabase({ dataDir: firstConfig.dataDir })
     const firstRuntime = createRuntime("0.1.0")
+    const firstRepository = createRuntimeSettingsRepository({
+      dataDir: firstConfig.dataDir,
+    })
+    const firstPersisted = firstRepository.get()
+    const firstApplied = createAppliedRuntimeSettingsHolder(
+      buildAppliedRuntimeSettings({ persisted: firstPersisted, envOverrides: {} }),
+    )
+    const firstAppliedValues = firstApplied.get()
     const { app: firstApp } = await createServer({
-      config: firstConfig,
+      config: {
+        host: firstAppliedValues.bindHost,
+        port: firstAppliedValues.bindPort,
+        dataDir: firstConfig.dataDir,
+      },
       runtime: firstRuntime,
       database: firstDatabase,
+      runtimeSettingsRepository: firstRepository,
+      appliedRuntimeSettings: firstApplied,
+      envBindOverrides: {},
     })
 
     await firstApp.inject({
@@ -298,10 +363,23 @@ describe("runtime settings durability", () => {
 
     const secondDatabase = openDatabase({ dataDir })
     const secondRuntime = createRuntime("0.1.0")
+    const secondRepository = createRuntimeSettingsRepository({ dataDir })
+    const secondPersisted = secondRepository.get()
+    const secondApplied = createAppliedRuntimeSettingsHolder(
+      buildAppliedRuntimeSettings({ persisted: secondPersisted, envOverrides: {} }),
+    )
+    const secondAppliedValues = secondApplied.get()
     const { app: secondApp } = await createServer({
-      config: firstConfig,
+      config: {
+        host: secondAppliedValues.bindHost,
+        port: secondAppliedValues.bindPort,
+        dataDir: firstConfig.dataDir,
+      },
       runtime: secondRuntime,
       database: secondDatabase,
+      runtimeSettingsRepository: secondRepository,
+      appliedRuntimeSettings: secondApplied,
+      envBindOverrides: {},
     })
     apps.push(secondApp)
 
@@ -309,12 +387,12 @@ describe("runtime settings durability", () => {
       method: "GET",
       url: "/v1/settings/runtime",
     })
-    const body = RuntimeSettingsSchema.parse(JSON.parse(response.body))
+    const body = RuntimeSettingsViewSchema.parse(JSON.parse(response.body))
 
-    expect(body.advertisedUrl).toBe("https://edge.example.com")
-    expect(body.bindPort).toBe(4100)
-    expect(body.logLevel).toBe("warn")
-    expect(body.trustedProxies).toEqual(["192.168.0.0/16"])
+    expect(body.settings.advertisedUrl).toBe("https://edge.example.com")
+    expect(body.settings.bindPort).toBe(4100)
+    expect(body.settings.logLevel).toBe("warn")
+    expect(body.settings.trustedProxies).toEqual(["192.168.0.0/16"])
 
     secondDatabase.close()
   })

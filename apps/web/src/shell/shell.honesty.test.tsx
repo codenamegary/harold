@@ -96,12 +96,23 @@ describe("shell honesty", () => {
   let runtimeSettings = {
     advertisedUrl: null as string | null,
     trustedProxies: [] as string[],
-    bindHost: "127.0.0.1",
+    bindHost: "127.0.0.1" as const,
     bindPort: 3847,
-    logLevel: "info",
+    logLevel: "info" as const,
     logPath: null as string | null,
     allowedRoots: [] as string[],
   }
+
+  const wrapRuntimeSettingsView = () => ({
+    settings: runtimeSettings,
+    restartRequired: false,
+    effective: {
+      bindHost: runtimeSettings.bindHost,
+      bindPort: runtimeSettings.bindPort,
+      logPath: runtimeSettings.logPath,
+    },
+    overrides: {},
+  })
 
   beforeEach(() => {
     runtimeSettings = {
@@ -181,7 +192,7 @@ describe("shell honesty", () => {
 
       if (url === "/v1/settings/runtime" && method === "GET") {
         return Promise.resolve(
-          new Response(JSON.stringify(runtimeSettings), {
+          new Response(JSON.stringify(wrapRuntimeSettingsView()), {
             status: 200,
             headers: { "Content-Type": "application/json" },
           }),
@@ -198,13 +209,10 @@ describe("shell honesty", () => {
             body.advertisedUrl === undefined ? runtimeSettings.advertisedUrl : body.advertisedUrl,
         }
         return Promise.resolve(
-          new Response(
-            JSON.stringify({ settings: runtimeSettings, restartRequired: false }),
-            {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            },
-          ),
+          new Response(JSON.stringify(wrapRuntimeSettingsView()), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
         )
       }
 
@@ -390,13 +398,13 @@ describe("shell honesty", () => {
   })
 
   describe("settings disabled honesty", () => {
-    test("runtime toggles, diagnostics, and provider connect actions are disabled", async () => {
+    test("runtime controls are live and provider connect actions stay disabled", async () => {
       const { getByRole } = renderShellRoute("/settings")
 
       await waitForShellReady(getByRole)
 
-      expect(getByRole("checkbox", { name: /allow local network/i })).toBeDisabled()
-      expect(getByRole("checkbox", { name: /detailed request logs/i })).toBeDisabled()
+      expect(getByRole("combobox", { name: "Log level" })).toBeEnabled()
+      expect(getByRole("textbox", { name: "Trusted proxy CIDR" })).toBeEnabled()
       expect(getByRole("button", { name: "Download diagnostics" })).toBeDisabled()
       expect(getByRole("button", { name: "Connect GitHub" })).toBeDisabled()
       expect(getByRole("button", { name: "Connect GitLab" })).toBeDisabled()

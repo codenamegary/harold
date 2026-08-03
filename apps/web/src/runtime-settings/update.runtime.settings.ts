@@ -1,8 +1,8 @@
 import { AllowedRootHasWorkspacesProblemSchema } from "contracts/http/error"
 import {
   RUNTIME_SETTINGS_PATH,
+  RuntimeSettingsViewSchema,
   UpdateRuntimeSettingsBody,
-  UpdateRuntimeSettingsResponseSchema,
 } from "contracts/http/runtime-settings"
 
 export type RuntimeSettingsUpdateError = Error & {
@@ -65,5 +65,5 @@ export const updateRuntimeSettings = async (
   }
 
   const responsePayload: unknown = await response.json()
-  return UpdateRuntimeSettingsResponseSchema.parse(responsePayload)
+  return RuntimeSettingsViewSchema.parse(responsePayload)
 }

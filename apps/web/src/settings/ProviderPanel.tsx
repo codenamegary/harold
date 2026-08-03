@@ -126,7 +126,7 @@ const LocalFilesystemProviderCard: React.FC = () => {
   const [confirmRemoveRoot, setConfirmRemoveRoot] = useState<string | undefined>(undefined)
   const [removeError, setRemoveError] = useState<string | undefined>(undefined)
 
-  const allowedRoots = runtimeSettingsQuery.data?.allowedRoots ?? []
+  const allowedRoots = runtimeSettingsQuery.data?.settings.allowedRoots ?? []
   const pending = updateRuntimeSettingsMutation.isPending
 
   const saveRoots = async (nextRoots: string[], force = false) => {
@@ -293,7 +293,7 @@ const LocalFilesystemProviderCard: React.FC = () => {
 
 export const ProviderPanel: React.FC = () => {
   const runtimeSettingsQuery = useRuntimeSettingsQuery()
-  const configuredCount = runtimeSettingsQuery.data?.allowedRoots.length ?? 0
+  const configuredCount = runtimeSettingsQuery.data?.settings.allowedRoots.length ?? 0
 
   return (
     <Panel className="mb-[25px] p-[22px]">

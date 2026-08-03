@@ -364,7 +364,7 @@ const ExternalUrlStep: React.FC<ExternalUrlStepProps> = (props) => {
   return (
     <ExternalUrlForm
       {...props}
-      initialHost={hostFromAdvertisedUrl(runtimeSettingsQuery.data.advertisedUrl)}
+      initialHost={hostFromAdvertisedUrl(runtimeSettingsQuery.data.settings.advertisedUrl)}
     />
   )
 }
@@ -431,7 +431,7 @@ const TestConnectionStep: React.FC<TestConnectionStepProps> = ({
   const [runError, setRunError] = useState<string | null>(null)
   const autoRunStarted = useRef(false)
 
-  const advertisedUrl = runtimeSettingsQuery.data?.advertisedUrl ?? null
+  const advertisedUrl = runtimeSettingsQuery.data?.settings.advertisedUrl ?? null
   const endpointLabel =
     advertisedUrl ?? `https://127.0.0.1:${localAgentPort}`
 
