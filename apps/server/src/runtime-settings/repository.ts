@@ -13,16 +13,6 @@ import { Config } from "../config/config"
 
 export const settingsFileName = "settings.yml"
 
-export type RuntimeSettingsSeedDefaults = {
-  bindHost: "127.0.0.1"
-  bindPort: number
-  logLevel: RuntimeSettings["logLevel"]
-  logPath: string | null
-  advertisedUrl: string | null
-  trustedProxies: string[]
-  allowedRoots: string[]
-}
-
 export type RuntimeSettingsRepository = {
   get: () => RuntimeSettings
   update: (body: UpdateRuntimeSettingsBody) => UpdateRuntimeSettingsResponse
@@ -30,10 +20,10 @@ export type RuntimeSettingsRepository = {
 
 export type CreateRuntimeSettingsRepositoryOptions = {
   dataDir: string
-  seedDefaults?: RuntimeSettingsSeedDefaults
+  seedDefaults?: RuntimeSettings
 }
 
-const fallbackSeedDefaults: RuntimeSettingsSeedDefaults = {
+const fallbackSeedDefaults = RuntimeSettingsSchema.parse({
   bindHost: "127.0.0.1",
   bindPort: 3847,
   logLevel: "info",
@@ -41,7 +31,7 @@ const fallbackSeedDefaults: RuntimeSettingsSeedDefaults = {
   advertisedUrl: null,
   trustedProxies: [],
   allowedRoots: [],
-}
+})
 
 const settingsPathFor = (dataDir: string): string =>
   path.join(dataDir, settingsFileName)
@@ -113,14 +103,13 @@ const requiresRestart = (params: {
 
 const loadOrSeed = (params: {
   filePath: string
-  seedDefaults: RuntimeSettingsSeedDefaults
+  seedDefaults: RuntimeSettings
 }): RuntimeSettings => {
   const { filePath, seedDefaults } = params
 
   if (!existsSync(filePath)) {
-    const seeded = RuntimeSettingsSchema.parse(seedDefaults)
-    writeSettingsAtomic({ filePath, settings: seeded })
-    return seeded
+    writeSettingsAtomic({ filePath, settings: seedDefaults })
+    return seedDefaults
   }
 
   const raw = readFileSync(filePath, "utf8")
@@ -170,14 +159,13 @@ export const createRuntimeSettingsRepository = (
   }
 }
 
-export const seedDefaultsFromConfig = (
-  config: Config,
-): RuntimeSettingsSeedDefaults => ({
-  bindHost: config.host,
-  bindPort: config.port,
-  logLevel: "info",
-  logPath: null,
-  advertisedUrl: null,
-  trustedProxies: [],
-  allowedRoots: [],
-})
+export const seedDefaultsFromConfig = (config: Config): RuntimeSettings =>
+  RuntimeSettingsSchema.parse({
+    bindHost: config.host,
+    bindPort: config.port,
+    logLevel: "info",
+    logPath: null,
+    advertisedUrl: null,
+    trustedProxies: [],
+    allowedRoots: [],
+  })

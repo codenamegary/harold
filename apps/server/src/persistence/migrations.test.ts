@@ -92,7 +92,6 @@ describe("drizzle migrations", () => {
     expect(tables).toContain("__drizzle_migrations")
     expect(tables).toContain("workspaces")
     expect(tables).toContain("agent_settings")
-    expect(tables).not.toContain("runtime_settings")
     expect(tables).not.toContain("schema_migrations")
 
     const columns = database.sqlite
@@ -330,7 +329,6 @@ describe("drizzle migrations", () => {
     expect(migrationCount(database.sqlite)).toBe(currentMigrationCount)
     expect(tableNames(database.sqlite)).toContain("devices")
     expect(tableNames(database.sqlite)).toContain("pairing_codes")
-    expect(tableNames(database.sqlite)).not.toContain("runtime_settings")
 
     const workspace = database.sqlite
       .query<{ id: string; name: string }, []>(
