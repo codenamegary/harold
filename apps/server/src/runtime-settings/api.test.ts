@@ -414,3 +414,33 @@ describe("runtime settings durability", () => {
     expect(fileRaw).toContain("bindPort: 4123")
   })
 })
+
+describe("createServer runtime settings seed", () => {
+  test("bare createServer seeds missing settings.yml from config", async () => {
+    const dataDir = await createTempDataDir()
+    const config = parseConfig({
+      AGENT_SERVER_HOST: "127.0.0.1",
+      AGENT_SERVER_PORT: "4123",
+      AGENT_SERVER_DATA_DIR: dataDir,
+    })
+    const database = openDatabase({ dataDir: config.dataDir })
+    const runtime = createRuntime("0.1.0")
+    const { app } = await createServer({
+      config,
+      runtime,
+      database,
+    })
+    apps.push(app)
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/settings/runtime",
+    })
+    const body = RuntimeSettingsViewSchema.parse(JSON.parse(response.body))
+
+    expect(response.statusCode).toBe(200)
+    expect(body.settings.bindPort).toBe(4123)
+    const fileRaw = await readFile(path.join(dataDir, settingsFileName), "utf8")
+    expect(fileRaw).toContain("bindPort: 4123")
+  })
+})

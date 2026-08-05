@@ -1,7 +1,6 @@
 import {
   LogLevel,
   PatchRuntimeSettingsQuerySchema,
-  RuntimeSettingsViewSchema,
   UpdateRuntimeSettingsBodySchema,
 } from "contracts/http/runtime-settings"
 import { FastifyInstance } from "fastify"
@@ -59,7 +58,7 @@ export const registerRuntimeSettingsRoutes = (
       envOverrides: options.envBindOverrides ?? {},
     })
 
-    return reply.status(200).send(RuntimeSettingsViewSchema.parse(view))
+    return reply.status(200).send(view)
   })
 
   app.patch("/v1/settings/runtime", async (request, reply) => {
@@ -163,6 +162,6 @@ export const registerRuntimeSettingsRoutes = (
       envOverrides: options.envBindOverrides ?? {},
     })
 
-    return reply.status(200).send(RuntimeSettingsViewSchema.parse(view))
+    return reply.status(200).send(view)
   })
 }
