@@ -781,51 +781,105 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack, endpointHint })
 
 export const ConnectWizard: React.FC = () => {
   const [searchParams] = useSearchParams()
-  const [view, setView] = useState<WizardView>(() =>
-    initialViewFromSearchParam(searchParams.get("step")),
-  )
+  const initialView = initialViewFromSearchParam(searchParams.get("step"))
+  const [view, setView] = useState<WizardView>(initialView)
   const [accessMode, setAccessMode] = useState<AccessMode>("local")
   const [proxyProvider, setProxyProvider] = useState<ProxyProvider>("caddy")
-  const [returnedFromCloud, setReturnedFromCloud] = useState(false)
   const [modeSwitchError, setModeSwitchError] = useState<string | null>(null)
+  const [localPairGate, setLocalPairGate] = useState<"pending" | "ready">(
+    initialView.kind === "local-pair" ? "pending" : "ready",
+  )
   const updateRuntimeSettingsMutation = useUpdateRuntimeSettingsMutation()
+  const runtimeSettingsQuery = useRuntimeSettingsQuery()
+  const hasPreparedDeepLinkLocalPair = useRef(false)
 
   const cloudStep = view.kind === "cloud" ? view.step : null
 
-  const handleModeContinue = () => {
+  const resolveRuntimeSettingsView = async () => {
+    if (runtimeSettingsQuery.isSuccess && runtimeSettingsQuery.data !== undefined) {
+      return runtimeSettingsQuery.data
+    }
+
+    const result = await runtimeSettingsQuery.refetch()
+    if (result.data === undefined) {
+      throw new Error("runtime settings unavailable")
+    }
+
+    return result.data
+  }
+
+  const enterLocalPair = () => {
     setModeSwitchError(null)
+    setLocalPairGate("pending")
 
-    if (accessMode === "local") {
-      if (returnedFromCloud) {
-        void updateRuntimeSettingsMutation
-          .mutateAsync({ body: { advertisedUrl: null } })
-          .then(() => {
-            setReturnedFromCloud(false)
-            setView({ kind: "local-pair" })
-          })
-          .catch(() => {
-            setModeSwitchError("Could not clear the saved external URL. Try again.")
-          })
-        return
-      }
+    void resolveRuntimeSettingsView()
+      .then(async (settingsView) => {
+        if (settingsView.settings.advertisedUrl !== null) {
+          await updateRuntimeSettingsMutation.mutateAsync({ body: { advertisedUrl: null } })
+        }
 
-      setView({ kind: "local-pair" })
+        setView({ kind: "local-pair" })
+        setLocalPairGate("ready")
+      })
+      .catch(() => {
+        setModeSwitchError("Could not clear the saved external URL. Try again.")
+        setLocalPairGate("ready")
+      })
+  }
+
+  useEffect(() => {
+    if (hasPreparedDeepLinkLocalPair.current) {
       return
     }
 
-    setReturnedFromCloud(false)
+    if (initialView.kind !== "local-pair") {
+      return
+    }
+
+    if (!runtimeSettingsQuery.isSuccess) {
+      return
+    }
+
+    hasPreparedDeepLinkLocalPair.current = true
+
+    const advertisedUrl = runtimeSettingsQuery.data.settings.advertisedUrl
+    if (advertisedUrl === null) {
+      setLocalPairGate("ready")
+      return
+    }
+
+    setModeSwitchError(null)
+    void updateRuntimeSettingsMutation
+      .mutateAsync({ body: { advertisedUrl: null } })
+      .then(() => setLocalPairGate("ready"))
+      .catch(() => {
+        setModeSwitchError("Could not clear the saved external URL. Try again.")
+        setView({ kind: "mode-select" })
+        setLocalPairGate("ready")
+      })
+  }, [
+    initialView.kind,
+    runtimeSettingsQuery.data,
+    runtimeSettingsQuery.isSuccess,
+    updateRuntimeSettingsMutation,
+  ])
+
+  const handleModeContinue = () => {
+    if (accessMode === "local") {
+      enterLocalPair()
+      return
+    }
+
+    setModeSwitchError(null)
     setView({ kind: "cloud", step: 1 })
   }
 
   const handleBackToModeSelect = () => {
-    if (view.kind === "cloud") {
-      setReturnedFromCloud(true)
-    }
-
     setView({ kind: "mode-select" })
   }
 
   const handleLocalPairBack = () => {
+    setLocalPairGate("ready")
     setView({ kind: "mode-select" })
   }
 
@@ -891,8 +945,11 @@ export const ConnectWizard: React.FC = () => {
               endpointHint="remote"
             />
           ) : null}
-          {view.kind === "local-pair" ? (
+          {view.kind === "local-pair" && localPairGate === "ready" ? (
             <PairDeviceStep onBack={handleLocalPairBack} endpointHint="local" />
+          ) : null}
+          {view.kind === "local-pair" && localPairGate === "pending" ? (
+            <p className="m-0 text-sm text-muted">Preparing local pairing…</p>
           ) : null}
         </section>
       </div>

@@ -274,4 +274,40 @@ describe("pairing HTTP integration", () => {
     )
     expect(clearedPairing.endpoint).toBe(`http://${config.host}:${config.port}`)
   })
+
+  test("local pairing after clearing stale advertised URL uses loopback endpoint", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app, config } = await createTestApp(resources, dataDir)
+    const httpBase = await getListeningHttpBase(app, config)
+
+    const setAdvertisedResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ advertisedUrl: "https://agents.example.com" }),
+    })
+    expect(setAdvertisedResponse.status).toBe(200)
+
+    const staleCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    const stalePairing = CreatePairingCodeResponseSchema.parse(await staleCreate.json())
+    expect(stalePairing.endpoint).toBe("https://agents.example.com")
+
+    const clearResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ advertisedUrl: null }),
+    })
+    expect(clearResponse.status).toBe(200)
+
+    const localCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    const localPairing = CreatePairingCodeResponseSchema.parse(await localCreate.json())
+    expect(localPairing.endpoint).toBe(`http://${config.host}:${config.port}`)
+  })
 })

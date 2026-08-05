@@ -278,7 +278,9 @@ describe("ConnectWizard", () => {
 
     fireEvent.click(getByRole("button", { name: continueButtonName }))
 
-    expect(getByRole("heading", { name: /pair a device/i })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(getByRole("heading", { name: /pair a device/i })).toBeInTheDocument()
+    })
     expect(queryByRole("button", { name: /external url/i })).toBeNull()
     await waitFor(() => {
       expect(getByRole("status", { name: /pairing code/i })).toHaveTextContent("J7K-9P2")
@@ -290,7 +292,9 @@ describe("ConnectWizard", () => {
       initialEntries: ["/connect?step=pair"],
     })
 
-    expect(getByRole("heading", { name: /pair a device/i })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(getByRole("heading", { name: /pair a device/i })).toBeInTheDocument()
+    })
     expect(queryByRole("status", { name: "Wizard progress" })).toBeNull()
     await waitFor(() => {
       expect(getByRole("status", { name: /pairing code/i })).toHaveTextContent("J7K-9P2")
@@ -385,6 +389,28 @@ describe("ConnectWizard", () => {
     expect(getByText("Listening on your advertised HTTPS endpoint")).toBeInTheDocument()
   })
 
+  test("fresh local continue clears stale advertised URL before pairing", async () => {
+    runtimeSettings = {
+      ...defaultRuntimeSettings,
+      advertisedUrl: "https://agents.example.com",
+    }
+
+    const { getByRole, getByText } = renderConnectWizard()
+
+    fireEvent.click(getByRole("button", { name: continueButtonName }))
+
+    await waitFor(() => {
+      expect(runtimeSettingsUpdates).toEqual([{ advertisedUrl: null }])
+    })
+    await waitFor(() => {
+      expect(runtimeSettings.advertisedUrl).toBeNull()
+    })
+    await waitFor(() => {
+      expect(getByRole("status", { name: /pairing code/i })).toHaveTextContent("J7K-9P2")
+    })
+    expect(getByText("Listening on this local Agent Server endpoint")).toBeInTheDocument()
+  })
+
   test("switching cloud back to local clears advertised URL", async () => {
     const { getByRole } = renderConnectWizard()
 
@@ -401,6 +427,101 @@ describe("ConnectWizard", () => {
     await waitFor(() => {
       expect(getByRole("heading", { name: /pair a device/i })).toBeInTheDocument()
     })
+  })
+
+  test("pair deep link clears stale advertised URL before pairing", async () => {
+    runtimeSettings = {
+      ...defaultRuntimeSettings,
+      advertisedUrl: "https://agents.example.com",
+    }
+
+    const { getByRole } = renderWithProviders(<ConnectWizard />, {
+      initialEntries: ["/connect?step=pair"],
+    })
+
+    await waitFor(() => {
+      expect(runtimeSettingsUpdates).toEqual([{ advertisedUrl: null }])
+    })
+    await waitFor(() => {
+      expect(runtimeSettings.advertisedUrl).toBeNull()
+    })
+    await waitFor(() => {
+      expect(getByRole("status", { name: /pairing code/i })).toHaveTextContent("J7K-9P2")
+    })
+  })
+
+  test("pair deep link blocks pairing when advertised URL clear fails", async () => {
+    runtimeSettings = {
+      ...defaultRuntimeSettings,
+      advertisedUrl: "https://agents.example.com",
+    }
+
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/settings/runtime" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(wrapRuntimeSettingsView(runtimeSettings)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/runtime" && method === "PATCH") {
+        return Promise.resolve(new Response("server error", { status: 500 }))
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const { getByRole, getByText } = renderWithProviders(<ConnectWizard />, {
+      initialEntries: ["/connect?step=pair"],
+    })
+
+    await waitFor(() => {
+      expect(getByText(/could not clear the saved external url/i)).toBeInTheDocument()
+    })
+    expect(getByRole("heading", { name: /how will you connect/i })).toBeInTheDocument()
+    expect(pairingRequests).toHaveLength(0)
+  })
+
+  test("local continue blocks pairing when advertised URL clear fails", async () => {
+    runtimeSettings = {
+      ...defaultRuntimeSettings,
+      advertisedUrl: "https://agents.example.com",
+    }
+
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/settings/runtime" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(wrapRuntimeSettingsView(runtimeSettings)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/runtime" && method === "PATCH") {
+        return Promise.resolve(new Response("server error", { status: 500 }))
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const { getByRole, getByText } = renderConnectWizard()
+
+    fireEvent.click(getByRole("button", { name: continueButtonName }))
+
+    await waitFor(() => {
+      expect(getByText(/could not clear the saved external url/i)).toBeInTheDocument()
+    })
+    expect(getByRole("heading", { name: /how will you connect/i })).toBeInTheDocument()
+    expect(pairingRequests).toHaveLength(0)
   })
 
   test("access mode cards toggle selection visually", () => {
