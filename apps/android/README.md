@@ -33,6 +33,26 @@ Install a debug build on a connected device or emulator:
 - **Release** builds reject cleartext HTTP and WebSocket traffic.
 - **Debug** builds allow cleartext through a debug-only network security config. No trust-all TLS.
 
+## Authenticated transport
+
+One OkHttp client serves both authenticated paths. It attaches the paired device
+credential as `Authorization: Bearer` ([ADR-0001](../../docs/adr/0001-device-authentication.md)).
+The credential never appears in a URL or a log line.
+
+- HTTP: `GET /v1/workspaces?limit=1` proves the path from the shell.
+- Events: `/v1/events?cursor=N` over WebSocket. Bearer travels on the HTTP
+  Upgrade. There is no browser-style `auth` first message.
+
+The connection gateway folds ordered event frames and advances a cursor only
+after it applies them, so a replayed frame is a no-op. The cursor lives in
+memory: a live reconnect resumes from the last applied event, a fresh process
+cold starts at `0`.
+
+Reconnect uses `min(250 * 2^(attempt - 1), 4000)` ms with no jitter. A rejected
+credential (HTTP `401`, or close `1008` with reason `unauthorized`) stops
+auto-retry, keeps the stored credential, and offers Retry and Re-pair. Every
+other close, slow consumer included, keeps reconnecting.
+
 ## CI
 
 Android checks run in `.github/workflows/android.yml` when `apps/android/**` changes.
