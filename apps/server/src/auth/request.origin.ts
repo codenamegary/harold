@@ -64,7 +64,5 @@ export const isHostPrincipalRequest = (
     return false
   }
 
-  const tcpPeerTrusted = isTrustedProxyPeer(request.ip, trustedProxies)
-  const forwarded = hasHonoredForwardedHeaders(request, tcpPeerTrusted)
-  return !(tcpPeerTrusted && forwarded)
+  return !isTrustedProxyPeer(request.ip, trustedProxies)
 }

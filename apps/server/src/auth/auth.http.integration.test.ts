@@ -20,6 +20,15 @@ import { Config } from "../config/config"
 import { hashDeviceCredential } from "../device/hash.device.credential"
 import { BEARER_CHALLENGE } from "./problems"
 
+const patchTrustedProxies = async (httpBase: string, trustedProxies: string[]) => {
+  const response = await fetch(`${httpBase}/v1/settings/runtime`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ trustedProxies }),
+  })
+  expect(response.status).toBe(200)
+}
+
 const resources = createTestAppResources()
 
 afterEach(async () => {
@@ -213,23 +222,24 @@ describe("device auth HTTP", () => {
 })
 
 describe("trusted proxy host principal", () => {
-  const patchTrustedProxies = async (httpBase: string, trustedProxies: string[]) => {
-    const response = await fetch(`${httpBase}/v1/settings/runtime`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ trustedProxies }),
-    })
-    expect(response.status).toBe(200)
-  }
+  test("direct loopback outside trustedProxies stays host", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app, config } = await createTestApp(resources, dataDir)
+    const { httpBase } = await getListeningHttpBase(app, config)
 
-  test("direct loopback without forwarded headers stays host", async () => {
+    const response = await fetch(`${httpBase}/v1/workspaces`)
+    expect(response.status).toBe(200)
+  })
+
+  test("trusted proxy without forwarded headers is not host", async () => {
     const dataDir = await createTempDataDir(resources)
     const { app, config } = await createTestApp(resources, dataDir)
     const { httpBase } = await getListeningHttpBase(app, config)
     await patchTrustedProxies(httpBase, ["127.0.0.1"])
 
     const response = await fetch(`${httpBase}/v1/workspaces`)
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(401)
+    expect(response.headers.get("www-authenticate")).toBe(BEARER_CHALLENGE)
   })
 
   test("trusted loopback peer with forwarded headers is not host", async () => {
@@ -324,6 +334,35 @@ describe("device auth WebSocket", () => {
     })
 
     expect(opened).toBe(true)
+  })
+
+  test("trusted proxy without forwarded headers does not connect as host", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app, config } = await createTestApp(resources, dataDir, {
+      wsAuthFrameTimeoutMs: 200,
+    })
+    const { httpBase, wsUrl } = await getListeningHttpBase(app, config)
+    await patchTrustedProxies(httpBase, ["127.0.0.1"])
+
+    const closeCode = await new Promise<number>((resolve, reject) => {
+      const ws = new WebSocket(wsUrl)
+      const timer = setTimeout(() => {
+        ws.close()
+        reject(new Error("timeout waiting for close"))
+      }, 2_000)
+
+      ws.addEventListener("close", (event) => {
+        clearTimeout(timer)
+        resolve(event.code)
+      })
+
+      ws.addEventListener("unexpected-response", (_req, res) => {
+        clearTimeout(timer)
+        reject(new Error(`unexpected response ${res.statusCode}`))
+      })
+    })
+
+    expect(closeCode).toBe(1008)
   })
 
   test("Upgrade Authorization Bearer unlocks event stream", async () => {

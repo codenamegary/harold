@@ -53,10 +53,19 @@ describe("hasHonoredForwardedHeaders", () => {
 })
 
 describe("isHostPrincipalRequest", () => {
-  test("direct loopback without headers stays host-eligible", () => {
+  test("direct loopback outside trustedProxies stays host-eligible", () => {
+    expect(isHostPrincipalRequest({ ip: "127.0.0.1", headers: {} }, [])).toBe(
+      true,
+    )
+    expect(
+      isHostPrincipalRequest({ ip: "127.0.0.1", headers: {} }, ["10.0.0.1"]),
+    ).toBe(true)
+  })
+
+  test("trusted proxy without forwarded headers is not host-eligible", () => {
     expect(
       isHostPrincipalRequest({ ip: "127.0.0.1", headers: {} }, ["127.0.0.1"]),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   test("spoofed headers from untrusted loopback stay host-eligible", () => {
