@@ -26,8 +26,10 @@ transfer convenience, not a separate protocol.
 6. Hash pairing codes at rest with a password KDF (Argon2id preferred) or an
    equivalent slow hash, because code entropy is far below 112 bits
    ([NIST SP 800-63B-4][nist-authn], [OWASP Password Storage][owasp-password]).
-7. QR may encode the same claim payload for optical transfer. Scanning must not
-   invent a second trust model ([NIST binding local OOB][nist-events]).
+7. QR encodes the versioned custom URI
+   `agent-server://pair?v=1&endpoint=<encoded absolute URL>&code=<XXX-XXX>` for
+   optical transfer. Scanning must not invent a second trust model
+   ([NIST binding local OOB][nist-events]).
 8. Do not implement RFC 8628 Device Authorization Grant as the Milestone 2
    protocol.
 
@@ -90,10 +92,13 @@ reachable off-machine (Milestone 3).
 
 - Pairing create stays a host-operator action. Unauthenticated clients cannot mint
   codes.
-- Claim endpoint is the brute-force surface. This protocol does not require rate
-  limiting.
-- Connect wizard QR rendering may encode code plus local endpoint hint. Claim
-  still posts the code string to Agent Server.
+- Claim endpoint is the brute-force surface. Agent Server does not add claim
+  rate limits for this product. Do not introduce per-code, per-source, or global
+  claim throttling without a new ADR.
+- Connect wizard QR encodes the versioned custom URI
+  `agent-server://pair?v=1&endpoint=<encoded absolute URL>&code=<XXX-XXX>`.
+  Shared format and parse helpers live in `packages/contracts`. Claim still
+  posts the code string to Agent Server.
 - A future move to RFC 8628 would be a new decision, not a silent reshape of
   `/v1/pairing-codes`.
 

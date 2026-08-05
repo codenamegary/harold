@@ -4,4 +4,13 @@
     <string name="shell_status_not_paired">Not paired</string>
     <string name="pair_action">Pair</string>
     <string name="pair_content_description">Pair with Agent Server</string>
+    <string name="pairing_title">Pair device</string>
+    <string name="pairing_back">Back</string>
+    <string name="pairing_manual_entry">Enter manually</string>
+    <string name="pairing_use_scanner">Use scanner</string>
+    <string name="pairing_endpoint_label">Agent Server endpoint</string>
+    <string name="pairing_code_label">Pairing code</string>
+    <string name="pairing_submit">Claim pairing code</string>
+    <string name="pairing_claiming">Claiming pairing code…</string>
+    <string name="pairing_camera_permission_required">Camera permission is required to scan pairing QR codes.</string>
 </resources>
