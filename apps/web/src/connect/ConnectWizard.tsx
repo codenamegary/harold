@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react"
 import { QRCodeSVG } from "qrcode.react"
 import { ConnectionCheckId, ConnectionTestResponse } from "contracts/http/connection-test"
 import { CreatePairingCodeResponse } from "contracts/http/pairing-code"
+import { formatPairingQrUri } from "contracts/pairing/qr-uri"
 import { useNavigate, useSearchParams } from "react-router"
 import { Button } from "../design-system/Button"
 import { FieldLabel } from "../design-system/FieldLabel"
@@ -592,9 +593,9 @@ type PairDeviceStepProps = {
 }
 
 const qrPayload = (pairingCode: CreatePairingCodeResponse): string =>
-  JSON.stringify({
-    code: pairingCode.code,
+  formatPairingQrUri({
     endpoint: pairingCode.endpoint,
+    code: pairingCode.code,
   })
 
 const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack, endpointHint }) => {

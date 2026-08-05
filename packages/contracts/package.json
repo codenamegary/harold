@@ -14,6 +14,7 @@
     "./http/agent-settings": "./src/http/agent-settings.ts",
     "./http/runtime-settings": "./src/http/runtime-settings.ts",
     "./http/connection-test": "./src/http/connection-test.ts",
+    "./pairing/qr-uri": "./src/pairing/qr-uri.ts",
 
     "./events/event": "./src/events/event.ts",
     "./events/primitives": "./src/events/primitives.ts",

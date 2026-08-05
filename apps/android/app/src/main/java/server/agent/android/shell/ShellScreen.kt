@@ -81,7 +81,7 @@ fun ShellScreen(
                         contentDescription = pairContentDescription
                     },
             ) {
-                Text(text = stringResource(R.string.pair_action))
+                Text(text = uiState.pairLabel)
             }
         }
     }

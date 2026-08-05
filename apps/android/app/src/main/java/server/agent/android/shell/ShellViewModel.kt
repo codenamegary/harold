@@ -1,33 +1,35 @@
 package server.agent.android.shell
 
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
+import kotlinx.coroutines.launch
 import server.agent.android.di.AppContainer
-
-data class ShellUiState(
-    val title: String = "Agent Server",
-    val status: String = "Not paired",
-    val pairEnabled: Boolean = false,
-)
 
 class ShellViewModel(
     private val appContainer: AppContainer,
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(
-        ShellUiState(
-            pairEnabled = appContainer.sessionGateway.isPaired(),
-        ),
-    )
+    private val _uiState = MutableStateFlow(ShellUiState())
     val uiState: StateFlow<ShellUiState> = _uiState.asStateFlow()
 
-    fun onPairClick() {
-        _uiState.update { current ->
-            current.copy(pairEnabled = appContainer.sessionGateway.isPaired())
+    init {
+        viewModelScope.launch {
+            appContainer.sessionGateway.refresh()
         }
+
+        viewModelScope.launch {
+            appContainer.sessionGateway.pairedState.collect { pairedState ->
+                _uiState.update { current -> current.fromPairedState(pairedState) }
+            }
+        }
+    }
+
+    fun onPairClick(onNavigateToPairing: () -> Unit) {
+        onNavigateToPairing()
     }
 }
 

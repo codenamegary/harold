@@ -1,7 +1,6 @@
 package server.agent.android.shell
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -19,7 +18,7 @@ class ShellScreenTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun showsAgentServerNotPairedAndDisabledPairButton() {
+    fun showsAgentServerNotPairedAndPairButton() {
         composeTestRule.setContent {
             AgentServerTheme(dynamicColor = false) {
                 ShellScreen(
@@ -31,6 +30,6 @@ class ShellScreenTest {
 
         composeTestRule.onNodeWithText("Agent Server").assertIsDisplayed()
         composeTestRule.onNodeWithText("Not paired").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("shell_pair_button").assertIsNotEnabled()
+        composeTestRule.onNodeWithTag("shell_pair_button").assertIsDisplayed()
     }
 }
