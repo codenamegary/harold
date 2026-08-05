@@ -22,7 +22,11 @@ fun AppNavHost(
 ) {
     val navController = rememberNavController()
     val shellViewModel: ShellViewModel = viewModel(
-        factory = ShellViewModelFactory(appContainer),
+        factory = ShellViewModelFactory(
+            sessionGateway = appContainer.sessionGateway,
+            connectionGateway = appContainer.connectionGateway,
+            agentApi = appContainer.agentApi,
+        ),
     )
     val shellUiState by shellViewModel.uiState.collectAsState()
 
@@ -38,6 +42,7 @@ fun AppNavHost(
                         navController.navigate(Routes.Pairing)
                     }
                 },
+                onRetryClick = shellViewModel::onRetryClick,
             )
         }
 

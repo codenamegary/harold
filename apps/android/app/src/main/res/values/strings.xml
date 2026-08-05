@@ -4,6 +4,8 @@
     <string name="shell_status_not_paired">Not paired</string>
     <string name="pair_action">Pair</string>
     <string name="pair_content_description">Pair with Agent Server</string>
+    <string name="retry_action">Retry</string>
+    <string name="retry_content_description">Retry connecting to Agent Server</string>
     <string name="pairing_title">Pair device</string>
     <string name="pairing_back">Back</string>
     <string name="pairing_manual_entry">Enter manually</string>
