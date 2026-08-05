@@ -1,0 +1,40 @@
+name: android
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - apps/android/**
+      - .github/workflows/android.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - apps/android/**
+      - .github/workflows/android.yml
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/android
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Android checks
+        run: ./gradlew --no-daemon --stacktrace --warning-mode=all lintRelease testDebugUnitTest assembleDebug assembleRelease
