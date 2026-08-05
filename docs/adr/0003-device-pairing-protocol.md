@@ -18,7 +18,7 @@ transfer convenience, not a separate protocol.
 3. Codes are one-time, short-lived (**≤ 10 minutes**), and generated with a CSPRNG
    ([NIST SP 800-63B-4 binding][nist-events]).
 4. Keep the human-enterable `XXX-XXX` presentation from the prototype. Treat it
-   as low-entropy. Compensate with strict rate limits, short TTL, and single use
+   as low-entropy. Compensate with a short TTL and single use
    ([RFC 8628 §5.1][rfc8628], [NIST OOB / look-up secret guidance][nist-authn],
    [OWASP API2:2023][owasp-api2]).
 5. Prefer an unambiguous alphabet (avoid confusable `0`/`O`, `1`/`I`/`l`) and
@@ -80,7 +80,6 @@ Milestone 2 keeps the short code for UX on loopback and compensates:
 
 - One-time use
 - TTL ≤ 10 minutes
-- Per-code and per-source attempt limits
 - Invalidate on claim, expiry, or explicit revoke
 - Slow hash at rest
 
@@ -91,8 +90,8 @@ reachable off-machine (Milestone 3).
 
 - Pairing create stays a host-operator action. Unauthenticated clients cannot mint
   codes.
-- Claim endpoint is the brute-force surface. Rate limits are part of the protocol,
-  not optional polish.
+- Claim endpoint is the brute-force surface. This protocol does not require rate
+  limiting.
 - Connect wizard QR rendering may encode code plus local endpoint hint. Claim
   still posts the code string to Agent Server.
 - A future move to RFC 8628 would be a new decision, not a silent reshape of
