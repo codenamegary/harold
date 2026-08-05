@@ -4,11 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import server.agent.android.connection.ConnectionGateway
+import server.agent.android.events.ConnectionStatus
 import server.agent.android.network.AgentApi
 import server.agent.android.network.AgentApiError
 import server.agent.android.network.AgentApiException
@@ -24,6 +28,19 @@ class ShellViewModel(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ShellUiState())
     val uiState: StateFlow<ShellUiState> = _uiState.asStateFlow()
+
+    val showShell: StateFlow<Boolean> = combine(
+        sessionGateway.pairedState,
+        _uiState,
+        connectionGateway.state,
+    ) { pairedState, shellState, connectionState ->
+        when {
+            pairedState is PairedState.NotPaired -> true
+            shellState.probeUnauthorized -> true
+            connectionState.status is ConnectionStatus.AuthFailed -> true
+            else -> false
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     init {
         viewModelScope.launch {

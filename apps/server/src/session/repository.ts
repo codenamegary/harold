@@ -24,7 +24,7 @@ export type CreateSessionInput = {
 }
 
 export type SessionListOptions = {
-  workspaceId: string
+  workspaceId?: string
   limit?: number
   cursor?: string
 }
@@ -147,6 +147,16 @@ export const createSessionRepository = (database: AgentDatabase) => {
 
   const workspaceScope = (workspaceId: string) => eq(sessions.workspaceId, workspaceId)
 
+  const nonArchivedScope = () =>
+    and(sql`${sessions.archivedAt} IS NULL`, sql`${sessions.state} != 'archived'`)
+
+  const countActive = (): number =>
+    database.db
+      .select({ value: count() })
+      .from(sessions)
+      .where(nonArchivedScope())
+      .get()?.value ?? 0
+
   const conditionAfter = (row: SessionRow) =>
     or(
       lt(sessions.lastUsedAt, row.lastUsedAt),
@@ -177,6 +187,24 @@ export const createSessionRepository = (database: AgentDatabase) => {
       .limit(1)
       .get() !== undefined
 
+  const hasMoreAfterGlobal = (row: SessionRow): boolean =>
+    database.db
+      .select()
+      .from(sessions)
+      .where(and(nonArchivedScope(), conditionAfter(row)))
+      .orderBy(desc(sessions.lastUsedAt), asc(sessions.id))
+      .limit(1)
+      .get() !== undefined
+
+  const hasMoreBeforeGlobal = (row: SessionRow): boolean =>
+    database.db
+      .select()
+      .from(sessions)
+      .where(and(nonArchivedScope(), conditionBefore(row)))
+      .orderBy(asc(sessions.lastUsedAt), desc(sessions.id))
+      .limit(1)
+      .get() !== undefined
+
   const buildPageCursors = (workspaceId: string, rows: SessionRow[]) => {
     if (rows.length === 0) {
       return { nextCursor: undefined, previousCursor: undefined }
@@ -190,6 +218,24 @@ export const createSessionRepository = (database: AgentDatabase) => {
         ? encodeSessionPageCursor({ id: last.id, edge: "after" })
         : undefined,
       previousCursor: hasMoreBefore(workspaceId, first)
+        ? encodeSessionPageCursor({ id: first.id, edge: "before" })
+        : undefined,
+    }
+  }
+
+  const buildGlobalPageCursors = (rows: SessionRow[]) => {
+    if (rows.length === 0) {
+      return { nextCursor: undefined, previousCursor: undefined }
+    }
+
+    const first = rows[0]
+    const last = rows[rows.length - 1]
+
+    return {
+      nextCursor: hasMoreAfterGlobal(last)
+        ? encodeSessionPageCursor({ id: last.id, edge: "after" })
+        : undefined,
+      previousCursor: hasMoreBeforeGlobal(first)
         ? encodeSessionPageCursor({ id: first.id, edge: "before" })
         : undefined,
     }
@@ -244,6 +290,50 @@ export const createSessionRepository = (database: AgentDatabase) => {
     return [...rows].sort((left, right) => compareSessions(rowToSession(left), rowToSession(right)))
   }
 
+  const listGlobalForward = (limit: number, cursorRow?: SessionRow): SessionRow[] => {
+    const scope = nonArchivedScope()
+
+    if (cursorRow === undefined) {
+      return database.db
+        .select()
+        .from(sessions)
+        .where(scope)
+        .orderBy(desc(sessions.lastUsedAt), asc(sessions.id))
+        .limit(limit)
+        .all()
+    }
+
+    return database.db
+      .select()
+      .from(sessions)
+      .where(and(scope, conditionAfter(cursorRow)))
+      .orderBy(desc(sessions.lastUsedAt), asc(sessions.id))
+      .limit(limit)
+      .all()
+  }
+
+  const listGlobalBackward = (limit: number, cursorRow?: SessionRow): SessionRow[] => {
+    const scope = nonArchivedScope()
+    const rows =
+      cursorRow === undefined
+        ? database.db
+            .select()
+            .from(sessions)
+            .where(scope)
+            .orderBy(asc(sessions.lastUsedAt), desc(sessions.id))
+            .limit(limit)
+            .all()
+        : database.db
+            .select()
+            .from(sessions)
+            .where(and(scope, conditionBefore(cursorRow)))
+            .orderBy(asc(sessions.lastUsedAt), desc(sessions.id))
+            .limit(limit)
+            .all()
+
+    return [...rows].sort((left, right) => compareSessions(rowToSession(left), rowToSession(right)))
+  }
+
   const create = (input: CreateSessionInput): SessionRepositoryResult<Session> => {
     const db = resolveExecutor(input.executor)
     const timestamp = nowIso()
@@ -284,6 +374,14 @@ export const createSessionRepository = (database: AgentDatabase) => {
   }
 
   const list = (options: SessionListOptions): SessionListResult => {
+    if (options.workspaceId === undefined) {
+      return listGlobal(options)
+    }
+
+    return listByWorkspace(options)
+  }
+
+  const listByWorkspace = (options: SessionListOptions & { workspaceId: string }): SessionListResult => {
     const limit = options.limit ?? DEFAULT_LIST_LIMIT
     const decodedCursor =
       options.cursor === undefined ? undefined : decodeSessionPageCursor(options.cursor)
@@ -317,6 +415,50 @@ export const createSessionRepository = (database: AgentDatabase) => {
         nextCursor: cursors.nextCursor,
         previousCursor: cursors.previousCursor,
         count: countByWorkspace(options.workspaceId),
+      },
+    }
+  }
+
+  const listGlobal = (options: SessionListOptions): SessionListResult => {
+    const limit = options.limit ?? DEFAULT_LIST_LIMIT
+    const decodedCursor =
+      options.cursor === undefined ? undefined : decodeSessionPageCursor(options.cursor)
+
+    if (options.cursor !== undefined && decodedCursor?.ok !== true) {
+      return { ok: false, error: { kind: "invalid_cursor" } }
+    }
+
+    const cursorRow =
+      decodedCursor?.ok === true ? getRowById(decodedCursor.value.id) : undefined
+
+    if (decodedCursor?.ok === true) {
+      if (cursorRow === undefined) {
+        return { ok: false, error: { kind: "invalid_cursor" } }
+      }
+
+      const archived =
+        cursorRow.archivedAt !== null || cursorRow.state === "archived"
+
+      if (archived) {
+        return { ok: false, error: { kind: "invalid_cursor" } }
+      }
+    }
+
+    const rows =
+      decodedCursor?.ok === true && decodedCursor.value.edge === "before"
+        ? listGlobalBackward(limit, cursorRow)
+        : listGlobalForward(limit, cursorRow)
+
+    const cursors = buildGlobalPageCursors(rows)
+
+    return {
+      ok: true,
+      value: {
+        items: rows.map(rowToSession),
+        limit,
+        nextCursor: cursors.nextCursor,
+        previousCursor: cursors.previousCursor,
+        count: countActive(),
       },
     }
   }

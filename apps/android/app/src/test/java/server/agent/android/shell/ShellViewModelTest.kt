@@ -18,6 +18,11 @@ import server.agent.android.connection.ConnectionGateway
 import server.agent.android.contracts.ItemCollection
 import server.agent.android.contracts.PageInfo
 import server.agent.android.contracts.Workspace
+import server.agent.android.contracts.AgentSettingsCollection
+import server.agent.android.contracts.CreateSessionBody
+import server.agent.android.contracts.CreateSessionResponse
+import server.agent.android.contracts.Session
+import server.agent.android.contracts.SessionCollection
 import server.agent.android.contracts.WorkspaceCollection
 import server.agent.android.contracts.WorkspaceState
 import server.agent.android.events.ConnectionState
@@ -215,4 +220,23 @@ private class FakeAgentApi(
 
         return result
     }
+
+    override suspend fun listSessions(
+        serverOrigin: String,
+        workspaceId: String?,
+        limit: Int,
+    ): Result<SessionCollection> = Result.failure(UnsupportedOperationException())
+
+    override suspend fun listAgents(serverOrigin: String): Result<AgentSettingsCollection> =
+        Result.failure(UnsupportedOperationException())
+
+    override suspend fun createSession(
+        serverOrigin: String,
+        body: CreateSessionBody,
+    ): Result<CreateSessionResponse> = Result.failure(UnsupportedOperationException())
+
+    override suspend fun selectSession(
+        serverOrigin: String,
+        sessionId: String,
+    ): Result<Session> = Result.failure(UnsupportedOperationException())
 }

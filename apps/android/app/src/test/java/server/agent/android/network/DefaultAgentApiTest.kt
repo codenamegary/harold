@@ -12,6 +12,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import server.agent.android.contracts.AgentId
+import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.WorkspaceState
 
 @RunWith(RobolectricTestRunner::class)
@@ -148,6 +150,77 @@ class DefaultAgentApiTest {
         val error = errorOf(agentApi.listWorkspaces(serverOrigin = origin(), limit = 1))
 
         assertTrue("expected transport error but was $error", error is AgentApiError.Transport)
+    }
+
+    @Test
+    fun listSessionsWithoutWorkspaceIdUsesGlobalEndpoint() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(
+                    """
+                    {
+                      "items": [
+                        {
+                          "id": "sess_01",
+                          "workspaceId": "ws_01",
+                          "agentId": "cursor",
+                          "name": "Debug",
+                          "state": "idle",
+                          "createdAt": "2026-08-05T00:00:00.000Z",
+                          "lastUsedAt": "2026-08-05T01:00:00.000Z",
+                          "archivedAt": null
+                        }
+                      ],
+                      "page": { "limit": 100, "count": 1 }
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val result = agentApi.listSessions(serverOrigin = origin())
+
+        val recorded = server.takeRequest()
+        assertEquals("/v1/sessions?limit=100", recorded.path)
+        assertEquals(1, result.getOrThrow().items.size)
+    }
+
+    @Test
+    fun createSessionPostsBody() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(201)
+                .setBody(
+                    """
+                    {
+                      "id": "sess_01",
+                      "workspaceId": "ws_01",
+                      "agentId": "cursor",
+                      "name": "Ship it",
+                      "state": "running",
+                      "createdAt": "2026-08-05T00:00:00.000Z",
+                      "lastUsedAt": "2026-08-05T00:00:00.000Z",
+                      "archivedAt": null,
+                      "turnId": "turn_01"
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val result = agentApi.createSession(
+            serverOrigin = origin(),
+            body = CreateSessionBody(
+                workspaceId = "ws_01",
+                agentId = AgentId.Cursor,
+                text = "Ship it",
+            ),
+        )
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/v1/sessions", recorded.path)
+        assertTrue(recorded.body.readUtf8().contains("Ship it"))
+        assertEquals("sess_01", result.getOrThrow().id)
     }
 
     private fun origin(): String = server.url("/").toString().trimEnd('/')

@@ -475,8 +475,77 @@ describe("session repository", () => {
     const live = repository.listLiveNonArchived()
     const liveIds = live.map((session) => session.id).sort()
 
-    expect(liveIds).toEqual([idle.value.id, running.value.id].sort())
+    expect(liveIds).toEqual([idle.value.id, running.value.id].toSorted())
     expect(live.every((session) => session.state !== "archived")).toBe(true)
+
+    database.close()
+  })
+
+  test("lists active sessions across workspaces sorted by lastUsedAt desc when workspaceId is omitted", async () => {
+    const dataDir = await createTempDataDir()
+    const { database, workspaceId } = await seedWorkspace(dataDir)
+    const otherWorkspaceDir = await createWorkspaceDir(dataDir, "other")
+    const workspaceRepository = createWorkspaceRepository(database, {
+      getAllowedRoots: () => [path.resolve(dataDir)],
+    })
+    const otherWorkspace = workspaceRepository.create({
+      name: "Other",
+      path: otherWorkspaceDir,
+    })
+    expect(otherWorkspace.ok).toBe(true)
+    if (!otherWorkspace.ok) {
+      return
+    }
+
+    const repository = createSessionRepository(database)
+
+    const older = repository.create({
+      workspaceId,
+      agentId: "cursor",
+      name: "Older",
+      acpSessionId: "acp-older",
+    })
+    const newer = repository.create({
+      workspaceId: otherWorkspace.value.id,
+      agentId: "cursor",
+      name: "Newer",
+      acpSessionId: "acp-newer",
+    })
+    const archived = repository.create({
+      workspaceId,
+      agentId: "cursor",
+      name: "Archived",
+      acpSessionId: "acp-archived",
+    })
+    expect(older.ok && newer.ok && archived.ok).toBe(true)
+    if (!older.ok || !newer.ok || !archived.ok) {
+      return
+    }
+
+    database.db
+      .update(sessions)
+      .set({ lastUsedAt: "2026-01-01T00:00:00.000Z" })
+      .where(eq(sessions.id, older.value.id))
+      .run()
+    database.db
+      .update(sessions)
+      .set({ lastUsedAt: "2026-01-02T00:00:00.000Z" })
+      .where(eq(sessions.id, newer.value.id))
+      .run()
+
+    repository.archive({ id: archived.value.id })
+
+    const listResult = repository.list({ limit: 100 })
+    expect(listResult.ok).toBe(true)
+    if (!listResult.ok) {
+      return
+    }
+
+    expect(listResult.value.items.map((session) => session.id)).toEqual([
+      newer.value.id,
+      older.value.id,
+    ])
+    expect(listResult.value.count).toBe(2)
 
     database.close()
   })

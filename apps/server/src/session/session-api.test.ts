@@ -33,6 +33,58 @@ afterEach(async () => {
   await cleanupTestAppResources(resources)
 })
 
+describe("GET /v1/sessions", () => {
+  test("returns non-archived sessions across workspaces sorted by lastUsedAt when workspaceId is omitted", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { app } = await createTestApp(resources, dataDir, whichFn, acceptTestExecutablePath, {
+      capabilities: { loadSession: true, sessionClose: true },
+      sessionNewSessionId: "global-list-session",
+      sessionLoadSessionId: "global-list-session",
+    })
+    const { workspaceId } = await seedWorkspace(app, dataDir)
+    await enableAgent(app, "cursor", whichFn)
+
+    const createFirst = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: {
+        workspaceId,
+        agentId: "cursor",
+        text: "First session",
+      },
+    })
+    const first = CreateSessionResponseSchema.parse(JSON.parse(createFirst.body))
+
+    const createSecond = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: {
+        workspaceId,
+        agentId: "cursor",
+        text: "Second session",
+      },
+    })
+    const second = CreateSessionResponseSchema.parse(JSON.parse(createSecond.body))
+
+    await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${first.id}/select`,
+    })
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/sessions",
+    })
+    const listed = SessionCollectionSchema.parse(JSON.parse(listResponse.body))
+
+    expect(listResponse.statusCode).toBe(200)
+    expect(listed.items.map((session) => session.id)).toEqual([first.id, second.id])
+  })
+})
+
 describe("POST /v1/sessions", () => {
   test("returns 201 with session fields plus turnId and derived name", async () => {
     const dataDir = await createTempDataDir(resources)
