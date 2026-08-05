@@ -34,8 +34,17 @@ class DefaultConnectionGateway(
     private var serverOrigin: String? = null
 
     override fun connect(serverOrigin: String) {
+        // A cursor is a position in one server's journal. Point at another server
+        // and the only safe resume point is the start.
+        val movedServer = this.serverOrigin?.let { it != serverOrigin } ?: false
+
         this.serverOrigin = serverOrigin
         loop?.cancel()
+
+        if (movedServer) {
+            _state.value = ConnectionState()
+        }
+
         loop = scope.launch { run(serverOrigin) }
     }
 

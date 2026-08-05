@@ -157,6 +157,29 @@ class DefaultConnectionGatewayTest {
     }
 
     @Test
+    fun coldStartsAgainWhenThePairedServerChanges() = runTest {
+        val stream = ScriptedEventStream(
+            listOf(
+                listOf(
+                    StreamEvent.Open,
+                    StreamEvent.Frame(frameOf("1", "2")),
+                    StreamEvent.Closed(DisconnectCause.Protocol("stop")),
+                ),
+                liveThen(DisconnectCause.Protocol("stop")),
+            ),
+        )
+        val gateway = gateway(stream)
+
+        gateway.connect(ORIGIN)
+        advanceUntilIdle()
+        gateway.connect("http://192.168.1.20:8787")
+        advanceUntilIdle()
+
+        assertEquals(listOf("0", "0"), stream.cursors)
+        assertEquals(START_CURSOR, gateway.state.value.cursor)
+    }
+
+    @Test
     fun stopsAutoRetryOnContractDrift() = runTest {
         val stream = ScriptedEventStream(listOf(liveThen(DisconnectCause.Protocol("unknown type"))))
         val gateway = gateway(stream)
