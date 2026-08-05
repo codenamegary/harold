@@ -14,11 +14,15 @@ import server.agent.android.credentials.CredentialStore
 import server.agent.android.credentials.DefaultCredentialStore
 import server.agent.android.events.EventStreamFactory
 import server.agent.android.events.OkHttpEventStream
+import server.agent.android.navigation.DefaultNavigationPreferences
+import server.agent.android.navigation.NavigationPreferences
 import server.agent.android.network.AgentApi
 import server.agent.android.network.BearerAuthInterceptor
 import server.agent.android.network.DefaultAgentApi
 import server.agent.android.network.DefaultPairingApi
 import server.agent.android.network.PairingApi
+import server.agent.android.operator.DefaultOperatorRepository
+import server.agent.android.operator.OperatorRepository
 import server.agent.android.pairing.DefaultPairingCoordinator
 import server.agent.android.pairing.DefaultPairingPayloadParser
 import server.agent.android.pairing.PairingCoordinator
@@ -38,6 +42,8 @@ interface AppContainer {
     val deviceNameProvider: () -> String
     val agentApi: AgentApi
     val connectionGateway: ConnectionGateway
+    val navigationPreferences: NavigationPreferences
+    val operatorRepository: OperatorRepository
 }
 
 class DefaultAppContainer(
@@ -77,4 +83,6 @@ class DefaultAppContainer(
         },
         scope = applicationScope,
     )
+    override val navigationPreferences: NavigationPreferences = DefaultNavigationPreferences(context)
+    override val operatorRepository: OperatorRepository = DefaultOperatorRepository(agentApi)
 }

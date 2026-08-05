@@ -43,7 +43,7 @@ export const UpdateSessionBodySchema = z.strictObject({
 export const SessionCollectionSchema = createCollectionSchema(SessionSchema)
 
 export const ListSessionsQuerySchema = z.strictObject({
-  workspaceId: IdSchema,
+  workspaceId: IdSchema.optional(),
   limit: z.coerce.number().int().positive().max(200).default(100),
   cursor: CursorSchema.optional(),
 })

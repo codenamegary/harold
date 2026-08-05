@@ -1,4 +1,4 @@
-package server.agent.android.network
+package server.agent.android.operator
 
 import server.agent.android.contracts.AgentSettingsCollection
 import server.agent.android.contracts.CreateSessionBody
@@ -7,35 +7,10 @@ import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionCollection
 import server.agent.android.contracts.WorkspaceCollection
 
-sealed interface AgentApiError {
-    /** Terminal: the credential is missing, revoked, or rejected. */
-    data class Unauthorized(
-        val detail: String?,
-    ) : AgentApiError
-
-    data class Problem(
-        val status: Int,
-        val title: String,
-        val detail: String?,
-    ) : AgentApiError
-
-    data class Decode(
-        val cause: Throwable,
-    ) : AgentApiError
-
-    data class Transport(
-        val cause: Throwable,
-    ) : AgentApiError
-}
-
-class AgentApiException(
-    val error: AgentApiError,
-) : Exception()
-
-interface AgentApi {
+interface OperatorRepository {
     suspend fun listWorkspaces(
         serverOrigin: String,
-        limit: Int,
+        limit: Int = 100,
     ): Result<WorkspaceCollection>
 
     suspend fun listSessions(

@@ -8,6 +8,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import server.agent.android.chat.ChatScreen
+import server.agent.android.chat.ChatViewModel
+import server.agent.android.chat.ChatViewModelFactory
+import server.agent.android.chat.WorkspacesScreen
+import server.agent.android.chat.WorkspacesViewModel
+import server.agent.android.chat.WorkspacesViewModelFactory
 import server.agent.android.di.AppContainer
 import server.agent.android.pairing.PairingScreen
 import server.agent.android.pairing.PairingViewModel
@@ -29,6 +35,19 @@ fun AppNavHost(
         ),
     )
     val shellUiState by shellViewModel.uiState.collectAsState()
+    val showShell by shellViewModel.showShell.collectAsState()
+
+    LaunchedEffect(showShell) {
+        if (showShell) {
+            navController.navigate(Routes.Shell) {
+                popUpTo(0) { inclusive = true }
+            }
+        } else {
+            navController.navigate(Routes.Chat) {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+    }
 
     NavHost(
         navController = navController,
@@ -70,6 +89,52 @@ fun AppNavHost(
                 onCodeChanged = pairingViewModel::onCodeChanged,
                 onSubmitManual = pairingViewModel::submitManualPairing,
                 onQrScanned = pairingViewModel::onQrScanned,
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(Routes.Chat) { backStackEntry ->
+            val chatViewModel: ChatViewModel = viewModel(
+                viewModelStoreOwner = backStackEntry,
+                factory = ChatViewModelFactory(
+                    savedStateHandle = backStackEntry.savedStateHandle,
+                    sessionGateway = appContainer.sessionGateway,
+                    connectionGateway = appContainer.connectionGateway,
+                    operatorRepository = appContainer.operatorRepository,
+                    navigationPreferences = appContainer.navigationPreferences,
+                ),
+            )
+            val chatUiState by chatViewModel.uiState.collectAsState()
+
+            ChatScreen(
+                uiState = chatUiState,
+                onSessionSelectorClick = chatViewModel::showPicker,
+                onWorkspacesClick = { navController.navigate(Routes.Workspaces) },
+                onDismissPicker = chatViewModel::hidePicker,
+                onSessionClick = chatViewModel::selectSession,
+                onCreateClick = {
+                    chatViewModel.hidePicker()
+                    chatViewModel.showCreateDialog()
+                },
+                onDismissCreate = chatViewModel::hideCreateDialog,
+                onCreateWorkspaceChanged = chatViewModel::onCreateWorkspaceChanged,
+                onCreateAgentChanged = chatViewModel::onCreateAgentChanged,
+                onCreatePromptChanged = chatViewModel::onCreatePromptChanged,
+                onCreateSubmit = chatViewModel::submitCreateSession,
+            )
+        }
+
+        composable(Routes.Workspaces) {
+            val workspacesViewModel: WorkspacesViewModel = viewModel(
+                factory = WorkspacesViewModelFactory(
+                    sessionGateway = appContainer.sessionGateway,
+                    operatorRepository = appContainer.operatorRepository,
+                ),
+            )
+            val workspacesUiState by workspacesViewModel.uiState.collectAsState()
+
+            WorkspacesScreen(
+                uiState = workspacesUiState,
                 onBack = { navController.popBackStack() },
             )
         }
