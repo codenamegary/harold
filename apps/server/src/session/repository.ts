@@ -378,7 +378,11 @@ export const createSessionRepository = (database: AgentDatabase) => {
       return listGlobal(options)
     }
 
-    return listByWorkspace(options)
+    return listByWorkspace({
+      workspaceId: options.workspaceId,
+      limit: options.limit,
+      cursor: options.cursor,
+    })
   }
 
   const listByWorkspace = (options: SessionListOptions & { workspaceId: string }): SessionListResult => {
