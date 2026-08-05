@@ -21,7 +21,7 @@ class ShellScreenTest {
     @Test
     fun showsAgentServerNotPairedAndDisabledPairButton() {
         composeTestRule.setContent {
-            AgentServerTheme {
+            AgentServerTheme(dynamicColor = false) {
                 ShellScreen(
                     uiState = ShellUiState(),
                     onPairClick = {},

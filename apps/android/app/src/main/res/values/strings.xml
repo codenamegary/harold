@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">Agent Server</string>
+    <string name="shell_title">Agent Server</string>
+    <string name="shell_status_not_paired">Not paired</string>
+    <string name="pair_action">Pair</string>
+    <string name="pair_content_description">Pair with Agent Server</string>
 </resources>
