@@ -31,6 +31,8 @@ data class ConnectionState(
     val status: ConnectionStatus = ConnectionStatus.Idle,
     val cursor: String = START_CURSOR,
     val appliedEvents: Int = 0,
+    /** Consecutive failed connects. Survives `Connecting` so backoff keeps growing. */
+    val attempt: Int = 0,
 )
 
 sealed interface DisconnectCause {
@@ -65,7 +67,7 @@ fun reduce(state: ConnectionState, signal: ConnectionSignal): ConnectionState =
     when (signal) {
         ConnectionSignal.ConnectRequested -> state.copy(status = ConnectionStatus.Connecting)
 
-        ConnectionSignal.Connected -> state.copy(status = ConnectionStatus.Live)
+        ConnectionSignal.Connected -> state.copy(status = ConnectionStatus.Live, attempt = 0)
 
         is ConnectionSignal.FrameReceived -> state.applyFrame(signal.frame)
 
@@ -76,8 +78,10 @@ fun reduce(state: ConnectionState, signal: ConnectionSignal): ConnectionState =
             is DisconnectCause.Protocol ->
                 state.copy(status = ConnectionStatus.TransportError(message = cause.message))
 
-            is DisconnectCause.Retryable ->
-                state.copy(status = ConnectionStatus.Reconnecting(attempt = state.nextAttempt()))
+            is DisconnectCause.Retryable -> state.copy(
+                status = ConnectionStatus.Reconnecting(attempt = state.attempt + 1),
+                attempt = state.attempt + 1,
+            )
         }
     }
 
@@ -108,12 +112,6 @@ private fun ConnectionState.applyFrame(frame: EventFrame): ConnectionState {
         appliedEvents = appliedEvents + applied,
     )
 }
-
-private fun ConnectionState.nextAttempt(): Int =
-    when (val current = status) {
-        is ConnectionStatus.Reconnecting -> current.attempt + 1
-        else -> 1
-    }
 
 /** Cursors are canonical non-negative integers. `-1` sorts behind every real cursor. */
 private fun String.cursorValue(): Long = toLongOrNull() ?: -1L

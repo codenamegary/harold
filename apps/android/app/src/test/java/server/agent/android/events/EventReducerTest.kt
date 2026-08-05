@@ -85,6 +85,17 @@ class EventReducerTest {
     }
 
     @Test
+    fun keepsTheAttemptCountWhileTheNextConnectIsInFlight() {
+        val dropped = reduce(live(), ConnectionSignal.Disconnected(DisconnectCause.Retryable("closed")))
+        val retrying = reduce(dropped, ConnectionSignal.ConnectRequested)
+        val droppedAgain =
+            reduce(retrying, ConnectionSignal.Disconnected(DisconnectCause.Retryable("closed")))
+
+        assertEquals(ConnectionStatus.Connecting, retrying.status)
+        assertEquals(ConnectionStatus.Reconnecting(attempt = 2), droppedAgain.status)
+    }
+
+    @Test
     fun resetsTheAttemptCountAfterASuccessfulReconnect() {
         val dropped = reduce(live(), ConnectionSignal.Disconnected(DisconnectCause.Retryable("closed")))
         val recovered = reduce(reduce(dropped, ConnectionSignal.ConnectRequested), ConnectionSignal.Connected)
