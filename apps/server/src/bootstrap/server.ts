@@ -14,6 +14,7 @@ import { registerAgentSettingsRoutes } from "../agent-settings/agent-settings-ro
 import {
   createRuntimeSettingsRepository,
   RuntimeSettingsRepository,
+  seedDefaultsFromConfig,
 } from "../runtime-settings/repository"
 import { registerRuntimeSettingsRoutes } from "../runtime-settings/routes"
 import { AppliedRuntimeSettingsHolder } from "../runtime-settings/applied.runtime.settings"
@@ -144,7 +145,10 @@ export const createServer = async ({
   const deviceRepository = createDeviceRepository(database)
   const runtimeSettingsRepository =
     providedRuntimeSettingsRepository ??
-    createRuntimeSettingsRepository({ dataDir: config.dataDir })
+    createRuntimeSettingsRepository({
+      dataDir: config.dataDir,
+      seedDefaults: seedDefaultsFromConfig(config),
+    })
 
   registerAuthMiddleware(app, {
     deviceRepository,
