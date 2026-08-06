@@ -169,4 +169,18 @@ private class WorkspacesFakeOperatorRepository(
         sessionId: String,
     ): Result<server.agent.android.contracts.Session> =
         Result.failure(UnsupportedOperationException())
+
+    override suspend fun listPendingPermissions(
+        serverOrigin: String,
+        sessionId: String,
+    ): Result<List<server.agent.android.contracts.PermissionRequest>> =
+        Result.failure(UnsupportedOperationException())
+
+    override suspend fun resolvePermission(
+        serverOrigin: String,
+        sessionId: String,
+        requestId: String,
+        optionId: String,
+    ): Result<server.agent.android.contracts.PermissionRequest> =
+        Result.failure(UnsupportedOperationException())
 }

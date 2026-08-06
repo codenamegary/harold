@@ -15,6 +15,8 @@ import org.robolectric.annotation.Config
 import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.UpdateSessionBody
+import server.agent.android.contracts.PermissionStatus
+import server.agent.android.contracts.ResolvePermissionRequestBody
 import server.agent.android.contracts.SessionState
 import server.agent.android.contracts.WorkspaceState
 
@@ -302,6 +304,82 @@ class DefaultAgentApiTest {
         assertEquals("POST", recorded.method)
         assertEquals("/v1/sessions/sess_01/archive", recorded.path)
         assertEquals(SessionState.Archived, result.getOrThrow().state)
+    }
+
+    @Test
+    fun listPendingPermissionsUsesStatusQuery() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(
+                    """
+                    {
+                      "items": [
+                        {
+                          "id": "perm_01",
+                          "sessionId": "sess_01",
+                          "turnId": "turn_01",
+                          "toolCallId": "tool_01",
+                          "toolName": "fake-tool",
+                          "status": "pending",
+                          "options": [
+                            { "optionId": "allow-once", "name": "Allow once", "kind": "allow" }
+                          ],
+                          "createdAt": "2026-08-06T00:00:00.000Z"
+                        }
+                      ],
+                      "page": { "limit": 100, "count": 1 }
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val result = agentApi.listPendingPermissions(serverOrigin = origin(), sessionId = "sess_01")
+
+        val recorded = server.takeRequest()
+        assertEquals("GET", recorded.method)
+        assertEquals("/v1/sessions/sess_01/permissions?status=pending", recorded.path)
+        assertEquals("perm_01", result.getOrThrow().items.single().id)
+    }
+
+    @Test
+    fun resolvePermissionSendsPatchBody() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(
+                    """
+                    {
+                      "id": "perm_01",
+                      "sessionId": "sess_01",
+                      "turnId": "turn_01",
+                      "toolCallId": "tool_01",
+                      "toolName": "fake-tool",
+                      "status": "resolved",
+                      "options": [
+                        { "optionId": "allow-once", "name": "Allow once", "kind": "allow" }
+                      ],
+                      "createdAt": "2026-08-06T00:00:00.000Z"
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val result = agentApi.resolvePermission(
+            serverOrigin = origin(),
+            sessionId = "sess_01",
+            requestId = "perm_01",
+            body = ResolvePermissionRequestBody(optionId = "allow-once"),
+        )
+
+        val recorded = server.takeRequest()
+        assertEquals("PATCH", recorded.method)
+        assertEquals("/v1/sessions/sess_01/permissions/perm_01", recorded.path)
+        assertTrue(recorded.body.readUtf8().contains("\"optionId\":\"allow-once\""))
+        assertEquals(
+            PermissionStatus.Resolved,
+            result.getOrThrow().status,
+        )
     }
 
     private fun origin(): String = server.url("/").toString().trimEnd('/')

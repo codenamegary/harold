@@ -18,6 +18,10 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import server.agent.android.contracts.AgentId
+import server.agent.android.contracts.PermissionOption
+import server.agent.android.contracts.PermissionOptionKind
+import server.agent.android.contracts.PermissionRequest
+import server.agent.android.contracts.PermissionStatus
 import server.agent.android.contracts.SessionState
 import server.agent.android.ui.theme.AgentServerTheme
 
@@ -85,6 +89,7 @@ class ChatScreenTest {
                     onArchiveClick = {},
                     onDismissArchive = {},
                     onArchiveSubmit = {},
+                    onPermissionOptionSelect = {},
                 )
             }
         }
@@ -138,6 +143,7 @@ class ChatScreenTest {
                     onArchiveClick = {},
                     onDismissArchive = {},
                     onArchiveSubmit = {},
+                    onPermissionOptionSelect = {},
                 )
             }
         }
@@ -174,10 +180,76 @@ class ChatScreenTest {
                     onArchiveClick = {},
                     onDismissArchive = {},
                     onArchiveSubmit = {},
+                    onPermissionOptionSelect = {},
                 )
             }
         }
 
         composeTestRule.onNodeWithTag("select_session_cta").assertIsDisplayed()
+    }
+
+    @Test
+    fun showsPermissionPanelAboveComposer() {
+        var selectedOption: String? = null
+        val request = PermissionRequest(
+            id = "perm_01",
+            sessionId = "sess_01",
+            turnId = "turn_01",
+            toolCallId = "tool_01",
+            toolName = "fake-tool",
+            status = PermissionStatus.Pending,
+            options = listOf(
+                PermissionOption("allow-once", "Allow once", PermissionOptionKind.Allow),
+                PermissionOption("reject-once", "Reject once", PermissionOptionKind.Deny),
+            ),
+            createdAt = "2026-08-06T00:00:00.000Z",
+        )
+
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        selectedSession = SessionRow(
+                            id = "sess_01",
+                            name = "Alpha",
+                            workspaceId = "ws_01",
+                            workspaceLabel = "agent-server",
+                            agentId = AgentId.Cursor,
+                            agentLabel = "Cursor",
+                            state = SessionState.AwaitingPermission,
+                        ),
+                        pendingPermissions = listOf(request),
+                    ),
+                    onSessionSelectorClick = {},
+                    onWorkspacesClick = {},
+                    onDismissPicker = {},
+                    onSessionClick = {},
+                    onRenameSessionClick = {},
+                    onCreateClick = {},
+                    onDismissCreate = {},
+                    onCreateWorkspaceChanged = {},
+                    onCreateAgentChanged = {},
+                    onCreatePromptChanged = {},
+                    onCreateSubmit = {},
+                    onComposerTextChanged = {},
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onRenameClick = {},
+                    onDismissRename = {},
+                    onRenameNameChanged = {},
+                    onRenameSubmit = {},
+                    onArchiveClick = {},
+                    onDismissArchive = {},
+                    onArchiveSubmit = {},
+                    onPermissionOptionSelect = { optionId -> selectedOption = optionId },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("permission_panel").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Permission required for fake-tool").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Session: Alpha").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("permission_option_allow-once").performClick()
+        assertTrue(selectedOption == "allow-once")
     }
 }

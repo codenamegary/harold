@@ -133,6 +133,7 @@ fun AppNavHost(
                 onArchiveClick = chatViewModel::showArchiveDialog,
                 onDismissArchive = chatViewModel::hideArchiveDialog,
                 onArchiveSubmit = chatViewModel::submitArchive,
+                onPermissionOptionSelect = chatViewModel::submitPermissionOption,
             )
         }
 

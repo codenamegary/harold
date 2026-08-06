@@ -31,6 +31,12 @@ import server.agent.android.contracts.PromptSessionResponse
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionState
 import server.agent.android.contracts.UpdateSessionBody
+import server.agent.android.contracts.PermissionOption
+import server.agent.android.contracts.PermissionOptionKind
+import server.agent.android.contracts.PermissionRequest
+import server.agent.android.contracts.PermissionStatus
+import server.agent.android.network.AgentApiError
+import server.agent.android.network.AgentApiException
 import server.agent.android.contracts.Workspace
 import server.agent.android.contracts.WorkspaceCollection
 import server.agent.android.contracts.WorkspaceState
@@ -273,6 +279,81 @@ class ChatViewModelTest {
         assertEquals(SessionState.Stopping, viewModel.uiState.value.effectiveSessionState)
     }
 
+    @Test
+    fun loadsPendingPermissionsAfterSessionSelect() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+        )
+
+        advanceUntilIdle()
+
+        assertEquals(1, repository.pendingCalls.size)
+        assertEquals("perm_01", viewModel.uiState.value.activePermissionRequest?.id)
+    }
+
+    @Test
+    fun permissionEventsUpdatePendingState() = runTest(dispatcher) {
+        val eventSource = FakeSessionEventSource()
+        val viewModel = createViewModel(
+            repository = ChatFakeOperatorRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            eventSource = eventSource,
+        )
+
+        advanceUntilIdle()
+
+        eventSource.emit(listOf(permissionRequested(cursor = "1", sessionId = "sess_02")))
+        advanceUntilIdle()
+
+        assertEquals("fake-tool", viewModel.uiState.value.activePermissionRequest?.toolName)
+        assertEquals(2, viewModel.uiState.value.activePermissionRequest?.options?.size)
+    }
+
+    @Test
+    fun resolvePermissionClearsSubmittingState() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository()
+        val eventSource = FakeSessionEventSource()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            eventSource = eventSource,
+        )
+
+        advanceUntilIdle()
+        eventSource.emit(listOf(permissionRequested(cursor = "1", sessionId = "sess_02")))
+        advanceUntilIdle()
+
+        viewModel.submitPermissionOption("allow-once")
+        advanceUntilIdle()
+
+        assertEquals(1, repository.resolveCalls.size)
+        assertEquals(null, viewModel.uiState.value.permissionUiState.submittingOptionId)
+    }
+
+    @Test
+    fun resolvePermissionConflictRefreshesPendingAndShowsError() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository(resolveConflict = true)
+        val eventSource = FakeSessionEventSource()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            eventSource = eventSource,
+        )
+
+        advanceUntilIdle()
+        eventSource.emit(listOf(permissionRequested(cursor = "1", sessionId = "sess_02")))
+        advanceUntilIdle()
+
+        viewModel.submitPermissionOption("allow-once")
+        advanceUntilIdle()
+
+        assertEquals(2, repository.pendingCalls.size)
+        assertEquals(null, viewModel.uiState.value.activePermissionRequest)
+        assertTrue(viewModel.uiState.value.permissionUiState.error?.isNotBlank() == true)
+    }
+
     private fun createViewModel(
         repository: ChatFakeOperatorRepository,
         navigation: ChatFakeNavigationPreferences,
@@ -351,13 +432,17 @@ private class FakeSessionEventSource : SessionEventSource {
     }
 }
 
-private class ChatFakeOperatorRepository : OperatorRepository {
+private class ChatFakeOperatorRepository(
+    private val resolveConflict: Boolean = false,
+) : OperatorRepository {
     val selectCalls = mutableListOf<String>()
     val createCalls = mutableListOf<CreateSessionBody>()
     val promptCalls = mutableListOf<PromptSessionBody>()
     val cancelCalls = mutableListOf<String>()
     val updateCalls = mutableListOf<UpdateSessionBody>()
     val archiveCalls = mutableListOf<String>()
+    val pendingCalls = mutableListOf<String>()
+    val resolveCalls = mutableListOf<Pair<String, String>>()
     private val createdSessions = mutableListOf<Session>()
 
     override suspend fun listWorkspaces(
@@ -476,6 +561,54 @@ private class ChatFakeOperatorRepository : OperatorRepository {
             ),
         )
     }
+
+    override suspend fun listPendingPermissions(
+        serverOrigin: String,
+        sessionId: String,
+    ): Result<List<PermissionRequest>> {
+        pendingCalls += sessionId
+        return if (resolveConflict && pendingCalls.size > 1) {
+            Result.success(emptyList())
+        } else {
+            Result.success(listOf(samplePermission(sessionId)))
+        }
+    }
+
+    override suspend fun resolvePermission(
+        serverOrigin: String,
+        sessionId: String,
+        requestId: String,
+        optionId: String,
+    ): Result<PermissionRequest> {
+        resolveCalls += requestId to optionId
+        return if (resolveConflict) {
+            Result.failure(
+                AgentApiException(
+                    AgentApiError.Problem(
+                        status = 409,
+                        title = "Conflict",
+                        detail = "permission request already resolved",
+                    ),
+                ),
+            )
+        } else {
+            Result.success(samplePermission(sessionId).copy(status = PermissionStatus.Resolved))
+        }
+    }
+
+    private fun samplePermission(sessionId: String): PermissionRequest = PermissionRequest(
+        id = "perm_01",
+        sessionId = sessionId,
+        turnId = "turn_01",
+        toolCallId = "tool_01",
+        toolName = "fake-tool",
+        status = PermissionStatus.Pending,
+        options = listOf(
+            PermissionOption("allow-once", "Allow once", PermissionOptionKind.Allow),
+            PermissionOption("reject-once", "Reject once", PermissionOptionKind.Deny),
+        ),
+        createdAt = "2026-08-06T00:00:00.000Z",
+    )
 
     private fun session(id: String, name: String): Session = Session(
         id = id,
