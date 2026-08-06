@@ -39,6 +39,8 @@ fun ChatScreen(
     onCreateAgentChanged: (server.agent.android.contracts.AgentId) -> Unit,
     onCreatePromptChanged: (String) -> Unit,
     onCreateSubmit: () -> Unit,
+    onComposerTextChanged: (String) -> Unit,
+    onComposerSubmit: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val sessionLabel = uiState.selectedSession?.name ?: "Select session"
@@ -94,28 +96,69 @@ fun ChatScreen(
                 )
             }
 
+            if (uiState.streamReconnecting) {
+                Text(
+                    text = "Reconnecting session stream…",
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.testTag("stream_reconnect_banner"),
+                )
+            }
+
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                contentAlignment = Alignment.Center,
+                contentAlignment = if (uiState.transcript.rows.isEmpty()) {
+                    Alignment.Center
+                } else {
+                    Alignment.TopStart
+                },
             ) {
+                ChatTranscript(
+                    rows = uiState.transcript.rows,
+                    showProgress = uiState.showProgress && uiState.transcript.rows.isEmpty(),
+                    emptyMessage = uiState.emptyTranscriptMessage,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+
+            uiState.composerBlockedMessage?.let { message ->
                 Text(
-                    text = uiState.placeholderMessage,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.testTag("chat_placeholder"),
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("composer_blocked_message"),
+                )
+            }
+
+            uiState.composerError?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("composer_error"),
                 )
             }
 
             OutlinedTextField(
-                value = "",
-                onValueChange = {},
-                enabled = false,
+                value = uiState.composerText,
+                onValueChange = onComposerTextChanged,
+                enabled = uiState.composerEnabled,
                 label = { Text(text = "Message") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("chat_composer"),
             )
+
+            TextButton(
+                onClick = onComposerSubmit,
+                enabled = uiState.composerEnabled && uiState.composerText.isNotBlank(),
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .testTag("chat_send_button"),
+            ) {
+                Text(text = if (uiState.composerSubmitting) "Sending…" else "Send")
+            }
         }
     }
 

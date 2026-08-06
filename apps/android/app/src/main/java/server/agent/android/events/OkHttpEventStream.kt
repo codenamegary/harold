@@ -24,7 +24,7 @@ class OkHttpEventStream(
     private val serverOrigin: String,
     private val decoder: EventDecoder = EventDecoder(),
 ) : EventStream {
-    override fun connect(cursor: String): Flow<StreamEvent> = callbackFlow {
+    override fun connect(cursor: String, sessionId: String?): Flow<StreamEvent> = callbackFlow {
         val finished = AtomicBoolean(false)
 
         fun finish(cause: DisconnectCause) {
@@ -64,7 +64,7 @@ class OkHttpEventStream(
         }
 
         val socket = client.newWebSocket(
-            Request.Builder().url(eventStreamUrl(serverOrigin, cursor)).build(),
+            Request.Builder().url(eventStreamUrl(serverOrigin, cursor, sessionId)).build(),
             listener,
         )
 

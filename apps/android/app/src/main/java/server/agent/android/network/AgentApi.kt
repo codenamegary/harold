@@ -55,4 +55,10 @@ interface AgentApi {
         serverOrigin: String,
         sessionId: String,
     ): Result<Session>
+
+    suspend fun promptSession(
+        serverOrigin: String,
+        sessionId: String,
+        body: server.agent.android.contracts.PromptSessionBody,
+    ): Result<server.agent.android.contracts.PromptSessionResponse>
 }

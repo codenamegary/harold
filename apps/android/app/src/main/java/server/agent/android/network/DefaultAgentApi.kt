@@ -15,6 +15,8 @@ import server.agent.android.contracts.AgentSettingsCollection
 import server.agent.android.contracts.ConflictProblem
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateSessionResponse
+import server.agent.android.contracts.PromptSessionBody
+import server.agent.android.contracts.PromptSessionResponse
 import server.agent.android.contracts.InternalProblem
 import server.agent.android.contracts.ItemCollection
 import server.agent.android.contracts.NotFoundProblem
@@ -89,6 +91,18 @@ class DefaultAgentApi(
         body = "{}",
     ) { responseBody ->
         json.decodeFromString(Session.serializer(), responseBody)
+    }
+
+    override suspend fun promptSession(
+        serverOrigin: String,
+        sessionId: String,
+        body: PromptSessionBody,
+    ): Result<PromptSessionResponse> = post(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/sessions/$sessionId/prompt",
+        body = json.encodeToString(PromptSessionBody.serializer(), body),
+    ) { responseBody ->
+        json.decodeFromString(PromptSessionResponse.serializer(), responseBody)
     }
 
     private suspend fun <T> get(

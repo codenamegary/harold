@@ -2,6 +2,7 @@ package server.agent.android.chat
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,14 +23,18 @@ import server.agent.android.contracts.AgentSettings
 import server.agent.android.contracts.AgentSettingsCollection
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateSessionResponse
+import server.agent.android.contracts.EventEnvelope
 import server.agent.android.contracts.ItemCollection
 import server.agent.android.contracts.PageInfo
+import server.agent.android.contracts.PromptSessionBody
+import server.agent.android.contracts.PromptSessionResponse
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionState
 import server.agent.android.contracts.Workspace
 import server.agent.android.contracts.WorkspaceCollection
 import server.agent.android.contracts.WorkspaceState
 import server.agent.android.events.ConnectionState
+import server.agent.android.events.EventStreamFactory
 import server.agent.android.navigation.NavigationPreferences
 import server.agent.android.operator.OperatorRepository
 import server.agent.android.session.PairedState
@@ -54,13 +59,7 @@ class ChatViewModelTest {
     fun loadsSessionsAndRestoresLastSession() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository()
         val navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02")
-        val viewModel = ChatViewModel(
-            savedStateHandle = SavedStateHandle(),
-            sessionGateway = ChatFakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
-            connectionGateway = ChatFakeConnectionGateway(),
-            operatorRepository = repository,
-            navigationPreferences = navigation,
-        )
+        val viewModel = createViewModel(repository, navigation)
 
         advanceUntilIdle()
 
@@ -72,13 +71,7 @@ class ChatViewModelTest {
     @Test
     fun createSessionValidatesPrompt() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository()
-        val viewModel = ChatViewModel(
-            savedStateHandle = SavedStateHandle(),
-            sessionGateway = ChatFakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
-            connectionGateway = ChatFakeConnectionGateway(),
-            operatorRepository = repository,
-            navigationPreferences = ChatFakeNavigationPreferences(),
-        )
+        val viewModel = createViewModel(repository, ChatFakeNavigationPreferences())
 
         advanceUntilIdle()
         viewModel.showCreateDialog()
@@ -93,13 +86,7 @@ class ChatViewModelTest {
     @Test
     fun createSessionSubmitsWhenValid() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository()
-        val viewModel = ChatViewModel(
-            savedStateHandle = SavedStateHandle(),
-            sessionGateway = ChatFakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
-            connectionGateway = ChatFakeConnectionGateway(),
-            operatorRepository = repository,
-            navigationPreferences = ChatFakeNavigationPreferences(),
-        )
+        val viewModel = createViewModel(repository, ChatFakeNavigationPreferences())
 
         advanceUntilIdle()
         viewModel.showCreateDialog()
@@ -114,6 +101,113 @@ class ChatViewModelTest {
         assertEquals(1, repository.createCalls.size)
         assertTrue(repository.selectCalls.contains("sess_new"))
     }
+
+    @Test
+    fun streamsTranscriptAndAllowsFollowUpPrompt() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository()
+        val eventSource = FakeSessionEventSource()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            eventSource = eventSource,
+        )
+
+        advanceUntilIdle()
+
+        eventSource.emit(
+            listOf(
+                turnStarted(cursor = "1", text = "Explain auth", sessionId = "sess_02"),
+                thoughtDelta(cursor = "2", text = "plan", sessionId = "sess_02"),
+                outputDelta(cursor = "3", text = "done", sessionId = "sess_02"),
+                sessionState(cursor = "4", state = SessionState.Idle, sessionId = "sess_02"),
+            ),
+        )
+        advanceUntilIdle()
+
+        val transcript = viewModel.uiState.value.transcript
+        assertEquals(3, transcript.rows.size)
+        assertTrue(transcript.rows[0] is TranscriptUserRow)
+        assertEquals(SessionState.Idle, viewModel.uiState.value.effectiveSessionState)
+        assertTrue(viewModel.uiState.value.composerEnabled)
+
+        viewModel.onComposerTextChanged("Follow up")
+        viewModel.submitComposerPrompt()
+        advanceUntilIdle()
+
+        assertEquals(1, repository.promptCalls.size)
+        assertEquals("Follow up", repository.promptCalls.first().text)
+        assertEquals("", viewModel.uiState.value.composerText)
+    }
+
+    @Test
+    fun blocksComposerWhileSessionRunning() = runTest(dispatcher) {
+        val eventSource = FakeSessionEventSource()
+        val viewModel = createViewModel(
+            repository = ChatFakeOperatorRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            eventSource = eventSource,
+        )
+
+        advanceUntilIdle()
+
+        eventSource.emit(
+            listOf(
+                turnStarted(cursor = "1", sessionId = "sess_02"),
+                sessionState(cursor = "2", state = SessionState.Running, sessionId = "sess_02"),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.composerEnabled)
+        assertTrue(viewModel.uiState.value.showProgress)
+    }
+
+    @Test
+    fun reconnectClearsTranscriptBeforeReplay() = runTest(dispatcher) {
+        val eventSource = FakeSessionEventSource()
+        val viewModel = createViewModel(
+            repository = ChatFakeOperatorRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            eventSource = eventSource,
+        )
+
+        advanceUntilIdle()
+
+        eventSource.emit(listOf(turnStarted(cursor = "1", text = "first", sessionId = "sess_02")))
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.transcript.rows.size)
+
+        eventSource.triggerReconnect()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.streamReconnecting)
+        assertEquals(0, viewModel.uiState.value.transcript.rows.size)
+
+        eventSource.emit(
+            listOf(
+                turnStarted(cursor = "1", text = "first", sessionId = "sess_02"),
+                outputDelta(cursor = "2", text = "reply", sessionId = "sess_02"),
+                sessionState(cursor = "3", state = SessionState.Idle, sessionId = "sess_02"),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.streamReconnecting)
+        assertEquals(2, viewModel.uiState.value.transcript.rows.size)
+    }
+
+    private fun createViewModel(
+        repository: ChatFakeOperatorRepository,
+        navigation: ChatFakeNavigationPreferences,
+        eventSource: FakeSessionEventSource = FakeSessionEventSource(),
+    ): ChatViewModel = ChatViewModel(
+        savedStateHandle = SavedStateHandle(),
+        sessionGateway = ChatFakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
+        connectionGateway = ChatFakeConnectionGateway(),
+        operatorRepository = repository,
+        navigationPreferences = navigation,
+        eventStreamFactory = EventStreamFactory { _ -> error("unused in tests") },
+        sessionEventSource = eventSource,
+    )
 
     private companion object {
         const val ORIGIN = "http://127.0.0.1:8787"
@@ -153,15 +247,40 @@ private class ChatFakeNavigationPreferences(
     override suspend fun clearLastSessionId() = Unit
 }
 
+private class FakeSessionEventSource : SessionEventSource {
+    private var onEvents: ((List<EventEnvelope>) -> Unit)? = null
+    private var onReconnect: (() -> Unit)? = null
+
+    override fun observe(
+        serverOrigin: String,
+        sessionId: String,
+        onReconnect: () -> Unit,
+        onEvents: (List<EventEnvelope>) -> Unit,
+    ): Job {
+        this.onReconnect = onReconnect
+        this.onEvents = onEvents
+        return Job()
+    }
+
+    fun emit(events: List<EventEnvelope>) {
+        onEvents?.invoke(events)
+    }
+
+    fun triggerReconnect() {
+        onReconnect?.invoke()
+    }
+}
+
 private class ChatFakeOperatorRepository : OperatorRepository {
     val selectCalls = mutableListOf<String>()
     val createCalls = mutableListOf<CreateSessionBody>()
+    val promptCalls = mutableListOf<PromptSessionBody>()
     private val createdSessions = mutableListOf<Session>()
 
     override suspend fun listWorkspaces(
         serverOrigin: String,
         limit: Int,
-    ): Result<WorkspaceCollection> = Result.success(
+    ) = Result.success(
         WorkspaceCollection(
             items = listOf(
                 Workspace(
@@ -181,7 +300,7 @@ private class ChatFakeOperatorRepository : OperatorRepository {
         serverOrigin: String,
         workspaceId: String?,
         limit: Int,
-    ): Result<ItemCollection<Session>> = Result.success(
+    ) = Result.success(
         ItemCollection(
             items = createdSessions + listOf(
                 session("sess_02", "Alpha"),
@@ -191,20 +310,19 @@ private class ChatFakeOperatorRepository : OperatorRepository {
         ),
     )
 
-    override suspend fun listAgents(serverOrigin: String): Result<AgentSettingsCollection> =
-        Result.success(
-            AgentSettingsCollection(
-                items = listOf(
-                    AgentSettings(
-                        id = AgentId.Cursor,
-                        displayName = "Cursor",
-                        available = true,
-                        enabled = true,
-                        path = "/usr/local/bin/agent",
-                    ),
+    override suspend fun listAgents(serverOrigin: String) = Result.success(
+        AgentSettingsCollection(
+            items = listOf(
+                AgentSettings(
+                    id = AgentId.Cursor,
+                    displayName = "Cursor",
+                    available = true,
+                    enabled = true,
+                    path = "/usr/local/bin/agent",
                 ),
             ),
-        )
+        ),
+    )
 
     override suspend fun createSession(
         serverOrigin: String,
@@ -235,6 +353,15 @@ private class ChatFakeOperatorRepository : OperatorRepository {
         selectCalls += sessionId
 
         return Result.success(session(sessionId, "Selected"))
+    }
+
+    override suspend fun promptSession(
+        serverOrigin: String,
+        sessionId: String,
+        body: PromptSessionBody,
+    ): Result<PromptSessionResponse> {
+        promptCalls += body
+        return Result.success(PromptSessionResponse(turnId = "turn_follow_up"))
     }
 
     private fun session(id: String, name: String): Session = Session(

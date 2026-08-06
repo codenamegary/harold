@@ -102,6 +102,7 @@ fun AppNavHost(
                     connectionGateway = appContainer.connectionGateway,
                     operatorRepository = appContainer.operatorRepository,
                     navigationPreferences = appContainer.navigationPreferences,
+                    eventStreamFactory = appContainer.eventStreamFactory,
                 ),
             )
             val chatUiState by chatViewModel.uiState.collectAsState()
@@ -121,6 +122,8 @@ fun AppNavHost(
                 onCreateAgentChanged = chatViewModel::onCreateAgentChanged,
                 onCreatePromptChanged = chatViewModel::onCreatePromptChanged,
                 onCreateSubmit = chatViewModel::submitCreateSession,
+                onComposerTextChanged = chatViewModel::onComposerTextChanged,
+                onComposerSubmit = chatViewModel::submitComposerPrompt,
             )
         }
 

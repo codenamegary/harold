@@ -53,6 +53,14 @@ class OkHttpEventStreamTest {
     }
 
     @Test
+    fun includesSessionIdWhenProvided() {
+        assertEquals(
+            "ws://127.0.0.1:8787/v1/events?cursor=0&sessionId=sess_01",
+            eventStreamUrl("http://127.0.0.1:8787", "0", "sess_01"),
+        )
+    }
+
+    @Test
     fun coldStartsAtCursorZeroWithBearerOnTheUpgrade() {
         enqueueSocket { socket -> socket.close(1000, "done") }
 

@@ -4,32 +4,47 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import server.agent.android.connection.ConnectionGateway
+import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.CreateSessionBody
+import server.agent.android.contracts.EventEnvelope
+import server.agent.android.contracts.PromptSessionBody
 import server.agent.android.contracts.Session
+import server.agent.android.contracts.SessionState
 import server.agent.android.contracts.WorkspaceState
 import server.agent.android.events.ConnectionStatus
+import server.agent.android.events.EventStreamFactory
 import server.agent.android.navigation.NavigationPreferences
 import server.agent.android.network.AgentApiError
 import server.agent.android.network.AgentApiException
 import server.agent.android.operator.OperatorRepository
 import server.agent.android.session.PairedState
 import server.agent.android.session.SessionGateway
-import server.agent.android.connection.ConnectionGateway
 
 class ChatViewModel(
     private val savedStateHandle: SavedStateHandle,
     private val sessionGateway: SessionGateway,
     private val connectionGateway: ConnectionGateway,
     private val operatorRepository: OperatorRepository,
-    private val navigationPreferences: NavigationPreferences,
+    private val     navigationPreferences: NavigationPreferences,
+    eventStreamFactory: EventStreamFactory,
+    sessionEventSource: SessionEventSource? = null,
 ) : ViewModel() {
+    private val sessionChatStream: SessionEventSource = sessionEventSource ?: SessionChatStream(
+        streamFactory = eventStreamFactory,
+        scope = viewModelScope,
+    )
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+
+    private var streamJob: Job? = null
+    private var activeSessionId: String? = null
 
     init {
         savedStateHandle.get<String>(KEY_SELECTED_SESSION_ID)?.let { sessionId ->
@@ -56,6 +71,8 @@ class ChatViewModel(
             sessionGateway.pairedState.collect { paired ->
                 if (paired is PairedState.Paired) {
                     refreshOperatorData(paired.serverOrigin)
+                } else {
+                    stopSessionStream()
                 }
             }
         }
@@ -102,7 +119,7 @@ class ChatViewModel(
         }
     }
 
-    fun onCreateAgentChanged(agentId: server.agent.android.contracts.AgentId) {
+    fun onCreateAgentChanged(agentId: AgentId) {
         _uiState.update { current ->
             current.copy(
                 createState = current.createState.copy(
@@ -121,6 +138,12 @@ class ChatViewModel(
                     error = null,
                 ),
             )
+        }
+    }
+
+    fun onComposerTextChanged(text: String) {
+        _uiState.update { current ->
+            current.copy(composerText = text, composerError = null)
         }
     }
 
@@ -187,6 +210,45 @@ class ChatViewModel(
         }
     }
 
+    fun submitComposerPrompt() {
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val session = _uiState.value.selectedSession ?: return
+        val prompt = _uiState.value.composerText.trim()
+
+        if (prompt.isEmpty() || !_uiState.value.composerEnabled) {
+            return
+        }
+
+        _uiState.update { current ->
+            current.copy(composerSubmitting = true, composerError = null)
+        }
+
+        viewModelScope.launch {
+            operatorRepository.promptSession(
+                serverOrigin = paired.serverOrigin,
+                sessionId = session.id,
+                body = PromptSessionBody(text = prompt),
+            ).fold(
+                onSuccess = {
+                    _uiState.update { current ->
+                        current.copy(
+                            composerText = "",
+                            composerSubmitting = false,
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update { current ->
+                        current.copy(
+                            composerSubmitting = false,
+                            composerError = errorMessage(error),
+                        )
+                    }
+                },
+            )
+        }
+    }
+
     fun selectSession(row: SessionRow) {
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
 
@@ -200,15 +262,21 @@ class ChatViewModel(
             onSuccess = { session ->
                 navigationPreferences.saveLastSessionId(session.id)
                 persistSelectedSession(session.id)
+                val selected = row.copy(
+                    name = session.name,
+                    state = session.state,
+                )
                 _uiState.update { current ->
                     current.copy(
-                        selectedSession = row.copy(
-                            name = session.name,
-                            state = session.state,
-                        ),
+                        selectedSession = selected,
                         pickerVisible = false,
+                        transcript = emptyTranscript,
+                        composerText = "",
+                        composerError = null,
+                        streamReconnecting = false,
                     )
                 }
+                startSessionStream(serverOrigin, session.id)
             },
             onFailure = { error ->
                 _uiState.update { current ->
@@ -216,6 +284,58 @@ class ChatViewModel(
                 }
             },
         )
+    }
+
+    private fun startSessionStream(serverOrigin: String, sessionId: String) {
+        if (activeSessionId == sessionId && streamJob?.isActive == true) {
+            return
+        }
+
+        stopSessionStream()
+        activeSessionId = sessionId
+
+        streamJob = sessionChatStream.observe(
+            serverOrigin = serverOrigin,
+            sessionId = sessionId,
+            onReconnect = {
+                _uiState.update { current ->
+                    current.copy(
+                        transcript = emptyTranscript,
+                        streamReconnecting = true,
+                    )
+                }
+            },
+            onEvents = { frame -> applySessionEvents(sessionId, frame) },
+        )
+    }
+
+    private fun applySessionEvents(sessionId: String, frame: List<EventEnvelope>) {
+        _uiState.update { current ->
+            val nextTranscript = foldTranscriptEvents(
+                state = current.transcript,
+                events = frame,
+                sessionId = sessionId,
+            )
+            val nextSessionState = resolveEffectiveSessionState(
+                sessionId = sessionId,
+                transcriptSessionState = nextTranscript.sessionState,
+                listSessionState = current.selectedSession?.state,
+            )
+
+            current.copy(
+                transcript = nextTranscript,
+                streamReconnecting = false,
+                selectedSession = current.selectedSession?.let { session ->
+                    nextSessionState?.let { session.copy(state = it) } ?: session
+                },
+            )
+        }
+    }
+
+    private fun stopSessionStream() {
+        streamJob?.cancel()
+        streamJob = null
+        activeSessionId = null
     }
 
     private suspend fun refreshOperatorData(serverOrigin: String) {
@@ -267,6 +387,9 @@ class ChatViewModel(
             ?: return
 
         val row = rows.firstOrNull { session -> session.id == savedId } ?: return
+        if (activeSessionId == row.id && streamJob?.isActive == true) {
+            return
+        }
         selectSession(serverOrigin, row)
     }
 
@@ -275,9 +398,11 @@ class ChatViewModel(
             ?: SessionRow(
                 id = sessionId,
                 name = "Session",
+                workspaceId = "",
                 workspaceLabel = "",
+                agentId = AgentId.Cursor,
                 agentLabel = "",
-                state = server.agent.android.contracts.SessionState.Idle,
+                state = SessionState.Idle,
             )
 
         _uiState.update { current -> current.copy(selectedSession = row) }
@@ -313,11 +438,13 @@ class ChatViewModel(
 
     private fun Session.toSessionRow(
         workspaceLabels: Map<String, String>,
-        agentLabels: Map<server.agent.android.contracts.AgentId, String>,
+        agentLabels: Map<AgentId, String>,
     ): SessionRow = SessionRow(
         id = id,
         name = name,
+        workspaceId = workspaceId,
         workspaceLabel = workspaceLabels[workspaceId] ?: workspaceId,
+        agentId = agentId,
         agentLabel = agentLabels[agentId] ?: agentId.name,
         state = state,
     )
@@ -331,6 +458,11 @@ class ChatViewModel(
             null -> error.message ?: "Request failed"
         }
 
+    override fun onCleared() {
+        stopSessionStream()
+        super.onCleared()
+    }
+
     companion object {
         const val KEY_SELECTED_SESSION_ID = "selected_session_id"
     }
@@ -342,6 +474,7 @@ class ChatViewModelFactory(
     private val connectionGateway: ConnectionGateway,
     private val operatorRepository: OperatorRepository,
     private val navigationPreferences: NavigationPreferences,
+    private val eventStreamFactory: EventStreamFactory,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -352,6 +485,7 @@ class ChatViewModelFactory(
                 connectionGateway = connectionGateway,
                 operatorRepository = operatorRepository,
                 navigationPreferences = navigationPreferences,
+                eventStreamFactory = eventStreamFactory,
             ) as T
         }
 
