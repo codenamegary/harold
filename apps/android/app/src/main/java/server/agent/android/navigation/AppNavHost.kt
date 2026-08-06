@@ -113,6 +113,7 @@ fun AppNavHost(
                 onWorkspacesClick = { navController.navigate(Routes.Workspaces) },
                 onDismissPicker = chatViewModel::hidePicker,
                 onSessionClick = chatViewModel::selectSession,
+                onRenameSessionClick = chatViewModel::showRenameDialogForSession,
                 onCreateClick = {
                     chatViewModel.hidePicker()
                     chatViewModel.showCreateDialog()
@@ -124,6 +125,14 @@ fun AppNavHost(
                 onCreateSubmit = chatViewModel::submitCreateSession,
                 onComposerTextChanged = chatViewModel::onComposerTextChanged,
                 onComposerSubmit = chatViewModel::submitComposerPrompt,
+                onComposerCancel = chatViewModel::submitCancel,
+                onRenameClick = chatViewModel::showRenameDialog,
+                onDismissRename = chatViewModel::hideRenameDialog,
+                onRenameNameChanged = chatViewModel::onRenameNameChanged,
+                onRenameSubmit = chatViewModel::submitRename,
+                onArchiveClick = chatViewModel::showArchiveDialog,
+                onDismissArchive = chatViewModel::hideArchiveDialog,
+                onArchiveSubmit = chatViewModel::submitArchive,
             )
         }
 

@@ -3,9 +3,11 @@ package server.agent.android.chat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,6 +35,7 @@ fun ChatScreen(
     onWorkspacesClick: () -> Unit,
     onDismissPicker: () -> Unit,
     onSessionClick: (SessionRow) -> Unit,
+    onRenameSessionClick: (SessionRow) -> Unit,
     onCreateClick: () -> Unit,
     onDismissCreate: () -> Unit,
     onCreateWorkspaceChanged: (String) -> Unit,
@@ -41,9 +44,18 @@ fun ChatScreen(
     onCreateSubmit: () -> Unit,
     onComposerTextChanged: (String) -> Unit,
     onComposerSubmit: () -> Unit,
+    onComposerCancel: () -> Unit,
+    onRenameClick: () -> Unit,
+    onDismissRename: () -> Unit,
+    onRenameNameChanged: (String) -> Unit,
+    onRenameSubmit: () -> Unit,
+    onArchiveClick: () -> Unit,
+    onDismissArchive: () -> Unit,
+    onArchiveSubmit: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val sessionLabel = uiState.selectedSession?.name ?: "Select session"
+    val hasSelectedSession = uiState.selectedSession != null
 
     Scaffold(
         topBar = {
@@ -68,6 +80,24 @@ fun ChatScreen(
                         expanded = menuExpanded,
                         onDismissRequest = { menuExpanded = false },
                     ) {
+                        if (hasSelectedSession) {
+                            DropdownMenuItem(
+                                text = { Text(text = "Rename session") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onRenameClick()
+                                },
+                                modifier = Modifier.testTag("rename_menu_item"),
+                            )
+                            DropdownMenuItem(
+                                text = { Text(text = "Archive session") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onArchiveClick()
+                                },
+                                modifier = Modifier.testTag("archive_menu_item"),
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text(text = "Workspaces") },
                             onClick = {
@@ -104,60 +134,109 @@ fun ChatScreen(
                 )
             }
 
+            uiState.cancelError?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("cancel_error"),
+                )
+            }
+
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                contentAlignment = if (uiState.transcript.rows.isEmpty()) {
+                contentAlignment = if (
+                    uiState.transcript.rows.isEmpty() && !uiState.showProgress && !uiState.showSelectSessionCta
+                ) {
                     Alignment.Center
                 } else {
                     Alignment.TopStart
                 },
             ) {
-                ChatTranscript(
-                    rows = uiState.transcript.rows,
-                    showProgress = uiState.showProgress && uiState.transcript.rows.isEmpty(),
-                    emptyMessage = uiState.emptyTranscriptMessage,
-                    modifier = Modifier.fillMaxSize(),
-                )
+                when {
+                    uiState.showSelectSessionCta -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("select_session_cta"),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Text(
+                                text = "Select a session to start chatting.",
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            TextButton(onClick = onSessionSelectorClick) {
+                                Text(text = "Select session")
+                            }
+                        }
+                    }
+
+                    else -> {
+                        ChatTranscript(
+                            rows = uiState.transcript.rows,
+                            showProgress = uiState.showProgress && uiState.transcript.rows.isEmpty(),
+                            progressMessage = uiState.sessionProgressMessage,
+                            emptyMessage = uiState.emptyTranscriptMessage,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
             }
 
-            uiState.composerBlockedMessage?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.testTag("composer_blocked_message"),
+            if (hasSelectedSession) {
+                uiState.composerBlockedMessage?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag("composer_blocked_message"),
+                    )
+                }
+
+                uiState.composerError?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag("composer_error"),
+                    )
+                }
+
+                OutlinedTextField(
+                    value = uiState.composerText,
+                    onValueChange = onComposerTextChanged,
+                    enabled = uiState.composerEnabled,
+                    label = { Text(text = "Message") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("chat_composer"),
                 )
-            }
 
-            uiState.composerError?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.testTag("composer_error"),
-                )
-            }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                ) {
+                    if (uiState.showComposerCancel) {
+                        TextButton(
+                            onClick = onComposerCancel,
+                            enabled = !uiState.cancelSubmitting,
+                            modifier = Modifier.testTag("chat_cancel_button"),
+                        ) {
+                            Text(text = if (uiState.cancelSubmitting) "Canceling…" else "Cancel run")
+                        }
+                    }
 
-            OutlinedTextField(
-                value = uiState.composerText,
-                onValueChange = onComposerTextChanged,
-                enabled = uiState.composerEnabled,
-                label = { Text(text = "Message") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("chat_composer"),
-            )
-
-            TextButton(
-                onClick = onComposerSubmit,
-                enabled = uiState.composerEnabled && uiState.composerText.isNotBlank(),
-                modifier = Modifier
-                    .align(Alignment.End)
-                    .testTag("chat_send_button"),
-            ) {
-                Text(text = if (uiState.composerSubmitting) "Sending…" else "Send")
+                    TextButton(
+                        onClick = onComposerSubmit,
+                        enabled = uiState.composerEnabled && uiState.composerText.isNotBlank(),
+                        modifier = Modifier.testTag("chat_send_button"),
+                    ) {
+                        Text(text = if (uiState.composerSubmitting) "Sending…" else "Send")
+                    }
+                }
             }
         }
     }
@@ -167,6 +246,7 @@ fun ChatScreen(
             uiState = uiState,
             onDismiss = onDismissPicker,
             onSessionClick = onSessionClick,
+            onRenameSessionClick = onRenameSessionClick,
             onCreateClick = onCreateClick,
         )
     }
@@ -179,6 +259,51 @@ fun ChatScreen(
             onAgentChanged = onCreateAgentChanged,
             onPromptChanged = onCreatePromptChanged,
             onSubmit = onCreateSubmit,
+        )
+    }
+
+    if (uiState.renameDialogVisible) {
+        RenameSessionDialog(
+            renameState = uiState.renameState,
+            onDismiss = onDismissRename,
+            onNameChanged = onRenameNameChanged,
+            onSubmit = onRenameSubmit,
+        )
+    }
+
+    if (uiState.archiveDialogVisible) {
+        AlertDialog(
+            onDismissRequest = onDismissArchive,
+            title = { Text(text = "Archive session?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(text = "Archived sessions leave the active workflow.")
+                    uiState.archiveError?.let { message ->
+                        Text(
+                            text = message,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.testTag("archive_error"),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = onArchiveSubmit,
+                    enabled = !uiState.archiveSubmitting,
+                    modifier = Modifier.testTag("archive_confirm"),
+                ) {
+                    Text(text = if (uiState.archiveSubmitting) "Archiving…" else "Archive")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = onDismissArchive,
+                    modifier = Modifier.testTag("archive_cancel"),
+                ) {
+                    Text(text = "Cancel")
+                }
+            },
         )
     }
 }

@@ -14,6 +14,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.CreateSessionBody
+import server.agent.android.contracts.UpdateSessionBody
+import server.agent.android.contracts.SessionState
 import server.agent.android.contracts.WorkspaceState
 
 @RunWith(RobolectricTestRunner::class)
@@ -221,6 +223,85 @@ class DefaultAgentApiTest {
         assertEquals("/v1/sessions", recorded.path)
         assertTrue(recorded.body.readUtf8().contains("Ship it"))
         assertEquals("sess_01", result.getOrThrow().id)
+    }
+
+    @Test
+    fun updateSessionPatchesName() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(
+                    """
+                    {
+                      "id": "sess_01",
+                      "workspaceId": "ws_01",
+                      "agentId": "cursor",
+                      "name": "Renamed",
+                      "state": "idle",
+                      "createdAt": "2026-08-05T00:00:00.000Z",
+                      "lastUsedAt": "2026-08-05T01:00:00.000Z",
+                      "archivedAt": null
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val result = agentApi.updateSession(
+            serverOrigin = origin(),
+            sessionId = "sess_01",
+            body = UpdateSessionBody(name = "Renamed"),
+        )
+
+        val recorded = server.takeRequest()
+        assertEquals("PATCH", recorded.method)
+        assertEquals("/v1/sessions/sess_01", recorded.path)
+        assertEquals("Renamed", result.getOrThrow().name)
+    }
+
+    @Test
+    fun cancelSessionPostsEmptyBody() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(202)
+                .setBody("""{ "turnId": "turn_01" }"""),
+        )
+
+        val result = agentApi.cancelSession(serverOrigin = origin(), sessionId = "sess_01")
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/v1/sessions/sess_01/cancel", recorded.path)
+        assertEquals("{}", recorded.body.readUtf8())
+        assertEquals("turn_01", result.getOrThrow().turnId)
+    }
+
+    @Test
+    fun archiveSessionPostsEmptyBody() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(
+                    """
+                    {
+                      "id": "sess_01",
+                      "workspaceId": "ws_01",
+                      "agentId": "cursor",
+                      "name": "Archived",
+                      "state": "archived",
+                      "createdAt": "2026-08-05T00:00:00.000Z",
+                      "lastUsedAt": "2026-08-05T01:00:00.000Z",
+                      "archivedAt": "2026-08-05T02:00:00.000Z"
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val result = agentApi.archiveSession(serverOrigin = origin(), sessionId = "sess_01")
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/v1/sessions/sess_01/archive", recorded.path)
+        assertEquals(SessionState.Archived, result.getOrThrow().state)
     }
 
     private fun origin(): String = server.url("/").toString().trimEnd('/')

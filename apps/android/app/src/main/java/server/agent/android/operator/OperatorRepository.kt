@@ -36,4 +36,20 @@ interface OperatorRepository {
         sessionId: String,
         body: server.agent.android.contracts.PromptSessionBody,
     ): Result<server.agent.android.contracts.PromptSessionResponse>
+
+    suspend fun updateSession(
+        serverOrigin: String,
+        sessionId: String,
+        body: server.agent.android.contracts.UpdateSessionBody,
+    ): Result<Session>
+
+    suspend fun cancelSession(
+        serverOrigin: String,
+        sessionId: String,
+    ): Result<server.agent.android.contracts.CancelSessionResponse>
+
+    suspend fun archiveSession(
+        serverOrigin: String,
+        sessionId: String,
+    ): Result<Session>
 }

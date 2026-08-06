@@ -13,6 +13,7 @@ import server.agent.android.contracts.AgentServerJson
 import server.agent.android.contracts.AgentSettings
 import server.agent.android.contracts.AgentSettingsCollection
 import server.agent.android.contracts.ConflictProblem
+import server.agent.android.contracts.CancelSessionResponse
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateSessionResponse
 import server.agent.android.contracts.PromptSessionBody
@@ -24,6 +25,7 @@ import server.agent.android.contracts.ProblemDetails
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionCollection
 import server.agent.android.contracts.UnauthorizedProblem
+import server.agent.android.contracts.UpdateSessionBody
 import server.agent.android.contracts.Workspace
 import server.agent.android.contracts.WorkspaceCollection
 
@@ -105,6 +107,40 @@ class DefaultAgentApi(
         json.decodeFromString(PromptSessionResponse.serializer(), responseBody)
     }
 
+    override suspend fun updateSession(
+        serverOrigin: String,
+        sessionId: String,
+        body: UpdateSessionBody,
+    ): Result<Session> = patch(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/sessions/$sessionId",
+        body = json.encodeToString(UpdateSessionBody.serializer(), body),
+    ) { responseBody ->
+        json.decodeFromString(Session.serializer(), responseBody)
+    }
+
+    override suspend fun cancelSession(
+        serverOrigin: String,
+        sessionId: String,
+    ): Result<CancelSessionResponse> = post(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/sessions/$sessionId/cancel",
+        body = "{}",
+    ) { responseBody ->
+        json.decodeFromString(CancelSessionResponse.serializer(), responseBody)
+    }
+
+    override suspend fun archiveSession(
+        serverOrigin: String,
+        sessionId: String,
+    ): Result<Session> = post(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/sessions/$sessionId/archive",
+        body = "{}",
+    ) { responseBody ->
+        json.decodeFromString(Session.serializer(), responseBody)
+    }
+
     private suspend fun <T> get(
         serverOrigin: String,
         pathSegments: String,
@@ -129,6 +165,20 @@ class DefaultAgentApi(
         pathSegments = pathSegments,
         query = emptyMap(),
         method = "POST",
+        body = body,
+        decode = decode,
+    )
+
+    private suspend fun <T> patch(
+        serverOrigin: String,
+        pathSegments: String,
+        body: String,
+        decode: (String) -> T,
+    ): Result<T> = request(
+        serverOrigin = serverOrigin,
+        pathSegments = pathSegments,
+        query = emptyMap(),
+        method = "PATCH",
         body = body,
         decode = decode,
     )

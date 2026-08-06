@@ -142,17 +142,18 @@ describe("HTTP cancel accept-and-stream", () => {
     const { httpBase, wsUrl } = await getListeningUrl(app, config)
     const { eventsPromise, whenOpen } = collectEventsUntil({
       url: `${wsUrl}?sessionId=${session.id}`,
-      until: (events) =>
-        events.some((event) => event.type === "turn.cancelled") &&
-        events.some(
-          (event) =>
-            event.type === "session.state" &&
-            event.payload.state === "idle" &&
-            events.some(
-              (prior) =>
-                prior.type === "session.state" && prior.payload.state === "running",
-            ),
-        ),
+      timeoutMs: 15000,
+      until: (events) => {
+        const states = events
+          .filter((event) => event.type === "session.state")
+          .map((event) => event.payload.state)
+
+        return (
+          events.some((event) => event.type === "turn.cancelled") &&
+          states.includes("stopping") &&
+          states.includes("idle")
+        )
+      },
     })
 
     await whenOpen
@@ -179,6 +180,12 @@ describe("HTTP cancel accept-and-stream", () => {
     if (turnCancelled?.type === "turn.cancelled") {
       expect(turnCancelled.payload.turnId).toBe(promptBody.turnId)
     }
+
+    const stopping = events.find(
+      (event) =>
+        event.type === "session.state" && event.payload.state === "stopping",
+    )
+    expect(stopping).toBeDefined()
 
     await waitFor(async () => {
       const latest = await app.inject({

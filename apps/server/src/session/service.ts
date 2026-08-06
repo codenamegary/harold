@@ -231,6 +231,10 @@ export const createSessionService = (context: SessionServiceContext) => {
     input: { id: string },
   ): SessionServiceResult<Session> => setTurnState({ id: input.id, state: "idle" })
 
+  const markStopping = (
+    input: { id: string },
+  ): SessionServiceResult<Session> => setTurnState({ id: input.id, state: "stopping" })
+
   const markOffline = (
     input: { id: string },
   ): SessionServiceResult<Session> => {
@@ -293,6 +297,7 @@ export const createSessionService = (context: SessionServiceContext) => {
     resume,
     markRunning,
     markIdle,
+    markStopping,
     markOffline,
     markLiveSessionsOffline,
   }
