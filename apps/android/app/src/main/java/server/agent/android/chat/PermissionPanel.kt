@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
@@ -14,8 +15,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import server.agent.android.R
 import server.agent.android.contracts.PermissionRequest
+
+private val MIN_TOUCH_TARGET = 48.dp
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -56,10 +63,19 @@ fun PermissionPanel(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 request.options.forEach { option ->
+                    val optionContentDescription = stringResource(
+                        R.string.permission_option_content_description,
+                        option.name,
+                    )
                     TextButton(
                         onClick = { onSelectOption(option.optionId) },
                         enabled = submittingOptionId == null,
-                        modifier = Modifier.testTag("permission_option_${option.optionId}"),
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                            .testTag("permission_option_${option.optionId}")
+                            .semantics {
+                                contentDescription = optionContentDescription
+                            },
                     ) {
                         Text(
                             text = if (submittingOptionId == option.optionId) {

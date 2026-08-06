@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -28,6 +29,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import android.Manifest
 import android.content.Intent
@@ -39,6 +44,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
 import server.agent.android.R
+
+private val MIN_TOUCH_TARGET = 48.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,6 +80,17 @@ fun ChatScreen(
     val sessionLabel = uiState.selectedSession?.name ?: "Select session"
     val hasSelectedSession = uiState.selectedSession != null
     val context = LocalContext.current
+    val sessionSelectorContentDescription = stringResource(
+        R.string.chat_session_selector_content_description,
+        sessionLabel,
+    )
+    val overflowContentDescription = stringResource(R.string.chat_overflow_content_description)
+    val openSettingsContentDescription =
+        stringResource(R.string.notification_permission_open_settings_content_description)
+    val notNowContentDescription =
+        stringResource(R.string.notification_permission_not_now_content_description)
+    val sendContentDescription = stringResource(R.string.chat_send_content_description)
+    val cancelContentDescription = stringResource(R.string.chat_cancel_content_description)
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -106,7 +124,12 @@ fun ChatScreen(
                         )
                         context.startActivity(intent)
                     },
-                    modifier = Modifier.testTag("notification_permission_settings"),
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                        .testTag("notification_permission_settings")
+                        .semantics {
+                            contentDescription = openSettingsContentDescription
+                        },
                 ) {
                     Text(text = stringResource(R.string.notification_permission_open_settings))
                 }
@@ -114,7 +137,12 @@ fun ChatScreen(
             dismissButton = {
                 TextButton(
                     onClick = onDismissNotificationPermissionPrompt,
-                    modifier = Modifier.testTag("notification_permission_dismiss"),
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                        .testTag("notification_permission_dismiss")
+                        .semantics {
+                            contentDescription = notNowContentDescription
+                        },
                 ) {
                     Text(text = stringResource(R.string.notification_permission_not_now))
                 }
@@ -129,7 +157,12 @@ fun ChatScreen(
                 title = {
                     TextButton(
                         onClick = onSessionSelectorClick,
-                        modifier = Modifier.testTag("session_selector"),
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                            .testTag("session_selector")
+                            .semantics {
+                                contentDescription = sessionSelectorContentDescription
+                            },
                     ) {
                         Text(text = "$sessionLabel ▾")
                     }
@@ -137,7 +170,12 @@ fun ChatScreen(
                 actions = {
                     TextButton(
                         onClick = { menuExpanded = true },
-                        modifier = Modifier.testTag("chat_overflow"),
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                            .testTag("chat_overflow")
+                            .semantics {
+                                contentDescription = overflowContentDescription
+                            },
                     ) {
                         Text(text = "More")
                     }
@@ -188,7 +226,11 @@ fun ChatScreen(
                 Text(
                     text = uiState.connectionBanner,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.testTag("connection_banner"),
+                    modifier = Modifier
+                        .testTag("connection_banner")
+                        .semantics {
+                            liveRegion = LiveRegionMode.Polite
+                        },
                 )
             }
 
@@ -196,7 +238,11 @@ fun ChatScreen(
                 Text(
                     text = "Reconnecting session stream…",
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.testTag("stream_reconnect_banner"),
+                    modifier = Modifier
+                        .testTag("stream_reconnect_banner")
+                        .semantics {
+                            liveRegion = LiveRegionMode.Polite
+                        },
                 )
             }
 
@@ -301,7 +347,12 @@ fun ChatScreen(
                         TextButton(
                             onClick = onComposerCancel,
                             enabled = !uiState.cancelSubmitting,
-                            modifier = Modifier.testTag("chat_cancel_button"),
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                                .testTag("chat_cancel_button")
+                                .semantics {
+                                    contentDescription = cancelContentDescription
+                                },
                         ) {
                             Text(text = if (uiState.cancelSubmitting) "Canceling…" else "Cancel run")
                         }
@@ -310,7 +361,12 @@ fun ChatScreen(
                     TextButton(
                         onClick = onComposerSubmit,
                         enabled = uiState.composerEnabled && uiState.composerText.isNotBlank(),
-                        modifier = Modifier.testTag("chat_send_button"),
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                            .testTag("chat_send_button")
+                            .semantics {
+                                contentDescription = sendContentDescription
+                            },
                     ) {
                         Text(text = if (uiState.composerSubmitting) "Sending…" else "Send")
                     }

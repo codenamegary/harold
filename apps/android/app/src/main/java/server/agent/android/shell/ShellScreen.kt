@@ -21,7 +21,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -75,7 +77,10 @@ fun ShellScreen(
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .padding(horizontal = 24.dp, vertical = 16.dp)
-                        .testTag("shell_status"),
+                        .testTag("shell_status")
+                        .semantics {
+                            liveRegion = LiveRegionMode.Polite
+                        },
                 )
             }
 
@@ -86,7 +91,11 @@ fun ShellScreen(
                     text = connectionStatus,
                     style = MaterialTheme.typography.titleMedium,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.testTag("shell_connection_status"),
+                    modifier = Modifier
+                        .testTag("shell_connection_status")
+                        .semantics {
+                            liveRegion = LiveRegionMode.Polite
+                        },
                 )
             }
 
