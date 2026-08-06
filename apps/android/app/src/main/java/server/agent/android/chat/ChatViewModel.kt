@@ -21,6 +21,12 @@ import server.agent.android.contracts.UpdateSessionBody
 import server.agent.android.contracts.WorkspaceState
 import server.agent.android.events.ConnectionStatus
 import server.agent.android.events.EventStreamFactory
+import server.agent.android.foreground.ActiveSessionSnapshot
+import server.agent.android.foreground.ActiveSessionTracker
+import server.agent.android.foreground.OpenSessionRequests
+import server.agent.android.foreground.SessionForegroundCoordinator
+import server.agent.android.foreground.SessionStreamBroker
+import server.agent.android.foreground.StreamPinReason
 import server.agent.android.navigation.NavigationPreferences
 import server.agent.android.network.AgentApiError
 import server.agent.android.network.AgentApiException
@@ -33,9 +39,13 @@ class ChatViewModel(
     private val sessionGateway: SessionGateway,
     private val connectionGateway: ConnectionGateway,
     private val operatorRepository: OperatorRepository,
-    private val     navigationPreferences: NavigationPreferences,
+    private val navigationPreferences: NavigationPreferences,
     eventStreamFactory: EventStreamFactory,
     sessionEventSource: SessionEventSource? = null,
+    private val activeSessionTracker: ActiveSessionTracker? = null,
+    private val sessionStreamBroker: SessionStreamBroker? = null,
+    private val sessionForegroundCoordinator: SessionForegroundCoordinator? = null,
+    private val openSessionRequests: OpenSessionRequests? = null,
 ) : ViewModel() {
     private val sessionChatStream: SessionEventSource = sessionEventSource ?: SessionChatStream(
         streamFactory = eventStreamFactory,
@@ -45,6 +55,7 @@ class ChatViewModel(
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     private var streamJob: Job? = null
+    private var frameCollectJob: Job? = null
     private var activeSessionId: String? = null
 
     init {
@@ -71,11 +82,43 @@ class ChatViewModel(
         viewModelScope.launch {
             sessionGateway.pairedState.collect { paired ->
                 if (paired is PairedState.Paired) {
+                    sessionForegroundCoordinator?.setServerOrigin(paired.serverOrigin)
                     refreshOperatorData(paired.serverOrigin)
                 } else {
+                    sessionForegroundCoordinator?.setServerOrigin(null)
                     stopSessionStream()
                 }
             }
+        }
+
+        sessionForegroundCoordinator?.let { coordinator ->
+            viewModelScope.launch {
+                coordinator.state.collect { foreground ->
+                    _uiState.update { current ->
+                        current.copy(notificationPermissionDenied = foreground.permissionDenied)
+                    }
+                }
+            }
+        }
+
+        openSessionRequests?.let { requests ->
+            viewModelScope.launch {
+                requests.sessionIds.collect { sessionId ->
+                    openSessionFromNotification(sessionId)
+                }
+            }
+        }
+    }
+
+    fun dismissNotificationPermissionPrompt() {
+        sessionForegroundCoordinator?.dismissPermissionPrompt()
+        _uiState.update { current -> current.copy(notificationPermissionDenied = false) }
+    }
+
+    fun onNotificationPermissionResult(granted: Boolean) {
+        sessionForegroundCoordinator?.onPermissionMaybeChanged()
+        if (!granted) {
+            _uiState.update { current -> current.copy(notificationPermissionDenied = true) }
         }
     }
 
@@ -534,12 +577,38 @@ class ChatViewModel(
     }
 
     private fun startSessionStream(serverOrigin: String, sessionId: String) {
-        if (activeSessionId == sessionId && streamJob?.isActive == true) {
+        if (activeSessionId == sessionId && (streamJob?.isActive == true || frameCollectJob?.isActive == true)) {
             return
         }
 
         stopSessionStream()
         activeSessionId = sessionId
+
+        val broker = sessionStreamBroker
+        if (broker != null) {
+            broker.pin(serverOrigin, sessionId, StreamPinReason.Ui)
+            frameCollectJob = viewModelScope.launch {
+                broker.frames.collect { frame ->
+                    if (frame.sessionId != sessionId) {
+                        return@collect
+                    }
+                    if (frame.reconnect) {
+                        _uiState.update { current ->
+                            current.copy(
+                                transcript = emptyTranscript,
+                                pendingPermissions = emptyList(),
+                                permissionUiState = PermissionUiState(),
+                                streamReconnecting = true,
+                            )
+                        }
+                        refreshPendingPermissions(serverOrigin, sessionId)
+                    } else {
+                        applySessionEvents(sessionId, frame.events)
+                    }
+                }
+            }
+            return
+        }
 
         streamJob = sessionChatStream.observe(
             serverOrigin = serverOrigin,
@@ -598,16 +667,45 @@ class ChatViewModel(
             )
         }
 
+        syncActiveSessionsFromUiState()
+
         if (_uiState.value.selectedSession == null && activeSessionId == sessionId) {
             viewModelScope.launch { clearPersistedSession() }
             stopSessionStream()
         }
     }
 
+    private fun syncActiveSessionsFromUiState() {
+        val tracker = activeSessionTracker ?: return
+        val rows = _uiState.value.sessions
+        tracker.replaceAll(
+            rows.map { row ->
+                ActiveSessionSnapshot(id = row.id, name = row.name, state = row.state)
+            },
+        )
+        sessionForegroundCoordinator?.onSessionsChanged()
+    }
+
     private fun stopSessionStream() {
         streamJob?.cancel()
         streamJob = null
+        frameCollectJob?.cancel()
+        frameCollectJob = null
+        val sessionId = activeSessionId
         activeSessionId = null
+        if (sessionId != null) {
+            sessionStreamBroker?.unpin(sessionId, StreamPinReason.Ui)
+        }
+    }
+
+    private suspend fun openSessionFromNotification(sessionId: String) {
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        if (_uiState.value.selectedSession?.id == sessionId) {
+            return
+        }
+
+        val row = _uiState.value.sessions.firstOrNull { session -> session.id == sessionId } ?: return
+        selectSession(paired.serverOrigin, row)
     }
 
     private suspend fun refreshOperatorData(serverOrigin: String) {
@@ -639,6 +737,7 @@ class ChatViewModel(
                     )
                 }
 
+                syncActiveSessionsFromUiState()
                 restoreLastSession(serverOrigin, rows)
             },
             onFailure = { error ->
@@ -819,6 +918,10 @@ class ChatViewModelFactory(
     private val operatorRepository: OperatorRepository,
     private val navigationPreferences: NavigationPreferences,
     private val eventStreamFactory: EventStreamFactory,
+    private val activeSessionTracker: ActiveSessionTracker,
+    private val sessionStreamBroker: SessionStreamBroker,
+    private val sessionForegroundCoordinator: SessionForegroundCoordinator,
+    private val openSessionRequests: OpenSessionRequests,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -830,6 +933,10 @@ class ChatViewModelFactory(
                 operatorRepository = operatorRepository,
                 navigationPreferences = navigationPreferences,
                 eventStreamFactory = eventStreamFactory,
+                activeSessionTracker = activeSessionTracker,
+                sessionStreamBroker = sessionStreamBroker,
+                sessionForegroundCoordinator = sessionForegroundCoordinator,
+                openSessionRequests = openSessionRequests,
             ) as T
         }
 

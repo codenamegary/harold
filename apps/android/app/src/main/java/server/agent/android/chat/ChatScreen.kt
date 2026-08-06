@@ -18,14 +18,27 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import android.Manifest
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import android.content.pm.PackageManager
+import server.agent.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,10 +66,62 @@ fun ChatScreen(
     onDismissArchive: () -> Unit,
     onArchiveSubmit: () -> Unit,
     onPermissionOptionSelect: (String) -> Unit,
+    onNotificationPermissionResult: (Boolean) -> Unit = {},
+    onDismissNotificationPermissionPrompt: () -> Unit = {},
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val sessionLabel = uiState.selectedSession?.name ?: "Select session"
     val hasSelectedSession = uiState.selectedSession != null
+    val context = LocalContext.current
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        onNotificationPermissionResult(granted)
+    }
+
+    LaunchedEffect(uiState.notificationPermissionDenied) {
+        if (
+            uiState.notificationPermissionDenied &&
+            Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    if (uiState.notificationPermissionDenied) {
+        AlertDialog(
+            onDismissRequest = onDismissNotificationPermissionPrompt,
+            title = { Text(text = stringResource(R.string.notification_permission_title)) },
+            text = { Text(text = stringResource(R.string.notification_permission_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val intent = Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.fromParts("package", context.packageName, null),
+                        )
+                        context.startActivity(intent)
+                    },
+                    modifier = Modifier.testTag("notification_permission_settings"),
+                ) {
+                    Text(text = stringResource(R.string.notification_permission_open_settings))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = onDismissNotificationPermissionPrompt,
+                    modifier = Modifier.testTag("notification_permission_dismiss"),
+                ) {
+                    Text(text = stringResource(R.string.notification_permission_not_now))
+                }
+            },
+            modifier = Modifier.testTag("notification_permission_dialog"),
+        )
+    }
 
     Scaffold(
         topBar = {

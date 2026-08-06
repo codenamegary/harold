@@ -14,6 +14,15 @@ import server.agent.android.credentials.CredentialStore
 import server.agent.android.credentials.DefaultCredentialStore
 import server.agent.android.events.EventStreamFactory
 import server.agent.android.events.OkHttpEventStream
+import server.agent.android.foreground.ActiveSessionTracker
+import server.agent.android.foreground.AndroidNotificationPermissionChecker
+import server.agent.android.foreground.AndroidSessionForegroundLauncher
+import server.agent.android.foreground.DefaultActiveSessionTracker
+import server.agent.android.foreground.DefaultOpenSessionRequests
+import server.agent.android.foreground.DefaultSessionStreamBroker
+import server.agent.android.foreground.OpenSessionRequests
+import server.agent.android.foreground.SessionForegroundCoordinator
+import server.agent.android.foreground.SessionStreamBroker
 import server.agent.android.navigation.DefaultNavigationPreferences
 import server.agent.android.navigation.NavigationPreferences
 import server.agent.android.network.AgentApi
@@ -45,6 +54,10 @@ interface AppContainer {
     val eventStreamFactory: EventStreamFactory
     val navigationPreferences: NavigationPreferences
     val operatorRepository: OperatorRepository
+    val activeSessionTracker: ActiveSessionTracker
+    val sessionStreamBroker: SessionStreamBroker
+    val sessionForegroundCoordinator: SessionForegroundCoordinator
+    val openSessionRequests: OpenSessionRequests
 }
 
 class DefaultAppContainer(
@@ -87,4 +100,18 @@ class DefaultAppContainer(
     )
     override val navigationPreferences: NavigationPreferences = DefaultNavigationPreferences(context)
     override val operatorRepository: OperatorRepository = DefaultOperatorRepository(agentApi)
+
+    override val activeSessionTracker: ActiveSessionTracker = DefaultActiveSessionTracker()
+    override val sessionStreamBroker: SessionStreamBroker = DefaultSessionStreamBroker(
+        streamFactory = eventStreamFactory,
+        scope = applicationScope,
+    )
+    override val openSessionRequests: OpenSessionRequests = DefaultOpenSessionRequests()
+    override val sessionForegroundCoordinator: SessionForegroundCoordinator =
+        SessionForegroundCoordinator(
+            tracker = activeSessionTracker,
+            permissionChecker = AndroidNotificationPermissionChecker(context),
+            launcher = AndroidSessionForegroundLauncher(context),
+            streamBroker = sessionStreamBroker,
+        )
 }

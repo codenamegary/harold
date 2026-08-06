@@ -72,6 +72,7 @@ data class ChatUiState(
     val streamReconnecting: Boolean = false,
     val pendingPermissions: List<PermissionRequest> = emptyList(),
     val permissionUiState: PermissionUiState = PermissionUiState(),
+    val notificationPermissionDenied: Boolean = false,
 ) {
     val activePermissionRequest: PermissionRequest?
         get() = activePermissionRequest(pendingPermissions)
