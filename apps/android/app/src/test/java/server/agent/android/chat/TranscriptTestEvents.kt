@@ -104,9 +104,14 @@ internal fun sessionState(
             "state",
             JsonPrimitive(
                 when (state) {
+                    SessionState.Starting -> "starting"
                     SessionState.Idle -> "idle"
                     SessionState.Running -> "running"
-                    else -> "idle"
+                    SessionState.AwaitingPermission -> "awaiting-permission"
+                    SessionState.Stopping -> "stopping"
+                    SessionState.Offline -> "offline"
+                    SessionState.Error -> "error"
+                    SessionState.Archived -> "archived"
                 },
             ),
         )

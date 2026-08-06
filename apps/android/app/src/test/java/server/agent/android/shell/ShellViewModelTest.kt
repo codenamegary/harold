@@ -246,4 +246,21 @@ private class FakeAgentApi(
         body: server.agent.android.contracts.PromptSessionBody,
     ): Result<server.agent.android.contracts.PromptSessionResponse> =
         Result.failure(UnsupportedOperationException())
+
+    override suspend fun updateSession(
+        serverOrigin: String,
+        sessionId: String,
+        body: server.agent.android.contracts.UpdateSessionBody,
+    ): Result<Session> = Result.failure(UnsupportedOperationException())
+
+    override suspend fun cancelSession(
+        serverOrigin: String,
+        sessionId: String,
+    ): Result<server.agent.android.contracts.CancelSessionResponse> =
+        Result.failure(UnsupportedOperationException())
+
+    override suspend fun archiveSession(
+        serverOrigin: String,
+        sessionId: String,
+    ): Result<Session> = Result.failure(UnsupportedOperationException())
 }

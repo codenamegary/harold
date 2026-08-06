@@ -147,6 +147,11 @@ describe("HTTP cancel accept-and-stream", () => {
         events.some(
           (event) =>
             event.type === "session.state" &&
+            event.payload.state === "stopping",
+        ) &&
+        events.some(
+          (event) =>
+            event.type === "session.state" &&
             event.payload.state === "idle" &&
             events.some(
               (prior) =>
@@ -179,6 +184,12 @@ describe("HTTP cancel accept-and-stream", () => {
     if (turnCancelled?.type === "turn.cancelled") {
       expect(turnCancelled.payload.turnId).toBe(promptBody.turnId)
     }
+
+    const stopping = events.find(
+      (event) =>
+        event.type === "session.state" && event.payload.state === "stopping",
+    )
+    expect(stopping).toBeDefined()
 
     await waitFor(async () => {
       const latest = await app.inject({

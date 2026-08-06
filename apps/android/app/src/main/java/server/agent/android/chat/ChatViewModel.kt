@@ -17,6 +17,7 @@ import server.agent.android.contracts.EventEnvelope
 import server.agent.android.contracts.PromptSessionBody
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionState
+import server.agent.android.contracts.UpdateSessionBody
 import server.agent.android.contracts.WorkspaceState
 import server.agent.android.events.ConnectionStatus
 import server.agent.android.events.EventStreamFactory
@@ -249,6 +250,194 @@ class ChatViewModel(
         }
     }
 
+    fun submitCancel() {
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val session = _uiState.value.selectedSession ?: return
+
+        if (!_uiState.value.showComposerCancel) {
+            return
+        }
+
+        _uiState.update { current ->
+            current.copy(cancelSubmitting = true, cancelError = null)
+        }
+
+        viewModelScope.launch {
+            operatorRepository.cancelSession(
+                serverOrigin = paired.serverOrigin,
+                sessionId = session.id,
+            ).fold(
+                onSuccess = {
+                    _uiState.update { current ->
+                        current.copy(cancelSubmitting = false)
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update { current ->
+                        current.copy(
+                            cancelSubmitting = false,
+                            cancelError = errorMessage(error),
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun showRenameDialog() {
+        val session = _uiState.value.selectedSession ?: return
+        showRenameDialogForSession(session)
+    }
+
+    fun showRenameDialogForSession(row: SessionRow) {
+        _uiState.update { current ->
+            current.copy(
+                renameDialogVisible = true,
+                renameState = RenameSessionUiState(
+                    sessionId = row.id,
+                    name = row.name,
+                ),
+            )
+        }
+    }
+
+    fun hideRenameDialog() {
+        _uiState.update { current ->
+            current.copy(
+                renameDialogVisible = false,
+                renameState = RenameSessionUiState(),
+            )
+        }
+    }
+
+    fun onRenameNameChanged(name: String) {
+        _uiState.update { current ->
+            current.copy(
+                renameState = current.renameState.copy(
+                    name = name,
+                    error = null,
+                ),
+            )
+        }
+    }
+
+    fun submitRename() {
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val renameState = _uiState.value.renameState
+        val name = renameState.name.trim()
+
+        if (name.isEmpty()) {
+            _uiState.update { current ->
+                current.copy(renameState = current.renameState.copy(error = "Enter a session name"))
+            }
+            return
+        }
+
+        if (name.length > SESSION_NAME_MAX_LENGTH) {
+            _uiState.update { current ->
+                current.copy(
+                    renameState = current.renameState.copy(
+                        error = "Name must be $SESSION_NAME_MAX_LENGTH characters or fewer",
+                    ),
+                )
+            }
+            return
+        }
+
+        _uiState.update { current ->
+            current.copy(renameState = current.renameState.copy(submitting = true, error = null))
+        }
+
+        viewModelScope.launch {
+            operatorRepository.updateSession(
+                serverOrigin = paired.serverOrigin,
+                sessionId = renameState.sessionId,
+                body = UpdateSessionBody(name = name),
+            ).fold(
+                onSuccess = { updated ->
+                    _uiState.update { current ->
+                        current.copy(
+                            renameDialogVisible = false,
+                            renameState = RenameSessionUiState(),
+                            sessions = current.sessions.map { row ->
+                                if (row.id == updated.id) {
+                                    row.copy(name = updated.name)
+                                } else {
+                                    row
+                                }
+                            },
+                            selectedSession = current.selectedSession?.let { selected ->
+                                if (selected.id == updated.id) {
+                                    selected.copy(name = updated.name)
+                                } else {
+                                    selected
+                                }
+                            },
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update { current ->
+                        current.copy(
+                            renameState = current.renameState.copy(
+                                submitting = false,
+                                error = errorMessage(error),
+                            ),
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun showArchiveDialog() {
+        _uiState.update { current ->
+            current.copy(
+                archiveDialogVisible = true,
+                archiveError = null,
+            )
+        }
+    }
+
+    fun hideArchiveDialog() {
+        _uiState.update { current ->
+            current.copy(
+                archiveDialogVisible = false,
+                archiveSubmitting = false,
+                archiveError = null,
+            )
+        }
+    }
+
+    fun submitArchive() {
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val session = _uiState.value.selectedSession ?: return
+
+        _uiState.update { current ->
+            current.copy(archiveSubmitting = true, archiveError = null)
+        }
+
+        viewModelScope.launch {
+            operatorRepository.archiveSession(
+                serverOrigin = paired.serverOrigin,
+                sessionId = session.id,
+            ).fold(
+                onSuccess = { archived ->
+                    hideArchiveDialog()
+                    removeSessionFromActiveWorkflow(sessionId = archived.id)
+                },
+                onFailure = { error ->
+                    _uiState.update { current ->
+                        current.copy(
+                            archiveSubmitting = false,
+                            archiveError = errorMessage(error),
+                        )
+                    }
+                },
+            )
+        }
+    }
+
     fun selectSession(row: SessionRow) {
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
 
@@ -311,6 +500,7 @@ class ChatViewModel(
 
     private fun applySessionEvents(sessionId: String, frame: List<EventEnvelope>) {
         _uiState.update { current ->
+            val nextSessions = applySessionListStateEvents(current.sessions, frame)
             val nextTranscript = foldTranscriptEvents(
                 state = current.transcript,
                 events = frame,
@@ -319,16 +509,32 @@ class ChatViewModel(
             val nextSessionState = resolveEffectiveSessionState(
                 sessionId = sessionId,
                 transcriptSessionState = nextTranscript.sessionState,
-                listSessionState = current.selectedSession?.state,
+                listSessionState = nextSessions.firstOrNull { row -> row.id == sessionId }?.state
+                    ?: current.selectedSession?.state,
             )
 
+            val selectedStillActive = nextSessions.any { row -> row.id == sessionId }
+            val nextSelected = when {
+                current.selectedSession?.id != sessionId -> current.selectedSession
+                !selectedStillActive -> null
+                else -> current.selectedSession?.let { session ->
+                    val listRow = nextSessions.first { row -> row.id == sessionId }
+                    nextSessionState?.let { session.copy(state = it, name = listRow.name) }
+                        ?: session.copy(name = listRow.name)
+                }
+            }
+
             current.copy(
+                sessions = nextSessions,
                 transcript = nextTranscript,
                 streamReconnecting = false,
-                selectedSession = current.selectedSession?.let { session ->
-                    nextSessionState?.let { session.copy(state = it) } ?: session
-                },
+                selectedSession = nextSelected,
             )
+        }
+
+        if (_uiState.value.selectedSession == null && activeSessionId == sessionId) {
+            viewModelScope.launch { clearPersistedSession() }
+            stopSessionStream()
         }
     }
 
@@ -354,9 +560,11 @@ class ChatViewModel(
 
         sessionsResult.fold(
             onSuccess = { collection ->
-                val rows = collection.items.map { session ->
-                    session.toSessionRow(workspaceLabels, agentLabels)
-                }
+                val rows = collection.items
+                    .filter { session -> session.state != SessionState.Archived }
+                    .map { session ->
+                        session.toSessionRow(workspaceLabels, agentLabels)
+                    }
                 _uiState.update { current ->
                     current.copy(
                         sessions = rows,
@@ -436,6 +644,29 @@ class ChatViewModel(
         savedStateHandle[KEY_SELECTED_SESSION_ID] = sessionId
     }
 
+    private suspend fun clearPersistedSession() {
+        savedStateHandle.remove<String>(KEY_SELECTED_SESSION_ID)
+        navigationPreferences.clearLastSessionId()
+    }
+
+    private fun removeSessionFromActiveWorkflow(sessionId: String) {
+        stopSessionStream()
+        viewModelScope.launch {
+            clearPersistedSession()
+        }
+        _uiState.update { current ->
+            current.copy(
+                sessions = current.sessions.filterNot { row -> row.id == sessionId },
+                selectedSession = null,
+                transcript = emptyTranscript,
+                composerText = "",
+                composerError = null,
+                cancelError = null,
+                pickerVisible = false,
+            )
+        }
+    }
+
     private fun Session.toSessionRow(
         workspaceLabels: Map<String, String>,
         agentLabels: Map<AgentId, String>,
@@ -465,6 +696,7 @@ class ChatViewModel(
 
     companion object {
         const val KEY_SELECTED_SESSION_ID = "selected_session_id"
+        const val SESSION_NAME_MAX_LENGTH = 120
     }
 }
 

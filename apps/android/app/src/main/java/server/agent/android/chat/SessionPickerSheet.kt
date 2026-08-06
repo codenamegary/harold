@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,6 +15,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -26,6 +28,7 @@ fun SessionPickerSheet(
     uiState: ChatUiState,
     onDismiss: () -> Unit,
     onSessionClick: (SessionRow) -> Unit,
+    onRenameSessionClick: (SessionRow) -> Unit,
     onCreateClick: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -72,6 +75,7 @@ fun SessionPickerSheet(
                             SessionPickerRow(
                                 session = session,
                                 onClick = { onSessionClick(session) },
+                                onRenameClick = { onRenameSessionClick(session) },
                             )
                         }
                     }
@@ -94,6 +98,7 @@ fun SessionPickerSheet(
 private fun SessionPickerRow(
     session: SessionRow,
     onClick: () -> Unit,
+    onRenameClick: () -> Unit,
 ) {
     Card(
         onClick = onClick,
@@ -101,20 +106,34 @@ private fun SessionPickerRow(
             .fillMaxWidth()
             .testTag("session_row_${session.id}"),
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(text = session.name, style = MaterialTheme.typography.titleMedium)
-            Text(
-                text = "${session.workspaceLabel} · ${session.agentLabel}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = session.state.name,
-                style = MaterialTheme.typography.labelSmall,
-            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(text = session.name, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = "${session.workspaceLabel} · ${session.agentLabel}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = sessionStatusLabel(session.state),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+
+            TextButton(
+                onClick = onRenameClick,
+                modifier = Modifier.testTag("session_rename_${session.id}"),
+            ) {
+                Text(text = "Rename")
+            }
         }
     }
 }

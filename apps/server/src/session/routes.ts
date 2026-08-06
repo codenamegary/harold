@@ -95,7 +95,10 @@ export const registerSessionRoutes = (
 
     void started.completion.finally(() => {
       const current = sessionRepository.getById({ id: params.sessionId })
-      if (current.ok && current.value.state === "running") {
+      if (
+        current.ok &&
+        (current.value.state === "running" || current.value.state === "stopping")
+      ) {
         sessionService.markIdle({ id: params.sessionId })
       }
     })
@@ -374,7 +377,7 @@ export const registerSessionRoutes = (
       return sendProblem(reply, 409, buildSessionArchivedProblem())
     }
 
-    if (existing.value.state === "running") {
+    if (existing.value.state === "running" || existing.value.state === "stopping") {
       return sendProblem(reply, 409, buildTurnInProgressProblem())
     }
 
@@ -474,11 +477,17 @@ export const registerSessionRoutes = (
       return sendProblem(reply, 409, buildNoActiveTurnProblem())
     }
 
+    const stopping = sessionService.markStopping({ id: sessionId })
+    if (!stopping.ok) {
+      return sendProblem(reply, 404, buildSessionNotFoundProblem())
+    }
+
     const cancelled = await acpSupervisor.cancelAcpSession({
       acpSessionId: binding.value.acpSessionId,
     })
 
     if (!cancelled.ok) {
+      sessionService.markRunning({ id: sessionId })
       return sendProblem(reply, 409, buildAcpUnavailableProblem(cancelled.reason))
     }
 

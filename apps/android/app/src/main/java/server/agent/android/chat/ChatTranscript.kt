@@ -19,6 +19,7 @@ import server.agent.android.contracts.ToolCallStatus
 fun ChatTranscript(
     rows: List<TranscriptRow>,
     showProgress: Boolean,
+    progressMessage: String?,
     emptyMessage: String?,
     modifier: Modifier = Modifier,
 ) {
@@ -42,7 +43,7 @@ fun ChatTranscript(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 CircularProgressIndicator()
-                Text(text = "Session running…")
+                Text(text = progressMessage ?: "Session running…")
             }
         }
 

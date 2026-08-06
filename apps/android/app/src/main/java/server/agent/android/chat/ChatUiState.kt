@@ -36,6 +36,13 @@ data class CreateSessionUiState(
     val error: String? = null,
 )
 
+data class RenameSessionUiState(
+    val sessionId: String = "",
+    val name: String = "",
+    val submitting: Boolean = false,
+    val error: String? = null,
+)
+
 data class ChatUiState(
     val connectionBanner: String? = null,
     val selectedSession: SessionRow? = null,
@@ -49,6 +56,13 @@ data class ChatUiState(
     val composerText: String = "",
     val composerSubmitting: Boolean = false,
     val composerError: String? = null,
+    val cancelSubmitting: Boolean = false,
+    val cancelError: String? = null,
+    val renameDialogVisible: Boolean = false,
+    val renameState: RenameSessionUiState = RenameSessionUiState(),
+    val archiveDialogVisible: Boolean = false,
+    val archiveSubmitting: Boolean = false,
+    val archiveError: String? = null,
     val streamReconnecting: Boolean = false,
 ) {
     val effectiveSessionState: SessionState?
@@ -72,8 +86,14 @@ data class ChatUiState(
     val composerBlockedMessage: String?
         get() = composerBlockedMessage(effectiveSessionState)
 
+    val showComposerCancel: Boolean
+        get() = showComposerCancel(effectiveSessionState) && !cancelSubmitting
+
+    val sessionProgressMessage: String?
+        get() = sessionProgressMessage(effectiveSessionState)
+
     val showProgress: Boolean
-        get() = isSessionRunning(effectiveSessionState)
+        get() = sessionProgressMessage != null
 
     val emptyTranscriptMessage: String?
         get() = when {
@@ -81,4 +101,7 @@ data class ChatUiState(
             transcript.rows.isEmpty() && !showProgress -> "Send a message to begin."
             else -> null
         }
+
+    val showSelectSessionCta: Boolean
+        get() = selectedSession == null && !sessionsLoading
 }

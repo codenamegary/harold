@@ -30,6 +30,7 @@ import server.agent.android.contracts.PromptSessionBody
 import server.agent.android.contracts.PromptSessionResponse
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionState
+import server.agent.android.contracts.UpdateSessionBody
 import server.agent.android.contracts.Workspace
 import server.agent.android.contracts.WorkspaceCollection
 import server.agent.android.contracts.WorkspaceState
@@ -195,6 +196,83 @@ class ChatViewModelTest {
         assertEquals(2, viewModel.uiState.value.transcript.rows.size)
     }
 
+    @Test
+    fun cancelSessionCallsRepository() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository()
+        val eventSource = FakeSessionEventSource()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            eventSource = eventSource,
+        )
+
+        advanceUntilIdle()
+        eventSource.emit(
+            listOf(sessionState(cursor = "1", state = SessionState.Running, sessionId = "sess_02")),
+        )
+        advanceUntilIdle()
+        viewModel.submitCancel()
+        advanceUntilIdle()
+
+        assertEquals(listOf("sess_02"), repository.cancelCalls)
+    }
+
+    @Test
+    fun renameSessionUpdatesListAndHeader() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+        )
+
+        advanceUntilIdle()
+        viewModel.showRenameDialog()
+        viewModel.onRenameNameChanged("Renamed session")
+        viewModel.submitRename()
+        advanceUntilIdle()
+
+        assertEquals("Renamed session", viewModel.uiState.value.selectedSession?.name)
+        assertEquals(
+            "Renamed session",
+            viewModel.uiState.value.sessions.first { it.id == "sess_02" }.name,
+        )
+    }
+
+    @Test
+    fun archiveSessionClearsSelection() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository()
+        val navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02")
+        val viewModel = createViewModel(repository, navigation)
+
+        advanceUntilIdle()
+        viewModel.submitArchive()
+        advanceUntilIdle()
+
+        assertEquals(null, viewModel.uiState.value.selectedSession)
+        assertTrue(viewModel.uiState.value.sessions.none { it.id == "sess_02" })
+        assertEquals(null, navigation.savedSessionId)
+    }
+
+    @Test
+    fun sessionStateEventUpdatesListRow() = runTest(dispatcher) {
+        val eventSource = FakeSessionEventSource()
+        val viewModel = createViewModel(
+            repository = ChatFakeOperatorRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            eventSource = eventSource,
+        )
+
+        advanceUntilIdle()
+
+        eventSource.emit(
+            listOf(sessionState(cursor = "1", state = SessionState.Stopping, sessionId = "sess_02")),
+        )
+        advanceUntilIdle()
+
+        assertEquals(SessionState.Stopping, viewModel.uiState.value.sessions.first { it.id == "sess_02" }.state)
+        assertEquals(SessionState.Stopping, viewModel.uiState.value.effectiveSessionState)
+    }
+
     private fun createViewModel(
         repository: ChatFakeOperatorRepository,
         navigation: ChatFakeNavigationPreferences,
@@ -244,7 +322,9 @@ private class ChatFakeNavigationPreferences(
         savedSessionId = sessionId
     }
 
-    override suspend fun clearLastSessionId() = Unit
+    override suspend fun clearLastSessionId() {
+        savedSessionId = null
+    }
 }
 
 private class FakeSessionEventSource : SessionEventSource {
@@ -275,6 +355,9 @@ private class ChatFakeOperatorRepository : OperatorRepository {
     val selectCalls = mutableListOf<String>()
     val createCalls = mutableListOf<CreateSessionBody>()
     val promptCalls = mutableListOf<PromptSessionBody>()
+    val cancelCalls = mutableListOf<String>()
+    val updateCalls = mutableListOf<UpdateSessionBody>()
+    val archiveCalls = mutableListOf<String>()
     private val createdSessions = mutableListOf<Session>()
 
     override suspend fun listWorkspaces(
@@ -362,6 +445,36 @@ private class ChatFakeOperatorRepository : OperatorRepository {
     ): Result<PromptSessionResponse> {
         promptCalls += body
         return Result.success(PromptSessionResponse(turnId = "turn_follow_up"))
+    }
+
+    override suspend fun updateSession(
+        serverOrigin: String,
+        sessionId: String,
+        body: UpdateSessionBody,
+    ): Result<Session> {
+        updateCalls += body
+        return Result.success(session(sessionId, body.name))
+    }
+
+    override suspend fun cancelSession(
+        serverOrigin: String,
+        sessionId: String,
+    ): Result<server.agent.android.contracts.CancelSessionResponse> {
+        cancelCalls += sessionId
+        return Result.success(server.agent.android.contracts.CancelSessionResponse(turnId = "turn_cancel"))
+    }
+
+    override suspend fun archiveSession(
+        serverOrigin: String,
+        sessionId: String,
+    ): Result<Session> {
+        archiveCalls += sessionId
+        return Result.success(
+            session(sessionId, "Archived").copy(
+                state = SessionState.Archived,
+                archivedAt = "2026-08-06T00:00:00.000Z",
+            ),
+        )
     }
 
     private fun session(id: String, name: String): Session = Session(

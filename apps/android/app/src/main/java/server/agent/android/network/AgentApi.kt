@@ -1,10 +1,12 @@
 package server.agent.android.network
 
 import server.agent.android.contracts.AgentSettingsCollection
+import server.agent.android.contracts.CancelSessionResponse
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateSessionResponse
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionCollection
+import server.agent.android.contracts.UpdateSessionBody
 import server.agent.android.contracts.WorkspaceCollection
 
 sealed interface AgentApiError {
@@ -61,4 +63,20 @@ interface AgentApi {
         sessionId: String,
         body: server.agent.android.contracts.PromptSessionBody,
     ): Result<server.agent.android.contracts.PromptSessionResponse>
+
+    suspend fun updateSession(
+        serverOrigin: String,
+        sessionId: String,
+        body: UpdateSessionBody,
+    ): Result<Session>
+
+    suspend fun cancelSession(
+        serverOrigin: String,
+        sessionId: String,
+    ): Result<CancelSessionResponse>
+
+    suspend fun archiveSession(
+        serverOrigin: String,
+        sessionId: String,
+    ): Result<Session>
 }

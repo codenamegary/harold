@@ -1,8 +1,5 @@
 package server.agent.android.chat
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -11,6 +8,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -66,6 +66,7 @@ class ChatScreenTest {
                     onWorkspacesClick = {},
                     onDismissPicker = {},
                     onSessionClick = {},
+                    onRenameSessionClick = {},
                     onCreateClick = {},
                     onDismissCreate = {},
                     onCreateWorkspaceChanged = {},
@@ -76,6 +77,14 @@ class ChatScreenTest {
                         uiState = uiState.copy(composerText = text)
                     },
                     onComposerSubmit = { submitted = true },
+                    onComposerCancel = {},
+                    onRenameClick = {},
+                    onDismissRename = {},
+                    onRenameNameChanged = {},
+                    onRenameSubmit = {},
+                    onArchiveClick = {},
+                    onDismissArchive = {},
+                    onArchiveSubmit = {},
                 )
             }
         }
@@ -92,7 +101,7 @@ class ChatScreenTest {
     }
 
     @Test
-    fun disablesComposerWhileSessionRunning() {
+    fun disablesComposerWhileSessionRunningAndShowsCancel() {
         composeTestRule.setContent {
             AgentServerTheme(dynamicColor = false) {
                 ChatScreen(
@@ -112,6 +121,7 @@ class ChatScreenTest {
                     onWorkspacesClick = {},
                     onDismissPicker = {},
                     onSessionClick = {},
+                    onRenameSessionClick = {},
                     onCreateClick = {},
                     onDismissCreate = {},
                     onCreateWorkspaceChanged = {},
@@ -120,11 +130,54 @@ class ChatScreenTest {
                     onCreateSubmit = {},
                     onComposerTextChanged = {},
                     onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onRenameClick = {},
+                    onDismissRename = {},
+                    onRenameNameChanged = {},
+                    onRenameSubmit = {},
+                    onArchiveClick = {},
+                    onDismissArchive = {},
+                    onArchiveSubmit = {},
                 )
             }
         }
 
         composeTestRule.onNodeWithTag("chat_composer").assertIsNotEnabled()
         composeTestRule.onNodeWithTag("chat_progress").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("chat_cancel_button").assertIsDisplayed()
+    }
+
+    @Test
+    fun showsSelectSessionCtaWhenNoSessionSelected() {
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(selectedSession = null),
+                    onSessionSelectorClick = {},
+                    onWorkspacesClick = {},
+                    onDismissPicker = {},
+                    onSessionClick = {},
+                    onRenameSessionClick = {},
+                    onCreateClick = {},
+                    onDismissCreate = {},
+                    onCreateWorkspaceChanged = {},
+                    onCreateAgentChanged = {},
+                    onCreatePromptChanged = {},
+                    onCreateSubmit = {},
+                    onComposerTextChanged = {},
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onRenameClick = {},
+                    onDismissRename = {},
+                    onRenameNameChanged = {},
+                    onRenameSubmit = {},
+                    onArchiveClick = {},
+                    onDismissArchive = {},
+                    onArchiveSubmit = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("select_session_cta").assertIsDisplayed()
     }
 }

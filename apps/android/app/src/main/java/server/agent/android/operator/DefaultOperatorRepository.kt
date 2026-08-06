@@ -34,4 +34,20 @@ class DefaultOperatorRepository(
         sessionId: String,
         body: server.agent.android.contracts.PromptSessionBody,
     ) = agentApi.promptSession(serverOrigin, sessionId, body)
+
+    override suspend fun updateSession(
+        serverOrigin: String,
+        sessionId: String,
+        body: server.agent.android.contracts.UpdateSessionBody,
+    ) = agentApi.updateSession(serverOrigin, sessionId, body)
+
+    override suspend fun cancelSession(
+        serverOrigin: String,
+        sessionId: String,
+    ) = agentApi.cancelSession(serverOrigin, sessionId)
+
+    override suspend fun archiveSession(
+        serverOrigin: String,
+        sessionId: String,
+    ) = agentApi.archiveSession(serverOrigin, sessionId)
 }
