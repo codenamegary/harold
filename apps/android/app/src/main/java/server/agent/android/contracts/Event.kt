@@ -38,6 +38,9 @@ enum class EventType {
     @SerialName("session.permission.requested")
     SessionPermissionRequested,
 
+    @SerialName("session.permission.resolved")
+    SessionPermissionResolved,
+
     @SerialName("turn.started")
     TurnStarted,
 

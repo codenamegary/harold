@@ -52,4 +52,16 @@ interface OperatorRepository {
         serverOrigin: String,
         sessionId: String,
     ): Result<Session>
+
+    suspend fun listPendingPermissions(
+        serverOrigin: String,
+        sessionId: String,
+    ): Result<List<server.agent.android.contracts.PermissionRequest>>
+
+    suspend fun resolvePermission(
+        serverOrigin: String,
+        sessionId: String,
+        requestId: String,
+        optionId: String,
+    ): Result<server.agent.android.contracts.PermissionRequest>
 }

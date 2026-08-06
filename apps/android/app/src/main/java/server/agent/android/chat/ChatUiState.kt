@@ -1,6 +1,7 @@
 package server.agent.android.chat
 
 import server.agent.android.contracts.AgentId
+import server.agent.android.contracts.PermissionRequest
 import server.agent.android.contracts.SessionState
 import server.agent.android.contracts.WorkspaceState
 
@@ -43,6 +44,11 @@ data class RenameSessionUiState(
     val error: String? = null,
 )
 
+data class PermissionUiState(
+    val submittingOptionId: String? = null,
+    val error: String? = null,
+)
+
 data class ChatUiState(
     val connectionBanner: String? = null,
     val selectedSession: SessionRow? = null,
@@ -64,7 +70,12 @@ data class ChatUiState(
     val archiveSubmitting: Boolean = false,
     val archiveError: String? = null,
     val streamReconnecting: Boolean = false,
+    val pendingPermissions: List<PermissionRequest> = emptyList(),
+    val permissionUiState: PermissionUiState = PermissionUiState(),
 ) {
+    val activePermissionRequest: PermissionRequest?
+        get() = activePermissionRequest(pendingPermissions)
+
     val effectiveSessionState: SessionState?
         get() = resolveEffectiveSessionState(
             sessionId = selectedSession?.id.orEmpty(),

@@ -250,6 +250,61 @@ class ChatViewModel(
         }
     }
 
+    fun submitPermissionOption(optionId: String) {
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val session = _uiState.value.selectedSession ?: return
+        val active = _uiState.value.activePermissionRequest ?: return
+
+        if (_uiState.value.permissionUiState.submittingOptionId != null) {
+            return
+        }
+
+        _uiState.update { current ->
+            current.copy(
+                permissionUiState = current.permissionUiState.copy(
+                    submittingOptionId = optionId,
+                    error = null,
+                ),
+            )
+        }
+
+        viewModelScope.launch {
+            operatorRepository.resolvePermission(
+                serverOrigin = paired.serverOrigin,
+                sessionId = session.id,
+                requestId = active.id,
+                optionId = optionId,
+            ).fold(
+                onSuccess = {
+                    _uiState.update { current ->
+                        current.copy(permissionUiState = PermissionUiState())
+                    }
+                },
+                onFailure = { error ->
+                    val apiError = (error as? AgentApiException)?.error
+                    val shouldRefresh = apiError is AgentApiError.Problem && apiError.status == HTTP_CONFLICT
+
+                    if (shouldRefresh) {
+                        refreshPendingPermissions(
+                            serverOrigin = paired.serverOrigin,
+                            sessionId = session.id,
+                            authoritative = true,
+                        )
+                    }
+
+                    _uiState.update { current ->
+                        current.copy(
+                            permissionUiState = current.permissionUiState.copy(
+                                submittingOptionId = null,
+                                error = errorMessage(error),
+                            ),
+                        )
+                    }
+                },
+            )
+        }
+    }
+
     fun submitCancel() {
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
         val session = _uiState.value.selectedSession ?: return
@@ -462,10 +517,13 @@ class ChatViewModel(
                         transcript = emptyTranscript,
                         composerText = "",
                         composerError = null,
+                        pendingPermissions = emptyList(),
+                        permissionUiState = PermissionUiState(),
                         streamReconnecting = false,
                     )
                 }
                 startSessionStream(serverOrigin, session.id)
+                loadPendingPermissions(serverOrigin, session.id)
             },
             onFailure = { error ->
                 _uiState.update { current ->
@@ -490,8 +548,13 @@ class ChatViewModel(
                 _uiState.update { current ->
                     current.copy(
                         transcript = emptyTranscript,
+                        pendingPermissions = emptyList(),
+                        permissionUiState = PermissionUiState(),
                         streamReconnecting = true,
                     )
+                }
+                viewModelScope.launch {
+                    refreshPendingPermissions(serverOrigin, sessionId)
                 }
             },
             onEvents = { frame -> applySessionEvents(sessionId, frame) },
@@ -524,9 +587,12 @@ class ChatViewModel(
                 }
             }
 
+            val nextPending = applyPermissionEvents(current.pendingPermissions, frame)
+
             current.copy(
                 sessions = nextSessions,
                 transcript = nextTranscript,
+                pendingPermissions = nextPending,
                 streamReconnecting = false,
                 selectedSession = nextSelected,
             )
@@ -662,9 +728,54 @@ class ChatViewModel(
                 composerText = "",
                 composerError = null,
                 cancelError = null,
+                pendingPermissions = emptyList(),
+                permissionUiState = PermissionUiState(),
                 pickerVisible = false,
             )
         }
+    }
+
+    private fun loadPendingPermissions(serverOrigin: String, sessionId: String) {
+        viewModelScope.launch {
+            operatorRepository.listPendingPermissions(serverOrigin, sessionId).fold(
+                onSuccess = { items ->
+                    _uiState.update { current ->
+                        current.copy(pendingPermissions = items)
+                    }
+                },
+                onFailure = {
+                    _uiState.update { current ->
+                        current.copy(pendingPermissions = emptyList())
+                    }
+                },
+            )
+        }
+    }
+
+    private suspend fun refreshPendingPermissions(
+        serverOrigin: String,
+        sessionId: String,
+        authoritative: Boolean = false,
+    ) {
+        operatorRepository.listPendingPermissions(serverOrigin, sessionId).fold(
+            onSuccess = { items ->
+                _uiState.update { current ->
+                    current.copy(
+                        pendingPermissions = if (authoritative) {
+                            items
+                        } else {
+                            mergePendingRead(current.pendingPermissions, items)
+                        },
+                        permissionUiState = PermissionUiState(),
+                    )
+                }
+            },
+            onFailure = {
+                _uiState.update { current ->
+                    current.copy(pendingPermissions = emptyList())
+                }
+            },
+        )
     }
 
     private fun Session.toSessionRow(
@@ -697,6 +808,7 @@ class ChatViewModel(
     companion object {
         const val KEY_SELECTED_SESSION_ID = "selected_session_id"
         const val SESSION_NAME_MAX_LENGTH = 120
+        private const val HTTP_CONFLICT = 409
     }
 }
 

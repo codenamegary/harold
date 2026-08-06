@@ -4,6 +4,9 @@ import server.agent.android.contracts.AgentSettingsCollection
 import server.agent.android.contracts.CancelSessionResponse
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateSessionResponse
+import server.agent.android.contracts.PermissionRequest
+import server.agent.android.contracts.PermissionRequestCollection
+import server.agent.android.contracts.ResolvePermissionRequestBody
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionCollection
 import server.agent.android.contracts.UpdateSessionBody
@@ -79,4 +82,16 @@ interface AgentApi {
         serverOrigin: String,
         sessionId: String,
     ): Result<Session>
+
+    suspend fun listPendingPermissions(
+        serverOrigin: String,
+        sessionId: String,
+    ): Result<PermissionRequestCollection>
+
+    suspend fun resolvePermission(
+        serverOrigin: String,
+        sessionId: String,
+        requestId: String,
+        body: ResolvePermissionRequestBody,
+    ): Result<PermissionRequest>
 }

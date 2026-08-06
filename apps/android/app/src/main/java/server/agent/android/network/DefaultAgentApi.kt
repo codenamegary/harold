@@ -21,6 +21,9 @@ import server.agent.android.contracts.PromptSessionResponse
 import server.agent.android.contracts.InternalProblem
 import server.agent.android.contracts.ItemCollection
 import server.agent.android.contracts.NotFoundProblem
+import server.agent.android.contracts.PermissionRequest
+import server.agent.android.contracts.PermissionRequestCollection
+import server.agent.android.contracts.ResolvePermissionRequestBody
 import server.agent.android.contracts.ProblemDetails
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionCollection
@@ -139,6 +142,30 @@ class DefaultAgentApi(
         body = "{}",
     ) { responseBody ->
         json.decodeFromString(Session.serializer(), responseBody)
+    }
+
+    override suspend fun listPendingPermissions(
+        serverOrigin: String,
+        sessionId: String,
+    ): Result<PermissionRequestCollection> = get(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/sessions/$sessionId/permissions",
+        query = mapOf("status" to "pending"),
+    ) { body ->
+        json.decodeFromString(ItemCollection.serializer(PermissionRequest.serializer()), body)
+    }
+
+    override suspend fun resolvePermission(
+        serverOrigin: String,
+        sessionId: String,
+        requestId: String,
+        body: ResolvePermissionRequestBody,
+    ): Result<PermissionRequest> = patch(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/sessions/$sessionId/permissions/$requestId",
+        body = json.encodeToString(ResolvePermissionRequestBody.serializer(), body),
+    ) { responseBody ->
+        json.decodeFromString(PermissionRequest.serializer(), responseBody)
     }
 
     private suspend fun <T> get(

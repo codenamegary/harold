@@ -21,6 +21,9 @@ import server.agent.android.contracts.Workspace
 import server.agent.android.contracts.AgentSettingsCollection
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateSessionResponse
+import server.agent.android.contracts.PermissionRequest
+import server.agent.android.contracts.PermissionRequestCollection
+import server.agent.android.contracts.ResolvePermissionRequestBody
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionCollection
 import server.agent.android.contracts.WorkspaceCollection
@@ -263,4 +266,16 @@ private class FakeAgentApi(
         serverOrigin: String,
         sessionId: String,
     ): Result<Session> = Result.failure(UnsupportedOperationException())
+
+    override suspend fun listPendingPermissions(
+        serverOrigin: String,
+        sessionId: String,
+    ): Result<PermissionRequestCollection> = Result.failure(UnsupportedOperationException())
+
+    override suspend fun resolvePermission(
+        serverOrigin: String,
+        sessionId: String,
+        requestId: String,
+        body: ResolvePermissionRequestBody,
+    ): Result<PermissionRequest> = Result.failure(UnsupportedOperationException())
 }

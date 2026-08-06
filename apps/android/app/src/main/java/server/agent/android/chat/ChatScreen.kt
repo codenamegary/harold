@@ -52,6 +52,7 @@ fun ChatScreen(
     onArchiveClick: () -> Unit,
     onDismissArchive: () -> Unit,
     onArchiveSubmit: () -> Unit,
+    onPermissionOptionSelect: (String) -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val sessionLabel = uiState.selectedSession?.name ?: "Select session"
@@ -193,6 +194,18 @@ fun ChatScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.testTag("composer_blocked_message"),
+                    )
+                }
+
+                uiState.activePermissionRequest?.let { request ->
+                    val sessionName = uiState.selectedSession?.name ?: "Session"
+                    PermissionPanel(
+                        request = request,
+                        sessionName = sessionName,
+                        submittingOptionId = uiState.permissionUiState.submittingOptionId,
+                        error = uiState.permissionUiState.error,
+                        onSelectOption = onPermissionOptionSelect,
+                        modifier = Modifier.padding(bottom = 8.dp),
                     )
                 }
 

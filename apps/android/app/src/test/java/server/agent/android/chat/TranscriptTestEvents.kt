@@ -1,6 +1,8 @@
 package server.agent.android.chat
 
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import server.agent.android.contracts.EventEnvelope
 import server.agent.android.contracts.EventType
@@ -146,6 +148,38 @@ internal fun turnFailed(
         put("turnId", JsonPrimitive(turnId))
         put("sessionId", JsonPrimitive(sessionId))
         put("failureCode", JsonPrimitive("agent_error"))
+    },
+)
+
+internal fun permissionRequested(
+    cursor: String,
+    sessionId: String = "sess_01",
+    requestId: String = "perm_01",
+): EventEnvelope = EventEnvelope(
+    type = server.agent.android.contracts.EventType.SessionPermissionRequested,
+    cursor = cursor,
+    occurredAt = "2026-08-06T00:00:00.000Z",
+    sessionId = sessionId,
+    payload = buildJsonObject {
+        put("requestId", JsonPrimitive(requestId))
+        put("turnId", JsonPrimitive("turn_01"))
+        put("toolCallId", JsonPrimitive("tool_01"))
+        put("toolName", JsonPrimitive("fake-tool"))
+        put(
+            "options",
+            buildJsonArray {
+                addJsonObject {
+                    put("optionId", JsonPrimitive("allow-once"))
+                    put("name", JsonPrimitive("Allow once"))
+                    put("kind", JsonPrimitive("allow"))
+                }
+                addJsonObject {
+                    put("optionId", JsonPrimitive("reject-once"))
+                    put("name", JsonPrimitive("Reject once"))
+                    put("kind", JsonPrimitive("deny"))
+                }
+            },
+        )
     },
 )
 

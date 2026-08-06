@@ -50,4 +50,23 @@ class DefaultOperatorRepository(
         serverOrigin: String,
         sessionId: String,
     ) = agentApi.archiveSession(serverOrigin, sessionId)
+
+    override suspend fun listPendingPermissions(
+        serverOrigin: String,
+        sessionId: String,
+    ) = agentApi.listPendingPermissions(serverOrigin, sessionId).map { collection ->
+        collection.items
+    }
+
+    override suspend fun resolvePermission(
+        serverOrigin: String,
+        sessionId: String,
+        requestId: String,
+        optionId: String,
+    ) = agentApi.resolvePermission(
+        serverOrigin = serverOrigin,
+        sessionId = sessionId,
+        requestId = requestId,
+        body = server.agent.android.contracts.ResolvePermissionRequestBody(optionId = optionId),
+    )
 }
