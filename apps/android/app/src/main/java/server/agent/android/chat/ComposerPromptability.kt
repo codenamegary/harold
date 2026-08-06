@@ -1,0 +1,47 @@
+package server.agent.android.chat
+
+import server.agent.android.contracts.SessionState
+
+fun resolveEffectiveSessionState(
+    sessionId: String,
+    transcriptSessionState: SessionState?,
+    listSessionState: SessionState?,
+): SessionState? {
+    if (sessionId.isEmpty()) {
+        return null
+    }
+
+    return transcriptSessionState ?: listSessionState
+}
+
+fun isComposerPromptable(
+    workspaceId: String,
+    agentId: server.agent.android.contracts.AgentId?,
+    sessionId: String,
+    sessionState: SessionState?,
+): Boolean {
+    if (workspaceId.isEmpty() || agentId == null) {
+        return false
+    }
+
+    if (sessionId.isEmpty()) {
+        return true
+    }
+
+    return sessionState == SessionState.Idle
+}
+
+fun composerBlockedMessage(sessionState: SessionState?): String? =
+    when (sessionState) {
+        SessionState.Offline ->
+            "Session reconnecting. Prompts unlock when it is idle again."
+        SessionState.Error ->
+            "Session ended with an error. Start a new session to continue."
+        else -> null
+    }
+
+fun isSessionRunning(sessionState: SessionState?): Boolean =
+    sessionState == SessionState.Running ||
+        sessionState == SessionState.Starting ||
+        sessionState == SessionState.AwaitingPermission ||
+        sessionState == SessionState.Stopping

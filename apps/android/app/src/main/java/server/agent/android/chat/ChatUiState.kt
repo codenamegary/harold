@@ -7,7 +7,9 @@ import server.agent.android.contracts.WorkspaceState
 data class SessionRow(
     val id: String,
     val name: String,
+    val workspaceId: String,
     val workspaceLabel: String,
+    val agentId: AgentId,
     val agentLabel: String,
     val state: SessionState,
 )
@@ -43,5 +45,40 @@ data class ChatUiState(
     val pickerVisible: Boolean = false,
     val createDialogVisible: Boolean = false,
     val createState: CreateSessionUiState = CreateSessionUiState(),
-    val placeholderMessage: String = "Streaming chat arrives in the next story.",
-)
+    val transcript: TranscriptState = emptyTranscript,
+    val composerText: String = "",
+    val composerSubmitting: Boolean = false,
+    val composerError: String? = null,
+    val streamReconnecting: Boolean = false,
+) {
+    val effectiveSessionState: SessionState?
+        get() = resolveEffectiveSessionState(
+            sessionId = selectedSession?.id.orEmpty(),
+            transcriptSessionState = transcript.sessionState,
+            listSessionState = selectedSession?.state,
+        )
+
+    val composerEnabled: Boolean
+        get() {
+            val session = selectedSession ?: return false
+            return isComposerPromptable(
+                workspaceId = session.workspaceId,
+                agentId = session.agentId,
+                sessionId = session.id,
+                sessionState = effectiveSessionState,
+            ) && !composerSubmitting && !streamReconnecting
+        }
+
+    val composerBlockedMessage: String?
+        get() = composerBlockedMessage(effectiveSessionState)
+
+    val showProgress: Boolean
+        get() = isSessionRunning(effectiveSessionState)
+
+    val emptyTranscriptMessage: String?
+        get() = when {
+            selectedSession == null -> "Select a session to start chatting."
+            transcript.rows.isEmpty() && !showProgress -> "Send a message to begin."
+            else -> null
+        }
+}

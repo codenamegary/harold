@@ -28,4 +28,10 @@ class DefaultOperatorRepository(
         serverOrigin: String,
         sessionId: String,
     ) = agentApi.selectSession(serverOrigin, sessionId)
+
+    override suspend fun promptSession(
+        serverOrigin: String,
+        sessionId: String,
+        body: server.agent.android.contracts.PromptSessionBody,
+    ) = agentApi.promptSession(serverOrigin, sessionId, body)
 }

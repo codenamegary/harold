@@ -143,4 +143,11 @@ private class WorkspacesFakeOperatorRepository(
         sessionId: String,
     ): Result<server.agent.android.contracts.Session> =
         Result.failure(UnsupportedOperationException())
+
+    override suspend fun promptSession(
+        serverOrigin: String,
+        sessionId: String,
+        body: server.agent.android.contracts.PromptSessionBody,
+    ): Result<server.agent.android.contracts.PromptSessionResponse> =
+        Result.failure(UnsupportedOperationException())
 }

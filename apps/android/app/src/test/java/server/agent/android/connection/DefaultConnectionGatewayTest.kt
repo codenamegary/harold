@@ -255,7 +255,7 @@ private class ScriptedEventStream(
     val cursors = mutableListOf<String>()
     val connectedAt = mutableListOf<Long>()
 
-    override fun connect(cursor: String): Flow<StreamEvent> {
+    override fun connect(cursor: String, sessionId: String?): Flow<StreamEvent> {
         val index = cursors.size
         cursors += cursor
         connectedAt += now()

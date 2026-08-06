@@ -20,14 +20,18 @@ interface EventStream {
      * Opens a fresh socket per call and emits until it closes. Reconnecting means
      * calling this again with the last applied cursor, never reusing a dead socket.
      */
-    fun connect(cursor: String): Flow<StreamEvent>
+    fun connect(cursor: String, sessionId: String? = null): Flow<StreamEvent>
 }
 
 fun interface EventStreamFactory {
     fun create(serverOrigin: String): EventStream
 }
 
-fun eventStreamUrl(serverOrigin: String, cursor: String): String {
+fun eventStreamUrl(
+    serverOrigin: String,
+    cursor: String,
+    sessionId: String? = null,
+): String {
     val origin = serverOrigin.trim().trimEnd('/')
     val socketOrigin = when {
         origin.startsWith("https://") -> "wss://${origin.removePrefix("https://")}"
@@ -35,5 +39,12 @@ fun eventStreamUrl(serverOrigin: String, cursor: String): String {
         else -> origin
     }
 
-    return "$socketOrigin/v1/events?cursor=$cursor"
+    val query = buildString {
+        append("cursor=$cursor")
+        if (sessionId != null) {
+            append("&sessionId=$sessionId")
+        }
+    }
+
+    return "$socketOrigin/v1/events?$query"
 }

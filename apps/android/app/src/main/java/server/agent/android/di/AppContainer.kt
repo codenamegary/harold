@@ -42,6 +42,7 @@ interface AppContainer {
     val deviceNameProvider: () -> String
     val agentApi: AgentApi
     val connectionGateway: ConnectionGateway
+    val eventStreamFactory: EventStreamFactory
     val navigationPreferences: NavigationPreferences
     val operatorRepository: OperatorRepository
 }
@@ -77,10 +78,11 @@ class DefaultAppContainer(
     override val deviceNameProvider: () -> String = ::defaultDeviceName
 
     override val agentApi: AgentApi = DefaultAgentApi(client = authenticatedClient)
+    override val eventStreamFactory: EventStreamFactory = EventStreamFactory { serverOrigin ->
+        OkHttpEventStream(client = authenticatedClient, serverOrigin = serverOrigin)
+    }
     override val connectionGateway: ConnectionGateway = DefaultConnectionGateway(
-        streamFactory = EventStreamFactory { serverOrigin ->
-            OkHttpEventStream(client = authenticatedClient, serverOrigin = serverOrigin)
-        },
+        streamFactory = eventStreamFactory,
         scope = applicationScope,
     )
     override val navigationPreferences: NavigationPreferences = DefaultNavigationPreferences(context)
