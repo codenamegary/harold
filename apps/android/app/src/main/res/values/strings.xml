@@ -15,4 +15,10 @@
     <string name="pairing_submit">Claim pairing code</string>
     <string name="pairing_claiming">Claiming pairing code…</string>
     <string name="pairing_camera_permission_required">Camera permission is required to scan pairing QR codes.</string>
+    <string name="active_sessions_channel_name">Active sessions</string>
+    <string name="active_sessions_channel_description">Shows while Agent Server sessions are actively running</string>
+    <string name="notification_permission_title">Notifications required</string>
+    <string name="notification_permission_body">Active sessions cannot stay live in the background without notifications.</string>
+    <string name="notification_permission_open_settings">Open system settings</string>
+    <string name="notification_permission_not_now">Not now</string>
 </resources>

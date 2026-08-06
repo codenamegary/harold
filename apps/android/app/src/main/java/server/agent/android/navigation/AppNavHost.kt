@@ -103,6 +103,10 @@ fun AppNavHost(
                     operatorRepository = appContainer.operatorRepository,
                     navigationPreferences = appContainer.navigationPreferences,
                     eventStreamFactory = appContainer.eventStreamFactory,
+                    activeSessionTracker = appContainer.activeSessionTracker,
+                    sessionStreamBroker = appContainer.sessionStreamBroker,
+                    sessionForegroundCoordinator = appContainer.sessionForegroundCoordinator,
+                    openSessionRequests = appContainer.openSessionRequests,
                 ),
             )
             val chatUiState by chatViewModel.uiState.collectAsState()
@@ -134,6 +138,8 @@ fun AppNavHost(
                 onDismissArchive = chatViewModel::hideArchiveDialog,
                 onArchiveSubmit = chatViewModel::submitArchive,
                 onPermissionOptionSelect = chatViewModel::submitPermissionOption,
+                onNotificationPermissionResult = chatViewModel::onNotificationPermissionResult,
+                onDismissNotificationPermissionPrompt = chatViewModel::dismissNotificationPermissionPrompt,
             )
         }
 
