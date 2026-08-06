@@ -19,6 +19,7 @@ export const JournalRecordKindSchema = z.enum([
   "workspace.changed",
   "session.created",
   "session.state",
+  "session.permission.resolved",
   "turn.started",
   "turn.completed",
   "turn.failed",
@@ -92,9 +93,27 @@ const AcpResponsePayloadSchema = z.strictObject({
   success: z.boolean(),
 })
 
+const PermissionOptionKindSchema = z.enum(["allow", "deny", "other"])
+
+const PermissionOptionPayloadSchema = z.strictObject({
+  optionId: z.string().min(1),
+  name: z.string().min(1),
+  kind: PermissionOptionKindSchema.optional(),
+})
+
 const AcpPermissionPayloadSchema = z.strictObject({
+  requestId: IdSchema,
   toolCallId: ToolCallIdSchema,
   toolName: z.string().min(1),
+  options: z.array(PermissionOptionPayloadSchema).min(1),
+})
+
+const SessionPermissionResolvedPayloadSchema = z.strictObject({
+  requestId: IdSchema,
+  turnId: TurnIdSchema,
+  toolCallId: ToolCallIdSchema,
+  optionId: z.string().min(1),
+  outcome: z.enum(["selected", "cancelled"]),
 })
 
 const AgentMessageChunkNotificationPayloadSchema = z.strictObject({
@@ -173,6 +192,13 @@ export const JournalAppendRecordSchema = z.discriminatedUnion("kind", [
     workspaceId: IdSchema,
     sessionId: IdSchema,
     payload: SessionStatePayloadSchema,
+  }),
+  JournalAppendBaseSchema.extend({
+    kind: z.literal("session.permission.resolved"),
+    workspaceId: IdSchema,
+    sessionId: IdSchema,
+    turnId: TurnIdSchema,
+    payload: SessionPermissionResolvedPayloadSchema,
   }),
   JournalAppendBaseSchema.extend({
     kind: z.literal("turn.started"),
@@ -268,6 +294,7 @@ export const JournalStoredPayloadSchema = z.union([
   WorkspaceChangedPayloadSchema,
   SessionCreatedPayloadSchema,
   SessionStatePayloadSchema,
+  SessionPermissionResolvedPayloadSchema,
   TurnStartedPayloadSchema,
   TurnCompletedPayloadSchema,
   TurnFailedPayloadSchema,
@@ -285,6 +312,7 @@ export const journalPayloadSchemaByKind = {
   "workspace.changed": WorkspaceChangedPayloadSchema,
   "session.created": SessionCreatedPayloadSchema,
   "session.state": SessionStatePayloadSchema,
+  "session.permission.resolved": SessionPermissionResolvedPayloadSchema,
   "turn.started": TurnStartedPayloadSchema,
   "turn.completed": TurnCompletedPayloadSchema,
   "turn.failed": TurnFailedPayloadSchema,

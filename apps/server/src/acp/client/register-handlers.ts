@@ -6,11 +6,13 @@ import { resolveExtensionHandler } from "./extensions/types"
 import { isAcpJsonRpcError } from "../transport/json-rpc-error"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
 import { SessionBindingRegistry } from "./session-binding-registry"
+import { PermissionService } from "../../permission/service"
 
 export type RegisterAcpClientHandlersParams = {
   transport: JsonRpcTransport
   profile: AgentProfile
   sessionBindingRegistry: SessionBindingRegistry
+  permissionService: PermissionService
   logUnknownExtension?: (method: string) => void
 }
 
@@ -24,16 +26,16 @@ export const registerAcpClientHandlers = ({
   transport,
   profile,
   sessionBindingRegistry,
+  permissionService,
   logUnknownExtension = defaultLogUnknownExtension,
 }: RegisterAcpClientHandlersParams) => {
   const fsHandlers = createAcpFsHandlers({ sessionBindingRegistry })
   const terminalHandlers = createAcpTerminalHandlers({ sessionBindingRegistry })
-  const permissionHandlers = createAcpPermissionHandler()
+  const permissionHandlers = createAcpPermissionHandler({ permissionService })
 
   const coreHandlers: Record<string, AcpRequestHandler> = {
     ...fsHandlers,
     ...terminalHandlers,
-    ...permissionHandlers,
   }
 
   const registerHandler = (method: string, handler: AcpRequestHandler) => {
@@ -55,6 +57,15 @@ export const registerAcpClientHandlers = ({
 
   Object.entries(coreHandlers).forEach(([method, handler]) => {
     registerHandler(method, handler)
+  })
+
+  transport.onRequest("session/request_permission", async ({ id, params }) => {
+    await permissionHandlers.handlePermissionRequest({
+      jsonRpcId: id,
+      params,
+      respond: (result) => transport.respond(id, result),
+      respondError: (code, message) => transport.respondError(id, code, message),
+    })
   })
 
   Object.entries(profile.extensionHandlers).forEach(([method, handler]) => {

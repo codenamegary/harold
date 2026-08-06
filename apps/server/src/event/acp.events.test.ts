@@ -150,11 +150,20 @@ describe("projectAcpEvent", () => {
       turnId,
       phase: "live",
       method: "session/request_permission",
-      payload: { toolCallId: "tool-perm", toolName: "write_file" },
+      payload: {
+        requestId: "perm-1",
+        toolCallId: "tool-perm",
+        toolName: "write_file",
+        options: [{ optionId: "allow-once", name: "Allow once" }],
+      },
     }
 
     const events = projectAcpEvent(parseAcpJournalRecord(record), { outputChunksByTurnId: {} })
     expect(events[0]?.type).toBe("session.permission.requested")
+    expect(events[0]?.payload).toMatchObject({
+      requestId: "perm-1",
+      options: [{ optionId: "allow-once", name: "Allow once" }],
+    })
   })
 
   test("suppresses load_replay notifications from public stream", () => {

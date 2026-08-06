@@ -12,6 +12,7 @@ import {
   TurnIdSchema,
   WorkspaceChangeKindSchema,
 } from "./primitives"
+import { PermissionOptionSchema } from "../http/permission"
 
 const EventScopeSchema = z.object({
   cursor: EventCursorSchema,
@@ -101,9 +102,21 @@ export const EventSchema = z.discriminatedUnion("type", [
   EventScopeSchema.extend({
     type: z.literal("session.permission.requested"),
     payload: z.strictObject({
+      requestId: IdSchema,
       turnId: TurnIdSchema,
       toolCallId: ToolCallIdSchema,
       toolName: z.string().min(1),
+      options: z.array(PermissionOptionSchema).min(1),
+    }),
+  }),
+  EventScopeSchema.extend({
+    type: z.literal("session.permission.resolved"),
+    payload: z.strictObject({
+      requestId: IdSchema,
+      turnId: TurnIdSchema,
+      toolCallId: ToolCallIdSchema,
+      optionId: z.string().min(1),
+      outcome: z.enum(["selected", "cancelled"]),
     }),
   }),
   EventScopeSchema.extend({

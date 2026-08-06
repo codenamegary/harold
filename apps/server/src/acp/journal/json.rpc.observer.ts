@@ -3,10 +3,8 @@ import { AcpJournalWriter } from "./acp.journal.writer"
 import { hashToolCallIdForLog } from "./hash.tool.call.id"
 import {
   createAcpNotificationRecord,
-  createAcpPermissionRecord,
   createAcpRequestRecord,
   createAcpResponseRecord,
-  sanitizePermissionRequest,
   sanitizeSessionUpdate,
   shouldJournalAcpMethod,
 } from "./sanitize.acp.update"
@@ -105,37 +103,6 @@ export const createAcpJsonRpcJournalObserver = ({
     ])
   }
 
-  const handlePermissionRequest = (params: unknown) => {
-    const value = params as { sessionId?: string }
-    if (value.sessionId === undefined) {
-      return
-    }
-
-    const binding = sessionBindingRegistry.getBinding(value.sessionId)
-    if (binding === undefined || binding.activeTurnId === undefined) {
-      return
-    }
-
-    const payload = sanitizePermissionRequest(params)
-    if (payload === undefined) {
-      return
-    }
-
-    logToolCallId(hashToolCallIdForLog(payload.toolCallId))
-
-    journalWriter.appendAndPublish([
-      createAcpPermissionRecord({
-        occurredAt: nowIso(),
-        workspaceId: binding.workspaceId,
-        sessionId: binding.sessionId,
-        turnId: binding.activeTurnId,
-        protocolVersion: ACP_PROTOCOL_VERSION,
-        phase: binding.phase,
-        payload,
-      }),
-    ])
-  }
-
   return (event: JsonRpcObserverEvent) => {
     switch (event.kind) {
       case "outbound_request":
@@ -150,9 +117,6 @@ export const createAcpJsonRpcJournalObserver = ({
         }
         return
       case "inbound_request":
-        if (event.method === "session/request_permission") {
-          handlePermissionRequest(event.params)
-        }
         return
     }
   }

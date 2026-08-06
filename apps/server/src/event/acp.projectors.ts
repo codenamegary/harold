@@ -99,9 +99,11 @@ const projectPermissionRequested = (record: PermissionRecord): Event =>
     workspaceId: record.workspaceId,
     sessionId: record.sessionId,
     payload: {
+      requestId: record.payload.requestId,
       turnId: record.turnId,
       toolCallId: record.payload.toolCallId,
       toolName: record.payload.toolName,
+      options: record.payload.options,
     },
   })
 

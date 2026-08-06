@@ -4,6 +4,7 @@ import { JsonRpcTransport } from "../transport/json-rpc-transport"
 import { SpawnedAgentProcess } from "./spawn-agent-process"
 import { SessionBindingRegistry } from "../client/session-binding-registry"
 import { AcpJournalWriter } from "../journal/acp.journal.writer"
+import { PermissionService } from "../../permission/service"
 
 export type AcpSupervisorState = "stopped" | "starting" | "ready" | "error"
 
@@ -110,6 +111,7 @@ export type CreateAcpSupervisorParams = {
   agentSettingsRepository: AgentSettingsReader
   serverVersion: string
   journalWriter?: AcpJournalWriter
+  permissionService?: PermissionService
   onSessionUpdate?: SessionUpdateHandler
   onBeforeClearRuntime?: () => void
   onSupervisorReady?: () => void | Promise<void>

@@ -310,6 +310,27 @@ const handleSessionPrompt = (
     ...(config.emitToolUpdatesOnPrompt ? toolCallUpdates(sessionId) : []),
   ]
 
+  const permissionOutbound = config.emitPermissionRequestOnPrompt
+    ? [
+        permissionRequest(sessionId, [
+          { optionId: "allow-once", name: "Allow once" },
+          { optionId: "reject-once", name: "Reject once" },
+        ]),
+      ]
+    : []
+
+  if (permissionOutbound.length > 0) {
+    return {
+      holdPromptResponse: true,
+      outbound: permissionOutbound,
+      notifications: updates.slice(0, 1),
+      deferredNotifications: updates.slice(1).map((notification, index) => ({
+        delayMs: (index + 1) * 20,
+        notification,
+      })),
+    }
+  }
+
   if (updates.length === 0) {
     const requestId = promptState.completeNatural(sessionId)
     return {

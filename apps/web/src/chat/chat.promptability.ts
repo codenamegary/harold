@@ -46,5 +46,9 @@ export const composerBlockedMessage = (
     return "Session ended with an error. Start a new session to continue."
   }
 
+  if (sessionState === "awaiting-permission") {
+    return "Waiting for permission. Answer above to continue."
+  }
+
   return null
 }

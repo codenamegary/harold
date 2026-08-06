@@ -24,6 +24,7 @@ import { createSessionRepository } from "../session/repository"
 import { registerSessionRoutes } from "../session/routes"
 import { createWorkspaceService } from "../workspace/service"
 import { createSessionService } from "../session/service"
+import { createPermissionService } from "../permission/service"
 import { createDeviceRepository } from "../device/repository"
 import { createDeviceService } from "../device/service"
 import { registerDeviceRoutes } from "../device/routes"
@@ -185,12 +186,26 @@ export const createServer = async ({
 
   const supervisorRef: { current: AcpSupervisor | null } = { current: null }
 
+  const permissionService = createPermissionService({
+    getSessionBindingRegistry: () => {
+      const supervisor = supervisorRef.current
+      if (supervisor === null) {
+        throw new Error("ACP supervisor is not ready")
+      }
+      return supervisor.getSessionBindingRegistry()
+    },
+    sessionRepository,
+    sessionService,
+    journalWriter,
+  })
+
   const acpSupervisor =
     providedAcpSupervisor ??
     createAcpSupervisor({
       agentSettingsRepository,
       serverVersion: runtime.version,
       journalWriter,
+      permissionService,
       spawnAgentProcessFn,
       onBeforeClearRuntime: () => {
         if (!offlineOnBindingClear.enabled) {
@@ -286,6 +301,7 @@ export const createServer = async ({
     workspaceRepository,
     agentSettingsRepository,
     acpSupervisor,
+    permissionService,
   )
 
   const deviceService = createDeviceService({

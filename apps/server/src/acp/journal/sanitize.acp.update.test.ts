@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test"
 import { JournalAppendRecordSchema } from "contracts/events/journal-record"
 import {
   sanitizeOperatorPromptText,
-  sanitizePermissionRequest,
   sanitizeSessionUpdate,
   shouldJournalAcpMethod,
 } from "./sanitize.acp.update"
@@ -123,18 +122,6 @@ describe("sanitizeOperatorPromptText", () => {
     ).toBe("kept")
     expect(sanitizeOperatorPromptText(undefined)).toBe("")
     expect(sanitizeOperatorPromptText("raw")).toBe("")
-  })
-})
-
-describe("sanitizePermissionRequest", () => {
-  test("keeps tool metadata without permission detail", () => {
-    expect(
-      sanitizePermissionRequest({
-        sessionId: "sess-1",
-        options: [{ optionId: "allow-once", name: "Allow", description: "secret detail" }],
-        toolCall: { toolCallId: "tool-1", name: "write_file" },
-      }),
-    ).toEqual({ toolCallId: "tool-1", toolName: "write_file" })
   })
 })
 
