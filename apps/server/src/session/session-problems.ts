@@ -96,3 +96,29 @@ export const buildNoActiveTurnProblem = (detail = "No turn in progress") =>
     status: 409,
     detail,
   })
+
+export const buildPermissionNotFoundProblem = (detail = "Unknown permission request") =>
+  NotFoundProblemSchema.parse({
+    type: PROBLEM_TYPES.notFound,
+    title: "Permission request not found",
+    status: 404,
+    detail,
+  })
+
+export const buildPermissionConflictProblem = (detail = "Permission request already resolved") =>
+  ConflictProblemSchema.parse({
+    type: PROBLEM_TYPES.conflict,
+    title: "Permission request conflict",
+    status: 409,
+    detail,
+  })
+
+export const buildPermissionValidationProblem = (detail: string) =>
+  ValidationProblemSchema.parse({
+    type: PROBLEM_TYPES.validationError,
+    title: "Request validation failed",
+    status: 400,
+    code: "validation.request.invalid",
+    errors: [{ pointer: "#/optionId", code: "validation.permission.option.invalid" }],
+    detail,
+  })

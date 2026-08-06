@@ -3,6 +3,7 @@ import {
   JOURNAL_SCHEMA_VERSION,
   journalPayloadSchemaByKind,
 } from "contracts/events/journal-record"
+import { TurnIdSchema } from "contracts/events/primitives"
 import { ParsedJournalRecord } from "./journal.repository"
 
 export const lifecycleKinds = [
@@ -10,6 +11,7 @@ export const lifecycleKinds = [
   "workspace.changed",
   "session.created",
   "session.state",
+  "session.permission.resolved",
   "device.paired",
   "device.connected",
   "device.disconnected",
@@ -52,6 +54,13 @@ export const LifecycleJournalRecordSchema = z.discriminatedUnion("kind", [
     workspaceId: ScopeIdSchema,
     sessionId: ScopeIdSchema,
     payload: journalPayloadSchemaByKind["session.state"],
+  }),
+  LifecycleJournalRecordBaseSchema.extend({
+    kind: z.literal("session.permission.resolved"),
+    workspaceId: ScopeIdSchema,
+    sessionId: ScopeIdSchema,
+    turnId: TurnIdSchema,
+    payload: journalPayloadSchemaByKind["session.permission.resolved"],
   }),
   LifecycleJournalRecordBaseSchema.extend({
     kind: z.literal("device.paired"),

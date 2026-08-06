@@ -4,6 +4,7 @@ import { StatusDotVariant } from "../design-system/StatusDot"
 const statusDotVariantBySessionState: Partial<Record<SessionState, StatusDotVariant>> = {
   idle: "online",
   running: "warning",
+  "awaiting-permission": "warning",
   offline: "offline",
   error: "offline",
 }

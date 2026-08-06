@@ -6,6 +6,10 @@ type ServerStatusRecord = Extract<LifecycleJournalRecord, { kind: "server.status
 type WorkspaceChangedRecord = Extract<LifecycleJournalRecord, { kind: "workspace.changed" }>
 type SessionCreatedRecord = Extract<LifecycleJournalRecord, { kind: "session.created" }>
 type SessionStateRecord = Extract<LifecycleJournalRecord, { kind: "session.state" }>
+type SessionPermissionResolvedRecord = Extract<
+  LifecycleJournalRecord,
+  { kind: "session.permission.resolved" }
+>
 type DevicePairedRecord = Extract<LifecycleJournalRecord, { kind: "device.paired" }>
 type DeviceConnectedRecord = Extract<LifecycleJournalRecord, { kind: "device.connected" }>
 type DeviceDisconnectedRecord = Extract<LifecycleJournalRecord, { kind: "device.disconnected" }>
@@ -73,6 +77,22 @@ const projectSessionState = (record: SessionStateRecord): Event =>
     },
   })
 
+const projectSessionPermissionResolved = (record: SessionPermissionResolvedRecord): Event =>
+  EventSchema.parse({
+    type: "session.permission.resolved",
+    cursor: eventCursorToString(record.cursor),
+    occurredAt: record.occurredAt,
+    workspaceId: record.workspaceId,
+    sessionId: record.sessionId,
+    payload: {
+      requestId: record.payload.requestId,
+      turnId: record.payload.turnId,
+      toolCallId: record.payload.toolCallId,
+      optionId: record.payload.optionId,
+      outcome: record.payload.outcome,
+    },
+  })
+
 const projectDevicePaired = (record: DevicePairedRecord): Event =>
   EventSchema.parse({
     type: "device.paired",
@@ -119,6 +139,8 @@ export const projectLifecycleEvent = (record: LifecycleJournalRecord): Event => 
       return projectSessionCreated(record)
     case "session.state":
       return projectSessionState(record)
+    case "session.permission.resolved":
+      return projectSessionPermissionResolved(record)
     case "device.paired":
       return projectDevicePaired(record)
     case "device.connected":

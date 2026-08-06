@@ -81,7 +81,7 @@ afterEach(async () => {
 })
 
 describe("ACP client handlers integration", () => {
-  test("auto-allows session/request_permission with allow-once", async () => {
+  test("rejects permission requests when permission service is unavailable", async () => {
     const { supervisor, responses } = createHarness({
       emitPermissionRequest: true,
       sessionNewSessionId: "permission-session",
@@ -96,31 +96,7 @@ describe("ACP client handlers integration", () => {
     const response = await waitForResponse(responses, 1000)
     expect(response).toMatchObject({
       id: 1000,
-      result: {
-        outcome: {
-          outcome: "selected",
-          optionId: "allow-once",
-        },
-      },
-    })
-
-    await supervisor.stop()
-  })
-
-  test("rejects permission requests without a permissive option", async () => {
-    const { supervisor, responses } = createHarness({
-      emitPermissionRequestNoAllow: true,
-      sessionNewSessionId: "permission-session",
-    })
-
-    await supervisor.start("cursor")
-    const transport = supervisor.getTransport()
-    await transport!.request("session/new", { cwd: "/tmp", mcpServers: [] })
-
-    const response = await waitForResponse(responses, 1000)
-    expect(response).toMatchObject({
-      id: 1000,
-      error: { message: "no permissive permission option available" },
+      error: { message: "permission service unavailable" },
     })
 
     await supervisor.stop()

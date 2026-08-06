@@ -13,6 +13,8 @@ import {
   serializeJsonRpcMessage,
 } from "./protocol"
 
+const PERMISSION_REQUEST_ID = 1000
+
 export const runFakeAcpStdio = (
   input: NodeJS.ReadableStream = process.stdin,
   output: NodeJS.WritableStream = process.stdout,
@@ -20,6 +22,7 @@ export const runFakeAcpStdio = (
   const config = readFakeAcpConfig()
   const promptState = createFakeAcpPromptState()
   const buffer: string[] = [""]
+  let heldPromptSessionId: string | undefined
 
   const scheduleDeferredNotifications = (
     sessionId: string,
@@ -63,11 +66,23 @@ export const runFakeAcpStdio = (
       return
     }
 
+    if ("id" in message && !("method" in message)) {
+      if (message.id === PERMISSION_REQUEST_ID && heldPromptSessionId !== undefined) {
+        const response = completePromptIfActive(promptState, heldPromptSessionId)
+        heldPromptSessionId = undefined
+        if (response !== undefined) {
+          output.write(serializeJsonRpcMessage(response))
+        }
+      }
+      return
+    }
+
     if (!isJsonRpcRequest(message)) {
       return
     }
 
-    const handled = handleJsonRpcMessage(message, config, promptState)
+    const request = message
+    const handled = handleJsonRpcMessage(request, config, promptState)
     if (!handled || !("outbound" in handled)) {
       return
     }
@@ -83,9 +98,12 @@ export const runFakeAcpStdio = (
     })
 
     const promptSessionId =
-      message.method === "session/prompt"
-        ? (message.params as { sessionId?: string } | undefined)?.sessionId
+      request.method === "session/prompt"
+        ? (request.params as { sessionId?: string } | undefined)?.sessionId
         : undefined
+    if (promptSessionId !== undefined && handled.holdPromptResponse === true && handled.outbound.length > 0) {
+      heldPromptSessionId = promptSessionId
+    }
     if (promptSessionId !== undefined && handled.deferredNotifications.length > 0) {
       scheduleDeferredNotifications(promptSessionId, handled.deferredNotifications)
     }

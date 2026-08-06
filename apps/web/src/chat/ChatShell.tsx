@@ -1,7 +1,8 @@
 import React from "react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { AgentId } from "contracts/http/agent-settings"
 import { Event } from "contracts/events/event"
+import { PermissionRequest } from "contracts/http/permission"
 import { useAgentSettingsQuery } from "../agent-settings/use.agent.settings.query"
 import { useWorkspacesInfiniteQuery } from "../workspace/use.workspaces.infinite.query"
 import { useSessionsQuery } from "../session/use.sessions.query"
@@ -10,10 +11,18 @@ import { usePromptSessionMutation } from "../session/use.prompt.session.mutation
 import { useCancelSessionMutation } from "../session/use.cancel.session.mutation"
 import { useSelectSessionMutation } from "../session/use.select.session.mutation"
 import { useSessionEventStream } from "../session/use.session.event.stream"
+import {
+  activePermissionRequest,
+  applyPermissionEvents,
+  mergePendingRead,
+} from "../permission/apply.permission.events"
+import { fetchPendingPermissions } from "../permission/fetch.pending.permissions"
+import { useResolvePermissionMutation } from "../permission/use.resolve.permission.mutation"
 import { ChatHeader } from "./ChatHeader"
 import { WelcomeMessage } from "./WelcomeMessage"
 import { ChatComposer } from "./ChatComposer"
 import { ChatTranscript } from "./ChatTranscript"
+import { PermissionPanel } from "./PermissionPanel"
 import {
   emptyTranscript,
   foldTranscriptEvents,
@@ -30,6 +39,8 @@ export const ChatShell: React.FC = () => {
   const [agentId, setAgentId] = useState<AgentId | "">("")
   const [sessionId, setSessionId] = useState("")
   const [transcript, setTranscript] = useState<TranscriptState>(emptyTranscript)
+  const [pendingPermissions, setPendingPermissions] = useState<PermissionRequest[]>([])
+  const [submittingOptionId, setSubmittingOptionId] = useState<string | null>(null)
 
   const workspacesQuery = useWorkspacesInfiniteQuery({})
   const agentsQuery = useAgentSettingsQuery()
@@ -39,6 +50,7 @@ export const ChatShell: React.FC = () => {
   const promptSessionMutation = usePromptSessionMutation()
   const cancelSessionMutation = useCancelSessionMutation()
   const selectSessionMutation = useSelectSessionMutation()
+  const resolvePermissionMutation = useResolvePermissionMutation()
 
   const workspaces =
     workspacesQuery.data?.pages.flatMap((page) => page.items) ?? []
@@ -49,11 +61,39 @@ export const ChatShell: React.FC = () => {
 
   const handleEvents = (events: ReadonlyArray<Event>) => {
     setTranscript((current) => foldTranscriptEvents(current, events))
+    setPendingPermissions((current) => applyPermissionEvents(current, events))
   }
 
   const handleReconnect = () => {
     setTranscript(emptyTranscript)
+    if (sessionId === "") {
+      setPendingPermissions([])
+      return
+    }
+
+    void fetchPendingPermissions(sessionId)
+      .then((items) => {
+        setPendingPermissions((current) => mergePendingRead(current, items))
+      })
+      .catch(() => {
+        setPendingPermissions([])
+      })
   }
+
+  useEffect(() => {
+    if (sessionId === "") {
+      setPendingPermissions([])
+      return
+    }
+
+    void fetchPendingPermissions(sessionId)
+      .then((items) => {
+        setPendingPermissions(items)
+      })
+      .catch(() => {
+        setPendingPermissions([])
+      })
+  }, [sessionId])
 
   useSessionEventStream({
     sessionId: sessionId === "" ? null : sessionId,
@@ -73,11 +113,34 @@ export const ChatShell: React.FC = () => {
     transcriptSessionState: transcript.sessionState,
     listSessionState: selectedSession?.state,
   })
-  const runningFromSession = effectiveSessionState === "running"
+  const runningFromSession =
+    effectiveSessionState === "running" || effectiveSessionState === "awaiting-permission"
   const running =
     runningFromSession ||
     createSessionMutation.isPending ||
     promptSessionMutation.isPending
+
+  const activePermission = activePermissionRequest(pendingPermissions)
+
+  const handlePermissionOption = (optionId: string) => {
+    if (sessionId === "" || activePermission === null) {
+      return
+    }
+
+    setSubmittingOptionId(optionId)
+    resolvePermissionMutation.mutate(
+      {
+        sessionId,
+        requestId: activePermission.id,
+        body: { status: "resolved", optionId },
+      },
+      {
+        onSettled: () => {
+          setSubmittingOptionId(null)
+        },
+      },
+    )
+  }
 
   const composerEnabled = isComposerPromptable({
     workspaceId,
@@ -177,6 +240,13 @@ export const ChatShell: React.FC = () => {
         {showWelcome ? <WelcomeMessage /> : <ChatTranscript rows={transcript.rows} />}
       </div>
       <div className="px-5 pb-5 max-[820px]:px-2.5 max-[820px]:pb-2.5">
+        {activePermission !== null ? (
+          <PermissionPanel
+            request={activePermission}
+            submittingOptionId={submittingOptionId}
+            onSelectOption={handlePermissionOption}
+          />
+        ) : null}
         <ChatComposer
           disabled={!composerEnabled}
           running={running}

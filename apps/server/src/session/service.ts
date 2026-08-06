@@ -227,6 +227,11 @@ export const createSessionService = (context: SessionServiceContext) => {
     input: { id: string },
   ): SessionServiceResult<Session> => setTurnState({ id: input.id, state: "running" })
 
+  const markAwaitingPermission = (
+    input: { id: string },
+  ): SessionServiceResult<Session> =>
+    setTurnState({ id: input.id, state: "awaiting-permission" })
+
   const markIdle = (
     input: { id: string },
   ): SessionServiceResult<Session> => setTurnState({ id: input.id, state: "idle" })
@@ -296,6 +301,7 @@ export const createSessionService = (context: SessionServiceContext) => {
     archive,
     resume,
     markRunning,
+    markAwaitingPermission,
     markIdle,
     markStopping,
     markOffline,

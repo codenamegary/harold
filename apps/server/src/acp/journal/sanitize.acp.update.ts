@@ -178,27 +178,6 @@ export const sanitizeSessionUpdate = (update: unknown): SanitizedNotificationPay
   }
 }
 
-export const sanitizePermissionRequest = (
-  params: unknown,
-): SanitizedPermissionPayload | undefined => {
-  if (typeof params !== "object" || params === null) {
-    return undefined
-  }
-
-  const value = params as {
-    toolCall?: { toolCallId?: string; name?: string }
-  }
-
-  const toolCallId = value.toolCall?.toolCallId
-  const toolName = value.toolCall?.name
-
-  if (toolCallId === undefined || toolName === undefined) {
-    return undefined
-  }
-
-  return { toolCallId, toolName }
-}
-
 const failureCodeByPhrase: ReadonlyArray<{ pattern: RegExp; code: FailureCode }> = [
   { pattern: /connection refused/i, code: "transport_connection_refused" },
   { pattern: /connection reset/i, code: "transport_connection_reset" },

@@ -196,8 +196,10 @@ describe("ListSessionsQuerySchema", () => {
     ).toThrow()
   })
 
-  test("requires workspaceId", () => {
-    expect(() => ListSessionsQuerySchema.parse({})).toThrow()
+  test("defaults limit when workspaceId omitted", () => {
+    expect(ListSessionsQuerySchema.parse({})).toEqual({
+      limit: 100,
+    })
   })
 
   test("accepts cursor", () => {

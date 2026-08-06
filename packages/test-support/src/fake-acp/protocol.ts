@@ -51,3 +51,6 @@ export const isJsonRpcRequest = (message: JsonRpcMessage): message is JsonRpcReq
 
 export const isJsonRpcNotification = (message: JsonRpcMessage): message is JsonRpcNotification =>
   "method" in message && !("id" in message)
+
+export const isJsonRpcResponse = (message: JsonRpcMessage): message is JsonRpcResponse =>
+  "id" in message && !("method" in message)

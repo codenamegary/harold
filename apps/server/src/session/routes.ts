@@ -11,10 +11,16 @@ import {
   SessionSchema,
   UpdateSessionBodySchema,
 } from "contracts/http/session"
+import {
+  PermissionRequestCollectionSchema,
+  ResolvePermissionRequestBodySchema,
+  ResolvePermissionRequestResponseSchema,
+} from "contracts/http/permission"
 import { FastifyInstance } from "fastify"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { AgentSettingsRepository } from "../agent-settings/agent-settings-repository"
 import { agentDefinitions } from "../agent-settings/agent-registry"
+import { PermissionService } from "../permission/service"
 import { WorkspaceRepository } from "../workspace/repository"
 import { deriveSessionNameFromPrompt } from "./derive.session.name"
 import { SessionRepository } from "./repository"
@@ -32,6 +38,9 @@ import {
   buildAgentUnavailableProblem,
   buildInvalidCursorProblem,
   buildNoActiveTurnProblem,
+  buildPermissionConflictProblem,
+  buildPermissionNotFoundProblem,
+  buildPermissionValidationProblem,
   buildSessionArchivedProblem,
   buildSessionNotFoundProblem,
   buildSessionNotResumableProblem,
@@ -58,6 +67,7 @@ export const registerSessionRoutes = (
   workspaceRepository: WorkspaceRepository,
   agentSettingsRepository: AgentSettingsRepository,
   acpSupervisor: AcpSupervisor,
+  permissionService: PermissionService,
 ) => {
   const startAcceptedPrompt = async (params: {
     sessionId: string
@@ -477,6 +487,8 @@ export const registerSessionRoutes = (
       return sendProblem(reply, 409, buildNoActiveTurnProblem())
     }
 
+    permissionService.clearSessionPending(sessionId)
+
     const stopping = sessionService.markStopping({ id: sessionId })
     if (!stopping.ok) {
       return sendProblem(reply, 404, buildSessionNotFoundProblem())
@@ -492,5 +504,74 @@ export const registerSessionRoutes = (
     }
 
     return reply.status(202).send(CancelSessionResponseSchema.parse({ turnId: activeTurnId }))
+  })
+
+  app.get("/v1/sessions/:sessionId/permissions", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string }
+    const query = request.query as { status?: string }
+
+    if (query.status !== undefined && query.status !== "pending") {
+      return sendProblem(
+        reply,
+        400,
+        buildPermissionValidationProblem("status must be pending when provided"),
+      )
+    }
+
+    const existing = sessionRepository.getById({ id: sessionId })
+    if (!existing.ok) {
+      return sendProblem(reply, 404, buildSessionNotFoundProblem())
+    }
+
+    if (isArchivedSession(existing.value)) {
+      return sendProblem(reply, 409, buildSessionArchivedProblem())
+    }
+
+    const items = permissionService.listPendingForSession(sessionId)
+
+    return reply.status(200).send(
+      PermissionRequestCollectionSchema.parse({
+        items,
+        page: {
+          limit: Math.max(items.length, 1),
+          count: items.length,
+        },
+      }),
+    )
+  })
+
+  app.patch("/v1/sessions/:sessionId/permissions/:requestId", async (request, reply) => {
+    const { sessionId, requestId } = request.params as {
+      sessionId: string
+      requestId: string
+    }
+    const body = ResolvePermissionRequestBodySchema.parse(request.body)
+
+    const existing = sessionRepository.getById({ id: sessionId })
+    if (!existing.ok) {
+      return sendProblem(reply, 404, buildSessionNotFoundProblem())
+    }
+
+    if (isArchivedSession(existing.value)) {
+      return sendProblem(reply, 409, buildSessionArchivedProblem())
+    }
+
+    const resolved = permissionService.resolvePending({ sessionId, requestId, body })
+    if (!resolved.ok) {
+      switch (resolved.kind) {
+        case "not_found":
+          return sendProblem(reply, 404, buildPermissionNotFoundProblem())
+        case "conflict":
+          return sendProblem(reply, 409, buildPermissionConflictProblem(resolved.detail))
+        case "validation":
+          return sendProblem(reply, 400, buildPermissionValidationProblem(resolved.detail ?? "invalid option"))
+        case "journal_failed":
+          return sendProblem(reply, 409, buildAcpUnavailableProblem("Failed to record permission decision"))
+      }
+    }
+
+    return reply
+      .status(200)
+      .send(ResolvePermissionRequestResponseSchema.parse(resolved.value))
   })
 }

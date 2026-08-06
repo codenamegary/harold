@@ -10,6 +10,7 @@ export type FakeAcpConfig = FakeAcpCapabilities & {
   sessionLoadFails: boolean
   emitPermissionRequest: boolean
   emitPermissionRequestNoAllow: boolean
+  emitPermissionRequestOnPrompt: boolean
   emitFsReadRequest: boolean
   emitFsWriteRequest: boolean
   emitTerminalCreateRequest: boolean
@@ -66,6 +67,7 @@ export const readFakeAcpConfig = (
   sessionLoadFails: parseBooleanEnv(env.FAKE_ACP_SESSION_LOAD_FAILS, false),
   emitPermissionRequest: parseBooleanEnv(env.FAKE_ACP_EMIT_PERMISSION_REQUEST, false),
   emitPermissionRequestNoAllow: parseBooleanEnv(env.FAKE_ACP_EMIT_PERMISSION_REQUEST_NO_ALLOW, false),
+  emitPermissionRequestOnPrompt: parseBooleanEnv(env.FAKE_ACP_EMIT_PERMISSION_REQUEST_ON_PROMPT, false),
   emitFsReadRequest: parseBooleanEnv(env.FAKE_ACP_EMIT_FS_READ_REQUEST, false),
   emitFsWriteRequest: parseBooleanEnv(env.FAKE_ACP_EMIT_FS_WRITE_REQUEST, false),
   emitTerminalCreateRequest: parseBooleanEnv(env.FAKE_ACP_EMIT_TERMINAL_CREATE_REQUEST, false),
@@ -90,6 +92,7 @@ export type FakeAcpEnvOptions = {
   sessionLoadFails?: boolean
   emitPermissionRequest?: boolean
   emitPermissionRequestNoAllow?: boolean
+  emitPermissionRequestOnPrompt?: boolean
   emitFsReadRequest?: boolean
   emitFsWriteRequest?: boolean
   emitTerminalCreateRequest?: boolean
@@ -127,6 +130,7 @@ export const fakeAcpEnvFromCapabilities = (options: FakeAcpEnvOptions): Record<s
   ...optionalBooleanEnv("FAKE_ACP_SESSION_LOAD_FAILS", options.sessionLoadFails),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_PERMISSION_REQUEST", options.emitPermissionRequest),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_PERMISSION_REQUEST_NO_ALLOW", options.emitPermissionRequestNoAllow),
+  ...optionalBooleanEnv("FAKE_ACP_EMIT_PERMISSION_REQUEST_ON_PROMPT", options.emitPermissionRequestOnPrompt),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_FS_READ_REQUEST", options.emitFsReadRequest),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_FS_WRITE_REQUEST", options.emitFsWriteRequest),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_TERMINAL_CREATE_REQUEST", options.emitTerminalCreateRequest),

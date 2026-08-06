@@ -9,6 +9,7 @@
     "./http/error": "./src/http/error.ts",
     "./http/workspace": "./src/http/workspace.ts",
     "./http/session": "./src/http/session.ts",
+    "./http/permission": "./src/http/permission.ts",
     "./http/device": "./src/http/device.ts",
     "./http/pairing-code": "./src/http/pairing-code.ts",
     "./http/agent-settings": "./src/http/agent-settings.ts",

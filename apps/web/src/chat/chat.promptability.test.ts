@@ -37,6 +37,7 @@ describe("chat promptability", () => {
     }
 
     expect(isComposerPromptable({ ...base, sessionState: "running" })).toBe(false)
+    expect(isComposerPromptable({ ...base, sessionState: "awaiting-permission" })).toBe(false)
     expect(isComposerPromptable({ ...base, sessionState: "offline" })).toBe(false)
     expect(isComposerPromptable({ ...base, sessionState: "error" })).toBe(false)
   })
@@ -49,6 +50,9 @@ describe("chat promptability", () => {
       "Session ended with an error. Start a new session to continue.",
     )
     expect(composerBlockedMessage("running")).toBeNull()
+    expect(composerBlockedMessage("awaiting-permission")).toBe(
+      "Waiting for permission. Answer above to continue.",
+    )
     expect(composerBlockedMessage("idle")).toBeNull()
   })
 
@@ -65,6 +69,7 @@ describe("chat promptability", () => {
   test("session status dot maps idle running offline and error", () => {
     expect(sessionStatusDotVariant("idle")).toBe("online")
     expect(sessionStatusDotVariant("running")).toBe("warning")
+    expect(sessionStatusDotVariant("awaiting-permission")).toBe("warning")
     expect(sessionStatusDotVariant("offline")).toBe("offline")
     expect(sessionStatusDotVariant("error")).toBe("offline")
     expect(sessionStatusDotVariant("starting")).toBeNull()

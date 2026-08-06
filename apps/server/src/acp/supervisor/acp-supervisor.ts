@@ -32,6 +32,7 @@ import {
   sanitizeOperatorPromptText,
 } from "../journal/sanitize.acp.update"
 import { createTurnId } from "../../session/create.turn.id"
+import { createUnavailablePermissionService } from "../../permission/service"
 
 type SupervisorRuntime = {
   state: AcpSupervisorState
@@ -136,6 +137,7 @@ export const createAcpSupervisor = ({
   agentSettingsRepository,
   serverVersion,
   journalWriter,
+  permissionService,
   onSessionUpdate = () => undefined,
   onBeforeClearRuntime = () => undefined,
   onSupervisorReady = () => undefined,
@@ -233,6 +235,7 @@ export const createAcpSupervisor = ({
       transport,
       profile: resolved.profile,
       sessionBindingRegistry,
+      permissionService: permissionService ?? createUnavailablePermissionService(),
     })
 
     transport.onNotification("session/update", (params) => {
