@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { act, fireEvent, waitFor } from "@testing-library/react"
+import { act, waitFor } from "@testing-library/react"
 import { AgentSettingsCollectionSchema } from "contracts/http/agent-settings"
 import { SessionCollectionSchema } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
@@ -7,9 +7,9 @@ import {
   clearChatTestSelection,
   joinSessionByName,
   openComboboxOptions,
-  startNewSession,
 } from "../chat/select.combobox.option"
 import { renderWithProviders } from "../query/render.with.providers"
+import { hrefOf, requestUrl } from "../test/request.url"
 import { AppRoutes } from "../shell/AppRouter"
 import userEvent from "@testing-library/user-event"
 
@@ -131,13 +131,13 @@ describe("App live session list", () => {
     sockets.length = 0
 
     globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
-      const socket = createFakeSocket(String(url))
+      const socket = createFakeSocket(hrefOf(url))
       sockets.push(socket)
       return socket
     } as unknown as typeof WebSocket
 
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
       const method = init?.method ?? "GET"
 
       if (url === "/v1/status" || url.startsWith("/v1/status?")) {

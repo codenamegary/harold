@@ -18,6 +18,7 @@ import {
   enableAgent,
   seedWorkspace,
 } from "../test-support/create-test-app"
+import { eventDataText } from "../test/event.data.text"
 import { Config } from "../config/config"
 import { eventCursorToString, MAX_SAFE_EVENT_CURSOR } from "./cursor"
 import { createEventJournalRepository } from "./journal.repository"
@@ -78,7 +79,7 @@ const collectReplayFrames = (url: string, idleMs = 150): Promise<Event[][]> =>
     })
 
     ws.addEventListener("message", (event) => {
-      frames.push(EventFrameSchema.parse(JSON.parse(String(event.data))))
+      frames.push(EventFrameSchema.parse(JSON.parse(eventDataText(event.data))))
       resetIdleTimer()
     })
 
@@ -572,7 +573,7 @@ describe("GET /v1/events journal corruption", () => {
         const frames: Event[][] = []
 
         ws.addEventListener("message", (event) => {
-          frames.push(EventFrameSchema.parse(JSON.parse(String(event.data))))
+          frames.push(EventFrameSchema.parse(JSON.parse(eventDataText(event.data))))
         })
 
         ws.addEventListener("close", (closeEvent) => {

@@ -2,6 +2,7 @@ import { EventStreamAuthFrameSchema } from "contracts/events/stream.auth"
 import { WebSocket } from "ws"
 import { authenticate, AuthenticateParams } from "./authenticate"
 import { Principal } from "./principal"
+import { websocketRawDataText } from "./websocket.raw.data.text"
 
 export const DEFAULT_WS_AUTH_FRAME_TIMEOUT_MS = 5_000
 
@@ -19,7 +20,7 @@ const authenticateAuthFrameMessage = (params: {
   data: WebSocket.RawData
   lookupByCredentialHash: AuthenticateParams["lookupByCredentialHash"]
 }): WsAuthFrameResult => {
-  const parsedJson: unknown = JSON.parse(String(params.data))
+  const parsedJson: unknown = JSON.parse(websocketRawDataText(params.data))
   const frameResult = EventStreamAuthFrameSchema.safeParse(parsedJson)
   if (!frameResult.success) {
     return { ok: false, reason: "invalid" }

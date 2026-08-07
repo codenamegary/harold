@@ -5,6 +5,7 @@ import { AgentSettingsCollectionSchema } from "contracts/http/agent-settings"
 import { SessionCollectionSchema, SessionSchema } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
+import { hrefOf, requestUrl } from "../test/request.url"
 import { ChatPage } from "../shell/pages/ChatPage"
 import {
   clearChatTestSelection,
@@ -94,11 +95,11 @@ describe("Chat session rename and archive", () => {
   beforeEach(() => {
     clearChatTestSelection()
     globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
-      return createFakeSocket(String(url))
+      return createFakeSocket(hrefOf(url))
     } as unknown as typeof WebSocket
 
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
       const method = init?.method ?? "GET"
 
       if (url.startsWith("/v1/workspaces")) {
@@ -155,7 +156,7 @@ describe("Chat session rename and archive", () => {
     })
 
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
       const method = init?.method ?? "GET"
 
       if (url === `/v1/sessions/${liveSession.id}` && method === "PATCH") {
@@ -207,7 +208,7 @@ describe("Chat session rename and archive", () => {
     })
     globalThis.fetch = fetchMock as typeof fetch
 
-    const { getByLabelText, getByRole } = renderChatPage()
+    const { getByRole } = renderChatPage()
     await selectLiveSession(getByRole)
 
     await waitFor(() => {
@@ -244,7 +245,7 @@ describe("Chat session rename and archive", () => {
 
   test("shows rename Problem Details in the header", async () => {
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
       const method = init?.method ?? "GET"
 
       if (url === `/v1/sessions/${liveSession.id}` && method === "PATCH") {
@@ -303,7 +304,7 @@ describe("Chat session rename and archive", () => {
     })
     globalThis.fetch = fetchMock as typeof fetch
 
-    const { getByLabelText, getByRole } = renderChatPage()
+    const { getByRole } = renderChatPage()
     await selectLiveSession(getByRole)
 
     await waitFor(() => {
@@ -337,7 +338,7 @@ describe("Chat session rename and archive", () => {
     const archivedFlag = { value: false }
 
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
       const method = init?.method ?? "GET"
 
       if (url === `/v1/sessions/${liveSession.id}/archive` && method === "POST") {
@@ -393,7 +394,7 @@ describe("Chat session rename and archive", () => {
     })
     globalThis.fetch = fetchMock as typeof fetch
 
-    const { getByLabelText, getByRole, queryByRole } = renderChatPage()
+    const { getByRole, queryByRole } = renderChatPage()
     await selectLiveSession(getByRole)
 
     await waitFor(() => {
@@ -425,7 +426,7 @@ describe("Chat session rename and archive", () => {
 
   test("shows archive Problem Details in the modal", async () => {
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
       const method = init?.method ?? "GET"
 
       if (url === `/v1/sessions/${liveSession.id}/archive` && method === "POST") {
@@ -484,7 +485,7 @@ describe("Chat session rename and archive", () => {
     })
     globalThis.fetch = fetchMock as typeof fetch
 
-    const { getByLabelText, getByRole } = renderChatPage()
+    const { getByRole } = renderChatPage()
     await selectLiveSession(getByRole)
 
     await waitFor(() => {

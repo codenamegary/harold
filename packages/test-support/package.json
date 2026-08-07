@@ -16,7 +16,7 @@
     "./second-client/log-capture": "./src/second-client/log.capture.ts"
   },
   "scripts": {
-    "lint": "oxlint",
+    "lint": "oxlint --deny-warnings",
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },

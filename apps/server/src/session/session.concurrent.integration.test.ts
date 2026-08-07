@@ -19,6 +19,7 @@ import {
   enableAgent,
   seedWorkspace,
 } from "../test-support/create-test-app"
+import { eventDataText } from "../test/event.data.text"
 import { Config } from "../config/config"
 
 const resources = createTestAppResources()
@@ -128,7 +129,7 @@ const collectEventsUntil = (params: {
     })
 
     ws.addEventListener("message", (event) => {
-      const frame = EventFrameSchema.parse(JSON.parse(String(event.data)))
+      const frame = EventFrameSchema.parse(JSON.parse(eventDataText(event.data)))
       events.push(...frame)
       if (params.until(events)) {
         clearTimeout(timeout)

@@ -7,6 +7,7 @@ import {
 } from "contracts/http/agent-settings"
 import { PROBLEM_TYPES } from "contracts/http/error"
 import { renderWithProviders } from "../query/render.with.providers"
+import { requestBodyText, requestUrl } from "../test/request.url"
 import { AgentsPanel } from "./AgentsPanel"
 
 const validStatus = {
@@ -77,16 +78,9 @@ const flushDetectSuccessFeedback = async (card: HTMLElement) => {
 
 const setInputValue = async (input: HTMLElement, value: string) => {
   const inputElement = input as HTMLInputElement
-  const valueSetter = Object.getOwnPropertyDescriptor(
-    HTMLInputElement.prototype,
-    "value",
-  )?.set
 
   await act(async () => {
-    if (valueSetter) {
-      valueSetter.call(inputElement, value)
-    }
-
+    inputElement.value = value
     inputElement.dispatchEvent(new Event("input", { bubbles: true }))
     inputElement.dispatchEvent(new Event("change", { bubbles: true }))
   })
@@ -95,7 +89,7 @@ const setInputValue = async (input: HTMLElement, value: string) => {
 describe("AgentsPanel", () => {
   beforeEach(() => {
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
       const method = init?.method ?? "GET"
 
       if (url === "/v1/status") {
@@ -129,7 +123,7 @@ describe("AgentsPanel", () => {
     const cursorState = { agent: cursorAgent() }
 
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
       const method = init?.method ?? "GET"
 
       if (url === "/v1/status") {
@@ -183,7 +177,7 @@ describe("AgentsPanel", () => {
     const cursorState = { agent: cursorAgent() }
 
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
       const method = init?.method ?? "GET"
 
       if (url === "/v1/status") {
@@ -239,7 +233,7 @@ describe("AgentsPanel", () => {
     const cursorState = { agent: cursorAgent({ enabled: true, path: null }) }
 
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
       const method = init?.method ?? "GET"
 
       if (url === "/v1/status") {
@@ -261,7 +255,7 @@ describe("AgentsPanel", () => {
       }
 
       if (url === "/v1/settings/agents/cursor" && method === "PATCH") {
-        const body = JSON.parse(String(init?.body))
+        const body = JSON.parse(requestBodyText(init?.body))
 
         if (body.path === manualPath) {
           cursorState.agent = cursorAgent({ enabled: true, path: manualPath })
@@ -312,7 +306,7 @@ describe("AgentsPanel", () => {
     const cursorState = { agent: cursorAgent({ enabled: true, path: null }) }
 
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
       const method = init?.method ?? "GET"
 
       if (url === "/v1/status") {
@@ -364,7 +358,7 @@ describe("AgentsPanel", () => {
     expect(
       fetchMock.mock.calls.some(
         ([url, init]) =>
-          String(url) === "/v1/settings/agents/cursor" && init?.method === "PATCH",
+          requestUrl(url) === "/v1/settings/agents/cursor" && init?.method === "PATCH",
       ),
     ).toBe(false)
   })
@@ -383,7 +377,7 @@ describe("AgentsPanel", () => {
     }
 
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
       const method = init?.method ?? "GET"
 
       if (url === "/v1/status") {
@@ -405,7 +399,7 @@ describe("AgentsPanel", () => {
       }
 
       if (url === "/v1/settings/agents/cursor" && method === "PATCH") {
-        const body = JSON.parse(String(init?.body))
+        const body = JSON.parse(requestBodyText(init?.body))
 
         if (body.path === invalidPath) {
           return Promise.resolve(
@@ -477,7 +471,7 @@ describe("AgentsPanel", () => {
 
   test("shows error when agent settings API is unreachable", async () => {
     globalThis.fetch = mock((input: RequestInfo | URL) => {
-      const url = String(input)
+      const url = requestUrl(input)
 
       if (url === "/v1/status") {
         return Promise.resolve(

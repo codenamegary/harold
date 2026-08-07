@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "bun run src/main.ts",
     "start": "bun run src/main.ts",
-    "lint": "oxlint",
+    "lint": "oxlint --deny-warnings",
     "typecheck": "tsc --noEmit",
     "test": "NODE_ENV=test bun test",
     "test:coverage": "NODE_ENV=test bun test --coverage --coverage-reporter=lcov --coverage-dir=../../coverage/server",

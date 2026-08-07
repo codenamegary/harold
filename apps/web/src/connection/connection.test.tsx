@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { fireEvent, waitFor, within } from "@testing-library/react"
 import { AppRoutes } from "../shell/AppRouter"
 import { renderWithProviders } from "../query/render.with.providers"
+import { hrefOf, requestUrl } from "../test/request.url"
 import { fetchStatus } from "./fetch.status"
 
 const validStatus = {
@@ -22,7 +23,7 @@ const originalWebSocket = globalThis.WebSocket
 const stubWebSocket = () => {
   globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
     return {
-      url: String(url),
+        url: hrefOf(url),
       readyState: 1,
       close: () => undefined,
       send: () => undefined,
@@ -127,7 +128,7 @@ describe("connection shell wiring", () => {
   test("refresh button refetches status", async () => {
     const statusCallCount = { value: 0 }
     const fetchMock = mock((input: RequestInfo | URL) => {
-      const url = String(input)
+      const url = requestUrl(input)
 
       if (url === "/v1/status") {
         statusCallCount.value += 1

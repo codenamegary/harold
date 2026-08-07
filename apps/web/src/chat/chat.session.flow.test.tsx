@@ -8,6 +8,7 @@ import {
 } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
+import { hrefOf, requestUrl } from "../test/request.url"
 import { ChatPage } from "../shell/pages/ChatPage"
 import {
   clearChatTestSelection,
@@ -114,13 +115,13 @@ describe("Chat session flow", () => {
     sockets.length = 0
 
     globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
-      const socket = createFakeSocket(String(url))
+      const socket = createFakeSocket(hrefOf(url))
       sockets.push(socket)
       return socket
     } as unknown as typeof WebSocket
 
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
       const method = init?.method ?? "GET"
 
       if (url.startsWith("/v1/workspaces")) {
@@ -232,7 +233,7 @@ describe("Chat session flow", () => {
 
   test("create-with-prompt binds session and opens event stream from cursor 0", async () => {
     const fetchMock = globalThis.fetch as ReturnType<typeof mock>
-    const { getByLabelText, getByRole } = renderChat()
+    const { getByRole } = renderChat()
     await selectWorkspaceAndAgent(getByRole)
     await typeAndSend(getByRole, "Explain auth")
 
@@ -240,7 +241,7 @@ describe("Chat session flow", () => {
       expect(
         fetchMock.mock.calls.some(
           ([input, init]) =>
-            String(input) === "/v1/sessions" &&
+            requestUrl(input) === "/v1/sessions" &&
             (init as RequestInit | undefined)?.method === "POST",
         ),
       ).toBe(true)
@@ -321,7 +322,7 @@ describe("Chat session flow", () => {
 
   test("cancel posts while running and prompt posts on existing session", async () => {
     const fetchMock = globalThis.fetch as ReturnType<typeof mock>
-    const { getByLabelText, getByRole } = renderChat()
+    const { getByRole } = renderChat()
     await selectWorkspaceAndAgent(getByRole)
     await typeAndSend(getByRole, "Explain auth")
 
@@ -362,7 +363,7 @@ describe("Chat session flow", () => {
       expect(
         fetchMock.mock.calls.some(
           ([input, init]) =>
-            String(input).includes(`/v1/sessions/${createdSession.id}/cancel`) &&
+            requestUrl(input).includes(`/v1/sessions/${createdSession.id}/cancel`) &&
             (init as RequestInit | undefined)?.method === "POST",
         ),
       ).toBe(true)
@@ -397,7 +398,7 @@ describe("Chat session flow", () => {
       expect(
         fetchMock.mock.calls.some(
           ([input, init]) =>
-            String(input).includes(`/v1/sessions/${createdSession.id}/prompt`) &&
+            requestUrl(input).includes(`/v1/sessions/${createdSession.id}/prompt`) &&
             (init as RequestInit | undefined)?.method === "POST",
         ),
       ).toBe(true)
@@ -405,7 +406,7 @@ describe("Chat session flow", () => {
   })
 
   test("reconnect clears and rebuilds transcript from replay", async () => {
-    const { getByLabelText, getByRole, getByText, queryByText } = renderChat()
+    const { getByRole, getByText, queryByText } = renderChat()
     await selectWorkspaceAndAgent(getByRole)
     await typeAndSend(getByRole, "Explain auth")
 

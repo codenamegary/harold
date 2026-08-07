@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { fireEvent, waitFor } from "@testing-library/react"
 import { renderWithProviders } from "../query/render.with.providers"
+import { requestBodyText } from "../test/request.url"
 import { SettingsPage } from "../shell/pages/SettingsPage"
 
 const validStatus = {
@@ -98,7 +99,7 @@ describe("SettingsPage", () => {
       }
 
       if (url.startsWith("/v1/settings/runtime") && method === "PATCH") {
-        const body: unknown = JSON.parse(String(init?.body ?? "{}"))
+        const body: unknown = JSON.parse(requestBodyText(init?.body))
         patchBodies.push(body)
         runtimeSettings = {
           ...runtimeSettings,

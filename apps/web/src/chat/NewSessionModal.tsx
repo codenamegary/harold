@@ -34,16 +34,15 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
     q: debouncedWorkspaceQuery.trim() === "" ? undefined : debouncedWorkspaceQuery.trim(),
   })
 
-  const workspaces =
-    workspacesQuery.data?.pages.flatMap((page) => page.items) ?? []
-
   const workspaceOptions = useMemo((): ComboboxOptionItem[] => {
+    const workspaces =
+      workspacesQuery.data?.pages.flatMap((page) => page.items) ?? []
     return workspaces.map((workspace: Workspace) => ({
       value: workspace.id,
       label: workspace.name,
       description: workspace.path,
     }))
-  }, [workspaces])
+  }, [workspacesQuery.data])
 
   const agentOptions = useMemo((): ComboboxOptionItem[] => {
     return agents

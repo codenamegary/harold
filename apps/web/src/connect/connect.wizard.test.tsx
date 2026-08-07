@@ -3,6 +3,7 @@ import React from "react"
 import { act, fireEvent, waitFor, within } from "@testing-library/react"
 import { useLocation } from "react-router"
 import { renderWithProviders } from "../query/render.with.providers"
+import { hrefOf, requestBodyText, requestUrl } from "../test/request.url"
 import { ConnectWizard } from "./ConnectWizard"
 
 const cloudStepRailLabels = [
@@ -117,18 +118,6 @@ const LocationProbe: React.FC = () => {
   return <output aria-label="Current route">{location.pathname}</output>
 }
 
-const requestUrl = (input: RequestInfo | URL): string => {
-  if (typeof input === "string") {
-    return input
-  }
-
-  if (input instanceof URL) {
-    return input.href
-  }
-
-  return input.url
-}
-
 const continueButtonName = /^Continue$/
 
 const goToCloudExternalUrl = async (
@@ -192,7 +181,7 @@ describe("ConnectWizard", () => {
     runtimeSettings = { ...defaultRuntimeSettings }
 
     globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
-      const socket = createFakeSocket(String(url))
+      const socket = createFakeSocket(hrefOf(url))
       sockets.push(socket)
       return socket
     } as unknown as typeof WebSocket
@@ -213,7 +202,7 @@ describe("ConnectWizard", () => {
 
       if (url === "/v1/settings/runtime" && method === "PATCH") {
         runtimeSettingsRequests.push("PATCH")
-        const body = JSON.parse(String(init?.body ?? "{}")) as {
+        const body = JSON.parse(requestBodyText(init?.body)) as {
           advertisedUrl?: string | null
         }
         runtimeSettingsUpdates.push(body)

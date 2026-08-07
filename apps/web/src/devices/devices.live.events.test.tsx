@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { act, waitFor } from "@testing-library/react"
 import { DeviceCollectionSchema, DeviceState } from "contracts/http/device"
 import { renderWithProviders } from "../query/render.with.providers"
+import { hrefOf, requestUrl } from "../test/request.url"
 import { AppRoutes } from "../shell/AppRouter"
 
 type FakeSocket = {
@@ -43,18 +44,6 @@ const deviceCollection = (state: DeviceState) =>
     page: { limit: 100, count: 1 },
   })
 
-const requestUrl = (input: RequestInfo | URL): string => {
-  if (typeof input === "string") {
-    return input
-  }
-
-  if (input instanceof URL) {
-    return input.href
-  }
-
-  return input.url
-}
-
 const createFakeSocket = (url: string): FakeSocket => {
   const listeners = new Map<string, Array<(event: { data?: string }) => void>>()
 
@@ -93,7 +82,7 @@ describe("Devices live events", () => {
     backend.deviceState = "offline"
 
     globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
-      const socket = createFakeSocket(String(url))
+      const socket = createFakeSocket(hrefOf(url))
       sockets.push(socket)
       return socket
     } as unknown as typeof WebSocket

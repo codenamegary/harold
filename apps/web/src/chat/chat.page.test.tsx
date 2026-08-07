@@ -6,6 +6,7 @@ import { AgentSettingsCollectionSchema } from "contracts/http/agent-settings"
 import { SessionCollectionSchema } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
+import { requestUrl } from "../test/request.url"
 import { ChatPage } from "../shell/pages/ChatPage"
 import { clearChatTestSelection, openNewSessionModal, confirmNewSessionModal } from "./select.combobox.option"
 
@@ -61,7 +62,7 @@ describe("ChatPage", () => {
   beforeEach(() => {
     clearChatTestSelection()
     globalThis.fetch = mock((input: RequestInfo | URL) => {
-      const url = String(input)
+      const url = requestUrl(input)
 
       if (url.startsWith("/v1/workspaces")) {
         return Promise.resolve(

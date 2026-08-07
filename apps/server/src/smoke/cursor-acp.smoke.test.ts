@@ -19,6 +19,7 @@ import { Config, parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/database"
 import { sessions } from "../persistence/schema/sessions"
 import { createRuntime } from "../runtime/runtime"
+import { eventDataText } from "../test/event.data.text"
 
 const waitFor = async (
   predicate: () => boolean | Promise<boolean>,
@@ -112,7 +113,7 @@ const collectEventsUntil = (params: {
     })
 
     ws.addEventListener("message", (event) => {
-      const frame = EventFrameSchema.parse(JSON.parse(String(event.data)))
+      const frame = EventFrameSchema.parse(JSON.parse(eventDataText(event.data)))
       events.push(...frame)
       if (params.until(events)) {
         clearTimeout(timeout)
@@ -175,7 +176,7 @@ const collectReplayEvents = (params: {
     })
 
     ws.addEventListener("message", (event) => {
-      const frame = EventFrameSchema.parse(JSON.parse(String(event.data)))
+      const frame = EventFrameSchema.parse(JSON.parse(eventDataText(event.data)))
       events.push(...frame)
       resetIdleTimer()
     })

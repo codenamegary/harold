@@ -5,6 +5,7 @@ import { createStore } from "jotai"
 import { nowAtom } from "../connection/now.atom"
 import { queryKeys } from "../query/query.keys"
 import { renderWithProviders } from "../query/render.with.providers"
+import { requestUrl } from "../test/request.url"
 import { OverviewPage } from "../shell/pages/OverviewPage"
 
 const validStatus = {
@@ -55,7 +56,7 @@ const renderOverviewPage = (now = new Date("2026-01-01T01:01:01.000Z").getTime()
 describe("OverviewPage", () => {
   beforeEach(() => {
     globalThis.fetch = mock((input: RequestInfo | URL) => {
-      const url = String(input)
+      const url = requestUrl(input)
 
       if (url.startsWith("/v1/workspaces")) {
         return Promise.resolve(
@@ -174,7 +175,7 @@ describe("OverviewPage", () => {
 
   test("workspace panel shows loaded workspaces", async () => {
     globalThis.fetch = mock((input: RequestInfo | URL) => {
-      const url = String(input)
+      const url = requestUrl(input)
 
       if (url === "/v1/workspaces?limit=4") {
         return Promise.resolve(

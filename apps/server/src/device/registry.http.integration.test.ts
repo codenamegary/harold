@@ -15,6 +15,7 @@ import {
   createTestApp,
   createTestAppResources,
 } from "../test-support/create-test-app"
+import { eventDataText } from "../test/event.data.text"
 import { Config } from "../config/config"
 import { createEventJournalRepository } from "../event/journal.repository"
 import { clearDevicePresence } from "./presence"
@@ -126,7 +127,7 @@ const openHostStream = (wsUrl: string): Promise<{
     })
 
     ws.addEventListener("message", (message) => {
-      const frame = EventFrameSchema.parse(JSON.parse(String(message.data)))
+      const frame = EventFrameSchema.parse(JSON.parse(eventDataText(message.data)))
       for (const event of frame) {
         notify(event)
       }

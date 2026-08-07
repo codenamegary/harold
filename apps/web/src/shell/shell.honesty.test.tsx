@@ -3,6 +3,7 @@ import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { DeviceCollectionSchema } from "contracts/http/device"
 import { fireEvent, waitFor, within, act } from "@testing-library/react"
 import { renderWithProviders } from "../query/render.with.providers"
+import { hrefOf, requestBodyText, requestUrl } from "../test/request.url"
 import { AppRoutes } from "./AppRouter"
 
 const validStatus = {
@@ -54,18 +55,6 @@ const renderShellRoute = (path: string) =>
   renderWithProviders(<AppRoutes />, {
     initialEntries: [path],
   })
-
-const requestUrl = (input: RequestInfo | URL): string => {
-  if (typeof input === "string") {
-    return input
-  }
-
-  if (input instanceof URL) {
-    return input.href
-  }
-
-  return input.url
-}
 
 const waitForShellReady = async (getByRole: ReturnType<typeof renderWithProviders>["getByRole"]) => {
   await waitFor(() => {
@@ -127,7 +116,7 @@ describe("shell honesty", () => {
 
     globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
       return {
-        url: String(url),
+        url: hrefOf(url),
         readyState: 1,
         close: () => undefined,
         send: () => undefined,
@@ -200,7 +189,7 @@ describe("shell honesty", () => {
       }
 
       if (url === "/v1/settings/runtime" && method === "PATCH") {
-        const body = JSON.parse(String(init?.body ?? "{}")) as {
+        const body = JSON.parse(requestBodyText(init?.body)) as {
           advertisedUrl?: string | null
         }
         runtimeSettings = {

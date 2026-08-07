@@ -50,7 +50,7 @@ export const closeDeviceConnections = (deviceId: string): void => {
     return
   }
 
-  for (const connection of [...connections]) {
+  for (const connection of connections) {
     if (isCloseableConnection(connection)) {
       connection.close(REVOKE_CLOSE_CODE, REVOKE_CLOSE_REASON)
     }

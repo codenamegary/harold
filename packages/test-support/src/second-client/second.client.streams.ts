@@ -1,6 +1,7 @@
 import { EventFrameSchema } from "contracts/events/stream"
 import { Event } from "contracts/events/event"
 import { WebSocket } from "ws"
+import { websocketRawDataText } from "../websocket.raw.data.text"
 
 export type HostEventStream = {
   ws: WebSocket
@@ -66,7 +67,7 @@ export const openHostEventStream = (wsUrl: string): Promise<HostEventStream> =>
     })
 
     ws.on("message", (message) => {
-      const frame = EventFrameSchema.parse(JSON.parse(String(message)))
+      const frame = EventFrameSchema.parse(JSON.parse(websocketRawDataText(message)))
       for (const event of frame) {
         notify(event)
       }

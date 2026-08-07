@@ -16,9 +16,6 @@ const createHarness = (journalFails = false) => {
   })
 
   let responded = false
-  const respond = () => {
-    responded = true
-  }
 
   const sessionRepository = {
     getById: ({ id }: { id: string }) =>

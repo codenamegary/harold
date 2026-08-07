@@ -3,6 +3,7 @@ import { fireEvent, waitFor, within } from "@testing-library/react"
 import { Route, Routes } from "react-router"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
+import { requestUrl } from "../test/request.url"
 import { WorkspacesPage } from "../shell/pages/WorkspacesPage"
 
 const validWorkspace = {
@@ -37,7 +38,7 @@ const renderWorkspacesPage = (initialEntries = ["/workspaces"]) =>
 describe("WorkspacesPage", () => {
   beforeEach(() => {
     globalThis.fetch = mock((input: RequestInfo | URL) => {
-      const url = String(input)
+      const url = requestUrl(input)
 
       if (url.startsWith("/v1/workspaces")) {
         return Promise.resolve(
@@ -68,7 +69,7 @@ describe("WorkspacesPage", () => {
 
   test("lists workspace cards from the API", async () => {
     globalThis.fetch = mock((input: RequestInfo | URL) => {
-      const url = String(input)
+      const url = requestUrl(input)
 
       if (url.startsWith("/v1/workspaces")) {
         return Promise.resolve(
@@ -97,7 +98,7 @@ describe("WorkspacesPage", () => {
 
   test("adds a workspace through the modal", async () => {
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
 
       if (url === "/v1/workspaces" && init?.method === "POST") {
         return Promise.resolve(
@@ -155,7 +156,7 @@ describe("WorkspacesPage", () => {
 
   test("searches workspaces through URL params", async () => {
     const fetchMock = mock((input: RequestInfo | URL) => {
-      const url = String(input)
+      const url = requestUrl(input)
 
       if (url.includes("q=agent")) {
         return Promise.resolve(
@@ -198,7 +199,7 @@ describe("WorkspacesPage", () => {
 
   test("filters workspaces by state through URL params", async () => {
     const fetchMock = mock((input: RequestInfo | URL) => {
-      const url = String(input)
+      const url = requestUrl(input)
 
       if (url.includes("state=missing")) {
         return Promise.resolve(
@@ -248,7 +249,7 @@ describe("WorkspacesPage", () => {
 
   test("disables load more when next cursor is absent", async () => {
     globalThis.fetch = mock((input: RequestInfo | URL) => {
-      const url = String(input)
+      const url = requestUrl(input)
 
       if (url.startsWith("/v1/workspaces")) {
         return Promise.resolve(
@@ -287,7 +288,7 @@ describe("WorkspacesPage", () => {
 
   test("renames a workspace inline", async () => {
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
 
       if (url === "/v1/workspaces/ws-agent-server" && init?.method === "PATCH") {
         return Promise.resolve(
@@ -349,7 +350,7 @@ describe("WorkspacesPage", () => {
 
   test("shows rename errors on the card", async () => {
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
 
       if (url === "/v1/workspaces/ws-agent-server" && init?.method === "PATCH") {
         return Promise.resolve(
@@ -411,7 +412,7 @@ describe("WorkspacesPage", () => {
     const deleted = { value: false }
 
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
 
       if (url === "/v1/workspaces/ws-agent-server" && init?.method === "DELETE") {
         deleted.value = true
@@ -455,7 +456,7 @@ describe("WorkspacesPage", () => {
 
   test("shows unregister errors in the modal", async () => {
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
 
       if (url === "/v1/workspaces/ws-agent-server" && init?.method === "DELETE") {
         return Promise.resolve(

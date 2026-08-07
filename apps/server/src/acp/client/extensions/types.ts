@@ -1,6 +1,6 @@
 import { createAcpJsonRpcError } from "../../transport/json-rpc-error"
 
-export type ExtensionHandler = (params: unknown) => unknown | Promise<unknown>
+export type ExtensionHandler = (params: unknown) => unknown
 
 export type ExtensionHandlers = Record<string, ExtensionHandler>
 

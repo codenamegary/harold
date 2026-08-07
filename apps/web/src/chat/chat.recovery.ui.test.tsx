@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router"
 import { AgentSettingsCollectionSchema } from "contracts/http/agent-settings"
 import { SessionCollectionSchema } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
+import { requestUrl } from "../test/request.url"
 import { ChatPage } from "../shell/pages/ChatPage"
 import {
   clearChatTestSelection,
@@ -115,7 +115,7 @@ describe("Chat recovery UI", () => {
     } as unknown as typeof WebSocket
 
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
+      const url = requestUrl(input)
       const method = init?.method ?? "GET"
 
       if (url.startsWith("/v1/workspaces")) {
@@ -234,14 +234,14 @@ describe("Chat recovery UI", () => {
 
     const cancelCallsBefore = fetchMock.mock.calls.filter(
       ([input, init]) =>
-        String(input).includes("/cancel") && (init as RequestInit | undefined)?.method === "POST",
+        requestUrl(input).includes("/cancel") && (init as RequestInit | undefined)?.method === "POST",
     ).length
 
     await joinSessionByName({ getByRole }, idleSessionLabel)
 
     const cancelCallsAfter = fetchMock.mock.calls.filter(
       ([input, init]) =>
-        String(input).includes("/cancel") && (init as RequestInit | undefined)?.method === "POST",
+        requestUrl(input).includes("/cancel") && (init as RequestInit | undefined)?.method === "POST",
     ).length
 
     expect(cancelCallsAfter).toBe(cancelCallsBefore)

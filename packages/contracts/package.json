@@ -24,7 +24,7 @@
     "./events/journal-record": "./src/events/journal-record.ts"
   },
   "scripts": {
-    "lint": "oxlint",
+    "lint": "oxlint --deny-warnings",
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },

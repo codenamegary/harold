@@ -14,6 +14,7 @@ import {
   createWorkspaceDir,
   seedWorkspace,
 } from "../test-support/create-test-app"
+import { eventDataText } from "../test/event.data.text"
 import { Config } from "../config/config"
 import { EventCommitPublisher } from "./commit.publisher"
 import {
@@ -69,7 +70,7 @@ const collectFramesUntil = (params: {
     })
 
     ws.addEventListener("message", (event) => {
-      frames.push(EventFrameSchema.parse(JSON.parse(String(event.data))))
+      frames.push(EventFrameSchema.parse(JSON.parse(eventDataText(event.data))))
       if (params.until(frames)) {
         clearTimeout(timeout)
         ws.close()

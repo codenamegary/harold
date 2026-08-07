@@ -4,6 +4,7 @@ import { Device, DeviceCollectionSchema } from "contracts/http/device"
 import React from "react"
 import { useLocation } from "react-router"
 import { renderWithProviders } from "../query/render.with.providers"
+import { requestUrl } from "../test/request.url"
 import { DevicesView } from "./DevicesView"
 
 const originalFetch = globalThis.fetch
@@ -31,18 +32,6 @@ const collection = (items: ReadonlyArray<Device>) =>
     items,
     page: { limit: 100, count: items.length },
   })
-
-const requestUrl = (input: RequestInfo | URL): string => {
-  if (typeof input === "string") {
-    return input
-  }
-
-  if (input instanceof URL) {
-    return input.href
-  }
-
-  return input.url
-}
 
 const LocationProbe: React.FC = () => {
   const location = useLocation()

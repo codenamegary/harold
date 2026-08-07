@@ -16,7 +16,7 @@ export type RegisterAcpClientHandlersParams = {
   logUnknownExtension?: (method: string) => void
 }
 
-type AcpRequestHandler = (params: unknown) => unknown | Promise<unknown>
+type AcpRequestHandler = (params: unknown) => unknown
 
 const defaultLogUnknownExtension = (method: string) => {
   console.warn(`unknown ACP extension: ${method}`)

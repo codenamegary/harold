@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { act, fireEvent, waitFor } from "@testing-library/react"
 import { AppRoutes } from "../shell/AppRouter"
 import { renderWithProviders } from "../query/render.with.providers"
+import { hrefOf, requestUrl } from "../test/request.url"
 
 const validStatus = {
   version: "0.1.0",
@@ -69,13 +70,13 @@ describe("Connection status recovery", () => {
     statusCallCount.value = 0
 
     globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
-      const socket = createFakeSocket(String(url))
+      const socket = createFakeSocket(hrefOf(url))
       sockets.push(socket)
       return socket
     } as unknown as typeof WebSocket
 
     globalThis.fetch = mock((input: RequestInfo | URL) => {
-      const url = String(input)
+      const url = requestUrl(input)
 
       if (url === "/v1/status" || url.startsWith("/v1/status?")) {
         statusCallCount.value += 1

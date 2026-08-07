@@ -106,7 +106,12 @@ const createLineReader = (stream: ReadableStream<Uint8Array>) => {
     return readNext()
   }
 
-  return { readLine, cancel: () => reader.cancel() }
+  return {
+    readLine,
+    cancel: () => {
+      void reader.cancel()
+    },
+  }
 }
 
 export const createJsonRpcTransport = ({
@@ -147,18 +152,30 @@ export const createJsonRpcTransport = ({
 
     const handlers = requestHandlers.get(message.method) ?? []
     if (handlers.length > 0) {
-      await Promise.all(handlers.map((handler) => handler({
-        id: message.id,
-        params: message.params,
-      })))
+      await Promise.all(
+        handlers.map((handler) =>
+          Promise.resolve(
+            handler({
+              id: message.id,
+              params: message.params,
+            }),
+          ),
+        ),
+      )
       return
     }
 
-    await Promise.all(unhandledRequestHandlers.map((handler) => handler({
-      method: message.method,
-      id: message.id,
-      params: message.params,
-    })))
+    await Promise.all(
+      unhandledRequestHandlers.map((handler) =>
+        Promise.resolve(
+          handler({
+            method: message.method,
+            id: message.id,
+            params: message.params,
+          }),
+        ),
+      ),
+    )
   }
 
   const dispatchMessage = (message: {
