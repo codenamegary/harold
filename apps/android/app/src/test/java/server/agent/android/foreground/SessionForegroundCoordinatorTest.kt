@@ -88,6 +88,37 @@ class SessionForegroundCoordinatorTest {
         assertTrue(broker.pinnedSessionIds().isEmpty())
     }
 
+    @Test
+    fun openSessionIdPrefersAwaitingPermissionOverRunning() = runTest {
+        val tracker = DefaultActiveSessionTracker()
+        val launcher = FakeLauncher()
+        val broker = recordingBroker()
+        val coordinator = SessionForegroundCoordinator(
+            tracker = tracker,
+            permissionChecker = { true },
+            launcher = launcher,
+            streamBroker = broker,
+        )
+
+        coordinator.setServerOrigin("https://example.test")
+        tracker.replaceAll(
+            listOf(
+                ActiveSessionSnapshot("sess_running", "Tea essay", SessionState.Running),
+                ActiveSessionSnapshot(
+                    "sess_permission",
+                    "trigger permission now",
+                    SessionState.AwaitingPermission,
+                ),
+            ),
+        )
+        coordinator.onSessionsChanged()
+        advanceUntilIdle()
+
+        assertEquals("sess_permission", coordinator.state.value.openSessionId)
+        assertEquals("2 active sessions · Needs permission", coordinator.state.value.notification?.text)
+        assertTrue(launcher.isRunning)
+    }
+
     private fun TestScope.recordingBroker(): DefaultSessionStreamBroker =
         DefaultSessionStreamBroker(
             streamFactory = EventStreamFactory { error("unused") },
