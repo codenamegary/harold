@@ -1,11 +1,16 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { fireEvent, waitFor } from "@testing-library/react"
+import { waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router"
 import { AgentSettingsCollectionSchema } from "contracts/http/agent-settings"
 import { SessionCollectionSchema } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
 import { ChatPage } from "../shell/pages/ChatPage"
+import {
+  clearChatTestSelection,
+  joinSessionByName,
+  startNewSession,
+} from "./select.combobox.option"
 
 const workspaceCollection = WorkspaceCollectionSchema.parse({
   items: [
@@ -82,6 +87,11 @@ const sessionsList = SessionCollectionSchema.parse({
   page: { limit: 100, count: 4 },
 })
 
+const idleSessionLabel = "Idle chat"
+const runningSessionLabel = "Running chat"
+const offlineSessionLabel = "Offline chat"
+const errorSessionLabel = "Error chat"
+
 const originalFetch = globalThis.fetch
 const originalWebSocket = globalThis.WebSocket
 
@@ -92,27 +102,9 @@ const renderChat = () =>
     </MemoryRouter>,
   )
 
-const selectWorkspaceAndAgent = async (
-  getByLabelText: ReturnType<typeof renderChat>["getByLabelText"],
-) => {
-  await waitFor(() => {
-    expect(getByLabelText("Workspace")).not.toBeDisabled()
-  })
-  fireEvent.change(getByLabelText("Workspace"), { target: { value: "ws_01" } })
-  fireEvent.change(getByLabelText("Agent"), { target: { value: "cursor" } })
-}
-
-const selectWorkspaceAgentAndWaitForSessions = async (
-  getByLabelText: ReturnType<typeof renderChat>["getByLabelText"],
-) => {
-  await selectWorkspaceAndAgent(getByLabelText)
-  await waitFor(() => {
-    expect(getByLabelText("Session")).toHaveTextContent("Idle chat · idle")
-  })
-}
-
 describe("Chat recovery UI", () => {
   beforeEach(() => {
+    clearChatTestSelection()
     globalThis.WebSocket = function FakeWebSocket() {
       return {
         readyState: 1,
@@ -169,42 +161,31 @@ describe("Chat recovery UI", () => {
   })
 
   afterEach(() => {
+    clearChatTestSelection()
     globalThis.fetch = originalFetch
     globalThis.WebSocket = originalWebSocket
   })
 
   test("new session keeps composer enabled with workspace and agent", async () => {
-    const { getByLabelText, getByRole } = renderChat()
-    await selectWorkspaceAgentAndWaitForSessions(getByLabelText)
+    const { getByRole } = renderChat()
+    await startNewSession({ getByRole })
 
-    expect(getByLabelText("Session")).toHaveValue("")
+    expect(getByRole("combobox", { name: "Session" })).toHaveValue("New session")
     expect(getByRole("textbox", { name: "Chat message" })).not.toBeDisabled()
   })
 
   test("idle session enables composer and shows online status dot", async () => {
     const { getByLabelText, getByRole } = renderChat()
-    await selectWorkspaceAgentAndWaitForSessions(getByLabelText)
+    await joinSessionByName({ getByRole }, idleSessionLabel)
 
-    fireEvent.change(getByLabelText("Session"), { target: { value: idleSession.id } })
-
-    await waitFor(() => {
-      expect(getByLabelText("Session")).toHaveValue(idleSession.id)
-    })
-
-    expect(getByLabelText("Session")).toHaveTextContent("Idle chat · idle")
+    expect(getByRole("combobox", { name: "Session" })).toHaveValue(idleSessionLabel)
     expect(getByRole("textbox", { name: "Chat message" })).not.toBeDisabled()
     expect(getByLabelText("online status")).toBeInTheDocument()
   })
 
   test("running session disables composer and shows cancel without blocked copy", async () => {
     const { getByLabelText, getByRole, queryByText } = renderChat()
-    await selectWorkspaceAgentAndWaitForSessions(getByLabelText)
-
-    fireEvent.change(getByLabelText("Session"), { target: { value: runningSession.id } })
-
-    await waitFor(() => {
-      expect(getByLabelText("Session")).toHaveValue(runningSession.id)
-    })
+    await joinSessionByName({ getByRole }, runningSessionLabel)
 
     expect(getByRole("textbox", { name: "Chat message" })).toBeDisabled()
     expect(getByRole("button", { name: "Cancel turn" })).toBeInTheDocument()
@@ -219,13 +200,7 @@ describe("Chat recovery UI", () => {
 
   test("offline session disables composer with reconnect copy", async () => {
     const { getByLabelText, getByRole, getByText } = renderChat()
-    await selectWorkspaceAgentAndWaitForSessions(getByLabelText)
-
-    fireEvent.change(getByLabelText("Session"), { target: { value: offlineSession.id } })
-
-    await waitFor(() => {
-      expect(getByLabelText("Session")).toHaveValue(offlineSession.id)
-    })
+    await joinSessionByName({ getByRole }, offlineSessionLabel)
 
     expect(getByRole("textbox", { name: "Chat message" })).toBeDisabled()
     expect(
@@ -236,13 +211,7 @@ describe("Chat recovery UI", () => {
 
   test("error session disables composer with terminal copy", async () => {
     const { getByLabelText, getByRole, getByText } = renderChat()
-    await selectWorkspaceAgentAndWaitForSessions(getByLabelText)
-
-    fireEvent.change(getByLabelText("Session"), { target: { value: errorSession.id } })
-
-    await waitFor(() => {
-      expect(getByLabelText("Session")).toHaveValue(errorSession.id)
-    })
+    await joinSessionByName({ getByRole }, errorSessionLabel)
 
     expect(getByRole("textbox", { name: "Chat message" })).toBeDisabled()
     expect(
@@ -252,39 +221,23 @@ describe("Chat recovery UI", () => {
   })
 
   test("console has no resume control", async () => {
-    const { getByLabelText, queryByRole } = renderChat()
-    await selectWorkspaceAgentAndWaitForSessions(getByLabelText)
-
-    fireEvent.change(getByLabelText("Session"), { target: { value: offlineSession.id } })
-
-    await waitFor(() => {
-      expect(getByLabelText("Session")).toHaveValue(offlineSession.id)
-    })
+    const { getByRole, queryByRole } = renderChat()
+    await joinSessionByName({ getByRole }, offlineSessionLabel)
 
     expect(queryByRole("button", { name: /resume/i })).not.toBeInTheDocument()
   })
 
   test("switching sessions does not post cancel", async () => {
     const fetchMock = globalThis.fetch as ReturnType<typeof mock>
-    const { getByLabelText } = renderChat()
-    await selectWorkspaceAgentAndWaitForSessions(getByLabelText)
-
-    fireEvent.change(getByLabelText("Session"), { target: { value: runningSession.id } })
-
-    await waitFor(() => {
-      expect(getByLabelText("Session")).toHaveValue(runningSession.id)
-    })
+    const { getByRole } = renderChat()
+    await joinSessionByName({ getByRole }, runningSessionLabel)
 
     const cancelCallsBefore = fetchMock.mock.calls.filter(
       ([input, init]) =>
         String(input).includes("/cancel") && (init as RequestInit | undefined)?.method === "POST",
     ).length
 
-    fireEvent.change(getByLabelText("Session"), { target: { value: idleSession.id } })
-
-    await waitFor(() => {
-      expect(getByLabelText("Session")).toHaveValue(idleSession.id)
-    })
+    await joinSessionByName({ getByRole }, idleSessionLabel)
 
     const cancelCallsAfter = fetchMock.mock.calls.filter(
       ([input, init]) =>

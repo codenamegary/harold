@@ -9,6 +9,13 @@ import {
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
 import { ChatPage } from "../shell/pages/ChatPage"
+import {
+  clearChatTestSelection,
+  confirmNewSessionModal,
+  joinSessionByName,
+  openNewSessionModal,
+  startNewSession,
+} from "./select.combobox.option"
 
 const workspaceCollection = WorkspaceCollectionSchema.parse({
   items: [
@@ -103,6 +110,7 @@ describe("Chat session flow", () => {
   const sockets: FakeSocket[] = []
 
   beforeEach(() => {
+    clearChatTestSelection()
     sockets.length = 0
 
     globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
@@ -183,6 +191,7 @@ describe("Chat session flow", () => {
   })
 
   afterEach(() => {
+    clearChatTestSelection()
     globalThis.fetch = originalFetch
     globalThis.WebSocket = originalWebSocket
   })
@@ -195,13 +204,9 @@ describe("Chat session flow", () => {
     )
 
   const selectWorkspaceAndAgent = async (
-    getByLabelText: ReturnType<typeof renderChat>["getByLabelText"],
+    getByRole: ReturnType<typeof renderChat>["getByRole"],
   ) => {
-    await waitFor(() => {
-      expect(getByLabelText("Workspace")).not.toBeDisabled()
-    })
-    fireEvent.change(getByLabelText("Workspace"), { target: { value: "ws_01" } })
-    fireEvent.change(getByLabelText("Agent"), { target: { value: "cursor" } })
+    await startNewSession({ getByRole })
   }
 
   const typeAndSend = async (
@@ -228,7 +233,7 @@ describe("Chat session flow", () => {
   test("create-with-prompt binds session and opens event stream from cursor 0", async () => {
     const fetchMock = globalThis.fetch as ReturnType<typeof mock>
     const { getByLabelText, getByRole } = renderChat()
-    await selectWorkspaceAndAgent(getByLabelText)
+    await selectWorkspaceAndAgent(getByRole)
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {
@@ -242,7 +247,7 @@ describe("Chat session flow", () => {
     })
 
     await waitFor(() => {
-      expect(getByLabelText("Session")).toHaveValue(createdSession.id)
+      expect(getByRole("combobox", { name: "Session" })).toHaveValue(createdSession.name)
     })
 
     await waitFor(() => {
@@ -317,11 +322,11 @@ describe("Chat session flow", () => {
   test("cancel posts while running and prompt posts on existing session", async () => {
     const fetchMock = globalThis.fetch as ReturnType<typeof mock>
     const { getByLabelText, getByRole } = renderChat()
-    await selectWorkspaceAndAgent(getByLabelText)
+    await selectWorkspaceAndAgent(getByRole)
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {
-      expect(getByLabelText("Session")).toHaveValue(createdSession.id)
+      expect(getByRole("combobox", { name: "Session" })).toHaveValue(createdSession.name)
     })
 
     await waitFor(() => {
@@ -401,7 +406,7 @@ describe("Chat session flow", () => {
 
   test("reconnect clears and rebuilds transcript from replay", async () => {
     const { getByLabelText, getByRole, getByText, queryByText } = renderChat()
-    await selectWorkspaceAndAgent(getByLabelText)
+    await selectWorkspaceAndAgent(getByRole)
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {
@@ -442,10 +447,12 @@ describe("Chat session flow", () => {
       expect(getByText("stale")).toBeInTheDocument()
     })
 
-    fireEvent.change(getByLabelText("Session"), { target: { value: "" } })
-    fireEvent.change(getByLabelText("Session"), {
-      target: { value: createdSession.id },
-    })
+    await openNewSessionModal({ getByRole })
+    await confirmNewSessionModal(
+      { getByRole },
+      { workspaceName: "agent-server", agentName: "Cursor" },
+    )
+    await joinSessionByName({ getByRole }, createdSession.name)
 
     await waitFor(() => {
       expect(sockets.length).toBe(2)

@@ -1,15 +1,17 @@
 import { SessionCollectionSchema } from "contracts/http/session"
 
 export type FetchSessionsParams = {
-  workspaceId: string
+  workspaceId?: string
   limit?: number
   cursor?: string
 }
 
-export const fetchSessions = async (params: FetchSessionsParams) => {
+export const fetchSessions = async (params: FetchSessionsParams = {}) => {
   const searchParams = new URLSearchParams()
-  searchParams.set("workspaceId", params.workspaceId)
 
+  if (params.workspaceId !== undefined && params.workspaceId !== "") {
+    searchParams.set("workspaceId", params.workspaceId)
+  }
   if (params.limit !== undefined) {
     searchParams.set("limit", String(params.limit))
   }
@@ -17,7 +19,9 @@ export const fetchSessions = async (params: FetchSessionsParams) => {
     searchParams.set("cursor", params.cursor)
   }
 
-  const response = await fetch(`/v1/sessions?${searchParams.toString()}`)
+  const query = searchParams.toString()
+  const url = query === "" ? "/v1/sessions" : `/v1/sessions?${query}`
+  const response = await fetch(url)
 
   if (!response.ok) {
     throw new Error(`Sessions fetch failed with ${response.status}`)

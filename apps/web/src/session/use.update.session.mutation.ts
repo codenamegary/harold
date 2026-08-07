@@ -18,20 +18,21 @@ export const useUpdateSessionMutation = () => {
     mutationFn: ({ sessionId, body }: UpdateSessionInput) =>
       updateSession(sessionId, body),
     onSuccess: (session) => {
-      const key = queryKeys.sessions(session.workspaceId)
-      const existing = queryClient.getQueryData(key)
-      if (existing !== undefined) {
-        const collection = SessionCollectionSchema.parse(existing)
-        queryClient.setQueryData(
-          key,
-          SessionCollectionSchema.parse({
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.sessionsRoot },
+        (existing: unknown) => {
+          if (existing === undefined) {
+            return existing
+          }
+          const collection = SessionCollectionSchema.parse(existing)
+          return SessionCollectionSchema.parse({
             items: collection.items.map((item) =>
               item.id === session.id ? session : item,
             ),
             page: collection.page,
-          }),
-        )
-      }
+          })
+        },
+      )
     },
   })
 }

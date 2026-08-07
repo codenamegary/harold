@@ -9,22 +9,23 @@ export const useArchiveSessionMutation = () => {
   return useMutation({
     mutationFn: (sessionId: string) => archiveSession(sessionId),
     onSuccess: (session) => {
-      const key = queryKeys.sessions(session.workspaceId)
-      const existing = queryClient.getQueryData(key)
-      if (existing !== undefined) {
-        const collection = SessionCollectionSchema.parse(existing)
-        const nextItems = collection.items.filter((item) => item.id !== session.id)
-        queryClient.setQueryData(
-          key,
-          SessionCollectionSchema.parse({
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.sessionsRoot },
+        (existing: unknown) => {
+          if (existing === undefined) {
+            return existing
+          }
+          const collection = SessionCollectionSchema.parse(existing)
+          const nextItems = collection.items.filter((item) => item.id !== session.id)
+          return SessionCollectionSchema.parse({
             items: nextItems,
             page: {
               ...collection.page,
               count: nextItems.length,
             },
-          }),
-        )
-      }
+          })
+        },
+      )
     },
   })
 }

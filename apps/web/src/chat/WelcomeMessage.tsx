@@ -8,7 +8,7 @@ export const WelcomeMessage: React.FC = () => (
     >
       ›_
     </div>
-    <h3 className="m-0 mb-2 text-lg">Test your ACP connection</h3>
+    <h3 className="m-0 mb-2 text-lg">Chat with an agent</h3>
     <p className="text-sm text-muted">
       Send a prompt directly to an agent without leaving the console.
     </p>

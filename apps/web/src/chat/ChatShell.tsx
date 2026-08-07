@@ -1,5 +1,5 @@
 import React from "react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { AgentId } from "contracts/http/agent-settings"
 import { Event } from "contracts/events/event"
 import { PermissionRequest } from "contracts/http/permission"
@@ -33,6 +33,11 @@ import {
   isComposerPromptable,
   resolveEffectiveSessionState,
 } from "./chat.promptability"
+import {
+  clearChatSelection,
+  readChatSelection,
+  writeChatSelection,
+} from "./chat.selection.storage"
 
 export const ChatShell: React.FC = () => {
   const [workspaceId, setWorkspaceId] = useState("")
@@ -41,10 +46,11 @@ export const ChatShell: React.FC = () => {
   const [transcript, setTranscript] = useState<TranscriptState>(emptyTranscript)
   const [pendingPermissions, setPendingPermissions] = useState<PermissionRequest[]>([])
   const [submittingOptionId, setSubmittingOptionId] = useState<string | null>(null)
+  const hasAttemptedResume = useRef(false)
 
   const workspacesQuery = useWorkspacesInfiniteQuery({})
   const agentsQuery = useAgentSettingsQuery()
-  const sessionsQuery = useSessionsQuery(workspaceId === "" ? null : workspaceId)
+  const sessionsQuery = useSessionsQuery()
 
   const createSessionMutation = useCreateSessionMutation()
   const promptSessionMutation = usePromptSessionMutation()
@@ -58,6 +64,45 @@ export const ChatShell: React.FC = () => {
   const sessions = (sessionsQuery.data?.items ?? []).filter(
     (session) => session.state !== "archived" && session.archivedAt === null,
   )
+
+  const persistSelection = (next: {
+    workspaceId: string
+    agentId: AgentId | ""
+    sessionId: string
+  }) => {
+    writeChatSelection(next)
+  }
+
+  useEffect(() => {
+    if (hasAttemptedResume.current) {
+      return
+    }
+    if (sessionsQuery.isLoading || sessionsQuery.isError) {
+      return
+    }
+
+    hasAttemptedResume.current = true
+    const saved = readChatSelection()
+    if (saved === null || saved.sessionId === "") {
+      return
+    }
+
+    const matched = sessions.find((session) => session.id === saved.sessionId)
+    if (matched === undefined) {
+      clearChatSelection()
+      return
+    }
+
+    setWorkspaceId(matched.workspaceId)
+    setAgentId(matched.agentId)
+    setSessionId(matched.id)
+    persistSelection({
+      workspaceId: matched.workspaceId,
+      agentId: matched.agentId,
+      sessionId: matched.id,
+    })
+    selectSessionMutation.mutate(matched.id)
+  }, [sessions, sessionsQuery.isError, sessionsQuery.isLoading, selectSessionMutation])
 
   const handleEvents = (events: ReadonlyArray<Event>) => {
     setTranscript((current) => foldTranscriptEvents(current, events))
@@ -107,7 +152,9 @@ export const ChatShell: React.FC = () => {
   const handleSessionArchived = () => {
     setSessionId("")
     setTranscript(emptyTranscript)
+    persistSelection({ workspaceId, agentId, sessionId: "" })
   }
+
   const effectiveSessionState = resolveEffectiveSessionState({
     sessionId,
     transcriptSessionState: transcript.sessionState,
@@ -150,37 +197,37 @@ export const ChatShell: React.FC = () => {
   })
   const blockedMessage = composerBlockedMessage(effectiveSessionState)
 
-  const handleWorkspaceChange = (nextWorkspaceId: string) => {
-    setWorkspaceId(nextWorkspaceId)
-    setSessionId("")
-    setTranscript(emptyTranscript)
-  }
-
-  const handleAgentChange = (nextAgentId: AgentId | "") => {
-    setAgentId(nextAgentId)
-    if (
-      sessionId !== "" &&
-      selectedSession !== undefined &&
-      nextAgentId !== "" &&
-      selectedSession.agentId !== nextAgentId
-    ) {
-      setSessionId("")
-      setTranscript(emptyTranscript)
-    }
-  }
-
-  const handleSessionChange = (nextSessionId: string) => {
-    setSessionId(nextSessionId)
-    setTranscript(emptyTranscript)
-    if (nextSessionId === "") {
+  const handleJoinSession = (nextSessionId: string) => {
+    const nextSession = sessions.find((session) => session.id === nextSessionId)
+    if (nextSession === undefined) {
       return
     }
 
-    const nextSession = sessions.find((session) => session.id === nextSessionId)
-    if (nextSession !== undefined) {
-      setAgentId(nextSession.agentId)
-      selectSessionMutation.mutate(nextSessionId)
-    }
+    setWorkspaceId(nextSession.workspaceId)
+    setAgentId(nextSession.agentId)
+    setSessionId(nextSession.id)
+    setTranscript(emptyTranscript)
+    persistSelection({
+      workspaceId: nextSession.workspaceId,
+      agentId: nextSession.agentId,
+      sessionId: nextSession.id,
+    })
+    selectSessionMutation.mutate(nextSessionId)
+  }
+
+  const handleStartNewSession = (selection: {
+    workspaceId: string
+    agentId: AgentId
+  }) => {
+    setWorkspaceId(selection.workspaceId)
+    setAgentId(selection.agentId)
+    setSessionId("")
+    setTranscript(emptyTranscript)
+    persistSelection({
+      workspaceId: selection.workspaceId,
+      agentId: selection.agentId,
+      sessionId: "",
+    })
   }
 
   const handleSend = (text: string) => {
@@ -199,6 +246,11 @@ export const ChatShell: React.FC = () => {
           onSuccess: (created) => {
             setSessionId(created.id)
             setTranscript(emptyTranscript)
+            persistSelection({
+              workspaceId: created.workspaceId,
+              agentId: created.agentId,
+              sessionId: created.id,
+            })
           },
         },
       )
@@ -231,9 +283,8 @@ export const ChatShell: React.FC = () => {
         sessionId={sessionId}
         selectedSession={selectedSession}
         selectedSessionState={effectiveSessionState}
-        onWorkspaceChange={handleWorkspaceChange}
-        onAgentChange={handleAgentChange}
-        onSessionChange={handleSessionChange}
+        onJoinSession={handleJoinSession}
+        onStartNewSession={handleStartNewSession}
         onSessionArchived={handleSessionArchived}
       />
       <div className="flex-1 overflow-y-auto px-[max(25px,calc((100%-800px)/2))] py-[25px] [scrollbar-color:#252b34_transparent] max-[820px]:px-[13px] max-[820px]:py-[18px]">

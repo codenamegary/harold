@@ -3,8 +3,15 @@ import { act, fireEvent, waitFor } from "@testing-library/react"
 import { AgentSettingsCollectionSchema } from "contracts/http/agent-settings"
 import { SessionCollectionSchema } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
+import {
+  clearChatTestSelection,
+  joinSessionByName,
+  openComboboxOptions,
+  startNewSession,
+} from "../chat/select.combobox.option"
 import { renderWithProviders } from "../query/render.with.providers"
 import { AppRoutes } from "../shell/AppRouter"
+import userEvent from "@testing-library/user-event"
 
 const validStatus = {
   version: "0.1.0",
@@ -120,6 +127,7 @@ describe("App live session list", () => {
   const sockets: FakeSocket[] = []
 
   beforeEach(() => {
+    clearChatTestSelection()
     sockets.length = 0
 
     globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
@@ -197,36 +205,17 @@ describe("App live session list", () => {
   })
 
   afterEach(() => {
+    clearChatTestSelection()
     globalThis.fetch = originalFetch
     globalThis.WebSocket = originalWebSocket
   })
 
   test("session list updates from app stream while another session is selected", async () => {
-    const { getByLabelText } = renderWithProviders(<AppRoutes />, {
+    const { getByRole } = renderWithProviders(<AppRoutes />, {
       initialEntries: ["/chat"],
     })
 
-    await waitFor(() => {
-      expect(getByLabelText("Workspace")).not.toBeDisabled()
-    })
-
-    fireEvent.change(getByLabelText("Workspace"), { target: { value: "ws_01" } })
-    fireEvent.change(getByLabelText("Agent"), { target: { value: "cursor" } })
-
-    await waitFor(() => {
-      expect(getByLabelText("Session")).toHaveTextContent("Selected chat · idle")
-      expect(getByLabelText("Session")).toHaveTextContent("Background chat · idle")
-    })
-
-    fireEvent.change(getByLabelText("Session"), {
-      target: { value: selectedSession.id },
-    })
-
-    await waitFor(() => {
-      expect((getByLabelText("Session") as HTMLSelectElement).value).toBe(
-        selectedSession.id,
-      )
-    })
+    await joinSessionByName({ getByRole }, "Selected chat")
 
     await waitFor(() => {
       expect(sockets.some(isAppEventSocket)).toBe(true)
@@ -238,8 +227,9 @@ describe("App live session list", () => {
     const appSocket = sockets.find(isAppEventSocket)
     expect(appSocket).toBeDefined()
 
-    const sessionSelect = getByLabelText("Session")
-    expect(sessionSelect).toHaveTextContent("Background chat · idle")
+    await openComboboxOptions({ getByRole }, "Session")
+    expect(getByRole("option", { name: /Background chat/ })).toBeInTheDocument()
+    await userEvent.setup().keyboard("{Escape}")
 
     act(() => {
       appSocket?.dispatch(
@@ -260,51 +250,26 @@ describe("App live session list", () => {
       )
     })
 
+    await openComboboxOptions({ getByRole }, "Session")
     await waitFor(() => {
-      expect(sessionSelect).toHaveTextContent("Background chat · running")
+      expect(getByRole("option", { name: /Background chat/ })).toHaveTextContent("running")
     })
-
-    expect(getByLabelText("Session")).toHaveValue(selectedSession.id)
-    expect(sessionSelect).toHaveTextContent("Selected chat · idle")
+    expect(getByRole("combobox", { name: "Session" })).toHaveValue("Selected chat")
+    expect(getByRole("option", { name: /Selected chat/ })).toHaveTextContent("idle")
   })
 
   test("switching selected session keeps the app stream open", async () => {
-    const { getByLabelText } = renderWithProviders(<AppRoutes />, {
+    const { getByRole } = renderWithProviders(<AppRoutes />, {
       initialEntries: ["/chat"],
     })
 
-    await waitFor(() => {
-      expect(getByLabelText("Workspace")).not.toBeDisabled()
-    })
-
-    fireEvent.change(getByLabelText("Workspace"), { target: { value: "ws_01" } })
-    fireEvent.change(getByLabelText("Agent"), { target: { value: "cursor" } })
-
-    await waitFor(() => {
-      expect(getByLabelText("Session")).toHaveTextContent("Selected chat · idle")
-    })
-
-    fireEvent.change(getByLabelText("Session"), {
-      target: { value: selectedSession.id },
-    })
-
-    await waitFor(() => {
-      expect((getByLabelText("Session") as HTMLSelectElement).value).toBe(
-        selectedSession.id,
-      )
-    })
+    await joinSessionByName({ getByRole }, "Selected chat")
 
     const appSocketBefore = sockets.find(isAppEventSocket)
     expect(appSocketBefore).toBeDefined()
     expect(appSocketBefore?.readyState).toBe(1)
 
-    fireEvent.change(getByLabelText("Session"), {
-      target: { value: otherSession.id },
-    })
-
-    await waitFor(() => {
-      expect(getByLabelText("Session")).toHaveValue(otherSession.id)
-    })
+    await joinSessionByName({ getByRole }, "Background chat")
 
     await waitFor(() => {
       expect(sockets.some((socket) => isSessionEventSocket(socket, otherSession.id))).toBe(
@@ -334,8 +299,9 @@ describe("App live session list", () => {
       )
     })
 
+    await openComboboxOptions({ getByRole }, "Session")
     await waitFor(() => {
-      expect(getByLabelText("Session")).toHaveTextContent("Selected chat · error")
+      expect(getByRole("option", { name: /Selected chat/ })).toHaveTextContent("error")
     })
   })
 })

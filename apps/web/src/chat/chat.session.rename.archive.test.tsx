@@ -6,6 +6,10 @@ import { SessionCollectionSchema, SessionSchema } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
 import { ChatPage } from "../shell/pages/ChatPage"
+import {
+  clearChatTestSelection,
+  joinSessionByName,
+} from "./select.combobox.option"
 
 const workspaceCollection = WorkspaceCollectionSchema.parse({
   items: [
@@ -82,23 +86,13 @@ const renderChatPage = () =>
     </MemoryRouter>,
   )
 
-const selectLiveSession = async (getByLabelText: (name: string) => HTMLElement) => {
-  await waitFor(() => {
-    expect(getByLabelText("Workspace")).not.toBeDisabled()
-  })
-
-  fireEvent.change(getByLabelText("Workspace"), { target: { value: "ws_01" } })
-  fireEvent.change(getByLabelText("Agent"), { target: { value: "cursor" } })
-
-  await waitFor(() => {
-    expect(getByLabelText("Session")).not.toBeDisabled()
-  })
-
-  fireEvent.change(getByLabelText("Session"), { target: { value: liveSession.id } })
+const selectLiveSession = async (getByRole: ReturnType<typeof renderChatPage>["getByRole"]) => {
+  await joinSessionByName({ getByRole }, "Explain auth")
 }
 
 describe("Chat session rename and archive", () => {
   beforeEach(() => {
+    clearChatTestSelection()
     globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
       return createFakeSocket(String(url))
     } as unknown as typeof WebSocket
@@ -148,6 +142,7 @@ describe("Chat session rename and archive", () => {
   })
 
   afterEach(() => {
+    clearChatTestSelection()
     globalThis.fetch = originalFetch
     globalThis.WebSocket = originalWebSocket
   })
@@ -213,12 +208,16 @@ describe("Chat session rename and archive", () => {
     globalThis.fetch = fetchMock as typeof fetch
 
     const { getByLabelText, getByRole } = renderChatPage()
-    await selectLiveSession(getByLabelText)
+    await selectLiveSession(getByRole)
 
+    await waitFor(() => {
+      expect(getByRole("button", { name: "Edit name for Explain auth" })).toBeInTheDocument()
+    })
+
+    fireEvent.click(getByRole("button", { name: "Edit name for Explain auth" }))
     await waitFor(() => {
       expect(getByRole("button", { name: "Rename Explain auth" })).toBeInTheDocument()
     })
-
     fireEvent.click(getByRole("button", { name: "Rename Explain auth" }))
     const renameInput = getByRole("textbox", { name: "Rename Explain auth" })
     fireEvent.change(renameInput, { target: { value: "Renamed session" } })
@@ -235,12 +234,11 @@ describe("Chat session rename and archive", () => {
     })
 
     await waitFor(() => {
-      expect(getByRole("button", { name: "Rename Renamed session" })).toBeInTheDocument()
+      expect(getByRole("button", { name: "Edit name for Renamed session" })).toBeInTheDocument()
     })
 
     await waitFor(() => {
-      const sessionSelect = getByLabelText("Session") as HTMLSelectElement
-      expect(sessionSelect).toHaveTextContent("Renamed session · idle")
+      expect(getByRole("combobox", { name: "Session" })).toHaveValue("Renamed session")
     })
   })
 
@@ -306,12 +304,16 @@ describe("Chat session rename and archive", () => {
     globalThis.fetch = fetchMock as typeof fetch
 
     const { getByLabelText, getByRole } = renderChatPage()
-    await selectLiveSession(getByLabelText)
+    await selectLiveSession(getByRole)
 
+    await waitFor(() => {
+      expect(getByRole("button", { name: "Edit name for Explain auth" })).toBeInTheDocument()
+    })
+
+    fireEvent.click(getByRole("button", { name: "Edit name for Explain auth" }))
     await waitFor(() => {
       expect(getByRole("button", { name: "Rename Explain auth" })).toBeInTheDocument()
     })
-
     fireEvent.click(getByRole("button", { name: "Rename Explain auth" }))
     const renameInput = getByRole("textbox", { name: "Rename Explain auth" })
     fireEvent.change(renameInput, { target: { value: "Missing session" } })
@@ -392,7 +394,7 @@ describe("Chat session rename and archive", () => {
     globalThis.fetch = fetchMock as typeof fetch
 
     const { getByLabelText, getByRole, queryByRole } = renderChatPage()
-    await selectLiveSession(getByLabelText)
+    await selectLiveSession(getByRole)
 
     await waitFor(() => {
       expect(getByRole("button", { name: "Archive Explain auth" })).toBeInTheDocument()
@@ -416,13 +418,8 @@ describe("Chat session rename and archive", () => {
     )
 
     await waitFor(() => {
-      expect(getByLabelText("Session")).toHaveValue("")
+      expect(getByRole("combobox", { name: "Session" })).toHaveValue("New session")
       expect(queryByRole("button", { name: "Rename Explain auth" })).not.toBeInTheDocument()
-      expect(
-        Array.from((getByLabelText("Session") as HTMLSelectElement).options).map(
-          (option) => option.textContent,
-        ),
-      ).not.toContain("Explain auth · idle")
     })
   })
 
@@ -488,7 +485,7 @@ describe("Chat session rename and archive", () => {
     globalThis.fetch = fetchMock as typeof fetch
 
     const { getByLabelText, getByRole } = renderChatPage()
-    await selectLiveSession(getByLabelText)
+    await selectLiveSession(getByRole)
 
     await waitFor(() => {
       expect(getByRole("button", { name: "Archive Explain auth" })).toBeInTheDocument()

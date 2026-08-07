@@ -18,7 +18,7 @@ const routeMetaByPath: Record<string, RouteMeta> = {
   "/connect": { eyebrow: "CONNECTION WIZARD", title: "Connect" },
   "/workspaces": { eyebrow: "PROJECTS & AGENTS", title: "Workspaces" },
   "/devices": { eyebrow: "ACCESS CONTROL", title: "Devices" },
-  "/chat": { eyebrow: "LOCAL TEST", title: "Agent playground" },
+  "/chat": { eyebrow: "SESSIONS", title: "Chat" },
   "/settings": { eyebrow: "SERVER", title: "Settings" },
 }
 
@@ -79,7 +79,7 @@ export const AppShell: React.FC = () => {
             Devices
           </SidebarNavLink>
           <SidebarNavLink to="/chat" icon={<span>›_</span>}>
-            Test chat
+            Chat
           </SidebarNavLink>
         </nav>
 
@@ -143,7 +143,7 @@ export const AppShell: React.FC = () => {
               onClick={closeSidebar}
               className="inline-flex min-h-9 items-center justify-center gap-3 rounded-[7px] border border-lime bg-lime px-3.5 text-base font-semibold whitespace-nowrap text-lime-ink shadow-[0_0_0_1px_rgba(0,0,0,0.18),inset_0_1px_rgba(255,255,255,0.25)] hover:bg-lime-hover max-[640px]:hidden"
             >
-              <span>Open test chat</span>
+              <span>Open chat</span>
               <span aria-hidden>→</span>
             </Link>
           </div>

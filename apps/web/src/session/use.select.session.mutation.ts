@@ -7,9 +7,9 @@ export const useSelectSessionMutation = () => {
 
   return useMutation({
     mutationFn: (sessionId: string) => selectSession(sessionId),
-    onSuccess: async (session) => {
+    onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: queryKeys.sessions(session.workspaceId),
+        queryKey: queryKeys.sessionsRoot,
       })
     },
   })

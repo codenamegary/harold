@@ -42,7 +42,7 @@ export const useCreateSessionMutation = () => {
         )
       }
 
-      await queryClient.invalidateQueries({ queryKey: key })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.sessionsRoot })
     },
   })
 }

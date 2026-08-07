@@ -14,6 +14,6 @@ export const queryKeys = {
   runtimeSettingsRoot: ["runtimeSettings"] as const,
   runtimeSettings: () => [...queryKeys.runtimeSettingsRoot] as const,
   sessionsRoot: ["sessions"] as const,
-  sessions: (workspaceId: string) =>
-    [...queryKeys.sessionsRoot, workspaceId] as const,
+  sessions: (workspaceId?: string) =>
+    [...queryKeys.sessionsRoot, workspaceId ?? "all"] as const,
 }

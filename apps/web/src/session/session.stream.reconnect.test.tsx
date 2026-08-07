@@ -9,6 +9,11 @@ import {
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
 import { ChatPage } from "../shell/pages/ChatPage"
+import {
+  clearChatTestSelection,
+  joinSessionByName,
+  startNewSession,
+} from "../chat/select.combobox.option"
 
 const workspaceCollection = WorkspaceCollectionSchema.parse({
   items: [
@@ -108,6 +113,7 @@ describe("Session stream reconnect rebuild", () => {
   const sockets: FakeSocket[] = []
 
   beforeEach(() => {
+    clearChatTestSelection()
     sockets.length = 0
 
     globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
@@ -170,6 +176,7 @@ describe("Session stream reconnect rebuild", () => {
   })
 
   afterEach(() => {
+    clearChatTestSelection()
     globalThis.fetch = originalFetch
     globalThis.WebSocket = originalWebSocket
   })
@@ -182,13 +189,9 @@ describe("Session stream reconnect rebuild", () => {
     )
 
   const selectWorkspaceAndAgent = async (
-    getByLabelText: ReturnType<typeof renderChat>["getByLabelText"],
+    getByRole: ReturnType<typeof renderChat>["getByRole"],
   ) => {
-    await waitFor(() => {
-      expect(getByLabelText("Workspace")).not.toBeDisabled()
-    })
-    fireEvent.change(getByLabelText("Workspace"), { target: { value: "ws_01" } })
-    fireEvent.change(getByLabelText("Agent"), { target: { value: "cursor" } })
+    await startNewSession({ getByRole })
   }
 
   const typeAndSend = async (
@@ -214,11 +217,11 @@ describe("Session stream reconnect rebuild", () => {
 
   test("close reopens stream and rebuilds transcript from journal replay only", async () => {
     const { getByLabelText, getByRole, queryByText } = renderChat()
-    await selectWorkspaceAndAgent(getByLabelText)
+    await selectWorkspaceAndAgent(getByRole)
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {
-      expect(getByLabelText("Session")).toHaveValue(createdSession.id)
+      expect(getByRole("combobox", { name: "Session" })).toHaveValue(createdSession.name)
     })
 
     await waitFor(() => {
@@ -354,7 +357,7 @@ describe("Session stream reconnect rebuild", () => {
 
   test("error reopens stream with cursor 0 after clear for full replay", async () => {
     const { getByLabelText, getByRole } = renderChat()
-    await selectWorkspaceAndAgent(getByLabelText)
+    await selectWorkspaceAndAgent(getByRole)
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {

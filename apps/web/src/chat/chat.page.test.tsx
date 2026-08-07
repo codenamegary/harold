@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { fireEvent, waitFor } from "@testing-library/react"
+import { waitFor } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router"
 import { AgentSettingsCollectionSchema } from "contracts/http/agent-settings"
 import { SessionCollectionSchema } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
 import { ChatPage } from "../shell/pages/ChatPage"
+import { clearChatTestSelection, openNewSessionModal, confirmNewSessionModal } from "./select.combobox.option"
 
 const workspaceCollection = WorkspaceCollectionSchema.parse({
   items: [
@@ -57,6 +59,7 @@ const renderChatPage = () =>
 
 describe("ChatPage", () => {
   beforeEach(() => {
+    clearChatTestSelection()
     globalThis.fetch = mock((input: RequestInfo | URL) => {
       const url = String(input)
 
@@ -92,6 +95,7 @@ describe("ChatPage", () => {
   })
 
   afterEach(() => {
+    clearChatTestSelection()
     globalThis.fetch = originalFetch
     globalThis.WebSocket = originalWebSocket
   })
@@ -101,46 +105,57 @@ describe("ChatPage", () => {
 
     expect(getByRole("main")).toBeInTheDocument()
     await waitFor(() => {
-      expect(getByRole("heading", { level: 3, name: "Test your ACP connection" })).toBeInTheDocument()
+      expect(getByRole("heading", { level: 3, name: "Chat with an agent" })).toBeInTheDocument()
     })
     expect(getByText("Send a prompt directly to an agent without leaving the console.")).toBeInTheDocument()
   })
 
-  test("workspace agent and session selectors leave the disabled stub state", async () => {
-    const { getByLabelText } = renderChatPage()
+  test("session picker is available for join or new", async () => {
+    const { getByRole } = renderChatPage()
+    const user = userEvent.setup()
 
     await waitFor(() => {
-      expect(getByLabelText("Workspace")).not.toBeDisabled()
+      expect(getByRole("combobox", { name: "Session" })).not.toBeDisabled()
     })
 
-    expect(getByLabelText("Agent")).not.toBeDisabled()
-    expect(getByLabelText("Session")).toBeDisabled()
-    expect(getByLabelText("Workspace").querySelectorAll("option").length).toBeGreaterThan(1)
+    await user.click(getByRole("combobox", { name: "Session" }))
+    await waitFor(() => {
+      expect(getByRole("option", { name: /New session/ })).toBeInTheDocument()
+    })
+    await user.keyboard("{Escape}")
   })
 
-  test("composer enables when workspace and agent are selected", async () => {
-    const { getByLabelText, getByRole } = renderChatPage()
+  test("new session modal enables composer after workspace and agent are chosen", async () => {
+    const { getByRole } = renderChatPage()
 
     await waitFor(() => {
-      expect(getByLabelText("Workspace")).not.toBeDisabled()
+      expect(getByRole("combobox", { name: "Session" })).not.toBeDisabled()
     })
 
-    fireEvent.change(getByLabelText("Workspace"), { target: { value: "ws_01" } })
-    fireEvent.change(getByLabelText("Agent"), { target: { value: "cursor" } })
+    await openNewSessionModal({ getByRole })
+
+    await waitFor(() => {
+      expect(getByRole("dialog", { name: "New session" })).toBeInTheDocument()
+    })
+
+    await confirmNewSessionModal(
+      { getByRole },
+      { workspaceName: "agent-server", agentName: "Cursor" },
+    )
 
     await waitFor(() => {
       expect(getByRole("textbox", { name: "Chat message" })).not.toBeDisabled()
     })
     expect(getByRole("button", { name: "Send message" })).toBeDisabled()
-    expect(getByLabelText("Session")).not.toBeDisabled()
-    expect(getByLabelText("Session")).toHaveValue("")
+    expect(getByRole("combobox", { name: "Session" })).toHaveValue("New session")
+    expect(getByRole("main").ownerDocument.body).toHaveTextContent("agent-server · Cursor")
   })
 
   test("prototype slash menu, prompt chips, and attach are gone", async () => {
     const { getByRole, queryByRole, queryByText } = renderChatPage()
 
     await waitFor(() => {
-      expect(getByRole("heading", { level: 3, name: "Test your ACP connection" })).toBeInTheDocument()
+      expect(getByRole("heading", { level: 3, name: "Chat with an agent" })).toBeInTheDocument()
     })
 
     expect(queryByRole("menu", { name: "Slash commands" })).not.toBeInTheDocument()

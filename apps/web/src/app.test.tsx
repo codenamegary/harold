@@ -20,7 +20,7 @@ const routePages = [
   { path: "/connect", heading: "Connect" },
   { path: "/workspaces", heading: "Workspaces" },
   { path: "/devices", heading: "Devices" },
-  { path: "/chat", heading: "Agent playground" },
+  { path: "/chat", heading: "Chat" },
   { path: "/settings", heading: "Settings" },
 ] as const
 
