@@ -305,8 +305,7 @@ export const ProviderPanel: React.FC = () => (
     <div className="mb-[22px]">
       <h3 className="m-0 text-lg font-semibold">Workspace provider</h3>
       <p className="m-0 mt-2 max-w-2xl text-sm text-muted">
-        Control where Agent Server can create workspaces and which folders agents are allowed to
-        access.
+        Control where workspaces live.
       </p>
     </div>
 
