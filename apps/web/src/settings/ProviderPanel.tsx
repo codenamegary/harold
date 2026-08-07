@@ -1,11 +1,14 @@
 import React, { useState } from "react"
 import { CircleHelp, Save, Trash2 } from "lucide-react"
+import {
+  ActionField,
+  ActionTextInput,
+  FieldActionButton,
+} from "../design-system/ActionTextInput"
 import { Button } from "../design-system/Button"
-import { IconButton } from "../design-system/IconButton"
 import { Modal } from "../design-system/Modal"
 import { Panel } from "../design-system/Panel"
 import { StatusPill } from "../design-system/StatusPill"
-import { TextInput } from "../design-system/TextInput"
 import { isRuntimeSettingsUpdateError } from "../runtime-settings/update.runtime.settings"
 import { useRuntimeSettingsQuery } from "../runtime-settings/use.runtime.settings.query"
 import { useUpdateRuntimeSettingsMutation } from "../runtime-settings/use.update.runtime.settings.mutation"
@@ -219,29 +222,34 @@ const LocalFilesystemProviderCard: React.FC = () => {
           ) : (
             <ul className="m-0 list-none space-y-2 p-0">
               {allowedRoots.map((root) => (
-                <li
-                  key={root}
-                  className="flex items-center justify-between gap-3 rounded-[7px] border border-line-soft bg-panel-elevated px-3 py-2"
-                >
-                  <code className="min-w-0 truncate text-xs text-body-soft" title={root}>
-                    {root}
-                  </code>
-                  <IconButton
-                    aria-label={`Remove ${root}`}
-                    disabled={pending}
-                    onClick={() => {
-                      void handleRemoveRoot(root)
-                    }}
+                <li key={root}>
+                  <ActionField
+                    action={
+                      <FieldActionButton
+                        aria-label={`Remove ${root}`}
+                        disabled={pending}
+                        onClick={() => {
+                          void handleRemoveRoot(root)
+                        }}
+                      >
+                        <Trash2 aria-hidden className="size-3.5" strokeWidth={1.75} />
+                      </FieldActionButton>
+                    }
                   >
-                    <Trash2 aria-hidden className="size-4" strokeWidth={1.75} />
-                  </IconButton>
+                    <code
+                      className="min-w-0 flex-1 truncate px-2 font-mono text-xs text-body-soft"
+                      title={root}
+                    >
+                      {root}
+                    </code>
+                  </ActionField>
                 </li>
               ))}
             </ul>
           )}
 
-          <div className="mt-4 flex items-center gap-2">
-            <TextInput
+          <div className="mt-4">
+            <ActionTextInput
               aria-label="Allowed root path"
               value={draftPath}
               placeholder="/home/you/projects"
@@ -250,17 +258,15 @@ const LocalFilesystemProviderCard: React.FC = () => {
                 setDraftPath(event.currentTarget.value)
                 setFormError(undefined)
               }}
-              className="min-w-0 flex-1"
-            />
-            <IconButton
-              aria-label="Add root"
-              disabled={pending}
-              onClick={() => {
-                void handleAddRoot()
+              action={{
+                "aria-label": "Add root",
+                disabled: pending,
+                onClick: () => {
+                  void handleAddRoot()
+                },
+                children: <Save aria-hidden className="size-3.5" strokeWidth={1.75} />,
               }}
-            >
-              <Save aria-hidden className="size-4" strokeWidth={1.75} />
-            </IconButton>
+            />
           </div>
 
           {formError ? (

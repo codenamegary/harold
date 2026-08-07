@@ -2,9 +2,8 @@ import React, { useEffect, useState } from "react"
 import { UseMutationResult } from "@tanstack/react-query"
 import { AgentSettings } from "contracts/http/agent-settings"
 import { Save } from "lucide-react"
+import { ActionTextInput } from "../design-system/ActionTextInput"
 import { FieldLabel } from "../design-system/FieldLabel"
-import { IconButton } from "../design-system/IconButton"
-import { TextInput } from "../design-system/TextInput"
 import {
   agentPathDetectErrorMessage,
   agentSettingsUpdateErrorMessage,
@@ -161,7 +160,7 @@ export const AgentSettingsCard: React.FC<AgentSettingsCardProps> = ({
         <FieldLabel htmlFor={`${agent.id}-path`} className="mb-2">
           Executable path
         </FieldLabel>
-        <TextInput
+        <ActionTextInput
           id={`${agent.id}-path`}
           value={draftPath}
           readOnly={!agent.enabled && !controlsDisabled}
@@ -170,6 +169,12 @@ export const AgentSettingsCard: React.FC<AgentSettingsCardProps> = ({
           placeholder={agent.enabled ? "Enter agent executable path" : "Enable agent to edit path"}
           onChange={(event) => handlePathValueChange(event.target.value)}
           onInput={(event) => handlePathValueChange(event.currentTarget.value)}
+          action={{
+            "aria-label": updateMutation.isPending ? "Saving path" : "Save path",
+            disabled: !canSavePath,
+            onClick: handleSavePath,
+            children: <Save aria-hidden className="size-3.5" strokeWidth={1.75} />,
+          }}
         />
         {pathError ? (
           <p className="m-0 mt-2 text-xs text-red-400" role="alert">
@@ -181,7 +186,7 @@ export const AgentSettingsCard: React.FC<AgentSettingsCardProps> = ({
             {detectError}
           </p>
         ) : null}
-        <div className="mt-3 flex items-center justify-between gap-3">
+        <div className="mt-3 flex items-center gap-3">
           <span className="inline-flex min-h-9 items-center gap-1.5">
             <button
               type="button"
@@ -196,13 +201,6 @@ export const AgentSettingsCard: React.FC<AgentSettingsCardProps> = ({
               <DetectSuccessCheck onAnimationEnd={() => setDetectSuccessVisible(false)} />
             ) : null}
           </span>
-          <IconButton
-            aria-label={updateMutation.isPending ? "Saving path" : "Save path"}
-            disabled={!canSavePath}
-            onClick={handleSavePath}
-          >
-            <Save aria-hidden className="size-4" strokeWidth={1.75} />
-          </IconButton>
         </div>
       </div>
     </section>
