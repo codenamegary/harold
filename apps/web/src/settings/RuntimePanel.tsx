@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react"
+import { Save, Trash2 } from "lucide-react"
 import { logLevels } from "contracts/http/runtime-settings"
-import { Button } from "../design-system/Button"
 import { FieldLabel } from "../design-system/FieldLabel"
+import { IconButton } from "../design-system/IconButton"
 import { Panel } from "../design-system/Panel"
 import { TextInput } from "../design-system/TextInput"
 import { isRuntimeSettingsUpdateError } from "../runtime-settings/update.runtime.settings"
@@ -192,17 +193,18 @@ export const RuntimePanel: React.FC = () => {
                 key={proxy}
                 className="flex items-center justify-between gap-3 rounded-[7px] border border-line-soft bg-panel-elevated px-3 py-2"
               >
-                <code className="truncate text-xs text-body-soft">{proxy}</code>
-                <Button
-                  variant="secondary"
-                  className="shrink-0 px-2 py-1 text-xs"
+                <code className="min-w-0 truncate text-xs text-body-soft" title={proxy}>
+                  {proxy}
+                </code>
+                <IconButton
+                  aria-label={`Remove ${proxy}`}
                   disabled={pending}
                   onClick={() => {
                     void handleRemoveProxy(proxy)
                   }}
                 >
-                  Remove
-                </Button>
+                  <Trash2 aria-hidden className="size-4" strokeWidth={1.75} />
+                </IconButton>
               </li>
             ))}
           </ul>
@@ -219,15 +221,15 @@ export const RuntimePanel: React.FC = () => {
             }}
             className="min-w-0 flex-1"
           />
-          <Button
-            variant="secondary"
+          <IconButton
+            aria-label="Add proxy"
             disabled={pending}
             onClick={() => {
               void handleAddProxy()
             }}
           >
-            Add proxy
-          </Button>
+            <Save aria-hidden className="size-4" strokeWidth={1.75} />
+          </IconButton>
         </div>
         {proxyError ? (
           <p className="m-0 mt-2 text-xs text-danger" role="alert">
@@ -275,15 +277,15 @@ export const RuntimePanel: React.FC = () => {
             }}
             className="min-w-0 flex-1 font-mono"
           />
-          <Button
-            variant="secondary"
+          <IconButton
+            aria-label="Save port"
             disabled={pending || bindPortEnvOverride}
             onClick={() => {
               void handleSavePort()
             }}
           >
-            Save port
-          </Button>
+            <Save aria-hidden className="size-4" strokeWidth={1.75} />
+          </IconButton>
         </div>
         {portError ? (
           <p className="m-0 mt-2 text-xs text-danger" role="alert">
@@ -311,15 +313,15 @@ export const RuntimePanel: React.FC = () => {
             }}
             className="min-w-0 flex-1 font-mono"
           />
-          <Button
-            variant="secondary"
+          <IconButton
+            aria-label="Save path"
             disabled={pending}
             onClick={() => {
               void handleSaveLogPath()
             }}
           >
-            Save path
-          </Button>
+            <Save aria-hidden className="size-4" strokeWidth={1.75} />
+          </IconButton>
         </div>
         {logPathError ? (
           <p className="m-0 mt-2 text-xs text-danger" role="alert">

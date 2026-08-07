@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react"
 import { UseMutationResult } from "@tanstack/react-query"
 import { AgentSettings } from "contracts/http/agent-settings"
-import { Button } from "../design-system/Button"
+import { Save } from "lucide-react"
 import { FieldLabel } from "../design-system/FieldLabel"
+import { IconButton } from "../design-system/IconButton"
 import { TextInput } from "../design-system/TextInput"
 import {
   agentPathDetectErrorMessage,
@@ -195,13 +196,13 @@ export const AgentSettingsCard: React.FC<AgentSettingsCardProps> = ({
               <DetectSuccessCheck onAnimationEnd={() => setDetectSuccessVisible(false)} />
             ) : null}
           </span>
-          <Button
-            variant="secondary"
+          <IconButton
+            aria-label={updateMutation.isPending ? "Saving path" : "Save path"}
             disabled={!canSavePath}
             onClick={handleSavePath}
           >
-            {updateMutation.isPending ? "Saving…" : "Save path"}
-          </Button>
+            <Save aria-hidden className="size-4" strokeWidth={1.75} />
+          </IconButton>
         </div>
       </div>
     </section>
