@@ -13,12 +13,12 @@ export const OverviewAccessBanner: React.FC = () => (
       ↗
     </div>
     <div>
-      <div className="text-[11px] font-semibold">Connect from anywhere</div>
-      <p className="m-0 mt-1 text-[9px] text-dim">
+      <div className="text-sm font-semibold">Connect from anywhere</div>
+      <p className="m-0 mt-1 text-xs text-dim">
         Expose your server securely with a tunnel or reverse proxy.
       </p>
     </div>
-    <div className="flex items-center gap-2 font-mono text-[8px] text-[#5f6875] max-[640px]:col-span-2">
+    <div className="flex items-center gap-2 font-mono text-2xs text-[#5f6875] max-[640px]:col-span-2">
       <span className="text-lime">✓ Local server</span>
       <span aria-hidden className="h-px w-[22px] bg-[#2d343f]" />
       <span>External access</span>

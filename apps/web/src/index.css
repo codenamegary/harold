@@ -61,6 +61,12 @@
   --text-lg--line-height: 1.5;
   --text-xl: 1.125rem;
   --text-xl--line-height: 1.35;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 1.15;
+  --text-3xl: 1.6875rem;
+  --text-3xl--line-height: 1.15;
+  --text-4xl: 2rem;
+  --text-4xl--line-height: 1.15;
 }
 
 @layer base {

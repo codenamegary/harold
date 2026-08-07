@@ -24,10 +24,10 @@ export const OverviewWorkspaceRow: React.FC<OverviewWorkspaceRowProps> = ({ work
           ⌘
         </span>
         <div className="min-w-0">
-          <strong className="block truncate text-2xs font-medium text-white">
+          <strong className="block truncate text-sm font-medium text-white">
             {workspace.name}
           </strong>
-          <small className="mt-[5px] block truncate font-mono text-3xs text-dim">
+          <small className="mt-[5px] block truncate font-mono text-xs text-dim">
             {workspace.path}
           </small>
         </div>
@@ -36,21 +36,21 @@ export const OverviewWorkspaceRow: React.FC<OverviewWorkspaceRowProps> = ({ work
         aria-hidden
         className="flex min-w-0 items-center gap-2.5 opacity-50 max-[1100px]:hidden"
       >
-        <span className="grid size-[23px] shrink-0 place-items-center rounded-[5px] bg-violet/12 font-mono text-3xs text-violet-soft">
+        <span className="grid size-[23px] shrink-0 place-items-center rounded-[5px] bg-violet/12 font-mono text-2xs text-violet-soft">
           --
         </span>
         <div className="min-w-0">
-          <strong className="block truncate text-2xs font-medium text-white">
+          <strong className="block truncate text-sm font-medium text-white">
             Coming soon
           </strong>
-          <small className="mt-[5px] block truncate text-3xs text-dim">Agents not live</small>
+          <small className="mt-[5px] block truncate text-xs text-dim">Agents not live</small>
         </div>
       </div>
       <div className="flex items-center gap-1.5 max-[1100px]:hidden">
         <StatusDot variant={stateDisplay.dotVariant} aria-label={stateDisplay.label} />
-        <span className="text-2xs text-muted">{stateDisplay.label}</span>
+        <span className="text-xs text-muted">{stateDisplay.label}</span>
       </div>
-      <div className="text-right font-mono text-3xs whitespace-nowrap text-dim max-[1100px]:hidden">
+      <div className="text-right font-mono text-xs whitespace-nowrap text-dim max-[1100px]:hidden">
         {formatRelativeLastUsed(workspace.lastUsedAt, workspace.createdAt, nowMs)}
       </div>
     </div>

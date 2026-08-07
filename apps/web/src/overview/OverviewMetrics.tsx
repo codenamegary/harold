@@ -17,13 +17,13 @@ const ComingSoonMetricCard: React.FC<ComingSoonMetricCardProps> = ({
   accent,
 }) => (
   <MetricCard accent={accent} aria-label={title} className="opacity-60">
-    <div className="flex items-center justify-between text-[10px] text-muted">
+    <div className="flex items-center justify-between text-xs text-muted">
       <span>{title}</span>
     </div>
-    <div className="my-[18px] text-[27px] font-semibold tracking-[-0.04em] text-dim">
+    <div className="my-[18px] text-3xl font-semibold tracking-[-0.04em] text-dim">
       Coming soon
     </div>
-    <div className="flex items-center justify-between text-[10px] text-muted">
+    <div className="flex items-center justify-between text-xs text-muted">
       <span>{footLabel}</span>
     </div>
   </MetricCard>
@@ -39,17 +39,17 @@ export const OverviewMetrics: React.FC = () => {
   return (
     <div className="mb-2.5 grid grid-cols-4 gap-2.5 max-[1100px]:grid-cols-2 max-[640px]:grid-cols-1">
       <MetricCard accent="lime" aria-label="Server status">
-        <div className="flex items-center justify-between text-[10px] text-muted">
+        <div className="flex items-center justify-between text-xs text-muted">
           <span>Server status</span>
           {serverStatus.pill ? <StatusPill variant="success">{serverStatus.pill}</StatusPill> : null}
         </div>
-        <div className="my-[18px] text-[27px] font-semibold tracking-[-0.04em]">
+        <div className="my-[18px] text-3xl font-semibold tracking-[-0.04em]">
           {serverStatus.value}
         </div>
-        <div className="flex items-center justify-between text-[10px] text-muted">
+        <div className="flex items-center justify-between text-xs text-muted">
           <span>Uptime</span>
           {serverStatus.uptime ? (
-            <strong className="font-mono text-[9px] font-medium text-[#c3c9d2]">
+            <strong className="font-mono text-xs font-medium text-[#c3c9d2]">
               {serverStatus.uptime}
             </strong>
           ) : null}

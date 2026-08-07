@@ -24,7 +24,7 @@ export const OverviewHero: React.FC = () => {
           />
           SYSTEM HEALTH
         </SectionKicker>
-        <h2 className="m-0 text-[clamp(24px,3vw,32px)] leading-[1.15] font-semibold tracking-[-0.04em]">
+        <h2 className="m-0 text-2xl font-semibold tracking-[-0.04em] min-[820px]:text-4xl">
           {heroCopy.title}
         </h2>
         <p className="m-0 mt-[9px] text-xs text-muted">{heroCopy.description}</p>
