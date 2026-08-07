@@ -1,0 +1,15 @@
+import React from "react"
+import { Streamdown } from "streamdown"
+import "streamdown/styles.css"
+
+type MarkdownMessageProps = {
+  text: string
+}
+
+export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ text }) => {
+  return (
+    <div className="markdown-message text-sm leading-relaxed text-body">
+      <Streamdown controls={false}>{text}</Streamdown>
+    </div>
+  )
+}

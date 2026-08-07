@@ -1,4 +1,5 @@
 import React from "react"
+import { MarkdownMessage } from "./MarkdownMessage"
 import { TranscriptRow } from "./transcript.reducer"
 
 type ChatTranscriptProps = {
@@ -62,11 +63,8 @@ export const ChatTranscript: React.FC<ChatTranscriptProps> = ({ rows }) => {
         }
 
         return (
-          <div
-            key={rowKey(row, index)}
-            className="px-1 text-sm leading-relaxed text-body"
-          >
-            {row.text}
+          <div key={rowKey(row, index)} className="px-1">
+            <MarkdownMessage text={row.text} />
           </div>
         )
       })}
