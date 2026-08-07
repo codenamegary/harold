@@ -126,6 +126,23 @@ describe("EventSchema", () => {
     expect(EventSchema.parse(disconnected)).toEqual(disconnected)
     expect(EventSchema.parse(revoked)).toEqual(revoked)
   })
+
+  test("accepts session.tool.completed without tool name", () => {
+    expect(() =>
+      EventSchema.parse({
+        type: "session.tool.completed",
+        cursor: "12",
+        occurredAt: "2026-07-24T12:00:00.000Z",
+        workspaceId: "ws_01",
+        sessionId: "sess_01",
+        payload: {
+          turnId: "turn_01JFC8C7E77NQCFH0RF9Z22JHH",
+          toolCallId: "tool-1",
+          status: "completed",
+        },
+      }),
+    ).not.toThrow()
+  })
 })
 
 describe("EventCursorSchema", () => {

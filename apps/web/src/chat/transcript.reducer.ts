@@ -27,6 +27,7 @@ export type TranscriptToolRow = {
   toolName: string
   toolKind: ToolKind
   status: ToolCallStatus | "pending"
+  detail?: string
 }
 
 export type TranscriptRow =
@@ -189,6 +190,9 @@ export const foldTranscriptEvent = (
             toolName: event.payload.toolName,
             toolKind: event.payload.toolKind,
             status: "pending",
+            ...(event.payload.detail !== undefined
+              ? { detail: event.payload.detail }
+              : {}),
           },
         ],
       }
@@ -200,8 +204,15 @@ export const foldTranscriptEvent = (
           isToolForCall(event.payload.toolCallId),
           (row) => ({
             ...row,
-            toolName: event.payload.toolName,
-            toolKind: event.payload.toolKind,
+            ...(event.payload.toolName !== undefined
+              ? { toolName: event.payload.toolName }
+              : {}),
+            ...(event.payload.toolKind !== undefined
+              ? { toolKind: event.payload.toolKind }
+              : {}),
+            ...(event.payload.detail !== undefined
+              ? { detail: event.payload.detail }
+              : {}),
             status: event.payload.status,
           }),
         ),

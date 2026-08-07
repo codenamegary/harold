@@ -85,6 +85,99 @@ const readToolName = (fields: Record<string, unknown>): string | undefined => {
   return undefined
 }
 
+const TOOL_DETAIL_MAX_CHARS = 2_000
+
+const truncateToolDetail = (value: string): string =>
+  value.length <= TOOL_DETAIL_MAX_CHARS
+    ? value
+    : `${value.slice(0, TOOL_DETAIL_MAX_CHARS - 1)}…`
+
+const readLocationLines = (fields: Record<string, unknown>): string[] => {
+  if (!Array.isArray(fields.locations)) {
+    return []
+  }
+
+  return fields.locations.flatMap((entry) => {
+    if (typeof entry !== "object" || entry === null || !("path" in entry)) {
+      return []
+    }
+
+    const path = entry.path
+    if (typeof path !== "string" || path.length === 0) {
+      return []
+    }
+
+    const line =
+      "line" in entry && typeof entry.line === "number" && Number.isFinite(entry.line)
+        ? Math.trunc(entry.line)
+        : undefined
+
+    return [line === undefined ? path : `${path}:${line}`]
+  })
+}
+
+const preferredRawInputKeys = [
+  "path",
+  "filePath",
+  "target_file",
+  "targetFile",
+  "file",
+  "query",
+  "pattern",
+  "glob",
+  "command",
+] as const
+
+const readRawInputDetail = (rawInput: unknown): string | undefined => {
+  if (typeof rawInput === "string" && rawInput.trim().length > 0) {
+    return truncateToolDetail(rawInput.trim())
+  }
+
+  if (typeof rawInput !== "object" || rawInput === null || Array.isArray(rawInput)) {
+    return undefined
+  }
+
+  const record = rawInput as Record<string, unknown>
+  const parts = preferredRawInputKeys.flatMap((key) => {
+    const value = record[key]
+    if (typeof value === "string" && value.trim().length > 0) {
+      return [`${key}: ${value.trim()}`]
+    }
+    if (
+      Array.isArray(value)
+      && value.length > 0
+      && value.every((item) => typeof item === "string")
+    ) {
+      return [`${key}: ${value.join(", ")}`]
+    }
+    return []
+  })
+
+  if (parts.length > 0) {
+    return truncateToolDetail(parts.join("\n"))
+  }
+
+  try {
+    return truncateToolDetail(JSON.stringify(record, null, 2))
+  } catch {
+    return undefined
+  }
+}
+
+export const readToolDetail = (fields: Record<string, unknown>): string | undefined => {
+  const rawInputDetail = readRawInputDetail(fields.rawInput)
+  const parts = [
+    ...readLocationLines(fields),
+    ...(rawInputDetail === undefined ? [] : [rawInputDetail]),
+  ]
+
+  if (parts.length === 0) {
+    return undefined
+  }
+
+  return truncateToolDetail(parts.join("\n"))
+}
+
 export const sanitizeOperatorPromptText = (prompt: unknown): string => {
   if (!Array.isArray(prompt)) {
     return ""
@@ -138,12 +231,14 @@ export const sanitizeSessionUpdate = (update: unknown): SanitizedNotificationPay
       if (toolCallId === undefined || toolName === undefined) {
         return undefined
       }
+      const detail = readToolDetail(fields)
       return {
         updateKind: "tool_call",
         toolCallId,
         toolName,
         toolKind: parseToolKind(fields.toolKind ?? fields.kind),
         ...(fields.status === "pending" ? { status: "pending" as const } : {}),
+        ...(detail !== undefined ? { detail } : {}),
       }
     }
     case "tool_call_update": {
@@ -152,17 +247,20 @@ export const sanitizeSessionUpdate = (update: unknown): SanitizedNotificationPay
       const status = fields.status
       if (
         toolCallId === undefined
-        || toolName === undefined
         || (status !== "in_progress" && status !== "completed" && status !== "failed")
       ) {
         return undefined
       }
+
+      const hasKind = fields.toolKind !== undefined || fields.kind !== undefined
+      const detail = readToolDetail(fields)
       return {
         updateKind: "tool_call_update",
         toolCallId,
-        toolName,
-        toolKind: parseToolKind(fields.toolKind ?? fields.kind),
+        ...(toolName !== undefined ? { toolName } : {}),
+        ...(hasKind ? { toolKind: parseToolKind(fields.toolKind ?? fields.kind) } : {}),
         status,
+        ...(detail !== undefined ? { detail } : {}),
       }
     }
     case "session_info_update": {

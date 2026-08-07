@@ -87,6 +87,7 @@ export const EventSchema = z.discriminatedUnion("type", [
       toolCallId: ToolCallIdSchema,
       toolName: z.string().min(1),
       toolKind: ToolKindSchema,
+      detail: z.string().min(1).optional(),
     }),
   }),
   EventScopeSchema.extend({
@@ -94,9 +95,10 @@ export const EventSchema = z.discriminatedUnion("type", [
     payload: z.strictObject({
       turnId: TurnIdSchema,
       toolCallId: ToolCallIdSchema,
-      toolName: z.string().min(1),
-      toolKind: ToolKindSchema,
+      toolName: z.string().min(1).optional(),
+      toolKind: ToolKindSchema.optional(),
       status: ToolCallStatusSchema,
+      detail: z.string().min(1).optional(),
     }),
   }),
   EventScopeSchema.extend({

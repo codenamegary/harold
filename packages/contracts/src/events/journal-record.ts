@@ -132,14 +132,16 @@ const ToolCallNotificationPayloadSchema = z.strictObject({
   toolName: z.string().min(1),
   toolKind: ToolKindSchema,
   status: z.literal("pending").optional(),
+  detail: z.string().min(1).optional(),
 })
 
 const ToolCallUpdateNotificationPayloadSchema = z.strictObject({
   updateKind: z.literal("tool_call_update"),
   toolCallId: ToolCallIdSchema,
-  toolName: z.string().min(1),
-  toolKind: ToolKindSchema,
+  toolName: z.string().min(1).optional(),
+  toolKind: ToolKindSchema.optional(),
   status: ToolCallStatusSchema.exclude(["pending"]),
+  detail: z.string().min(1).optional(),
 })
 
 const SessionInfoUpdateNotificationPayloadSchema = z.strictObject({

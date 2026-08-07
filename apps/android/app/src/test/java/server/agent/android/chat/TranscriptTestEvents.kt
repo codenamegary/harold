@@ -91,6 +91,22 @@ internal fun toolCompleted(
     },
 )
 
+internal fun toolCompletedStatusOnly(
+    cursor: String,
+    turnId: String = "turn_01JFC8C7E77NQCFH0RF9Z22JHH",
+    sessionId: String = "sess_01",
+): EventEnvelope = EventEnvelope(
+    type = EventType.SessionToolCompleted,
+    cursor = cursor,
+    occurredAt = "2026-08-05T00:00:00.000Z",
+    sessionId = sessionId,
+    payload = buildJsonObject {
+        put("turnId", JsonPrimitive(turnId))
+        put("toolCallId", JsonPrimitive("tool_01"))
+        put("status", JsonPrimitive("completed"))
+    },
+)
+
 internal fun sessionState(
     cursor: String,
     state: SessionState,

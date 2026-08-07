@@ -1,0 +1,87 @@
+import React from "react"
+import { TranscriptToolRow } from "./transcript.reducer"
+
+type ToolCallGroupProps = {
+  tools: ReadonlyArray<TranscriptToolRow>
+}
+
+const toolCallLabel = (count: number): string =>
+  count === 1 ? "1 tool call" : `${count} tool calls`
+
+const isActiveStatus = (status: TranscriptToolRow["status"]): boolean =>
+  status === "pending" || status === "in_progress"
+
+const truncateLabel = (value: string, maxChars: number): string =>
+  value.length <= maxChars ? value : `${value.slice(0, maxChars - 1)}…`
+
+const shortToolLabel = (tool: TranscriptToolRow): string => {
+  const name = tool.toolName.trim()
+  if (name.startsWith("`")) {
+    const firstLine = (name.replace(/^`+/, "").split("\n")[0] ?? name).trim()
+    return truncateLabel(firstLine, 72)
+  }
+
+  const detailLine = tool.detail?.split("\n")[0]?.trim()
+  if (detailLine !== undefined && detailLine.length > 0) {
+    return `${name} · ${truncateLabel(detailLine, 56)}`
+  }
+
+  return name
+}
+
+const toolDetailBody = (tool: TranscriptToolRow): string => {
+  const parts = [tool.toolName.trim()]
+  if (tool.detail !== undefined && tool.detail.trim().length > 0) {
+    parts.push(tool.detail.trim())
+  }
+  parts.push(`status: ${tool.status}`)
+  return parts.join("\n\n")
+}
+
+export const ToolCallGroup: React.FC<ToolCallGroupProps> = ({ tools }) => {
+  const activeCount = tools.filter((tool) => isActiveStatus(tool.status)).length
+  const summary =
+    activeCount > 0
+      ? `${toolCallLabel(tools.length)} · ${activeCount} running`
+      : toolCallLabel(tools.length)
+
+  return (
+    <details className="group/tool-group rounded-md border border-line-soft bg-[#0d1117] open:bg-[#0f141b]">
+      <summary className="cursor-pointer list-none px-3 py-2 font-mono text-sm text-[#8b949e] marker:content-none [&::-webkit-details-marker]:hidden">
+        <span className="inline-flex items-center gap-2">
+          <span
+            aria-hidden
+            className="text-sm text-dim transition-transform group-open/tool-group:rotate-90"
+          >
+            ▸
+          </span>
+          <span>{summary}</span>
+        </span>
+      </summary>
+      <ul className="m-0 flex list-none flex-col gap-1.5 border-t border-line-soft px-2 py-2">
+        {tools.map((tool) => (
+          <li key={tool.toolCallId}>
+            <details className="group/tool-item rounded border border-line-soft/80 bg-[#0b0f14]">
+              <summary className="cursor-pointer list-none px-2.5 py-1.5 font-mono text-sm text-[#8b949e] marker:content-none [&::-webkit-details-marker]:hidden">
+                <span className="inline-flex min-w-0 items-center gap-2">
+                  <span
+                    aria-hidden
+                    className="shrink-0 text-sm text-dim transition-transform group-open/tool-item:rotate-90"
+                  >
+                    ▸
+                  </span>
+                  <span className="min-w-0 truncate">
+                    {shortToolLabel(tool)} · {tool.status}
+                  </span>
+                </span>
+              </summary>
+              <pre className="m-0 overflow-x-auto border-t border-line-soft px-2.5 py-2 font-mono text-sm leading-relaxed whitespace-pre-wrap text-body-soft">
+                {toolDetailBody(tool)}
+              </pre>
+            </details>
+          </li>
+        ))}
+      </ul>
+    </details>
+  )
+}

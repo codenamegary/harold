@@ -506,6 +506,7 @@ describe("Chat session flow", () => {
     await waitFor(() => {
       expect(getByText("rebuilt")).toBeInTheDocument()
     })
+    expect(getByText("1 tool call · 1 running")).toBeInTheDocument()
     expect(getByText("read · pending")).toBeInTheDocument()
     expect(queryByText("stale")).not.toBeInTheDocument()
   })

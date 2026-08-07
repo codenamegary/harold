@@ -142,6 +142,32 @@ describe("projectAcpEvent", () => {
     )
   })
 
+  test("maps status-only tool_call_update without tool name", () => {
+    const completed: ParsedJournalRecord = {
+      ...baseRecord,
+      cursor: 12n,
+      kind: "acp.notification",
+      turnId,
+      phase: "live",
+      payload: {
+        updateKind: "tool_call_update",
+        toolCallId: "tool-1",
+        status: "completed",
+      },
+    }
+
+    const event = projectAcpEvent(parseAcpJournalRecord(completed), { outputChunksByTurnId: {} })[0]
+    expect(event).toMatchObject({
+      type: "session.tool.completed",
+      payload: {
+        turnId,
+        toolCallId: "tool-1",
+        status: "completed",
+      },
+    })
+    expect(event && "payload" in event ? event.payload : undefined).not.toHaveProperty("toolName")
+  })
+
   test("maps permission requests", () => {
     const record: ParsedJournalRecord = {
       ...baseRecord,

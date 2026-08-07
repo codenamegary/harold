@@ -48,6 +48,7 @@ data class TranscriptToolRow(
     val toolName: String,
     val toolKind: server.agent.android.contracts.ToolKind,
     val status: ToolCallStatus,
+    val detail: String? = null,
 ) : TranscriptRow
 
 data class TranscriptTurnStatusRow(
@@ -183,6 +184,7 @@ fun foldTranscriptEvent(
                     toolName = payload.toolName,
                     toolKind = payload.toolKind,
                     status = ToolCallStatus.Pending,
+                    detail = payload.detail,
                 ),
             )
         }
@@ -194,10 +196,12 @@ fun foldTranscriptEvent(
                     withCursor.rows,
                     { row -> row is TranscriptToolRow && row.toolCallId == payload.toolCallId },
                 ) { row ->
-                    (row as TranscriptToolRow).copy(
-                        toolName = payload.toolName,
-                        toolKind = payload.toolKind,
+                    val tool = row as TranscriptToolRow
+                    tool.copy(
+                        toolName = payload.toolName ?: tool.toolName,
+                        toolKind = payload.toolKind ?: tool.toolKind,
                         status = payload.status,
+                        detail = payload.detail ?: tool.detail,
                     )
                 },
             )

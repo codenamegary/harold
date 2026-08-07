@@ -64,6 +64,23 @@ class TranscriptReducerTest {
     }
 
     @Test
+    fun statusOnlyToolCompletedKeepsStartedToolName() {
+        val next = foldTranscriptEvents(
+            emptyTranscript,
+            listOf(
+                turnStarted(cursor = "1"),
+                toolStarted(cursor = "2"),
+                toolCompletedStatusOnly(cursor = "3"),
+            ),
+            sessionId = SESSION_ID,
+        )
+
+        val tool = next.rows[1] as TranscriptToolRow
+        assertEquals("read", tool.toolName)
+        assertEquals(ToolCallStatus.Completed, tool.status)
+    }
+
+    @Test
     fun sessionStateUpdatesRunningFlag() {
         val running = foldTranscriptEvent(
             emptyTranscript,

@@ -67,6 +67,9 @@ const projectNotification = (record: AcpNotificationRecord): Event[] => {
             toolCallId: record.payload.toolCallId,
             toolName: record.payload.toolName,
             toolKind: record.payload.toolKind,
+            ...(record.payload.detail !== undefined
+              ? { detail: record.payload.detail }
+              : {}),
           },
         }),
       ]
@@ -78,9 +81,16 @@ const projectNotification = (record: AcpNotificationRecord): Event[] => {
           payload: {
             turnId,
             toolCallId: record.payload.toolCallId,
-            toolName: record.payload.toolName,
-            toolKind: record.payload.toolKind,
+            ...(record.payload.toolName !== undefined
+              ? { toolName: record.payload.toolName }
+              : {}),
+            ...(record.payload.toolKind !== undefined
+              ? { toolKind: record.payload.toolKind }
+              : {}),
             status: record.payload.status,
+            ...(record.payload.detail !== undefined
+              ? { detail: record.payload.detail }
+              : {}),
           },
         }),
       ]

@@ -85,6 +85,60 @@ describe("sanitizeSessionUpdate", () => {
     })
   })
 
+  test("keeps status-only tool_call_update without tool name", () => {
+    expect(
+      sanitizeSessionUpdate({
+        sessionUpdate: "tool_call_update",
+        toolCallId: "call_001",
+        status: "completed",
+      }),
+    ).toEqual({
+      updateKind: "tool_call_update",
+      toolCallId: "call_001",
+      status: "completed",
+    })
+  })
+
+  test("maps tool_call_update with title and status", () => {
+    expect(
+      sanitizeSessionUpdate({
+        sessionUpdate: "tool_call_update",
+        toolCallId: "call_001",
+        title: "Reading file",
+        kind: "read",
+        status: "in_progress",
+      }),
+    ).toEqual({
+      updateKind: "tool_call_update",
+      toolCallId: "call_001",
+      toolName: "Reading file",
+      toolKind: "read",
+      status: "in_progress",
+    })
+  })
+
+  test("captures locations and rawInput as tool detail", () => {
+    expect(
+      sanitizeSessionUpdate({
+        sessionUpdate: "tool_call",
+        toolCallId: "call_001",
+        title: "Read File",
+        kind: "read",
+        status: "pending",
+        locations: [{ path: "/home/codenamegary/sites/griddy/README.md", line: 1 }],
+        rawInput: { path: "/home/codenamegary/sites/griddy/README.md" },
+      }),
+    ).toEqual({
+      updateKind: "tool_call",
+      toolCallId: "call_001",
+      toolName: "Read File",
+      toolKind: "read",
+      status: "pending",
+      detail:
+        "/home/codenamegary/sites/griddy/README.md:1\npath: /home/codenamegary/sites/griddy/README.md",
+    })
+  })
+
   test("rejects payloads with extra secret fields at journal boundary", () => {
     const payload = sanitizeSessionUpdate({ updateKind: "agent_message_chunk", text: "ok" })
     expect(() =>

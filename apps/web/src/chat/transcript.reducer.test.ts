@@ -168,6 +168,39 @@ describe("foldTranscriptEvent", () => {
     ])
   })
 
+  test("status-only tool completed keeps the started tool name", () => {
+    const next = foldTranscriptEvents(emptyTranscript, [
+      turnStarted({}),
+      toolStarted({ toolName: "read_file" }),
+      {
+        ...baseEvent,
+        cursor: "5",
+        type: "session.tool.completed",
+        payload: {
+          turnId: "turn_01JFC8C7E77NQCFH0RF9Z22JHH",
+          toolCallId: "tool_01",
+          status: "completed",
+        },
+      },
+    ])
+
+    expect(next.rows).toEqual([
+      {
+        kind: "user",
+        turnId: "turn_01JFC8C7E77NQCFH0RF9Z22JHH",
+        text: "Explain auth",
+      },
+      {
+        kind: "tool",
+        turnId: "turn_01JFC8C7E77NQCFH0RF9Z22JHH",
+        toolCallId: "tool_01",
+        toolName: "read_file",
+        toolKind: "read",
+        status: "completed",
+      },
+    ])
+  })
+
   test("session.state updates running flag and cursor", () => {
     const running: TranscriptState = foldTranscriptEvent(
       emptyTranscript,

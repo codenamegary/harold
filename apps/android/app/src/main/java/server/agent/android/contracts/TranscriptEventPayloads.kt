@@ -57,13 +57,15 @@ data class ToolStartedPayload(
     val toolCallId: String,
     val toolName: String,
     val toolKind: ToolKind,
+    val detail: String? = null,
 )
 
 @Serializable
 data class ToolCompletedPayload(
     val turnId: String,
     val toolCallId: String,
-    val toolName: String,
-    val toolKind: ToolKind,
+    val toolName: String? = null,
+    val toolKind: ToolKind? = null,
     val status: ToolCallStatus,
+    val detail: String? = null,
 )

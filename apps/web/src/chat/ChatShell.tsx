@@ -1,5 +1,5 @@
 import React from "react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { AgentId } from "contracts/http/agent-settings"
 import { Event } from "contracts/events/event"
 import { PermissionRequest } from "contracts/http/permission"
@@ -47,6 +47,8 @@ export const ChatShell: React.FC = () => {
   const [pendingPermissions, setPendingPermissions] = useState<PermissionRequest[]>([])
   const [submittingOptionId, setSubmittingOptionId] = useState<string | null>(null)
   const hasAttemptedResume = useRef(false)
+  const transcriptScrollRef = useRef<HTMLDivElement>(null)
+  const transcriptBottomRef = useRef<HTMLDivElement>(null)
 
   const workspacesQuery = useWorkspacesInfiniteQuery({})
   const agentsQuery = useAgentSettingsQuery()
@@ -272,6 +274,20 @@ export const ChatShell: React.FC = () => {
 
   const showWelcome = sessionId === "" && transcript.rows.length === 0
 
+  useLayoutEffect(() => {
+    if (showWelcome) {
+      return
+    }
+
+    const container = transcriptScrollRef.current
+    if (container !== null) {
+      container.scrollTop = container.scrollHeight
+      return
+    }
+
+    transcriptBottomRef.current?.scrollIntoView({ block: "end" })
+  }, [showWelcome, transcript.rows, running, pendingPermissions.length])
+
   return (
     <div className="flex h-[calc(100vh-143px)] min-h-[600px] flex-col overflow-hidden rounded-[10px] border border-line-soft bg-panel max-[820px]:h-[calc(100vh-123px)] max-[820px]:min-h-[520px]">
       <ChatHeader
@@ -287,8 +303,18 @@ export const ChatShell: React.FC = () => {
         onStartNewSession={handleStartNewSession}
         onSessionArchived={handleSessionArchived}
       />
-      <div className="flex-1 overflow-y-auto px-[max(25px,calc((100%-800px)/2))] py-[25px] [scrollbar-color:#252b34_transparent] max-[820px]:px-[13px] max-[820px]:py-[18px]">
-        {showWelcome ? <WelcomeMessage /> : <ChatTranscript rows={transcript.rows} />}
+      <div
+        ref={transcriptScrollRef}
+        className="flex-1 overflow-y-auto px-[max(25px,calc((100%-800px)/2))] py-[25px] [scrollbar-color:#252b34_transparent] max-[820px]:px-[13px] max-[820px]:py-[18px]"
+      >
+        {showWelcome ? (
+          <WelcomeMessage />
+        ) : (
+          <>
+            <ChatTranscript rows={transcript.rows} isRunning={running} />
+            <div ref={transcriptBottomRef} aria-hidden className="h-px w-full" />
+          </>
+        )}
       </div>
       <div className="px-5 pb-5 max-[820px]:px-2.5 max-[820px]:pb-2.5">
         {activePermission !== null ? (
