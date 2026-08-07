@@ -8,11 +8,16 @@
     <string name="retry_content_description">Retry connecting to Agent Server</string>
     <string name="pairing_title">Pair device</string>
     <string name="pairing_back">Back</string>
+    <string name="pairing_back_content_description">Go back from pairing</string>
     <string name="pairing_manual_entry">Enter manually</string>
+    <string name="pairing_manual_entry_content_description">Enter pairing details manually</string>
     <string name="pairing_use_scanner">Use scanner</string>
+    <string name="pairing_use_scanner_content_description">Scan pairing QR code</string>
+    <string name="pairing_scanner_content_description">QR code scanner for pairing</string>
     <string name="pairing_endpoint_label">Agent Server endpoint</string>
     <string name="pairing_code_label">Pairing code</string>
     <string name="pairing_submit">Claim pairing code</string>
+    <string name="pairing_submit_content_description">Claim pairing code</string>
     <string name="pairing_claiming">Claiming pairing code…</string>
     <string name="pairing_camera_permission_required">Camera permission is required to scan pairing QR codes.</string>
     <string name="active_sessions_channel_name">Active sessions</string>
@@ -20,5 +25,14 @@
     <string name="notification_permission_title">Notifications required</string>
     <string name="notification_permission_body">Active sessions cannot stay live in the background without notifications.</string>
     <string name="notification_permission_open_settings">Open system settings</string>
+    <string name="notification_permission_open_settings_content_description">Open system settings for notifications</string>
     <string name="notification_permission_not_now">Not now</string>
+    <string name="notification_permission_not_now_content_description">Dismiss notification permission prompt</string>
+    <string name="chat_session_selector_content_description">Select session: %1$s</string>
+    <string name="chat_overflow_content_description">More chat options</string>
+    <string name="chat_send_content_description">Send message</string>
+    <string name="chat_cancel_content_description">Cancel run</string>
+    <string name="permission_option_content_description">Permission option: %1$s</string>
+    <string name="workspaces_back">Back</string>
+    <string name="workspaces_back_content_description">Go back from workspaces</string>
 </resources>

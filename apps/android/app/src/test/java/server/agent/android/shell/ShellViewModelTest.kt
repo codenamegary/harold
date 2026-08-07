@@ -81,17 +81,16 @@ class ShellViewModelTest {
     }
 
     @Test
-    fun offersRetryWhenTheHttpProbeIsUnauthorized() = runTest {
+    fun clearsLocalAccessWhenTheHttpProbeIsUnauthorized() = runTest {
+        val session = paired()
         val api = FakeAgentApi(
             Result.failure(AgentApiException(AgentApiError.Unauthorized("Authentication required"))),
         )
-        val viewModel = viewModel(paired(), FakeConnectionGateway(), api)
+        val viewModel = viewModel(session, FakeConnectionGateway(), api)
 
-        assertTrue(viewModel.uiState.value.retryVisible)
-        assertEquals(
-            "Workspaces unavailable. Authentication required",
-            viewModel.uiState.value.workspacesSummary,
-        )
+        assertEquals(1, session.clearLocalAccessCount)
+        assertEquals(PairedState.NotPaired, session.pairedState.value)
+        assertEquals("Not paired", viewModel.uiState.value.status)
     }
 
     @Test
@@ -105,9 +104,23 @@ class ShellViewModelTest {
         connection.emit(ConnectionStatus.Reconnecting(attempt = 2))
         assertEquals("Reconnecting (attempt 2)", viewModel.uiState.value.connectionStatus)
 
-        connection.emit(ConnectionStatus.AuthFailed(detail = null))
-        assertEquals("Auth failed", viewModel.uiState.value.connectionStatus)
+        connection.emit(ConnectionStatus.TransportError("boom"))
+        assertEquals("Transport error. boom", viewModel.uiState.value.connectionStatus)
         assertTrue(viewModel.uiState.value.retryVisible)
+    }
+
+    @Test
+    fun clearsLocalAccessWhenTheStreamRejectsTheCredential() = runTest {
+        val session = paired()
+        val connection = FakeConnectionGateway()
+        val viewModel = viewModel(session, connection, FakeAgentApi(Result.success(collectionOf(1))))
+
+        connection.emit(ConnectionStatus.AuthFailed(detail = "Device revoked"))
+
+        assertEquals(1, session.clearLocalAccessCount)
+        assertEquals(PairedState.NotPaired, session.pairedState.value)
+        assertEquals("Not paired", viewModel.uiState.value.status)
+        assertEquals(1, connection.disconnects)
     }
 
     @Test
@@ -116,7 +129,7 @@ class ShellViewModelTest {
         val api = FakeAgentApi(Result.success(collectionOf(count = 1)))
         val viewModel = viewModel(paired(), connection, api)
 
-        connection.emit(ConnectionStatus.AuthFailed(detail = null))
+        connection.emit(ConnectionStatus.TransportError("timeout"))
         viewModel.onRetryClick()
 
         assertEquals(1, connection.retries)
@@ -180,7 +193,15 @@ private class FakeSessionGateway(
     private val _pairedState = MutableStateFlow(initial)
     override val pairedState: StateFlow<PairedState> = _pairedState.asStateFlow()
 
+    var clearLocalAccessCount = 0
+        private set
+
     override suspend fun refresh() = Unit
+
+    override suspend fun clearLocalAccess() {
+        clearLocalAccessCount += 1
+        _pairedState.value = PairedState.NotPaired
+    }
 }
 
 private class FakeConnectionGateway : ConnectionGateway {

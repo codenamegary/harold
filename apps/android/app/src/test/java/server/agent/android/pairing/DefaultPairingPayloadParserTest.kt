@@ -55,4 +55,27 @@ class DefaultPairingPayloadParserTest {
             releaseParser.parse(payload)
         }
     }
+
+    @Test
+    fun rejectsInvalidScheme() {
+        assertThrows(PairingPayloadParseException::class.java) {
+            debugParser.parse("https://pair?v=1&endpoint=https%3A%2F%2Fa.example&code=R7K-4MP")
+        }
+    }
+
+    @Test
+    fun rejectsInvalidCodeFormat() {
+        assertThrows(PairingPayloadParseException::class.java) {
+            debugParser.parse(
+                "agent-server://pair?v=1&endpoint=https%3A%2F%2Fa.example&code=SHORT",
+            )
+        }
+    }
+
+    @Test
+    fun rejectsMissingEndpoint() {
+        assertThrows(PairingPayloadParseException::class.java) {
+            debugParser.parse("agent-server://pair?v=1&code=R7K-4MP")
+        }
+    }
 }

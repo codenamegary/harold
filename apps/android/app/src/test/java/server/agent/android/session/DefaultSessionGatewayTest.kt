@@ -44,14 +44,48 @@ class DefaultSessionGatewayTest {
         assertNull(holder.current())
         assertEquals(PairedState.NotPaired, gateway.pairedState.value)
     }
+
+    @Test
+    fun clearLocalAccessDeletesStoreAndReturnsToNotPaired() = runTest {
+        val holder = CredentialHolder()
+        val store = FakeCredentialStore(
+            StoredCredential(
+                formatVersion = 1,
+                deviceId = "device_01",
+                serverOrigin = "http://127.0.0.1:8787",
+                deviceName = "Pixel",
+                credential = "devcred_secret",
+            ),
+        )
+        val gateway = DefaultSessionGateway(
+            credentialStore = store,
+            credentialHolder = holder,
+        )
+
+        gateway.refresh()
+        gateway.clearLocalAccess()
+
+        assertNull(holder.current())
+        assertNull(store.load())
+        assertEquals(1, store.clearCount)
+        assertEquals(PairedState.NotPaired, gateway.pairedState.value)
+    }
 }
 
 private class FakeCredentialStore(
-    private val stored: StoredCredential?,
+    private var stored: StoredCredential?,
 ) : CredentialStore {
+    var clearCount = 0
+        private set
+
     override suspend fun load(): StoredCredential? = stored
 
-    override suspend fun save(credential: StoredCredential) = Unit
+    override suspend fun save(credential: StoredCredential) {
+        stored = credential
+    }
 
-    override suspend fun clear() = Unit
+    override suspend fun clear() {
+        clearCount += 1
+        stored = null
+    }
 }

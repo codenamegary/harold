@@ -38,11 +38,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import server.agent.android.R
+
+private val MIN_TOUCH_TARGET = 48.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,12 +62,25 @@ fun PairingScreen(
     onQrScanned: (String) -> Unit,
     onBack: () -> Unit,
 ) {
+    val backContentDescription = stringResource(R.string.pairing_back_content_description)
+    val manualEntryContentDescription = stringResource(R.string.pairing_manual_entry_content_description)
+    val useScannerContentDescription = stringResource(R.string.pairing_use_scanner_content_description)
+    val scannerContentDescription = stringResource(R.string.pairing_scanner_content_description)
+    val submitContentDescription = stringResource(R.string.pairing_submit_content_description)
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(text = stringResource(R.string.pairing_title)) },
                 navigationIcon = {
-                    TextButton(onClick = onBack) {
+                    TextButton(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                            .semantics {
+                                contentDescription = backContentDescription
+                            },
+                    ) {
                         Text(text = stringResource(R.string.pairing_back))
                     }
                 },
@@ -89,10 +108,20 @@ fun PairingScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(320.dp)
-                        .testTag("pairing_scanner"),
+                        .testTag("pairing_scanner")
+                        .semantics {
+                            contentDescription = scannerContentDescription
+                        },
                 )
 
-                TextButton(onClick = onManualEntryClick) {
+                TextButton(
+                    onClick = onManualEntryClick,
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                        .semantics {
+                            contentDescription = manualEntryContentDescription
+                        },
+                ) {
                     Text(text = stringResource(R.string.pairing_manual_entry))
                 }
             } else {
@@ -124,13 +153,23 @@ fun PairingScreen(
                     onClick = onSubmitManual,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .defaultMinSize(minHeight = 48.dp)
-                        .testTag("pairing_submit_button"),
+                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                        .testTag("pairing_submit_button")
+                        .semantics {
+                            contentDescription = submitContentDescription
+                        },
                 ) {
                     Text(text = stringResource(R.string.pairing_submit))
                 }
 
-                TextButton(onClick = onScannerClick) {
+                TextButton(
+                    onClick = onScannerClick,
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                        .semantics {
+                            contentDescription = useScannerContentDescription
+                        },
+                ) {
                     Text(text = stringResource(R.string.pairing_use_scanner))
                 }
             }
@@ -141,7 +180,10 @@ fun PairingScreen(
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier
                         .padding(top = 16.dp)
-                        .testTag("pairing_error"),
+                        .testTag("pairing_error")
+                        .semantics {
+                            liveRegion = LiveRegionMode.Polite
+                        },
                 )
             }
         }

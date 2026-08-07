@@ -28,4 +28,10 @@ class DefaultSessionGateway(
             )
         }
     }
+
+    override suspend fun clearLocalAccess() {
+        credentialStore.clear()
+        credentialHolder.set(null)
+        _pairedState.value = PairedState.NotPaired
+    }
 }

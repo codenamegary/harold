@@ -93,6 +93,10 @@ private class WorkspacesFakeSessionGateway(
     override val pairedState: StateFlow<PairedState> = _pairedState.asStateFlow()
 
     override suspend fun refresh() = Unit
+
+    override suspend fun clearLocalAccess() {
+        _pairedState.value = PairedState.NotPaired
+    }
 }
 
 private class WorkspacesFakeOperatorRepository(

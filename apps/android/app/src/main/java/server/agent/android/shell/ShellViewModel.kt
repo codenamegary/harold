@@ -61,6 +61,10 @@ class ShellViewModel(
         viewModelScope.launch {
             connectionGateway.state.collect { state ->
                 _uiState.update { current -> current.fromConnectionState(state) }
+
+                if (state.status is ConnectionStatus.AuthFailed) {
+                    sessionGateway.clearLocalAccess()
+                }
             }
         }
     }
@@ -96,6 +100,11 @@ class ShellViewModel(
                 },
                 onFailure = ::probeFailure,
             )
+
+            if (probe is WorkspaceProbe.Unauthorized) {
+                sessionGateway.clearLocalAccess()
+                return@launch
+            }
 
             _uiState.update { current -> current.fromWorkspaceProbe(probe) }
         }

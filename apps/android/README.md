@@ -50,8 +50,8 @@ cold starts at `0`.
 
 Reconnect uses `min(250 * 2^(attempt - 1), 4000)` ms with no jitter. A rejected
 credential (HTTP `401`, or close `1008` with reason `unauthorized`) stops
-auto-retry, keeps the stored credential, and offers Retry and Re-pair. Every
-other close, slow consumer included, keeps reconnecting.
+auto-retry, clears the local credential, and returns the operator to pairing.
+Every other close, slow consumer included, keeps reconnecting.
 
 ## CI
 

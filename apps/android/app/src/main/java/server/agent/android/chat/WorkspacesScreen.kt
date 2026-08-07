@@ -2,6 +2,7 @@ package server.agent.android.chat
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -12,12 +13,21 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import server.agent.android.R
 import server.agent.android.contracts.WorkspaceState
+
+private val MIN_TOUCH_TARGET = 48.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,13 +35,22 @@ fun WorkspacesScreen(
     uiState: WorkspacesUiState,
     onBack: () -> Unit,
 ) {
+    val backContentDescription = stringResource(R.string.workspaces_back_content_description)
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(text = "Workspaces") },
                 navigationIcon = {
-                    androidx.compose.material3.TextButton(onClick = onBack) {
-                        Text(text = "Back")
+                    TextButton(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                            .semantics {
+                                contentDescription = backContentDescription
+                            },
+                    ) {
+                        Text(text = stringResource(R.string.workspaces_back))
                     }
                 },
             )
@@ -46,18 +65,36 @@ fun WorkspacesScreen(
         ) {
             when (val state = uiState.loadState) {
                 WorkspacesLoadState.Loading -> {
-                    Text(text = "Loading workspaces…", modifier = Modifier.testTag("workspaces_loading"))
+                    Text(
+                        text = "Loading workspaces…",
+                        modifier = Modifier
+                            .testTag("workspaces_loading")
+                            .semantics {
+                                liveRegion = LiveRegionMode.Polite
+                            },
+                    )
                 }
 
                 WorkspacesLoadState.Empty -> {
-                    Text(text = "No workspaces", modifier = Modifier.testTag("workspaces_empty"))
+                    Text(
+                        text = "No workspaces",
+                        modifier = Modifier
+                            .testTag("workspaces_empty")
+                            .semantics {
+                                liveRegion = LiveRegionMode.Polite
+                            },
+                    )
                 }
 
                 is WorkspacesLoadState.Error -> {
                     Text(
                         text = state.message,
                         color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.testTag("workspaces_error"),
+                        modifier = Modifier
+                            .testTag("workspaces_error")
+                            .semantics {
+                                liveRegion = LiveRegionMode.Polite
+                            },
                     )
                 }
 
