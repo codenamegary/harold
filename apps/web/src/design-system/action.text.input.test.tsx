@@ -58,6 +58,65 @@ describe("ActionTextInput", () => {
     fireEvent.click(getByRole("button", { name: "Save path" }))
     expect(clicked).toBe(true)
   })
+
+  test("Enter submits the action by default", () => {
+    let clicked = false
+    const { getByRole } = render(
+      <ActionTextInput
+        aria-label="Path"
+        action={{
+          "aria-label": "Save path",
+          onClick: () => {
+            clicked = true
+          },
+          children: "save",
+        }}
+      />,
+    )
+
+    fireEvent.keyDown(getByRole("textbox", { name: "Path" }), { key: "Enter" })
+    expect(clicked).toBe(true)
+  })
+
+  test("Enter does not submit when submitOnEnter is false", () => {
+    let clicked = false
+    const { getByRole } = render(
+      <ActionTextInput
+        aria-label="Path"
+        submitOnEnter={false}
+        action={{
+          "aria-label": "Save path",
+          onClick: () => {
+            clicked = true
+          },
+          children: "save",
+        }}
+      />,
+    )
+
+    fireEvent.keyDown(getByRole("textbox", { name: "Path" }), { key: "Enter" })
+    expect(clicked).toBe(false)
+  })
+
+  test("Enter does not submit when the action is disabled", () => {
+    let clicked = false
+    const { getByRole } = render(
+      <ActionTextInput
+        aria-label="Path"
+        action={{
+          "aria-label": "Save path",
+          disabled: true,
+          onClick: () => {
+            clicked = true
+          },
+          children: "save",
+        }}
+      />,
+    )
+
+    fireEvent.keyDown(getByRole("textbox", { name: "Path" }), { key: "Enter" })
+    expect(clicked).toBe(false)
+  })
 })
 
 describe("ActionField", () => {
