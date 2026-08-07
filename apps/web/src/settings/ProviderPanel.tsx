@@ -54,22 +54,22 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
     aria-disabled={disabled ? "true" : undefined}
     className={`rounded-[9px] border p-5 ${disabled ? "border-line-soft bg-[#0a0c10] opacity-55" : "border-lime/35 bg-[linear-gradient(145deg,rgba(182,243,107,0.04),#0b0e13)]"}`}
   >
-    <div className="mb-3.5 flex items-start justify-between gap-3">
-      <span className="grid size-9 place-items-center rounded-[7px] border border-line bg-panel-2 text-muted">
-        {icon}
-      </span>
+    <div className="mb-3.5 flex items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className="grid size-9 shrink-0 place-items-center rounded-[7px] border border-line bg-panel-2 text-muted">
+          {icon}
+        </span>
+        <h4 className="m-0 text-base font-semibold">{title}</h4>
+        <button
+          type="button"
+          className="grid size-5 shrink-0 place-items-center rounded text-muted hover:text-body-soft"
+          title={description}
+          aria-label={description}
+        >
+          <CircleHelp aria-hidden className="size-3.5" strokeWidth={1.75} />
+        </button>
+      </div>
       {stateLabel}
-    </div>
-    <div className="mb-2 flex items-center gap-1.5">
-      <h4 className="m-0 text-base font-semibold">{title}</h4>
-      <button
-        type="button"
-        className="grid size-5 shrink-0 place-items-center rounded text-muted hover:text-body-soft"
-        title={description}
-        aria-label={description}
-      >
-        <CircleHelp aria-hidden className="size-3.5" strokeWidth={1.75} />
-      </button>
     </div>
     {children}
     {action}
