@@ -245,6 +245,28 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun renameFromSessionListUpdatesNonSelectedRow() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+        )
+
+        advanceUntilIdle()
+        val listRow = viewModel.uiState.value.sessions.first { it.id == "sess_01" }
+        viewModel.showRenameDialogForSession(listRow)
+        viewModel.onRenameNameChanged("List rename proof")
+        viewModel.submitRename()
+        advanceUntilIdle()
+
+        assertEquals("Selected", viewModel.uiState.value.selectedSession?.name)
+        assertEquals(
+            "List rename proof",
+            viewModel.uiState.value.sessions.first { it.id == "sess_01" }.name,
+        )
+    }
+
+    @Test
     fun archiveSessionClearsSelection() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository()
         val navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02")
