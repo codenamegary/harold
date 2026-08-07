@@ -125,20 +125,27 @@ describe("SettingsPage", () => {
     globalThis.fetch = originalFetch
   })
 
-  test("renders page intro description", async () => {
-    const { getByText } = await renderSettingsPage()
+  test("does not render the old page intro description", async () => {
+    const { queryByText } = await renderSettingsPage()
 
-    expect(getByText("Configure runtime behavior and diagnostics.")).toBeInTheDocument()
+    expect(queryByText("Configure runtime behavior and diagnostics.")).not.toBeInTheDocument()
   })
 
   test("filesystem provider lists roots with add controls", async () => {
-    const { getByText, getByRole } = await renderSettingsPage()
+    const { getByText, getByRole, queryByText } = await renderSettingsPage()
 
-    expect(getByText("0 configured")).toBeInTheDocument()
+    expect(queryByText("0 configured")).not.toBeInTheDocument()
+    expect(queryByText("WORKSPACE SOURCES")).not.toBeInTheDocument()
+    expect(getByText("Workspace provider")).toBeInTheDocument()
     expect(getByText("Local filesystem")).toBeInTheDocument()
     expect(getByText("No allowed roots configured yet.")).toBeInTheDocument()
     expect(getByRole("button", { name: "Add root" })).toBeEnabled()
     expect(getByRole("textbox", { name: "Allowed root path" })).toBeEnabled()
+    expect(
+      getByRole("button", {
+        name: "Register folders from this machine. Paths outside these roots remain unavailable to remote clients.",
+      }),
+    ).toBeInTheDocument()
   })
 
   test("github and gitlab providers are greyed with coming soon", async () => {
@@ -167,7 +174,7 @@ describe("SettingsPage", () => {
 
     await waitFor(() => {
       expect(patchBodies).toContainEqual({ trustedProxies: ["10.0.0.0/8"] })
-      expect(getByRole("button", { name: "Remove" })).toBeInTheDocument()
+      expect(getByRole("button", { name: "Remove 10.0.0.0/8" })).toBeInTheDocument()
     })
   })
 

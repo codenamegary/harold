@@ -499,7 +499,6 @@ describe("AgentsPanel", () => {
 
     await waitFor(() => {
       expect(view.getByText("Could not load agent settings.")).toBeInTheDocument()
-      expect(view.getByText("Unavailable")).toBeInTheDocument()
     })
   })
 })

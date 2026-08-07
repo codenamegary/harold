@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from "react"
+import { Save, Trash2 } from "lucide-react"
 import { logLevels } from "contracts/http/runtime-settings"
-import { Button } from "../design-system/Button"
+import {
+  ActionField,
+  ActionTextInput,
+  FieldActionButton,
+} from "../design-system/ActionTextInput"
 import { FieldLabel } from "../design-system/FieldLabel"
 import { Panel } from "../design-system/Panel"
 import { TextInput } from "../design-system/TextInput"
@@ -188,47 +193,49 @@ export const RuntimePanel: React.FC = () => {
         ) : (
           <ul className="m-0 mb-3 list-none space-y-2 p-0">
             {settings.trustedProxies.map((proxy) => (
-              <li
-                key={proxy}
-                className="flex items-center justify-between gap-3 rounded-[7px] border border-line-soft bg-panel-elevated px-3 py-2"
-              >
-                <code className="truncate text-xs text-body-soft">{proxy}</code>
-                <Button
-                  variant="secondary"
-                  className="shrink-0 px-2 py-1 text-xs"
-                  disabled={pending}
-                  onClick={() => {
-                    void handleRemoveProxy(proxy)
-                  }}
+              <li key={proxy}>
+                <ActionField
+                  action={
+                    <FieldActionButton
+                      aria-label={`Remove ${proxy}`}
+                      disabled={pending}
+                      onClick={() => {
+                        void handleRemoveProxy(proxy)
+                      }}
+                    >
+                      <Trash2 aria-hidden className="size-3.5" strokeWidth={1.75} />
+                    </FieldActionButton>
+                  }
                 >
-                  Remove
-                </Button>
+                  <code
+                    className="min-w-0 flex-1 truncate px-2 font-mono text-xs text-body-soft"
+                    title={proxy}
+                  >
+                    {proxy}
+                  </code>
+                </ActionField>
               </li>
             ))}
           </ul>
         )}
-        <div className="flex items-center gap-2">
-          <TextInput
-            aria-label="Trusted proxy CIDR"
-            value={proxyDraft}
-            placeholder="10.0.0.0/8"
-            disabled={pending}
-            onInput={(event) => {
-              setProxyDraft(event.currentTarget.value)
-              setProxyError(undefined)
-            }}
-            className="min-w-0 flex-1"
-          />
-          <Button
-            variant="secondary"
-            disabled={pending}
-            onClick={() => {
+        <ActionTextInput
+          aria-label="Trusted proxy CIDR"
+          value={proxyDraft}
+          placeholder="10.0.0.0/8"
+          disabled={pending}
+          onInput={(event) => {
+            setProxyDraft(event.currentTarget.value)
+            setProxyError(undefined)
+          }}
+          action={{
+            "aria-label": "Add proxy",
+            disabled: pending,
+            onClick: () => {
               void handleAddProxy()
-            }}
-          >
-            Add proxy
-          </Button>
-        </div>
+            },
+            children: <Save aria-hidden className="size-3.5" strokeWidth={1.75} />,
+          }}
+        />
         {proxyError ? (
           <p className="m-0 mt-2 text-xs text-danger" role="alert">
             {proxyError}
@@ -262,29 +269,26 @@ export const RuntimePanel: React.FC = () => {
             <code className="text-body-soft">{view.effective.bindPort}</code>.
           </p>
         )}
-        <div className="flex items-center gap-2">
-          <TextInput
-            id="runtime-bind-port"
-            aria-label="Bind port"
-            value={portDraft}
-            inputMode="numeric"
-            disabled={pending || bindPortEnvOverride}
-            onInput={(event) => {
-              setPortDraft(event.currentTarget.value)
-              setPortError(undefined)
-            }}
-            className="min-w-0 flex-1 font-mono"
-          />
-          <Button
-            variant="secondary"
-            disabled={pending || bindPortEnvOverride}
-            onClick={() => {
+        <ActionTextInput
+          id="runtime-bind-port"
+          aria-label="Bind port"
+          value={portDraft}
+          inputMode="numeric"
+          disabled={pending || bindPortEnvOverride}
+          onInput={(event) => {
+            setPortDraft(event.currentTarget.value)
+            setPortError(undefined)
+          }}
+          className="font-mono"
+          action={{
+            "aria-label": "Save port",
+            disabled: pending || bindPortEnvOverride,
+            onClick: () => {
               void handleSavePort()
-            }}
-          >
-            Save port
-          </Button>
-        </div>
+            },
+            children: <Save aria-hidden className="size-3.5" strokeWidth={1.75} />,
+          }}
+        />
         {portError ? (
           <p className="m-0 mt-2 text-xs text-danger" role="alert">
             {portError}
@@ -298,29 +302,26 @@ export const RuntimePanel: React.FC = () => {
           Leave empty to log to stdout. Effective path{" "}
           <code className="text-body-soft">{view.effective.logPath ?? "stdout"}</code>.
         </p>
-        <div className="flex items-center gap-2">
-          <TextInput
-            id="runtime-log-path"
-            aria-label="Log path"
-            value={logPathDraft}
-            placeholder="/var/log/agent-server.log"
-            disabled={pending}
-            onInput={(event) => {
-              setLogPathDraft(event.currentTarget.value)
-              setLogPathError(undefined)
-            }}
-            className="min-w-0 flex-1 font-mono"
-          />
-          <Button
-            variant="secondary"
-            disabled={pending}
-            onClick={() => {
+        <ActionTextInput
+          id="runtime-log-path"
+          aria-label="Log path"
+          value={logPathDraft}
+          placeholder="/var/log/agent-server.log"
+          disabled={pending}
+          onInput={(event) => {
+            setLogPathDraft(event.currentTarget.value)
+            setLogPathError(undefined)
+          }}
+          className="font-mono"
+          action={{
+            "aria-label": "Save path",
+            disabled: pending,
+            onClick: () => {
               void handleSaveLogPath()
-            }}
-          >
-            Save path
-          </Button>
-        </div>
+            },
+            children: <Save aria-hidden className="size-3.5" strokeWidth={1.75} />,
+          }}
+        />
         {logPathError ? (
           <p className="m-0 mt-2 text-xs text-danger" role="alert">
             {logPathError}

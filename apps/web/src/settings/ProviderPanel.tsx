@@ -1,10 +1,14 @@
 import React, { useState } from "react"
+import { CircleHelp, Save, Trash2 } from "lucide-react"
+import {
+  ActionField,
+  ActionTextInput,
+  FieldActionButton,
+} from "../design-system/ActionTextInput"
 import { Button } from "../design-system/Button"
 import { Modal } from "../design-system/Modal"
 import { Panel } from "../design-system/Panel"
-import { SectionKicker } from "../design-system/SectionKicker"
 import { StatusPill } from "../design-system/StatusPill"
-import { TextInput } from "../design-system/TextInput"
 import { isRuntimeSettingsUpdateError } from "../runtime-settings/update.runtime.settings"
 import { useRuntimeSettingsQuery } from "../runtime-settings/use.runtime.settings.query"
 import { useUpdateRuntimeSettingsMutation } from "../runtime-settings/use.update.runtime.settings.mutation"
@@ -31,7 +35,7 @@ type ProviderCardProps = {
   title: string
   description: string
   icon: React.ReactNode
-  stateLabel: React.ReactNode
+  stateLabel?: React.ReactNode
   disabled?: boolean
   children?: React.ReactNode
   action?: React.ReactNode
@@ -50,24 +54,26 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
     aria-disabled={disabled ? "true" : undefined}
     className={`rounded-[9px] border p-5 ${disabled ? "border-line-soft bg-[#0a0c10] opacity-55" : "border-lime/35 bg-[linear-gradient(145deg,rgba(182,243,107,0.04),#0b0e13)]"}`}
   >
-    <div className="mb-3.5 flex items-start justify-between gap-3">
-      <span className="grid size-9 place-items-center rounded-[7px] border border-line bg-panel-2 text-muted">
-        {icon}
-      </span>
+    <div className="mb-3.5 flex items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className="grid size-9 shrink-0 place-items-center rounded-[7px] border border-line bg-panel-2 text-muted">
+          {icon}
+        </span>
+        <h4 className="m-0 text-base font-semibold">{title}</h4>
+        <button
+          type="button"
+          className="grid size-5 shrink-0 place-items-center rounded text-muted hover:text-body-soft"
+          title={description}
+          aria-label={description}
+        >
+          <CircleHelp aria-hidden className="size-3.5" strokeWidth={1.75} />
+        </button>
+      </div>
       {stateLabel}
     </div>
-    <h4 className="m-0 mb-2 text-base font-semibold">{title}</h4>
-    <p className="m-0 text-sm leading-[1.55] text-muted">{description}</p>
     {children}
     {action}
   </section>
-)
-
-const ActiveState: React.FC = () => (
-  <span className="flex items-center gap-1.5 font-mono text-2xs text-lime">
-    <span aria-hidden className="size-1.5 rounded-full bg-lime" />
-    Active
-  </span>
 )
 
 type RemoveRootModalProps = {
@@ -209,36 +215,41 @@ const LocalFilesystemProviderCard: React.FC = () => {
         title="Local filesystem"
         description="Register folders from this machine. Paths outside these roots remain unavailable to remote clients."
         icon={<FilesystemIcon />}
-        stateLabel={<ActiveState />}
       >
-        <div className="mt-4 space-y-2">
+        <div className="mt-4">
           {allowedRoots.length === 0 ? (
             <p className="m-0 text-xs text-muted">No allowed roots configured yet.</p>
           ) : (
             <ul className="m-0 list-none space-y-2 p-0">
               {allowedRoots.map((root) => (
-                <li
-                  key={root}
-                  className="flex items-center justify-between gap-3 rounded-[7px] border border-line-soft bg-panel-elevated px-3 py-2"
-                >
-                  <code className="truncate text-xs text-body-soft">{root}</code>
-                  <Button
-                    variant="secondary"
-                    className="shrink-0 px-2 py-1 text-xs"
-                    disabled={pending}
-                    onClick={() => {
-                      void handleRemoveRoot(root)
-                    }}
+                <li key={root}>
+                  <ActionField
+                    action={
+                      <FieldActionButton
+                        aria-label={`Remove ${root}`}
+                        disabled={pending}
+                        onClick={() => {
+                          void handleRemoveRoot(root)
+                        }}
+                      >
+                        <Trash2 aria-hidden className="size-3.5" strokeWidth={1.75} />
+                      </FieldActionButton>
+                    }
                   >
-                    Remove
-                  </Button>
+                    <code
+                      className="min-w-0 flex-1 truncate px-2 font-mono text-xs text-body-soft"
+                      title={root}
+                    >
+                      {root}
+                    </code>
+                  </ActionField>
                 </li>
               ))}
             </ul>
           )}
 
-          <div className="flex items-center gap-2">
-            <TextInput
+          <div className="mt-4">
+            <ActionTextInput
               aria-label="Allowed root path"
               value={draftPath}
               placeholder="/home/you/projects"
@@ -247,27 +258,25 @@ const LocalFilesystemProviderCard: React.FC = () => {
                 setDraftPath(event.currentTarget.value)
                 setFormError(undefined)
               }}
-              className="min-w-0 flex-1"
-            />
-            <Button
-              variant="secondary"
-              disabled={pending}
-              onClick={() => {
-                void handleAddRoot()
+              action={{
+                "aria-label": "Add root",
+                disabled: pending,
+                onClick: () => {
+                  void handleAddRoot()
+                },
+                children: <Save aria-hidden className="size-3.5" strokeWidth={1.75} />,
               }}
-            >
-              Add root
-            </Button>
+            />
           </div>
 
           {formError ? (
-            <p className="m-0 text-xs text-danger" role="alert">
+            <p className="m-0 mt-2 text-xs text-danger" role="alert">
               {formError}
             </p>
           ) : null}
 
           {removeError && confirmRemoveRoot === undefined ? (
-            <p className="m-0 text-xs text-danger" role="alert">
+            <p className="m-0 mt-2 text-xs text-danger" role="alert">
               {removeError}
             </p>
           ) : null}
@@ -291,81 +300,61 @@ const LocalFilesystemProviderCard: React.FC = () => {
   )
 }
 
-export const ProviderPanel: React.FC = () => {
-  const runtimeSettingsQuery = useRuntimeSettingsQuery()
-  const configuredCount = runtimeSettingsQuery.data?.settings.allowedRoots.length ?? 0
+export const ProviderPanel: React.FC = () => (
+  <Panel className="mb-[25px] p-[22px]">
+    <div className="mb-[22px]">
+      <h3 className="m-0 text-lg font-semibold">Workspace provider</h3>
+      <p className="m-0 mt-2 max-w-2xl text-sm text-muted">
+        Control where workspaces live.
+      </p>
+    </div>
 
-  return (
-    <Panel className="mb-[25px] p-[22px]">
-      <div className="mb-[22px] flex items-start justify-between gap-4 max-[820px]:flex-col">
-        <div>
-          <SectionKicker>WORKSPACE SOURCES</SectionKicker>
-          <h3 className="m-0 text-lg font-semibold">Workspace provider</h3>
-          <p className="m-0 mt-2 max-w-2xl text-sm text-muted">
-            Control where Agent Server can create workspaces and which folders agents are allowed to
-            access.
-          </p>
+    <div className="grid gap-3.5 lg:grid-cols-3">
+      <LocalFilesystemProviderCard />
+
+      <ProviderCard
+        title="GitHub"
+        description="Choose repositories, clone them locally, and create isolated workspaces from branches or pull requests."
+        icon={<GitHubIcon />}
+        stateLabel={<StatusPill>Coming soon</StatusPill>}
+        disabled
+        action={
+          <Button variant="secondary" className="mt-4 w-full" disabled>
+            Connect GitHub
+          </Button>
+        }
+      >
+        <div className="mt-4 flex flex-wrap gap-2">
+          <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
+            Repository sync
+          </span>
+          <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
+            Pull request context
+          </span>
         </div>
-        <StatusPill variant="success">
-          {configuredCount} configured
-        </StatusPill>
-      </div>
+      </ProviderCard>
 
-      <div className="grid gap-3.5 lg:grid-cols-3">
-        <LocalFilesystemProviderCard />
-
-        <ProviderCard
-          title="GitHub"
-          description="Choose repositories, clone them locally, and create isolated workspaces from branches or pull requests."
-          icon={<GitHubIcon />}
-          stateLabel={<StatusPill>Coming soon</StatusPill>}
-          disabled
-          action={
-            <Button variant="secondary" className="mt-4 w-full" disabled>
-              Connect GitHub
-            </Button>
-          }
-        >
-          <div className="mt-4 flex flex-wrap gap-2">
-            <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
-              Repository sync
-            </span>
-            <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
-              Pull request context
-            </span>
-          </div>
-        </ProviderCard>
-
-        <ProviderCard
-          title="GitLab"
-          description="Connect self-managed or hosted GitLab projects and launch workspaces from merge requests."
-          icon={<GitLabIcon />}
-          stateLabel={<StatusPill>Coming soon</StatusPill>}
-          disabled
-          action={
-            <Button variant="secondary" className="mt-4 w-full" disabled>
-              Connect GitLab
-            </Button>
-          }
-        >
-          <div className="mt-4 flex flex-wrap gap-2">
-            <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
-              Project sync
-            </span>
-            <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
-              Merge request context
-            </span>
-          </div>
-        </ProviderCard>
-      </div>
-
-      <div className="mt-[18px] flex gap-2.5 rounded-[7px] border border-line-soft bg-panel-elevated p-3.5 text-xs leading-[1.55] text-muted">
-        <span aria-hidden>⌾</span>
-        <p className="m-0">
-          Allowed roots are enforced by the server after canonicalizing paths and resolving symlinks.
-          Removing a root unregisters access. It never deletes files.
-        </p>
-      </div>
-    </Panel>
-  )
-}
+      <ProviderCard
+        title="GitLab"
+        description="Connect self-managed or hosted GitLab projects and launch workspaces from merge requests."
+        icon={<GitLabIcon />}
+        stateLabel={<StatusPill>Coming soon</StatusPill>}
+        disabled
+        action={
+          <Button variant="secondary" className="mt-4 w-full" disabled>
+            Connect GitLab
+          </Button>
+        }
+      >
+        <div className="mt-4 flex flex-wrap gap-2">
+          <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
+            Project sync
+          </span>
+          <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
+            Merge request context
+          </span>
+        </div>
+      </ProviderCard>
+    </div>
+  </Panel>
+)
