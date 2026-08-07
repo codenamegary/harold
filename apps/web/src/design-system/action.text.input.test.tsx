@@ -18,6 +18,7 @@ describe("ActionTextInput", () => {
     const button = getByRole("button", { name: "Add root" })
     const shell = input.parentElement
 
+    expect(shell?.tagName.toLowerCase()).toBe("form")
     expect(shell).toHaveClass("border-line-input")
     expect(shell?.lastElementChild).toBe(button)
   })
@@ -45,6 +46,85 @@ describe("ActionTextInput", () => {
     const { getByRole } = render(
       <ActionTextInput
         aria-label="Path"
+        action={{
+          "aria-label": "Save path",
+          onClick: () => {
+            clicked = true
+          },
+          children: "save",
+        }}
+      />,
+    )
+
+    fireEvent.click(getByRole("button", { name: "Save path" }))
+    expect(clicked).toBe(true)
+  })
+
+  test("Enter submits the action by default", () => {
+    let clicked = false
+    const { getByRole } = render(
+      <ActionTextInput
+        aria-label="Path"
+        action={{
+          "aria-label": "Save path",
+          onClick: () => {
+            clicked = true
+          },
+          children: "save",
+        }}
+      />,
+    )
+
+    fireEvent.submit(getByRole("textbox", { name: "Path" }).parentElement as HTMLFormElement)
+    expect(clicked).toBe(true)
+  })
+
+  test("Enter does not submit when submitOnEnter is false", () => {
+    let clicked = false
+    const { getByRole } = render(
+      <ActionTextInput
+        aria-label="Path"
+        submitOnEnter={false}
+        action={{
+          "aria-label": "Save path",
+          onClick: () => {
+            clicked = true
+          },
+          children: "save",
+        }}
+      />,
+    )
+
+    fireEvent.submit(getByRole("textbox", { name: "Path" }).parentElement as HTMLFormElement)
+    expect(clicked).toBe(false)
+  })
+
+  test("Enter does not submit when the action is disabled", () => {
+    let clicked = false
+    const { getByRole } = render(
+      <ActionTextInput
+        aria-label="Path"
+        action={{
+          "aria-label": "Save path",
+          disabled: true,
+          onClick: () => {
+            clicked = true
+          },
+          children: "save",
+        }}
+      />,
+    )
+
+    fireEvent.submit(getByRole("textbox", { name: "Path" }).parentElement as HTMLFormElement)
+    expect(clicked).toBe(false)
+  })
+
+  test("click still saves when submitOnEnter is false", () => {
+    let clicked = false
+    const { getByRole } = render(
+      <ActionTextInput
+        aria-label="Path"
+        submitOnEnter={false}
         action={{
           "aria-label": "Save path",
           onClick: () => {
