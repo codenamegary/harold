@@ -5,6 +5,7 @@ import { useConnection } from "../connection/use.connection"
 import { IconButton } from "../design-system/IconButton"
 import { StatusDot } from "../design-system/StatusDot"
 import { useAppEventStream } from "../session/use.app.event.stream"
+import { AppMark } from "./AppMark"
 import { SidebarNavLink } from "./SidebarNavLink"
 
 type RouteMeta = {
@@ -55,14 +56,7 @@ export const AppShell: React.FC = () => {
         className={`fixed inset-y-0 left-0 z-40 flex w-[224px] flex-col border-r border-line-soft bg-[#0a0c10] px-3.5 pt-[22px] pb-4 transition-transform duration-[220ms] ease-out max-[820px]:shadow-[12px_0_50px_rgba(0,0,0,0.4)] max-[820px]:-translate-x-full ${sidebarOpen ? "max-[820px]:translate-x-0" : ""}`}
       >
         <div className="flex items-center gap-[11px] px-2 pb-[26px]">
-          <div
-            aria-hidden
-            className="relative size-8 overflow-hidden rounded-lg bg-lime"
-          >
-            <span className="absolute left-2 top-[9px] h-[3px] w-[17px] -rotate-[35deg] rounded-sm bg-[#0b1007]" />
-            <span className="absolute left-[5px] top-[15px] h-[3px] w-[17px] -rotate-[35deg] rounded-sm bg-[#0b1007]" />
-            <span className="absolute left-2 top-[21px] h-[3px] w-[17px] -rotate-[35deg] rounded-sm bg-[#0b1007]" />
-          </div>
+          <AppMark />
           <div>
             <div className="font-bold leading-tight tracking-tight">Agent Server</div>
             <div className="mt-[3px] font-mono text-xs uppercase tracking-[0.08em] text-dim">
