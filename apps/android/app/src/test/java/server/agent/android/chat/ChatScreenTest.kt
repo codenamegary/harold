@@ -149,8 +149,10 @@ class ChatScreenTest {
         }
 
         composeTestRule.onNodeWithTag("chat_composer").assertIsNotEnabled()
-        composeTestRule.onNodeWithTag("thinking_indicator").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("chat_progress").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("activity_status_line").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithTag("thinking_indicator", useUnmergedTree = true)
+            .assertIsDisplayed()
         composeTestRule.onNodeWithTag("chat_cancel_button").assertIsDisplayed()
     }
 
