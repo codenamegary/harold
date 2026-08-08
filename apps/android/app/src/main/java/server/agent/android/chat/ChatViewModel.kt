@@ -886,7 +886,7 @@ class ChatViewModel(
         workspaceId = workspaceId,
         workspaceLabel = workspaceLabels[workspaceId] ?: workspaceId,
         agentId = agentId,
-        agentLabel = agentLabels[agentId] ?: agentId.name,
+        agentLabel = agentLabels[agentId] ?: agentId,
         state = state,
     )
 
