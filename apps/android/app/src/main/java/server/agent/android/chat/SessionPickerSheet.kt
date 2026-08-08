@@ -3,7 +3,6 @@ package server.agent.android.chat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -49,6 +48,15 @@ fun SessionPickerSheet(
                 modifier = Modifier.testTag("session_picker_title"),
             )
 
+            Button(
+                onClick = onCreateClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("create_session_button"),
+            ) {
+                Text(text = "New session")
+            }
+
             when {
                 uiState.sessionsLoading -> {
                     Text(text = "Loading sessions…")
@@ -80,15 +88,6 @@ fun SessionPickerSheet(
                         }
                     }
                 }
-            }
-
-            Button(
-                onClick = onCreateClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("create_session_button"),
-            ) {
-                Text(text = "New session")
             }
         }
     }

@@ -185,6 +185,14 @@ fun ChatScreen(
                         expanded = menuExpanded,
                         onDismissRequest = { menuExpanded = false },
                     ) {
+                        DropdownMenuItem(
+                            text = { Text(text = stringResource(R.string.chat_new_session)) },
+                            onClick = {
+                                menuExpanded = false
+                                onCreateClick()
+                            },
+                            modifier = Modifier.testTag("new_session_menu_item"),
+                        )
                         if (hasSelectedSession) {
                             DropdownMenuItem(
                                 text = { Text(text = "Rename session") },
@@ -279,13 +287,27 @@ fun ChatScreen(
                             WelcomeMessage(
                                 body = stringResource(R.string.chat_welcome_select_session_body),
                                 action = {
-                                    Button(
-                                        onClick = onSessionSelectorClick,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET),
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
                                     ) {
-                                        Text(text = stringResource(R.string.chat_select_session))
+                                        Button(
+                                            onClick = onCreateClick,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                                                .testTag("new_session_cta"),
+                                        ) {
+                                            Text(text = stringResource(R.string.chat_new_session))
+                                        }
+                                        TextButton(
+                                            onClick = onSessionSelectorClick,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .defaultMinSize(minHeight = MIN_TOUCH_TARGET),
+                                        ) {
+                                            Text(text = stringResource(R.string.chat_select_session))
+                                        }
                                     }
                                 },
                             )
@@ -334,20 +356,21 @@ fun ChatScreen(
                     )
                 }
 
-                OutlinedTextField(
-                    value = uiState.composerText,
-                    onValueChange = onComposerTextChanged,
-                    enabled = uiState.composerEnabled,
-                    label = { Text(text = "Message") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("chat_composer"),
-                )
-
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.Bottom,
                 ) {
+                    OutlinedTextField(
+                        value = uiState.composerText,
+                        onValueChange = onComposerTextChanged,
+                        enabled = uiState.composerEnabled,
+                        label = { Text(text = "Message") },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("chat_composer"),
+                    )
+
                     if (uiState.showComposerCancel) {
                         TextButton(
                             onClick = onComposerCancel,
@@ -359,7 +382,7 @@ fun ChatScreen(
                                     contentDescription = cancelContentDescription
                                 },
                         ) {
-                            Text(text = if (uiState.cancelSubmitting) "Canceling…" else "Cancel run")
+                            Text(text = if (uiState.cancelSubmitting) "Canceling…" else "Cancel")
                         }
                     }
 

@@ -34,8 +34,9 @@
     <string name="chat_cancel_content_description">Cancel run</string>
     <string name="chat_welcome_title">Chat with an agent</string>
     <string name="chat_welcome_body">Send a prompt directly to an agent without leaving the console.</string>
-    <string name="chat_welcome_select_session_body">Select a session to start chatting.</string>
+    <string name="chat_welcome_select_session_body">Start a new session or pick an existing one.</string>
     <string name="chat_select_session">Select session</string>
+    <string name="chat_new_session">New session</string>
     <string name="shell_brand_subtitle">Operator console</string>
     <string name="shell_status_label">STATUS</string>
     <string name="shell_connection_label">CONNECTION</string>

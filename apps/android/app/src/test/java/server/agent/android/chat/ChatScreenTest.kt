@@ -156,6 +156,7 @@ class ChatScreenTest {
 
     @Test
     fun showsSelectSessionCtaWhenNoSessionSelected() {
+        var createClicked = false
         composeTestRule.setContent {
             AgentServerTheme(dynamicColor = false) {
                 ChatScreen(
@@ -165,7 +166,7 @@ class ChatScreenTest {
                     onDismissPicker = {},
                     onSessionClick = {},
                     onRenameSessionClick = {},
-                    onCreateClick = {},
+                    onCreateClick = { createClicked = true },
                     onDismissCreate = {},
                     onCreateWorkspaceChanged = {},
                     onCreateAgentChanged = {},
@@ -189,8 +190,58 @@ class ChatScreenTest {
         composeTestRule.onNodeWithTag("select_session_cta").assertIsDisplayed()
         composeTestRule.onNodeWithTag("chat_welcome").assertIsDisplayed()
         composeTestRule.onNodeWithText("Chat with an agent").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Select a session to start chatting.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Start a new session or pick an existing one.").assertIsDisplayed()
         composeTestRule.onNodeWithText("Select session").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("new_session_cta").assertIsDisplayed().performClick()
+        assertTrue(createClicked)
+    }
+
+    @Test
+    fun showsNewSessionInOverflowMenu() {
+        var createClicked = false
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        selectedSession = SessionRow(
+                            id = "sess_01",
+                            name = "Alpha",
+                            workspaceId = "ws_01",
+                            workspaceLabel = "agent-server",
+                            agentId = AgentId.Cursor,
+                            agentLabel = "Cursor",
+                            state = SessionState.Idle,
+                        ),
+                    ),
+                    onSessionSelectorClick = {},
+                    onWorkspacesClick = {},
+                    onDismissPicker = {},
+                    onSessionClick = {},
+                    onRenameSessionClick = {},
+                    onCreateClick = { createClicked = true },
+                    onDismissCreate = {},
+                    onCreateWorkspaceChanged = {},
+                    onCreateAgentChanged = {},
+                    onCreatePromptChanged = {},
+                    onCreateSubmit = {},
+                    onComposerTextChanged = {},
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onRenameClick = {},
+                    onDismissRename = {},
+                    onRenameNameChanged = {},
+                    onRenameSubmit = {},
+                    onArchiveClick = {},
+                    onDismissArchive = {},
+                    onArchiveSubmit = {},
+                    onPermissionOptionSelect = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("chat_overflow").performClick()
+        composeTestRule.onNodeWithTag("new_session_menu_item").assertIsDisplayed().performClick()
+        assertTrue(createClicked)
     }
 
     @Test
