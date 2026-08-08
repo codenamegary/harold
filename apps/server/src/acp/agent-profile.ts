@@ -1,14 +1,13 @@
 import { AgentId } from "contracts/http/agent-settings"
-import { cursorExtensionHandlers } from "./client/extensions/cursor"
+import {
+  AcpClientCapabilities,
+  defaultClientCapabilities,
+} from "./catalog/agent.profile.override"
+import { catalogAgentsById } from "./catalog/generated/catalog.agents.generated"
+import { productAgentOverridesById } from "./catalog/overrides/product.overrides"
 import { ExtensionHandlers } from "./client/extensions/types"
 
-export type AcpClientCapabilities = {
-  readonly fs: {
-    readonly readTextFile: true
-    readonly writeTextFile: true
-  }
-  readonly terminal: true
-}
+export type { AcpClientCapabilities }
 
 export type AgentProfile = {
   readonly id: AgentId
@@ -18,26 +17,31 @@ export type AgentProfile = {
   readonly extensionHandlers: ExtensionHandlers
 }
 
-const cursorClientCapabilities: AcpClientCapabilities = {
-  fs: {
-    readTextFile: true,
-    writeTextFile: true,
-  },
-  terminal: true,
+const emptyExtensionHandlers: ExtensionHandlers = {}
+
+/**
+ * Profile resolve = product override ∪ generated catalog defaults.
+ */
+export const resolveAgentProfile = (agentId: AgentId): AgentProfile | undefined => {
+  const catalogAgent = catalogAgentsById[agentId]
+  if (catalogAgent === undefined) {
+    return undefined
+  }
+
+  const override = productAgentOverridesById[agentId]
+
+  return {
+    id: agentId,
+    command: override?.command ?? catalogAgent.spawn.command,
+    authMethodId: override?.authMethodId ?? catalogAgent.authMethodId,
+    clientCapabilities: override?.clientCapabilities ?? defaultClientCapabilities,
+    extensionHandlers: override?.extensionHandlers ?? emptyExtensionHandlers,
+  }
 }
 
-export const cursorAgentProfile: AgentProfile = {
-  id: "cursor",
-  command: ["agent", "acp"],
-  authMethodId: "cursor_login",
-  clientCapabilities: cursorClientCapabilities,
-  extensionHandlers: cursorExtensionHandlers,
+const resolvedCursorProfile = resolveAgentProfile("cursor")
+if (resolvedCursorProfile === undefined) {
+  throw new Error("cursor agent is missing from the ACP catalog")
 }
 
-export const agentProfilesById: Record<AgentId, AgentProfile | undefined> = {
-  cursor: cursorAgentProfile,
-  claude: undefined,
-}
-
-export const resolveAgentProfile = (agentId: AgentId): AgentProfile | undefined =>
-  agentProfilesById[agentId]
+export const cursorAgentProfile: AgentProfile = resolvedCursorProfile

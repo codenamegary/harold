@@ -150,6 +150,43 @@ describe("createAcpSupervisor", () => {
     })
   })
 
+  test("starts a non-cursor catalog agent via generic profile", async () => {
+    const mock = createMockTransport()
+    const spawnCalls: Array<{ command: readonly string[]; executablePath: string }> = []
+    mock.setHandler("initialize", () => ({
+      protocolVersion: 1,
+      agentCapabilities: {
+        loadSession: false,
+        sessionCapabilities: { close: false },
+      },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "opencode", enabled: true, path: "/usr/local/bin/opencode" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: ({ profile, executablePath }) => {
+        spawnCalls.push({ command: profile.command, executablePath })
+        return createMockProcess()
+      },
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("opencode")
+
+    expect(supervisor.getStatus()).toEqual({ state: "ready", activeSessions: 0 })
+    expect(supervisor.getRunningAgentId()).toBe("opencode")
+    expect(spawnCalls).toEqual([
+      {
+        command: ["opencode", "acp"],
+        executablePath: "/usr/local/bin/opencode",
+      },
+    ])
+  })
+
   test("transitions to error when initialize fails", async () => {
     const mock = createMockTransport()
     mock.setHandler("initialize", () => {

@@ -72,9 +72,9 @@ const emptyAgentCollection = {
       path: null,
     },
     {
-      id: "claude",
-      displayName: "Claude",
-      available: false,
+      id: "claude-acp",
+      displayName: "Claude Agent",
+      available: true,
       enabled: false,
       path: null,
     },

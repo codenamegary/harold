@@ -24,9 +24,9 @@ const validStatus = {
 
 const mutationFlowTimeoutMs = 15000
 
-const claudeAgent: AgentSettings = {
-  id: "claude",
-  displayName: "Claude",
+const comingSoonAgent: AgentSettings = {
+  id: "claude-acp",
+  displayName: "Claude Agent",
   available: false,
   enabled: false,
   path: null,
@@ -43,7 +43,7 @@ const cursorAgent = (overrides: Partial<AgentSettings> = {}): AgentSettings => (
 
 const agentsCollection = (cursor: AgentSettings) =>
   AgentSettingsCollectionSchema.parse({
-    items: [cursor, claudeAgent],
+    items: [cursor, comingSoonAgent],
   })
 
 const originalFetch = globalThis.fetch
@@ -454,17 +454,17 @@ describe("AgentsPanel", () => {
     await flushDetectSuccessFeedback(card)
   }, mutationFlowTimeoutMs)
 
-  test("claude card is greyed out and cannot be enabled", async () => {
+  test("unavailable agent card is greyed out and cannot be enabled", async () => {
     const view = renderAgentsPanel()
 
     await waitFor(() => {
-      expect(view.getByLabelText("Claude agent")).toBeInTheDocument()
+      expect(view.getByLabelText("Claude Agent agent")).toBeInTheDocument()
     })
 
-    const claudeCard = view.getByLabelText("Claude agent")
+    const claudeCard = view.getByLabelText("Claude Agent agent")
 
     expect(within(claudeCard).getByText("Coming soon")).toBeInTheDocument()
-    expect(within(claudeCard).queryByLabelText("Enable Claude")).not.toBeInTheDocument()
+    expect(within(claudeCard).queryByLabelText("Enable Claude Agent")).not.toBeInTheDocument()
     expect(within(claudeCard).getByRole("button", { name: "Detect path" })).toBeDisabled()
     expect(within(claudeCard).getByRole("button", { name: "Save path" })).toBeDisabled()
   })

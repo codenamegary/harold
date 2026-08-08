@@ -1,4 +1,6 @@
-import { AgentId, AgentSettings } from "contracts/http/agent-settings"
+import { AgentId, AgentIdSchema, AgentSettings } from "contracts/http/agent-settings"
+import { catalogAgentList, catalogAgentsById } from "../acp/catalog/generated/catalog.agents.generated"
+import { productAgentOverridesById } from "../acp/catalog/overrides/product.overrides"
 
 export type AgentDefinition = {
   id: AgentId
@@ -7,22 +9,31 @@ export type AgentDefinition = {
   binaryName: string
 }
 
-export const agentDefinitions: Record<AgentId, AgentDefinition> = {
-  cursor: {
-    id: "cursor",
-    displayName: "Cursor",
-    available: true,
-    binaryName: "agent",
-  },
-  claude: {
-    id: "claude",
-    displayName: "Claude",
-    available: false,
-    binaryName: "claude",
-  },
+const toAgentDefinition = (agentId: AgentId): AgentDefinition => {
+  const catalogAgent = catalogAgentsById[agentId]
+  const override = productAgentOverridesById[agentId]
+
+  return {
+    id: agentId,
+    displayName: catalogAgent.displayName,
+    available: catalogAgent.available,
+    binaryName: override?.binaryName ?? catalogAgent.spawn.binaryName,
+  }
 }
 
-export const agentDefinitionList: AgentDefinition[] = Object.values(agentDefinitions)
+export const agentDefinitionList: AgentDefinition[] = catalogAgentList.map((agent) =>
+  toAgentDefinition(AgentIdSchema.parse(agent.id)),
+)
+
+const buildAgentDefinitions = (): Record<AgentId, AgentDefinition> => {
+  const definitions = {} as Record<AgentId, AgentDefinition>
+  for (const definition of agentDefinitionList) {
+    definitions[definition.id] = definition
+  }
+  return definitions
+}
+
+export const agentDefinitions: Record<AgentId, AgentDefinition> = buildAgentDefinitions()
 
 export type AgentRegistryMetadata = {
   command: readonly string[]
@@ -30,18 +41,22 @@ export type AgentRegistryMetadata = {
   capabilities: readonly string[]
 }
 
-export const agentRegistryMetadataById: Record<AgentId, AgentRegistryMetadata> = {
-  cursor: {
-    command: ["agent", "acp"],
-    authMethodId: "cursor_login",
-    capabilities: ["session/new", "session/prompt", "session/cancel"],
-  },
-  claude: {
-    command: ["claude"],
-    authMethodId: "claude",
-    capabilities: [],
-  },
+const buildAgentRegistryMetadata = (): Record<AgentId, AgentRegistryMetadata> => {
+  const metadata = {} as Record<AgentId, AgentRegistryMetadata>
+  for (const definition of agentDefinitionList) {
+    const catalogAgent = catalogAgentsById[definition.id]
+    const override = productAgentOverridesById[definition.id]
+    metadata[definition.id] = {
+      command: override?.command ?? catalogAgent.spawn.command,
+      authMethodId: override?.authMethodId ?? catalogAgent.authMethodId,
+      capabilities: ["session/new", "session/prompt", "session/cancel"],
+    }
+  }
+  return metadata
 }
+
+export const agentRegistryMetadataById: Record<AgentId, AgentRegistryMetadata> =
+  buildAgentRegistryMetadata()
 
 export const toAgentSettings = (
   definition: AgentDefinition,

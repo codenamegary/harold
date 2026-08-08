@@ -6,6 +6,7 @@ import {
 } from "contracts/http/agent-settings"
 import { AgentDatabase } from "../persistence/database"
 import { agentSettings } from "../persistence/schema/agent-settings"
+import { ensureCatalogAgentSettingsRows } from "../acp/catalog/ensure.catalog.agent.settings"
 import {
   agentDefinitionList,
   agentDefinitions,
@@ -88,6 +89,8 @@ export const createAgentSettingsRepository = (
 ): AgentSettingsRepository => {
   const whichFn: WhichFn = options.whichFn ?? ((name) => Bun.which(name))
   const validatePath = options.validateExecutablePathFn ?? validateExecutablePath
+
+  ensureCatalogAgentSettingsRows(database)
 
   const list = (): AgentSettings[] => {
     const rows = database.db.select().from(agentSettings).all()

@@ -1,6 +1,7 @@
 import { z } from "zod"
+import { AgentIdSchema } from "./agent.id.generated"
 
-export const AgentIdSchema = z.enum(["cursor", "claude"])
+export { AgentIdSchema }
 
 export const AgentSettingsSchema = z.strictObject({
   id: AgentIdSchema,

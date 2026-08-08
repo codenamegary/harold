@@ -1,0 +1,43 @@
+{
+  "version": "1.0.0",
+  "agents": [
+    {
+      "id": "fixture-binary",
+      "name": "Fixture Binary",
+      "version": "1.0.0",
+      "description": "Binary spawn fixture",
+      "distribution": {
+        "binary": {
+          "linux-x86_64": {
+            "archive": "https://example.com/fixture-binary.tar.gz",
+            "cmd": "./fixture-bin",
+            "args": ["acp"]
+          }
+        }
+      }
+    },
+    {
+      "id": "fixture-npx",
+      "name": "Fixture Npx",
+      "version": "2.0.0",
+      "description": "Npx spawn fixture",
+      "distribution": {
+        "npx": {
+          "package": "@example/fixture-npx@2.0.0",
+          "args": ["--acp"]
+        }
+      }
+    },
+    {
+      "id": "fixture-uvx",
+      "name": "Fixture Uvx",
+      "version": "3.0.0",
+      "distribution": {
+        "uvx": {
+          "package": "fixture-uvx==3.0.0",
+          "args": ["acp"]
+        }
+      }
+    }
+  ]
+}

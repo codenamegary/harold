@@ -165,7 +165,7 @@ describe("POST /v1/sessions", () => {
     expect(body.title).toBe("Workspace not found")
   })
 
-  test("returns 409 when agent is unavailable", async () => {
+  test("returns 409 when catalog agent is disabled", async () => {
     const dataDir = await createTempDataDir(resources)
     const { app } = await createTestApp(resources, dataDir)
     const { workspaceId } = await seedWorkspace(app, dataDir)
@@ -175,7 +175,7 @@ describe("POST /v1/sessions", () => {
       url: "/v1/sessions",
       payload: {
         workspaceId,
-        agentId: "claude",
+        agentId: "claude-acp",
         text: "Claude session",
       },
     })
@@ -183,7 +183,7 @@ describe("POST /v1/sessions", () => {
     const body = ConflictProblemSchema.parse(JSON.parse(response.body))
 
     expect(response.statusCode).toBe(409)
-    expect(body.title).toBe("Agent is not available")
+    expect(body.title).toBe("Agent is disabled")
   })
 
   test("returns 409 when agent is disabled", async () => {

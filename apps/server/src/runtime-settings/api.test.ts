@@ -9,6 +9,7 @@ import {
   UpdateRuntimeSettingsResponseSchema,
 } from "contracts/http/runtime-settings"
 import YAML from "yaml"
+import { catalogAgentIds } from "../acp/catalog/generated/catalog.agents.generated"
 import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
 import { readEnvBindOverrides } from "../config/env.bind.overrides"
@@ -308,10 +309,8 @@ describe("PATCH /v1/settings/runtime", () => {
       )
       .all()
 
-    expect(agents).toEqual([
-      { agent_id: "claude", enabled: 0 },
-      { agent_id: "cursor", enabled: 0 },
-    ])
+    expect(agents.map((agent) => agent.agent_id)).toEqual([...catalogAgentIds])
+    expect(agents.every((agent) => agent.enabled === 0)).toBe(true)
   })
 })
 

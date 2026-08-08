@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { catalogAgentIds } from "../acp/catalog/generated/catalog.agents.generated"
 import {
-  ConflictProblemSchema,
   NotFoundProblemSchema,
   ValidationProblemSchema,
 } from "contracts/http/error"
@@ -60,7 +60,7 @@ afterEach(async () => {
 
 const findAgent = (
   collection: ReturnType<typeof AgentSettingsCollectionSchema.parse>,
-  agentId: "cursor" | "claude",
+  agentId: (typeof catalogAgentIds)[number],
 ) => {
   const agent = collection.items.find((item) => item.id === agentId)
   if (!agent) {
@@ -82,17 +82,17 @@ describe("GET /v1/settings/agents", () => {
     const body = AgentSettingsCollectionSchema.parse(JSON.parse(response.body))
 
     expect(response.statusCode).toBe(200)
-    expect(body.items).toHaveLength(2)
+    expect(body.items).toHaveLength(catalogAgentIds.length)
 
     const cursor = findAgent(body, "cursor")
     expect(cursor.enabled).toBe(false)
     expect(cursor.available).toBe(true)
     expect(cursor.path).toBeNull()
 
-    const claude = findAgent(body, "claude")
-    expect(claude.enabled).toBe(false)
-    expect(claude.available).toBe(false)
-    expect(claude.path).toBeNull()
+    const claudeAcp = findAgent(body, "claude-acp")
+    expect(claudeAcp.enabled).toBe(false)
+    expect(claudeAcp.available).toBe(true)
+    expect(claudeAcp.path).toBeNull()
   })
 })
 
@@ -325,21 +325,29 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     expect(response.statusCode).toBe(400)
   })
 
-  test("returns 409 when enabling claude", async () => {
+  test("enables a non-cursor catalog agent with an explicit path", async () => {
     const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const detectedPath = "/usr/bin/npx"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "npx" ? detectedPath : undefined
+    const { app } = await createTestApp(dataDir, whichFn)
 
     const response = await app.inject({
       method: "PATCH",
-      url: "/v1/settings/agents/claude",
-      payload: { enabled: true },
+      url: "/v1/settings/agents/claude-acp",
+      payload: { enabled: true, path: detectedPath },
     })
 
-    const body = ConflictProblemSchema.parse(JSON.parse(response.body))
+    const body = AgentSettingsSchema.parse(JSON.parse(response.body))
 
-    expect(response.statusCode).toBe(409)
-    expect(response.headers["content-type"]).toStartWith("application/problem+json")
-    expect(body.title).toBe("Agent cannot be enabled")
+    expect(response.statusCode).toBe(200)
+    expect(body).toEqual({
+      id: "claude-acp",
+      displayName: "Claude Agent",
+      available: true,
+      enabled: true,
+      path: detectedPath,
+    })
   })
 
   test("returns 400 for invalid agent id", async () => {

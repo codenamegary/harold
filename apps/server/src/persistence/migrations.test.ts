@@ -4,12 +4,13 @@ import { createHash } from "node:crypto"
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { catalogAgentIds } from "../acp/catalog/generated/catalog.agents.generated"
 import { openDatabase } from "./database"
 
 const tempDirs: string[] = []
 const migrationsFolder = path.join(import.meta.dir, "drizzle")
 const ms1MigrationCount = 4
-const currentMigrationCount = 5
+const currentMigrationCount = 6
 
 const createTempDataDir = async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-test-"))
@@ -127,10 +128,9 @@ describe("drizzle migrations", () => {
       )
       .all()
 
-    expect(seededAgents).toEqual([
-      { agent_id: "claude", enabled: 0 },
-      { agent_id: "cursor", enabled: 0 },
-    ])
+    expect(seededAgents).toEqual([{ agent_id: "cursor", enabled: 0 }])
+    expect(catalogAgentIds).toContain("cursor")
+    expect(catalogAgentIds).toContain("claude-acp")
 
     database.close()
   })
@@ -345,7 +345,8 @@ describe("drizzle migrations", () => {
       .all()
       .map((row) => row.agent_id)
 
-    expect(seededAgents).toEqual(["claude", "cursor"])
+    expect(seededAgents).toEqual(["cursor"])
+    expect(seededAgents).not.toContain("claude")
 
     database.close()
   })
