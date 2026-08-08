@@ -6,7 +6,11 @@ plugins {
 
 android {
     namespace = "server.agent.android"
-    compileSdk = 37
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 0
+        }
+    }
 
     defaultConfig {
         applicationId = "server.agent.android"
