@@ -1,4 +1,5 @@
 import React from "react"
+import { shortToolLabel } from "./short.tool.label"
 import { TranscriptToolRow } from "./transcript.reducer"
 
 type ToolCallGroupProps = {
@@ -10,24 +11,6 @@ const toolCallLabel = (count: number): string =>
 
 const isActiveStatus = (status: TranscriptToolRow["status"]): boolean =>
   status === "pending" || status === "in_progress"
-
-const truncateLabel = (value: string, maxChars: number): string =>
-  value.length <= maxChars ? value : `${value.slice(0, maxChars - 1)}…`
-
-const shortToolLabel = (tool: TranscriptToolRow): string => {
-  const name = tool.toolName.trim()
-  if (name.startsWith("`")) {
-    const firstLine = (name.replace(/^`+/, "").split("\n")[0] ?? name).trim()
-    return truncateLabel(firstLine, 72)
-  }
-
-  const detailLine = tool.detail?.split("\n")[0]?.trim()
-  if (detailLine !== undefined && detailLine.length > 0) {
-    return `${name} · ${truncateLabel(detailLine, 56)}`
-  }
-
-  return name
-}
 
 const toolDetailBody = (tool: TranscriptToolRow): string => {
   const parts = [tool.toolName.trim()]

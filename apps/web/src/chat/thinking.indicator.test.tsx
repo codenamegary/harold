@@ -7,15 +7,15 @@ import { ThinkingIndicator } from "./ThinkingIndicator"
 import { TranscriptRow } from "./transcript.reducer"
 
 describe("ThinkingIndicator", () => {
-  test("exposes a polite live status", () => {
-    const { getByRole } = render(<ThinkingIndicator />)
+  test("renders the shimmer label", () => {
+    const { getByText } = render(<ThinkingIndicator />)
 
-    expect(getByRole("status", { name: "Thinking" })).toBeInTheDocument()
+    expect(getByText("Thinking")).toBeInTheDocument()
   })
 })
 
-describe("ChatTranscript thinking", () => {
-  test("shows thinking indicator while running before assistant output", () => {
+describe("ChatTranscript activity status", () => {
+  test("shows thinking sticky status while running before assistant output", () => {
     const { getByRole } = render(
       <ChatTranscript
         isRunning
@@ -26,8 +26,8 @@ describe("ChatTranscript thinking", () => {
     expect(getByRole("status", { name: "Thinking" })).toBeInTheDocument()
   })
 
-  test("shows thinking indicator on active thought row while running", () => {
-    const { getByRole, getByText } = render(
+  test("keeps thinking section static while sticky line shows Thinking", () => {
+    const { getByRole, getByText, getAllByText } = render(
       <ChatTranscript
         isRunning
         rows={[
@@ -40,6 +40,7 @@ describe("ChatTranscript thinking", () => {
     expect(getByRole("status", { name: "Thinking" })).toBeInTheDocument()
     expect(getByText("planning")).toBeInTheDocument()
     expect(getByText("planning").closest("details")).not.toBeNull()
+    expect(getAllByText("Thinking").length).toBeGreaterThanOrEqual(2)
   })
 
   test("renders completed thinking as a collapsible section", async () => {
@@ -54,7 +55,7 @@ describe("ChatTranscript thinking", () => {
       />,
     )
 
-    expect(queryByRole("status", { name: "Thinking" })).toBeNull()
+    expect(queryByRole("status")).toBeNull()
     const summary = getByText("Thinking")
     const details = summary.closest("details")
     expect(details).not.toBeNull()
@@ -65,8 +66,8 @@ describe("ChatTranscript thinking", () => {
     expect(getByText("planning")).toBeInTheDocument()
   })
 
-  test("hides thinking indicator after assistant output starts", () => {
-    const { queryByRole, getByText } = render(
+  test("shows replying sticky status while assistant streams", () => {
+    const { getByRole, getByText } = render(
       <ChatTranscript
         isRunning
         rows={[
@@ -77,9 +78,68 @@ describe("ChatTranscript thinking", () => {
       />,
     )
 
-    expect(queryByRole("status", { name: "Thinking" })).toBeNull()
+    expect(getByRole("status", { name: "Replying" })).toBeInTheDocument()
     expect(getByText("Thinking")).toBeInTheDocument()
     expect(getByText("planning")).toBeInTheDocument()
+  })
+
+  test("shows using tools sticky status as one primary label", () => {
+    const { getByRole } = render(
+      <ChatTranscript
+        isRunning
+        rows={[
+          { kind: "user", turnId: "turn_1", text: "go" },
+          {
+            kind: "tool",
+            turnId: "turn_1",
+            toolCallId: "t1",
+            toolName: "grep",
+            toolKind: "execute",
+            status: "pending",
+            detail: "pattern",
+          },
+        ]}
+      />,
+    )
+
+    expect(getByRole("status", { name: "grep · pattern" })).toBeInTheDocument()
+  })
+
+  test("shows waiting for permission over other phases", () => {
+    const { getByRole } = render(
+      <ChatTranscript
+        isRunning
+        hasPendingPermission
+        rows={[
+          { kind: "user", turnId: "turn_1", text: "go" },
+          {
+            kind: "tool",
+            turnId: "turn_1",
+            toolCallId: "t1",
+            toolName: "read",
+            toolKind: "read",
+            status: "pending",
+          },
+        ]}
+      />,
+    )
+
+    expect(
+      getByRole("status", { name: "Waiting for permission" }),
+    ).toBeInTheDocument()
+  })
+
+  test("hides sticky status when not running", () => {
+    const { queryByRole } = render(
+      <ChatTranscript
+        rows={[
+          { kind: "user", turnId: "turn_1", text: "Explain auth" },
+          { kind: "assistant", turnId: "turn_1", text: "Auth uses JWT" },
+        ]}
+      />,
+    )
+
+    expect(queryByRole("status")).toBeNull()
   })
 })
 
