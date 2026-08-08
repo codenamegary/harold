@@ -30,14 +30,17 @@ describe("SessionSchema", () => {
     expect(SessionSchema.parse(validSession)).toEqual(validSession)
   })
 
-  test("accepts cursor and claude agent ids", () => {
+  test("accepts catalog agent ids", () => {
     expect(SessionSchema.parse({ ...validSession, agentId: "cursor" }).agentId).toBe("cursor")
-    expect(SessionSchema.parse({ ...validSession, agentId: "claude" }).agentId).toBe("claude")
+    expect(SessionSchema.parse({ ...validSession, agentId: "claude-acp" }).agentId).toBe(
+      "claude-acp",
+    )
+    expect(SessionSchema.parse({ ...validSession, agentId: "opencode" }).agentId).toBe("opencode")
   })
 
   test("rejects invalid agent id", () => {
     expect(() =>
-      SessionSchema.parse({ ...validSession, agentId: "agent-auth" }),
+      SessionSchema.parse({ ...validSession, agentId: "not-a-catalog-agent" }),
     ).toThrow()
   })
 
@@ -66,7 +69,7 @@ describe("CreateSessionBodySchema", () => {
     expect(() =>
       CreateSessionBodySchema.parse({
         workspaceId: "ws-agent-server",
-        agentId: "agent-auth",
+        agentId: "not-a-catalog-agent",
         text: "Explain the auth flow",
       }),
     ).toThrow()

@@ -34,9 +34,9 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       path: "/usr/local/bin/agent",
     },
     {
-      id: "claude",
-      displayName: "Claude",
-      available: false,
+      id: "claude-acp",
+      displayName: "Claude Agent",
+      available: true,
       enabled: false,
       path: null,
     },

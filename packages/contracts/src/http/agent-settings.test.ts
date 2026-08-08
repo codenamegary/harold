@@ -29,11 +29,11 @@ describe("AgentSettingsSchema", () => {
     expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
   })
 
-  test("accepts unavailable claude settings", () => {
+  test("accepts catalog agent ids beyond cursor", () => {
     const settings = {
-      id: "claude",
-      displayName: "Claude",
-      available: false,
+      id: "claude-acp",
+      displayName: "Claude Agent",
+      available: true,
       enabled: false,
       path: null,
     }
@@ -100,9 +100,9 @@ describe("AgentSettingsCollectionSchema", () => {
       items: [
         validAgentSettings,
         {
-          id: "claude",
-          displayName: "Claude",
-          available: false,
+          id: "claude-acp",
+          displayName: "Claude Agent",
+          available: true,
           enabled: false,
           path: null,
         },

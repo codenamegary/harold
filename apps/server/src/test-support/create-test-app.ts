@@ -7,6 +7,7 @@ import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
 import { openDatabase, AgentDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
+import { AgentId } from "contracts/http/agent-settings"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
 import { SpawnedAgentProcess } from "../acp/supervisor/spawn-agent-process"
@@ -207,7 +208,7 @@ export const seedWorkspace = async (
 
 export const enableAgent = async (
   app: Awaited<ReturnType<typeof createServer>>["app"],
-  agentId: "cursor" | "claude",
+  agentId: AgentId,
   whichFn?: WhichFn,
 ) => {
   const detectedPath = "/usr/local/bin/agent"
