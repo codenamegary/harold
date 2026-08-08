@@ -70,10 +70,10 @@ export const deriveActivityStatus = ({
     isActiveToolStatus(tool.status),
   )
   if (activeTool !== undefined) {
+    const toolLabel = shortToolLabel(activeTool).trim()
     return {
       phase: "using-tools",
-      label: "Using tools",
-      subtitle: shortToolLabel(activeTool),
+      label: toolLabel.length > 0 ? toolLabel : "Using tools",
     }
   }
 

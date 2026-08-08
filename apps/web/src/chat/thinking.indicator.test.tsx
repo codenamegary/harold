@@ -83,8 +83,8 @@ describe("ChatTranscript activity status", () => {
     expect(getByText("planning")).toBeInTheDocument()
   })
 
-  test("shows using tools sticky status with subtitle", () => {
-    const { getByRole, getByText } = render(
+  test("shows using tools sticky status as one primary label", () => {
+    const { getByRole } = render(
       <ChatTranscript
         isRunning
         rows={[
@@ -102,10 +102,7 @@ describe("ChatTranscript activity status", () => {
       />,
     )
 
-    expect(
-      getByRole("status", { name: "Using tools: grep · pattern" }),
-    ).toBeInTheDocument()
-    expect(getByText("grep · pattern")).toBeInTheDocument()
+    expect(getByRole("status", { name: "grep · pattern" })).toBeInTheDocument()
   })
 
   test("shows waiting for permission over other phases", () => {

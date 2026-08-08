@@ -44,7 +44,7 @@ describe("deriveActivityStatus", () => {
     })
   })
 
-  test("returns using tools with active tool subtitle", () => {
+  test("returns using tools as a single primary label", () => {
     const rows: TranscriptRow[] = [
       user(),
       {
@@ -75,8 +75,7 @@ describe("deriveActivityStatus", () => {
       }),
     ).toEqual({
       phase: "using-tools",
-      label: "Using tools",
-      subtitle: "grep · pattern",
+      label: "grep · pattern",
     })
   })
 
