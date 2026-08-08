@@ -15,7 +15,7 @@ on:
       - .github/workflows/android.yml
 
 jobs:
-  android:
+  build:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -39,28 +39,43 @@ jobs:
       - name: Android checks
         run: ./gradlew --no-daemon --stacktrace --warning-mode=all lintRelease testDebugUnitTest assembleDebug assembleRelease
 
-      - name: Upload debug APK
+      - name: Stage APK artifacts
+        run: |
+          mkdir -p artifacts
+          cp app/build/outputs/apk/debug/app-debug.apk artifacts/app-debug.apk
+          cp app/build/outputs/apk/release/app-release-unsigned.apk \
+            artifacts/app-release-unsigned.apk
+
+      - name: Upload APK artifacts
         uses: actions/upload-artifact@v7
         with:
-          path: apps/android/app/build/outputs/apk/debug/app-debug.apk
+          name: android-apks
+          path: apps/android/artifacts/
           archive: false
           if-no-files-found: error
 
+  upload-drive:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: android-apks
+          path: apks
+
       - name: Stage APKs for Google Drive
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           stamp=$(date -u +%Y%m%d-%H%M%S)
           mkdir -p drive-upload
-          cp app/build/outputs/apk/debug/app-debug.apk \
-            "drive-upload/${stamp}-debug-app.apk"
-          cp app/build/outputs/apk/release/app-release-unsigned.apk \
-            "drive-upload/${stamp}-release-app.apk"
+          cp apks/app-debug.apk "drive-upload/${stamp}-debug-app.apk"
+          cp apks/app-release-unsigned.apk "drive-upload/${stamp}-release-app.apk"
 
       - name: Upload APKs to Google Drive
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: Jumbo810/Upload_Github_Artifacts_TO_GDrive@v2.3.5
         with:
-          target: apps/android/drive-upload/*.apk
+          target: drive-upload/*.apk
           credentials: ${{ secrets.GDRIVE_CREDENTIALS }}
           parent_folder_id: ${{ secrets.GDRIVE_FOLDER_ID }}
           set_metadata: true
