@@ -107,12 +107,8 @@ data class ChatUiState(
     val showProgress: Boolean
         get() = sessionProgressMessage != null
 
-    val emptyTranscriptMessage: String?
-        get() = when {
-            selectedSession == null -> "Select a session to start chatting."
-            transcript.rows.isEmpty() && !showProgress -> "Send a message to begin."
-            else -> null
-        }
+    val showEmptyWelcome: Boolean
+        get() = selectedSession != null && transcript.rows.isEmpty() && !showProgress
 
     val showSelectSessionCta: Boolean
         get() = selectedSession == null && !sessionsLoading

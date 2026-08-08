@@ -149,6 +149,7 @@ class ChatScreenTest {
         }
 
         composeTestRule.onNodeWithTag("chat_composer").assertIsNotEnabled()
+        composeTestRule.onNodeWithTag("thinking_indicator").assertIsDisplayed()
         composeTestRule.onNodeWithTag("chat_progress").assertIsDisplayed()
         composeTestRule.onNodeWithTag("chat_cancel_button").assertIsDisplayed()
     }
@@ -186,6 +187,60 @@ class ChatScreenTest {
         }
 
         composeTestRule.onNodeWithTag("select_session_cta").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("chat_welcome").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Chat with an agent").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Select a session to start chatting.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Select session").assertIsDisplayed()
+    }
+
+    @Test
+    fun showsWelcomeWhenSelectedSessionHasEmptyTranscript() {
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        selectedSession = SessionRow(
+                            id = "sess_01",
+                            name = "Alpha",
+                            workspaceId = "ws_01",
+                            workspaceLabel = "agent-server",
+                            agentId = AgentId.Cursor,
+                            agentLabel = "Cursor",
+                            state = SessionState.Idle,
+                        ),
+                    ),
+                    onSessionSelectorClick = {},
+                    onWorkspacesClick = {},
+                    onDismissPicker = {},
+                    onSessionClick = {},
+                    onRenameSessionClick = {},
+                    onCreateClick = {},
+                    onDismissCreate = {},
+                    onCreateWorkspaceChanged = {},
+                    onCreateAgentChanged = {},
+                    onCreatePromptChanged = {},
+                    onCreateSubmit = {},
+                    onComposerTextChanged = {},
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onRenameClick = {},
+                    onDismissRename = {},
+                    onRenameNameChanged = {},
+                    onRenameSubmit = {},
+                    onArchiveClick = {},
+                    onDismissArchive = {},
+                    onArchiveSubmit = {},
+                    onPermissionOptionSelect = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("chat_welcome").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Chat with an agent").assertIsDisplayed()
+        composeTestRule.onNodeWithText(
+            "Send a prompt directly to an agent without leaving the console.",
+        ).assertIsDisplayed()
+        composeTestRule.onNodeWithTag("chat_composer").assertIsDisplayed()
     }
 
     @Test

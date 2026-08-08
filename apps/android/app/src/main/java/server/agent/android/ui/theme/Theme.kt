@@ -10,10 +10,65 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
+private val DarkColorScheme = darkColorScheme(
+    primary = Lime,
+    onPrimary = LimeInk,
+    primaryContainer = PanelElevated,
+    onPrimaryContainer = Lime,
+    secondary = Violet,
+    onSecondary = LimeInk,
+    secondaryContainer = PanelElevated,
+    onSecondaryContainer = VioletSoft,
+    tertiary = Amber,
+    onTertiary = LimeInk,
+    background = Ink,
+    onBackground = Body,
+    surface = Panel,
+    onSurface = Body,
+    surfaceVariant = Panel2,
+    onSurfaceVariant = Muted,
+    surfaceContainerHighest = PanelElevated,
+    surfaceContainerHigh = PanelElevated,
+    surfaceContainer = Panel2,
+    surfaceContainerLow = Panel,
+    surfaceContainerLowest = Ink,
+    outline = Line,
+    outlineVariant = LineSoft,
+    error = Danger,
+    onError = LimeInk,
+    errorContainer = PanelElevated,
+    onErrorContainer = Danger,
+)
+
+private val LightColorScheme = lightColorScheme(
+    primary = Lime,
+    onPrimary = LimeInk,
+    primaryContainer = LightPrimaryContainer,
+    onPrimaryContainer = LimeInk,
+    secondary = Violet,
+    onSecondary = LimeInk,
+    secondaryContainer = LightSecondaryContainer,
+    onSecondaryContainer = LimeInk,
+    tertiary = Amber,
+    onTertiary = LimeInk,
+    background = LightBackground,
+    onBackground = LightOnSurface,
+    surface = LightSurface,
+    onSurface = LightOnSurface,
+    surfaceVariant = LightSurfaceVariant,
+    onSurfaceVariant = LightOnSurfaceVariant,
+    outline = LightOutline,
+    outlineVariant = LightOutlineVariant,
+    error = Danger,
+    onError = LimeInk,
+    errorContainer = LightErrorContainer,
+    onErrorContainer = LightOnErrorContainer,
+)
+
 @Composable
 fun AgentServerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val colorScheme = when {
@@ -25,8 +80,8 @@ fun AgentServerTheme(
                 dynamicLightColorScheme(context)
             }
         }
-        darkTheme -> darkColorScheme()
-        else -> lightColorScheme()
+        darkTheme -> DarkColorScheme
+        else -> LightColorScheme
     }
 
     MaterialTheme(

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="window_background">#080A0D</color>
+    <color name="ic_launcher_background">#B6F36B</color>
+    <color name="brand_lime">#B6F36B</color>
+    <color name="brand_lime_ink">#10150C</color>
+</resources>

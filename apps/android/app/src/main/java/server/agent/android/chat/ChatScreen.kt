@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -260,7 +261,7 @@ fun ChatScreen(
                     .weight(1f)
                     .fillMaxWidth(),
                 contentAlignment = if (
-                    uiState.transcript.rows.isEmpty() && !uiState.showProgress && !uiState.showSelectSessionCta
+                    uiState.showEmptyWelcome || uiState.showSelectSessionCta
                 ) {
                     Alignment.Center
                 } else {
@@ -269,29 +270,33 @@ fun ChatScreen(
             ) {
                 when {
                     uiState.showSelectSessionCta -> {
-                        Column(
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("select_session_cta"),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Text(
-                                text = "Select a session to start chatting.",
-                                style = MaterialTheme.typography.bodyLarge,
+                            WelcomeMessage(
+                                body = stringResource(R.string.chat_welcome_select_session_body),
+                                action = {
+                                    Button(
+                                        onClick = onSessionSelectorClick,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET),
+                                    ) {
+                                        Text(text = stringResource(R.string.chat_select_session))
+                                    }
+                                },
                             )
-                            TextButton(onClick = onSessionSelectorClick) {
-                                Text(text = "Select session")
-                            }
                         }
                     }
 
                     else -> {
                         ChatTranscript(
                             rows = uiState.transcript.rows,
-                            showProgress = uiState.showProgress && uiState.transcript.rows.isEmpty(),
-                            progressMessage = uiState.sessionProgressMessage,
-                            emptyMessage = uiState.emptyTranscriptMessage,
+                            isRunning = uiState.showProgress || uiState.composerSubmitting,
+                            showWelcome = uiState.showEmptyWelcome,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }

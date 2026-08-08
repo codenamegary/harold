@@ -32,6 +32,16 @@
     <string name="chat_overflow_content_description">More chat options</string>
     <string name="chat_send_content_description">Send message</string>
     <string name="chat_cancel_content_description">Cancel run</string>
+    <string name="chat_welcome_title">Chat with an agent</string>
+    <string name="chat_welcome_body">Send a prompt directly to an agent without leaving the console.</string>
+    <string name="chat_welcome_select_session_body">Select a session to start chatting.</string>
+    <string name="chat_select_session">Select session</string>
+    <string name="shell_brand_subtitle">Operator console</string>
+    <string name="shell_status_label">STATUS</string>
+    <string name="shell_connection_label">CONNECTION</string>
+    <string name="shell_workspaces_label">WORKSPACES</string>
+    <string name="shell_pair_hint">Scan a pairing QR from your Agent Server host, or enter the endpoint and code manually.</string>
+    <string name="shell_repair_hint">Re-pair if this device lost access, or you want to connect to a different host.</string>
     <string name="permission_option_content_description">Permission option: %1$s</string>
     <string name="workspaces_back">Back</string>
     <string name="workspaces_back_content_description">Go back from workspaces</string>

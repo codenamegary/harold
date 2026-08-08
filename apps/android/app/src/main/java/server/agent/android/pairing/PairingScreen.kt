@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -35,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -49,6 +51,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import server.agent.android.R
 
 private val MIN_TOUCH_TARGET = 48.dp
+private val SCANNER_HEIGHT = 320.dp
+private val SCANNER_CORNER = 12.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -103,21 +107,28 @@ fun PairingScreen(
                     modifier = Modifier.padding(top = 16.dp),
                 )
             } else if (uiState.mode == PairingMode.Scan) {
+                Spacer(modifier = Modifier.height(16.dp))
+
                 PairingScanner(
                     onQrScanned = onQrScanned,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(320.dp)
+                        .height(SCANNER_HEIGHT)
+                        .clip(RoundedCornerShape(SCANNER_CORNER))
                         .testTag("pairing_scanner")
                         .semantics {
                             contentDescription = scannerContentDescription
                         },
                 )
 
-                TextButton(
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
                     onClick = onManualEntryClick,
                     modifier = Modifier
+                        .fillMaxWidth()
                         .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                        .testTag("pairing_manual_entry")
                         .semantics {
                             contentDescription = manualEntryContentDescription
                         },
@@ -223,10 +234,15 @@ private fun PairingScanner(
         return
     }
 
+    // COMPATIBLE uses TextureView so the preview respects Compose z-order.
+    // PERFORMANCE (SurfaceView) can draw over siblings like the manual-entry button.
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
-            PreviewView(ctx)
+            PreviewView(ctx).apply {
+                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                scaleType = PreviewView.ScaleType.FILL_CENTER
+            }
         },
         update = { previewView ->
             val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
