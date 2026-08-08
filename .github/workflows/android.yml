@@ -45,3 +45,22 @@ jobs:
           path: apps/android/app/build/outputs/apk/debug/app-debug.apk
           archive: false
           if-no-files-found: error
+
+      - name: Stage APKs for Google Drive
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          stamp=$(date -u +%Y%m%d-%H%M%S)
+          mkdir -p drive-upload
+          cp app/build/outputs/apk/debug/app-debug.apk \
+            "drive-upload/${stamp}-debug-app.apk"
+          cp app/build/outputs/apk/release/app-release-unsigned.apk \
+            "drive-upload/${stamp}-release-app.apk"
+
+      - name: Upload APKs to Google Drive
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: Jumbo810/Upload_Github_Artifacts_TO_GDrive@v2.3.5
+        with:
+          target: apps/android/drive-upload/*.apk
+          credentials: ${{ secrets.GDRIVE_CREDENTIALS }}
+          parent_folder_id: ${{ secrets.GDRIVE_FOLDER_ID }}
+          set_metadata: true
