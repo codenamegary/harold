@@ -298,7 +298,7 @@ describe("shell honesty", () => {
         expect(getByRole("heading", { name: /test your connection/i })).toBeInTheDocument()
       })
       await waitFor(() => {
-        expect(getByRole("button", { name: /^Run$/i })).toBeInTheDocument()
+        expect(getByRole("button", { name: /refresh connection test/i })).toBeInTheDocument()
       })
       await waitFor(() => {
         expect(getByRole("button", { name: /^Continue$/ })).toBeEnabled()
