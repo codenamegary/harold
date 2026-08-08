@@ -6,3 +6,4 @@ node_modules/
 .tmp/
 coverage/
 .argent/
+connect-tunnel.sh
