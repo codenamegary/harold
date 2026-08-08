@@ -342,6 +342,37 @@ export const createDeviceRepository = (database: AgentDatabase) => {
     return { ok: true, value: { newlyRevoked: true, device: rowToDevice(updated) } }
   }
 
+  const clearPairingCodeDeviceRefs = (params: {
+    deviceId: string
+    executor?: DbExecutor
+  }): void => {
+    const executor = executorOf(params.executor)
+    executor
+      .update(pairingCodes)
+      .set({ deviceId: null })
+      .where(eq(pairingCodes.deviceId, params.deviceId))
+      .run()
+  }
+
+  const deleteById = (params: {
+    deviceId: string
+    executor?: DbExecutor
+  }): DeviceRepositoryResult<void> => {
+    const executor = executorOf(params.executor)
+    const row = executor
+      .select()
+      .from(devices)
+      .where(eq(devices.id, params.deviceId))
+      .get()
+
+    if (row === undefined) {
+      return { ok: false, error: { kind: "device_not_found" } }
+    }
+
+    executor.delete(devices).where(eq(devices.id, params.deviceId)).run()
+    return { ok: true, value: undefined }
+  }
+
   const conditionAfter = (row: DeviceRow) =>
     or(
       lt(devices.pairedAt, row.pairedAt),
@@ -552,6 +583,8 @@ export const createDeviceRepository = (database: AgentDatabase) => {
     getByCredentialHash,
     touchLastSeen,
     revoke,
+    clearPairingCodeDeviceRefs,
+    deleteById,
     list,
   }
 }

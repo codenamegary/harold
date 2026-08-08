@@ -47,5 +47,6 @@ describe("DevicesPage", () => {
     expect(getByText("of 1 paired")).toBeInTheDocument()
     expect(getByText("DEVICE")).toBeInTheDocument()
     expect(getByRole("button", { name: "Revoke Studio Desktop" })).toBeEnabled()
+    expect(getByRole("button", { name: "Delete Studio Desktop" })).toBeEnabled()
   })
 })

@@ -7,6 +7,7 @@ describe("StatusPill", () => {
     const { getByText } = render(<StatusPill>Idle</StatusPill>)
 
     expect(getByText("Idle")).toHaveClass("bg-panel-elevated")
+    expect(getByText("Idle")).toHaveClass("h-5")
   })
 
   test("success variant uses lime styling", () => {
@@ -21,5 +22,17 @@ describe("StatusPill", () => {
 
     expect(getByText("Pairing")).toHaveClass("text-violet-soft")
     expect(getByText("Pairing")).toHaveClass("bg-violet/12")
+  })
+
+  test("md size matches icon button height", () => {
+    const { getByText } = render(
+      <StatusPill size="md" variant="success">
+        Online
+      </StatusPill>,
+    )
+
+    expect(getByText("Online")).toHaveClass("h-[34px]")
+    expect(getByText("Online")).toHaveClass("items-center")
+    expect(getByText("Online")).toHaveClass("justify-center")
   })
 })

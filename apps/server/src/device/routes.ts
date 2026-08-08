@@ -7,6 +7,7 @@ import {
   claimPairingCodePath,
 } from "contracts/http/pairing-code"
 import {
+  DeleteDeviceQuerySchema,
   DeviceCollectionSchema,
   DEVICES_PATH,
   devicePath,
@@ -116,7 +117,8 @@ export const registerDeviceRoutes = (app: FastifyInstance, service: DeviceServic
 
   app.delete(devicePath(":deviceId"), async (request, reply) => {
     const { deviceId } = request.params as { deviceId: string }
-    const result = service.revoke({ deviceId })
+    const query = DeleteDeviceQuerySchema.parse(request.query)
+    const result = service.revoke({ deviceId, hardDelete: query.hardDelete })
 
     if (!result.ok) {
       if (isDeviceError(result.error)) {

@@ -8,7 +8,7 @@ import {
   PAIRING_CODES_PATH,
   claimPairingCodePath,
 } from "contracts/http/pairing-code"
-import { DeviceCollectionSchema, DEVICES_PATH, devicePath } from "contracts/http/device"
+import { DeviceCollectionSchema, DEVICES_PATH, deleteDevicePath, devicePath } from "contracts/http/device"
 import { WebSocket } from "ws"
 import {
   cleanupTestAppResources,
@@ -318,5 +318,94 @@ describe("device revoke", () => {
     expect(response.status).toBe(404)
     expect(response.headers.get("content-type")).toContain("application/problem+json")
     NotFoundProblemSchema.parse(await response.json())
+  })
+
+  test("hardDelete removes device from list and emits device.revoked", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app, config, database } = await createTestApp(resources, dataDir)
+    const { httpBase, wsUrl } = await getListeningBase(app, config)
+    const host = await openHostStream(wsUrl)
+    const paired = await pairDevice(httpBase, { name: "Hard delete me", platform: "ios" })
+
+    const response = await fetch(
+      `${httpBase}${deleteDevicePath(paired.device.id, { hardDelete: true })}`,
+      { method: "DELETE" },
+    )
+    expect(response.status).toBe(204)
+
+    const revokedEvent = await host.waitForType("device.revoked")
+    expect(revokedEvent.type).toBe("device.revoked")
+    if (revokedEvent.type !== "device.revoked") {
+      throw new Error("expected device.revoked")
+    }
+    expect(revokedEvent.payload.deviceId).toBe(paired.device.id)
+
+    const listed = DeviceCollectionSchema.parse(
+      await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
+    )
+    expect(listed.items).toHaveLength(0)
+
+    const journal = createEventJournalRepository(database)
+    const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
+    expect(records.ok).toBe(true)
+    if (!records.ok) {
+      throw new Error("journal read failed")
+    }
+    expect(records.value.filter((record) => record.kind === "device.revoked")).toHaveLength(1)
+
+    await closeSocket(host.ws)
+  })
+
+  test("hardDelete of already-revoked device removes row without second device.revoked", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app, config, database } = await createTestApp(resources, dataDir)
+    const { httpBase, wsUrl } = await getListeningBase(app, config)
+    const host = await openHostStream(wsUrl)
+    const paired = await pairDevice(httpBase)
+
+    const soft = await fetch(`${httpBase}${devicePath(paired.device.id)}`, {
+      method: "DELETE",
+    })
+    expect(soft.status).toBe(204)
+    await host.waitForType("device.revoked")
+
+    const afterSoft = DeviceCollectionSchema.parse(
+      await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
+    )
+    expect(afterSoft.items).toHaveLength(1)
+    expect(afterSoft.items[0]?.state).toBe("revoked")
+
+    const journal = createEventJournalRepository(database)
+    const beforeHard = journal.readAfter({ cursor: 0n, limit: 1_000 })
+    expect(beforeHard.ok).toBe(true)
+    if (!beforeHard.ok) {
+      throw new Error("journal read failed")
+    }
+    const revokedBefore = beforeHard.value.filter(
+      (record) => record.kind === "device.revoked",
+    ).length
+
+    const hard = await fetch(
+      `${httpBase}${deleteDevicePath(paired.device.id, { hardDelete: true })}`,
+      { method: "DELETE" },
+    )
+    expect(hard.status).toBe(204)
+
+    const listed = DeviceCollectionSchema.parse(
+      await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
+    )
+    expect(listed.items).toHaveLength(0)
+
+    const afterHard = journal.readAfter({ cursor: 0n, limit: 1_000 })
+    expect(afterHard.ok).toBe(true)
+    if (!afterHard.ok) {
+      throw new Error("journal read failed")
+    }
+    const revokedAfter = afterHard.value.filter(
+      (record) => record.kind === "device.revoked",
+    ).length
+    expect(revokedAfter).toBe(revokedBefore)
+
+    await closeSocket(host.ws)
   })
 })

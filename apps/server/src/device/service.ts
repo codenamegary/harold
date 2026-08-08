@@ -253,8 +253,10 @@ export const createDeviceService = (context: DeviceServiceContext) => {
 
   const revoke = (params: {
     deviceId: string
+    hardDelete?: boolean
   }): DeviceServiceResult<{ newlyRevoked: boolean }> => {
     const now = nowIso()
+    const hardDelete = params.hardDelete === true
 
     const result = transactional<{ newlyRevoked: boolean }, DeviceError>((txParams) => {
       const revoked = context.deviceRepository.revoke({
@@ -267,31 +269,40 @@ export const createDeviceService = (context: DeviceServiceContext) => {
         return revoked
       }
 
-      if (!revoked.value.newlyRevoked) {
-        return {
-          ok: true,
-          value: { newlyRevoked: false },
-          appendedRecords: [],
-        }
+      const newlyRevoked = revoked.value.newlyRevoked
+      const appendedRecords = newlyRevoked
+        ? txParams.append([
+            {
+              schemaVersion: JOURNAL_SCHEMA_VERSION,
+              kind: "device.revoked",
+              occurredAt: now,
+              payload: { deviceId: params.deviceId },
+            },
+          ])
+        : { ok: true as const, value: [] }
+
+      if (!appendedRecords.ok) {
+        return appendedRecords
       }
 
-      const appendResult = txParams.append([
-        {
-          schemaVersion: JOURNAL_SCHEMA_VERSION,
-          kind: "device.revoked",
-          occurredAt: now,
-          payload: { deviceId: params.deviceId },
-        },
-      ])
-
-      if (!appendResult.ok) {
-        return appendResult
+      if (hardDelete) {
+        context.deviceRepository.clearPairingCodeDeviceRefs({
+          deviceId: params.deviceId,
+          executor: txParams.executor,
+        })
+        const deleted = context.deviceRepository.deleteById({
+          deviceId: params.deviceId,
+          executor: txParams.executor,
+        })
+        if (!deleted.ok) {
+          return deleted
+        }
       }
 
       return {
         ok: true,
-        value: { newlyRevoked: true },
-        appendedRecords: appendResult.value,
+        value: { newlyRevoked },
+        appendedRecords: appendedRecords.value,
       }
     })
 

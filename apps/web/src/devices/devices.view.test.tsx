@@ -85,6 +85,7 @@ describe("DevicesView", () => {
     expect(getByText("Kitchen tablet")).toBeInTheDocument()
     expect(getByText("—")).toBeInTheDocument()
     expect(getByRole("button", { name: "Revoke Studio Desktop" })).toBeEnabled()
+    expect(getByRole("button", { name: "Delete Studio Desktop" })).toBeEnabled()
   })
 
   test("navigates pair action to connect flow", async () => {
@@ -147,6 +148,51 @@ describe("DevicesView", () => {
     })
 
     fireEvent.click(getByRole("button", { name: "Revoke Studio Desktop" }))
+
+    await waitFor(() => {
+      expect(queryByText("Studio Desktop")).not.toBeInTheDocument()
+    })
+    expect(queryByText("Kitchen tablet")).toBeInTheDocument()
+  })
+
+  test("hard-deletes a device and refreshes the list", async () => {
+    const state = { deleted: false }
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (
+        url === "/v1/devices/dev_desktop?hardDelete=true" &&
+        method === "DELETE"
+      ) {
+        state.deleted = true
+        return Promise.resolve(new Response(null, { status: 204 }))
+      }
+
+      if (url.startsWith("/v1/devices")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(collection(state.deleted ? [tablet] : [desktop, tablet])),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const { getByRole, queryByText } = renderWithProviders(<DevicesView />, {
+      initialEntries: ["/devices"],
+    })
+
+    await waitFor(() => {
+      expect(getByRole("button", { name: "Delete Studio Desktop" })).toBeEnabled()
+    })
+
+    fireEvent.click(getByRole("button", { name: "Delete Studio Desktop" }))
 
     await waitFor(() => {
       expect(queryByText("Studio Desktop")).not.toBeInTheDocument()

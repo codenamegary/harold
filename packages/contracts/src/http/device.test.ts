@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import {
   DEVICES_PATH,
+  deleteDevicePath,
+  DeleteDeviceQuerySchema,
   devicePath,
   DeviceCollectionSchema,
   DeviceCredentialResponseSchema,
@@ -28,6 +30,39 @@ describe("devicePath", () => {
     expect(devicePath("device_01JFC8C7E77NQCFH0RF9Z22JHH")).toBe(
       "/v1/devices/device_01JFC8C7E77NQCFH0RF9Z22JHH",
     )
+  })
+})
+
+describe("deleteDevicePath", () => {
+  test("builds soft revoke path by default", () => {
+    expect(deleteDevicePath("device_01JFC8C7E77NQCFH0RF9Z22JHH")).toBe(
+      "/v1/devices/device_01JFC8C7E77NQCFH0RF9Z22JHH",
+    )
+  })
+
+  test("appends hardDelete query when requested", () => {
+    expect(
+      deleteDevicePath("device_01JFC8C7E77NQCFH0RF9Z22JHH", { hardDelete: true }),
+    ).toBe("/v1/devices/device_01JFC8C7E77NQCFH0RF9Z22JHH?hardDelete=true")
+  })
+})
+
+describe("DeleteDeviceQuerySchema", () => {
+  test("defaults hardDelete to false when omitted", () => {
+    expect(DeleteDeviceQuerySchema.parse({})).toEqual({ hardDelete: false })
+  })
+
+  test("parses hardDelete true and false", () => {
+    expect(DeleteDeviceQuerySchema.parse({ hardDelete: "true" })).toEqual({
+      hardDelete: true,
+    })
+    expect(DeleteDeviceQuerySchema.parse({ hardDelete: "false" })).toEqual({
+      hardDelete: false,
+    })
+  })
+
+  test("rejects unknown values", () => {
+    expect(() => DeleteDeviceQuerySchema.parse({ hardDelete: "yes" })).toThrow()
   })
 })
 
