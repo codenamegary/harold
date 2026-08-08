@@ -53,29 +53,30 @@ jobs:
           path: apps/android/artifacts/
           if-no-files-found: error
 
-  upload-drive:
+  upload-fs:
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Download APK artifacts
         uses: actions/download-artifact@v7
         with:
           name: android-apks
           path: apks
 
-      - name: Stage APKs for Google Drive
+      - name: Upload APKs to fs
+        env:
+          FS_URL: ${{ secrets.FS_URL }}
+          FS_USER: ${{ secrets.FS_USER }}
+          FS_PASSWORD: ${{ secrets.FS_PASSWORD }}
         run: |
           stamp=$(date -u +%Y%m%d-%H%M%S)
-          mkdir -p drive-upload
-          cp apks/app-debug.apk "drive-upload/${stamp}-debug-app.apk"
-          cp apks/app-release-unsigned.apk "drive-upload/${stamp}-release-app.apk"
-
-      - name: Upload APKs to Google Drive
-        uses: Jumbo810/Upload_Github_Artifacts_TO_GDrive@v2.3.5
-        with:
-          target: drive-upload/*.apk
-          credentials: ${{ secrets.GDRIVE_CREDENTIALS }}
-          parent_folder_id: ${{ secrets.GDRIVE_FOLDER_ID }}
-          owner: gary@powrit.com
-          set_metadata: true
+          mkdir -p staged
+          cp apks/app-debug.apk "staged/${stamp}-debug-app.apk"
+          cp apks/app-release-unsigned.apk "staged/${stamp}-release-app.apk"
+          export LOCAL_PATH=staged
+          export REMOTE_PATH=agent-server/apk
+          bash .github/scripts/upload-to-fs.sh

@@ -88,7 +88,7 @@ jobs:
             coverage/html/
           if-no-files-found: warn
 
-  upload-drive:
+  upload-fs:
     needs: check
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -102,10 +102,13 @@ jobs:
           name: coverage
           path: coverage
 
-      - name: Upload coverage to Google Drive
+      - name: Upload coverage to fs
         env:
-          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
-          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
-          GDRIVE_OWNER: gary@powrit.com
-          COVERAGE_HTML: coverage/html
-        run: bash .github/scripts/upload-coverage-to-gdrive.sh
+          FS_URL: ${{ secrets.FS_URL }}
+          FS_USER: ${{ secrets.FS_USER }}
+          FS_PASSWORD: ${{ secrets.FS_PASSWORD }}
+          LOCAL_PATH: coverage/html
+        run: |
+          stamp=$(date -u +%Y%m%d-%H%M%S)
+          export REMOTE_PATH="agent-server/coverage/${stamp}"
+          bash .github/scripts/upload-to-fs.sh
