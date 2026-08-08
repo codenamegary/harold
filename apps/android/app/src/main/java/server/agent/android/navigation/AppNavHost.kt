@@ -75,12 +75,6 @@ fun AppNavHost(
             )
             val pairingUiState by pairingViewModel.uiState.collectAsState()
 
-            LaunchedEffect(pairingUiState.completed) {
-                if (pairingUiState.completed) {
-                    navController.popBackStack()
-                }
-            }
-
             PairingScreen(
                 uiState = pairingUiState,
                 onManualEntryClick = pairingViewModel::showManualEntry,
