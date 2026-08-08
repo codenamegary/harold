@@ -1,4 +1,4 @@
-name: check
+name: web
 
 on:
   push:
@@ -30,14 +30,10 @@ jobs:
         uses: hrishikesh-kadam/setup-lcov@v1
 
       - name: Install dependencies
-        id: install
         run: bun install --frozen-lockfile
 
-      - name: Lint
-        run: bun run lint
-
-      - name: Typecheck
-        run: bun run typecheck
+      - name: Lint and typecheck
+        run: bun run lint && bun run typecheck
 
       - name: Test with coverage
         id: coverage
@@ -91,3 +87,29 @@ jobs:
             coverage/**/lcov.info
             coverage/html/
           if-no-files-found: warn
+
+  upload-drive:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: coverage
+          path: coverage
+
+      - name: Stage coverage for Google Drive
+        run: |
+          stamp=$(date -u +%Y%m%d-%H%M%S)
+          mkdir -p drive-upload
+          (cd coverage/html && zip -r "../../drive-upload/${stamp}-web-coverage.zip" .)
+
+      - name: Upload coverage to Google Drive
+        uses: Jumbo810/Upload_Github_Artifacts_TO_GDrive@v2.3.5
+        with:
+          target: drive-upload/*.zip
+          credentials: ${{ secrets.GDRIVE_CREDENTIALS }}
+          parent_folder_id: ${{ secrets.GDRIVE_FOLDER_ID }}
+          owner: gary@powrit.com
+          set_metadata: true
