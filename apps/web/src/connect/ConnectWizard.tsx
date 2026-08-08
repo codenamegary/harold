@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react"
 import { QRCodeSVG } from "qrcode.react"
+import { RefreshCw } from "lucide-react"
 import { ConnectionCheckId, ConnectionTestResponse } from "contracts/http/connection-test"
 import { CreatePairingCodeResponse } from "contracts/http/pairing-code"
 import { formatPairingQrUri } from "contracts/pairing/qr-uri"
@@ -407,15 +408,17 @@ const statusDotForSummary = (
   result: ConnectionTestResponse | undefined,
   isRunning: boolean,
 ): React.ComponentProps<typeof StatusDot>["variant"] => {
-  if (isRunning) {
-    return "warning"
-  }
-
+  // Prefer the last finished result so a stuck/in-flight re-run does not keep
+  // the summary yellow after all checks already passed.
   if (result?.canContinue === true) {
     return "online"
   }
 
   if (result?.canContinueAnyway === true) {
+    return "warning"
+  }
+
+  if (isRunning) {
     return "warning"
   }
 
@@ -427,9 +430,10 @@ const TestConnectionStep: React.FC<TestConnectionStepProps> = ({
   onContinue,
 }) => {
   const runtimeSettingsQuery = useRuntimeSettingsQuery()
-  const connectionTestMutation = useRunConnectionTestMutation()
+  const { mutateAsync } = useRunConnectionTestMutation()
   const [result, setResult] = useState<ConnectionTestResponse | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
+  const [isRunning, setIsRunning] = useState(false)
   const autoRunStarted = useRef(false)
 
   const advertisedUrl = runtimeSettingsQuery.data?.settings.advertisedUrl ?? null
@@ -437,14 +441,21 @@ const TestConnectionStep: React.FC<TestConnectionStepProps> = ({
     advertisedUrl ?? `https://127.0.0.1:${localAgentPort}`
 
   const runTest = () => {
+    if (isRunning) {
+      return
+    }
+
     setRunError(null)
-    void connectionTestMutation.mutateAsync().then(
+    setResult(null)
+    setIsRunning(true)
+    void mutateAsync().then(
       (response) => {
         setResult(response)
+        setIsRunning(false)
       },
       () => {
         setRunError("Connection test failed. Check the advertised URL and try again.")
-        setResult(null)
+        setIsRunning(false)
       },
     )
   }
@@ -456,19 +467,21 @@ const TestConnectionStep: React.FC<TestConnectionStepProps> = ({
 
     autoRunStarted.current = true
     setRunError(null)
-    void connectionTestMutation.mutateAsync().then(
+    setResult(null)
+    setIsRunning(true)
+    void mutateAsync().then(
       (response) => {
         setResult(response)
+        setIsRunning(false)
       },
       () => {
         setRunError("Connection test failed. Check the advertised URL and try again.")
-        setResult(null)
+        setIsRunning(false)
       },
     )
-  }, [advertisedUrl, connectionTestMutation])
+  }, [advertisedUrl, mutateAsync])
 
   const checksById = new Map(result?.checks.map((check) => [check.id, check]) ?? [])
-  const isRunning = connectionTestMutation.isPending
   const canContinue = result?.canContinue === true
   const canContinueAnyway = result?.canContinueAnyway === true
 
@@ -545,7 +558,9 @@ const TestConnectionStep: React.FC<TestConnectionStepProps> = ({
               <div className="flex-1">
                 <strong className="block text-sm font-medium text-body">{title}</strong>
                 <small className="mt-1 block text-xs text-dim">
-                  {check?.message ?? "Waiting to run…"}
+                  {isRunning && check === undefined
+                    ? "Checking…"
+                    : (check?.message ?? "Waiting to run…")}
                 </small>
               </div>
               <em className="text-2xs text-dim not-italic">
@@ -562,23 +577,32 @@ const TestConnectionStep: React.FC<TestConnectionStepProps> = ({
         </p>
       ) : null}
 
-      <div className="mt-4 flex items-center justify-end">
-        <Button variant="secondary" disabled={isRunning} onClick={runTest}>
-          Run
-        </Button>
-      </div>
-
       <div className="mt-6 flex items-center justify-between border-t border-line-soft pt-[18px]">
         <Button variant="secondary" onClick={onBack}>
           Back
         </Button>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-label={isRunning ? "Refreshing connection test" : "Refresh connection test"}
+            disabled={isRunning}
+            onClick={runTest}
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-[7px] border border-line-strong bg-panel-2 text-body cursor-pointer hover:bg-hover-surface-strong hover:border-line-hover-strong hover:text-white disabled:cursor-not-allowed"
+          >
+            <RefreshCw
+              aria-hidden
+              size={20}
+              absoluteStrokeWidth
+              strokeWidth={2}
+              className={isRunning ? "animate-spin" : undefined}
+            />
+          </button>
           {canContinueAnyway ? (
             <Button variant="secondary" onClick={onContinue}>
               Continue anyway
             </Button>
           ) : null}
-          <Button disabled={!canContinue || isRunning} onClick={onContinue}>
+          <Button disabled={!canContinue} onClick={onContinue}>
             Continue <span aria-hidden>→</span>
           </Button>
         </div>

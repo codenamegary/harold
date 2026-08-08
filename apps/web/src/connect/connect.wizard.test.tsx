@@ -551,7 +551,64 @@ describe("ConnectWizard", () => {
     await waitFor(() => {
       expect(getAllByText(/passed/i).length).toBeGreaterThanOrEqual(3)
     })
-    expect(getByRole("button", { name: /^Run$/i })).toBeInTheDocument()
+    expect(
+      getByRole("button", { name: /refresh connection test/i }),
+    ).toBeInTheDocument()
+  })
+
+  test("cloud test refresh clears checks and spins until complete", async () => {
+    let releaseSecondTest: (() => void) | undefined
+    const secondTestGate = new Promise<void>((resolve) => {
+      releaseSecondTest = resolve
+    })
+
+    const baseFetch = globalThis.fetch
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/connection-test" && method === "POST") {
+        connectionTestRequests.push(url)
+        if (connectionTestRequests.length === 1) {
+          return Promise.resolve(
+            new Response(JSON.stringify(passingConnectionTest), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }),
+          )
+        }
+
+        return secondTestGate.then(
+          () =>
+            new Response(JSON.stringify(passingConnectionTest), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }),
+        )
+      }
+
+      return baseFetch(input, init)
+    }) as typeof fetch
+
+    const { getByRole, getAllByText, queryAllByText } = renderConnectWizard()
+
+    await goToCloudExternalUrl(getByRole)
+    await saveCloudExternalUrl(getByRole, "agents.example.com")
+    await waitForConnectionTestContinue(getByRole)
+
+    fireEvent.click(getByRole("button", { name: /refresh connection test/i }))
+
+    await waitFor(() => {
+      expect(connectionTestRequests).toHaveLength(2)
+    })
+    expect(getByRole("button", { name: /refreshing connection test/i })).toBeDisabled()
+    expect(getByRole("button", { name: continueButtonName })).toBeDisabled()
+    expect(getAllByText(/checking…/i).length).toBe(3)
+    expect(queryAllByText(/passed/i)).toHaveLength(0)
+
+    releaseSecondTest?.()
+    await waitForConnectionTestContinue(getByRole)
+    expect(getByRole("button", { name: /refresh connection test/i })).toBeEnabled()
   })
 
   test("creates one pairing code on entering pair step under StrictMode", async () => {
