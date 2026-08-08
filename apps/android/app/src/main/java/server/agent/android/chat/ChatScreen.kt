@@ -319,6 +319,7 @@ fun ChatScreen(
                             rows = uiState.transcript.rows,
                             isRunning = uiState.showProgress || uiState.composerSubmitting,
                             showWelcome = uiState.showEmptyWelcome,
+                            hasPendingPermission = uiState.activePermissionRequest != null,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }

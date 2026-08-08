@@ -23,29 +23,27 @@ fun ChatTranscript(
     rows: List<TranscriptRow>,
     isRunning: Boolean,
     showWelcome: Boolean,
+    hasPendingPermission: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val blocks = groupTranscriptRows(rows)
     val listState = rememberLazyListState()
-    val activeTurnId = latestTurnId(rows)
-    val showWaitingIndicator =
-        isRunning
-            && (
-                rows.isEmpty()
-                    || (activeTurnId != null && !turnHasAssistant(rows, activeTurnId))
-                )
-    val waitingWithoutThought =
-        showWaitingIndicator && rows.none { it is TranscriptThinkingRow }
+    val activity = deriveActivityStatus(
+        rows = rows,
+        isRunning = isRunning,
+        hasPendingPermission = hasPendingPermission,
+    )
+    val showActivity = activity != null
 
-    LaunchedEffect(blocks.size, waitingWithoutThought, rows) {
-        val lastIndex = blocks.size - 1 + if (waitingWithoutThought) 1 else 0
+    LaunchedEffect(blocks.size, showActivity, rows, activity?.label) {
+        val lastIndex = blocks.size - 1 + if (showActivity) 1 else 0
         if (lastIndex >= 0) {
             listState.animateScrollToItem(lastIndex)
         }
     }
 
     when {
-        rows.isNotEmpty() || waitingWithoutThought -> {
+        rows.isNotEmpty() || showActivity -> {
             LazyColumn(
                 state = listState,
                 modifier = modifier
@@ -66,24 +64,20 @@ fun ChatTranscript(
                             TranscriptBlockRow(
                                 row = block.row,
                                 index = block.index,
-                                rows = rows,
-                                isRunning = isRunning,
-                                activeTurnId = activeTurnId,
                             )
                         }
                     }
                 }
 
-                if (waitingWithoutThought) {
-                    item(key = "thinking-indicator") {
-                        Column(
+                if (activity != null) {
+                    item(key = "activity-status") {
+                        ActivityStatusLine(
+                            label = activity.label,
+                            subtitle = activity.subtitle,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .testTag("chat_progress"),
-                        ) {
-                            ThinkingIndicator()
-                        }
+                                .padding(vertical = 4.dp),
+                        )
                     }
                 }
             }
@@ -99,9 +93,6 @@ fun ChatTranscript(
 private fun TranscriptBlockRow(
     row: TranscriptRow,
     index: Int,
-    rows: List<TranscriptRow>,
-    isRunning: Boolean,
-    activeTurnId: String?,
 ) {
     when (row) {
         is TranscriptUserRow -> {
@@ -122,16 +113,7 @@ private fun TranscriptBlockRow(
         }
 
         is TranscriptThinkingRow -> {
-            val isActiveThought =
-                isRunning
-                    && activeTurnId == row.turnId
-                    && !turnHasAssistant(rows, row.turnId)
-                    && rows.indexOfLast { it is TranscriptThinkingRow } == index
-
-            ThinkingSection(
-                text = row.text,
-                isActive = isActiveThought,
-            )
+            ThinkingSection(text = row.text)
         }
 
         is TranscriptAssistantRow -> {
@@ -145,7 +127,6 @@ private fun TranscriptBlockRow(
         }
 
         is TranscriptToolRow -> {
-            // Consecutive tools are grouped; a lone tool still goes through ToolCallGroup.
             ToolCallGroup(tools = listOf(row))
         }
 
@@ -168,12 +149,6 @@ private fun TranscriptBlockRow(
         }
     }
 }
-
-private fun latestTurnId(rows: List<TranscriptRow>): String? =
-    rows.lastOrNull { it is TranscriptUserRow }?.turnId
-
-private fun turnHasAssistant(rows: List<TranscriptRow>, turnId: String): Boolean =
-    rows.any { it is TranscriptAssistantRow && it.turnId == turnId }
 
 private fun transcriptBlockKey(block: TranscriptBlock): String =
     when (block) {

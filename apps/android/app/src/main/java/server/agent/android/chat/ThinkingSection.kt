@@ -26,7 +26,6 @@ import androidx.compose.ui.unit.em
 @Composable
 fun ThinkingSection(
     text: String,
-    isActive: Boolean,
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -52,18 +51,14 @@ fun ThinkingSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
-            if (isActive) {
-                ThinkingIndicator()
-            } else {
-                Text(
-                    text = "Thinking",
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 0.06.em,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                text = "Thinking",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 0.06.em,
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         AnimatedVisibility(visible = expanded) {
