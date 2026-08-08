@@ -78,4 +78,5 @@ jobs:
           target: drive-upload/*.apk
           credentials: ${{ secrets.GDRIVE_CREDENTIALS }}
           parent_folder_id: ${{ secrets.GDRIVE_FOLDER_ID }}
+          owner: gary@powrit.com
           set_metadata: true
