@@ -5,28 +5,30 @@ import org.junit.Test
 
 class MarkdownMessageTest {
     @Test
-    fun splitsFencedCodeFromProse() {
-        val segments = splitMarkdownSegments(
-            """
-            Hello **world**
+    fun appendsSuffixWhenTextGrows() {
+        val update = markdownStreamUpdate("Hello ", "Hello **world**")
 
-            ```
-            code here
-            ```
-
-            Done
-            """.trimIndent(),
-        )
-
-        assertEquals(3, segments.size)
-        assertEquals(MarkdownSegment.Prose("Hello **world**"), segments[0])
-        assertEquals(MarkdownSegment.Code("code here\n"), segments[1])
-        assertEquals(MarkdownSegment.Prose("Done"), segments[2])
+        assertEquals(MarkdownStreamUpdate.Append("**world**"), update)
     }
 
     @Test
-    fun stylesInlineBoldAndCode() {
-        val styled = styleInlineMarkdown("use `token` and **bold** text")
-        assertEquals("use token and bold text", styled.text)
+    fun noChangeWhenTextUnchanged() {
+        val update = markdownStreamUpdate("done", "done")
+
+        assertEquals(MarkdownStreamUpdate.NoChange, update)
+    }
+
+    @Test
+    fun restartsWhenTextIsReplaced() {
+        val update = markdownStreamUpdate("draft answer", "final answer")
+
+        assertEquals(MarkdownStreamUpdate.Restart, update)
+    }
+
+    @Test
+    fun appendsFullTextFromEmptyBuffer() {
+        val update = markdownStreamUpdate("", "# Title\n\nBody")
+
+        assertEquals(MarkdownStreamUpdate.Append("# Title\n\nBody"), update)
     }
 }

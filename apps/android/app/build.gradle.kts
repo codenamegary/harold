@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "server.agent.android"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "server.agent.android"
@@ -64,6 +64,8 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.5.0")
     implementation("androidx.camera:camera-view:1.5.0")
     implementation("com.google.zxing:core:3.5.3")
+    implementation("com.mikepenz:multiplatform-markdown-renderer-android:0.43.0")
+    implementation("com.mikepenz:multiplatform-markdown-renderer-m3:0.43.0")
 
     testImplementation("com.squareup.okhttp3:mockwebserver:5.4.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")

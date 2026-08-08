@@ -28,13 +28,13 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 21
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
 
       - name: Install SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+        run: sdkmanager "platform-tools" "platforms;android-36" "platforms;android-37" "build-tools;36.0.0"
 
       - name: Android checks
         run: ./gradlew --no-daemon --stacktrace --warning-mode=all lintRelease testDebugUnitTest assembleDebug assembleRelease
