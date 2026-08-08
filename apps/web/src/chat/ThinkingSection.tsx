@@ -1,15 +1,10 @@
 import React from "react"
-import { ThinkingIndicator } from "./ThinkingIndicator"
 
 type ThinkingSectionProps = {
   text: string
-  isActive: boolean
 }
 
-export const ThinkingSection: React.FC<ThinkingSectionProps> = ({
-  text,
-  isActive,
-}) => {
+export const ThinkingSection: React.FC<ThinkingSectionProps> = ({ text }) => {
   return (
     <details className="group rounded-md border border-line-soft bg-[#0d1117] open:bg-[#0f141b]">
       <summary className="cursor-pointer list-none px-3 py-2 marker:content-none [&::-webkit-details-marker]:hidden">
@@ -20,13 +15,9 @@ export const ThinkingSection: React.FC<ThinkingSectionProps> = ({
           >
             ▸
           </span>
-          {isActive ? (
-            <ThinkingIndicator />
-          ) : (
-            <span className="font-mono text-base tracking-[0.06em] text-dim">
-              Thinking
-            </span>
-          )}
+          <span className="font-mono text-base tracking-[0.06em] text-dim">
+            Thinking
+          </span>
         </span>
       </summary>
       <div className="border-t border-line-soft px-3 py-2 text-sm leading-relaxed text-body whitespace-pre-wrap">

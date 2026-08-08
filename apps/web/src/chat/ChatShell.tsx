@@ -311,7 +311,11 @@ export const ChatShell: React.FC = () => {
           <WelcomeMessage />
         ) : (
           <>
-            <ChatTranscript rows={transcript.rows} isRunning={running} />
+            <ChatTranscript
+              rows={transcript.rows}
+              isRunning={running}
+              hasPendingPermission={activePermission !== null}
+            />
             <div ref={transcriptBottomRef} aria-hidden className="h-px w-full" />
           </>
         )}

@@ -1,7 +1,8 @@
 import React from "react"
+import { ActivityStatusLine } from "./ActivityStatusLine"
+import { deriveActivityStatus } from "./derive.activity.status"
 import { groupTranscriptRows } from "./group.transcript.rows"
 import { MarkdownMessage } from "./MarkdownMessage"
-import { ThinkingIndicator } from "./ThinkingIndicator"
 import { ThinkingSection } from "./ThinkingSection"
 import { ToolCallGroup } from "./ToolCallGroup"
 import { TranscriptRow } from "./transcript.reducer"
@@ -9,6 +10,7 @@ import { TranscriptRow } from "./transcript.reducer"
 type ChatTranscriptProps = {
   rows: ReadonlyArray<TranscriptRow>
   isRunning?: boolean
+  hasPendingPermission?: boolean
 }
 
 const rowKey = (
@@ -23,29 +25,20 @@ const rowKey = (
   }
 }
 
-const latestTurnId = (rows: ReadonlyArray<TranscriptRow>): string | null => {
-  const last = rows.findLast((row) => row.kind === "user")
-  return last?.turnId ?? null
-}
-
-const turnHasAssistant = (
-  rows: ReadonlyArray<TranscriptRow>,
-  turnId: string,
-): boolean => rows.some((row) => row.kind === "assistant" && row.turnId === turnId)
-
 export const ChatTranscript: React.FC<ChatTranscriptProps> = ({
   rows,
   isRunning = false,
+  hasPendingPermission = false,
 }) => {
   if (rows.length === 0 && !isRunning) {
     return null
   }
 
-  const activeTurnId = latestTurnId(rows)
-  const showWaitingIndicator =
-    isRunning
-    && (rows.length === 0
-      || (activeTurnId !== null && !turnHasAssistant(rows, activeTurnId)))
+  const activity = deriveActivityStatus({
+    rows,
+    isRunning,
+    hasPendingPermission,
+  })
   const blocks = groupTranscriptRows(rows)
 
   return (
@@ -78,19 +71,7 @@ export const ChatTranscript: React.FC<ChatTranscriptProps> = ({
         }
 
         if (row.kind === "thinking") {
-          const isActiveThought =
-            isRunning
-            && activeTurnId === row.turnId
-            && !turnHasAssistant(rows, row.turnId)
-            && rows.findLastIndex((candidate) => candidate.kind === "thinking") === index
-
-          return (
-            <ThinkingSection
-              key={rowKey(row, index)}
-              text={row.text}
-              isActive={isActiveThought}
-            />
-          )
+          return <ThinkingSection key={rowKey(row, index)} text={row.text} />
         }
 
         return (
@@ -99,9 +80,11 @@ export const ChatTranscript: React.FC<ChatTranscriptProps> = ({
           </div>
         )
       })}
-      {showWaitingIndicator
-        && rows.findLast((row) => row.kind === "thinking") === undefined ? (
-        <ThinkingIndicator />
+      {activity !== null ? (
+        <ActivityStatusLine
+          label={activity.label}
+          subtitle={activity.subtitle}
+        />
       ) : null}
     </div>
   )
