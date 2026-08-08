@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test"
-import { resolveAgentProfile, cursorAgentProfile } from "../agent-profile"
+import { resolveAgentProfile } from "../agent-profile"
 import { buildAgentSpawnCommand } from "../supervisor/spawn-agent-process"
 
 describe("resolveAgentProfile", () => {
   test("preserves cursor product override command, auth, and extensions", () => {
-    expect(cursorAgentProfile).toEqual({
+    const profile = resolveAgentProfile("cursor")
+    if (profile === undefined) {
+      throw new Error("expected cursor profile")
+    }
+
+    expect(profile).toEqual({
       id: "cursor",
       command: ["agent", "acp"],
       authMethodId: "cursor_login",
@@ -15,15 +20,15 @@ describe("resolveAgentProfile", () => {
         },
         terminal: true,
       },
-      extensionHandlers: cursorAgentProfile.extensionHandlers,
+      extensionHandlers: profile.extensionHandlers,
     })
 
-    expect(Object.keys(cursorAgentProfile.extensionHandlers)).toEqual([
+    expect(Object.keys(profile.extensionHandlers)).toEqual([
       "cursor/ask_question",
       "cursor/create_plan",
     ])
 
-    expect(buildAgentSpawnCommand(cursorAgentProfile, "/opt/cursor/bin/agent")).toEqual([
+    expect(buildAgentSpawnCommand(profile, "/opt/cursor/bin/agent")).toEqual([
       "/opt/cursor/bin/agent",
       "acp",
     ])

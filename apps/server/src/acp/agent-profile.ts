@@ -38,10 +38,3 @@ export const resolveAgentProfile = (agentId: AgentId): AgentProfile | undefined 
     extensionHandlers: override?.extensionHandlers ?? emptyExtensionHandlers,
   }
 }
-
-const resolvedCursorProfile = resolveAgentProfile("cursor")
-if (resolvedCursorProfile === undefined) {
-  throw new Error("cursor agent is missing from the ACP catalog")
-}
-
-export const cursorAgentProfile: AgentProfile = resolvedCursorProfile
