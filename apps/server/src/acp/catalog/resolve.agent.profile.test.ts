@@ -59,4 +59,20 @@ describe("resolveAgentProfile", () => {
       "acp",
     ])
   })
+
+  test("builds a generic profile from a registry-ahead spawn snapshot", () => {
+    const profile = resolveAgentProfile("brand-new-agent", {
+      kind: "binary",
+      binaryName: "brand-new",
+      command: ["brand-new", "acp"],
+      displayName: "Brand New",
+      authMethodId: "brand-new-agent",
+    })
+    if (profile === undefined) {
+      throw new Error("expected registry-ahead profile")
+    }
+
+    expect(profile.command).toEqual(["brand-new", "acp"])
+    expect(profile.authMethodId).toBe("brand-new-agent")
+  })
 })

@@ -773,7 +773,7 @@ class ChatViewModel(
                 name = "Session",
                 workspaceId = "",
                 workspaceLabel = "",
-                agentId = AgentId.Cursor,
+                agentId = "cursor",
                 agentLabel = "",
                 state = SessionState.Idle,
             )

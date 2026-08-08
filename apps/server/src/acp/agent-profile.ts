@@ -1,4 +1,4 @@
-import { AgentId } from "contracts/http/agent-settings"
+import { AgentId, AgentSpawnSnapshot } from "contracts/http/agent-settings"
 import {
   AcpClientCapabilities,
   defaultClientCapabilities,
@@ -21,19 +21,33 @@ const emptyExtensionHandlers: ExtensionHandlers = {}
 
 /**
  * Profile resolve = product override ∪ generated catalog defaults.
+ * Registry-ahead agents resolve from a persisted spawn snapshot.
  */
-export const resolveAgentProfile = (agentId: AgentId): AgentProfile | undefined => {
-  const catalogAgent = catalogAgentsById[agentId]
-  if (catalogAgent === undefined) {
+export const resolveAgentProfile = (
+  agentId: AgentId,
+  spawnSnapshot?: AgentSpawnSnapshot | null,
+): AgentProfile | undefined => {
+  const catalogAgent = catalogAgentsById[agentId as keyof typeof catalogAgentsById]
+  const override = productAgentOverridesById[agentId]
+
+  if (catalogAgent !== undefined) {
+    return {
+      id: agentId,
+      command: override?.command ?? catalogAgent.spawn.command,
+      authMethodId: override?.authMethodId ?? catalogAgent.authMethodId,
+      clientCapabilities: override?.clientCapabilities ?? defaultClientCapabilities,
+      extensionHandlers: override?.extensionHandlers ?? emptyExtensionHandlers,
+    }
+  }
+
+  if (spawnSnapshot === null || spawnSnapshot === undefined) {
     return undefined
   }
 
-  const override = productAgentOverridesById[agentId]
-
   return {
     id: agentId,
-    command: override?.command ?? catalogAgent.spawn.command,
-    authMethodId: override?.authMethodId ?? catalogAgent.authMethodId,
+    command: override?.command ?? spawnSnapshot.command,
+    authMethodId: override?.authMethodId ?? spawnSnapshot.authMethodId,
     clientCapabilities: override?.clientCapabilities ?? defaultClientCapabilities,
     extensionHandlers: override?.extensionHandlers ?? emptyExtensionHandlers,
   }

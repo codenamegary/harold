@@ -215,7 +215,7 @@ class DefaultAgentApiTest {
             serverOrigin = origin(),
             body = CreateSessionBody(
                 workspaceId = "ws_01",
-                agentId = AgentId.Cursor,
+                agentId = "cursor",
                 text = "Ship it",
             ),
         )

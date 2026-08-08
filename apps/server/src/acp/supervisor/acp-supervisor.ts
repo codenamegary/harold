@@ -82,7 +82,8 @@ const resolveStartConfig = (
   repository: AgentSettingsReader,
   agentId: AgentId,
 ) => {
-  const profile = resolveAgentProfile(agentId)
+  const spawnSnapshot = repository.getSpawnSnapshot?.(agentId) ?? null
+  const profile = resolveAgentProfile(agentId, spawnSnapshot)
   if (!profile) {
     return { ok: false as const, reason: "Agent profile is not available" }
   }

@@ -37,6 +37,8 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       available: true,
       enabled: true,
       path: "/usr/local/bin/agent",
+      present: true,
+      popular: true,
     },
   ],
 })

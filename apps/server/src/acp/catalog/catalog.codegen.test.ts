@@ -70,10 +70,9 @@ describe("catalog codegen fixture", () => {
     expect(result.agentCount).toBe(3)
 
     const agentIdSource = await readFile(paths.contractsAgentIdPath, "utf8")
-    expect(agentIdSource).toContain('z.enum([')
-    expect(agentIdSource).toContain('"fixture-binary"')
-    expect(agentIdSource).toContain('"fixture-npx"')
-    expect(agentIdSource).toContain('"fixture-uvx"')
+    expect(agentIdSource).toContain("z.string().min(1)")
+    expect(agentIdSource).not.toContain("z.enum([")
+
 
     const catalogSource = await readFile(paths.catalogAgentsPath, "utf8")
     expect(catalogSource).toContain('"fixture-binary"')

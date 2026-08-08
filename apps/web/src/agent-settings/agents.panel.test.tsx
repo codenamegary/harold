@@ -30,6 +30,8 @@ const comingSoonAgent: AgentSettings = {
   available: false,
   enabled: false,
   path: null,
+  present: true,
+  popular: true,
 }
 
 const cursorAgent = (overrides: Partial<AgentSettings> = {}): AgentSettings => ({
@@ -38,6 +40,8 @@ const cursorAgent = (overrides: Partial<AgentSettings> = {}): AgentSettings => (
   available: true,
   enabled: false,
   path: null,
+  present: true,
+  popular: true,
   ...overrides,
 })
 
@@ -495,4 +499,114 @@ describe("AgentsPanel", () => {
       expect(view.getByText("Could not load agent settings.")).toBeInTheDocument()
     })
   })
+
+  test("import detect then apply enables selected agents after confirm", async () => {
+    const cursorState = { agent: cursorAgent() }
+    const importCandidate = {
+      id: "brand-new-agent",
+      displayName: "Brand New",
+      present: true,
+      path: "/usr/bin/brand-new",
+      inCatalog: false,
+      alreadyEnabled: false,
+      spawn: {
+        kind: "binary" as const,
+        binaryName: "brand-new",
+        command: ["brand-new", "acp"],
+        displayName: "Brand New",
+        authMethodId: "brand-new-agent",
+      },
+    }
+
+    const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(agentsCollection(cursorState.agent)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents/import/detect" && method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ items: [importCandidate] }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents/import/apply" && method === "POST") {
+        const body = JSON.parse(requestBodyText(init?.body))
+        expect(body.agents).toEqual([
+          {
+            id: "brand-new-agent",
+            path: "/usr/bin/brand-new",
+            spawn: importCandidate.spawn,
+          },
+        ])
+
+        cursorState.agent = cursorAgent({ enabled: true, path: "/usr/local/bin/agent" })
+        const imported = {
+          id: "brand-new-agent",
+          displayName: "Brand New",
+          available: true,
+          enabled: true,
+          path: "/usr/bin/brand-new",
+          present: true,
+          popular: false,
+        }
+
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(
+              AgentSettingsCollectionSchema.parse({
+                items: [imported, cursorState.agent, comingSoonAgent],
+              }),
+            ),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    })
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByRole("button", { name: "Import" })).toBeInTheDocument()
+    })
+
+    await clickInAct(view.getByRole("button", { name: "Import" }))
+
+    await waitFor(() => {
+      expect(view.getByRole("dialog", { name: "Import agents" })).toBeInTheDocument()
+      expect(view.getByLabelText("Enable Brand New")).toBeChecked()
+    })
+
+    await clickInAct(view.getByRole("button", { name: "Enable selected" }))
+
+    await waitFor(() => {
+      expect(view.queryByRole("dialog", { name: "Import agents" })).not.toBeInTheDocument()
+      expect(view.getByLabelText("Brand New agent")).toBeInTheDocument()
+    })
+  }, mutationFlowTimeoutMs)
 })

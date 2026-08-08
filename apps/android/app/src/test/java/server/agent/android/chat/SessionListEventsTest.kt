@@ -53,7 +53,7 @@ class SessionListEventsTest {
             name = "Session $id",
             workspaceId = "ws_01",
             workspaceLabel = "agent-server",
-            agentId = AgentId.Cursor,
+            agentId = "cursor",
             agentLabel = "Cursor",
             state = state,
         )

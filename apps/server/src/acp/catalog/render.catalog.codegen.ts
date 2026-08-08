@@ -29,18 +29,13 @@ const renderCatalogEntry = (entry: CatalogAgentEntry): string => `  ${quote(entr
     authMethodId: ${quote(entry.authMethodId)},
   }`
 
-export const renderAgentIdGenerated = (entries: readonly CatalogAgentEntry[]): string => {
-  const ids = entries.map((entry) => quote(entry.id)).join(",\n  ")
+export const renderAgentIdGenerated = (_entries: readonly CatalogAgentEntry[]): string =>
+  `${generatedBanner}import { z } from "zod"
 
-  return `${generatedBanner}import { z } from "zod"
-
-export const AgentIdSchema = z.enum([
-  ${ids},
-])
+export const AgentIdSchema = z.string().min(1)
 
 export type AgentId = z.infer<typeof AgentIdSchema>
 `
-}
 
 export const renderCatalogAgentsGenerated = (
   entries: readonly CatalogAgentEntry[],

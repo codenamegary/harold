@@ -82,7 +82,7 @@ class ContractDecodingTest {
             """.trimIndent(),
         )
 
-        assertEquals(AgentId.Cursor, settings.id)
+        assertEquals("cursor", settings.id)
         assertNull(settings.path)
     }
 
@@ -104,7 +104,7 @@ class ContractDecodingTest {
             """.trimIndent(),
         )
 
-        assertEquals(AgentId.Claude, session.agentId)
+        assertEquals("claude", session.agentId)
         assertEquals(SessionState.AwaitingPermission, session.state)
         assertNull(session.archivedAt)
     }

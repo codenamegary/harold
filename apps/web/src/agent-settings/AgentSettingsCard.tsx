@@ -139,7 +139,19 @@ export const AgentSettingsCard: React.FC<AgentSettingsCardProps> = ({
       className={`rounded-[9px] border p-4 ${isComingSoon ? "border-line-soft bg-[#0a0c10] opacity-55" : "border-lime/35 bg-[linear-gradient(145deg,rgba(182,243,107,0.04),#0b0e13)]"}`}
     >
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h4 className="m-0 text-base font-semibold">{agent.displayName}</h4>
+        <div className="min-w-0">
+          <h4 className="m-0 text-base font-semibold">{agent.displayName}</h4>
+          <div className="mt-1 flex flex-wrap gap-2">
+            {agent.present ? (
+              <span className="font-mono text-2xs text-lime">present</span>
+            ) : (
+              <span className="font-mono text-2xs text-dim">not present</span>
+            )}
+            {agent.popular ? (
+              <span className="font-mono text-2xs text-dim">popular</span>
+            ) : null}
+          </div>
+        </div>
         {isComingSoon ? (
           <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
             Coming soon

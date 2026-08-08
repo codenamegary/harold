@@ -10,7 +10,7 @@ import { openDatabase } from "./database"
 const tempDirs: string[] = []
 const migrationsFolder = path.join(import.meta.dir, "drizzle")
 const ms1MigrationCount = 4
-const currentMigrationCount = 6
+const currentMigrationCount = 7
 
 const createTempDataDir = async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-test-"))
@@ -118,6 +118,7 @@ describe("drizzle migrations", () => {
       "enabled",
       "path",
       "updated_at",
+      "spawn_snapshot",
     ])
 
     expect(migrationCount(database.sqlite)).toBe(currentMigrationCount)

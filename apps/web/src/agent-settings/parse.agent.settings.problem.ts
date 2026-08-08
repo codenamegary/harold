@@ -1,5 +1,6 @@
 import {
   ConflictProblemSchema,
+  InternalProblemSchema,
   NotFoundProblemSchema,
   ValidationProblemSchema,
 } from "contracts/http/error"
@@ -41,6 +42,14 @@ export const parseAgentSettingsProblem = async (
 
   if (response.status === 409) {
     const problem = ConflictProblemSchema.parse(payload)
+
+    return {
+      detail: problem.detail ?? problem.title,
+    }
+  }
+
+  if (response.status === 502) {
+    const problem = InternalProblemSchema.parse(payload)
 
     return {
       detail: problem.detail ?? problem.title,

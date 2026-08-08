@@ -43,6 +43,7 @@ import { registerEventStreamRoutes } from "../event/stream.routes"
 import { runStartupRecovery } from "../session/startup.recovery"
 import { registerAuthMiddleware } from "../auth/middleware"
 import { redactPairingCodeInUrl } from "../device/redact.pairing.code.in.url"
+import { FetchRegistryFn } from "../agent-settings/agent-settings-repository"
 
 const TestBodySchema = z.object({
   name: z.string().min(1),
@@ -67,6 +68,8 @@ export type CreateServerOptions = {
   registerTestRoutes?: boolean
   whichFn?: WhichFn
   validateExecutablePathFn?: ValidateExecutablePathFn
+  fetchRegistryFn?: FetchRegistryFn
+  registryUrl?: string
   acpSupervisor?: AcpSupervisor
   spawnAgentProcessFn?: SpawnAgentProcessFn
   isLoopbackRequest?: (request: FastifyRequest) => boolean
@@ -121,6 +124,8 @@ export const createServer = async ({
   registerTestRoutes: withTestRoutes = false,
   whichFn,
   validateExecutablePathFn,
+  fetchRegistryFn,
+  registryUrl,
   acpSupervisor: providedAcpSupervisor,
   spawnAgentProcessFn,
   isLoopbackRequest,
@@ -160,6 +165,8 @@ export const createServer = async ({
   const agentSettingsRepository = createAgentSettingsRepository(database, {
     whichFn,
     validateExecutablePathFn,
+    fetchRegistryFn,
+    registryUrl,
   })
   const eventJournal = providedEventJournal ?? createEventJournalRepository(database)
   const commitPublisher = createEventCommitPublisher()

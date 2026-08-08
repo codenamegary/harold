@@ -19,7 +19,6 @@ import {
 import { FastifyInstance } from "fastify"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { AgentSettingsRepository } from "../agent-settings/agent-settings-repository"
-import { agentDefinitions } from "../agent-settings/agent-registry"
 import { PermissionService } from "../permission/service"
 import { WorkspaceRepository } from "../workspace/repository"
 import { deriveSessionNameFromPrompt } from "./derive.session.name"
@@ -57,8 +56,6 @@ const sendProblem = (
   status: number,
   problem: unknown,
 ) => reply.status(status).type("application/problem+json").send(problem)
-
-const isRegisteredAgent = (agentId: AgentId): boolean => agentId in agentDefinitions
 
 export const registerSessionRoutes = (
   app: FastifyInstance,
@@ -128,20 +125,19 @@ export const registerSessionRoutes = (
       return sendProblem(reply, 404, buildWorkspaceNotFoundProblem())
     }
 
-    if (!isRegisteredAgent(body.agentId)) {
-      return sendProblem(reply, 404, buildAgentNotFoundProblem())
-    }
-
-    const definition = agentDefinitions[body.agentId]
-    if (!definition.available) {
-      return sendProblem(reply, 409, buildAgentUnavailableProblem())
-    }
-
     const agentSettings = agentSettingsRepository
       .list()
       .find((settings) => settings.id === body.agentId)
 
-    if (agentSettings === undefined || !agentSettings.enabled) {
+    if (agentSettings === undefined) {
+      return sendProblem(reply, 404, buildAgentNotFoundProblem())
+    }
+
+    if (!agentSettings.available) {
+      return sendProblem(reply, 409, buildAgentUnavailableProblem())
+    }
+
+    if (!agentSettings.enabled) {
       return sendProblem(reply, 409, buildAgentDisabledProblem())
     }
 

@@ -3,6 +3,8 @@ import {
   AgentSettingsCollectionSchema,
   AgentSettingsSchema,
   DetectAgentPathResponseSchema,
+  ImportApplyBodySchema,
+  ImportDetectResponseSchema,
   UpdateAgentSettingsBodySchema,
 } from "contracts/http/agent-settings"
 import { FastifyInstance } from "fastify"
@@ -14,6 +16,7 @@ import {
   buildAgentPathAutoDetectFailedProblem,
   buildAgentPathInvalidProblem,
   buildAgentPathNotFoundProblem,
+  buildAgentRegistryFetchFailedProblem,
 } from "./agent-settings-problems"
 
 const sendProblem = (
@@ -37,6 +40,34 @@ export const registerAgentSettingsRoutes = (
     })
 
     return reply.status(200).send(collection)
+  })
+
+  app.post("/v1/settings/agents/import/detect", async (_request, reply) => {
+    const result = await repository.importDetect()
+
+    if (!result.ok) {
+      return sendProblem(reply, 502, buildAgentRegistryFetchFailedProblem())
+    }
+
+    return reply.status(200).send(ImportDetectResponseSchema.parse(result.value))
+  })
+
+  app.post("/v1/settings/agents/import/apply", async (request, reply) => {
+    const body = ImportApplyBodySchema.parse(request.body)
+    const result = repository.importApply(body)
+
+    if (!result.ok) {
+      if (result.error.kind === "path_invalid") {
+        return sendProblem(reply, 400, buildAgentPathInvalidProblem(result.error.path))
+      }
+      return sendProblem(reply, 404, buildAgentNotFoundProblem())
+    }
+
+    return reply.status(200).send(
+      AgentSettingsCollectionSchema.parse({
+        items: result.value,
+      }),
+    )
   })
 
   app.post("/v1/settings/agents/:agentId/detect-path", async (request, reply) => {

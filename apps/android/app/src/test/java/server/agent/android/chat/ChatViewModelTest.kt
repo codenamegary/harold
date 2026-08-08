@@ -99,7 +99,7 @@ class ChatViewModelTest {
         viewModel.showCreateDialog()
         advanceUntilIdle()
         viewModel.onCreateWorkspaceChanged("ws_01")
-        viewModel.onCreateAgentChanged(AgentId.Cursor)
+        viewModel.onCreateAgentChanged("cursor")
         viewModel.onCreatePromptChanged("Ship it")
         viewModel.submitCreateSession()
         advanceUntilIdle()
@@ -508,7 +508,7 @@ private class ChatFakeOperatorRepository(
         AgentSettingsCollection(
             items = listOf(
                 AgentSettings(
-                    id = AgentId.Cursor,
+                    id = "cursor",
                     displayName = "Cursor",
                     available = true,
                     enabled = true,
@@ -639,7 +639,7 @@ private class ChatFakeOperatorRepository(
     private fun session(id: String, name: String): Session = Session(
         id = id,
         workspaceId = "ws_01",
-        agentId = AgentId.Cursor,
+        agentId = "cursor",
         name = name,
         state = SessionState.Idle,
         createdAt = "2026-08-05T00:00:00.000Z",

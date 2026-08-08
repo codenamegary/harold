@@ -23,7 +23,7 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
   onConfirm,
 }) => {
   const [workspaceId, setWorkspaceId] = useState("")
-  const [agentId, setAgentId] = useState<AgentId | "">("")
+  const [agentId, setAgentId] = useState("")
   const [workspaceQuery, setWorkspaceQuery] = useState("")
 
   const debouncedWorkspaceQuery = useDebouncedValue(
@@ -109,7 +109,7 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
           label="Agent"
           aria-label="Agent"
           value={agentId}
-          onChange={(next) => setAgentId(next as AgentId | "")}
+          onChange={setAgentId}
           options={agentOptions}
           placeholder="Select agent…"
         />

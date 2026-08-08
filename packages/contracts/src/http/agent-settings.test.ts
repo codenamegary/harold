@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import {
+  AgentIdSchema,
   AgentSettingsCollectionSchema,
   AgentSettingsSchema,
   DetectAgentPathResponseSchema,
+  ImportApplyBodySchema,
+  ImportDetectResponseSchema,
   UpdateAgentSettingsBodySchema,
 } from "./agent-settings"
 
@@ -12,7 +15,20 @@ const validAgentSettings = {
   available: true,
   enabled: false,
   path: null,
+  present: false,
+  popular: true,
 } as const
+
+describe("AgentIdSchema", () => {
+  test("accepts open string agent ids", () => {
+    expect(AgentIdSchema.parse("cursor")).toBe("cursor")
+    expect(AgentIdSchema.parse("registry-ahead-agent")).toBe("registry-ahead-agent")
+  })
+
+  test("rejects empty agent ids", () => {
+    expect(() => AgentIdSchema.parse("")).toThrow()
+  })
+})
 
 describe("AgentSettingsSchema", () => {
   test("accepts a valid agent settings record", () => {
@@ -24,6 +40,7 @@ describe("AgentSettingsSchema", () => {
       ...validAgentSettings,
       enabled: true,
       path: "/usr/local/bin/agent",
+      present: true,
     }
 
     expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
@@ -36,15 +53,25 @@ describe("AgentSettingsSchema", () => {
       available: true,
       enabled: false,
       path: null,
+      present: true,
+      popular: true,
     }
 
     expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
   })
 
-  test("rejects unknown agent id", () => {
-    expect(() =>
-      AgentSettingsSchema.parse({ ...validAgentSettings, id: "unknown" }),
-    ).toThrow()
+  test("accepts registry-ahead agent ids", () => {
+    const settings = {
+      id: "brand-new-agent",
+      displayName: "Brand New",
+      available: true,
+      enabled: true,
+      path: "/usr/bin/brand-new",
+      present: true,
+      popular: false,
+    }
+
+    expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
   })
 })
 
@@ -94,6 +121,54 @@ describe("DetectAgentPathResponseSchema", () => {
   })
 })
 
+describe("ImportDetectResponseSchema", () => {
+  test("accepts detect candidates", () => {
+    const response = {
+      items: [
+        {
+          id: "claude-acp",
+          displayName: "Claude Agent",
+          present: true,
+          path: "/usr/bin/claude",
+          inCatalog: true,
+          alreadyEnabled: false,
+          spawn: {
+            kind: "npx",
+            binaryName: "npx",
+            command: ["npx", "@agentclientprotocol/claude-agent-acp@0.66.0"],
+            displayName: "Claude Agent",
+            authMethodId: "claude-acp",
+          },
+        },
+      ],
+    }
+
+    expect(ImportDetectResponseSchema.parse(response)).toEqual(response)
+  })
+})
+
+describe("ImportApplyBodySchema", () => {
+  test("accepts apply selections", () => {
+    const body = {
+      agents: [
+        {
+          id: "brand-new-agent",
+          path: "/usr/bin/brand-new",
+          spawn: {
+            kind: "binary",
+            binaryName: "brand-new",
+            command: ["brand-new", "acp"],
+            displayName: "Brand New",
+            authMethodId: "brand-new-agent",
+          },
+        },
+      ],
+    }
+
+    expect(ImportApplyBodySchema.parse(body)).toEqual(body)
+  })
+})
+
 describe("AgentSettingsCollectionSchema", () => {
   test("accepts a collection of agent settings", () => {
     const collection = {
@@ -105,6 +180,8 @@ describe("AgentSettingsCollectionSchema", () => {
           available: true,
           enabled: false,
           path: null,
+          present: false,
+          popular: true,
         },
       ],
     }
