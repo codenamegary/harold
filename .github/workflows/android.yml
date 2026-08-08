@@ -51,7 +51,6 @@ jobs:
         with:
           name: android-apks
           path: apps/android/artifacts/
-          archive: false
           if-no-files-found: error
 
   upload-drive:
