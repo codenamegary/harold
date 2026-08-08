@@ -3,7 +3,6 @@ import { ImportDetectCandidate } from "contracts/http/agent-settings"
 import { useConnection } from "../connection/use.connection"
 import { Button } from "../design-system/Button"
 import { Panel } from "../design-system/Panel"
-import { SectionKicker } from "../design-system/SectionKicker"
 import { TextInput } from "../design-system/TextInput"
 import { AgentsImportDialog } from "./AgentsImportDialog"
 import { AgentSettingsCard } from "./AgentSettingsCard"
@@ -92,15 +91,8 @@ export const AgentsPanel: React.FC = () => {
 
   return (
     <Panel className="mb-[25px] p-[22px]">
-      <div className="mb-[22px] flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <SectionKicker>AGENT RUNTIME</SectionKicker>
-          <h3 className="m-0 text-lg font-semibold">Agents</h3>
-          <p className="m-0 mt-2 max-w-2xl text-sm text-muted">
-            Catalog agents are always listed. Presence is probed locally on load. Use Import to
-            detect present agents from the live registry and enable the ones you want.
-          </p>
-        </div>
+      <div className="mb-[22px] flex flex-wrap items-center justify-between gap-4">
+        <h3 className="m-0 text-lg font-semibold">Agents</h3>
         <Button
           type="button"
           variant="secondary"
