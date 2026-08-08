@@ -107,8 +107,17 @@ jobs:
           FS_URL: ${{ secrets.FS_URL }}
           FS_USER: ${{ secrets.FS_USER }}
           FS_PASSWORD: ${{ secrets.FS_PASSWORD }}
-          LOCAL_PATH: coverage/html
         run: |
           stamp=$(date -u +%Y%m%d-%H%M%S)
-          export REMOTE_PATH="agent-server/coverage/${stamp}"
+          zip_path="${stamp}.zip"
+          (cd coverage/html && zip -qr "../../${zip_path}" .)
+          export LOCAL_PATH="${zip_path}"
+          export REMOTE_PATH="agent-server/coverage"
           bash .github/scripts/upload-to-fs.sh
+          base="${FS_URL:-https://fs.codenamegary.com}"
+          base="${base%/}"
+          {
+            echo "## Coverage on fs"
+            echo ""
+            echo "Extracted report: [\`agent-server/coverage/${stamp}/\`](${base}/agent-server/coverage/${stamp}/)"
+          } >> "$GITHUB_STEP_SUMMARY"
