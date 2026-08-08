@@ -4,10 +4,12 @@ import { useConnection } from "../connection/use.connection"
 import { Button } from "../design-system/Button"
 import { Panel } from "../design-system/Panel"
 import { SectionKicker } from "../design-system/SectionKicker"
+import { TextInput } from "../design-system/TextInput"
 import { AgentsImportDialog } from "./AgentsImportDialog"
 import { AgentSettingsCard } from "./AgentSettingsCard"
 import { isAgentImportApplyError } from "./apply.agent.import"
 import { isAgentImportDetectError } from "./detect.agent.import"
+import { filterAgentSettings } from "./filter.agent.settings"
 import { useAgentSettingsQuery } from "./use.agent.settings.query"
 import { useApplyAgentImportMutation } from "./use.apply.agent.import.mutation"
 import { useDetectAgentImportMutation } from "./use.detect.agent.import.mutation"
@@ -27,9 +29,12 @@ export const AgentsPanel: React.FC = () => {
     agentSettingsQuery.isLoading ||
     agentSettingsQuery.isError
 
+  const [searchQuery, setSearchQuery] = useState("")
   const [importOpen, setImportOpen] = useState(false)
   const [importCandidates, setImportCandidates] = useState<ImportDetectCandidate[]>([])
   const [importError, setImportError] = useState("")
+
+  const filteredAgents = filterAgentSettings(agents, searchQuery)
 
   const handleOpenImport = () => {
     setImportError("")
@@ -118,8 +123,20 @@ export const AgentsPanel: React.FC = () => {
         </p>
       ) : null}
 
-      <div className="grid gap-3.5 lg:grid-cols-2">
-        {agents.map((agent) => (
+      <div className="mb-2.5">
+        <TextInput
+          type="search"
+          role="searchbox"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          onInput={(event) => setSearchQuery(event.currentTarget.value)}
+          placeholder="Search agents"
+          aria-label="Search agents"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+        {filteredAgents.map((agent) => (
           <AgentSettingsCard
             key={agent.id}
             agent={agent}

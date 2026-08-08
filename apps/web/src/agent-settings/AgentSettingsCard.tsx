@@ -12,13 +12,13 @@ import { detectAgentPath } from "./detect.agent.path"
 import { updateAgentSettings } from "./update.agent.settings"
 
 const textLinkClassName =
-  "inline-flex min-h-9 items-center justify-center gap-3 rounded-[7px] bg-transparent px-0 text-sm font-semibold whitespace-nowrap text-body-soft transition-opacity duration-300 ease-out hover:text-lime cursor-pointer disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50"
+  "inline-flex min-h-7 items-center justify-center gap-1.5 rounded-[7px] bg-transparent px-0 text-xs font-semibold whitespace-nowrap text-body-soft transition-opacity duration-300 ease-out hover:text-lime cursor-pointer disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50"
 
 const DetectSuccessCheck: React.FC<{ onAnimationEnd: () => void }> = ({ onAnimationEnd }) => (
   <svg
     viewBox="0 0 16 16"
     aria-hidden
-    className="size-3.5 shrink-0 text-lime animate-detect-path-check"
+    className="size-3 shrink-0 text-lime animate-detect-path-check"
     onAnimationEnd={onAnimationEnd}
   >
     <path
@@ -136,24 +136,22 @@ export const AgentSettingsCard: React.FC<AgentSettingsCardProps> = ({
     <section
       aria-label={`${agent.displayName} agent`}
       aria-disabled={isComingSoon ? "true" : undefined}
-      className={`rounded-[9px] border p-4 ${isComingSoon ? "border-line-soft bg-[#0a0c10] opacity-55" : "border-lime/35 bg-[linear-gradient(145deg,rgba(182,243,107,0.04),#0b0e13)]"}`}
+      className={`rounded-[9px] border p-3 ${isComingSoon ? "border-line-soft bg-[#0a0c10] opacity-55" : "border-lime/35 bg-[linear-gradient(145deg,rgba(182,243,107,0.04),#0b0e13)]"}`}
     >
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h4 className="m-0 text-base font-semibold">{agent.displayName}</h4>
-          <div className="mt-1 flex flex-wrap gap-2">
-            {agent.present ? (
-              <span className="font-mono text-2xs text-lime">present</span>
-            ) : (
-              <span className="font-mono text-2xs text-dim">not present</span>
-            )}
-            {agent.popular ? (
-              <span className="font-mono text-2xs text-dim">popular</span>
-            ) : null}
-          </div>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <h4 className="m-0 truncate text-sm font-semibold">{agent.displayName}</h4>
+          {agent.present ? (
+            <span className="shrink-0 font-mono text-2xs text-lime">present</span>
+          ) : (
+            <span className="shrink-0 font-mono text-2xs text-dim">not present</span>
+          )}
+          {agent.popular ? (
+            <span className="shrink-0 font-mono text-2xs text-dim">popular</span>
+          ) : null}
         </div>
         {isComingSoon ? (
-          <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
+          <span className="shrink-0 rounded-[5px] border border-line-soft bg-panel-elevated px-1.5 py-0.5 font-mono text-2xs text-dim">
             Coming soon
           </span>
         ) : (
@@ -169,7 +167,7 @@ export const AgentSettingsCard: React.FC<AgentSettingsCardProps> = ({
       </div>
 
       <div>
-        <FieldLabel htmlFor={`${agent.id}-path`} className="mb-2">
+        <FieldLabel htmlFor={`${agent.id}-path`} className="mt-0 mb-1">
           Executable path
         </FieldLabel>
         <ActionTextInput
@@ -189,17 +187,17 @@ export const AgentSettingsCard: React.FC<AgentSettingsCardProps> = ({
           }}
         />
         {pathError ? (
-          <p className="m-0 mt-2 text-xs text-red-400" role="alert">
+          <p className="m-0 mt-1.5 text-xs text-red-400" role="alert">
             {pathError}
           </p>
         ) : null}
         {detectError ? (
-          <p className="m-0 mt-2 text-xs text-red-400" role="alert">
+          <p className="m-0 mt-1.5 text-xs text-red-400" role="alert">
             {detectError}
           </p>
         ) : null}
-        <div className="mt-3 flex items-center gap-3">
-          <span className="inline-flex min-h-9 items-center gap-1.5">
+        <div className="mt-1.5 flex items-center gap-2">
+          <span className="inline-flex min-h-7 items-center gap-1.5">
             <button
               type="button"
               className={`${textLinkClassName}${isDetecting ? " pointer-events-none opacity-20" : ""}`}

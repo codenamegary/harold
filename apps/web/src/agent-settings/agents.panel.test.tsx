@@ -473,6 +473,22 @@ describe("AgentsPanel", () => {
     expect(within(claudeCard).getByRole("button", { name: "Save path" })).toBeDisabled()
   })
 
+  test("search filters agents by display name", async () => {
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByLabelText("Cursor agent")).toBeInTheDocument()
+      expect(view.getByLabelText("Claude Agent agent")).toBeInTheDocument()
+    })
+
+    await setInputValue(view.getByRole("searchbox", { name: "Search agents" }), "claude")
+
+    await waitFor(() => {
+      expect(view.container.querySelector('[aria-label="Cursor agent"]')).toBeNull()
+      expect(view.container.querySelector('[aria-label="Claude Agent agent"]')).not.toBeNull()
+    })
+  })
+
   test("shows error when agent settings API is unreachable", async () => {
     globalThis.fetch = mock((input: RequestInfo | URL) => {
       const url = requestUrl(input)
