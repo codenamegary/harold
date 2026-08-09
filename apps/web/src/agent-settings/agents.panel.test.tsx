@@ -490,6 +490,64 @@ describe("AgentsPanel", () => {
     })
   })
 
+  test("load more reveals additional agents ten at a time", async () => {
+    const manyAgents = Array.from({ length: 12 }, (_, index) => {
+      const n = index + 1
+      return AgentSettingsSchema.parse({
+        id: `agent-${n}`,
+        displayName: `Agent ${String(n).padStart(2, "0")}`,
+        available: true,
+        enabled: false,
+        path: null,
+        present: false,
+        popular: false,
+      })
+    })
+
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(AgentSettingsCollectionSchema.parse({ items: manyAgents })), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByRole("row", { name: "Agent 01 agent" })).toBeInTheDocument()
+      expect(view.getByRole("row", { name: "Agent 10 agent" })).toBeInTheDocument()
+    })
+
+    expect(view.queryByRole("row", { name: "Agent 11 agent" })).toBeNull()
+    expect(view.getByRole("button", { name: "Load more agents, 2 remaining" })).toBeInTheDocument()
+
+    await clickInAct(view.getByRole("button", { name: "Load more agents, 2 remaining" }))
+
+    await waitFor(() => {
+      expect(view.getByRole("row", { name: "Agent 11 agent" })).toBeInTheDocument()
+      expect(view.getByRole("row", { name: "Agent 12 agent" })).toBeInTheDocument()
+      expect(view.queryByRole("button", { name: /Load more agents/ })).toBeNull()
+    })
+  })
+
   test("shows error when agent settings API is unreachable", async () => {
     globalThis.fetch = mock((input: RequestInfo | URL) => {
       const url = requestUrl(input)

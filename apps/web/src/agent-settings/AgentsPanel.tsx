@@ -9,6 +9,7 @@ import { AgentsTable } from "./AgentsTable"
 import { isAgentImportApplyError } from "./apply.agent.import"
 import { isAgentImportDetectError } from "./detect.agent.import"
 import { filterAgentSettings } from "./filter.agent.settings"
+import { sortAgentSettings } from "./sort.agent.settings"
 import { useAgentSettingsQuery } from "./use.agent.settings.query"
 import { useApplyAgentImportMutation } from "./use.apply.agent.import.mutation"
 import { useDetectAgentImportMutation } from "./use.detect.agent.import.mutation"
@@ -33,7 +34,7 @@ export const AgentsPanel: React.FC = () => {
   const [importCandidates, setImportCandidates] = useState<ImportDetectCandidate[]>([])
   const [importError, setImportError] = useState("")
 
-  const filteredAgents = filterAgentSettings(agents, searchQuery)
+  const filteredAgents = sortAgentSettings(filterAgentSettings(agents, searchQuery))
 
   const handleOpenImport = () => {
     setImportError("")
@@ -129,6 +130,7 @@ export const AgentsPanel: React.FC = () => {
 
       <AgentsTable
         agents={filteredAgents}
+        searchQuery={searchQuery}
         controlsDisabled={controlsDisabled}
         updateMutation={updateMutation}
         detectMutation={detectMutation}
