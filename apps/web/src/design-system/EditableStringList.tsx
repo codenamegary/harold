@@ -30,9 +30,9 @@ export const EditableStringList: React.FC<EditableStringListProps> = ({
 
   const handleRowSubmit = (index: number, event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    event.stopPropagation()
 
-    const isLast = index === value.length - 1
-    if (!isLast) {
+    if (index !== value.length - 1) {
       return
     }
 

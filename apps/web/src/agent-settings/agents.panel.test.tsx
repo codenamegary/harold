@@ -240,13 +240,16 @@ describe("AgentsPanel", () => {
       const settings = view.getByRole("row", { name: "Cursor launch settings" })
       expect(within(settings).getByText("Could not detect agent path automatically.")).toBeInTheDocument()
       expect(within(row).getByLabelText("Enable Cursor")).toBeChecked()
-      expect(within(settings).getByRole("button", { name: "Save path" })).toBeInTheDocument()
+      expect(within(settings).getByLabelText("Cursor executable path")).toBeInTheDocument()
+      expect(within(settings).queryByRole("button", { name: "Save Cursor launch settings" })).toBeNull()
     })
   }, mutationFlowTimeoutMs)
 
-  test("saves a manual path override", async () => {
+  test("shows Save when dirty and PATCHes path with args", async () => {
     const manualPath = "/opt/custom/agent"
-    const cursorState = { agent: cursorAgent({ enabled: true, path: null, args: ["acp"] }) }
+    const cursorState = {
+      agent: cursorAgent({ enabled: true, path: "/usr/local/bin/agent", args: ["acp"] }),
+    }
 
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
@@ -274,7 +277,11 @@ describe("AgentsPanel", () => {
         const body = JSON.parse(requestBodyText(init?.body))
 
         if (body.path === manualPath) {
-          cursorState.agent = cursorAgent({ enabled: true, path: manualPath, args: ["acp"] })
+          cursorState.agent = cursorAgent({
+            enabled: body.enabled,
+            path: manualPath,
+            args: body.args,
+          })
 
           return Promise.resolve(
             new Response(JSON.stringify(AgentSettingsSchema.parse(cursorState.agent)), {
@@ -296,24 +303,32 @@ describe("AgentsPanel", () => {
     })
 
     const settings = await expandAgentRow(view, "Cursor")
+    expect(within(settings).queryByRole("button", { name: "Save Cursor launch settings" })).toBeNull()
+
     const pathInput = within(settings).getByLabelText("Cursor executable path")
     await setInputValue(pathInput, manualPath)
+    await setInputValue(within(settings).getByLabelText("Cursor args item 1"), "claude")
 
     await waitFor(() => {
-      expect(within(settings).getByRole("button", { name: "Save path" })).not.toBeDisabled()
+      expect(within(settings).getByRole("button", { name: "Save Cursor launch settings" })).not.toBeDisabled()
+      expect(within(settings).getByRole("button", { name: "Reset Cursor launch settings" })).toBeInTheDocument()
     })
 
-    await clickInAct(within(settings).getByRole("button", { name: "Save path" }))
+    await clickInAct(within(settings).getByRole("button", { name: "Save Cursor launch settings" }))
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/v1/settings/agents/cursor",
         expect.objectContaining({
           method: "PATCH",
-          body: JSON.stringify({ enabled: true, path: manualPath }),
+          body: JSON.stringify({
+            enabled: true,
+            path: manualPath,
+            args: ["claude"],
+          }),
         }),
       )
-      expect(within(settings).getByRole("button", { name: "Save path" })).toBeDisabled()
+      expect(within(settings).queryByRole("button", { name: "Save Cursor launch settings" })).toBeNull()
     })
   }, mutationFlowTimeoutMs)
 
@@ -370,7 +385,7 @@ describe("AgentsPanel", () => {
       "/usr/local/bin/agent",
     )
     expect(within(settings).getByLabelText("Cursor args item 1")).toHaveValue("acp")
-    expect(within(settings).getByRole("button", { name: "Save Cursor args" })).toBeDisabled()
+    expect(within(settings).queryByRole("button", { name: "Save Cursor launch settings" })).toBeNull()
   })
 
   test("saves args while preserving enabled state", async () => {
@@ -410,7 +425,7 @@ describe("AgentsPanel", () => {
         if (Array.isArray(body.args)) {
           cursorState.agent = cursorAgent({
             enabled: body.enabled,
-            path: "/usr/local/bin/agent",
+            path: body.path ?? "/usr/local/bin/agent",
             args: body.args,
           })
 
@@ -437,17 +452,21 @@ describe("AgentsPanel", () => {
     await setInputValue(within(settings).getByLabelText("Cursor args item 1"), "claude")
 
     await waitFor(() => {
-      expect(within(settings).getByRole("button", { name: "Save Cursor args" })).not.toBeDisabled()
+      expect(within(settings).getByRole("button", { name: "Save Cursor launch settings" })).not.toBeDisabled()
     })
 
-    await clickInAct(within(settings).getByRole("button", { name: "Save Cursor args" }))
+    await clickInAct(within(settings).getByRole("button", { name: "Save Cursor launch settings" }))
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/v1/settings/agents/cursor",
         expect.objectContaining({
           method: "PATCH",
-          body: JSON.stringify({ enabled: false, args: ["claude"] }),
+          body: JSON.stringify({
+            enabled: false,
+            path: "/usr/local/bin/agent",
+            args: ["claude"],
+          }),
         }),
       )
     })
@@ -587,10 +606,10 @@ describe("AgentsPanel", () => {
     await setInputValue(pathInput, invalidPath)
 
     await waitFor(() => {
-      expect(within(settings).getByRole("button", { name: "Save path" })).not.toBeDisabled()
+      expect(within(settings).getByRole("button", { name: "Save Cursor launch settings" })).not.toBeDisabled()
     })
 
-    await clickInAct(within(settings).getByRole("button", { name: "Save path" }))
+    await clickInAct(within(settings).getByRole("button", { name: "Save Cursor launch settings" }))
 
     await waitFor(() => {
       expect(within(settings).getByText("Invalid agent executable path")).toBeInTheDocument()
@@ -620,8 +639,8 @@ describe("AgentsPanel", () => {
 
     const settings = await expandAgentRow(view, "Claude Agent")
     expect(within(settings).getByRole("button", { name: "Detect path" })).toBeDisabled()
-    expect(within(settings).getByRole("button", { name: "Save path" })).toBeDisabled()
-    expect(within(settings).getByRole("button", { name: "Save Claude Agent args" })).toBeDisabled()
+    expect(within(settings).getByLabelText("Claude Agent executable path")).toBeDisabled()
+    expect(within(settings).queryByRole("button", { name: "Save Claude Agent launch settings" })).toBeNull()
   })
 
   test("search filters agents by display name", async () => {

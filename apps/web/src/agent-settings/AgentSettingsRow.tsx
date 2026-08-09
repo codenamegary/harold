@@ -1,9 +1,15 @@
 import React, { useEffect, useState } from "react"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { UseMutationResult } from "@tanstack/react-query"
 import { AgentSettings } from "contracts/http/agent-settings"
-import { ChevronDown, Save } from "lucide-react"
-import { ActionTextInput } from "../design-system/ActionTextInput"
+import { ChevronDown } from "lucide-react"
+import { Controller, useForm } from "react-hook-form"
 import { EditableStringList } from "../design-system/EditableStringList"
+import { TextInput } from "../design-system/TextInput"
+import {
+  AgentLaunchFormSchema,
+  AgentLaunchFormValues,
+} from "./agent.launch.form.schema"
 import {
   agentPathDetectErrorMessage,
   agentSettingsUpdateErrorMessage,
@@ -31,14 +37,6 @@ const DetectSuccessCheck: React.FC<{ onAnimationEnd: () => void }> = ({ onAnimat
 const toggleClassName =
   "relative h-[17px] w-[31px] shrink-0 cursor-pointer appearance-none rounded-[10px] bg-[#252c36] transition after:absolute after:left-[2px] after:top-[2px] after:size-[13px] after:rounded-full after:bg-[#727c89] after:transition-all after:content-[''] checked:bg-lime checked:after:left-[16px] checked:after:bg-lime-ink disabled:cursor-not-allowed disabled:opacity-50"
 
-const arraysEqual = (left: readonly string[], right: readonly string[]): boolean => {
-  if (left.length !== right.length) {
-    return false
-  }
-
-  return left.every((item, index) => item === right[index])
-}
-
 const truncateMiddle = (value: string, maxLength: number): string => {
   if (value.length <= maxLength) {
     return value
@@ -60,6 +58,16 @@ const formatLaunchSummary = (path: string | null, args: readonly string[]): stri
   const argsJoined = args.join(" ")
   return `${truncateMiddle(pathPart, 28)} ${truncateMiddle(argsJoined, 24)}`
 }
+
+const agentLaunchFormValues = (agent: AgentSettings): AgentLaunchFormValues => ({
+  path: agent.path ?? "",
+  args: [...agent.args],
+})
+
+const trimLaunchFormValues = (data: AgentLaunchFormValues): AgentLaunchFormValues => ({
+  path: data.path.trim(),
+  args: data.args.map((arg) => arg.trim()).filter((arg) => arg !== ""),
+})
 
 type UpdateMutation = UseMutationResult<
   Awaited<ReturnType<typeof updateAgentSettings>>,
@@ -86,40 +94,30 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
   updateMutation,
   detectMutation,
 }) => {
-  const savedPath = agent.path ?? ""
-  const savedArgs = agent.args
   const [expanded, setExpanded] = useState(false)
-  const [draftPath, setDraftPath] = useState(savedPath)
-  const [draftArgs, setDraftArgs] = useState<string[]>([...savedArgs])
   const [detectSuccessVisible, setDetectSuccessVisible] = useState(false)
 
-  useEffect(() => {
-    setDraftPath(savedPath)
-  }, [savedPath])
-
-  useEffect(() => {
-    setDraftArgs([...savedArgs])
-  }, [savedArgs])
+  const {
+    control,
+    handleSubmit,
+    reset,
+    setValue,
+    formState: { isDirty, isSubmitting, errors },
+  } = useForm<AgentLaunchFormValues>({
+    resolver: zodResolver(AgentLaunchFormSchema),
+    defaultValues: agentLaunchFormValues(agent),
+    values: agentLaunchFormValues(agent),
+  })
 
   const isComingSoon = !agent.available
   const rowDisabled = controlsDisabled || isComingSoon
-  const pathControlsDisabled = rowDisabled || !agent.enabled
-  const argsControlsDisabled = rowDisabled
+  const formControlsDisabled = rowDisabled || updateMutation.isPending
   const toggleDisabled = rowDisabled || updateMutation.isPending
-  const pathChanged = draftPath.trim() !== "" && draftPath !== savedPath
-  const argsChanged = !arraysEqual(draftArgs, savedArgs)
-  const canSavePath = agent.enabled && pathChanged && !updateMutation.isPending
-  const canSaveArgs = argsChanged && !updateMutation.isPending
 
   const updateErrorForAgent =
     updateMutation.isError && updateMutation.variables?.agentId === agent.id
       ? agentSettingsUpdateErrorMessage(updateMutation.error, "")
       : ""
-  const mutationBody = updateMutation.variables?.body
-  const isArgsOnlyMutation =
-    mutationBody !== undefined && "args" in mutationBody && !("path" in mutationBody)
-  const pathError = updateErrorForAgent !== "" && !isArgsOnlyMutation ? updateErrorForAgent : ""
-  const argsError = updateErrorForAgent !== "" && isArgsOnlyMutation ? updateErrorForAgent : ""
 
   const detectError =
     detectMutation.isError && detectMutation.variables === agent.id
@@ -130,10 +128,10 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
     detectMutation.isPending && detectMutation.variables === agent.id
 
   useEffect(() => {
-    if (pathError !== "" || detectError !== "" || argsError !== "") {
+    if (updateErrorForAgent !== "" || detectError !== "") {
       setExpanded(true)
     }
-  }, [pathError, detectError, argsError])
+  }, [updateErrorForAgent, detectError])
 
   const handleToggle = () => {
     updateMutation.mutate(
@@ -149,29 +147,21 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
     )
   }
 
-  const handleSavePath = () => {
+  const onSave = (data: AgentLaunchFormValues) => {
+    const next = trimLaunchFormValues(data)
+
     updateMutation.mutate(
       {
         agentId: agent.id,
-        body: { enabled: true, path: draftPath.trim() },
-      },
-      {
-        onSuccess: () => {
-          setDraftPath(draftPath.trim())
-          updateMutation.reset()
+        body: {
+          enabled: agent.enabled,
+          path: next.path,
+          args: next.args,
         },
       },
-    )
-  }
-
-  const handleSaveArgs = () => {
-    updateMutation.mutate(
-      {
-        agentId: agent.id,
-        body: { enabled: agent.enabled, args: draftArgs },
-      },
       {
         onSuccess: () => {
+          reset(next)
           updateMutation.reset()
         },
       },
@@ -184,22 +174,15 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
     detectMutation.reset()
     detectMutation.mutate(agent.id, {
       onSuccess: (result) => {
-        setDraftPath(result.path)
+        setValue("path", result.path, { shouldDirty: true, shouldValidate: true })
         detectMutation.reset()
         setDetectSuccessVisible(true)
       },
     })
   }
 
-  const handlePathValueChange = (value: string) => {
-    setDraftPath(value)
-    if (updateMutation.isError) {
-      updateMutation.reset()
-    }
-  }
-
-  const handleArgsChange = (next: string[]) => {
-    setDraftArgs(next)
+  const handleReset = () => {
+    reset(agentLaunchFormValues(agent))
     if (updateMutation.isError) {
       updateMutation.reset()
     }
@@ -209,6 +192,9 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
   const expandLabel = expanded
     ? `Collapse ${agent.displayName} launch settings`
     : `Expand ${agent.displayName} launch settings`
+  const saveDisabled = !isDirty || isSubmitting || updateMutation.isPending
+  const pathFieldError = errors.path?.message
+  const formError = updateErrorForAgent !== "" ? updateErrorForAgent : ""
 
   return (
     <>
@@ -283,30 +269,46 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
           className={`border-b border-line-soft last:border-b-0 ${isComingSoon ? "opacity-55" : ""}`}
         >
           <td colSpan={4} className="bg-[#0a0c10] px-3 py-3">
-            <div className="flex flex-col gap-4 pl-8">
+            <form className="flex flex-col gap-4 pl-8" onSubmit={handleSubmit(onSave)}>
               <div className="min-w-0 max-w-xl">
                 <p className="m-0 mb-1.5 text-2xs font-medium tracking-wide text-label">Path</p>
-                <ActionTextInput
-                  id={`${agent.id}-path`}
-                  aria-label={`${agent.displayName} executable path`}
-                  value={draftPath}
-                  readOnly={!agent.enabled && !controlsDisabled}
-                  disabled={controlsDisabled}
-                  aria-disabled={pathControlsDisabled}
-                  placeholder={agent.enabled ? "Executable path" : "Enable to edit path"}
-                  onChange={(event) => handlePathValueChange(event.target.value)}
-                  onInput={(event) => handlePathValueChange(event.currentTarget.value)}
-                  className="text-xs"
-                  action={{
-                    "aria-label": updateMutation.isPending ? "Saving path" : "Save path",
-                    disabled: !canSavePath,
-                    onClick: handleSavePath,
-                    children: <Save aria-hidden className="size-3.5" strokeWidth={1.75} />,
-                  }}
+                <Controller
+                  name="path"
+                  control={control}
+                  render={({ field }) => (
+                    <TextInput
+                      id={`${agent.id}-path`}
+                      aria-label={`${agent.displayName} executable path`}
+                      placeholder="Executable path"
+                      disabled={formControlsDisabled}
+                      className="text-xs"
+                      name={field.name}
+                      ref={field.ref}
+                      value={field.value}
+                      onBlur={field.onBlur}
+                      onChange={(event) => {
+                        field.onChange(event.target.value)
+                        if (updateMutation.isError) {
+                          updateMutation.reset()
+                        }
+                      }}
+                      onInput={(event) => {
+                        field.onChange(event.currentTarget.value)
+                        if (updateMutation.isError) {
+                          updateMutation.reset()
+                        }
+                      }}
+                    />
+                  )}
                 />
-                {pathError ? (
+                {pathFieldError ? (
                   <p className="m-0 mt-1 text-2xs text-red-400" role="alert">
-                    {pathError}
+                    {pathFieldError}
+                  </p>
+                ) : null}
+                {formError ? (
+                  <p className="m-0 mt-1 text-2xs text-red-400" role="alert">
+                    {formError}
                   </p>
                 ) : null}
                 {detectError ? (
@@ -319,7 +321,7 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
                     <button
                       type="button"
                       className={`${textLinkClassName}${isDetecting ? " pointer-events-none opacity-20" : ""}`}
-                      disabled={pathControlsDisabled || isDetecting}
+                      disabled={rowDisabled || isDetecting}
                       aria-busy={isDetecting}
                       onClick={handleDetectPath}
                     >
@@ -333,31 +335,48 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
               </div>
 
               <div className="min-w-0 max-w-xl">
-                <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <p className="m-0 text-2xs font-medium tracking-wide text-label">Args</p>
+                <p className="m-0 mb-1.5 text-2xs font-medium tracking-wide text-label">Args</p>
+                <Controller
+                  name="args"
+                  control={control}
+                  render={({ field }) => (
+                    <EditableStringList
+                      value={field.value}
+                      onChange={(next) => {
+                        setValue("args", next, { shouldDirty: true, shouldValidate: true })
+                        if (updateMutation.isError) {
+                          updateMutation.reset()
+                        }
+                      }}
+                      disabled={formControlsDisabled}
+                      aria-label={`${agent.displayName} args`}
+                    />
+                  )}
+                />
+              </div>
+
+              {isDirty ? (
+                <div className="flex items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={saveDisabled}
+                    aria-label={`Save ${agent.displayName} launch settings`}
+                    className={textLinkClassName}
+                  >
+                    Save
+                  </button>
                   <button
                     type="button"
+                    disabled={formControlsDisabled}
+                    aria-label={`Reset ${agent.displayName} launch settings`}
                     className={textLinkClassName}
-                    disabled={!canSaveArgs || argsControlsDisabled}
-                    aria-label={`Save ${agent.displayName} args`}
-                    onClick={handleSaveArgs}
+                    onClick={handleReset}
                   >
-                    Save args
+                    Reset
                   </button>
                 </div>
-                <EditableStringList
-                  value={draftArgs}
-                  onChange={handleArgsChange}
-                  disabled={argsControlsDisabled || updateMutation.isPending}
-                  aria-label={`${agent.displayName} args`}
-                />
-                {argsError ? (
-                  <p className="m-0 mt-1 text-2xs text-red-400" role="alert">
-                    {argsError}
-                  </p>
-                ) : null}
-              </div>
-            </div>
+              ) : null}
+            </form>
           </td>
         </tr>
       ) : null}
