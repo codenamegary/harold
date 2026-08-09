@@ -221,6 +221,11 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
               />
             </button>
             <span className="truncate text-sm font-semibold text-body">{agent.displayName}</span>
+            {agent.present ? (
+              <span className="shrink-0 rounded-[4px] border border-lime/40 px-1 py-px font-mono text-2xs text-lime">
+                present
+              </span>
+            ) : null}
             {agent.popular ? (
               <span className="shrink-0 rounded-[4px] border border-line-soft px-1 py-px font-mono text-2xs text-dim">
                 popular
@@ -232,13 +237,6 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
               </span>
             ) : null}
           </div>
-        </td>
-        <td className="px-3 py-2 align-middle whitespace-nowrap">
-          {agent.present ? (
-            <span className="font-mono text-2xs text-lime">present</span>
-          ) : (
-            <span className="font-mono text-2xs text-dim">not present</span>
-          )}
         </td>
         <td className="px-3 py-2 align-middle">
           <span
@@ -269,8 +267,8 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
           aria-label={`${agent.displayName} launch settings`}
           className={`border-b border-line-soft last:border-b-0 ${isComingSoon ? "opacity-55" : ""}`}
         >
-          <td colSpan={4} className="bg-[#0a0c10] px-3 py-3">
-            <form className="flex flex-col gap-4 pl-8" onSubmit={handleSubmit(onSave)}>
+          <td colSpan={3} className="bg-[#0a0c10] px-3 py-3">
+            <form className="flex flex-col gap-4 p-4" onSubmit={handleSubmit(onSave)}>
               <div className="min-w-0 max-w-xl">
                 <p className="m-0 mb-1.5 text-2xs font-medium tracking-wide text-label">Path</p>
                 <Controller

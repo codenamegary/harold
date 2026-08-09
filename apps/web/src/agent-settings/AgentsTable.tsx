@@ -53,9 +53,6 @@ export const AgentsTable: React.FC<AgentsTableProps> = ({
               Agent
             </th>
             <th scope="col" className="px-3 py-2 text-2xs font-medium tracking-wide text-label">
-              Presence
-            </th>
-            <th scope="col" className="px-3 py-2 text-2xs font-medium tracking-wide text-label">
               Launch
             </th>
             <th
@@ -78,7 +75,7 @@ export const AgentsTable: React.FC<AgentsTableProps> = ({
           ))}
           {hasMore ? (
             <tr className="border-t border-line-soft">
-              <td colSpan={4} className="px-3 py-2.5 text-center">
+              <td colSpan={3} className="px-3 py-2.5 text-center">
                 <button
                   type="button"
                   className="inline-flex min-h-6 cursor-pointer items-center justify-center rounded-[7px] bg-transparent px-2 text-2xs font-semibold text-body-soft transition-opacity duration-300 ease-out hover:text-lime"
