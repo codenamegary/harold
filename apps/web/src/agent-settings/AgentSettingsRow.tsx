@@ -274,7 +274,7 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
           className={`border-b border-line-soft last:border-b-0 ${isComingSoon ? "opacity-55" : ""}`}
         >
           <td colSpan={3} className="bg-[#0a0c10] px-3 py-3">
-            <form className="flex flex-col gap-4 p-4" onSubmit={handleSubmit(onSave)}>
+            <div className="flex flex-col gap-4 p-4">
               <div className="min-w-0 max-w-xl">
                 <p className="m-0 mb-1.5 text-2xs font-medium tracking-wide text-label">Path</p>
                 <Controller
@@ -354,6 +354,7 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
                         }
                       }}
                       disabled={formControlsDisabled}
+                      sortable
                       aria-label={`${agent.displayName} args`}
                     />
                   )}
@@ -394,11 +395,12 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
               {isDirty ? (
                 <div className="flex items-center gap-2.5">
                   <Button
-                    type="submit"
+                    type="button"
                     variant="submit"
                     size="sm"
                     disabled={saveDisabled}
                     aria-label={`Save ${agent.displayName} launch settings`}
+                    onClick={handleSubmit(onSave)}
                   >
                     Save
                   </Button>
@@ -414,7 +416,7 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
                   </Button>
                 </div>
               ) : null}
-            </form>
+            </div>
           </td>
         </tr>
       ) : null}

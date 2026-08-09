@@ -698,13 +698,14 @@ describe("AgentsPanel", () => {
     expect(
       within(settings).getByText(/Agents without -y may run in interactive mode and block spawning/i),
     ).toBeInTheDocument()
-    expect(within(settings).getByRole("status")).toBeInTheDocument()
     expect(within(settings).queryByRole("button", { name: "Save Claude Agent launch settings" })).toBeNull()
 
     await clickInAct(within(settings).getByRole("button", { name: "Add -y" }))
 
     await waitFor(() => {
-      expect(within(settings).queryByRole("status")).toBeNull()
+      expect(
+        within(settings).queryByText(/Agents without -y may run in interactive mode and block spawning/i),
+      ).toBeNull()
       expect(
         within(settings).getByRole("button", { name: "Save Claude Agent launch settings" }),
       ).not.toBeDisabled()
