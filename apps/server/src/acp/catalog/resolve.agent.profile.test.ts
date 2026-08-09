@@ -60,6 +60,19 @@ describe("resolveAgentProfile", () => {
     ])
   })
 
+  test("uses auggie native CLI override instead of registry npx package", () => {
+    const profile = resolveAgentProfile("auggie")
+    if (profile === undefined) {
+      throw new Error("expected auggie profile")
+    }
+
+    expect(profile.command).toEqual(["auggie", "--acp"])
+    expect(buildAgentSpawnCommand("/usr/local/bin/auggie", ["--acp"])).toEqual([
+      "/usr/local/bin/auggie",
+      "--acp",
+    ])
+  })
+
   test("builds a generic profile from a registry-ahead spawn snapshot", () => {
     const profile = resolveAgentProfile("brand-new-agent", {
       kind: "binary",
