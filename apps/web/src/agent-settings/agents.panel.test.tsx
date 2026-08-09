@@ -695,7 +695,9 @@ describe("AgentsPanel", () => {
 
     const settings = await expandAgentRow(view, "Claude Agent")
 
-    expect(within(settings).getByText(/npx may prompt without -y in non-interactive mode/i)).toBeInTheDocument()
+    expect(
+      within(settings).getByText(/Agents without -y may run in interactive mode and block spawning/i),
+    ).toBeInTheDocument()
     expect(within(settings).getByRole("status")).toBeInTheDocument()
     expect(within(settings).queryByRole("button", { name: "Save Claude Agent launch settings" })).toBeNull()
 

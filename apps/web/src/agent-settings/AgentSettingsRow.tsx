@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { UseMutationResult } from "@tanstack/react-query"
 import { AgentSettings } from "contracts/http/agent-settings"
-import { ChevronDown } from "lucide-react"
+import { ChevronDown, TriangleAlert } from "lucide-react"
 import { Controller, useForm } from "react-hook-form"
 import { Button } from "../design-system/Button"
 import { EditableStringList } from "../design-system/EditableStringList"
@@ -359,24 +359,34 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
                   )}
                 />
                 {showNpxYesWarning ? (
-                  <p className="m-0 mt-1 text-2xs text-dim" role="status">
-                    npx may prompt without -y in non-interactive mode.{" "}
-                    <button
-                      type="button"
-                      className={textLinkClassName}
-                      disabled={formControlsDisabled}
-                      onClick={() => {
-                        setValue("args", insertNpxYesFlag(argsValue), {
-                          shouldDirty: true,
-                          shouldValidate: true,
-                        })
-                        if (updateMutation.isError) {
-                          updateMutation.reset()
-                        }
-                      }}
-                    >
-                      Add -y
-                    </button>
+                  <p
+                    className="m-0 mt-1.5 flex items-start gap-1.5 text-2xs text-amber-200"
+                    role="status"
+                  >
+                    <TriangleAlert
+                      aria-hidden
+                      className="mt-px size-3.5 shrink-0 text-amber-400"
+                      strokeWidth={2}
+                    />
+                    <span>
+                      Agents without -y may run in interactive mode and block spawning.{" "}
+                      <button
+                        type="button"
+                        className={textLinkClassName}
+                        disabled={formControlsDisabled}
+                        onClick={() => {
+                          setValue("args", insertNpxYesFlag(argsValue), {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          })
+                          if (updateMutation.isError) {
+                            updateMutation.reset()
+                          }
+                        }}
+                      >
+                        Add -y
+                      </button>
+                    </span>
                   </p>
                 ) : null}
               </div>
