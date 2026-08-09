@@ -1,4 +1,4 @@
-import React, { FormEvent } from "react"
+import React, { FormEvent, useLayoutEffect, useState } from "react"
 import {
   closestCenter,
   DndContext,
@@ -15,7 +15,6 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { GripVertical, Plus, Trash2 } from "lucide-react"
-import { IconButton } from "./IconButton"
 import { TextInput } from "./TextInput"
 
 type EditableStringListProps = {
@@ -44,6 +43,11 @@ export const moveEditableStringListItem = (
   return arrayMove([...value], fromIndex, toIndex)
 }
 
+const createRowId = (): string => crypto.randomUUID()
+
+const rowControlClassName =
+  "grid size-8 shrink-0 place-items-center rounded-[7px] border border-line bg-surface text-icon hover:border-line-hover hover:bg-hover-surface hover:text-slate-200 disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50"
+
 type RowFieldsProps = {
   index: number
   item: string
@@ -66,18 +70,20 @@ const RowFields: React.FC<RowFieldsProps> = ({
       value={item}
       disabled={disabled}
       aria-label={`${ariaLabel} item ${index + 1}`}
-      className="min-h-8 text-xs"
+      className="h-8 min-h-8 text-xs"
+      style={{ minHeight: "2rem", height: "2rem" }}
       onChange={(event) => onItemChange(index, event.target.value)}
       onInput={(event) => onItemChange(index, event.currentTarget.value)}
     />
-    <IconButton
+    <button
+      type="button"
       aria-label={`Remove ${ariaLabel} item ${index + 1}`}
       disabled={disabled}
-      className="shrink-0"
+      className={`${rowControlClassName} cursor-pointer`}
       onClick={() => onRemove(index)}
     >
       <Trash2 aria-hidden className="size-3.5" strokeWidth={1.75} />
-    </IconButton>
+    </button>
   </>
 )
 
@@ -133,9 +139,9 @@ const SortableRow: React.FC<SortableRowProps> = ({
     <form
       ref={setNodeRef}
       role="listitem"
-      className={`flex min-w-0 items-center gap-1.5 ${isDragging ? "opacity-70" : ""}`}
+      className={`flex min-w-0 items-center gap-1.5 ${isDragging ? "z-10 opacity-70" : ""}`}
       style={{
-        transform: CSS.Transform.toString(transform),
+        transform: CSS.Translate.toString(transform),
         transition,
       }}
       onSubmit={(event) => onRowSubmit(index, event)}
@@ -144,7 +150,7 @@ const SortableRow: React.FC<SortableRowProps> = ({
         type="button"
         aria-label={`Reorder ${ariaLabel} item ${index + 1}`}
         disabled={disabled}
-        className="grid size-[34px] shrink-0 place-items-center rounded-[7px] border border-line bg-surface text-icon cursor-grab active:cursor-grabbing hover:border-line-hover hover:bg-hover-surface hover:text-slate-200 disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50"
+        className={`${rowControlClassName} cursor-grab active:cursor-grabbing`}
         {...attributes}
         {...listeners}
       >
@@ -162,6 +168,19 @@ const SortableRow: React.FC<SortableRowProps> = ({
   )
 }
 
+const syncItemIds = (previousIds: readonly string[], length: number): string[] => {
+  if (previousIds.length === length) {
+    return [...previousIds]
+  }
+
+  if (length > previousIds.length) {
+    const extras = Array.from({ length: length - previousIds.length }, () => createRowId())
+    return [...previousIds, ...extras]
+  }
+
+  return previousIds.slice(0, length)
+}
+
 export const EditableStringList: React.FC<EditableStringListProps> = ({
   value,
   onChange,
@@ -169,7 +188,24 @@ export const EditableStringList: React.FC<EditableStringListProps> = ({
   sortable = false,
   "aria-label": ariaLabel,
 }) => {
-  const itemIds = value.map((_, index) => String(index))
+  const [itemIds, setItemIds] = useState<string[]>(() => value.map(() => createRowId()))
+
+  useLayoutEffect(() => {
+    setItemIds((previousIds) => {
+      const nextIds = syncItemIds(previousIds, value.length)
+      if (
+        nextIds.length === previousIds.length &&
+        nextIds.every((id, index) => id === previousIds[index])
+      ) {
+        return previousIds
+      }
+      return nextIds
+    })
+  }, [value.length])
+
+  const resolvedIds =
+    itemIds.length === value.length ? itemIds : syncItemIds(itemIds, value.length)
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -183,10 +219,12 @@ export const EditableStringList: React.FC<EditableStringListProps> = ({
   }
 
   const handleRemove = (index: number) => {
+    setItemIds((previousIds) => previousIds.filter((_, itemIndex) => itemIndex !== index))
     onChange(value.filter((_, itemIndex) => itemIndex !== index))
   }
 
   const handleAdd = () => {
+    setItemIds((previousIds) => [...previousIds, createRowId()])
     onChange([...value, ""])
   }
 
@@ -207,16 +245,25 @@ export const EditableStringList: React.FC<EditableStringListProps> = ({
       return
     }
 
-    const fromIndex = Number(active.id)
-    const toIndex = Number(over.id)
+    const fromIndex = resolvedIds.indexOf(String(active.id))
+    const toIndex = resolvedIds.indexOf(String(over.id))
+    if (fromIndex < 0 || toIndex < 0) {
+      return
+    }
+
+    setItemIds(arrayMove(resolvedIds, fromIndex, toIndex))
     onChange(moveEditableStringListItem(value, fromIndex, toIndex))
   }
 
   const listBody = sortable ? (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+      <SortableContext items={resolvedIds} strategy={verticalListSortingStrategy}>
         {value.map((item, index) => {
-          const id = String(index)
+          const id = resolvedIds[index]
+          if (id === undefined) {
+            return null
+          }
+
           return (
             <SortableRow
               key={id}
@@ -234,18 +281,21 @@ export const EditableStringList: React.FC<EditableStringListProps> = ({
       </SortableContext>
     </DndContext>
   ) : (
-    value.map((item, index) => (
-      <StaticRow
-        key={itemIds[index]}
-        index={index}
-        item={item}
-        ariaLabel={ariaLabel}
-        disabled={disabled}
-        onItemChange={handleItemChange}
-        onRemove={handleRemove}
-        onRowSubmit={handleRowSubmit}
-      />
-    ))
+    value.map((item, index) => {
+      const id = resolvedIds[index] ?? `static-${index}`
+      return (
+        <StaticRow
+          key={id}
+          index={index}
+          item={item}
+          ariaLabel={ariaLabel}
+          disabled={disabled}
+          onItemChange={handleItemChange}
+          onRemove={handleRemove}
+          onRowSubmit={handleRowSubmit}
+        />
+      )
+    })
   )
 
   return (
