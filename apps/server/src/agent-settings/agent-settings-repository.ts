@@ -16,14 +16,16 @@ import { probePresence } from "../acp/catalog/probe.presence"
 import { resolveCatalogSpawn } from "../acp/catalog/resolve.catalog.spawn"
 import { registrySnapshotSchema } from "../acp/catalog/registry.schema"
 import {
-  agentDefinitions,
   isCatalogAgentId,
   isPopularAgentId,
   parseSpawnSnapshot,
+  resolveTemplateArgs,
+  resolveTemplateBinaryName,
   serializeSpawnSnapshot,
   sortAgentSettingsBands,
   toAgentSettings,
 } from "./agent-registry"
+import { parseArgs, serializeArgs } from "./agent.settings.args"
 import { resolveAgentPath, WhichFn } from "./resolve-agent-path"
 import {
   validateExecutablePath,
@@ -104,24 +106,12 @@ const resolveAvailable = (agentId: AgentId): boolean => {
   return catalogAgent?.available ?? true
 }
 
-const resolveBinaryNameForPath = (
-  agentId: AgentId,
-  spawnSnapshot: AgentSpawnSnapshot | null,
-): string | null => {
-  const definition = agentDefinitions[agentId]
-  if (definition !== undefined) {
-    return definition.binaryName
-  }
-
-  return spawnSnapshot?.binaryName ?? null
-}
-
 const detectPathForAgent = (
   agentId: AgentId,
   whichFn: WhichFn,
   spawnSnapshot: AgentSpawnSnapshot | null,
 ): string | null => {
-  const binaryName = resolveBinaryNameForPath(agentId, spawnSnapshot)
+  const binaryName = resolveTemplateBinaryName(agentId, spawnSnapshot)
   if (binaryName === null) {
     return null
   }
@@ -152,6 +142,11 @@ const resolvePathForUpdate = (
   return { ok: true, value: detectedPath }
 }
 
+const needsArgsSeed = (rawArgs: string | null): boolean => {
+  const parsed = parseArgs(rawArgs)
+  return parsed === null || parsed.length === 0
+}
+
 const toSettingsFromRow = (
   agentId: AgentId,
   row: AgentSettingsRow | undefined,
@@ -159,13 +154,15 @@ const toSettingsFromRow = (
 ): AgentSettings => {
   const spawnSnapshot = parseSpawnSnapshot(row?.spawnSnapshot ?? null)
   const presence = probePresence(agentId, presenceCtx, spawnSnapshot ?? undefined)
+  const storedArgs = parseArgs(row?.args ?? null)
 
   return toAgentSettings({
     id: agentId,
     displayName: resolveDisplayName(agentId, row),
     available: resolveAvailable(agentId),
     enabled: row?.enabled ?? false,
-    path: row?.path ?? null,
+    path: row?.path ?? resolveTemplateBinaryName(agentId, spawnSnapshot),
+    args: storedArgs ?? resolveTemplateArgs(agentId, spawnSnapshot),
     present: presence.present,
     popular: isPopularAgentId(agentId),
   })
@@ -268,6 +265,13 @@ export const createAgentSettingsRepository = (
     const spawnSnapshot = parseSpawnSnapshot(current.spawnSnapshot)
     const nextEnabled = body.enabled
     let nextPath = current.path
+    let nextArgs = current.args
+
+    if ("args" in body) {
+      nextArgs = serializeArgs(body.args)
+    } else if (nextEnabled && needsArgsSeed(current.args)) {
+      nextArgs = serializeArgs(resolveTemplateArgs(agentId, spawnSnapshot))
+    }
 
     if ("path" in body) {
       const resolvedPath = resolvePathForUpdate(
@@ -288,6 +292,7 @@ export const createAgentSettingsRepository = (
           ...current,
           enabled: true,
           path: null,
+          args: nextArgs,
           updatedAt: nowIso(),
         }
 
@@ -296,6 +301,7 @@ export const createAgentSettingsRepository = (
           .set({
             enabled: partialRow.enabled,
             path: partialRow.path,
+            args: partialRow.args,
             updatedAt: partialRow.updatedAt,
           })
           .where(eq(agentSettings.agentId, agentId))
@@ -315,6 +321,7 @@ export const createAgentSettingsRepository = (
       ...current,
       enabled: nextEnabled,
       path: nextPath,
+      args: nextArgs,
       updatedAt: nowIso(),
     }
 
@@ -323,6 +330,7 @@ export const createAgentSettingsRepository = (
       .set({
         enabled: nextRow.enabled,
         path: nextRow.path,
+        args: nextRow.args,
         updatedAt: nextRow.updatedAt,
       })
       .where(eq(agentSettings.agentId, agentId))
@@ -381,11 +389,12 @@ export const createAgentSettingsRepository = (
     const updatedAt = nowIso()
 
     for (const agent of body.agents) {
-      const nextPath = agent.path
-      if (nextPath !== null && !validatePath(nextPath)) {
-        return { ok: false, error: { kind: "path_invalid", path: nextPath } }
+      const nextPath = agent.path ?? agent.spawn.binaryName
+      if (agent.path !== null && !validatePath(agent.path)) {
+        return { ok: false, error: { kind: "path_invalid", path: agent.path } }
       }
 
+      const nextArgs = serializeArgs(agent.spawn.command.slice(1))
       const spawnSnapshotJson = isCatalogAgentId(agent.id)
         ? null
         : serializeSpawnSnapshot(agent.spawn)
@@ -403,6 +412,7 @@ export const createAgentSettingsRepository = (
             agentId: agent.id,
             enabled: true,
             path: nextPath,
+            args: nextArgs,
             spawnSnapshot: spawnSnapshotJson,
             updatedAt,
           })
@@ -414,7 +424,8 @@ export const createAgentSettingsRepository = (
         .update(agentSettings)
         .set({
           enabled: true,
-          path: nextPath ?? current.path,
+          path: nextPath,
+          args: nextArgs,
           spawnSnapshot: spawnSnapshotJson ?? current.spawnSnapshot,
           updatedAt,
         })

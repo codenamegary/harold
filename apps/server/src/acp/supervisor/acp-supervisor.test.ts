@@ -62,8 +62,13 @@ const createRepository = (agents: Array<{
   id: AgentId
   enabled: boolean
   path: string | null
+  args?: string[]
 }>) => ({
-  list: () => agents,
+  list: () =>
+    agents.map((agent) => ({
+      ...agent,
+      args: agent.args ?? ["acp"],
+    })),
 })
 
 const waitFor = async (predicate: () => boolean, timeoutMs = 2000) => {
@@ -152,7 +157,11 @@ describe("createAcpSupervisor", () => {
 
   test("starts a non-cursor catalog agent via generic profile", async () => {
     const mock = createMockTransport()
-    const spawnCalls: Array<{ command: readonly string[]; executablePath: string }> = []
+    const spawnCalls: Array<{
+      command: readonly string[]
+      executablePath: string
+      args: readonly string[]
+    }> = []
     mock.setHandler("initialize", () => ({
       protocolVersion: 1,
       agentCapabilities: {
@@ -167,8 +176,8 @@ describe("createAcpSupervisor", () => {
         { id: "opencode", enabled: true, path: "/usr/local/bin/opencode" },
       ]),
       serverVersion: "0.1.0",
-      spawnAgentProcessFn: ({ profile, executablePath }) => {
-        spawnCalls.push({ command: profile.command, executablePath })
+      spawnAgentProcessFn: ({ profile, executablePath, args }) => {
+        spawnCalls.push({ command: profile.command, executablePath, args })
         return createMockProcess()
       },
       createTransportFn: () => mock.transport,
@@ -183,6 +192,7 @@ describe("createAcpSupervisor", () => {
       {
         command: ["opencode", "acp"],
         executablePath: "/usr/local/bin/opencode",
+        args: ["acp"],
       },
     ])
   })

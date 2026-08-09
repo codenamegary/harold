@@ -28,7 +28,7 @@ describe("resolveAgentProfile", () => {
       "cursor/create_plan",
     ])
 
-    expect(buildAgentSpawnCommand(profile, "/opt/cursor/bin/agent")).toEqual([
+    expect(buildAgentSpawnCommand("/opt/cursor/bin/agent", ["acp"])).toEqual([
       "/opt/cursor/bin/agent",
       "acp",
     ])
@@ -54,7 +54,7 @@ describe("resolveAgentProfile", () => {
       extensionHandlers: {},
     })
 
-    expect(buildAgentSpawnCommand(profile, "/usr/local/bin/opencode")).toEqual([
+    expect(buildAgentSpawnCommand("/usr/local/bin/opencode", ["acp"])).toEqual([
       "/usr/local/bin/opencode",
       "acp",
     ])

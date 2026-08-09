@@ -6,6 +6,7 @@ const agent = (overrides: Partial<AgentSettings> & Pick<AgentSettings, "id" | "d
   available: true,
   enabled: false,
   path: null,
+  args: [],
   present: false,
   popular: false,
   ...overrides,

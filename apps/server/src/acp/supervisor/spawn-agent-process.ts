@@ -10,15 +10,19 @@ export type SpawnedAgentProcess = {
 export type SpawnAgentProcessFn = (input: {
   profile: AgentProfile
   executablePath: string
+  args: readonly string[]
 }) => SpawnedAgentProcess
 
 export const buildAgentSpawnCommand = (
-  profile: AgentProfile,
   executablePath: string,
-): readonly string[] => [executablePath, ...profile.command.slice(1)]
+  args: readonly string[],
+): readonly string[] => [executablePath, ...args]
 
-export const spawnAgentProcess: SpawnAgentProcessFn = ({ profile, executablePath }) => {
-  const cmd = buildAgentSpawnCommand(profile, executablePath)
+export const spawnAgentProcess: SpawnAgentProcessFn = ({
+  executablePath,
+  args,
+}) => {
+  const cmd = buildAgentSpawnCommand(executablePath, args)
   const subprocess = Bun.spawn({
     cmd: [...cmd],
     stdin: "pipe",

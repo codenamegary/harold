@@ -56,7 +56,7 @@ export const AgentsTable: React.FC<AgentsTableProps> = ({
               Presence
             </th>
             <th scope="col" className="px-3 py-2 text-2xs font-medium tracking-wide text-label">
-              Path
+              Launch
             </th>
             <th
               scope="col"

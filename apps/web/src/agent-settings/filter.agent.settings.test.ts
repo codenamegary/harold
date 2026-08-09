@@ -8,6 +8,7 @@ const cursor: AgentSettings = {
   available: true,
   enabled: false,
   path: null,
+  args: [],
   present: true,
   popular: true,
 }
@@ -18,6 +19,7 @@ const claude: AgentSettings = {
   available: false,
   enabled: false,
   path: null,
+  args: [],
   present: true,
   popular: true,
 }

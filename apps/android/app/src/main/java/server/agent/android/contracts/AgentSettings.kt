@@ -11,6 +11,7 @@ data class AgentSettings(
     val available: Boolean,
     val enabled: Boolean,
     val path: String?,
+    val args: List<String> = emptyList(),
     val present: Boolean = false,
     val popular: Boolean = false,
 )

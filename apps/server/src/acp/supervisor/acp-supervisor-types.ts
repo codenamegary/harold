@@ -102,6 +102,7 @@ export type AgentSettingsReader = {
     id: AgentId
     enabled: boolean
     path: string | null
+    args: string[]
   }>
   getSpawnSnapshot?: (agentId: AgentId) => AgentSpawnSnapshot | null
 }
@@ -121,6 +122,7 @@ export type CreateAcpSupervisorParams = {
   spawnAgentProcessFn?: (input: {
     profile: AgentProfile
     executablePath: string
+    args: readonly string[]
   }) => SpawnedAgentProcess
   createTransportFn?: (process: SpawnedAgentProcess) => JsonRpcTransport
 }

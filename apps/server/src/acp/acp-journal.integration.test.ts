@@ -186,7 +186,9 @@ describe("ACP journal integration", () => {
     }
 
     const agentSettingsRepository = {
-      list: () => [{ id: "cursor" as const, enabled: true, path: "/fake/agent" }],
+      list: () => [
+        { id: "cursor" as const, enabled: true, path: "/fake/agent", args: ["acp"] },
+      ],
     }
 
     const acpSupervisor = createAcpSupervisor({

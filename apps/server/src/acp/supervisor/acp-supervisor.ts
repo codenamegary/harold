@@ -101,6 +101,7 @@ const resolveStartConfig = (
     ok: true as const,
     profile,
     executablePath: settings.path,
+    args: settings.args,
   }
 }
 
@@ -221,6 +222,7 @@ export const createAcpSupervisor = ({
     const process = spawnAgentProcessFn({
       profile: resolved.profile,
       executablePath: resolved.executablePath,
+      args: resolved.args,
     })
     const transport = createTransportFn(process)
 

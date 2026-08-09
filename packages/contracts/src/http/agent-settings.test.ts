@@ -15,9 +15,10 @@ const validAgentSettings = {
   available: true,
   enabled: false,
   path: null,
+  args: [] as string[],
   present: false,
   popular: true,
-} as const
+}
 
 describe("AgentIdSchema", () => {
   test("accepts open string agent ids", () => {
@@ -40,6 +41,7 @@ describe("AgentSettingsSchema", () => {
       ...validAgentSettings,
       enabled: true,
       path: "/usr/local/bin/agent",
+      args: ["acp"],
       present: true,
     }
 
@@ -53,6 +55,7 @@ describe("AgentSettingsSchema", () => {
       available: true,
       enabled: false,
       path: null,
+      args: ["@agentclientprotocol/claude-agent-acp@0.66.0"],
       present: true,
       popular: true,
     }
@@ -67,11 +70,17 @@ describe("AgentSettingsSchema", () => {
       available: true,
       enabled: true,
       path: "/usr/bin/brand-new",
+      args: ["acp"],
       present: true,
       popular: false,
     }
 
     expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
+  })
+
+  test("rejects missing args", () => {
+    const { args: _args, ...withoutArgs } = validAgentSettings
+    expect(() => AgentSettingsSchema.parse(withoutArgs)).toThrow()
   })
 })
 
@@ -94,6 +103,44 @@ describe("UpdateAgentSettingsBodySchema", () => {
     })
   })
 
+  test("accepts enable with args", () => {
+    expect(
+      UpdateAgentSettingsBodySchema.parse({
+        enabled: true,
+        args: ["acp"],
+      }),
+    ).toEqual({
+      enabled: true,
+      args: ["acp"],
+    })
+  })
+
+  test("accepts enable with path and args", () => {
+    expect(
+      UpdateAgentSettingsBodySchema.parse({
+        enabled: true,
+        path: "/opt/agent/bin",
+        args: ["acp", "--verbose"],
+      }),
+    ).toEqual({
+      enabled: true,
+      path: "/opt/agent/bin",
+      args: ["acp", "--verbose"],
+    })
+  })
+
+  test("accepts empty args array", () => {
+    expect(
+      UpdateAgentSettingsBodySchema.parse({
+        enabled: true,
+        args: [],
+      }),
+    ).toEqual({
+      enabled: true,
+      args: [],
+    })
+  })
+
   test("rejects null path", () => {
     expect(() =>
       UpdateAgentSettingsBodySchema.parse({ enabled: true, path: null }),
@@ -103,6 +150,12 @@ describe("UpdateAgentSettingsBodySchema", () => {
   test("rejects path without enabled", () => {
     expect(() =>
       UpdateAgentSettingsBodySchema.parse({ path: "/opt/agent/bin" }),
+    ).toThrow()
+  })
+
+  test("rejects args without enabled", () => {
+    expect(() =>
+      UpdateAgentSettingsBodySchema.parse({ args: ["acp"] }),
     ).toThrow()
   })
 
@@ -180,6 +233,7 @@ describe("AgentSettingsCollectionSchema", () => {
           available: true,
           enabled: false,
           path: null,
+          args: [],
           present: false,
           popular: true,
         },

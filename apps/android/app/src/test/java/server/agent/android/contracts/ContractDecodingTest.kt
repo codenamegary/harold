@@ -77,13 +77,19 @@ class ContractDecodingTest {
               "displayName": "Cursor",
               "available": true,
               "enabled": false,
-              "path": null
+              "path": null,
+              "args": [],
+              "present": true,
+              "popular": true
             }
             """.trimIndent(),
         )
 
         assertEquals("cursor", settings.id)
         assertNull(settings.path)
+        assertEquals(emptyList<String>(), settings.args)
+        assertEquals(true, settings.present)
+        assertEquals(true, settings.popular)
     }
 
     @Test

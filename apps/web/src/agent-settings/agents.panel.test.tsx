@@ -30,6 +30,7 @@ const comingSoonAgent: AgentSettings = {
   available: false,
   enabled: false,
   path: null,
+  args: [],
   present: true,
   popular: true,
 }
@@ -40,6 +41,7 @@ const cursorAgent = (overrides: Partial<AgentSettings> = {}): AgentSettings => (
   available: true,
   enabled: false,
   path: null,
+  args: [],
   present: true,
   popular: true,
   ...overrides,
@@ -88,6 +90,14 @@ const setInputValue = async (input: HTMLElement, value: string) => {
     inputElement.dispatchEvent(new Event("input", { bubbles: true }))
     inputElement.dispatchEvent(new Event("change", { bubbles: true }))
   })
+}
+
+const expandAgentRow = async (view: ReturnType<typeof renderAgentsPanel>, displayName: string) => {
+  const row = view.getByRole("row", { name: `${displayName} agent` })
+  await clickInAct(
+    within(row).getByRole("button", { name: `Expand ${displayName} launch settings` }),
+  )
+  return view.getByRole("row", { name: `${displayName} launch settings` })
 }
 
 describe("AgentsPanel", () => {
@@ -149,7 +159,7 @@ describe("AgentsPanel", () => {
       }
 
       if (url === "/v1/settings/agents/cursor" && method === "PATCH") {
-        cursorState.agent = cursorAgent({ enabled: true, path: detectedPath })
+        cursorState.agent = cursorAgent({ enabled: true, path: detectedPath, args: ["acp"] })
 
         return Promise.resolve(
           new Response(JSON.stringify(AgentSettingsSchema.parse(cursorState.agent)), {
@@ -172,7 +182,8 @@ describe("AgentsPanel", () => {
 
     await waitFor(() => {
       const row = view.getByRole("row", { name: "Cursor agent" })
-      expect(within(row).getByDisplayValue(detectedPath)).toBeInTheDocument()
+      expect(within(row).getByLabelText("Cursor launch summary")).toHaveTextContent(detectedPath)
+      expect(within(row).getByLabelText("Cursor launch summary")).toHaveTextContent("acp")
       expect(within(row).getByLabelText("Enable Cursor")).toBeChecked()
     })
   }, mutationFlowTimeoutMs)
@@ -226,15 +237,16 @@ describe("AgentsPanel", () => {
 
     await waitFor(() => {
       const row = view.getByRole("row", { name: "Cursor agent" })
-      expect(within(row).getByText("Could not detect agent path automatically.")).toBeInTheDocument()
+      const settings = view.getByRole("row", { name: "Cursor launch settings" })
+      expect(within(settings).getByText("Could not detect agent path automatically.")).toBeInTheDocument()
       expect(within(row).getByLabelText("Enable Cursor")).toBeChecked()
-      expect(within(row).getByRole("button", { name: "Save path" })).toBeInTheDocument()
+      expect(within(settings).getByRole("button", { name: "Save path" })).toBeInTheDocument()
     })
   }, mutationFlowTimeoutMs)
 
   test("saves a manual path override", async () => {
     const manualPath = "/opt/custom/agent"
-    const cursorState = { agent: cursorAgent({ enabled: true, path: null }) }
+    const cursorState = { agent: cursorAgent({ enabled: true, path: null, args: ["acp"] }) }
 
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
@@ -262,7 +274,7 @@ describe("AgentsPanel", () => {
         const body = JSON.parse(requestBodyText(init?.body))
 
         if (body.path === manualPath) {
-          cursorState.agent = cursorAgent({ enabled: true, path: manualPath })
+          cursorState.agent = cursorAgent({ enabled: true, path: manualPath, args: ["acp"] })
 
           return Promise.resolve(
             new Response(JSON.stringify(AgentSettingsSchema.parse(cursorState.agent)), {
@@ -283,15 +295,15 @@ describe("AgentsPanel", () => {
       expect(within(view.getByRole("row", { name: "Cursor agent" })).getByLabelText("Enable Cursor")).toBeChecked()
     })
 
-    const row = view.getByRole("row", { name: "Cursor agent" })
-    const pathInput = within(row).getByLabelText("Cursor executable path")
+    const settings = await expandAgentRow(view, "Cursor")
+    const pathInput = within(settings).getByLabelText("Cursor executable path")
     await setInputValue(pathInput, manualPath)
 
     await waitFor(() => {
-      expect(within(row).getByRole("button", { name: "Save path" })).not.toBeDisabled()
+      expect(within(settings).getByRole("button", { name: "Save path" })).not.toBeDisabled()
     })
 
-    await clickInAct(within(row).getByRole("button", { name: "Save path" }))
+    await clickInAct(within(settings).getByRole("button", { name: "Save path" }))
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -301,13 +313,149 @@ describe("AgentsPanel", () => {
           body: JSON.stringify({ enabled: true, path: manualPath }),
         }),
       )
-      expect(within(row).getByRole("button", { name: "Save path" })).toBeDisabled()
+      expect(within(settings).getByRole("button", { name: "Save path" })).toBeDisabled()
+    })
+  }, mutationFlowTimeoutMs)
+
+  test("expanded row shows path and args editors", async () => {
+    const cursorState = {
+      agent: cursorAgent({
+        enabled: true,
+        path: "/usr/local/bin/agent",
+        args: ["acp"],
+      }),
+    }
+
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(agentsCollection(cursorState.agent)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByRole("row", { name: "Cursor agent" })).toBeInTheDocument()
+    })
+
+    const row = view.getByRole("row", { name: "Cursor agent" })
+    expect(within(row).getByLabelText("Cursor launch summary")).toHaveTextContent(
+      "/usr/local/bin/agent",
+    )
+    expect(within(row).getByLabelText("Cursor launch summary")).toHaveTextContent("acp")
+    expect(view.queryByLabelText("Cursor executable path")).not.toBeInTheDocument()
+
+    const settings = await expandAgentRow(view, "Cursor")
+
+    expect(within(settings).getByLabelText("Cursor executable path")).toHaveValue(
+      "/usr/local/bin/agent",
+    )
+    expect(within(settings).getByLabelText("Cursor args item 1")).toHaveValue("acp")
+    expect(within(settings).getByRole("button", { name: "Save Cursor args" })).toBeDisabled()
+  })
+
+  test("saves args while preserving enabled state", async () => {
+    const cursorState = {
+      agent: cursorAgent({
+        enabled: false,
+        path: "/usr/local/bin/agent",
+        args: ["acp"],
+      }),
+    }
+
+    const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(agentsCollection(cursorState.agent)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents/cursor" && method === "PATCH") {
+        const body = JSON.parse(requestBodyText(init?.body))
+
+        if (Array.isArray(body.args)) {
+          cursorState.agent = cursorAgent({
+            enabled: body.enabled,
+            path: "/usr/local/bin/agent",
+            args: body.args,
+          })
+
+          return Promise.resolve(
+            new Response(JSON.stringify(AgentSettingsSchema.parse(cursorState.agent)), {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }),
+          )
+        }
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    })
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByRole("row", { name: "Cursor agent" })).toBeInTheDocument()
+    })
+
+    const settings = await expandAgentRow(view, "Cursor")
+    await setInputValue(within(settings).getByLabelText("Cursor args item 1"), "claude")
+
+    await waitFor(() => {
+      expect(within(settings).getByRole("button", { name: "Save Cursor args" })).not.toBeDisabled()
+    })
+
+    await clickInAct(within(settings).getByRole("button", { name: "Save Cursor args" }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/v1/settings/agents/cursor",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ enabled: false, args: ["claude"] }),
+        }),
+      )
     })
   }, mutationFlowTimeoutMs)
 
   test("detect path link pre-fills the input without saving", async () => {
     const detectedPath = "/usr/local/bin/agent"
-    const cursorState = { agent: cursorAgent({ enabled: true, path: null }) }
+    const cursorState = { agent: cursorAgent({ enabled: true, path: null, args: [] }) }
 
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
@@ -350,14 +498,14 @@ describe("AgentsPanel", () => {
       expect(view.getByRole("row", { name: "Cursor agent" })).toBeInTheDocument()
     })
 
-    const row = view.getByRole("row", { name: "Cursor agent" })
-    await clickInAct(within(row).getByRole("button", { name: "Detect path" }))
+    const settings = await expandAgentRow(view, "Cursor")
+    await clickInAct(within(settings).getByRole("button", { name: "Detect path" }))
 
     await waitFor(() => {
-      expect(within(row).getByDisplayValue(detectedPath)).toBeInTheDocument()
+      expect(within(settings).getByDisplayValue(detectedPath)).toBeInTheDocument()
     })
 
-    await flushDetectSuccessFeedback(row)
+    await flushDetectSuccessFeedback(settings)
 
     expect(
       fetchMock.mock.calls.some(
@@ -370,7 +518,7 @@ describe("AgentsPanel", () => {
   test("detect path clears save path error and pre-fills input", async () => {
     const invalidPath = "/does/not/exist"
     const detectedPath = "/usr/local/bin/agent"
-    const cursorState = { agent: cursorAgent({ enabled: true, path: null }) }
+    const cursorState = { agent: cursorAgent({ enabled: true, path: null, args: [] }) }
 
     const invalidPathProblem = {
       type: PROBLEM_TYPES.validationError,
@@ -434,28 +582,28 @@ describe("AgentsPanel", () => {
       expect(view.getByRole("row", { name: "Cursor agent" })).toBeInTheDocument()
     })
 
-    const row = view.getByRole("row", { name: "Cursor agent" })
-    const pathInput = within(row).getByLabelText("Cursor executable path")
+    const settings = await expandAgentRow(view, "Cursor")
+    const pathInput = within(settings).getByLabelText("Cursor executable path")
     await setInputValue(pathInput, invalidPath)
 
     await waitFor(() => {
-      expect(within(row).getByRole("button", { name: "Save path" })).not.toBeDisabled()
+      expect(within(settings).getByRole("button", { name: "Save path" })).not.toBeDisabled()
     })
 
-    await clickInAct(within(row).getByRole("button", { name: "Save path" }))
+    await clickInAct(within(settings).getByRole("button", { name: "Save path" }))
 
     await waitFor(() => {
-      expect(within(row).getByText("Invalid agent executable path")).toBeInTheDocument()
+      expect(within(settings).getByText("Invalid agent executable path")).toBeInTheDocument()
     })
 
-    await clickInAct(within(row).getByRole("button", { name: "Detect path" }))
+    await clickInAct(within(settings).getByRole("button", { name: "Detect path" }))
 
     await waitFor(() => {
-      expect(within(row).getByDisplayValue(detectedPath)).toBeInTheDocument()
-      expect(within(row).queryByText("Invalid agent executable path")).not.toBeInTheDocument()
+      expect(within(settings).getByDisplayValue(detectedPath)).toBeInTheDocument()
+      expect(within(settings).queryByText("Invalid agent executable path")).not.toBeInTheDocument()
     })
 
-    await flushDetectSuccessFeedback(row)
+    await flushDetectSuccessFeedback(settings)
   }, mutationFlowTimeoutMs)
 
   test("unavailable agent row is greyed out and cannot be enabled", async () => {
@@ -469,8 +617,11 @@ describe("AgentsPanel", () => {
 
     expect(within(claudeRow).getByText("Coming soon")).toBeInTheDocument()
     expect(within(claudeRow).queryByLabelText("Enable Claude Agent")).not.toBeInTheDocument()
-    expect(within(claudeRow).getByRole("button", { name: "Detect path" })).toBeDisabled()
-    expect(within(claudeRow).getByRole("button", { name: "Save path" })).toBeDisabled()
+
+    const settings = await expandAgentRow(view, "Claude Agent")
+    expect(within(settings).getByRole("button", { name: "Detect path" })).toBeDisabled()
+    expect(within(settings).getByRole("button", { name: "Save path" })).toBeDisabled()
+    expect(within(settings).getByRole("button", { name: "Save Claude Agent args" })).toBeDisabled()
   })
 
   test("search filters agents by display name", async () => {
@@ -499,6 +650,7 @@ describe("AgentsPanel", () => {
         available: true,
         enabled: false,
         path: null,
+        args: [],
         present: false,
         popular: false,
       })
@@ -641,6 +793,7 @@ describe("AgentsPanel", () => {
           available: true,
           enabled: true,
           path: "/usr/bin/brand-new",
+          args: [],
           present: true,
           popular: false,
         }

@@ -94,14 +94,16 @@ describe("GET /v1/settings/agents", () => {
     const cursor = findAgent(body, "cursor")
     expect(cursor.enabled).toBe(false)
     expect(cursor.available).toBe(true)
-    expect(cursor.path).toBeNull()
+    expect(cursor.path).toBe("agent")
+    expect(cursor.args).toEqual(["acp"])
     expect(cursor.present).toBe(true)
     expect(cursor.popular).toBe(true)
 
     const claudeAcp = findAgent(body, "claude-acp")
     expect(claudeAcp.enabled).toBe(false)
     expect(claudeAcp.available).toBe(true)
-    expect(claudeAcp.path).toBeNull()
+    expect(claudeAcp.path).toBe("npx")
+    expect(claudeAcp.args).toEqual(["@agentclientprotocol/claude-agent-acp@0.66.0"])
     expect(claudeAcp.popular).toBe(true)
   })
 
@@ -202,7 +204,7 @@ describe("POST /v1/settings/agents/:agentId/detect-path", () => {
       url: "/v1/settings/agents",
     })
     const listBody = AgentSettingsCollectionSchema.parse(JSON.parse(listResponse.body))
-    expect(findAgent(listBody, "cursor").path).toBeNull()
+    expect(findAgent(listBody, "cursor").path).toBe("agent")
   })
 
   test("returns 404 when detect fails", async () => {
@@ -241,6 +243,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     expect(response.statusCode).toBe(200)
     expect(body.enabled).toBe(true)
     expect(body.path).toBe(detectedPath)
+    expect(body.args).toEqual(["acp"])
     expect(body.present).toBe(true)
   })
 
@@ -270,7 +273,8 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const cursor = findAgent(listBody, "cursor")
 
     expect(cursor.enabled).toBe(true)
-    expect(cursor.path).toBeNull()
+    expect(cursor.path).toBe("agent")
+    expect(cursor.args).toEqual(["acp"])
   })
 
   test("disables cursor and keeps stored path", async () => {
@@ -431,6 +435,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
       available: true,
       enabled: true,
       path: detectedPath,
+      args: ["@agentclientprotocol/claude-agent-acp@0.66.0"],
       present: false,
       popular: true,
     })
@@ -582,6 +587,7 @@ describe("POST /v1/settings/agents/import/detect and apply", () => {
       available: true,
       enabled: true,
       path: "/usr/bin/brand-new",
+      args: ["acp"],
       present: true,
       popular: false,
     })
@@ -657,6 +663,7 @@ describe("agent settings durability", () => {
 
     expect(cursor.enabled).toBe(true)
     expect(cursor.path).toBe(detectedPath)
+    expect(cursor.args).toEqual(["acp"])
 
     secondDatabase.close()
   })

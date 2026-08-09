@@ -19,6 +19,7 @@ export const AgentSettingsSchema = z.strictObject({
   available: z.boolean(),
   enabled: z.boolean(),
   path: z.string().min(1).nullable(),
+  args: z.array(z.string()),
   present: z.boolean(),
   popular: z.boolean(),
 })
@@ -36,9 +37,22 @@ export const UpdateAgentSettingsWithPathBodySchema = z.strictObject({
   path: z.string().min(1),
 })
 
+export const UpdateAgentSettingsWithArgsBodySchema = z.strictObject({
+  enabled: z.boolean(),
+  args: z.array(z.string()),
+})
+
+export const UpdateAgentSettingsWithPathAndArgsBodySchema = z.strictObject({
+  enabled: z.boolean(),
+  path: z.string().min(1),
+  args: z.array(z.string()),
+})
+
 export const UpdateAgentSettingsBodySchema = z.union([
   UpdateAgentSettingsEnableOnlyBodySchema,
   UpdateAgentSettingsWithPathBodySchema,
+  UpdateAgentSettingsWithArgsBodySchema,
+  UpdateAgentSettingsWithPathAndArgsBodySchema,
 ])
 
 export const DetectAgentPathResponseSchema = z.strictObject({

@@ -83,6 +83,34 @@ export const parseSpawnSnapshot = (raw: string | null): AgentSpawnSnapshot | nul
 export const serializeSpawnSnapshot = (snapshot: AgentSpawnSnapshot): string =>
   JSON.stringify(snapshot)
 
+export const resolveTemplateBinaryName = (
+  agentId: AgentId,
+  spawnSnapshot: AgentSpawnSnapshot | null,
+): string | null => {
+  const definition = agentDefinitions[agentId]
+  if (definition !== undefined) {
+    return definition.binaryName
+  }
+
+  return spawnSnapshot?.binaryName ?? null
+}
+
+export const resolveTemplateArgs = (
+  agentId: AgentId,
+  spawnSnapshot: AgentSpawnSnapshot | null,
+): string[] => {
+  const override = productAgentOverridesById[agentId]
+  const catalogAgent = catalogAgentsById[agentId as keyof typeof catalogAgentsById]
+  const command =
+    override?.command ?? catalogAgent?.spawn.command ?? spawnSnapshot?.command
+
+  if (command === undefined) {
+    return []
+  }
+
+  return command.slice(1)
+}
+
 export const toAgentSettings = (
   input: {
     id: AgentId
@@ -90,6 +118,7 @@ export const toAgentSettings = (
     available: boolean
     enabled: boolean
     path: string | null
+    args: string[]
     present: boolean
     popular: boolean
   },
@@ -99,6 +128,7 @@ export const toAgentSettings = (
   available: input.available,
   enabled: input.enabled,
   path: input.path,
+  args: input.args,
   present: input.present,
   popular: input.popular,
 })
