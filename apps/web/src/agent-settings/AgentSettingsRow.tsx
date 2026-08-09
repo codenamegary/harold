@@ -3,7 +3,6 @@ import { UseMutationResult } from "@tanstack/react-query"
 import { AgentSettings } from "contracts/http/agent-settings"
 import { Save } from "lucide-react"
 import { ActionTextInput } from "../design-system/ActionTextInput"
-import { FieldLabel } from "../design-system/FieldLabel"
 import {
   agentPathDetectErrorMessage,
   agentSettingsUpdateErrorMessage,
@@ -12,7 +11,7 @@ import { detectAgentPath } from "./detect.agent.path"
 import { updateAgentSettings } from "./update.agent.settings"
 
 const textLinkClassName =
-  "inline-flex min-h-7 items-center justify-center gap-1.5 rounded-[7px] bg-transparent px-0 text-xs font-semibold whitespace-nowrap text-body-soft transition-opacity duration-300 ease-out hover:text-lime cursor-pointer disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50"
+  "inline-flex min-h-6 items-center justify-center gap-1 rounded-[7px] bg-transparent px-0 text-2xs font-semibold whitespace-nowrap text-body-soft transition-opacity duration-300 ease-out hover:text-lime cursor-pointer disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50"
 
 const DetectSuccessCheck: React.FC<{ onAnimationEnd: () => void }> = ({ onAnimationEnd }) => (
   <svg
@@ -43,14 +42,14 @@ type DetectMutation = UseMutationResult<
   Parameters<typeof detectAgentPath>[0]
 >
 
-type AgentSettingsCardProps = {
+type AgentSettingsRowProps = {
   agent: AgentSettings
   controlsDisabled: boolean
   updateMutation: UpdateMutation
   detectMutation: DetectMutation
 }
 
-export const AgentSettingsCard: React.FC<AgentSettingsCardProps> = ({
+export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
   agent,
   controlsDisabled,
   updateMutation,
@@ -65,9 +64,9 @@ export const AgentSettingsCard: React.FC<AgentSettingsCardProps> = ({
   }, [savedPath])
 
   const isComingSoon = !agent.available
-  const cardDisabled = controlsDisabled || isComingSoon
-  const pathControlsDisabled = cardDisabled || !agent.enabled
-  const toggleDisabled = cardDisabled || updateMutation.isPending
+  const rowDisabled = controlsDisabled || isComingSoon
+  const pathControlsDisabled = rowDisabled || !agent.enabled
+  const toggleDisabled = rowDisabled || updateMutation.isPending
   const pathChanged = draftPath.trim() !== "" && draftPath !== savedPath
   const canSavePath = agent.enabled && pathChanged && !updateMutation.isPending
 
@@ -83,6 +82,7 @@ export const AgentSettingsCard: React.FC<AgentSettingsCardProps> = ({
 
   const isDetecting =
     detectMutation.isPending && detectMutation.variables === agent.id
+
   const handleToggle = () => {
     updateMutation.mutate(
       {
@@ -133,27 +133,84 @@ export const AgentSettingsCard: React.FC<AgentSettingsCardProps> = ({
   }
 
   return (
-    <section
+    <tr
       aria-label={`${agent.displayName} agent`}
       aria-disabled={isComingSoon ? "true" : undefined}
-      className={`rounded-[9px] border p-3 ${isComingSoon ? "border-line-soft bg-[#0a0c10] opacity-55" : "border-lime/35 bg-[linear-gradient(145deg,rgba(182,243,107,0.04),#0b0e13)]"}`}
+      className={`border-b border-line-soft last:border-b-0 ${isComingSoon ? "opacity-55" : ""}`}
     >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <h4 className="m-0 truncate text-sm font-semibold">{agent.displayName}</h4>
-          {agent.present ? (
-            <span className="shrink-0 font-mono text-2xs text-lime">present</span>
-          ) : (
-            <span className="shrink-0 font-mono text-2xs text-dim">not present</span>
-          )}
+      <td className="px-3 py-2 align-middle">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm font-semibold text-body">{agent.displayName}</span>
           {agent.popular ? (
-            <span className="shrink-0 font-mono text-2xs text-dim">popular</span>
+            <span className="shrink-0 rounded-[4px] border border-line-soft px-1 py-px font-mono text-2xs text-dim">
+              popular
+            </span>
+          ) : null}
+          {isComingSoon ? (
+            <span className="shrink-0 rounded-[4px] border border-line-soft bg-panel-elevated px-1 py-px font-mono text-2xs text-dim">
+              Coming soon
+            </span>
           ) : null}
         </div>
+      </td>
+      <td className="px-3 py-2 align-middle whitespace-nowrap">
+        {agent.present ? (
+          <span className="font-mono text-2xs text-lime">present</span>
+        ) : (
+          <span className="font-mono text-2xs text-dim">not present</span>
+        )}
+      </td>
+      <td className="px-3 py-2 align-middle">
+        <div className="min-w-[12rem] max-w-md">
+          <ActionTextInput
+            id={`${agent.id}-path`}
+            aria-label={`${agent.displayName} executable path`}
+            value={draftPath}
+            readOnly={!agent.enabled && !controlsDisabled}
+            disabled={controlsDisabled}
+            aria-disabled={pathControlsDisabled}
+            placeholder={agent.enabled ? "Executable path" : "Enable to edit path"}
+            onChange={(event) => handlePathValueChange(event.target.value)}
+            onInput={(event) => handlePathValueChange(event.currentTarget.value)}
+            className="text-xs"
+            action={{
+              "aria-label": updateMutation.isPending ? "Saving path" : "Save path",
+              disabled: !canSavePath,
+              onClick: handleSavePath,
+              children: <Save aria-hidden className="size-3.5" strokeWidth={1.75} />,
+            }}
+          />
+          {pathError ? (
+            <p className="m-0 mt-1 text-2xs text-red-400" role="alert">
+              {pathError}
+            </p>
+          ) : null}
+          {detectError ? (
+            <p className="m-0 mt-1 text-2xs text-red-400" role="alert">
+              {detectError}
+            </p>
+          ) : null}
+          <div className="mt-1 flex items-center gap-2">
+            <span className="inline-flex min-h-6 items-center gap-1.5">
+              <button
+                type="button"
+                className={`${textLinkClassName}${isDetecting ? " pointer-events-none opacity-20" : ""}`}
+                disabled={pathControlsDisabled || isDetecting}
+                aria-busy={isDetecting}
+                onClick={handleDetectPath}
+              >
+                Detect path
+              </button>
+              {detectSuccessVisible ? (
+                <DetectSuccessCheck onAnimationEnd={() => setDetectSuccessVisible(false)} />
+              ) : null}
+            </span>
+          </div>
+        </div>
+      </td>
+      <td className="px-3 py-2 align-middle text-right">
         {isComingSoon ? (
-          <span className="shrink-0 rounded-[5px] border border-line-soft bg-panel-elevated px-1.5 py-0.5 font-mono text-2xs text-dim">
-            Coming soon
-          </span>
+          <span className="sr-only">Unavailable</span>
         ) : (
           <input
             type="checkbox"
@@ -164,55 +221,7 @@ export const AgentSettingsCard: React.FC<AgentSettingsCardProps> = ({
             className={toggleClassName}
           />
         )}
-      </div>
-
-      <div>
-        <FieldLabel htmlFor={`${agent.id}-path`} className="mt-0 mb-1">
-          Executable path
-        </FieldLabel>
-        <ActionTextInput
-          id={`${agent.id}-path`}
-          value={draftPath}
-          readOnly={!agent.enabled && !controlsDisabled}
-          disabled={controlsDisabled}
-          aria-disabled={pathControlsDisabled}
-          placeholder={agent.enabled ? "Enter agent executable path" : "Enable agent to edit path"}
-          onChange={(event) => handlePathValueChange(event.target.value)}
-          onInput={(event) => handlePathValueChange(event.currentTarget.value)}
-          action={{
-            "aria-label": updateMutation.isPending ? "Saving path" : "Save path",
-            disabled: !canSavePath,
-            onClick: handleSavePath,
-            children: <Save aria-hidden className="size-3.5" strokeWidth={1.75} />,
-          }}
-        />
-        {pathError ? (
-          <p className="m-0 mt-1.5 text-xs text-red-400" role="alert">
-            {pathError}
-          </p>
-        ) : null}
-        {detectError ? (
-          <p className="m-0 mt-1.5 text-xs text-red-400" role="alert">
-            {detectError}
-          </p>
-        ) : null}
-        <div className="mt-1.5 flex items-center gap-2">
-          <span className="inline-flex min-h-7 items-center gap-1.5">
-            <button
-              type="button"
-              className={`${textLinkClassName}${isDetecting ? " pointer-events-none opacity-20" : ""}`}
-              disabled={pathControlsDisabled || isDetecting}
-              aria-busy={isDetecting}
-              onClick={handleDetectPath}
-            >
-              Detect path
-            </button>
-            {detectSuccessVisible ? (
-              <DetectSuccessCheck onAnimationEnd={() => setDetectSuccessVisible(false)} />
-            ) : null}
-          </span>
-        </div>
-      </div>
-    </section>
+      </td>
+    </tr>
   )
 }

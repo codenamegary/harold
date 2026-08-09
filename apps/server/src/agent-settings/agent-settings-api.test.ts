@@ -3,7 +3,6 @@ import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { catalogAgentIds } from "../acp/catalog/generated/catalog.agents.generated"
-import { popularAgentAllowlist } from "../acp/catalog/popular.allowlist"
 import {
   InternalProblemSchema,
   NotFoundProblemSchema,
@@ -106,7 +105,7 @@ describe("GET /v1/settings/agents", () => {
     expect(claudeAcp.popular).toBe(true)
   })
 
-  test("sorts enabled+present, then popular, then rest", async () => {
+  test("sorts enabled, then present, then popular, then rest", async () => {
     const dataDir = await createTempDataDir()
     const whichFn: WhichFn = (binaryName) => {
       if (binaryName === "agent") {
@@ -131,21 +130,52 @@ describe("GET /v1/settings/agents", () => {
     })
     const body = AgentSettingsCollectionSchema.parse(JSON.parse(response.body))
 
+    const bandRank = (item: (typeof body.items)[number]): number => {
+      if (item.enabled) {
+        return 0
+      }
+      if (item.present) {
+        return 1
+      }
+      if (item.popular) {
+        return 2
+      }
+      return 3
+    }
+
     const ids = body.items.map((item) => item.id)
     expect(ids[0]).toBe("opencode")
+    expect(body.items[0]?.enabled).toBe(true)
 
-    const afterEnabledPresent = body.items.slice(1)
-    const popularIds = new Set<string>(popularAgentAllowlist)
-    const firstNonPopularIndex = afterEnabledPresent.findIndex(
-      (item) => !popularIds.has(item.id),
-    )
-    expect(firstNonPopularIndex).toBeGreaterThan(0)
+    for (let index = 1; index < body.items.length; index += 1) {
+      const previous = body.items[index - 1]
+      const current = body.items[index]
+      if (previous === undefined || current === undefined) {
+        throw new Error("Unexpected missing agent in sort band assertion")
+      }
+      const previousRank = bandRank(previous)
+      const currentRank = bandRank(current)
+      expect(currentRank).toBeGreaterThanOrEqual(previousRank)
+      if (currentRank === previousRank) {
+        expect(
+          previous.displayName.localeCompare(current.displayName),
+        ).toBeLessThanOrEqual(0)
+      }
+    }
 
-    const popularBand = afterEnabledPresent.slice(0, firstNonPopularIndex)
-    expect(popularBand.every((item) => item.popular)).toBe(true)
-    expect(afterEnabledPresent.slice(firstNonPopularIndex).every((item) => !item.popular)).toBe(
-      true,
+    const firstPresentIndex = body.items.findIndex(
+      (item) => !item.enabled && item.present,
     )
+    const firstPopularOnlyIndex = body.items.findIndex(
+      (item) => !item.enabled && !item.present && item.popular,
+    )
+    const firstRestIndex = body.items.findIndex(
+      (item) => !item.enabled && !item.present && !item.popular,
+    )
+
+    expect(firstPresentIndex).toBeGreaterThan(0)
+    expect(firstPopularOnlyIndex).toBeGreaterThan(firstPresentIndex)
+    expect(firstRestIndex).toBeGreaterThan(firstPopularOnlyIndex)
   })
 })
 

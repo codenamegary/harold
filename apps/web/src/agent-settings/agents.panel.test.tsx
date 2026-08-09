@@ -68,8 +68,8 @@ const clickInAct = async (element: HTMLElement) => {
   })
 }
 
-const flushDetectSuccessFeedback = async (card: HTMLElement) => {
-  const checkmark = card.querySelector(".animate-detect-path-check")
+const flushDetectSuccessFeedback = async (row: HTMLElement) => {
+  const checkmark = row.querySelector(".animate-detect-path-check")
 
   if (!checkmark) {
     return
@@ -171,9 +171,9 @@ describe("AgentsPanel", () => {
     await clickInAct(view.getByLabelText("Enable Cursor"))
 
     await waitFor(() => {
-      const card = view.getByLabelText("Cursor agent")
-      expect(within(card).getByDisplayValue(detectedPath)).toBeInTheDocument()
-      expect(within(card).getByLabelText("Enable Cursor")).toBeChecked()
+      const row = view.getByRole("row", { name: "Cursor agent" })
+      expect(within(row).getByDisplayValue(detectedPath)).toBeInTheDocument()
+      expect(within(row).getByLabelText("Enable Cursor")).toBeChecked()
     })
   }, mutationFlowTimeoutMs)
 
@@ -225,10 +225,10 @@ describe("AgentsPanel", () => {
     await clickInAct(view.getByLabelText("Enable Cursor"))
 
     await waitFor(() => {
-      const card = view.getByLabelText("Cursor agent")
-      expect(within(card).getByText("Could not detect agent path automatically.")).toBeInTheDocument()
-      expect(within(card).getByLabelText("Enable Cursor")).toBeChecked()
-      expect(within(card).getByRole("button", { name: "Save path" })).toBeInTheDocument()
+      const row = view.getByRole("row", { name: "Cursor agent" })
+      expect(within(row).getByText("Could not detect agent path automatically.")).toBeInTheDocument()
+      expect(within(row).getByLabelText("Enable Cursor")).toBeChecked()
+      expect(within(row).getByRole("button", { name: "Save path" })).toBeInTheDocument()
     })
   }, mutationFlowTimeoutMs)
 
@@ -280,18 +280,18 @@ describe("AgentsPanel", () => {
     const view = renderAgentsPanel()
 
     await waitFor(() => {
-      expect(within(view.getByLabelText("Cursor agent")).getByLabelText("Enable Cursor")).toBeChecked()
+      expect(within(view.getByRole("row", { name: "Cursor agent" })).getByLabelText("Enable Cursor")).toBeChecked()
     })
 
-    const card = view.getByLabelText("Cursor agent")
-    const pathInput = within(card).getByLabelText("Executable path")
+    const row = view.getByRole("row", { name: "Cursor agent" })
+    const pathInput = within(row).getByLabelText("Cursor executable path")
     await setInputValue(pathInput, manualPath)
 
     await waitFor(() => {
-      expect(within(card).getByRole("button", { name: "Save path" })).not.toBeDisabled()
+      expect(within(row).getByRole("button", { name: "Save path" })).not.toBeDisabled()
     })
 
-    await clickInAct(within(card).getByRole("button", { name: "Save path" }))
+    await clickInAct(within(row).getByRole("button", { name: "Save path" }))
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -301,7 +301,7 @@ describe("AgentsPanel", () => {
           body: JSON.stringify({ enabled: true, path: manualPath }),
         }),
       )
-      expect(within(card).getByRole("button", { name: "Save path" })).toBeDisabled()
+      expect(within(row).getByRole("button", { name: "Save path" })).toBeDisabled()
     })
   }, mutationFlowTimeoutMs)
 
@@ -347,17 +347,17 @@ describe("AgentsPanel", () => {
     const view = renderAgentsPanel()
 
     await waitFor(() => {
-      expect(view.getByLabelText("Cursor agent")).toBeInTheDocument()
+      expect(view.getByRole("row", { name: "Cursor agent" })).toBeInTheDocument()
     })
 
-    const card = view.getByLabelText("Cursor agent")
-    await clickInAct(within(card).getByRole("button", { name: "Detect path" }))
+    const row = view.getByRole("row", { name: "Cursor agent" })
+    await clickInAct(within(row).getByRole("button", { name: "Detect path" }))
 
     await waitFor(() => {
-      expect(within(card).getByDisplayValue(detectedPath)).toBeInTheDocument()
+      expect(within(row).getByDisplayValue(detectedPath)).toBeInTheDocument()
     })
 
-    await flushDetectSuccessFeedback(card)
+    await flushDetectSuccessFeedback(row)
 
     expect(
       fetchMock.mock.calls.some(
@@ -431,61 +431,62 @@ describe("AgentsPanel", () => {
     const view = renderAgentsPanel()
 
     await waitFor(() => {
-      expect(view.getByLabelText("Cursor agent")).toBeInTheDocument()
+      expect(view.getByRole("row", { name: "Cursor agent" })).toBeInTheDocument()
     })
 
-    const card = view.getByLabelText("Cursor agent")
-    const pathInput = within(card).getByLabelText("Executable path")
+    const row = view.getByRole("row", { name: "Cursor agent" })
+    const pathInput = within(row).getByLabelText("Cursor executable path")
     await setInputValue(pathInput, invalidPath)
 
     await waitFor(() => {
-      expect(within(card).getByRole("button", { name: "Save path" })).not.toBeDisabled()
+      expect(within(row).getByRole("button", { name: "Save path" })).not.toBeDisabled()
     })
 
-    await clickInAct(within(card).getByRole("button", { name: "Save path" }))
+    await clickInAct(within(row).getByRole("button", { name: "Save path" }))
 
     await waitFor(() => {
-      expect(within(card).getByText("Invalid agent executable path")).toBeInTheDocument()
+      expect(within(row).getByText("Invalid agent executable path")).toBeInTheDocument()
     })
 
-    await clickInAct(within(card).getByRole("button", { name: "Detect path" }))
+    await clickInAct(within(row).getByRole("button", { name: "Detect path" }))
 
     await waitFor(() => {
-      expect(within(card).getByDisplayValue(detectedPath)).toBeInTheDocument()
-      expect(within(card).queryByText("Invalid agent executable path")).not.toBeInTheDocument()
+      expect(within(row).getByDisplayValue(detectedPath)).toBeInTheDocument()
+      expect(within(row).queryByText("Invalid agent executable path")).not.toBeInTheDocument()
     })
 
-    await flushDetectSuccessFeedback(card)
+    await flushDetectSuccessFeedback(row)
   }, mutationFlowTimeoutMs)
 
-  test("unavailable agent card is greyed out and cannot be enabled", async () => {
+  test("unavailable agent row is greyed out and cannot be enabled", async () => {
     const view = renderAgentsPanel()
 
     await waitFor(() => {
-      expect(view.getByLabelText("Claude Agent agent")).toBeInTheDocument()
+      expect(view.getByRole("row", { name: "Claude Agent agent" })).toBeInTheDocument()
     })
 
-    const claudeCard = view.getByLabelText("Claude Agent agent")
+    const claudeRow = view.getByRole("row", { name: "Claude Agent agent" })
 
-    expect(within(claudeCard).getByText("Coming soon")).toBeInTheDocument()
-    expect(within(claudeCard).queryByLabelText("Enable Claude Agent")).not.toBeInTheDocument()
-    expect(within(claudeCard).getByRole("button", { name: "Detect path" })).toBeDisabled()
-    expect(within(claudeCard).getByRole("button", { name: "Save path" })).toBeDisabled()
+    expect(within(claudeRow).getByText("Coming soon")).toBeInTheDocument()
+    expect(within(claudeRow).queryByLabelText("Enable Claude Agent")).not.toBeInTheDocument()
+    expect(within(claudeRow).getByRole("button", { name: "Detect path" })).toBeDisabled()
+    expect(within(claudeRow).getByRole("button", { name: "Save path" })).toBeDisabled()
   })
 
   test("search filters agents by display name", async () => {
     const view = renderAgentsPanel()
 
     await waitFor(() => {
-      expect(view.getByLabelText("Cursor agent")).toBeInTheDocument()
-      expect(view.getByLabelText("Claude Agent agent")).toBeInTheDocument()
+      expect(view.getByRole("table", { name: "Agents" })).toBeInTheDocument()
+      expect(view.getByRole("row", { name: "Cursor agent" })).toBeInTheDocument()
+      expect(view.getByRole("row", { name: "Claude Agent agent" })).toBeInTheDocument()
     })
 
     await setInputValue(view.getByRole("searchbox", { name: "Search agents" }), "claude")
 
     await waitFor(() => {
-      expect(view.container.querySelector('[aria-label="Cursor agent"]')).toBeNull()
-      expect(view.container.querySelector('[aria-label="Claude Agent agent"]')).not.toBeNull()
+      expect(view.queryByRole("row", { name: "Cursor agent" })).toBeNull()
+      expect(view.getByRole("row", { name: "Claude Agent agent" })).toBeInTheDocument()
     })
   })
 
@@ -622,7 +623,7 @@ describe("AgentsPanel", () => {
 
     await waitFor(() => {
       expect(view.queryByRole("dialog", { name: "Import agents" })).not.toBeInTheDocument()
-      expect(view.getByLabelText("Brand New agent")).toBeInTheDocument()
+      expect(view.getByRole("row", { name: "Brand New agent" })).toBeInTheDocument()
     })
   }, mutationFlowTimeoutMs)
 })

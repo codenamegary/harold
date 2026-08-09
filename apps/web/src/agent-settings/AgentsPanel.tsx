@@ -5,7 +5,7 @@ import { Button } from "../design-system/Button"
 import { Panel } from "../design-system/Panel"
 import { TextInput } from "../design-system/TextInput"
 import { AgentsImportDialog } from "./AgentsImportDialog"
-import { AgentSettingsCard } from "./AgentSettingsCard"
+import { AgentsTable } from "./AgentsTable"
 import { isAgentImportApplyError } from "./apply.agent.import"
 import { isAgentImportDetectError } from "./detect.agent.import"
 import { filterAgentSettings } from "./filter.agent.settings"
@@ -127,17 +127,12 @@ export const AgentsPanel: React.FC = () => {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-        {filteredAgents.map((agent) => (
-          <AgentSettingsCard
-            key={agent.id}
-            agent={agent}
-            controlsDisabled={controlsDisabled}
-            updateMutation={updateMutation}
-            detectMutation={detectMutation}
-          />
-        ))}
-      </div>
+      <AgentsTable
+        agents={filteredAgents}
+        controlsDisabled={controlsDisabled}
+        updateMutation={updateMutation}
+        detectMutation={detectMutation}
+      />
 
       <AgentsImportDialog
         open={importOpen}

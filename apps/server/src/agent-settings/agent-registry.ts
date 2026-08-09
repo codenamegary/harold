@@ -107,13 +107,16 @@ export const sortAgentSettingsBands = (
   items: readonly AgentSettings[],
 ): AgentSettings[] => {
   const bandRank = (item: AgentSettings): number => {
-    if (item.enabled && item.present) {
+    if (item.enabled) {
       return 0
     }
-    if (item.popular) {
+    if (item.present) {
       return 1
     }
-    return 2
+    if (item.popular) {
+      return 2
+    }
+    return 3
   }
 
   return [...items].sort((left, right) => {
