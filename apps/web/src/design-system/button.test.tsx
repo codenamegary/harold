@@ -21,6 +21,28 @@ describe("Button", () => {
     expect(getByRole("button", { name: "Back" })).toHaveClass("bg-transparent")
   })
 
+  test("submit variant uses lime background for form CTAs", () => {
+    const { getByRole } = render(
+      <Button type="submit" variant="submit">
+        Save
+      </Button>,
+    )
+
+    const button = getByRole("button", { name: "Save" })
+    expect(button).toHaveClass("bg-lime")
+    expect(button).toHaveAttribute("type", "submit")
+  })
+
+  test("sm size uses compact height", () => {
+    const { getByRole } = render(
+      <Button size="sm" variant="secondary">
+        Reset
+      </Button>,
+    )
+
+    expect(getByRole("button", { name: "Reset" })).toHaveClass("min-h-7")
+  })
+
   test("disabled button is not interactive", () => {
     const { getByRole } = render(<Button disabled>Save</Button>)
 

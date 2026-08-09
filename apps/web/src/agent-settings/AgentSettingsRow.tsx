@@ -4,6 +4,7 @@ import { UseMutationResult } from "@tanstack/react-query"
 import { AgentSettings } from "contracts/http/agent-settings"
 import { ChevronDown } from "lucide-react"
 import { Controller, useForm } from "react-hook-form"
+import { Button } from "../design-system/Button"
 import { EditableStringList } from "../design-system/EditableStringList"
 import { TextInput } from "../design-system/TextInput"
 import {
@@ -356,24 +357,26 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
               </div>
 
               {isDirty ? (
-                <div className="flex items-center gap-3">
-                  <button
+                <div className="flex items-center gap-2.5">
+                  <Button
                     type="submit"
+                    variant="submit"
+                    size="sm"
                     disabled={saveDisabled}
                     aria-label={`Save ${agent.displayName} launch settings`}
-                    className={textLinkClassName}
                   >
                     Save
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="sm"
                     disabled={formControlsDisabled}
                     aria-label={`Reset ${agent.displayName} launch settings`}
-                    className={textLinkClassName}
                     onClick={handleReset}
                   >
                     Reset
-                  </button>
+                  </Button>
                 </div>
               ) : null}
             </form>
