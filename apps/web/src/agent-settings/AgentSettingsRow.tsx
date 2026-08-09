@@ -16,6 +16,7 @@ import {
   agentSettingsUpdateErrorMessage,
 } from "./agent.settings.mutation.error.message"
 import { detectAgentPath } from "./detect.agent.path"
+import { insertNpxYesFlag, needsNpxYesFlag } from "./npx.yes.flag"
 import { updateAgentSettings } from "./update.agent.settings"
 
 const textLinkClassName =
@@ -103,6 +104,7 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
     handleSubmit,
     reset,
     setValue,
+    watch,
     formState: { isDirty, isSubmitting, errors },
   } = useForm<AgentLaunchFormValues>({
     resolver: zodResolver(AgentLaunchFormSchema),
@@ -110,10 +112,14 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
     values: agentLaunchFormValues(agent),
   })
 
+  const pathValue = watch("path")
+  const argsValue = watch("args")
+
   const isComingSoon = !agent.available
   const rowDisabled = controlsDisabled || isComingSoon
   const formControlsDisabled = rowDisabled || updateMutation.isPending
   const toggleDisabled = rowDisabled || updateMutation.isPending
+  const showNpxYesWarning = !isComingSoon && needsNpxYesFlag(pathValue, argsValue)
 
   const updateErrorForAgent =
     updateMutation.isError && updateMutation.variables?.agentId === agent.id
@@ -352,6 +358,27 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
                     />
                   )}
                 />
+                {showNpxYesWarning ? (
+                  <p className="m-0 mt-1 text-2xs text-dim" role="status">
+                    npx may prompt without -y in non-interactive mode.{" "}
+                    <button
+                      type="button"
+                      className={textLinkClassName}
+                      disabled={formControlsDisabled}
+                      onClick={() => {
+                        setValue("args", insertNpxYesFlag(argsValue), {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        })
+                        if (updateMutation.isError) {
+                          updateMutation.reset()
+                        }
+                      }}
+                    >
+                      Add -y
+                    </button>
+                  </p>
+                ) : null}
               </div>
 
               {isDirty ? (

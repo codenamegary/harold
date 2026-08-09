@@ -643,6 +643,74 @@ describe("AgentsPanel", () => {
     expect(within(settings).queryByRole("button", { name: "Save Claude Agent launch settings" })).toBeNull()
   })
 
+  test("warns when editable npx args omit -y and Add -y dirties Save", async () => {
+    const claudeAcp = AgentSettingsSchema.parse({
+      id: "claude-acp",
+      displayName: "Claude Agent",
+      available: true,
+      enabled: true,
+      path: "npx",
+      args: ["@agentclientprotocol/claude-agent-acp@0.66.0"],
+      present: true,
+      popular: true,
+    })
+
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(
+              AgentSettingsCollectionSchema.parse({
+                items: [cursorAgent(), claudeAcp],
+              }),
+            ),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByRole("row", { name: "Claude Agent agent" })).toBeInTheDocument()
+    })
+
+    const settings = await expandAgentRow(view, "Claude Agent")
+
+    expect(within(settings).getByText(/npx may prompt without -y in non-interactive mode/i)).toBeInTheDocument()
+    expect(within(settings).getByRole("status")).toBeInTheDocument()
+    expect(within(settings).queryByRole("button", { name: "Save Claude Agent launch settings" })).toBeNull()
+
+    await clickInAct(within(settings).getByRole("button", { name: "Add -y" }))
+
+    await waitFor(() => {
+      expect(within(settings).queryByRole("status")).toBeNull()
+      expect(
+        within(settings).getByRole("button", { name: "Save Claude Agent launch settings" }),
+      ).not.toBeDisabled()
+    })
+
+    expect(within(settings).getByDisplayValue("-y")).toBeInTheDocument()
+  })
+
   test("search filters agents by display name", async () => {
     const view = renderAgentsPanel()
 

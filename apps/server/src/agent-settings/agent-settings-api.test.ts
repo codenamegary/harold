@@ -103,7 +103,7 @@ describe("GET /v1/settings/agents", () => {
     expect(claudeAcp.enabled).toBe(false)
     expect(claudeAcp.available).toBe(true)
     expect(claudeAcp.path).toBe("npx")
-    expect(claudeAcp.args).toEqual(["@agentclientprotocol/claude-agent-acp@0.66.0"])
+    expect(claudeAcp.args).toEqual(["-y", "@agentclientprotocol/claude-agent-acp@0.66.0"])
     expect(claudeAcp.popular).toBe(true)
   })
 
@@ -435,7 +435,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
       available: true,
       enabled: true,
       path: detectedPath,
-      args: ["@agentclientprotocol/claude-agent-acp@0.66.0"],
+      args: ["-y", "@agentclientprotocol/claude-agent-acp@0.66.0"],
       present: false,
       popular: true,
     })

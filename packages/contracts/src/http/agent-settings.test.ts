@@ -188,7 +188,7 @@ describe("ImportDetectResponseSchema", () => {
           spawn: {
             kind: "npx",
             binaryName: "npx",
-            command: ["npx", "@agentclientprotocol/claude-agent-acp@0.66.0"],
+            command: ["npx", "-y", "@agentclientprotocol/claude-agent-acp@0.66.0"],
             displayName: "Claude Agent",
             authMethodId: "claude-acp",
           },
