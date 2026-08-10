@@ -99,4 +99,43 @@ describe("ConfirmDeleteIconButton", () => {
     expect(container.firstChild).toHaveClass("h-7")
     expect(getByRole("button", { name: "Confirm" })).toHaveClass("h-7")
   })
+
+  test("pending shows deleting status instead of confirm actions", () => {
+    const onConfirm = mock(() => {})
+    const { getByRole, queryByRole, rerender } = render(
+      <ConfirmDeleteIconButton aria-label="Delete Custom Agent" onConfirm={onConfirm} />,
+    )
+
+    fireEvent.click(getByRole("button", { name: "Delete Custom Agent" }))
+    fireEvent.click(getByRole("button", { name: "Confirm" }))
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+
+    rerender(
+      <ConfirmDeleteIconButton
+        aria-label="Delete Custom Agent"
+        pending
+        onConfirm={onConfirm}
+      />,
+    )
+
+    expect(queryByRole("button", { name: "Confirm" })).toBeNull()
+    expect(queryByRole("button", { name: "Cancel" })).toBeNull()
+    expect(getByRole("status")).toHaveTextContent("Deleting…")
+  })
+
+  test("Escape does not cancel while pending", () => {
+    const onConfirm = mock(() => {})
+    const { getByRole, queryByRole } = render(
+      <ConfirmDeleteIconButton
+        aria-label="Delete Custom Agent"
+        pending
+        onConfirm={onConfirm}
+      />,
+    )
+
+    fireEvent.keyDown(window, { key: "Escape" })
+
+    expect(getByRole("status")).toHaveTextContent("Deleting…")
+    expect(queryByRole("button", { name: "Delete Custom Agent" })).toBeNull()
+  })
 })

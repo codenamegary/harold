@@ -144,7 +144,9 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
   const commandPreview = formatLaunchCommandPreview(pathValue, argsValue)
 
   const isComingSoon = !agent.available
-  const rowDisabled = controlsDisabled || isComingSoon
+  const isDeleting =
+    deleteMutation.isPending && deleteMutation.variables === agent.id
+  const rowDisabled = controlsDisabled || isComingSoon || isDeleting
   const formControlsDisabled = rowDisabled || updateMutation.isPending
   const toggleDisabled = rowDisabled || updateMutation.isPending
   const showNpxYesWarning = !isComingSoon && needsNpxYesFlag(pathValue, argsValue)
@@ -267,8 +269,9 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
     <>
       <tr
         aria-label={`${agent.displayName} agent`}
-        aria-disabled={isComingSoon ? "true" : undefined}
-        className={`border-b border-line-soft ${expanded ? "" : "last:border-b-0"} ${isComingSoon ? "opacity-55" : ""}`}
+        aria-disabled={isComingSoon || isDeleting ? "true" : undefined}
+        aria-busy={isDeleting ? "true" : undefined}
+        className={`border-b border-line-soft transition-opacity duration-200 ${expanded ? "" : "last:border-b-0"} ${isComingSoon || isDeleting ? "opacity-55" : ""} ${isDeleting ? "pointer-events-none" : ""}`}
       >
         <td className="px-3 py-2 align-middle">
           <div className="flex min-w-0 items-center gap-2">
@@ -359,7 +362,10 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
             {agent.deletable ? (
               <ConfirmDeleteIconButton
                 aria-label={`Delete ${agent.displayName}`}
-                disabled={rowDisabled || deleteMutation.isPending}
+                disabled={
+                  (controlsDisabled || isComingSoon || deleteMutation.isPending) && !isDeleting
+                }
+                pending={isDeleting}
                 onConfirm={handleDelete}
               />
             ) : null}
@@ -381,7 +387,8 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
       {expanded ? (
         <tr
           aria-label={`${agent.displayName} launch settings`}
-          className={`border-b border-line-soft last:border-b-0 ${isComingSoon ? "opacity-55" : ""}`}
+          aria-busy={isDeleting ? "true" : undefined}
+          className={`border-b border-line-soft last:border-b-0 transition-opacity duration-200 ${isComingSoon || isDeleting ? "opacity-55" : ""} ${isDeleting ? "pointer-events-none" : ""}`}
         >
           <td colSpan={3} className="bg-[#0a0c10] px-3 py-3">
             <div className="flex flex-col gap-4 p-4">
