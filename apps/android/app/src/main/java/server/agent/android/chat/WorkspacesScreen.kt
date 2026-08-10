@@ -34,10 +34,13 @@ private val MIN_TOUCH_TARGET = 48.dp
 fun WorkspacesScreen(
     uiState: WorkspacesUiState,
     onBack: () -> Unit,
+    onAddClick: () -> Unit,
 ) {
     val backContentDescription = stringResource(R.string.workspaces_back_content_description)
+    val addContentDescription = stringResource(R.string.workspaces_add_content_description)
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text(text = "Workspaces") },
@@ -51,6 +54,19 @@ fun WorkspacesScreen(
                             },
                     ) {
                         Text(text = stringResource(R.string.workspaces_back))
+                    }
+                },
+                actions = {
+                    TextButton(
+                        onClick = onAddClick,
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                            .semantics {
+                                contentDescription = addContentDescription
+                            }
+                            .testTag("workspaces_add"),
+                    ) {
+                        Text(text = stringResource(R.string.workspaces_add))
                     }
                 },
             )

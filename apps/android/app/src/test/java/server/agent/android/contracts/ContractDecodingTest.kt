@@ -275,6 +275,53 @@ class ContractDecodingTest {
         }
     }
 
+    @Test
+    fun decodesRuntimeSettingsView() {
+        val view = AgentServerJson.decodeFromString(
+            RuntimeSettingsView.serializer(),
+            """
+            {
+              "settings": {
+                "advertisedUrl": null,
+                "trustedProxies": [],
+                "bindHost": "127.0.0.1",
+                "bindPort": 3847,
+                "logLevel": "info",
+                "logPath": null,
+                "allowedRoots": ["/home/ops/code"]
+              },
+              "restartRequired": false,
+              "effective": {
+                "bindHost": "127.0.0.1",
+                "bindPort": 3847,
+                "logPath": null
+              },
+              "overrides": {}
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals(listOf("/home/ops/code"), view.settings.allowedRoots)
+        assertEquals(LogLevel.Info, view.settings.logLevel)
+    }
+
+    @Test
+    fun decodesFilesystemDirectoryCollection() {
+        val collection = AgentServerJson.decodeFromString(
+            FilesystemDirectoryCollection.serializer(),
+            """
+            {
+              "items": [
+                { "name": "agent-server", "path": "/home/ops/code/agent-server" }
+              ]
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals(1, collection.items.size)
+        assertEquals("agent-server", collection.items.single().name)
+    }
+
     private fun assertThrowsSerialization(block: () -> Unit) {
         val thrown = runCatching(block).exceptionOrNull()
 
