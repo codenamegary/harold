@@ -22,6 +22,36 @@ export const buildAgentCannotEnableProblem = (detail = "Agent is not available i
     detail,
   })
 
+export const buildAgentCannotRenameProblem = (
+  detail = "Only custom agents can be renamed",
+) =>
+  ConflictProblemSchema.parse({
+    type: PROBLEM_TYPES.conflict,
+    title: "Agent cannot be renamed",
+    status: 409,
+    detail,
+  })
+
+export const buildAgentCannotDeleteProblem = (
+  detail = "Catalog agents cannot be deleted",
+) =>
+  ConflictProblemSchema.parse({
+    type: PROBLEM_TYPES.conflict,
+    title: "Agent cannot be deleted",
+    status: 409,
+    detail,
+  })
+
+export const buildAgentIdConflictProblem = (
+  detail = "Another agent already uses this id",
+) =>
+  ConflictProblemSchema.parse({
+    type: PROBLEM_TYPES.conflict,
+    title: "Agent id conflict",
+    status: 409,
+    detail,
+  })
+
 export const buildAgentPathNotFoundProblem = (
   detail = "Could not find an agent executable on PATH",
 ) =>

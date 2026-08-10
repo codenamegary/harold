@@ -43,6 +43,19 @@ describe("Button", () => {
     expect(getByRole("button", { name: "Reset" })).toHaveClass("min-h-7")
   })
 
+  test("xs size matches icon-row height", () => {
+    const { getByRole } = render(
+      <Button size="xs" variant="danger">
+        Confirm
+      </Button>,
+    )
+
+    const button = getByRole("button", { name: "Confirm" })
+    expect(button).toHaveClass("h-6")
+    expect(button).toHaveClass("min-h-6")
+    expect(button).toHaveClass("text-2xs")
+  })
+
   test("disabled button is not interactive", () => {
     const { getByRole } = render(<Button disabled>Save</Button>)
 
@@ -59,5 +72,11 @@ describe("Button", () => {
     expect(button).toHaveAttribute("aria-disabled", "true")
     expect(button).toHaveClass("opacity-50")
     expect(button).toHaveClass("pointer-events-none")
+  })
+
+  test("danger variant uses danger styling", () => {
+    const { getByRole } = render(<Button variant="danger">Confirm</Button>)
+
+    expect(getByRole("button", { name: "Confirm" })).toHaveClass("bg-danger/15")
   })
 })

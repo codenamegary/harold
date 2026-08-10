@@ -73,6 +73,7 @@ const emptyAgentCollection = {
       args: [],
       present: true,
       popular: true,
+      deletable: false,
     },
     {
       id: "claude-acp",
@@ -83,6 +84,7 @@ const emptyAgentCollection = {
       args: [],
       present: true,
       popular: true,
+      deletable: false,
     },
   ],
 }

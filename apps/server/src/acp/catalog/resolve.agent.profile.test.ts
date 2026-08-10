@@ -73,19 +73,19 @@ describe("resolveAgentProfile", () => {
     ])
   })
 
-  test("builds a generic profile from a registry-ahead spawn snapshot", () => {
-    const profile = resolveAgentProfile("brand-new-agent", {
+  test("builds a generic profile from a custom agent spawn snapshot", () => {
+    const profile = resolveAgentProfile("custom-my-bot", {
       kind: "binary",
-      binaryName: "brand-new",
-      command: ["brand-new", "acp"],
-      displayName: "Brand New",
-      authMethodId: "brand-new-agent",
+      binaryName: "/opt/my-bot",
+      command: ["/opt/my-bot", "acp"],
+      displayName: "My Bot",
+      authMethodId: "custom-my-bot",
     })
     if (profile === undefined) {
-      throw new Error("expected registry-ahead profile")
+      throw new Error("expected custom profile")
     }
 
-    expect(profile.command).toEqual(["brand-new", "acp"])
-    expect(profile.authMethodId).toBe("brand-new-agent")
+    expect(profile.command).toEqual(["/opt/my-bot", "acp"])
+    expect(profile.authMethodId).toBe("custom-my-bot")
   })
 })

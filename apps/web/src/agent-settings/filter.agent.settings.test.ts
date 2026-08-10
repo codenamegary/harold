@@ -11,6 +11,7 @@ const cursor: AgentSettings = {
   args: [],
   present: true,
   popular: true,
+  deletable: false,
 }
 
 const claude: AgentSettings = {
@@ -22,6 +23,7 @@ const claude: AgentSettings = {
   args: [],
   present: true,
   popular: true,
+  deletable: false,
 }
 
 describe("filterAgentSettings", () => {

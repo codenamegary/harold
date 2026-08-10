@@ -2,6 +2,7 @@ import {
   AgentIdSchema,
   AgentSettingsCollectionSchema,
   AgentSettingsSchema,
+  CreateCustomAgentBodySchema,
   DetectAgentPathResponseSchema,
   ImportApplyBodySchema,
   ImportDetectResponseSchema,
@@ -11,7 +12,10 @@ import { FastifyInstance } from "fastify"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { AgentSettingsRepository } from "./agent-settings-repository"
 import {
+  buildAgentCannotDeleteProblem,
   buildAgentCannotEnableProblem,
+  buildAgentCannotRenameProblem,
+  buildAgentIdConflictProblem,
   buildAgentNotFoundProblem,
   buildAgentPathAutoDetectFailedProblem,
   buildAgentPathInvalidProblem,
@@ -40,6 +44,17 @@ export const registerAgentSettingsRoutes = (
     })
 
     return reply.status(200).send(collection)
+  })
+
+  app.post("/v1/settings/agents", async (request, reply) => {
+    CreateCustomAgentBodySchema.parse(request.body ?? {})
+    const result = repository.createCustom()
+
+    if (!result.ok) {
+      return sendProblem(reply, 404, buildAgentNotFoundProblem())
+    }
+
+    return reply.status(201).send(AgentSettingsSchema.parse(result.value))
   })
 
   app.post("/v1/settings/agents/import/detect", async (_request, reply) => {
@@ -95,6 +110,12 @@ export const registerAgentSettingsRoutes = (
       if (result.error.kind === "cannot_enable") {
         return sendProblem(reply, 409, buildAgentCannotEnableProblem())
       }
+      if (result.error.kind === "cannot_rename") {
+        return sendProblem(reply, 409, buildAgentCannotRenameProblem())
+      }
+      if (result.error.kind === "id_conflict") {
+        return sendProblem(reply, 409, buildAgentIdConflictProblem())
+      }
       if (result.error.kind === "path_not_found") {
         return sendProblem(reply, 404, buildAgentPathNotFoundProblem())
       }
@@ -107,10 +128,30 @@ export const registerAgentSettingsRoutes = (
       return sendProblem(reply, 404, buildAgentNotFoundProblem())
     }
 
-    if (!body.enabled) {
+    if ("enabled" in body && !body.enabled) {
+      await acpSupervisor.handleAgentDisabled(agentId)
+    }
+
+    if ("displayName" in body && result.value.id !== agentId) {
       await acpSupervisor.handleAgentDisabled(agentId)
     }
 
     return reply.status(200).send(AgentSettingsSchema.parse(result.value))
+  })
+
+  app.delete("/v1/settings/agents/:agentId", async (request, reply) => {
+    const agentId = AgentIdSchema.parse((request.params as { agentId: string }).agentId)
+    const result = repository.remove(agentId)
+
+    if (!result.ok) {
+      if (result.error.kind === "cannot_delete") {
+        return sendProblem(reply, 409, buildAgentCannotDeleteProblem())
+      }
+      return sendProblem(reply, 404, buildAgentNotFoundProblem())
+    }
+
+    await acpSupervisor.handleAgentDisabled(agentId)
+
+    return reply.status(204).send()
   })
 }

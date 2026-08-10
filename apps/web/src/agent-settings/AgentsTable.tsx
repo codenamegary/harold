@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react"
 import { UseMutationResult } from "@tanstack/react-query"
-import { AgentSettings } from "contracts/http/agent-settings"
+import { AgentId, AgentSettings } from "contracts/http/agent-settings"
 import { AgentSettingsRow } from "./AgentSettingsRow"
+import { deleteAgentSettings } from "./delete.agent.settings"
 import { detectAgentPath } from "./detect.agent.path"
 import { updateAgentSettings } from "./update.agent.settings"
 
@@ -19,20 +20,30 @@ type DetectMutation = UseMutationResult<
   Parameters<typeof detectAgentPath>[0]
 >
 
+type DeleteMutation = UseMutationResult<
+  Awaited<ReturnType<typeof deleteAgentSettings>>,
+  Error,
+  AgentId
+>
+
 type AgentsTableProps = {
   agents: readonly AgentSettings[]
   searchQuery: string
   controlsDisabled: boolean
+  initiallyExpandedAgentId: string | null
   updateMutation: UpdateMutation
   detectMutation: DetectMutation
+  deleteMutation: DeleteMutation
 }
 
 export const AgentsTable: React.FC<AgentsTableProps> = ({
   agents,
   searchQuery,
   controlsDisabled,
+  initiallyExpandedAgentId,
   updateMutation,
   detectMutation,
+  deleteMutation,
 }) => {
   const [visibleCount, setVisibleCount] = useState(pageSize)
 
@@ -69,8 +80,10 @@ export const AgentsTable: React.FC<AgentsTableProps> = ({
               key={agent.id}
               agent={agent}
               controlsDisabled={controlsDisabled}
+              initiallyExpanded={agent.id === initiallyExpandedAgentId}
               updateMutation={updateMutation}
               detectMutation={detectMutation}
+              deleteMutation={deleteMutation}
             />
           ))}
           {hasMore ? (
@@ -78,11 +91,11 @@ export const AgentsTable: React.FC<AgentsTableProps> = ({
               <td colSpan={3} className="px-3 py-2.5 text-center">
                 <button
                   type="button"
-                  className="inline-flex min-h-6 cursor-pointer items-center justify-center rounded-[7px] bg-transparent px-2 text-2xs font-semibold text-body-soft transition-opacity duration-300 ease-out hover:text-lime"
+                  className="inline-flex min-h-6 items-center justify-center rounded-[7px] bg-transparent px-0 text-2xs font-semibold text-body-soft transition-opacity duration-300 ease-out hover:text-lime cursor-pointer"
                   aria-label={`Load more agents, ${remainingCount} remaining`}
                   onClick={() => setVisibleCount((count) => count + pageSize)}
                 >
-                  Load more
+                  Show more ({remainingCount})
                 </button>
               </td>
             </tr>

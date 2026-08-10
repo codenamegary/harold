@@ -438,6 +438,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
       args: ["-y", "@agentclientprotocol/claude-agent-acp@0.66.0"],
       present: false,
       popular: true,
+      deletable: false,
     })
   })
 
@@ -590,6 +591,7 @@ describe("POST /v1/settings/agents/import/detect and apply", () => {
       args: ["acp"],
       present: true,
       popular: false,
+      deletable: true,
     })
     expect(applyBody.items[0]?.id).toBe("brand-new-agent")
   })
@@ -609,6 +611,192 @@ describe("POST /v1/settings/agents/import/detect and apply", () => {
     const body = InternalProblemSchema.parse(JSON.parse(response.body))
     expect(response.statusCode).toBe(502)
     expect(body.title).toBe("ACP registry unavailable")
+  })
+})
+
+describe("POST /v1/settings/agents custom create", () => {
+  test("creates a disabled custom agent at the top of the list", async () => {
+    const dataDir = await createTempDataDir()
+    const { app } = await createTestApp(dataDir)
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/v1/settings/agents",
+      payload: {},
+    })
+    const created = AgentSettingsSchema.parse(JSON.parse(createResponse.body))
+
+    expect(createResponse.statusCode).toBe(201)
+    expect(created).toEqual({
+      id: "custom-custom-agent",
+      displayName: "Custom Agent",
+      available: true,
+      enabled: false,
+      path: null,
+      args: [],
+      present: false,
+      popular: false,
+      deletable: true,
+    })
+
+    const secondResponse = await app.inject({
+      method: "POST",
+      url: "/v1/settings/agents",
+      payload: {},
+    })
+    const second = AgentSettingsSchema.parse(JSON.parse(secondResponse.body))
+    expect(second.displayName).toBe("Custom Agent 1")
+    expect(second.id).toBe("custom-custom-agent-1")
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/settings/agents",
+    })
+    const list = AgentSettingsCollectionSchema.parse(JSON.parse(listResponse.body))
+    expect(list.items[0]?.id).toBe(second.id)
+    expect(list.items[1]?.id).toBe(created.id)
+  })
+})
+
+describe("PATCH /v1/settings/agents/:agentId rename custom", () => {
+  test("renames display name and regenerates custom id", async () => {
+    const dataDir = await createTempDataDir()
+    const { app } = await createTestApp(dataDir)
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/v1/settings/agents",
+      payload: {},
+    })
+    const created = AgentSettingsSchema.parse(JSON.parse(createResponse.body))
+
+    const renameResponse = await app.inject({
+      method: "PATCH",
+      url: `/v1/settings/agents/${created.id}`,
+      payload: { displayName: "My Bot" },
+    })
+    const renamed = AgentSettingsSchema.parse(JSON.parse(renameResponse.body))
+
+    expect(renameResponse.statusCode).toBe(200)
+    expect(renamed.id).toBe("custom-my-bot")
+    expect(renamed.displayName).toBe("My Bot")
+
+    const list = AgentSettingsCollectionSchema.parse(
+      JSON.parse(
+        (
+          await app.inject({
+            method: "GET",
+            url: "/v1/settings/agents",
+          })
+        ).body,
+      ),
+    )
+    expect(list.items.some((item) => item.id === created.id)).toBe(false)
+    expect(findAgent(list, "custom-my-bot").displayName).toBe("My Bot")
+  })
+
+  test("rejects rename for catalog agents", async () => {
+    const dataDir = await createTempDataDir()
+    const { app } = await createTestApp(dataDir)
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/settings/agents/cursor",
+      payload: { displayName: "Nope" },
+    })
+
+    expect(response.statusCode).toBe(409)
+  })
+})
+
+describe("DELETE /v1/settings/agents/:agentId", () => {
+  test("deletes custom agents and rejects catalog deletes", async () => {
+    const dataDir = await createTempDataDir()
+    const { app } = await createTestApp(dataDir)
+
+    const created = AgentSettingsSchema.parse(
+      JSON.parse(
+        (
+          await app.inject({
+            method: "POST",
+            url: "/v1/settings/agents",
+            payload: {},
+          })
+        ).body,
+      ),
+    )
+
+    const deleteCustom = await app.inject({
+      method: "DELETE",
+      url: `/v1/settings/agents/${created.id}`,
+    })
+    expect(deleteCustom.statusCode).toBe(204)
+
+    const list = AgentSettingsCollectionSchema.parse(
+      JSON.parse(
+        (
+          await app.inject({
+            method: "GET",
+            url: "/v1/settings/agents",
+          })
+        ).body,
+      ),
+    )
+    expect(list.items.some((item) => item.id === created.id)).toBe(false)
+
+    const deleteCatalog = await app.inject({
+      method: "DELETE",
+      url: "/v1/settings/agents/cursor",
+    })
+    expect(deleteCatalog.statusCode).toBe(409)
+  })
+})
+
+describe("custom agent enable and spawn snapshot", () => {
+  test("enables custom agent with path and exposes spawn snapshot for supervisor", async () => {
+    const dataDir = await createTempDataDir()
+    const customPath = "/opt/custom/acp-agent"
+    const { app, database } = await createTestApp(dataDir)
+
+    const created = AgentSettingsSchema.parse(
+      JSON.parse(
+        (
+          await app.inject({
+            method: "POST",
+            url: "/v1/settings/agents",
+            payload: {},
+          })
+        ).body,
+      ),
+    )
+
+    const enableResponse = await app.inject({
+      method: "PATCH",
+      url: `/v1/settings/agents/${created.id}`,
+      payload: { enabled: true, path: customPath, args: ["acp"] },
+    })
+    const enabled = AgentSettingsSchema.parse(JSON.parse(enableResponse.body))
+
+    expect(enableResponse.statusCode).toBe(200)
+    expect(enabled.enabled).toBe(true)
+    expect(enabled.path).toBe(customPath)
+    expect(enabled.args).toEqual(["acp"])
+    expect(enabled.present).toBe(true)
+
+    const { createAgentSettingsRepository } = await import(
+      "./agent-settings-repository"
+    )
+    const repository = createAgentSettingsRepository(database, {
+      validateExecutablePathFn: acceptTestExecutablePath,
+    })
+    const snapshot = repository.getSpawnSnapshot(created.id)
+    expect(snapshot).toEqual({
+      kind: "binary",
+      binaryName: customPath,
+      command: [customPath, "acp"],
+      displayName: "Custom Agent",
+      authMethodId: created.id,
+    })
   })
 })
 

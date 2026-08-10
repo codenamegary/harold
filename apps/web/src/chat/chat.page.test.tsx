@@ -35,6 +35,7 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       args: [],
       present: true,
       popular: true,
+      deletable: false,
     },
     {
       id: "claude-acp",
@@ -45,6 +46,7 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       args: [],
       present: true,
       popular: true,
+      deletable: false,
     },
   ],
 })

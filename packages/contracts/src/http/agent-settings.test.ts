@@ -4,6 +4,7 @@ import {
   AgentSettingsCollectionSchema,
   AgentSettingsSchema,
   DetectAgentPathResponseSchema,
+  CreateCustomAgentBodySchema,
   ImportApplyBodySchema,
   ImportDetectResponseSchema,
   UpdateAgentSettingsBodySchema,
@@ -18,6 +19,7 @@ const validAgentSettings = {
   args: [] as string[],
   present: false,
   popular: true,
+  deletable: false,
 }
 
 describe("AgentIdSchema", () => {
@@ -58,6 +60,7 @@ describe("AgentSettingsSchema", () => {
       args: ["@agentclientprotocol/claude-agent-acp@0.66.0"],
       present: true,
       popular: true,
+      deletable: false,
     }
 
     expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
@@ -73,6 +76,7 @@ describe("AgentSettingsSchema", () => {
       args: ["acp"],
       present: true,
       popular: false,
+      deletable: true,
     }
 
     expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
@@ -164,6 +168,26 @@ describe("UpdateAgentSettingsBodySchema", () => {
       UpdateAgentSettingsBodySchema.parse({ enabled: true, path: "" }),
     ).toThrow()
   })
+
+  test("accepts rename with displayName", () => {
+    expect(UpdateAgentSettingsBodySchema.parse({ displayName: "My Bot" })).toEqual({
+      displayName: "My Bot",
+    })
+  })
+
+  test("rejects empty displayName", () => {
+    expect(() => UpdateAgentSettingsBodySchema.parse({ displayName: "" })).toThrow()
+  })
+})
+
+describe("CreateCustomAgentBodySchema", () => {
+  test("accepts empty body", () => {
+    expect(CreateCustomAgentBodySchema.parse({})).toEqual({})
+  })
+
+  test("rejects unexpected fields", () => {
+    expect(() => CreateCustomAgentBodySchema.parse({ displayName: "x" })).toThrow()
+  })
 })
 
 describe("DetectAgentPathResponseSchema", () => {
@@ -236,6 +260,7 @@ describe("AgentSettingsCollectionSchema", () => {
           args: [],
           present: false,
           popular: true,
+          deletable: false,
         },
       ],
     }

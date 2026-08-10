@@ -121,6 +121,7 @@ export const toAgentSettings = (
     args: string[]
     present: boolean
     popular: boolean
+    deletable: boolean
   },
 ): AgentSettings => ({
   id: input.id,
@@ -131,6 +132,7 @@ export const toAgentSettings = (
   args: input.args,
   present: input.present,
   popular: input.popular,
+  deletable: input.deletable,
 })
 
 export const sortAgentSettingsBands = (
