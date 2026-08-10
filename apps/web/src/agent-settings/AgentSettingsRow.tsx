@@ -16,6 +16,7 @@ import {
   agentSettingsUpdateErrorMessage,
 } from "./agent.settings.mutation.error.message"
 import { detectAgentPath } from "./detect.agent.path"
+import { formatLaunchCommandPreview } from "./launch.command.preview"
 import { insertNpxYesFlag, needsNpxYesFlag } from "./npx.yes.flag"
 import { updateAgentSettings } from "./update.agent.settings"
 
@@ -114,6 +115,7 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
 
   const pathValue = watch("path")
   const argsValue = watch("args")
+  const commandPreview = formatLaunchCommandPreview(pathValue, argsValue)
 
   const isComingSoon = !agent.available
   const rowDisabled = controlsDisabled || isComingSoon
@@ -390,6 +392,15 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
                     </span>
                   </p>
                 ) : null}
+                <div className="mt-2.5 min-w-0">
+                  <p className="m-0 mb-1 text-2xs font-medium tracking-wide text-label">Command</p>
+                  <pre
+                    aria-label={`${agent.displayName} command preview`}
+                    className="m-0 overflow-x-auto whitespace-pre-wrap break-all font-mono text-2xs text-dim"
+                  >
+                    {commandPreview === "" ? "—" : commandPreview}
+                  </pre>
+                </div>
               </div>
 
               {isDirty ? (

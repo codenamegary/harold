@@ -698,6 +698,9 @@ describe("AgentsPanel", () => {
     expect(
       within(settings).getByText(/Agents without -y may run in interactive mode and block spawning/i),
     ).toBeInTheDocument()
+    expect(within(settings).getByLabelText("Claude Agent command preview")).toHaveTextContent(
+      "npx @agentclientprotocol/claude-agent-acp@0.66.0",
+    )
     expect(within(settings).queryByRole("button", { name: "Save Claude Agent launch settings" })).toBeNull()
 
     await clickInAct(within(settings).getByRole("button", { name: "Add -y" }))
@@ -712,6 +715,9 @@ describe("AgentsPanel", () => {
     })
 
     expect(within(settings).getByDisplayValue("-y")).toBeInTheDocument()
+    expect(within(settings).getByLabelText("Claude Agent command preview")).toHaveTextContent(
+      "npx -y @agentclientprotocol/claude-agent-acp@0.66.0",
+    )
   })
 
   test("search filters agents by display name", async () => {
