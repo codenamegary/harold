@@ -47,6 +47,7 @@ class WorkspacesViewModelTest {
             operatorRepository = WorkspacesFakeOperatorRepository(),
         )
 
+        viewModel.refresh()
         advanceUntilIdle()
 
         val loaded = viewModel.uiState.value.loadState as WorkspacesLoadState.Loaded
@@ -61,6 +62,7 @@ class WorkspacesViewModelTest {
             operatorRepository = WorkspacesFakeOperatorRepository(workspaces = emptyList()),
         )
 
+        viewModel.refresh()
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.loadState is WorkspacesLoadState.Empty)
@@ -75,6 +77,7 @@ class WorkspacesViewModelTest {
             ),
         )
 
+        viewModel.refresh()
         advanceUntilIdle()
 
         val error = viewModel.uiState.value.loadState as WorkspacesLoadState.Error
@@ -125,6 +128,21 @@ private class WorkspacesFakeOperatorRepository(
             ),
         )
     }
+
+    override suspend fun getRuntimeSettings(serverOrigin: String) =
+        Result.failure<server.agent.android.contracts.RuntimeSettingsView>(UnsupportedOperationException())
+
+    override suspend fun listFilesystemDirectories(
+        serverOrigin: String,
+        root: String,
+    ) = Result.failure<server.agent.android.contracts.FilesystemDirectoryCollection>(
+        UnsupportedOperationException(),
+    )
+
+    override suspend fun createWorkspace(
+        serverOrigin: String,
+        body: server.agent.android.contracts.CreateWorkspaceBody,
+    ) = Result.failure<Workspace>(UnsupportedOperationException())
 
     override suspend fun listSessions(
         serverOrigin: String,

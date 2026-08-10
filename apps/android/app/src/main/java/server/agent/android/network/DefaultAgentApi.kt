@@ -16,6 +16,8 @@ import server.agent.android.contracts.ConflictProblem
 import server.agent.android.contracts.CancelSessionResponse
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateSessionResponse
+import server.agent.android.contracts.CreateWorkspaceBody
+import server.agent.android.contracts.FilesystemDirectoryCollection
 import server.agent.android.contracts.PromptSessionBody
 import server.agent.android.contracts.PromptSessionResponse
 import server.agent.android.contracts.InternalProblem
@@ -25,6 +27,7 @@ import server.agent.android.contracts.PermissionRequest
 import server.agent.android.contracts.PermissionRequestCollection
 import server.agent.android.contracts.ResolvePermissionRequestBody
 import server.agent.android.contracts.ProblemDetails
+import server.agent.android.contracts.RuntimeSettingsView
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionCollection
 import server.agent.android.contracts.UnauthorizedProblem
@@ -45,6 +48,36 @@ class DefaultAgentApi(
         query = mapOf("limit" to limit.toString()),
     ) { body ->
         json.decodeFromString(ItemCollection.serializer(Workspace.serializer()), body)
+    }
+
+    override suspend fun getRuntimeSettings(serverOrigin: String): Result<RuntimeSettingsView> = get(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/settings/runtime",
+        query = emptyMap(),
+    ) { body ->
+        json.decodeFromString(RuntimeSettingsView.serializer(), body)
+    }
+
+    override suspend fun listFilesystemDirectories(
+        serverOrigin: String,
+        root: String,
+    ): Result<FilesystemDirectoryCollection> = get(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/filesystem/directories",
+        query = mapOf("root" to root),
+    ) { body ->
+        json.decodeFromString(FilesystemDirectoryCollection.serializer(), body)
+    }
+
+    override suspend fun createWorkspace(
+        serverOrigin: String,
+        body: CreateWorkspaceBody,
+    ): Result<Workspace> = post(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/workspaces",
+        body = json.encodeToString(CreateWorkspaceBody.serializer(), body),
+    ) { responseBody ->
+        json.decodeFromString(Workspace.serializer(), responseBody)
     }
 
     override suspend fun listSessions(

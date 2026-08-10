@@ -245,6 +245,22 @@ private class FakeAgentApi(
         return result
     }
 
+    override suspend fun getRuntimeSettings(
+        serverOrigin: String,
+    ): Result<server.agent.android.contracts.RuntimeSettingsView> =
+        Result.failure(UnsupportedOperationException())
+
+    override suspend fun listFilesystemDirectories(
+        serverOrigin: String,
+        root: String,
+    ): Result<server.agent.android.contracts.FilesystemDirectoryCollection> =
+        Result.failure(UnsupportedOperationException())
+
+    override suspend fun createWorkspace(
+        serverOrigin: String,
+        body: server.agent.android.contracts.CreateWorkspaceBody,
+    ): Result<Workspace> = Result.failure(UnsupportedOperationException())
+
     override suspend fun listSessions(
         serverOrigin: String,
         workspaceId: String?,

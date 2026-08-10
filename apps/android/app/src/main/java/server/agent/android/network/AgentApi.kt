@@ -4,12 +4,16 @@ import server.agent.android.contracts.AgentSettingsCollection
 import server.agent.android.contracts.CancelSessionResponse
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateSessionResponse
+import server.agent.android.contracts.CreateWorkspaceBody
+import server.agent.android.contracts.FilesystemDirectoryCollection
 import server.agent.android.contracts.PermissionRequest
 import server.agent.android.contracts.PermissionRequestCollection
 import server.agent.android.contracts.ResolvePermissionRequestBody
+import server.agent.android.contracts.RuntimeSettingsView
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionCollection
 import server.agent.android.contracts.UpdateSessionBody
+import server.agent.android.contracts.Workspace
 import server.agent.android.contracts.WorkspaceCollection
 
 sealed interface AgentApiError {
@@ -42,6 +46,18 @@ interface AgentApi {
         serverOrigin: String,
         limit: Int,
     ): Result<WorkspaceCollection>
+
+    suspend fun getRuntimeSettings(serverOrigin: String): Result<RuntimeSettingsView>
+
+    suspend fun listFilesystemDirectories(
+        serverOrigin: String,
+        root: String,
+    ): Result<FilesystemDirectoryCollection>
+
+    suspend fun createWorkspace(
+        serverOrigin: String,
+        body: CreateWorkspaceBody,
+    ): Result<Workspace>
 
     suspend fun listSessions(
         serverOrigin: String,

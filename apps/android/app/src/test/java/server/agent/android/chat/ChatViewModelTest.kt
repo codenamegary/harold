@@ -490,6 +490,21 @@ private class ChatFakeOperatorRepository(
         ),
     )
 
+    override suspend fun getRuntimeSettings(serverOrigin: String) =
+        Result.failure<server.agent.android.contracts.RuntimeSettingsView>(UnsupportedOperationException())
+
+    override suspend fun listFilesystemDirectories(
+        serverOrigin: String,
+        root: String,
+    ) = Result.failure<server.agent.android.contracts.FilesystemDirectoryCollection>(
+        UnsupportedOperationException(),
+    )
+
+    override suspend fun createWorkspace(
+        serverOrigin: String,
+        body: server.agent.android.contracts.CreateWorkspaceBody,
+    ) = Result.failure<Workspace>(UnsupportedOperationException())
+
     override suspend fun listSessions(
         serverOrigin: String,
         workspaceId: String?,

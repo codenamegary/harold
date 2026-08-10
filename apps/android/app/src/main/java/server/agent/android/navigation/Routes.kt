@@ -5,4 +5,5 @@ object Routes {
     const val Pairing = "pairing"
     const val Chat = "chat"
     const val Workspaces = "workspaces"
+    const val AddWorkspace = "workspaces/add"
 }

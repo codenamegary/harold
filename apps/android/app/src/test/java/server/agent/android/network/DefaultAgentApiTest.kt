@@ -14,6 +14,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.CreateSessionBody
+import server.agent.android.contracts.CreateWorkspaceBody
 import server.agent.android.contracts.UpdateSessionBody
 import server.agent.android.contracts.PermissionStatus
 import server.agent.android.contracts.ResolvePermissionRequestBody
@@ -380,6 +381,104 @@ class DefaultAgentApiTest {
             PermissionStatus.Resolved,
             result.getOrThrow().status,
         )
+    }
+
+    @Test
+    fun getRuntimeSettingsDecodesAllowedRoots() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(
+                    """
+                    {
+                      "settings": {
+                        "advertisedUrl": null,
+                        "trustedProxies": [],
+                        "bindHost": "127.0.0.1",
+                        "bindPort": 3847,
+                        "logLevel": "info",
+                        "logPath": null,
+                        "allowedRoots": ["/home/ops/code"]
+                      },
+                      "restartRequired": false,
+                      "effective": {
+                        "bindHost": "127.0.0.1",
+                        "bindPort": 3847,
+                        "logPath": null
+                      },
+                      "overrides": {}
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val view = agentApi.getRuntimeSettings(serverOrigin = origin()).getOrThrow()
+
+        val recorded = server.takeRequest()
+        assertEquals("GET", recorded.method)
+        assertEquals("/v1/settings/runtime", recorded.path)
+        assertEquals(listOf("/home/ops/code"), view.settings.allowedRoots)
+    }
+
+    @Test
+    fun listFilesystemDirectoriesSendsRootQuery() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(
+                    """
+                    {
+                      "items": [
+                        { "name": "agent-server", "path": "/home/ops/code/agent-server" }
+                      ]
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val collection = agentApi.listFilesystemDirectories(
+            serverOrigin = origin(),
+            root = "/home/ops/code",
+        ).getOrThrow()
+
+        val recorded = server.takeRequest()
+        assertEquals("/v1/filesystem/directories?root=%2Fhome%2Fops%2Fcode", recorded.path)
+        assertEquals(1, collection.items.size)
+        assertEquals("agent-server", collection.items.single().name)
+    }
+
+    @Test
+    fun createWorkspacePostsNameAndPath() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(201)
+                .setBody(
+                    """
+                    {
+                      "id": "ws_01",
+                      "name": "agent-server",
+                      "path": "/home/ops/code/agent-server",
+                      "state": "available",
+                      "createdAt": "2026-08-10T00:00:00.000Z",
+                      "lastUsedAt": "2026-08-10T00:00:00.000Z"
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val workspace = agentApi.createWorkspace(
+            serverOrigin = origin(),
+            body = CreateWorkspaceBody(
+                name = "agent-server",
+                path = "/home/ops/code/agent-server",
+            ),
+        ).getOrThrow()
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/v1/workspaces", recorded.path)
+        assertTrue(recorded.body.readUtf8().contains("\"path\":\"/home/ops/code/agent-server\""))
+        assertEquals("ws_01", workspace.id)
     }
 
     private fun origin(): String = server.url("/").toString().trimEnd('/')

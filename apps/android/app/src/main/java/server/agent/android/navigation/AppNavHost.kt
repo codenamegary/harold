@@ -1,13 +1,20 @@
 package server.agent.android.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import server.agent.android.chat.AddWorkspaceScreen
+import server.agent.android.chat.AddWorkspaceViewModel
+import server.agent.android.chat.AddWorkspaceViewModelFactory
 import server.agent.android.chat.ChatScreen
 import server.agent.android.chat.ChatViewModel
 import server.agent.android.chat.ChatViewModelFactory
@@ -21,7 +28,6 @@ import server.agent.android.pairing.PairingViewModelFactory
 import server.agent.android.shell.ShellScreen
 import server.agent.android.shell.ShellViewModel
 import server.agent.android.shell.ShellViewModelFactory
-
 @Composable
 fun AppNavHost(
     appContainer: AppContainer,
@@ -145,10 +151,43 @@ fun AppNavHost(
                 ),
             )
             val workspacesUiState by workspacesViewModel.uiState.collectAsState()
+            val lifecycleOwner = LocalLifecycleOwner.current
+
+            DisposableEffect(lifecycleOwner, workspacesViewModel) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME) {
+                        workspacesViewModel.refresh()
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
 
             WorkspacesScreen(
                 uiState = workspacesUiState,
                 onBack = { navController.popBackStack() },
+                onAddClick = { navController.navigate(Routes.AddWorkspace) },
+            )
+        }
+
+        composable(Routes.AddWorkspace) {
+            val addWorkspaceViewModel: AddWorkspaceViewModel = viewModel(
+                factory = AddWorkspaceViewModelFactory(
+                    sessionGateway = appContainer.sessionGateway,
+                    operatorRepository = appContainer.operatorRepository,
+                ),
+            )
+            val addWorkspaceUiState by addWorkspaceViewModel.uiState.collectAsState()
+
+            AddWorkspaceScreen(
+                uiState = addWorkspaceUiState,
+                onBack = { navController.popBackStack() },
+                onNameChanged = addWorkspaceViewModel::onNameChanged,
+                onRootChanged = addWorkspaceViewModel::onRootChanged,
+                onFolderChanged = addWorkspaceViewModel::onFolderChanged,
+                onFolderQueryChanged = addWorkspaceViewModel::onFolderQueryChanged,
+                onSubmit = addWorkspaceViewModel::submit,
+                onCreated = { navController.popBackStack() },
             )
         }
     }

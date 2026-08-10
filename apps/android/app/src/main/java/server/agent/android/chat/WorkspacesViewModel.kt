@@ -39,12 +39,6 @@ class WorkspacesViewModel(
     private val _uiState = MutableStateFlow(WorkspacesUiState())
     val uiState: StateFlow<WorkspacesUiState> = _uiState.asStateFlow()
 
-    init {
-        viewModelScope.launch {
-            loadWorkspaces()
-        }
-    }
-
     fun refresh() {
         viewModelScope.launch {
             loadWorkspaces()

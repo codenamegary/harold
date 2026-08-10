@@ -46,4 +46,22 @@
     <string name="permission_option_content_description">Permission option: %1$s</string>
     <string name="workspaces_back">Back</string>
     <string name="workspaces_back_content_description">Go back from workspaces</string>
+    <string name="workspaces_add">Add</string>
+    <string name="workspaces_add_content_description">Add workspace</string>
+    <string name="add_workspace_title">Add workspace</string>
+    <string name="add_workspace_back">Back</string>
+    <string name="add_workspace_back_content_description">Go back from add workspace</string>
+    <string name="add_workspace_name_label">Name</string>
+    <string name="add_workspace_root_label">Root</string>
+    <string name="add_workspace_root_placeholder">Select root…</string>
+    <string name="add_workspace_folder_label">Folder</string>
+    <string name="add_workspace_folder_search">Search folders</string>
+    <string name="add_workspace_folder_select_root">Select a root first</string>
+    <string name="add_workspace_folder_search_empty">No folders match</string>
+    <string name="add_workspace_roots_loading">Loading roots…</string>
+    <string name="add_workspace_no_roots">Add an allowed root in Settings on the web before creating a workspace.</string>
+    <string name="add_workspace_folders_loading">Loading folders…</string>
+    <string name="add_workspace_folders_empty">No folders in this root</string>
+    <string name="add_workspace_submit">Add workspace</string>
+    <string name="add_workspace_submitting">Adding…</string>
 </resources>
