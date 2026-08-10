@@ -15,8 +15,8 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { GripVertical, Plus, Trash2 } from "lucide-react"
+import { moveEditableStringListItem } from "./editable.string.list.move"
 import { TextInput } from "./TextInput"
-import { moveEditableStringListItem } from "./move.editable.string.list.item"
 
 type EditableStringListProps = {
   value: readonly string[]

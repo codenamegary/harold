@@ -20,6 +20,7 @@ import { registerRuntimeSettingsRoutes } from "../runtime-settings/routes"
 import { AppliedRuntimeSettingsHolder } from "../runtime-settings/applied.runtime.settings"
 import { createWorkspaceRepository } from "../workspace/repository"
 import { registerWorkspaceRoutes } from "../workspace/routes"
+import { registerFilesystemBrowseRoutes } from "../filesystem/routes"
 import { createSessionRepository } from "../session/repository"
 import { registerSessionRoutes } from "../session/routes"
 import { createWorkspaceService } from "../workspace/service"
@@ -289,6 +290,7 @@ export const createServer = async ({
     sessionRepository,
     acpSupervisor,
   )
+  registerFilesystemBrowseRoutes(app, () => runtimeSettingsRepository.get().allowedRoots)
   registerAgentSettingsRoutes(app, agentSettingsRepository, acpSupervisor)
   registerRuntimeSettingsRoutes(app, runtimeSettingsRepository, {
     onLogLevelChanged: (nextLevel) => {

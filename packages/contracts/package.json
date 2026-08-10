@@ -15,6 +15,7 @@
     "./http/agent-settings": "./src/http/agent-settings.ts",
     "./http/runtime-settings": "./src/http/runtime-settings.ts",
     "./http/connection-test": "./src/http/connection-test.ts",
+    "./http/filesystem.browse": "./src/http/filesystem.browse.ts",
     "./pairing/qr-uri": "./src/pairing/qr-uri.ts",
 
     "./events/event": "./src/events/event.ts",

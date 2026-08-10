@@ -13,6 +13,9 @@ export const queryKeys = {
   agentSettings: () => [...queryKeys.agentSettingsRoot] as const,
   runtimeSettingsRoot: ["runtimeSettings"] as const,
   runtimeSettings: () => [...queryKeys.runtimeSettingsRoot] as const,
+  filesystemDirectoriesRoot: ["filesystemDirectories"] as const,
+  filesystemDirectories: (root: string) =>
+    [...queryKeys.filesystemDirectoriesRoot, root] as const,
   sessionsRoot: ["sessions"] as const,
   sessions: (workspaceId?: string) =>
     [...queryKeys.sessionsRoot, workspaceId ?? "all"] as const,
