@@ -33,6 +33,71 @@ afterEach(async () => {
   await cleanupTestAppResources(resources)
 })
 
+describe("custom ACP agent sessions", () => {
+  test("creates a session with an enabled custom agent via fake ACP", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const customPath = "/opt/custom/acp-agent"
+    const whichFn: WhichFn = () => undefined
+    const { app, database } = await createTestApp(
+      resources,
+      dataDir,
+      whichFn,
+      acceptTestExecutablePath,
+      {
+        capabilities: { loadSession: true, sessionClose: true },
+        sessionNewSessionId: "custom-agent-session",
+        sessionLoadSessionId: "custom-agent-session",
+      },
+    )
+    const { workspaceId } = await seedWorkspace(app, dataDir)
+
+    const createAgentResponse = await app.inject({
+      method: "POST",
+      url: "/v1/settings/agents",
+      payload: {},
+    })
+    expect(createAgentResponse.statusCode).toBe(201)
+    const createdAgent = JSON.parse(createAgentResponse.body) as { id: string }
+
+    const enableResponse = await app.inject({
+      method: "PATCH",
+      url: `/v1/settings/agents/${createdAgent.id}`,
+      payload: { enabled: true, path: customPath, args: ["acp"] },
+    })
+    expect(enableResponse.statusCode).toBe(200)
+
+    const createSessionResponse = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: {
+        workspaceId,
+        agentId: createdAgent.id,
+        text: "Custom agent session",
+      },
+    })
+    const created = CreateSessionResponseSchema.parse(JSON.parse(createSessionResponse.body))
+    expect(createSessionResponse.statusCode).toBe(201)
+    expect(created.agentId).toBe(createdAgent.id)
+    expect(created.state).toBe("running")
+
+    const renameResponse = await app.inject({
+      method: "PATCH",
+      url: `/v1/settings/agents/${createdAgent.id}`,
+      payload: { displayName: "My Custom Bot" },
+    })
+    expect(renameResponse.statusCode).toBe(200)
+    const renamedAgent = JSON.parse(renameResponse.body) as { id: string }
+    expect(renamedAgent.id).toBe("custom-my-custom-bot")
+
+    const sessionRow = database.db
+      .select()
+      .from(sessions)
+      .where(eq(sessions.id, created.id))
+      .get()
+    expect(sessionRow?.agentId).toBe("custom-my-custom-bot")
+  })
+})
+
 describe("GET /v1/sessions", () => {
   test("returns non-archived sessions across workspaces sorted by lastUsedAt when workspaceId is omitted", async () => {
     const dataDir = await createTempDataDir(resources)
