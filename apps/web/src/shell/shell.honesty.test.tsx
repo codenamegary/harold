@@ -290,6 +290,9 @@ describe("shell honesty", () => {
 
       await waitForShellReady(getByRole)
 
+      await waitFor(() => {
+        expect(getByRole("heading", { name: /how will you connect/i })).toBeInTheDocument()
+      })
       fireEvent.click(getByRole("button", { name: /cloud proxy/i }))
       fireEvent.click(getByRole("button", { name: /^Continue$/ }))
       await waitFor(() => {

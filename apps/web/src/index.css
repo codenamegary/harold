@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./design-system/copy.button.css";
 
 /* Scan Streamdown's Tailwind classes (hoisted via apps/web/node_modules symlink). */
 @source "../node_modules/streamdown/dist/*.js";

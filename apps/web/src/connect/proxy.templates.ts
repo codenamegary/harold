@@ -34,7 +34,7 @@ export const proxyTemplates: Record<ProxyProvider, ProxyTemplate> = {
     tabLabel: "Cloudflare Tunnel",
     label: "config.yml",
     code: (url) =>
-      `tunnel: cursor-acp\ncredentials-file: ~/.cloudflared/cursor-acp.json\n\ningress:\n  - hostname: ${stripProtocol(url)}\n    service: http://127.0.0.1:3847\n  - service: http_status:404`,
+      `tunnel: agentserver\ncredentials-file: ~/.cloudflared/agentserver.json\n\ningress:\n  - hostname: ${stripProtocol(url)}\n    service: http://127.0.0.1:3847\n  - service: http_status:404`,
     note: "Create a named tunnel first, then point the selected hostname to it in Cloudflare DNS.",
   },
 }

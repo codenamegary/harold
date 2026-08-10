@@ -123,6 +123,9 @@ const continueButtonName = /^Continue$/
 const goToCloudExternalUrl = async (
   getByRole: ReturnType<typeof renderWithProviders>["getByRole"],
 ) => {
+  await waitFor(() => {
+    expect(getByRole("heading", { name: /how will you connect/i })).toBeInTheDocument()
+  })
   fireEvent.click(getByRole("button", { name: /cloud proxy/i }))
   fireEvent.click(getByRole("button", { name: continueButtonName }))
   await waitFor(() => {
@@ -254,17 +257,132 @@ describe("ConnectWizard", () => {
     globalThis.WebSocket = originalWebSocket
   })
 
-  test("starts on access mode step without cloud step rail", () => {
+  test("starts on access mode step without cloud step rail", async () => {
     const { getByRole, queryByRole } = renderConnectWizard()
 
-    expect(getByRole("heading", { name: /how will you connect/i })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(getByRole("heading", { name: /how will you connect/i })).toBeInTheDocument()
+    })
     expect(queryByRole("button", { name: /external url/i })).toBeNull()
     expect(queryByRole("status", { name: "Wizard progress" })).toBeNull()
+  })
+
+  test("opens cloud-ready when advertised URL is already saved", async () => {
+    runtimeSettings = {
+      ...defaultRuntimeSettings,
+      advertisedUrl: "https://agents.example.com",
+    }
+
+    const { getByRole, getByText, getAllByText, queryByRole } = renderConnectWizard()
+
+    await waitFor(() => {
+      expect(getByRole("heading", { name: /cloud proxy connected/i })).toBeInTheDocument()
+    })
+    expect(getByText("https://agents.example.com")).toBeInTheDocument()
+    expect(getByRole("button", { name: /pair another device/i })).toBeInTheDocument()
+    expect(getByRole("button", { name: /^Reset$/i })).toBeInTheDocument()
+    expect(queryByRole("textbox", { name: /public server url/i })).toBeNull()
+    expect(queryByRole("status", { name: "Wizard progress" })).toBeNull()
+    await waitFor(() => {
+      expect(connectionTestRequests).toHaveLength(1)
+    })
+    await waitFor(() => {
+      expect(getAllByText(/passed/i).length).toBeGreaterThanOrEqual(3)
+    })
+    expect(getByRole("button", { name: /refresh connection test/i })).toBeInTheDocument()
+  })
+
+  test("cloud-ready pair another device opens remote pairing without rail", async () => {
+    runtimeSettings = {
+      ...defaultRuntimeSettings,
+      advertisedUrl: "https://agents.example.com",
+    }
+
+    const { getByRole, getByText, queryByRole } = renderConnectWizard()
+
+    await waitFor(() => {
+      expect(getByRole("heading", { name: /cloud proxy connected/i })).toBeInTheDocument()
+    })
+    fireEvent.click(getByRole("button", { name: /pair another device/i }))
+
+    await waitFor(() => {
+      expect(getByRole("status", { name: /pairing code/i })).toHaveTextContent("J7K-9P2")
+    })
+    expect(getByText("Listening on your advertised HTTPS endpoint")).toBeInTheDocument()
+    expect(queryByRole("button", { name: /external url/i })).toBeNull()
+    expect(queryByRole("status", { name: "Wizard progress" })).toBeNull()
+  })
+
+  test("cloud-ready reset clears advertised URL and returns to mode select", async () => {
+    runtimeSettings = {
+      ...defaultRuntimeSettings,
+      advertisedUrl: "https://agents.example.com",
+    }
+
+    const { getByRole } = renderConnectWizard()
+
+    await waitFor(() => {
+      expect(getByRole("heading", { name: /cloud proxy connected/i })).toBeInTheDocument()
+    })
+    fireEvent.click(getByRole("button", { name: /^Reset$/i }))
+
+    await waitFor(() => {
+      expect(runtimeSettingsUpdates).toEqual([{ advertisedUrl: null }])
+    })
+    await waitFor(() => {
+      expect(runtimeSettings.advertisedUrl).toBeNull()
+    })
+    await waitFor(() => {
+      expect(getByRole("heading", { name: /how will you connect/i })).toBeInTheDocument()
+    })
+  })
+
+  test("cloud-ready reset stays put when clear fails", async () => {
+    runtimeSettings = {
+      ...defaultRuntimeSettings,
+      advertisedUrl: "https://agents.example.com",
+    }
+
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/settings/runtime" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(wrapRuntimeSettingsView(runtimeSettings)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/runtime" && method === "PATCH") {
+        return Promise.resolve(new Response("server error", { status: 500 }))
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const { getByRole, getByText } = renderConnectWizard()
+
+    await waitFor(() => {
+      expect(getByRole("heading", { name: /cloud proxy connected/i })).toBeInTheDocument()
+    })
+    fireEvent.click(getByRole("button", { name: /^Reset$/i }))
+
+    await waitFor(() => {
+      expect(getByText(/could not clear the saved external url/i)).toBeInTheDocument()
+    })
+    expect(getByRole("heading", { name: /cloud proxy connected/i })).toBeInTheDocument()
+    expect(pairingRequests).toHaveLength(0)
   })
 
   test("local continue opens pair step without cloud rail", async () => {
     const { getByRole, queryByRole } = renderConnectWizard()
 
+    await waitFor(() => {
+      expect(getByRole("heading", { name: /how will you connect/i })).toBeInTheDocument()
+    })
     fireEvent.click(getByRole("button", { name: continueButtonName }))
 
     await waitFor(() => {
@@ -302,20 +420,10 @@ describe("ConnectWizard", () => {
     expect(getByRole("heading", { name: /configure external access/i })).toBeInTheDocument()
   })
 
-  test("cloud external URL pre-fills saved host and saves on continue", async () => {
-    runtimeSettings = {
-      ...defaultRuntimeSettings,
-      advertisedUrl: "https://agents.example.com",
-    }
-
+  test("cloud external URL saves on continue", async () => {
     const { getByRole } = renderConnectWizard()
 
     await goToCloudExternalUrl(getByRole)
-
-    expect(getByRole("textbox", { name: /public server url/i })).toHaveValue(
-      "agents.example.com",
-    )
-
     await saveCloudExternalUrl(getByRole, "edge.example.com")
     expect(runtimeSettingsUpdates).toEqual([{ advertisedUrl: "https://edge.example.com" }])
     expect(runtimeSettings.advertisedUrl).toBe("https://edge.example.com")
@@ -378,7 +486,7 @@ describe("ConnectWizard", () => {
     expect(getByText("Listening on your advertised HTTPS endpoint")).toBeInTheDocument()
   })
 
-  test("fresh local continue clears stale advertised URL before pairing", async () => {
+  test("fresh local continue after reset pairs on the local endpoint", async () => {
     runtimeSettings = {
       ...defaultRuntimeSettings,
       advertisedUrl: "https://agents.example.com",
@@ -386,33 +494,44 @@ describe("ConnectWizard", () => {
 
     const { getByRole, getByText } = renderConnectWizard()
 
-    fireEvent.click(getByRole("button", { name: continueButtonName }))
+    await waitFor(() => {
+      expect(getByRole("heading", { name: /cloud proxy connected/i })).toBeInTheDocument()
+    })
+    fireEvent.click(getByRole("button", { name: /^Reset$/i }))
 
     await waitFor(() => {
-      expect(runtimeSettingsUpdates).toEqual([{ advertisedUrl: null }])
+      expect(getByRole("heading", { name: /how will you connect/i })).toBeInTheDocument()
     })
-    await waitFor(() => {
-      expect(runtimeSettings.advertisedUrl).toBeNull()
-    })
+    fireEvent.click(getByRole("button", { name: continueButtonName }))
+
     await waitFor(() => {
       expect(getByRole("status", { name: /pairing code/i })).toHaveTextContent("J7K-9P2")
     })
     expect(getByText("Listening on this local Agent Server endpoint")).toBeInTheDocument()
   })
 
-  test("switching cloud back to local clears advertised URL", async () => {
+  test("switching cloud back to local uses reset then local continue", async () => {
     const { getByRole } = renderConnectWizard()
 
     await goToCloudExternalUrl(getByRole)
     await saveCloudExternalUrl(getByRole, "agents.example.com")
     fireEvent.click(getByRole("button", { name: /back/i }))
     fireEvent.click(getByRole("button", { name: /back/i }))
-    fireEvent.click(getByRole("button", { name: /local or private network/i }))
-    fireEvent.click(getByRole("button", { name: continueButtonName }))
+
+    await waitFor(() => {
+      expect(getByRole("heading", { name: /cloud proxy connected/i })).toBeInTheDocument()
+    })
+    fireEvent.click(getByRole("button", { name: /^Reset$/i }))
 
     await waitFor(() => {
       expect(runtimeSettings.advertisedUrl).toBeNull()
     })
+    await waitFor(() => {
+      expect(getByRole("heading", { name: /how will you connect/i })).toBeInTheDocument()
+    })
+    fireEvent.click(getByRole("button", { name: /local or private network/i }))
+    fireEvent.click(getByRole("button", { name: continueButtonName }))
+
     await waitFor(() => {
       expect(getByRole("heading", { name: /pair a device/i })).toBeInTheDocument()
     })
@@ -476,45 +595,12 @@ describe("ConnectWizard", () => {
     expect(pairingRequests).toHaveLength(0)
   })
 
-  test("local continue blocks pairing when advertised URL clear fails", async () => {
-    runtimeSettings = {
-      ...defaultRuntimeSettings,
-      advertisedUrl: "https://agents.example.com",
-    }
-
-    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input)
-      const method = init?.method ?? "GET"
-
-      if (url === "/v1/settings/runtime" && method === "GET") {
-        return Promise.resolve(
-          new Response(JSON.stringify(wrapRuntimeSettingsView(runtimeSettings)), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
-        )
-      }
-
-      if (url === "/v1/settings/runtime" && method === "PATCH") {
-        return Promise.resolve(new Response("server error", { status: 500 }))
-      }
-
-      return Promise.resolve(new Response("not found", { status: 404 }))
-    }) as typeof fetch
-
-    const { getByRole, getByText } = renderConnectWizard()
-
-    fireEvent.click(getByRole("button", { name: continueButtonName }))
+  test("access mode cards toggle selection visually", async () => {
+    const { getByRole } = renderConnectWizard()
 
     await waitFor(() => {
-      expect(getByText(/could not clear the saved external url/i)).toBeInTheDocument()
+      expect(getByRole("heading", { name: /how will you connect/i })).toBeInTheDocument()
     })
-    expect(getByRole("heading", { name: /how will you connect/i })).toBeInTheDocument()
-    expect(pairingRequests).toHaveLength(0)
-  })
-
-  test("access mode cards toggle selection visually", () => {
-    const { getByRole } = renderConnectWizard()
 
     const localCard = getByRole("button", { name: /local or private network/i })
     const cloudCard = getByRole("button", { name: /cloud proxy/i })
@@ -540,6 +626,26 @@ describe("ConnectWizard", () => {
 
     fireEvent.click(getByRole("tab", { name: /cloudflare tunnel/i }))
     expect(within(panel).getByText(/service: http:\/\/127\.0\.0\.1:3847/)).toBeInTheDocument()
+  })
+
+  test("proxy template copy button writes the snippet to the clipboard", async () => {
+    const writeText = mock(() => Promise.resolve())
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    })
+
+    const { getByRole } = renderConnectWizard()
+
+    await goToCloudExternalUrl(getByRole)
+    fireEvent.click(getByRole("button", { name: /^Copy$/i }))
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledTimes(1)
+    })
+    expect(String(writeText.mock.calls[0]?.[0] ?? "")).toContain(
+      "reverse_proxy http://10.8.0.2:3847",
+    )
   })
 
   test("cloud test step shows live check results", async () => {
@@ -619,6 +725,9 @@ describe("ConnectWizard", () => {
       { initialEntries: ["/connect"] },
     )
 
+    await waitFor(() => {
+      expect(getByRole("heading", { name: /how will you connect/i })).toBeInTheDocument()
+    })
     fireEvent.click(getByRole("button", { name: continueButtonName }))
 
     await waitFor(() => {
@@ -637,6 +746,9 @@ describe("ConnectWizard", () => {
   test("regenerate mints a fresh pairing code", async () => {
     const { getByRole } = renderConnectWizard()
 
+    await waitFor(() => {
+      expect(getByRole("heading", { name: /how will you connect/i })).toBeInTheDocument()
+    })
     fireEvent.click(getByRole("button", { name: continueButtonName }))
 
     await waitFor(() => {
@@ -660,6 +772,9 @@ describe("ConnectWizard", () => {
       { initialEntries: ["/connect"] },
     )
 
+    await waitFor(() => {
+      expect(getByRole("heading", { name: /how will you connect/i })).toBeInTheDocument()
+    })
     fireEvent.click(getByRole("button", { name: continueButtonName }))
 
     await waitFor(() => {
@@ -698,6 +813,9 @@ describe("ConnectWizard", () => {
   test("pair copy is device neutral", async () => {
     const { getByRole, container } = renderConnectWizard()
 
+    await waitFor(() => {
+      expect(getByRole("heading", { name: /how will you connect/i })).toBeInTheDocument()
+    })
     fireEvent.click(getByRole("button", { name: continueButtonName }))
 
     await waitFor(() => {
