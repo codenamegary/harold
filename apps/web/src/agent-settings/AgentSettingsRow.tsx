@@ -2,9 +2,10 @@ import React, { useEffect, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { UseMutationResult } from "@tanstack/react-query"
 import { AgentId, AgentSettings } from "contracts/http/agent-settings"
-import { ChevronDown, Trash2, TriangleAlert } from "lucide-react"
+import { ChevronDown, TriangleAlert } from "lucide-react"
 import { Controller, useForm } from "react-hook-form"
 import { Button } from "../design-system/Button"
+import { ConfirmDeleteIconButton } from "../design-system/ConfirmDeleteIconButton"
 import { EditableStringList } from "../design-system/EditableStringList"
 import { TextInput } from "../design-system/TextInput"
 import {
@@ -247,10 +248,6 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
   }
 
   const handleDelete = () => {
-    if (!window.confirm("Remove this agent?")) {
-      return
-    }
-
     deleteMutation.mutate(agent.id, {
       onSuccess: () => {
         deleteMutation.reset()
@@ -360,15 +357,11 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
         <td className="px-3 py-2 align-middle text-right">
           <div className="inline-flex items-center justify-end gap-2">
             {agent.deletable ? (
-              <button
-                type="button"
+              <ConfirmDeleteIconButton
                 aria-label={`Delete ${agent.displayName}`}
-                className="grid size-6 place-items-center rounded text-dim transition-colors hover:text-red-400 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={rowDisabled || deleteMutation.isPending}
-                onClick={handleDelete}
-              >
-                <Trash2 aria-hidden className="size-3.5" strokeWidth={1.75} />
-              </button>
+                onConfirm={handleDelete}
+              />
             ) : null}
             {isComingSoon ? (
               <span className="sr-only">Unavailable</span>

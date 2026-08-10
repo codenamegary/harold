@@ -60,4 +60,10 @@ describe("Button", () => {
     expect(button).toHaveClass("opacity-50")
     expect(button).toHaveClass("pointer-events-none")
   })
+
+  test("danger variant uses danger styling", () => {
+    const { getByRole } = render(<Button variant="danger">Confirm</Button>)
+
+    expect(getByRole("button", { name: "Confirm" })).toHaveClass("bg-danger/15")
+  })
 })
