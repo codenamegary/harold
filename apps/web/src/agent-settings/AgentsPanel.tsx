@@ -7,11 +7,14 @@ import { TextInput } from "../design-system/TextInput"
 import { AgentsImportDialog } from "./AgentsImportDialog"
 import { AgentsTable } from "./AgentsTable"
 import { isAgentImportApplyError } from "./apply.agent.import"
+import { isCreateCustomAgentError } from "./create.custom.agent"
 import { isAgentImportDetectError } from "./detect.agent.import"
 import { filterAgentSettings } from "./filter.agent.settings"
 import { sortAgentSettings } from "./sort.agent.settings"
 import { useAgentSettingsQuery } from "./use.agent.settings.query"
 import { useApplyAgentImportMutation } from "./use.apply.agent.import.mutation"
+import { useCreateCustomAgentMutation } from "./use.create.custom.agent.mutation"
+import { useDeleteAgentSettingsMutation } from "./use.delete.agent.settings.mutation"
 import { useDetectAgentImportMutation } from "./use.detect.agent.import.mutation"
 import { useDetectAgentPathMutation } from "./use.detect.agent.path.mutation"
 import { useUpdateAgentSettingsMutation } from "./use.update.agent.settings.mutation"
@@ -21,6 +24,8 @@ export const AgentsPanel: React.FC = () => {
   const agentSettingsQuery = useAgentSettingsQuery()
   const updateMutation = useUpdateAgentSettingsMutation()
   const detectMutation = useDetectAgentPathMutation()
+  const createCustomMutation = useCreateCustomAgentMutation()
+  const deleteMutation = useDeleteAgentSettingsMutation()
   const detectImportMutation = useDetectAgentImportMutation()
   const applyImportMutation = useApplyAgentImportMutation()
   const agents = agentSettingsQuery.data?.items ?? []
@@ -33,6 +38,8 @@ export const AgentsPanel: React.FC = () => {
   const [importOpen, setImportOpen] = useState(false)
   const [importCandidates, setImportCandidates] = useState<ImportDetectCandidate[]>([])
   const [importError, setImportError] = useState("")
+  const [createError, setCreateError] = useState("")
+  const [expandedAgentId, setExpandedAgentId] = useState<string | null>(null)
 
   const filteredAgents = sortAgentSettings(filterAgentSettings(agents, searchQuery))
 
@@ -90,23 +97,55 @@ export const AgentsPanel: React.FC = () => {
     )
   }
 
+  const handleAddCustom = () => {
+    setCreateError("")
+    createCustomMutation.mutate(undefined, {
+      onSuccess: (created) => {
+        setExpandedAgentId(created.id)
+        createCustomMutation.reset()
+      },
+      onError: (error) => {
+        const message = isCreateCustomAgentError(error)
+          ? error.problem.detail ?? error.message
+          : "Could not create a custom agent."
+        setCreateError(message)
+      },
+    })
+  }
+
   return (
     <Panel className="mb-[25px] p-[22px]">
       <div className="mb-[22px] flex flex-wrap items-center justify-between gap-4">
         <h3 className="m-0 text-lg font-semibold">Agents</h3>
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={controlsDisabled || detectImportMutation.isPending}
-          onClick={handleOpenImport}
-        >
-          {detectImportMutation.isPending ? "Detecting…" : "Import"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={controlsDisabled || createCustomMutation.isPending}
+            onClick={handleAddCustom}
+          >
+            {createCustomMutation.isPending ? "Adding…" : "Add"}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={controlsDisabled || detectImportMutation.isPending}
+            onClick={handleOpenImport}
+          >
+            {detectImportMutation.isPending ? "Detecting…" : "Import"}
+          </Button>
+        </div>
       </div>
 
       {agentSettingsQuery.isError ? (
         <p className="m-0 mb-3.5 text-sm text-red-400" role="alert">
           Could not load agent settings.
+        </p>
+      ) : null}
+
+      {createError ? (
+        <p className="m-0 mb-3.5 text-sm text-red-400" role="alert">
+          {createError}
         </p>
       ) : null}
 
@@ -132,8 +171,10 @@ export const AgentsPanel: React.FC = () => {
         agents={filteredAgents}
         searchQuery={searchQuery}
         controlsDisabled={controlsDisabled}
+        initiallyExpandedAgentId={expandedAgentId}
         updateMutation={updateMutation}
         detectMutation={detectMutation}
+        deleteMutation={deleteMutation}
       />
 
       <AgentsImportDialog

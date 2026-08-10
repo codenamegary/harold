@@ -22,6 +22,7 @@ export const AgentSettingsSchema = z.strictObject({
   args: z.array(z.string()),
   present: z.boolean(),
   popular: z.boolean(),
+  deletable: z.boolean(),
 })
 
 export const AgentSettingsCollectionSchema = z.strictObject({
@@ -48,12 +49,19 @@ export const UpdateAgentSettingsWithPathAndArgsBodySchema = z.strictObject({
   args: z.array(z.string()),
 })
 
+export const RenameAgentSettingsBodySchema = z.strictObject({
+  displayName: z.string().min(1),
+})
+
 export const UpdateAgentSettingsBodySchema = z.union([
   UpdateAgentSettingsEnableOnlyBodySchema,
   UpdateAgentSettingsWithPathBodySchema,
   UpdateAgentSettingsWithArgsBodySchema,
   UpdateAgentSettingsWithPathAndArgsBodySchema,
+  RenameAgentSettingsBodySchema,
 ])
+
+export const CreateCustomAgentBodySchema = z.strictObject({})
 
 export const DetectAgentPathResponseSchema = z.strictObject({
   path: z.string().min(1),
@@ -88,6 +96,8 @@ export type AgentSpawnSnapshot = z.infer<typeof AgentSpawnSnapshotSchema>
 export type AgentSettings = z.infer<typeof AgentSettingsSchema>
 export type AgentSettingsCollection = z.infer<typeof AgentSettingsCollectionSchema>
 export type UpdateAgentSettingsBody = z.infer<typeof UpdateAgentSettingsBodySchema>
+export type RenameAgentSettingsBody = z.infer<typeof RenameAgentSettingsBodySchema>
+export type CreateCustomAgentBody = z.infer<typeof CreateCustomAgentBodySchema>
 export type DetectAgentPathResponse = z.infer<typeof DetectAgentPathResponseSchema>
 export type ImportDetectCandidate = z.infer<typeof ImportDetectCandidateSchema>
 export type ImportDetectResponse = z.infer<typeof ImportDetectResponseSchema>

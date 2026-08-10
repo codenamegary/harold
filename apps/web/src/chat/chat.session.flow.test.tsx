@@ -43,6 +43,7 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       args: [],
       present: true,
       popular: true,
+      deletable: false,
     },
   ],
 })

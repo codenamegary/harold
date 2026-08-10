@@ -33,6 +33,7 @@ const comingSoonAgent: AgentSettings = {
   args: [],
   present: true,
   popular: true,
+  deletable: false,
 }
 
 const cursorAgent = (overrides: Partial<AgentSettings> = {}): AgentSettings => ({
@@ -44,6 +45,7 @@ const cursorAgent = (overrides: Partial<AgentSettings> = {}): AgentSettings => (
   args: [],
   present: true,
   popular: true,
+  deletable: false,
   ...overrides,
 })
 
@@ -653,6 +655,7 @@ describe("AgentsPanel", () => {
       args: ["@agentclientprotocol/claude-agent-acp@0.66.0"],
       present: true,
       popular: true,
+      deletable: false,
     })
 
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
@@ -749,6 +752,7 @@ describe("AgentsPanel", () => {
         args: [],
         present: false,
         popular: false,
+        deletable: false,
       })
     })
 
@@ -892,6 +896,7 @@ describe("AgentsPanel", () => {
           args: [],
           present: true,
           popular: false,
+          deletable: true,
         }
 
         return Promise.resolve(
@@ -931,6 +936,75 @@ describe("AgentsPanel", () => {
     await waitFor(() => {
       expect(view.queryByRole("dialog", { name: "Import agents" })).not.toBeInTheDocument()
       expect(view.getByRole("row", { name: "Brand New agent" })).toBeInTheDocument()
+    })
+  }, mutationFlowTimeoutMs)
+
+  test("Add creates a custom agent row with custom badge", async () => {
+    const listState = {
+      items: agentsCollection(cursorAgent()).items,
+    }
+
+    const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(AgentSettingsCollectionSchema.parse(listState)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "POST") {
+        const created = AgentSettingsSchema.parse({
+          id: "custom-custom-agent",
+          displayName: "Custom Agent",
+          available: true,
+          enabled: false,
+          path: null,
+          args: [],
+          present: false,
+          popular: false,
+          deletable: true,
+        })
+        listState.items = [created, ...listState.items]
+        return Promise.resolve(
+          new Response(JSON.stringify(created), {
+            status: 201,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    })
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByRole("button", { name: "Add" })).toBeInTheDocument()
+    })
+
+    await clickInAct(view.getByRole("button", { name: "Add" }))
+
+    await waitFor(() => {
+      const row = view.getByRole("row", { name: "Custom Agent agent" })
+      expect(within(row).getByText("custom")).toBeInTheDocument()
+      expect(
+        view.getByRole("row", { name: "Custom Agent launch settings" }),
+      ).toBeInTheDocument()
     })
   }, mutationFlowTimeoutMs)
 })

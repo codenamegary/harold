@@ -9,6 +9,7 @@ const agent = (overrides: Partial<AgentSettings> & Pick<AgentSettings, "id" | "d
   args: [],
   present: false,
   popular: false,
+  deletable: false,
   ...overrides,
 })
 
@@ -20,6 +21,7 @@ describe("sortAgentSettings", () => {
       enabled: true,
       present: true,
       popular: true,
+      deletable: false,
     })
     const claudeAcp = agent({
       id: "claude-acp",
@@ -27,6 +29,7 @@ describe("sortAgentSettings", () => {
       enabled: false,
       present: true,
       popular: true,
+      deletable: false,
     })
     const auggie = agent({
       id: "auggie",
@@ -34,6 +37,7 @@ describe("sortAgentSettings", () => {
       enabled: false,
       present: false,
       popular: true,
+      deletable: false,
     })
     const rest = agent({
       id: "rest-agent",
@@ -41,6 +45,7 @@ describe("sortAgentSettings", () => {
       enabled: false,
       present: false,
       popular: false,
+      deletable: false,
     })
 
     const sorted = sortAgentSettings([auggie, rest, claudeAcp, enabled])
@@ -50,6 +55,26 @@ describe("sortAgentSettings", () => {
       "claude-acp",
       "auggie",
       "rest-agent",
+    ])
+  })
+
+  test("keeps custom agents ahead of catalog bands", () => {
+    const custom = agent({
+      id: "custom-custom-agent",
+      displayName: "Custom Agent",
+      deletable: true,
+    })
+    const enabled = agent({
+      id: "cursor",
+      displayName: "Cursor",
+      enabled: true,
+      present: true,
+      popular: true,
+    })
+
+    expect(sortAgentSettings([enabled, custom]).map((item) => item.id)).toEqual([
+      "custom-custom-agent",
+      "cursor",
     ])
   })
 })

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { UseMutationResult } from "@tanstack/react-query"
-import { AgentSettings } from "contracts/http/agent-settings"
-import { ChevronDown, TriangleAlert } from "lucide-react"
+import { AgentId, AgentSettings } from "contracts/http/agent-settings"
+import { ChevronDown, Trash2, TriangleAlert } from "lucide-react"
 import { Controller, useForm } from "react-hook-form"
 import { Button } from "../design-system/Button"
 import { EditableStringList } from "../design-system/EditableStringList"
@@ -15,9 +15,11 @@ import {
   agentPathDetectErrorMessage,
   agentSettingsUpdateErrorMessage,
 } from "./agent.settings.mutation.error.message"
+import { deleteAgentSettings } from "./delete.agent.settings"
 import { detectAgentPath } from "./detect.agent.path"
 import { formatLaunchCommandPreview } from "./launch.command.preview"
 import { insertNpxYesFlag, needsNpxYesFlag } from "./npx.yes.flag"
+import { isCustomAgentId } from "./is.custom.agent.id"
 import { updateAgentSettings } from "./update.agent.settings"
 
 const textLinkClassName =
@@ -84,21 +86,44 @@ type DetectMutation = UseMutationResult<
   Parameters<typeof detectAgentPath>[0]
 >
 
+type DeleteMutation = UseMutationResult<
+  Awaited<ReturnType<typeof deleteAgentSettings>>,
+  Error,
+  AgentId
+>
+
 type AgentSettingsRowProps = {
   agent: AgentSettings
   controlsDisabled: boolean
+  initiallyExpanded: boolean
   updateMutation: UpdateMutation
   detectMutation: DetectMutation
+  deleteMutation: DeleteMutation
 }
 
 export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
   agent,
   controlsDisabled,
+  initiallyExpanded,
   updateMutation,
   detectMutation,
+  deleteMutation,
 }) => {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(initiallyExpanded)
   const [detectSuccessVisible, setDetectSuccessVisible] = useState(false)
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState(agent.displayName)
+  const isCustom = isCustomAgentId(agent.id)
+
+  useEffect(() => {
+    if (initiallyExpanded) {
+      setExpanded(true)
+    }
+  }, [initiallyExpanded])
+
+  useEffect(() => {
+    setNameDraft(agent.displayName)
+  }, [agent.displayName])
 
   const {
     control,
@@ -197,6 +222,42 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
     }
   }
 
+  const commitRename = () => {
+    const nextName = nameDraft.trim()
+    setEditingName(false)
+    if (nextName === "" || nextName === agent.displayName) {
+      setNameDraft(agent.displayName)
+      return
+    }
+
+    updateMutation.mutate(
+      {
+        agentId: agent.id,
+        body: { displayName: nextName },
+      },
+      {
+        onSuccess: () => {
+          updateMutation.reset()
+        },
+        onError: () => {
+          setNameDraft(agent.displayName)
+        },
+      },
+    )
+  }
+
+  const handleDelete = () => {
+    if (!window.confirm("Remove this agent?")) {
+      return
+    }
+
+    deleteMutation.mutate(agent.id, {
+      onSuccess: () => {
+        deleteMutation.reset()
+      },
+    })
+  }
+
   const launchSummary = formatLaunchSummary(agent.path, agent.args)
   const expandLabel = expanded
     ? `Collapse ${agent.displayName} launch settings`
@@ -228,7 +289,48 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
                 strokeWidth={1.75}
               />
             </button>
-            <span className="truncate text-sm font-semibold text-body">{agent.displayName}</span>
+            {editingName && isCustom ? (
+              <TextInput
+                aria-label={`Rename ${agent.displayName}`}
+                value={nameDraft}
+                disabled={formControlsDisabled}
+                className="min-w-0 flex-1 text-sm font-semibold"
+                autoFocus
+                onChange={(event) => setNameDraft(event.target.value)}
+                onInput={(event) => setNameDraft(event.currentTarget.value)}
+                onBlur={commitRename}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault()
+                    commitRename()
+                  }
+                  if (event.key === "Escape") {
+                    setNameDraft(agent.displayName)
+                    setEditingName(false)
+                  }
+                }}
+              />
+            ) : (
+              <button
+                type="button"
+                className={`truncate text-left text-sm font-semibold text-body ${isCustom ? "cursor-pointer hover:text-lime" : "cursor-default"}`}
+                disabled={!isCustom || rowDisabled}
+                aria-label={isCustom ? `Rename ${agent.displayName}` : undefined}
+                onClick={() => {
+                  if (!isCustom || rowDisabled) {
+                    return
+                  }
+                  setEditingName(true)
+                }}
+              >
+                {agent.displayName}
+              </button>
+            )}
+            {isCustom ? (
+              <span className="shrink-0 rounded-[4px] border border-line-soft px-1 py-px font-mono text-2xs text-dim">
+                custom
+              </span>
+            ) : null}
             {agent.present ? (
               <span className="shrink-0 rounded-[4px] border border-lime/40 px-1 py-px font-mono text-2xs text-lime">
                 present
@@ -256,18 +358,31 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
           </span>
         </td>
         <td className="px-3 py-2 align-middle text-right">
-          {isComingSoon ? (
-            <span className="sr-only">Unavailable</span>
-          ) : (
-            <input
-              type="checkbox"
-              checked={agent.enabled}
-              disabled={toggleDisabled}
-              aria-label={`Enable ${agent.displayName}`}
-              onChange={handleToggle}
-              className={toggleClassName}
-            />
-          )}
+          <div className="inline-flex items-center justify-end gap-2">
+            {agent.deletable ? (
+              <button
+                type="button"
+                aria-label={`Delete ${agent.displayName}`}
+                className="grid size-6 place-items-center rounded text-dim transition-colors hover:text-red-400 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={rowDisabled || deleteMutation.isPending}
+                onClick={handleDelete}
+              >
+                <Trash2 aria-hidden className="size-3.5" strokeWidth={1.75} />
+              </button>
+            ) : null}
+            {isComingSoon ? (
+              <span className="sr-only">Unavailable</span>
+            ) : (
+              <input
+                type="checkbox"
+                checked={agent.enabled}
+                disabled={toggleDisabled}
+                aria-label={`Enable ${agent.displayName}`}
+                onChange={handleToggle}
+                className={toggleClassName}
+              />
+            )}
+          </div>
         </td>
       </tr>
       {expanded ? (
