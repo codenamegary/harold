@@ -62,6 +62,7 @@ fun AddWorkspaceScreen(
     val formDisabled = uiState.hasNoRoots || uiState.rootsLoadState is RootsLoadState.Loading
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text(text = stringResource(R.string.add_workspace_title)) },

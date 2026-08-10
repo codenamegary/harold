@@ -40,6 +40,7 @@ fun WorkspacesScreen(
     val addContentDescription = stringResource(R.string.workspaces_add_content_description)
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text(text = "Workspaces") },
