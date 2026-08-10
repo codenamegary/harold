@@ -1,16 +1,8 @@
 package server.agent.android.contracts
 
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-@Serializable
-enum class AgentId {
-    @SerialName("cursor")
-    Cursor,
-
-    @SerialName("claude")
-    Claude,
-}
+typealias AgentId = String
 
 @Serializable
 data class AgentSettings(
@@ -19,6 +11,9 @@ data class AgentSettings(
     val available: Boolean,
     val enabled: Boolean,
     val path: String?,
+    val args: List<String> = emptyList(),
+    val present: Boolean = false,
+    val popular: Boolean = false,
 )
 
 @Serializable

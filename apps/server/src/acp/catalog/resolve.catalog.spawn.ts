@@ -47,7 +47,8 @@ const resolveNpxSpawn = (
   return {
     kind: "npx",
     binaryName: "npx",
-    command: ["npx", npx.package, ...args],
+    // -y skips the install prompt so ACP spawn stays non-interactive
+    command: ["npx", "-y", npx.package, ...args],
   }
 }
 

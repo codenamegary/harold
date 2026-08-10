@@ -1,5 +1,6 @@
 import {
   ConflictProblemSchema,
+  InternalProblemSchema,
   NotFoundProblemSchema,
   PROBLEM_TYPES,
   ValidationProblemSchema,
@@ -47,4 +48,14 @@ export const buildAgentPathAutoDetectFailedProblem = () =>
     status: 400,
     code: "validation.field.path.auto_detect_failed",
     errors: [{ pointer: "#/path", code: "validation.field.path.auto_detect_failed" }],
+  })
+
+export const buildAgentRegistryFetchFailedProblem = (
+  detail = "Could not fetch the live ACP registry",
+) =>
+  InternalProblemSchema.parse({
+    type: PROBLEM_TYPES.internalError,
+    title: "ACP registry unavailable",
+    status: 502,
+    detail,
   })

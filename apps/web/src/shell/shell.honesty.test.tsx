@@ -70,6 +70,9 @@ const emptyAgentCollection = {
       available: true,
       enabled: false,
       path: null,
+      args: [],
+      present: true,
+      popular: true,
     },
     {
       id: "claude-acp",
@@ -77,6 +80,9 @@ const emptyAgentCollection = {
       available: true,
       enabled: false,
       path: null,
+      args: [],
+      present: true,
+      popular: true,
     },
   ],
 }

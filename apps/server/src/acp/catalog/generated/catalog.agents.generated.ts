@@ -30,7 +30,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "agoragentic-mcp@1.3.0", "--acp"],
+      command: ["npx", "-y", "agoragentic-mcp@1.3.0", "--acp"],
     },
     authMethodId: "agoragentic-acp",
   },
@@ -58,7 +58,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "@augmentcode/auggie@0.35.0", "--acp"],
+      command: ["npx", "-y", "@augmentcode/auggie@0.35.0", "--acp"],
     },
     authMethodId: "auggie",
   },
@@ -72,7 +72,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "@autohandai/autohand-acp@0.2.1"],
+      command: ["npx", "-y", "@autohandai/autohand-acp@0.2.1"],
     },
     authMethodId: "autohand",
   },
@@ -86,7 +86,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "@agentclientprotocol/claude-agent-acp@0.66.0"],
+      command: ["npx", "-y", "@agentclientprotocol/claude-agent-acp@0.66.0"],
     },
     authMethodId: "claude-acp",
   },
@@ -100,7 +100,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "cline@3.0.51", "--acp"],
+      command: ["npx", "-y", "cline@3.0.51", "--acp"],
     },
     authMethodId: "cline",
   },
@@ -114,7 +114,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "@tencent-ai/codebuddy-code@2.106.7", "--acp"],
+      command: ["npx", "-y", "@tencent-ai/codebuddy-code@2.106.7", "--acp"],
     },
     authMethodId: "codebuddy-code",
   },
@@ -128,7 +128,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "@agentclientprotocol/codex-acp@1.1.14"],
+      command: ["npx", "-y", "@agentclientprotocol/codex-acp@1.1.14"],
     },
     authMethodId: "codex-acp",
   },
@@ -198,7 +198,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "deepagents-acp@0.1.7"],
+      command: ["npx", "-y", "deepagents-acp@0.1.7"],
     },
     authMethodId: "deepagents",
   },
@@ -226,7 +226,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "dimcode@0.3.7", "acp"],
+      command: ["npx", "-y", "dimcode@0.3.7", "acp"],
     },
     authMethodId: "dimcode",
   },
@@ -240,7 +240,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "dirac-cli@0.4.34", "--acp"],
+      command: ["npx", "-y", "dirac-cli@0.4.34", "--acp"],
     },
     authMethodId: "dirac",
   },
@@ -254,7 +254,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "droid@0.190.0", "exec", "--output-format", "acp-daemon"],
+      command: ["npx", "-y", "droid@0.190.0", "exec", "--output-format", "acp-daemon"],
     },
     authMethodId: "factory-droid",
   },
@@ -282,7 +282,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "@google/gemini-cli@0.54.4", "--acp"],
+      command: ["npx", "-y", "@google/gemini-cli@0.54.4", "--acp"],
     },
     authMethodId: "gemini",
   },
@@ -296,7 +296,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "@github/copilot@1.0.78", "--acp"],
+      command: ["npx", "-y", "@github/copilot@1.0.78", "--acp"],
     },
     authMethodId: "github-copilot-cli",
   },
@@ -310,7 +310,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "glm-acp-agent@1.3.0"],
+      command: ["npx", "-y", "glm-acp-agent@1.3.0"],
     },
     authMethodId: "glm-acp-agent",
   },
@@ -338,7 +338,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "@xai-official/grok@1.0.0", "agent", "stdio"],
+      command: ["npx", "-y", "@xai-official/grok@1.0.0", "agent", "stdio"],
     },
     authMethodId: "grok-build",
   },
@@ -436,7 +436,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "@compass-ai/nova@1.1.31", "acp"],
+      command: ["npx", "-y", "@compass-ai/nova@1.1.31", "acp"],
     },
     authMethodId: "nova",
   },
@@ -464,7 +464,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "pi-acp@0.0.33"],
+      command: ["npx", "-y", "pi-acp@0.0.33"],
     },
     authMethodId: "pi-acp",
   },
@@ -492,7 +492,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "@qoder-ai/qodercli@0.2.14", "--acp"],
+      command: ["npx", "-y", "@qoder-ai/qodercli@0.2.14", "--acp"],
     },
     authMethodId: "qoder",
   },
@@ -506,7 +506,7 @@ export const catalogAgentsById = {
     spawn: {
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "@qwen-code/qwen-code@0.21.7", "--acp", "--experimental-skills"],
+      command: ["npx", "-y", "@qwen-code/qwen-code@0.21.7", "--acp", "--experimental-skills"],
     },
     authMethodId: "qwen-code",
   },

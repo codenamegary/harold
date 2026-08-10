@@ -2,7 +2,7 @@
 name: acp-catalog-sync
 description: >-
   Refresh the pinned ACP registry snapshot, regenerate the agent catalog and
-  AgentId enum, and report the diff. Use when syncing ACP agents, updating the
+  open AgentId schema helper, and report the diff. Use when syncing ACP agents, updating the
   catalog, or after ACP registry changes.
 ---
 
@@ -65,6 +65,7 @@ bun run check
 
 ## Notes
 
-- Runtime does not fetch the live registry. Import UI is a later story.
+- Ordinary GET agent settings does not fetch the live registry. Import detect is the live-registry path.
 - `ensureCatalogAgentSettingsRows` inserts missing agent_settings rows on repository create.
 - Legacy `claude` id was removed. Catalog id is `claude-acp`.
+- `AgentIdSchema` is an open `z.string().min(1)`. Catalog ids live in `catalogAgentIds`.

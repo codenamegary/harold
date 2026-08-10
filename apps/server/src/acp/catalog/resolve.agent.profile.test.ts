@@ -28,7 +28,7 @@ describe("resolveAgentProfile", () => {
       "cursor/create_plan",
     ])
 
-    expect(buildAgentSpawnCommand(profile, "/opt/cursor/bin/agent")).toEqual([
+    expect(buildAgentSpawnCommand("/opt/cursor/bin/agent", ["acp"])).toEqual([
       "/opt/cursor/bin/agent",
       "acp",
     ])
@@ -54,9 +54,38 @@ describe("resolveAgentProfile", () => {
       extensionHandlers: {},
     })
 
-    expect(buildAgentSpawnCommand(profile, "/usr/local/bin/opencode")).toEqual([
+    expect(buildAgentSpawnCommand("/usr/local/bin/opencode", ["acp"])).toEqual([
       "/usr/local/bin/opencode",
       "acp",
     ])
+  })
+
+  test("uses auggie native CLI override instead of registry npx package", () => {
+    const profile = resolveAgentProfile("auggie")
+    if (profile === undefined) {
+      throw new Error("expected auggie profile")
+    }
+
+    expect(profile.command).toEqual(["auggie", "--acp"])
+    expect(buildAgentSpawnCommand("/usr/local/bin/auggie", ["--acp"])).toEqual([
+      "/usr/local/bin/auggie",
+      "--acp",
+    ])
+  })
+
+  test("builds a generic profile from a registry-ahead spawn snapshot", () => {
+    const profile = resolveAgentProfile("brand-new-agent", {
+      kind: "binary",
+      binaryName: "brand-new",
+      command: ["brand-new", "acp"],
+      displayName: "Brand New",
+      authMethodId: "brand-new-agent",
+    })
+    if (profile === undefined) {
+      throw new Error("expected registry-ahead profile")
+    }
+
+    expect(profile.command).toEqual(["brand-new", "acp"])
+    expect(profile.authMethodId).toBe("brand-new-agent")
   })
 })

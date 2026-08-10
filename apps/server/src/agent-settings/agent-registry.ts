@@ -1,6 +1,13 @@
-import { AgentId, AgentIdSchema, AgentSettings } from "contracts/http/agent-settings"
+import {
+  AgentId,
+  AgentIdSchema,
+  AgentSettings,
+  AgentSpawnSnapshot,
+  AgentSpawnSnapshotSchema,
+} from "contracts/http/agent-settings"
 import { catalogAgentList, catalogAgentsById } from "../acp/catalog/generated/catalog.agents.generated"
 import { productAgentOverridesById } from "../acp/catalog/overrides/product.overrides"
+import { popularAgentAllowlist } from "../acp/catalog/popular.allowlist"
 
 export type AgentDefinition = {
   id: AgentId
@@ -9,8 +16,15 @@ export type AgentDefinition = {
   binaryName: string
 }
 
+const popularAgentIdSet = new Set<string>(popularAgentAllowlist)
+
+export const isPopularAgentId = (agentId: AgentId): boolean => popularAgentIdSet.has(agentId)
+
+export const isCatalogAgentId = (agentId: AgentId): boolean =>
+  Object.prototype.hasOwnProperty.call(catalogAgentsById, agentId)
+
 const toAgentDefinition = (agentId: AgentId): AgentDefinition => {
-  const catalogAgent = catalogAgentsById[agentId]
+  const catalogAgent = catalogAgentsById[agentId as keyof typeof catalogAgentsById]
   const override = productAgentOverridesById[agentId]
 
   return {
@@ -25,15 +39,15 @@ export const agentDefinitionList: AgentDefinition[] = catalogAgentList.map((agen
   toAgentDefinition(AgentIdSchema.parse(agent.id)),
 )
 
-const buildAgentDefinitions = (): Record<AgentId, AgentDefinition> => {
-  const definitions = {} as Record<AgentId, AgentDefinition>
+const buildAgentDefinitions = (): Record<string, AgentDefinition> => {
+  const definitions: Record<string, AgentDefinition> = {}
   for (const definition of agentDefinitionList) {
     definitions[definition.id] = definition
   }
   return definitions
 }
 
-export const agentDefinitions: Record<AgentId, AgentDefinition> = buildAgentDefinitions()
+export const agentDefinitions: Record<string, AgentDefinition> = buildAgentDefinitions()
 
 export type AgentRegistryMetadata = {
   command: readonly string[]
@@ -41,10 +55,10 @@ export type AgentRegistryMetadata = {
   capabilities: readonly string[]
 }
 
-const buildAgentRegistryMetadata = (): Record<AgentId, AgentRegistryMetadata> => {
-  const metadata = {} as Record<AgentId, AgentRegistryMetadata>
+const buildAgentRegistryMetadata = (): Record<string, AgentRegistryMetadata> => {
+  const metadata: Record<string, AgentRegistryMetadata> = {}
   for (const definition of agentDefinitionList) {
-    const catalogAgent = catalogAgentsById[definition.id]
+    const catalogAgent = catalogAgentsById[definition.id as keyof typeof catalogAgentsById]
     const override = productAgentOverridesById[definition.id]
     metadata[definition.id] = {
       command: override?.command ?? catalogAgent.spawn.command,
@@ -55,19 +69,91 @@ const buildAgentRegistryMetadata = (): Record<AgentId, AgentRegistryMetadata> =>
   return metadata
 }
 
-export const agentRegistryMetadataById: Record<AgentId, AgentRegistryMetadata> =
+export const agentRegistryMetadataById: Record<string, AgentRegistryMetadata> =
   buildAgentRegistryMetadata()
 
+export const parseSpawnSnapshot = (raw: string | null): AgentSpawnSnapshot | null => {
+  if (raw === null) {
+    return null
+  }
+
+  return AgentSpawnSnapshotSchema.parse(JSON.parse(raw))
+}
+
+export const serializeSpawnSnapshot = (snapshot: AgentSpawnSnapshot): string =>
+  JSON.stringify(snapshot)
+
+export const resolveTemplateBinaryName = (
+  agentId: AgentId,
+  spawnSnapshot: AgentSpawnSnapshot | null,
+): string | null => {
+  const definition = agentDefinitions[agentId]
+  if (definition !== undefined) {
+    return definition.binaryName
+  }
+
+  return spawnSnapshot?.binaryName ?? null
+}
+
+export const resolveTemplateArgs = (
+  agentId: AgentId,
+  spawnSnapshot: AgentSpawnSnapshot | null,
+): string[] => {
+  const override = productAgentOverridesById[agentId]
+  const catalogAgent = catalogAgentsById[agentId as keyof typeof catalogAgentsById]
+  const command =
+    override?.command ?? catalogAgent?.spawn.command ?? spawnSnapshot?.command
+
+  if (command === undefined) {
+    return []
+  }
+
+  return command.slice(1)
+}
+
 export const toAgentSettings = (
-  definition: AgentDefinition,
-  row: {
+  input: {
+    id: AgentId
+    displayName: string
+    available: boolean
     enabled: boolean
     path: string | null
+    args: string[]
+    present: boolean
+    popular: boolean
   },
 ): AgentSettings => ({
-  id: definition.id,
-  displayName: definition.displayName,
-  available: definition.available,
-  enabled: row.enabled,
-  path: row.path,
+  id: input.id,
+  displayName: input.displayName,
+  available: input.available,
+  enabled: input.enabled,
+  path: input.path,
+  args: input.args,
+  present: input.present,
+  popular: input.popular,
 })
+
+export const sortAgentSettingsBands = (
+  items: readonly AgentSettings[],
+): AgentSettings[] => {
+  const bandRank = (item: AgentSettings): number => {
+    if (item.enabled) {
+      return 0
+    }
+    if (item.present) {
+      return 1
+    }
+    if (item.popular) {
+      return 2
+    }
+    return 3
+  }
+
+  return [...items].sort((left, right) => {
+    const bandDiff = bandRank(left) - bandRank(right)
+    if (bandDiff !== 0) {
+      return bandDiff
+    }
+    return left.displayName.localeCompare(right.displayName)
+  })
+}

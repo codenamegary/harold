@@ -2,21 +2,36 @@ import { eq } from "drizzle-orm"
 import {
   AgentId,
   AgentSettings,
+  AgentSpawnSnapshot,
+  ImportApplyBody,
+  ImportDetectCandidate,
+  ImportDetectResponse,
   UpdateAgentSettingsBody,
 } from "contracts/http/agent-settings"
 import { AgentDatabase } from "../persistence/database"
 import { agentSettings } from "../persistence/schema/agent-settings"
 import { ensureCatalogAgentSettingsRows } from "../acp/catalog/ensure.catalog.agent.settings"
+import { PresenceProbeContext } from "../acp/catalog/agent.profile.override"
+import { probePresence } from "../acp/catalog/probe.presence"
+import { resolveCatalogSpawn } from "../acp/catalog/resolve.catalog.spawn"
+import { registrySnapshotSchema } from "../acp/catalog/registry.schema"
 import {
-  agentDefinitionList,
-  agentDefinitions,
+  isCatalogAgentId,
+  isPopularAgentId,
+  parseSpawnSnapshot,
+  resolveTemplateArgs,
+  resolveTemplateBinaryName,
+  serializeSpawnSnapshot,
+  sortAgentSettingsBands,
   toAgentSettings,
 } from "./agent-registry"
+import { parseArgs, serializeArgs } from "./agent.settings.args"
 import { resolveAgentPath, WhichFn } from "./resolve-agent-path"
 import {
   validateExecutablePath,
   ValidateExecutablePathFn,
 } from "./validate-agent-path"
+import { catalogAgentsById } from "../acp/catalog/generated/catalog.agents.generated"
 
 export type AgentSettingsRepositoryError =
   | { kind: "not_found" }
@@ -24,6 +39,7 @@ export type AgentSettingsRepositoryError =
   | { kind: "path_not_found" }
   | { kind: "path_auto_detect_failed" }
   | { kind: "path_invalid"; path: string }
+  | { kind: "registry_fetch_failed" }
 
 export type AgentSettingsRepositoryResult<T> =
   | { ok: true; value: T }
@@ -31,33 +47,75 @@ export type AgentSettingsRepositoryResult<T> =
 
 type AgentSettingsRow = typeof agentSettings.$inferSelect
 
+export type FetchRegistryFn = (url: string) => Promise<unknown>
+
+export const defaultAcpRegistryUrl =
+  "https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json"
+
 export type AgentSettingsRepository = {
   list: () => AgentSettings[]
+  getSpawnSnapshot: (agentId: AgentId) => AgentSpawnSnapshot | null
   detectPath: (agentId: AgentId) => AgentSettingsRepositoryResult<{ path: string }>
   update: (input: {
     agentId: AgentId
     body: UpdateAgentSettingsBody
   }) => AgentSettingsRepositoryResult<AgentSettings>
+  importDetect: () => Promise<AgentSettingsRepositoryResult<ImportDetectResponse>>
+  importApply: (
+    body: ImportApplyBody,
+  ) => AgentSettingsRepositoryResult<AgentSettings[]>
 }
 
 export type CreateAgentSettingsRepositoryOptions = {
   whichFn?: WhichFn
   validateExecutablePathFn?: ValidateExecutablePathFn
+  env?: Readonly<Record<string, string | undefined>>
+  fetchRegistryFn?: FetchRegistryFn
+  registryUrl?: string
 }
 
 const nowIso = () => new Date().toISOString()
 
-const rowToAgentSettings = (row: AgentSettingsRow): AgentSettings => {
-  const definition = agentDefinitions[row.agentId as AgentId]
-  return toAgentSettings(definition, row)
+const createPresenceCtx = (
+  whichFn: WhichFn,
+  env: Readonly<Record<string, string | undefined>>,
+): PresenceProbeContext => ({
+  which: whichFn,
+  env,
+})
+
+const resolveDisplayName = (
+  agentId: AgentId,
+  row: AgentSettingsRow | undefined,
+): string => {
+  const catalogAgent = catalogAgentsById[agentId as keyof typeof catalogAgentsById]
+  if (catalogAgent !== undefined) {
+    return catalogAgent.displayName
+  }
+
+  const snapshot = parseSpawnSnapshot(row?.spawnSnapshot ?? null)
+  if (snapshot !== null) {
+    return snapshot.displayName
+  }
+
+  return agentId
+}
+
+const resolveAvailable = (agentId: AgentId): boolean => {
+  const catalogAgent = catalogAgentsById[agentId as keyof typeof catalogAgentsById]
+  return catalogAgent?.available ?? true
 }
 
 const detectPathForAgent = (
   agentId: AgentId,
   whichFn: WhichFn,
+  spawnSnapshot: AgentSpawnSnapshot | null,
 ): string | null => {
-  const definition = agentDefinitions[agentId]
-  return resolveAgentPath(definition.binaryName, whichFn)
+  const binaryName = resolveTemplateBinaryName(agentId, spawnSnapshot)
+  if (binaryName === null) {
+    return null
+  }
+  return resolveAgentPath(binaryName, whichFn)
 }
 
 const resolvePathForUpdate = (
@@ -65,6 +123,7 @@ const resolvePathForUpdate = (
   body: UpdateAgentSettingsBody,
   whichFn: WhichFn,
   validatePath: ValidateExecutablePathFn,
+  spawnSnapshot: AgentSpawnSnapshot | null,
 ): AgentSettingsRepositoryResult<string> => {
   if ("path" in body) {
     if (!validatePath(body.path)) {
@@ -73,7 +132,7 @@ const resolvePathForUpdate = (
     return { ok: true, value: body.path }
   }
 
-  const detectedPath = detectPathForAgent(agentId, whichFn)
+  const detectedPath = detectPathForAgent(agentId, whichFn, spawnSnapshot)
   if (!detectedPath) {
     return { ok: false, error: { kind: "path_not_found" } }
   }
@@ -83,39 +142,98 @@ const resolvePathForUpdate = (
   return { ok: true, value: detectedPath }
 }
 
+const needsArgsSeed = (rawArgs: string | null): boolean => {
+  const parsed = parseArgs(rawArgs)
+  return parsed === null || parsed.length === 0
+}
+
+const toSettingsFromRow = (
+  agentId: AgentId,
+  row: AgentSettingsRow | undefined,
+  presenceCtx: PresenceProbeContext,
+): AgentSettings => {
+  const spawnSnapshot = parseSpawnSnapshot(row?.spawnSnapshot ?? null)
+  const presence = probePresence(agentId, presenceCtx, spawnSnapshot ?? undefined)
+  const storedArgs = parseArgs(row?.args ?? null)
+
+  return toAgentSettings({
+    id: agentId,
+    displayName: resolveDisplayName(agentId, row),
+    available: resolveAvailable(agentId),
+    enabled: row?.enabled ?? false,
+    path: row?.path ?? resolveTemplateBinaryName(agentId, spawnSnapshot),
+    args: storedArgs ?? resolveTemplateArgs(agentId, spawnSnapshot),
+    present: presence.present,
+    popular: isPopularAgentId(agentId),
+  })
+}
+
 export const createAgentSettingsRepository = (
   database: AgentDatabase,
   options: CreateAgentSettingsRepositoryOptions = {},
 ): AgentSettingsRepository => {
   const whichFn: WhichFn = options.whichFn ?? ((name) => Bun.which(name))
   const validatePath = options.validateExecutablePathFn ?? validateExecutablePath
+  const env = options.env ?? process.env
+  const fetchRegistryFn =
+    options.fetchRegistryFn ??
+    (async (url: string) => {
+      const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error(`registry fetch failed: ${response.status}`)
+      }
+      return response.json()
+    })
+  const registryUrl = options.registryUrl ?? defaultAcpRegistryUrl
+  const presenceCtx = () => createPresenceCtx(whichFn, env)
 
   ensureCatalogAgentSettingsRows(database)
 
   const list = (): AgentSettings[] => {
     const rows = database.db.select().from(agentSettings).all()
     const rowsById = new Map(rows.map((row) => [row.agentId, row]))
+    const ctx = presenceCtx()
 
-    return agentDefinitionList.map((definition) => {
-      const row = rowsById.get(definition.id)
-      return row
-        ? rowToAgentSettings(row)
-        : toAgentSettings(definition, {
-            enabled: false,
-            path: null,
-          })
-    })
+    const catalogItems = Object.keys(catalogAgentsById).map((agentId) =>
+      toSettingsFromRow(agentId, rowsById.get(agentId), ctx),
+    )
+
+    const registryAheadItems = rows
+      .filter((row) => !isCatalogAgentId(row.agentId))
+      .map((row) => toSettingsFromRow(row.agentId, row, ctx))
+
+    return sortAgentSettingsBands([...catalogItems, ...registryAheadItems])
+  }
+
+  const getSpawnSnapshot = (agentId: AgentId): AgentSpawnSnapshot | null => {
+    const row = database.db
+      .select()
+      .from(agentSettings)
+      .where(eq(agentSettings.agentId, agentId))
+      .get()
+
+    return parseSpawnSnapshot(row?.spawnSnapshot ?? null)
   }
 
   const detectPath = (
     agentId: AgentId,
   ): AgentSettingsRepositoryResult<{ path: string }> => {
-    const definition = agentDefinitions[agentId]
-    if (!definition) {
+    const row = database.db
+      .select()
+      .from(agentSettings)
+      .where(eq(agentSettings.agentId, agentId))
+      .get()
+
+    const spawnSnapshot = parseSpawnSnapshot(row?.spawnSnapshot ?? null)
+    if (!isCatalogAgentId(agentId) && spawnSnapshot === null && row === undefined) {
       return { ok: false, error: { kind: "not_found" } }
     }
 
-    const detectedPath = detectPathForAgent(agentId, whichFn)
+    if (!isCatalogAgentId(agentId) && row === undefined) {
+      return { ok: false, error: { kind: "not_found" } }
+    }
+
+    const detectedPath = detectPathForAgent(agentId, whichFn, spawnSnapshot)
     if (!detectedPath || !validatePath(detectedPath)) {
       return { ok: false, error: { kind: "path_not_found" } }
     }
@@ -130,15 +248,6 @@ export const createAgentSettingsRepository = (
     agentId: AgentId
     body: UpdateAgentSettingsBody
   }): AgentSettingsRepositoryResult<AgentSettings> => {
-    const definition = agentDefinitions[agentId]
-    if (!definition) {
-      return { ok: false, error: { kind: "not_found" } }
-    }
-
-    if (body.enabled && !definition.available) {
-      return { ok: false, error: { kind: "cannot_enable" } }
-    }
-
     const current = database.db
       .select()
       .from(agentSettings)
@@ -149,22 +258,41 @@ export const createAgentSettingsRepository = (
       return { ok: false, error: { kind: "not_found" } }
     }
 
+    if (body.enabled && !resolveAvailable(agentId)) {
+      return { ok: false, error: { kind: "cannot_enable" } }
+    }
+
+    const spawnSnapshot = parseSpawnSnapshot(current.spawnSnapshot)
     const nextEnabled = body.enabled
     let nextPath = current.path
+    let nextArgs = current.args
+
+    if ("args" in body) {
+      nextArgs = serializeArgs(body.args)
+    } else if (nextEnabled && needsArgsSeed(current.args)) {
+      nextArgs = serializeArgs(resolveTemplateArgs(agentId, spawnSnapshot))
+    }
 
     if ("path" in body) {
-      const resolvedPath = resolvePathForUpdate(agentId, body, whichFn, validatePath)
+      const resolvedPath = resolvePathForUpdate(
+        agentId,
+        body,
+        whichFn,
+        validatePath,
+        spawnSnapshot,
+      )
       if (!resolvedPath.ok) {
         return resolvedPath
       }
       nextPath = resolvedPath.value
     } else if (nextEnabled && current.path === null) {
-      const detectedPath = detectPathForAgent(agentId, whichFn)
+      const detectedPath = detectPathForAgent(agentId, whichFn, spawnSnapshot)
       if (!detectedPath || !validatePath(detectedPath)) {
         const partialRow: AgentSettingsRow = {
           ...current,
           enabled: true,
           path: null,
+          args: nextArgs,
           updatedAt: nowIso(),
         }
 
@@ -173,6 +301,7 @@ export const createAgentSettingsRepository = (
           .set({
             enabled: partialRow.enabled,
             path: partialRow.path,
+            args: partialRow.args,
             updatedAt: partialRow.updatedAt,
           })
           .where(eq(agentSettings.agentId, agentId))
@@ -192,6 +321,7 @@ export const createAgentSettingsRepository = (
       ...current,
       enabled: nextEnabled,
       path: nextPath,
+      args: nextArgs,
       updatedAt: nowIso(),
     }
 
@@ -200,17 +330,118 @@ export const createAgentSettingsRepository = (
       .set({
         enabled: nextRow.enabled,
         path: nextRow.path,
+        args: nextRow.args,
         updatedAt: nextRow.updatedAt,
       })
       .where(eq(agentSettings.agentId, agentId))
       .run()
 
-    return { ok: true, value: rowToAgentSettings(nextRow) }
+    return { ok: true, value: toSettingsFromRow(agentId, nextRow, presenceCtx()) }
+  }
+
+  const importDetect = async (): Promise<
+    AgentSettingsRepositoryResult<ImportDetectResponse>
+  > => {
+    try {
+      const payload = await fetchRegistryFn(registryUrl)
+      const snapshot = registrySnapshotSchema.parse(payload)
+      const rows = database.db.select().from(agentSettings).all()
+      const rowsById = new Map(rows.map((row) => [row.agentId, row]))
+      const ctx = presenceCtx()
+
+      const items: ImportDetectCandidate[] = snapshot.agents.map((agent) => {
+        const spawn = resolveCatalogSpawn(agent)
+        const spawnSnapshot: AgentSpawnSnapshot = {
+          kind: spawn.kind,
+          binaryName: spawn.binaryName,
+          command: [...spawn.command],
+          displayName: agent.name,
+          authMethodId: agent.id,
+        }
+        const presence = probePresence(agent.id, ctx, spawn)
+        const row = rowsById.get(agent.id)
+
+        return {
+          id: agent.id,
+          displayName: agent.name,
+          present: presence.present,
+          path: presence.path,
+          inCatalog: isCatalogAgentId(agent.id),
+          alreadyEnabled: row?.enabled ?? false,
+          spawn: spawnSnapshot,
+        }
+      })
+
+      return {
+        ok: true,
+        value: {
+          items: items.filter((item) => item.present),
+        },
+      }
+    } catch {
+      return { ok: false, error: { kind: "registry_fetch_failed" } }
+    }
+  }
+
+  const importApply = (
+    body: ImportApplyBody,
+  ): AgentSettingsRepositoryResult<AgentSettings[]> => {
+    const updatedAt = nowIso()
+
+    for (const agent of body.agents) {
+      const nextPath = agent.path ?? agent.spawn.binaryName
+      if (agent.path !== null && !validatePath(agent.path)) {
+        return { ok: false, error: { kind: "path_invalid", path: agent.path } }
+      }
+
+      const nextArgs = serializeArgs(agent.spawn.command.slice(1))
+      const spawnSnapshotJson = isCatalogAgentId(agent.id)
+        ? null
+        : serializeSpawnSnapshot(agent.spawn)
+
+      const current = database.db
+        .select()
+        .from(agentSettings)
+        .where(eq(agentSettings.agentId, agent.id))
+        .get()
+
+      if (current === undefined) {
+        database.db
+          .insert(agentSettings)
+          .values({
+            agentId: agent.id,
+            enabled: true,
+            path: nextPath,
+            args: nextArgs,
+            spawnSnapshot: spawnSnapshotJson,
+            updatedAt,
+          })
+          .run()
+        continue
+      }
+
+      database.db
+        .update(agentSettings)
+        .set({
+          enabled: true,
+          path: nextPath,
+          args: nextArgs,
+          spawnSnapshot: spawnSnapshotJson ?? current.spawnSnapshot,
+          updatedAt,
+        })
+        .where(eq(agentSettings.agentId, agent.id))
+        .run()
+    }
+
+    return { ok: true, value: list() }
   }
 
   return {
     list,
+    getSpawnSnapshot,
     detectPath,
     update,
+    importDetect,
+    importApply,
   }
 }

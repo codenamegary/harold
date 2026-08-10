@@ -19,7 +19,7 @@ type ChatHeaderProps = {
   agents: ReadonlyArray<{ id: AgentId; displayName: string; enabled: boolean }>
   sessions: ReadonlyArray<Session>
   workspaceId: string
-  agentId: AgentId | ""
+  agentId: string
   sessionId: string
   selectedSession: Session | undefined
   selectedSessionState: SessionState | null

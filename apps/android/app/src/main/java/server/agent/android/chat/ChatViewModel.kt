@@ -773,7 +773,7 @@ class ChatViewModel(
                 name = "Session",
                 workspaceId = "",
                 workspaceLabel = "",
-                agentId = AgentId.Cursor,
+                agentId = "cursor",
                 agentLabel = "",
                 state = SessionState.Idle,
             )
@@ -886,7 +886,7 @@ class ChatViewModel(
         workspaceId = workspaceId,
         workspaceLabel = workspaceLabels[workspaceId] ?: workspaceId,
         agentId = agentId,
-        agentLabel = agentLabels[agentId] ?: agentId.name,
+        agentLabel = agentLabels[agentId] ?: agentId,
         state = state,
     )
 

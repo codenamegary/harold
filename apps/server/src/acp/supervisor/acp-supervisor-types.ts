@@ -1,4 +1,4 @@
-import { AgentId } from "contracts/http/agent-settings"
+import { AgentId, AgentSpawnSnapshot } from "contracts/http/agent-settings"
 import { AgentProfile } from "../agent-profile"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
 import { SpawnedAgentProcess } from "./spawn-agent-process"
@@ -102,7 +102,9 @@ export type AgentSettingsReader = {
     id: AgentId
     enabled: boolean
     path: string | null
+    args: string[]
   }>
+  getSpawnSnapshot?: (agentId: AgentId) => AgentSpawnSnapshot | null
 }
 
 export const DEFAULT_ACP_RESTART_BACKOFF_MS = [250, 500, 1000, 2000, 4000] as const
@@ -120,6 +122,7 @@ export type CreateAcpSupervisorParams = {
   spawnAgentProcessFn?: (input: {
     profile: AgentProfile
     executablePath: string
+    args: readonly string[]
   }) => SpawnedAgentProcess
   createTransportFn?: (process: SpawnedAgentProcess) => JsonRpcTransport
 }

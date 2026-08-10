@@ -4,6 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { catalogAgentIds } from "../acp/catalog/generated/catalog.agents.generated"
 import {
+  InternalProblemSchema,
   NotFoundProblemSchema,
   ValidationProblemSchema,
 } from "contracts/http/error"
@@ -11,6 +12,7 @@ import {
   AgentSettingsCollectionSchema,
   AgentSettingsSchema,
   DetectAgentPathResponseSchema,
+  ImportDetectResponseSchema,
 } from "contracts/http/agent-settings"
 import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
@@ -18,6 +20,7 @@ import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn, validateExecutablePath } from "../agent-settings/validate-agent-path"
+import { FetchRegistryFn } from "../agent-settings/agent-settings-repository"
 
 const tempDirs: string[] = []
 const apps: Awaited<ReturnType<typeof createServer>>["app"][] = []
@@ -34,6 +37,7 @@ const createTestApp = async (
   dataDir: string,
   whichFn?: WhichFn,
   validateExecutablePathFn: ValidateExecutablePathFn = acceptTestExecutablePath,
+  fetchRegistryFn?: FetchRegistryFn,
 ) => {
   const config = parseConfig({
     AGENT_SERVER_HOST: "127.0.0.1",
@@ -48,6 +52,7 @@ const createTestApp = async (
     database,
     whichFn,
     validateExecutablePathFn,
+    fetchRegistryFn,
   })
   apps.push(app)
   return { app, database, config }
@@ -60,7 +65,7 @@ afterEach(async () => {
 
 const findAgent = (
   collection: ReturnType<typeof AgentSettingsCollectionSchema.parse>,
-  agentId: (typeof catalogAgentIds)[number],
+  agentId: string,
 ) => {
   const agent = collection.items.find((item) => item.id === agentId)
   if (!agent) {
@@ -70,9 +75,11 @@ const findAgent = (
 }
 
 describe("GET /v1/settings/agents", () => {
-  test("returns all agents disabled by default", async () => {
+  test("returns all catalog agents disabled by default with presence and popular", async () => {
     const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? "/usr/local/bin/agent" : undefined
+    const { app } = await createTestApp(dataDir, whichFn)
 
     const response = await app.inject({
       method: "GET",
@@ -87,12 +94,90 @@ describe("GET /v1/settings/agents", () => {
     const cursor = findAgent(body, "cursor")
     expect(cursor.enabled).toBe(false)
     expect(cursor.available).toBe(true)
-    expect(cursor.path).toBeNull()
+    expect(cursor.path).toBe("agent")
+    expect(cursor.args).toEqual(["acp"])
+    expect(cursor.present).toBe(true)
+    expect(cursor.popular).toBe(true)
 
     const claudeAcp = findAgent(body, "claude-acp")
     expect(claudeAcp.enabled).toBe(false)
     expect(claudeAcp.available).toBe(true)
-    expect(claudeAcp.path).toBeNull()
+    expect(claudeAcp.path).toBe("npx")
+    expect(claudeAcp.args).toEqual(["-y", "@agentclientprotocol/claude-agent-acp@0.66.0"])
+    expect(claudeAcp.popular).toBe(true)
+  })
+
+  test("sorts enabled, then present, then popular, then rest", async () => {
+    const dataDir = await createTempDataDir()
+    const whichFn: WhichFn = (binaryName) => {
+      if (binaryName === "agent") {
+        return "/usr/local/bin/agent"
+      }
+      if (binaryName === "opencode") {
+        return "/usr/local/bin/opencode"
+      }
+      return undefined
+    }
+    const { app } = await createTestApp(dataDir, whichFn)
+
+    await app.inject({
+      method: "PATCH",
+      url: "/v1/settings/agents/opencode",
+      payload: { enabled: true },
+    })
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/settings/agents",
+    })
+    const body = AgentSettingsCollectionSchema.parse(JSON.parse(response.body))
+
+    const bandRank = (item: (typeof body.items)[number]): number => {
+      if (item.enabled) {
+        return 0
+      }
+      if (item.present) {
+        return 1
+      }
+      if (item.popular) {
+        return 2
+      }
+      return 3
+    }
+
+    const ids = body.items.map((item) => item.id)
+    expect(ids[0]).toBe("opencode")
+    expect(body.items[0]?.enabled).toBe(true)
+
+    for (let index = 1; index < body.items.length; index += 1) {
+      const previous = body.items[index - 1]
+      const current = body.items[index]
+      if (previous === undefined || current === undefined) {
+        throw new Error("Unexpected missing agent in sort band assertion")
+      }
+      const previousRank = bandRank(previous)
+      const currentRank = bandRank(current)
+      expect(currentRank).toBeGreaterThanOrEqual(previousRank)
+      if (currentRank === previousRank) {
+        expect(
+          previous.displayName.localeCompare(current.displayName),
+        ).toBeLessThanOrEqual(0)
+      }
+    }
+
+    const firstPresentIndex = body.items.findIndex(
+      (item) => !item.enabled && item.present,
+    )
+    const firstPopularOnlyIndex = body.items.findIndex(
+      (item) => !item.enabled && !item.present && item.popular,
+    )
+    const firstRestIndex = body.items.findIndex(
+      (item) => !item.enabled && !item.present && !item.popular,
+    )
+
+    expect(firstPresentIndex).toBeGreaterThan(0)
+    expect(firstPopularOnlyIndex).toBeGreaterThan(firstPresentIndex)
+    expect(firstRestIndex).toBeGreaterThan(firstPopularOnlyIndex)
   })
 })
 
@@ -119,7 +204,7 @@ describe("POST /v1/settings/agents/:agentId/detect-path", () => {
       url: "/v1/settings/agents",
     })
     const listBody = AgentSettingsCollectionSchema.parse(JSON.parse(listResponse.body))
-    expect(findAgent(listBody, "cursor").path).toBeNull()
+    expect(findAgent(listBody, "cursor").path).toBe("agent")
   })
 
   test("returns 404 when detect fails", async () => {
@@ -158,6 +243,8 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     expect(response.statusCode).toBe(200)
     expect(body.enabled).toBe(true)
     expect(body.path).toBe(detectedPath)
+    expect(body.args).toEqual(["acp"])
+    expect(body.present).toBe(true)
   })
 
   test("returns 400 and persists enabled when enable auto-detect fails", async () => {
@@ -186,7 +273,8 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const cursor = findAgent(listBody, "cursor")
 
     expect(cursor.enabled).toBe(true)
-    expect(cursor.path).toBeNull()
+    expect(cursor.path).toBe("agent")
+    expect(cursor.args).toEqual(["acp"])
   })
 
   test("disables cursor and keeps stored path", async () => {
@@ -347,10 +435,13 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
       available: true,
       enabled: true,
       path: detectedPath,
+      args: ["-y", "@agentclientprotocol/claude-agent-acp@0.66.0"],
+      present: false,
+      popular: true,
     })
   })
 
-  test("returns 400 for invalid agent id", async () => {
+  test("returns 404 for unknown agent id without a settings row", async () => {
     const dataDir = await createTempDataDir()
     const { app } = await createTestApp(dataDir)
 
@@ -360,11 +451,164 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
       payload: { enabled: true },
     })
 
-    const body = ValidationProblemSchema.parse(JSON.parse(response.body))
+    const body = NotFoundProblemSchema.parse(JSON.parse(response.body))
 
-    expect(response.statusCode).toBe(400)
-    expect(response.headers["content-type"]).toStartWith("application/problem+json")
-    expect(body.errors[0]?.pointer).toBe("#")
+    expect(response.statusCode).toBe(404)
+    expect(body.title).toBe("Agent not found")
+  })
+})
+
+describe("POST /v1/settings/agents/import/detect and apply", () => {
+  test("detect returns present candidates without persisting, apply upserts registry-ahead", async () => {
+    const dataDir = await createTempDataDir()
+    const whichFn: WhichFn = (binaryName) => {
+      if (binaryName === "agent") {
+        return "/usr/local/bin/agent"
+      }
+      if (binaryName === "brand-new") {
+        return "/usr/bin/brand-new"
+      }
+      return undefined
+    }
+
+    const fetchRegistryFn: FetchRegistryFn = async () => ({
+      version: "test",
+      agents: [
+        {
+          id: "cursor",
+          name: "Cursor",
+          distribution: {
+            binary: {
+              "linux-x86_64": {
+                archive: "https://example.test/cursor.tgz",
+                cmd: "cursor-agent",
+                args: ["acp"],
+              },
+            },
+          },
+        },
+        {
+          id: "brand-new-agent",
+          name: "Brand New",
+          distribution: {
+            binary: {
+              "linux-x86_64": {
+                archive: "https://example.test/brand-new.tgz",
+                cmd: "brand-new",
+                args: ["acp"],
+              },
+            },
+          },
+        },
+        {
+          id: "missing-binary-agent",
+          name: "Missing",
+          distribution: {
+            binary: {
+              "linux-x86_64": {
+                archive: "https://example.test/missing.tgz",
+                cmd: "missing-bin",
+                args: ["acp"],
+              },
+            },
+          },
+        },
+      ],
+    })
+
+    const { app } = await createTestApp(dataDir, whichFn, acceptTestExecutablePath, fetchRegistryFn)
+
+    const detectResponse = await app.inject({
+      method: "POST",
+      url: "/v1/settings/agents/import/detect",
+    })
+    const detectBody = ImportDetectResponseSchema.parse(JSON.parse(detectResponse.body))
+
+    expect(detectResponse.statusCode).toBe(200)
+    expect(detectBody.items.map((item) => item.id).sort()).toEqual([
+      "brand-new-agent",
+      "cursor",
+    ])
+    expect(detectBody.items.find((item) => item.id === "brand-new-agent")).toEqual({
+      id: "brand-new-agent",
+      displayName: "Brand New",
+      present: true,
+      path: "/usr/bin/brand-new",
+      inCatalog: false,
+      alreadyEnabled: false,
+      spawn: {
+        kind: "binary",
+        binaryName: "brand-new",
+        command: ["brand-new", "acp"],
+        displayName: "Brand New",
+        authMethodId: "brand-new-agent",
+      },
+    })
+
+    const listBeforeApply = AgentSettingsCollectionSchema.parse(
+      JSON.parse(
+        (
+          await app.inject({
+            method: "GET",
+            url: "/v1/settings/agents",
+          })
+        ).body,
+      ),
+    )
+    expect(listBeforeApply.items.some((item) => item.id === "brand-new-agent")).toBe(false)
+
+    const applyResponse = await app.inject({
+      method: "POST",
+      url: "/v1/settings/agents/import/apply",
+      payload: {
+        agents: [
+          {
+            id: "brand-new-agent",
+            path: "/usr/bin/brand-new",
+            spawn: {
+              kind: "binary",
+              binaryName: "brand-new",
+              command: ["brand-new", "acp"],
+              displayName: "Brand New",
+              authMethodId: "brand-new-agent",
+            },
+          },
+        ],
+      },
+    })
+
+    const applyBody = AgentSettingsCollectionSchema.parse(JSON.parse(applyResponse.body))
+    expect(applyResponse.statusCode).toBe(200)
+
+    const imported = findAgent(applyBody, "brand-new-agent")
+    expect(imported).toEqual({
+      id: "brand-new-agent",
+      displayName: "Brand New",
+      available: true,
+      enabled: true,
+      path: "/usr/bin/brand-new",
+      args: ["acp"],
+      present: true,
+      popular: false,
+    })
+    expect(applyBody.items[0]?.id).toBe("brand-new-agent")
+  })
+
+  test("detect returns 502 when registry fetch fails", async () => {
+    const dataDir = await createTempDataDir()
+    const fetchRegistryFn: FetchRegistryFn = async () => {
+      throw new Error("network down")
+    }
+    const { app } = await createTestApp(dataDir, undefined, acceptTestExecutablePath, fetchRegistryFn)
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/settings/agents/import/detect",
+    })
+
+    const body = InternalProblemSchema.parse(JSON.parse(response.body))
+    expect(response.statusCode).toBe(502)
+    expect(body.title).toBe("ACP registry unavailable")
   })
 })
 
@@ -419,6 +663,7 @@ describe("agent settings durability", () => {
 
     expect(cursor.enabled).toBe(true)
     expect(cursor.path).toBe(detectedPath)
+    expect(cursor.args).toEqual(["acp"])
 
     secondDatabase.close()
   })

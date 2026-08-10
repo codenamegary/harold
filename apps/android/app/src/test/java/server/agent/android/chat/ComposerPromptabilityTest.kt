@@ -14,7 +14,7 @@ class ComposerPromptabilityTest {
         assertTrue(
             isComposerPromptable(
                 workspaceId = "ws_01",
-                agentId = AgentId.Cursor,
+                agentId = "cursor",
                 sessionId = "sess_01",
                 sessionState = SessionState.Idle,
             ),
@@ -26,7 +26,7 @@ class ComposerPromptabilityTest {
         assertFalse(
             isComposerPromptable(
                 workspaceId = "ws_01",
-                agentId = AgentId.Cursor,
+                agentId = "cursor",
                 sessionId = "sess_01",
                 sessionState = SessionState.Running,
             ),

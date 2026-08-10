@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import {
+  AgentIdSchema,
   AgentSettingsCollectionSchema,
   AgentSettingsSchema,
   DetectAgentPathResponseSchema,
+  ImportApplyBodySchema,
+  ImportDetectResponseSchema,
   UpdateAgentSettingsBodySchema,
 } from "./agent-settings"
 
@@ -12,7 +15,21 @@ const validAgentSettings = {
   available: true,
   enabled: false,
   path: null,
-} as const
+  args: [] as string[],
+  present: false,
+  popular: true,
+}
+
+describe("AgentIdSchema", () => {
+  test("accepts open string agent ids", () => {
+    expect(AgentIdSchema.parse("cursor")).toBe("cursor")
+    expect(AgentIdSchema.parse("registry-ahead-agent")).toBe("registry-ahead-agent")
+  })
+
+  test("rejects empty agent ids", () => {
+    expect(() => AgentIdSchema.parse("")).toThrow()
+  })
+})
 
 describe("AgentSettingsSchema", () => {
   test("accepts a valid agent settings record", () => {
@@ -24,6 +41,8 @@ describe("AgentSettingsSchema", () => {
       ...validAgentSettings,
       enabled: true,
       path: "/usr/local/bin/agent",
+      args: ["acp"],
+      present: true,
     }
 
     expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
@@ -36,15 +55,32 @@ describe("AgentSettingsSchema", () => {
       available: true,
       enabled: false,
       path: null,
+      args: ["@agentclientprotocol/claude-agent-acp@0.66.0"],
+      present: true,
+      popular: true,
     }
 
     expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
   })
 
-  test("rejects unknown agent id", () => {
-    expect(() =>
-      AgentSettingsSchema.parse({ ...validAgentSettings, id: "unknown" }),
-    ).toThrow()
+  test("accepts registry-ahead agent ids", () => {
+    const settings = {
+      id: "brand-new-agent",
+      displayName: "Brand New",
+      available: true,
+      enabled: true,
+      path: "/usr/bin/brand-new",
+      args: ["acp"],
+      present: true,
+      popular: false,
+    }
+
+    expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
+  })
+
+  test("rejects missing args", () => {
+    const { args: _args, ...withoutArgs } = validAgentSettings
+    expect(() => AgentSettingsSchema.parse(withoutArgs)).toThrow()
   })
 })
 
@@ -67,6 +103,44 @@ describe("UpdateAgentSettingsBodySchema", () => {
     })
   })
 
+  test("accepts enable with args", () => {
+    expect(
+      UpdateAgentSettingsBodySchema.parse({
+        enabled: true,
+        args: ["acp"],
+      }),
+    ).toEqual({
+      enabled: true,
+      args: ["acp"],
+    })
+  })
+
+  test("accepts enable with path and args", () => {
+    expect(
+      UpdateAgentSettingsBodySchema.parse({
+        enabled: true,
+        path: "/opt/agent/bin",
+        args: ["acp", "--verbose"],
+      }),
+    ).toEqual({
+      enabled: true,
+      path: "/opt/agent/bin",
+      args: ["acp", "--verbose"],
+    })
+  })
+
+  test("accepts empty args array", () => {
+    expect(
+      UpdateAgentSettingsBodySchema.parse({
+        enabled: true,
+        args: [],
+      }),
+    ).toEqual({
+      enabled: true,
+      args: [],
+    })
+  })
+
   test("rejects null path", () => {
     expect(() =>
       UpdateAgentSettingsBodySchema.parse({ enabled: true, path: null }),
@@ -76,6 +150,12 @@ describe("UpdateAgentSettingsBodySchema", () => {
   test("rejects path without enabled", () => {
     expect(() =>
       UpdateAgentSettingsBodySchema.parse({ path: "/opt/agent/bin" }),
+    ).toThrow()
+  })
+
+  test("rejects args without enabled", () => {
+    expect(() =>
+      UpdateAgentSettingsBodySchema.parse({ args: ["acp"] }),
     ).toThrow()
   })
 
@@ -94,6 +174,54 @@ describe("DetectAgentPathResponseSchema", () => {
   })
 })
 
+describe("ImportDetectResponseSchema", () => {
+  test("accepts detect candidates", () => {
+    const response = {
+      items: [
+        {
+          id: "claude-acp",
+          displayName: "Claude Agent",
+          present: true,
+          path: "/usr/bin/claude",
+          inCatalog: true,
+          alreadyEnabled: false,
+          spawn: {
+            kind: "npx",
+            binaryName: "npx",
+            command: ["npx", "-y", "@agentclientprotocol/claude-agent-acp@0.66.0"],
+            displayName: "Claude Agent",
+            authMethodId: "claude-acp",
+          },
+        },
+      ],
+    }
+
+    expect(ImportDetectResponseSchema.parse(response)).toEqual(response)
+  })
+})
+
+describe("ImportApplyBodySchema", () => {
+  test("accepts apply selections", () => {
+    const body = {
+      agents: [
+        {
+          id: "brand-new-agent",
+          path: "/usr/bin/brand-new",
+          spawn: {
+            kind: "binary",
+            binaryName: "brand-new",
+            command: ["brand-new", "acp"],
+            displayName: "Brand New",
+            authMethodId: "brand-new-agent",
+          },
+        },
+      ],
+    }
+
+    expect(ImportApplyBodySchema.parse(body)).toEqual(body)
+  })
+})
+
 describe("AgentSettingsCollectionSchema", () => {
   test("accepts a collection of agent settings", () => {
     const collection = {
@@ -105,6 +233,9 @@ describe("AgentSettingsCollectionSchema", () => {
           available: true,
           enabled: false,
           path: null,
+          args: [],
+          present: false,
+          popular: true,
         },
       ],
     }

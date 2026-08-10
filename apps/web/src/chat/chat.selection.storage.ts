@@ -1,15 +1,10 @@
-import { AgentId } from "contracts/http/agent-settings"
-
 export type ChatSelection = {
   workspaceId: string
-  agentId: AgentId | ""
+  agentId: string
   sessionId: string
 }
 
 export const CHAT_SELECTION_STORAGE_KEY = "agent-server.chat.selection"
-
-const isAgentIdOrEmpty = (value: unknown): value is AgentId | "" =>
-  value === "" || typeof value === "string"
 
 export const readChatSelection = (): ChatSelection | null => {
   const raw = window.localStorage.getItem(CHAT_SELECTION_STORAGE_KEY)
@@ -27,7 +22,7 @@ export const readChatSelection = (): ChatSelection | null => {
       !("sessionId" in parsed) ||
       typeof parsed.workspaceId !== "string" ||
       typeof parsed.sessionId !== "string" ||
-      !isAgentIdOrEmpty(parsed.agentId)
+      typeof parsed.agentId !== "string"
     ) {
       return null
     }

@@ -10,7 +10,9 @@ const tempDirs: string[] = []
 const fakeProcesses: Array<{ kill: () => void }> = []
 
 const createRepository = () => ({
-  list: () => [{ id: "cursor" as const, enabled: true, path: "/fake/agent" }],
+  list: () => [
+    { id: "cursor" as const, enabled: true, path: "/fake/agent", args: ["acp"] },
+  ],
 })
 
 const createTempWorkspace = async () => {

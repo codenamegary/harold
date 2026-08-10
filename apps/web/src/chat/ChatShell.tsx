@@ -41,7 +41,7 @@ import {
 
 export const ChatShell: React.FC = () => {
   const [workspaceId, setWorkspaceId] = useState("")
-  const [agentId, setAgentId] = useState<AgentId | "">("")
+  const [agentId, setAgentId] = useState("")
   const [sessionId, setSessionId] = useState("")
   const [transcript, setTranscript] = useState<TranscriptState>(emptyTranscript)
   const [pendingPermissions, setPendingPermissions] = useState<PermissionRequest[]>([])
@@ -69,7 +69,7 @@ export const ChatShell: React.FC = () => {
 
   const persistSelection = (next: {
     workspaceId: string
-    agentId: AgentId | ""
+    agentId: string
     sessionId: string
   }) => {
     writeChatSelection(next)

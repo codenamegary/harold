@@ -82,7 +82,8 @@ const resolveStartConfig = (
   repository: AgentSettingsReader,
   agentId: AgentId,
 ) => {
-  const profile = resolveAgentProfile(agentId)
+  const spawnSnapshot = repository.getSpawnSnapshot?.(agentId) ?? null
+  const profile = resolveAgentProfile(agentId, spawnSnapshot)
   if (!profile) {
     return { ok: false as const, reason: "Agent profile is not available" }
   }
@@ -100,6 +101,7 @@ const resolveStartConfig = (
     ok: true as const,
     profile,
     executablePath: settings.path,
+    args: settings.args,
   }
 }
 
@@ -220,6 +222,7 @@ export const createAcpSupervisor = ({
     const process = spawnAgentProcessFn({
       profile: resolved.profile,
       executablePath: resolved.executablePath,
+      args: resolved.args,
     })
     const transport = createTransportFn(process)
 

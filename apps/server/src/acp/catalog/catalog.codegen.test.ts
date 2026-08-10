@@ -38,7 +38,7 @@ describe("resolveCatalogSpawn", () => {
     expect(resolveCatalogSpawn(npxAgent)).toEqual({
       kind: "npx",
       binaryName: "npx",
-      command: ["npx", "@example/fixture-npx@2.0.0", "--acp"],
+      command: ["npx", "-y", "@example/fixture-npx@2.0.0", "--acp"],
     })
 
     expect(resolveCatalogSpawn(uvxAgent)).toEqual({
@@ -70,15 +70,14 @@ describe("catalog codegen fixture", () => {
     expect(result.agentCount).toBe(3)
 
     const agentIdSource = await readFile(paths.contractsAgentIdPath, "utf8")
-    expect(agentIdSource).toContain('z.enum([')
-    expect(agentIdSource).toContain('"fixture-binary"')
-    expect(agentIdSource).toContain('"fixture-npx"')
-    expect(agentIdSource).toContain('"fixture-uvx"')
+    expect(agentIdSource).toContain("z.string().min(1)")
+    expect(agentIdSource).not.toContain("z.enum([")
+
 
     const catalogSource = await readFile(paths.catalogAgentsPath, "utf8")
     expect(catalogSource).toContain('"fixture-binary"')
     expect(catalogSource).toContain('binaryName: "fixture-bin"')
-    expect(catalogSource).toContain('command: ["npx", "@example/fixture-npx@2.0.0", "--acp"]')
+    expect(catalogSource).toContain('command: ["npx", "-y", "@example/fixture-npx@2.0.0", "--acp"]')
     expect(catalogSource).toContain('command: ["uvx", "fixture-uvx==3.0.0", "acp"]')
 
     const overridesSource = await readFile(paths.overrideSkeletonsPath, "utf8")

@@ -2,45 +2,6 @@
 // Source: apps/server/src/acp/catalog/registry.snapshot.json
 import { z } from "zod"
 
-export const AgentIdSchema = z.enum([
-  "agoragentic-acp",
-  "amp-acp",
-  "auggie",
-  "autohand",
-  "claude-acp",
-  "cline",
-  "codebuddy-code",
-  "codex-acp",
-  "cortex-code",
-  "corust-agent",
-  "crow-cli",
-  "cursor",
-  "deepagents",
-  "devin",
-  "dimcode",
-  "dirac",
-  "factory-droid",
-  "fast-agent",
-  "gemini",
-  "github-copilot-cli",
-  "glm-acp-agent",
-  "goose",
-  "grok-build",
-  "harn",
-  "junie",
-  "kilo",
-  "kimi",
-  "minion-code",
-  "mistral-vibe",
-  "nova",
-  "opencode",
-  "pi-acp",
-  "poolside",
-  "qoder",
-  "qwen-code",
-  "sigit",
-  "stakpak",
-  "vtcode",
-])
+export const AgentIdSchema = z.string().min(1)
 
 export type AgentId = z.infer<typeof AgentIdSchema>

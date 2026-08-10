@@ -118,7 +118,7 @@ describe("POST /v1/sessions", () => {
     expect("acpSessionId" in body).toBe(false)
   })
 
-  test("returns 400 for invalid agent id", async () => {
+  test("returns 404 for unknown agent id", async () => {
     const dataDir = await createTempDataDir(resources)
     const { app } = await createTestApp(resources, dataDir)
     const { workspaceId } = await seedWorkspace(app, dataDir)
@@ -133,11 +133,11 @@ describe("POST /v1/sessions", () => {
       },
     })
 
-    const body = ValidationProblemSchema.parse(JSON.parse(response.body))
+    const body = NotFoundProblemSchema.parse(JSON.parse(response.body))
 
-    expect(response.statusCode).toBe(400)
+    expect(response.statusCode).toBe(404)
     expect(response.headers["content-type"]).toStartWith("application/problem+json")
-    expect(body.errors[0]?.pointer).toBe("#/agentId")
+    expect(body.title).toBe("Agent not found")
   })
 
   test("returns 404 for unknown workspace", async () => {

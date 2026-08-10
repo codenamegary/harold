@@ -38,10 +38,14 @@ describe("SessionSchema", () => {
     expect(SessionSchema.parse({ ...validSession, agentId: "opencode" }).agentId).toBe("opencode")
   })
 
-  test("rejects invalid agent id", () => {
-    expect(() =>
-      SessionSchema.parse({ ...validSession, agentId: "not-a-catalog-agent" }),
-    ).toThrow()
+  test("accepts open agent ids including registry-ahead", () => {
+    expect(
+      SessionSchema.parse({ ...validSession, agentId: "not-a-catalog-agent" }).agentId,
+    ).toBe("not-a-catalog-agent")
+  })
+
+  test("rejects empty agent id", () => {
+    expect(() => SessionSchema.parse({ ...validSession, agentId: "" })).toThrow()
   })
 
   test("rejects internal acpSessionId", () => {
@@ -65,11 +69,21 @@ describe("CreateSessionBodySchema", () => {
     expect(CreateSessionBodySchema.parse(body)).toEqual(body)
   })
 
-  test("rejects invalid agent id", () => {
-    expect(() =>
+  test("accepts open agent ids", () => {
+    expect(
       CreateSessionBodySchema.parse({
         workspaceId: "ws-agent-server",
         agentId: "not-a-catalog-agent",
+        text: "Explain the auth flow",
+      }).agentId,
+    ).toBe("not-a-catalog-agent")
+  })
+
+  test("rejects empty agent id", () => {
+    expect(() =>
+      CreateSessionBodySchema.parse({
+        workspaceId: "ws-agent-server",
+        agentId: "",
         text: "Explain the auth flow",
       }),
     ).toThrow()
