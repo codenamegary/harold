@@ -8,8 +8,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -45,15 +49,19 @@ fun WorkspacesScreen(
             TopAppBar(
                 title = { Text(text = "Workspaces") },
                 navigationIcon = {
-                    TextButton(
+                    IconButton(
                         onClick = onBack,
                         modifier = Modifier
                             .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                            .testTag("workspaces_back")
                             .semantics {
                                 contentDescription = backContentDescription
                             },
                     ) {
-                        Text(text = stringResource(R.string.workspaces_back))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = null,
+                        )
                     }
                 },
                 actions = {

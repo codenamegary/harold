@@ -1,9 +1,11 @@
 package server.agent.android.chat
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -359,5 +361,52 @@ class ChatScreenTest {
         composeTestRule.onNodeWithText("Session: Alpha").assertIsDisplayed()
         composeTestRule.onNodeWithTag("permission_option_allow-once").performClick()
         assertTrue(selectedOption == "allow-once")
+    }
+
+    @Test
+    fun showsIconOverflowWithoutMoreText() {
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        selectedSession = SessionRow(
+                            id = "sess_01",
+                            name = "Alpha",
+                            workspaceId = "ws_01",
+                            workspaceLabel = "agent-server",
+                            agentId = "cursor",
+                            agentLabel = "Cursor",
+                            state = SessionState.Idle,
+                        ),
+                    ),
+                    onSessionSelectorClick = {},
+                    onWorkspacesClick = {},
+                    onDismissPicker = {},
+                    onSessionClick = {},
+                    onRenameSessionClick = {},
+                    onCreateClick = {},
+                    onDismissCreate = {},
+                    onCreateWorkspaceChanged = {},
+                    onCreateAgentChanged = {},
+                    onCreatePromptChanged = {},
+                    onCreateSubmit = {},
+                    onComposerTextChanged = {},
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onRenameClick = {},
+                    onDismissRename = {},
+                    onRenameNameChanged = {},
+                    onRenameSubmit = {},
+                    onArchiveClick = {},
+                    onDismissArchive = {},
+                    onArchiveSubmit = {},
+                    onPermissionOptionSelect = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("chat_overflow").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("More").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("session_selector").assertIsDisplayed()
     }
 }

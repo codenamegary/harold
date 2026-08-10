@@ -1,8 +1,10 @@
 package server.agent.android.chat
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import org.junit.Rule
@@ -18,6 +20,27 @@ import server.agent.android.ui.theme.AgentServerTheme
 class AddWorkspaceScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Test
+    fun showsIconBackWithoutBackText() {
+        composeTestRule.setContent {
+            AgentServerTheme {
+                AddWorkspaceScreen(
+                    uiState = AddWorkspaceUiState(rootsLoadState = RootsLoadState.Empty),
+                    onBack = {},
+                    onNameChanged = {},
+                    onRootChanged = {},
+                    onFolderChanged = {},
+                    onFolderQueryChanged = {},
+                    onSubmit = {},
+                    onCreated = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("add_workspace_back").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Back").assertCountEquals(0)
+    }
 
     @Test
     fun showsEmptyRootsMessageAndDisablesSubmit() {
