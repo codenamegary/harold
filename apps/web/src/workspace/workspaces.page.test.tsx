@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { fireEvent, waitFor, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { Route, Routes } from "react-router"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
@@ -25,12 +26,34 @@ const listCollection = WorkspaceCollectionSchema.parse({
   page: { limit: 20, count: 1 },
 })
 
+const allowedRoot = "/home/operator/code"
+
+const wrapRuntimeSettings = (allowedRoots: string[]) => ({
+  settings: {
+    advertisedUrl: null,
+    trustedProxies: [] as string[],
+    bindHost: "127.0.0.1" as const,
+    bindPort: 3847,
+    logLevel: "info" as const,
+    logPath: null as string | null,
+    allowedRoots,
+  },
+  restartRequired: false,
+  effective: {
+    bindHost: "127.0.0.1" as const,
+    bindPort: 3847,
+    logPath: null as string | null,
+  },
+  overrides: {},
+})
+
 const originalFetch = globalThis.fetch
 
 const renderWorkspacesPage = (initialEntries = ["/workspaces"]) =>
   renderWithProviders(
     <Routes>
       <Route path="/workspaces" element={<WorkspacesPage />} />
+      <Route path="/settings" element={<div>Settings page</div>} />
     </Routes>,
     { initialEntries },
   )
@@ -96,7 +119,7 @@ describe("WorkspacesPage", () => {
     expect(getByText("1 of 1 workspaces")).toBeInTheDocument()
   })
 
-  test("adds a workspace through the modal", async () => {
+  test("adds a workspace through root and folder pickers", async () => {
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
 
@@ -105,8 +128,8 @@ describe("WorkspacesPage", () => {
           new Response(
             JSON.stringify({
               ...validWorkspace,
-              name: "New Project",
-              path: "/home/operator/new-project",
+              name: "new-project",
+              path: `${allowedRoot}/new-project`,
             }),
             {
               status: 201,
@@ -125,6 +148,32 @@ describe("WorkspacesPage", () => {
         )
       }
 
+      if (url.startsWith("/v1/settings/runtime")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(wrapRuntimeSettings([allowedRoot])), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url.startsWith("/v1/filesystem/directories")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              items: [
+                { name: "new-project", path: `${allowedRoot}/new-project` },
+                { name: "other", path: `${allowedRoot}/other` },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        )
+      }
+
       return Promise.resolve(new Response("not found", { status: 404 }))
     })
     globalThis.fetch = fetchMock as typeof fetch
@@ -134,12 +183,48 @@ describe("WorkspacesPage", () => {
     fireEvent.click(getByRole("button", { name: "+ Add workspace" }))
 
     const dialog = getByRole("dialog")
-    fireEvent.change(within(dialog).getByLabelText("Name"), {
-      target: { value: "New Project" },
+    expect(within(dialog).queryByLabelText("Path")).not.toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringMatching(/^\/v1\/settings\/runtime/),
+      )
     })
-    fireEvent.change(within(dialog).getByLabelText("Path"), {
-      target: { value: "/home/operator/new-project" },
+    await waitFor(() => {
+      expect(within(dialog).getByRole("combobox", { name: "Root" })).not.toBeDisabled()
     })
+
+    const user = userEvent.setup()
+    const rootInput = within(dialog).getByRole("combobox", { name: "Root" })
+    await user.click(rootInput)
+    await user.keyboard("{ArrowDown}{Enter}")
+
+    await waitFor(() => {
+      expect(rootInput).toHaveValue(allowedRoot)
+    })
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringMatching(/^\/v1\/filesystem\/directories\?/),
+      )
+    })
+    await waitFor(() => {
+      expect(within(dialog).getByRole("combobox", { name: "Folder" })).not.toBeDisabled()
+    })
+
+    const folderInput = within(dialog).getByRole("combobox", { name: "Folder" })
+    await user.click(folderInput)
+    await user.type(folderInput, "new-project")
+    await user.keyboard("{ArrowDown}{Enter}")
+
+    await waitFor(() => {
+      expect(folderInput).toHaveValue("new-project")
+    })
+
+    await waitFor(() => {
+      expect(within(dialog).getByLabelText("Name")).toHaveValue("new-project")
+    })
+
     fireEvent.click(within(dialog).getByRole("button", { name: "Add workspace" }))
 
     await waitFor(() => {
@@ -150,8 +235,56 @@ describe("WorkspacesPage", () => {
       "/v1/workspaces",
       expect.objectContaining({
         method: "POST",
+        body: JSON.stringify({
+          name: "new-project",
+          path: `${allowedRoot}/new-project`,
+        }),
       }),
     )
+  }, 15_000)
+
+  test("links to Settings when no allowed roots are configured", async () => {
+    const fetchMock = mock((input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+
+      if (url.startsWith("/v1/workspaces")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(emptyCollection), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url.startsWith("/v1/settings/runtime")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(wrapRuntimeSettings([])), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    })
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const { getByRole, getByText } = renderWorkspacesPage()
+
+    fireEvent.click(getByRole("button", { name: "+ Add workspace" }))
+
+    const dialog = getByRole("dialog")
+    await waitFor(() => {
+      expect(within(dialog).getByRole("status")).toHaveTextContent(
+        "Add an allowed root in Settings before creating a workspace.",
+      )
+    })
+
+    fireEvent.click(within(dialog).getByRole("link", { name: "Settings" }))
+
+    await waitFor(() => {
+      expect(getByText("Settings page")).toBeInTheDocument()
+    })
   }, 10_000)
 
   test("searches workspaces through URL params", async () => {

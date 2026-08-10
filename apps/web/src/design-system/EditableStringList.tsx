@@ -15,6 +15,7 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { GripVertical, Plus, Trash2 } from "lucide-react"
+import { moveEditableStringListItem } from "./editable.string.list.move"
 import { TextInput } from "./TextInput"
 
 type EditableStringListProps = {
@@ -23,24 +24,6 @@ type EditableStringListProps = {
   disabled?: boolean
   sortable?: boolean
   "aria-label": string
-}
-
-export const moveEditableStringListItem = (
-  value: readonly string[],
-  fromIndex: number,
-  toIndex: number,
-): string[] => {
-  if (
-    fromIndex === toIndex ||
-    fromIndex < 0 ||
-    toIndex < 0 ||
-    fromIndex >= value.length ||
-    toIndex >= value.length
-  ) {
-    return [...value]
-  }
-
-  return arrayMove([...value], fromIndex, toIndex)
 }
 
 const createRowId = (): string => crypto.randomUUID()
