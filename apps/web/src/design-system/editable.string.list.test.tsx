@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { fireEvent, render } from "@testing-library/react"
 import React, { useState } from "react"
-import { EditableStringList, moveEditableStringListItem } from "./EditableStringList"
+import { EditableStringList } from "./EditableStringList"
+import { moveEditableStringListItem } from "./editable.string.list.move"
 
 const ControlledList: React.FC<{
   initial?: readonly string[]
