@@ -87,7 +87,9 @@ export const AddWorkspaceModal: React.FC<AddWorkspaceModalProps> = ({ open, onCl
     name.trim() !== "" &&
     folderPath !== "" &&
     !createWorkspaceMutation.isPending &&
-    !hasNoRoots
+    !hasNoRoots &&
+    !runtimeSettingsQuery.isError &&
+    !directoriesQuery.isError
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
