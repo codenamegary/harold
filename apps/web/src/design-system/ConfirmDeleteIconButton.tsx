@@ -2,13 +2,45 @@ import React, { useEffect, useRef, useState } from "react"
 import { Trash2 } from "lucide-react"
 import { Button } from "./Button"
 
+type ConfirmDeleteSize = "xs" | "sm"
+
 type ConfirmDeleteIconButtonProps = {
   "aria-label": string
   onConfirm: () => void
   disabled?: boolean
   confirmLabel?: string
   cancelLabel?: string
+  size?: ConfirmDeleteSize
   className?: string
+}
+
+const sizeStyles: Record<
+  ConfirmDeleteSize,
+  {
+    root: string
+    trashIdleMax: string
+    trashButton: string
+    trashIcon: string
+    actionsOpenMax: string
+    buttonSize: "xs" | "sm"
+  }
+> = {
+  xs: {
+    root: "h-6",
+    trashIdleMax: "max-w-6",
+    trashButton: "size-6",
+    trashIcon: "size-3.5",
+    actionsOpenMax: "max-w-40",
+    buttonSize: "xs",
+  },
+  sm: {
+    root: "h-7",
+    trashIdleMax: "max-w-7",
+    trashButton: "size-7",
+    trashIcon: "size-3.5",
+    actionsOpenMax: "max-w-44",
+    buttonSize: "sm",
+  },
 }
 
 export const ConfirmDeleteIconButton: React.FC<ConfirmDeleteIconButtonProps> = ({
@@ -17,10 +49,12 @@ export const ConfirmDeleteIconButton: React.FC<ConfirmDeleteIconButtonProps> = (
   disabled = false,
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
+  size = "xs",
   className = "",
 }) => {
   const [confirming, setConfirming] = useState(false)
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
+  const styles = sizeStyles[size]
 
   useEffect(() => {
     if (!confirming) {
@@ -55,14 +89,15 @@ export const ConfirmDeleteIconButton: React.FC<ConfirmDeleteIconButtonProps> = (
 
   return (
     <div
-      className={`inline-flex h-6 items-center justify-end overflow-hidden ${className}`}
+      className={`inline-flex items-stretch justify-end overflow-hidden ${styles.root} ${className}`}
       data-confirming={confirming ? "true" : "false"}
+      data-size={size}
     >
       <div
-        className={`flex shrink-0 items-center justify-center overflow-hidden transition-[max-width,opacity,transform] duration-200 ease-out ${
+        className={`flex shrink-0 items-stretch justify-center overflow-hidden transition-[max-width,opacity,transform] duration-200 ease-out ${
           confirming
             ? "max-w-0 translate-x-3 opacity-0 pointer-events-none"
-            : "max-w-6 translate-x-0 opacity-100"
+            : `${styles.trashIdleMax} translate-x-0 opacity-100`
         }`}
         aria-hidden={confirming}
       >
@@ -70,17 +105,17 @@ export const ConfirmDeleteIconButton: React.FC<ConfirmDeleteIconButtonProps> = (
           type="button"
           aria-label={ariaLabel}
           disabled={disabled || confirming}
-          className="grid size-6 place-items-center rounded text-dim transition-colors hover:text-danger cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+          className={`grid ${styles.trashButton} place-items-center rounded text-dim transition-colors hover:text-danger cursor-pointer disabled:cursor-not-allowed disabled:opacity-50`}
           onClick={() => setConfirming(true)}
         >
-          <Trash2 aria-hidden className="size-3.5" strokeWidth={1.75} />
+          <Trash2 aria-hidden className={styles.trashIcon} strokeWidth={1.75} />
         </button>
       </div>
 
       <div
-        className={`flex shrink-0 items-center gap-1 overflow-hidden transition-[max-width,opacity,transform] duration-200 ease-out ${
+        className={`flex shrink-0 items-stretch gap-1 overflow-hidden transition-[max-width,opacity,transform] duration-200 ease-out ${
           confirming
-            ? "max-w-40 translate-x-0 opacity-100"
+            ? `${styles.actionsOpenMax} translate-x-0 opacity-100`
             : "max-w-0 -translate-x-2 opacity-0 pointer-events-none"
         }`}
         aria-hidden={!confirming}
@@ -89,8 +124,8 @@ export const ConfirmDeleteIconButton: React.FC<ConfirmDeleteIconButtonProps> = (
           ref={confirmButtonRef}
           type="button"
           variant="danger"
-          size="sm"
-          className="min-h-6 px-2 text-2xs"
+          size={styles.buttonSize}
+          className="h-full"
           disabled={disabled}
           onClick={handleConfirm}
         >
@@ -99,8 +134,8 @@ export const ConfirmDeleteIconButton: React.FC<ConfirmDeleteIconButtonProps> = (
         <Button
           type="button"
           variant="secondary"
-          size="sm"
-          className="min-h-6 px-2 text-2xs"
+          size={styles.buttonSize}
+          className="h-full"
           disabled={disabled}
           onClick={() => setConfirming(false)}
         >

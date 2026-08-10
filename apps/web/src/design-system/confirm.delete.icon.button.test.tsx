@@ -72,4 +72,31 @@ describe("ConfirmDeleteIconButton", () => {
     expect(queryByRole("button", { name: "Confirm" })).toBeNull()
     expect(onConfirm).not.toHaveBeenCalled()
   })
+
+  test("xs confirm actions use matching height classes", () => {
+    const { getByRole, container } = render(
+      <ConfirmDeleteIconButton aria-label="Delete Custom Agent" onConfirm={() => {}} />,
+    )
+
+    fireEvent.click(getByRole("button", { name: "Delete Custom Agent" }))
+
+    expect(container.firstChild).toHaveClass("h-6")
+    expect(getByRole("button", { name: "Confirm" })).toHaveClass("h-6")
+    expect(getByRole("button", { name: "Cancel" })).toHaveClass("h-6")
+  })
+
+  test("sm size uses the larger row height", () => {
+    const { getByRole, container } = render(
+      <ConfirmDeleteIconButton
+        aria-label="Delete Custom Agent"
+        size="sm"
+        onConfirm={() => {}}
+      />,
+    )
+
+    fireEvent.click(getByRole("button", { name: "Delete Custom Agent" }))
+
+    expect(container.firstChild).toHaveClass("h-7")
+    expect(getByRole("button", { name: "Confirm" })).toHaveClass("h-7")
+  })
 })

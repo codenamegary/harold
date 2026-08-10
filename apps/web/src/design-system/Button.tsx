@@ -1,7 +1,7 @@
 import { ComponentPropsWithoutRef, forwardRef } from "react"
 
 type ButtonVariant = "primary" | "submit" | "secondary" | "text" | "danger"
-type ButtonSize = "md" | "sm"
+type ButtonSize = "md" | "sm" | "xs"
 
 type ButtonProps = {
   variant?: ButtonVariant
@@ -22,8 +22,9 @@ const variantClasses: Record<ButtonVariant, string> = {
 }
 
 const sizeClasses: Record<ButtonSize, string> = {
+  xs: "h-6 min-h-6 gap-1 px-2 text-2xs leading-none",
+  sm: "h-7 min-h-7 gap-2 px-2.5 text-sm",
   md: "min-h-9 gap-3 px-3.5 text-base",
-  sm: "min-h-7 gap-2 px-2.5 text-sm",
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
