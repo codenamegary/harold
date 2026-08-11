@@ -8,11 +8,16 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -158,6 +163,9 @@ fun ChatScreen(
                 title = {
                     TextButton(
                         onClick = onSessionSelectorClick,
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                        ),
                         modifier = Modifier
                             .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                             .testTag("session_selector")
@@ -169,7 +177,7 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    TextButton(
+                    IconButton(
                         onClick = { menuExpanded = true },
                         modifier = Modifier
                             .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
@@ -178,7 +186,10 @@ fun ChatScreen(
                                 contentDescription = overflowContentDescription
                             },
                     ) {
-                        Text(text = "More")
+                        Icon(
+                            imageVector = Icons.Filled.MoreVert,
+                            contentDescription = null,
+                        )
                     }
 
                     DropdownMenu(

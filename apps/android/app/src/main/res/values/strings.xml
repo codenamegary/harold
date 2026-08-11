@@ -44,12 +44,10 @@
     <string name="shell_pair_hint">Scan a pairing QR from your Agent Server host, or enter the endpoint and code manually.</string>
     <string name="shell_repair_hint">Re-pair if this device lost access, or you want to connect to a different host.</string>
     <string name="permission_option_content_description">Permission option: %1$s</string>
-    <string name="workspaces_back">Back</string>
     <string name="workspaces_back_content_description">Go back from workspaces</string>
     <string name="workspaces_add">Add</string>
     <string name="workspaces_add_content_description">Add workspace</string>
     <string name="add_workspace_title">Add workspace</string>
-    <string name="add_workspace_back">Back</string>
     <string name="add_workspace_back_content_description">Go back from add workspace</string>
     <string name="add_workspace_name_label">Name</string>
     <string name="add_workspace_root_label">Root</string>
