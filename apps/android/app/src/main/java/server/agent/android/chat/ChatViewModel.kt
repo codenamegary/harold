@@ -58,6 +58,8 @@ class ChatViewModel(
     private var frameCollectJob: Job? = null
     private var activeSessionId: String? = null
     private var sessionsSearchJob: Job? = null
+    private var sessionsListLoadJob: Job? = null
+    private var sessionsListGeneration: Int = 0
     private var workspaceLabels: Map<String, String> = emptyMap()
     private var agentLabels: Map<AgentId, String> = emptyMap()
 
@@ -144,6 +146,8 @@ class ChatViewModel(
 
     fun openSessionsList() {
         hidePicker()
+        sessionsSearchJob?.cancel()
+        sessionsListLoadJob?.cancel()
         _uiState.update { current ->
             current.copy(
                 sessionsListSearch = "",
@@ -160,6 +164,7 @@ class ChatViewModel(
             current.copy(sessionsListSearch = query)
         }
         sessionsSearchJob?.cancel()
+        sessionsListLoadJob?.cancel()
         sessionsSearchJob = viewModelScope.launch {
             kotlinx.coroutines.delay(SESSIONS_SEARCH_DEBOUNCE_MS)
             val trimmed = query.trim()
@@ -174,10 +179,12 @@ class ChatViewModel(
             return
         }
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val generation = sessionsListGeneration
+        val search = state.sessionsListSearch.trim().takeIf { it.isNotEmpty() }
 
         _uiState.update { current -> current.copy(sessionsListLoadingMore = true) }
-        viewModelScope.launch {
-            val search = state.sessionsListSearch.trim().takeIf { it.isNotEmpty() }
+        sessionsListLoadJob?.cancel()
+        sessionsListLoadJob = viewModelScope.launch {
             operatorRepository.listSessions(
                 serverOrigin = paired.serverOrigin,
                 limit = SESSIONS_PAGE_SIZE,
@@ -185,6 +192,9 @@ class ChatViewModel(
                 search = search,
             ).fold(
                 onSuccess = { collection ->
+                    if (generation != sessionsListGeneration) {
+                        return@fold
+                    }
                     val rows = collection.items
                         .filter { session -> session.state != SessionState.Archived }
                         .map { session -> session.toSessionRow(workspaceLabels, agentLabels) }
@@ -198,6 +208,9 @@ class ChatViewModel(
                     }
                 },
                 onFailure = { error ->
+                    if (generation != sessionsListGeneration) {
+                        return@fold
+                    }
                     _uiState.update { current ->
                         current.copy(
                             sessionsListLoadingMore = false,
@@ -941,9 +954,12 @@ class ChatViewModel(
 
     private suspend fun refreshSessionsList(search: String?) {
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        sessionsListLoadJob?.cancel()
+        val generation = ++sessionsListGeneration
         _uiState.update { current ->
             current.copy(
                 sessionsListLoading = true,
+                sessionsListLoadingMore = false,
                 sessionsListError = null,
             )
         }
@@ -954,6 +970,9 @@ class ChatViewModel(
             search = search,
         ).fold(
             onSuccess = { collection ->
+                if (generation != sessionsListGeneration) {
+                    return@fold
+                }
                 val rows = collection.items
                     .filter { session -> session.state != SessionState.Archived }
                     .map { session -> session.toSessionRow(workspaceLabels, agentLabels) }
@@ -968,6 +987,9 @@ class ChatViewModel(
                 }
             },
             onFailure = { error ->
+                if (generation != sessionsListGeneration) {
+                    return@fold
+                }
                 _uiState.update { current ->
                     current.copy(
                         sessionsListLoading = false,

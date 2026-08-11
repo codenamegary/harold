@@ -225,6 +225,18 @@ fun ChatScreen(
                                     enabled = false,
                                     modifier = Modifier.testTag("session_menu_loading"),
                                 )
+                            } else if (uiState.recentSessionsError != null) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = uiState.recentSessionsError,
+                                            color = MaterialTheme.colorScheme.error,
+                                        )
+                                    },
+                                    onClick = {},
+                                    enabled = false,
+                                    modifier = Modifier.testTag("session_menu_error"),
+                                )
                             } else {
                                 uiState.recentSessions.forEach { session ->
                                     DropdownMenuItem(
