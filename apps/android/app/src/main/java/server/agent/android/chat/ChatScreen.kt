@@ -413,7 +413,7 @@ fun ChatScreen(
     }
 
     if (uiState.renameDialogVisible) {
-        RenameSessionDialog(
+        RenameSessionSheet(
             renameState = uiState.renameState,
             onDismiss = onDismissRename,
             onNameChanged = onRenameNameChanged,
@@ -454,6 +454,7 @@ fun ChatScreen(
                     Text(text = "Cancel")
                 }
             },
+            modifier = Modifier.testTag("archive_session_dialog"),
         )
     }
 }
