@@ -1,5 +1,6 @@
 package server.agent.android.chat
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -7,12 +8,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,6 +45,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import android.Manifest
 import android.content.Intent
@@ -355,6 +362,64 @@ fun ChatScreen(
                     )
                 }
 
+                val slashQuery = activeSlashQuery(uiState.composerText)
+                val slashMatches = slashQuery?.let { query -> filterSlashStubs(query) }
+
+                if (slashMatches != null) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("slash_stub_menu"),
+                    ) {
+                        if (slashMatches.isEmpty()) {
+                            Text(
+                                text = "No matching commands",
+                                modifier = Modifier
+                                    .padding(12.dp)
+                                    .testTag("slash_stub_empty"),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 180.dp),
+                            ) {
+                                items(slashMatches, key = { command -> command.id }) { command ->
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                onComposerTextChanged(
+                                                    insertSlashStub(
+                                                        uiState.composerText,
+                                                        command.name,
+                                                    ),
+                                                )
+                                            }
+                                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                                            .testTag("slash_stub_item_${command.id}"),
+                                    ) {
+                                        Text(
+                                            text = "/${command.name}",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            text = command.description,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -385,7 +450,7 @@ fun ChatScreen(
                         }
                     }
 
-                    TextButton(
+                    IconButton(
                         onClick = onComposerSubmit,
                         enabled = uiState.composerEnabled && uiState.composerText.isNotBlank(),
                         modifier = Modifier
@@ -395,7 +460,10 @@ fun ChatScreen(
                                 contentDescription = sendContentDescription
                             },
                     ) {
-                        Text(text = if (uiState.composerSubmitting) "Sending…" else "Send")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = null,
+                        )
                     }
                 }
             }
