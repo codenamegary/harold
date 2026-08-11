@@ -204,6 +204,7 @@ export const registerSessionRoutes = (
       workspaceId: query.workspaceId,
       limit: query.limit,
       cursor: query.cursor,
+      search: query.search,
     })
 
     if (!result.ok) {

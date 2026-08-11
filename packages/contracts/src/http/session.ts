@@ -46,6 +46,7 @@ export const ListSessionsQuerySchema = z.strictObject({
   workspaceId: IdSchema.optional(),
   limit: z.coerce.number().int().positive().max(200).default(100),
   cursor: CursorSchema.optional(),
+  search: z.string().min(1).optional(),
 })
 
 export const PromptSessionBodySchema = z.strictObject({

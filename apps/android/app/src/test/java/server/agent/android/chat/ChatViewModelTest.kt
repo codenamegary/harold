@@ -29,6 +29,7 @@ import server.agent.android.contracts.PageInfo
 import server.agent.android.contracts.PromptSessionBody
 import server.agent.android.contracts.PromptSessionResponse
 import server.agent.android.contracts.Session
+import server.agent.android.contracts.SessionCollection
 import server.agent.android.contracts.SessionState
 import server.agent.android.contracts.UpdateSessionBody
 import server.agent.android.contracts.PermissionOption
@@ -509,15 +510,34 @@ private class ChatFakeOperatorRepository(
         serverOrigin: String,
         workspaceId: String?,
         limit: Int,
-    ) = Result.success(
-        ItemCollection(
-            items = createdSessions + listOf(
-                session("sess_02", "Alpha"),
-                session("sess_01", "Beta"),
+        cursor: String?,
+        search: String?,
+    ): Result<ItemCollection<Session>> {
+        val all = createdSessions + listOf(
+            session("sess_02", "Alpha"),
+            session("sess_01", "Beta"),
+        )
+        val filtered = if (search.isNullOrBlank()) {
+            all
+        } else {
+            all.filter { session ->
+                session.name.contains(search, ignoreCase = true)
+            }
+        }
+        val end = minOf(limit, filtered.size)
+        val pageItems = filtered.subList(0, end)
+        val nextCursor = if (filtered.size > limit) "cursor_more" else null
+        return Result.success(
+            ItemCollection(
+                items = pageItems,
+                page = PageInfo(
+                    limit = limit,
+                    count = filtered.size,
+                    nextCursor = nextCursor,
+                ),
             ),
-            page = PageInfo(limit = 100, count = 2 + createdSessions.size),
-        ),
-    )
+        )
+    }
 
     override suspend fun listAgents(serverOrigin: String) = Result.success(
         AgentSettingsCollection(

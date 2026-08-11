@@ -191,6 +191,32 @@ class DefaultAgentApiTest {
     }
 
     @Test
+    fun listSessionsIncludesSearchAndCursor() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(
+                    """
+                    {
+                      "items": [],
+                      "page": { "limit": 20, "count": 0, "nextCursor": null }
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        agentApi.listSessions(
+            serverOrigin = origin(),
+            limit = 20,
+            cursor = "cursor_01",
+            search = "auth",
+        )
+
+        val recorded = server.takeRequest()
+        assertEquals("/v1/sessions?limit=20&cursor=cursor_01&search=auth", recorded.path)
+    }
+
+    @Test
     fun createSessionPostsBody() = runTest {
         server.enqueue(
             MockResponse()

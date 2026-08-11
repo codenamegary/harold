@@ -33,6 +33,8 @@ interface OperatorRepository {
         serverOrigin: String,
         workspaceId: String? = null,
         limit: Int = 100,
+        cursor: String? = null,
+        search: String? = null,
     ): Result<SessionCollection>
 
     suspend fun listAgents(serverOrigin: String): Result<AgentSettingsCollection>

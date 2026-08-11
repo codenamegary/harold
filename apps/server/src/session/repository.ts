@@ -27,6 +27,7 @@ export type SessionListOptions = {
   workspaceId?: string
   limit?: number
   cursor?: string
+  search?: string
 }
 
 export type GetSessionByIdInput = {
@@ -135,26 +136,40 @@ const nowIso = (): string => new Date().toISOString()
 export const createSessionRepository = (database: AgentDatabase) => {
   const resolveExecutor = (executor?: DbExecutor): DbExecutor => executor ?? database.db
 
-  const countByWorkspace = (workspaceId: string): number =>
+  const nameSearchScope = (search?: string) => {
+    if (search === undefined || search === "") {
+      return undefined
+    }
+
+    const searchTerm = search.toLowerCase()
+    return sql`instr(lower(${sessions.name}), ${searchTerm}) > 0`
+  }
+
+  const workspaceListScope = (workspaceId: string, search?: string) =>
+    and(eq(sessions.workspaceId, workspaceId), nameSearchScope(search))
+
+  const globalListScope = (search?: string) =>
+    and(
+      sql`${sessions.archivedAt} IS NULL`,
+      sql`${sessions.state} != 'archived'`,
+      nameSearchScope(search),
+    )
+
+  const countByWorkspace = (workspaceId: string, search?: string): number =>
     database.db
       .select({ value: count() })
       .from(sessions)
-      .where(eq(sessions.workspaceId, workspaceId))
+      .where(workspaceListScope(workspaceId, search))
       .get()?.value ?? 0
 
   const getRowById = (id: string): SessionRow | undefined =>
     database.db.select().from(sessions).where(eq(sessions.id, id)).get()
 
-  const workspaceScope = (workspaceId: string) => eq(sessions.workspaceId, workspaceId)
-
-  const nonArchivedScope = () =>
-    and(sql`${sessions.archivedAt} IS NULL`, sql`${sessions.state} != 'archived'`)
-
-  const countActive = (): number =>
+  const countActive = (search?: string): number =>
     database.db
       .select({ value: count() })
       .from(sessions)
-      .where(nonArchivedScope())
+      .where(globalListScope(search))
       .get()?.value ?? 0
 
   const conditionAfter = (row: SessionRow) =>
@@ -169,43 +184,43 @@ export const createSessionRepository = (database: AgentDatabase) => {
       and(eq(sessions.lastUsedAt, row.lastUsedAt), lt(sessions.id, row.id)),
     )
 
-  const hasMoreAfter = (workspaceId: string, row: SessionRow): boolean =>
+  const hasMoreAfter = (workspaceId: string, row: SessionRow, search?: string): boolean =>
     database.db
       .select()
       .from(sessions)
-      .where(and(workspaceScope(workspaceId), conditionAfter(row)))
+      .where(and(workspaceListScope(workspaceId, search), conditionAfter(row)))
       .orderBy(desc(sessions.lastUsedAt), asc(sessions.id))
       .limit(1)
       .get() !== undefined
 
-  const hasMoreBefore = (workspaceId: string, row: SessionRow): boolean =>
+  const hasMoreBefore = (workspaceId: string, row: SessionRow, search?: string): boolean =>
     database.db
       .select()
       .from(sessions)
-      .where(and(workspaceScope(workspaceId), conditionBefore(row)))
+      .where(and(workspaceListScope(workspaceId, search), conditionBefore(row)))
       .orderBy(asc(sessions.lastUsedAt), desc(sessions.id))
       .limit(1)
       .get() !== undefined
 
-  const hasMoreAfterGlobal = (row: SessionRow): boolean =>
+  const hasMoreAfterGlobal = (row: SessionRow, search?: string): boolean =>
     database.db
       .select()
       .from(sessions)
-      .where(and(nonArchivedScope(), conditionAfter(row)))
+      .where(and(globalListScope(search), conditionAfter(row)))
       .orderBy(desc(sessions.lastUsedAt), asc(sessions.id))
       .limit(1)
       .get() !== undefined
 
-  const hasMoreBeforeGlobal = (row: SessionRow): boolean =>
+  const hasMoreBeforeGlobal = (row: SessionRow, search?: string): boolean =>
     database.db
       .select()
       .from(sessions)
-      .where(and(nonArchivedScope(), conditionBefore(row)))
+      .where(and(globalListScope(search), conditionBefore(row)))
       .orderBy(asc(sessions.lastUsedAt), desc(sessions.id))
       .limit(1)
       .get() !== undefined
 
-  const buildPageCursors = (workspaceId: string, rows: SessionRow[]) => {
+  const buildPageCursors = (workspaceId: string, rows: SessionRow[], search?: string) => {
     if (rows.length === 0) {
       return { nextCursor: undefined, previousCursor: undefined }
     }
@@ -214,16 +229,16 @@ export const createSessionRepository = (database: AgentDatabase) => {
     const last = rows[rows.length - 1]
 
     return {
-      nextCursor: hasMoreAfter(workspaceId, last)
+      nextCursor: hasMoreAfter(workspaceId, last, search)
         ? encodeSessionPageCursor({ id: last.id, edge: "after" })
         : undefined,
-      previousCursor: hasMoreBefore(workspaceId, first)
+      previousCursor: hasMoreBefore(workspaceId, first, search)
         ? encodeSessionPageCursor({ id: first.id, edge: "before" })
         : undefined,
     }
   }
 
-  const buildGlobalPageCursors = (rows: SessionRow[]) => {
+  const buildGlobalPageCursors = (rows: SessionRow[], search?: string) => {
     if (rows.length === 0) {
       return { nextCursor: undefined, previousCursor: undefined }
     }
@@ -232,10 +247,10 @@ export const createSessionRepository = (database: AgentDatabase) => {
     const last = rows[rows.length - 1]
 
     return {
-      nextCursor: hasMoreAfterGlobal(last)
+      nextCursor: hasMoreAfterGlobal(last, search)
         ? encodeSessionPageCursor({ id: last.id, edge: "after" })
         : undefined,
-      previousCursor: hasMoreBeforeGlobal(first)
+      previousCursor: hasMoreBeforeGlobal(first, search)
         ? encodeSessionPageCursor({ id: first.id, edge: "before" })
         : undefined,
     }
@@ -245,12 +260,13 @@ export const createSessionRepository = (database: AgentDatabase) => {
     workspaceId: string,
     limit: number,
     cursorRow?: SessionRow,
+    search?: string,
   ): SessionRow[] => {
     if (cursorRow === undefined) {
       return database.db
         .select()
         .from(sessions)
-        .where(workspaceScope(workspaceId))
+        .where(workspaceListScope(workspaceId, search))
         .orderBy(desc(sessions.lastUsedAt), asc(sessions.id))
         .limit(limit)
         .all()
@@ -259,7 +275,7 @@ export const createSessionRepository = (database: AgentDatabase) => {
     return database.db
       .select()
       .from(sessions)
-      .where(and(workspaceScope(workspaceId), conditionAfter(cursorRow)))
+      .where(and(workspaceListScope(workspaceId, search), conditionAfter(cursorRow)))
       .orderBy(desc(sessions.lastUsedAt), asc(sessions.id))
       .limit(limit)
       .all()
@@ -269,20 +285,21 @@ export const createSessionRepository = (database: AgentDatabase) => {
     workspaceId: string,
     limit: number,
     cursorRow?: SessionRow,
+    search?: string,
   ): SessionRow[] => {
     const rows =
       cursorRow === undefined
         ? database.db
             .select()
             .from(sessions)
-            .where(workspaceScope(workspaceId))
+            .where(workspaceListScope(workspaceId, search))
             .orderBy(asc(sessions.lastUsedAt), desc(sessions.id))
             .limit(limit)
             .all()
         : database.db
             .select()
             .from(sessions)
-            .where(and(workspaceScope(workspaceId), conditionBefore(cursorRow)))
+            .where(and(workspaceListScope(workspaceId, search), conditionBefore(cursorRow)))
             .orderBy(asc(sessions.lastUsedAt), desc(sessions.id))
             .limit(limit)
             .all()
@@ -290,8 +307,12 @@ export const createSessionRepository = (database: AgentDatabase) => {
     return [...rows].sort((left, right) => compareSessions(rowToSession(left), rowToSession(right)))
   }
 
-  const listGlobalForward = (limit: number, cursorRow?: SessionRow): SessionRow[] => {
-    const scope = nonArchivedScope()
+  const listGlobalForward = (
+    limit: number,
+    cursorRow?: SessionRow,
+    search?: string,
+  ): SessionRow[] => {
+    const scope = globalListScope(search)
 
     if (cursorRow === undefined) {
       return database.db
@@ -312,8 +333,12 @@ export const createSessionRepository = (database: AgentDatabase) => {
       .all()
   }
 
-  const listGlobalBackward = (limit: number, cursorRow?: SessionRow): SessionRow[] => {
-    const scope = nonArchivedScope()
+  const listGlobalBackward = (
+    limit: number,
+    cursorRow?: SessionRow,
+    search?: string,
+  ): SessionRow[] => {
+    const scope = globalListScope(search)
     const rows =
       cursorRow === undefined
         ? database.db
@@ -382,6 +407,7 @@ export const createSessionRepository = (database: AgentDatabase) => {
       workspaceId: options.workspaceId,
       limit: options.limit,
       cursor: options.cursor,
+      search: options.search,
     })
   }
 
@@ -406,10 +432,10 @@ export const createSessionRepository = (database: AgentDatabase) => {
 
     const rows =
       decodedCursor?.ok === true && decodedCursor.value.edge === "before"
-        ? listBackward(options.workspaceId, limit, cursorRow)
-        : listForward(options.workspaceId, limit, cursorRow)
+        ? listBackward(options.workspaceId, limit, cursorRow, options.search)
+        : listForward(options.workspaceId, limit, cursorRow, options.search)
 
-    const cursors = buildPageCursors(options.workspaceId, rows)
+    const cursors = buildPageCursors(options.workspaceId, rows, options.search)
 
     return {
       ok: true,
@@ -418,7 +444,7 @@ export const createSessionRepository = (database: AgentDatabase) => {
         limit,
         nextCursor: cursors.nextCursor,
         previousCursor: cursors.previousCursor,
-        count: countByWorkspace(options.workspaceId),
+        count: countByWorkspace(options.workspaceId, options.search),
       },
     }
   }
@@ -450,10 +476,10 @@ export const createSessionRepository = (database: AgentDatabase) => {
 
     const rows =
       decodedCursor?.ok === true && decodedCursor.value.edge === "before"
-        ? listGlobalBackward(limit, cursorRow)
-        : listGlobalForward(limit, cursorRow)
+        ? listGlobalBackward(limit, cursorRow, options.search)
+        : listGlobalForward(limit, cursorRow, options.search)
 
-    const cursors = buildGlobalPageCursors(rows)
+    const cursors = buildGlobalPageCursors(rows, options.search)
 
     return {
       ok: true,
@@ -462,7 +488,7 @@ export const createSessionRepository = (database: AgentDatabase) => {
         limit,
         nextCursor: cursors.nextCursor,
         previousCursor: cursors.previousCursor,
-        count: countActive(),
+        count: countActive(options.search),
       },
     }
   }

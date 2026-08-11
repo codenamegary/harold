@@ -265,6 +265,8 @@ private class FakeAgentApi(
         serverOrigin: String,
         workspaceId: String?,
         limit: Int,
+        cursor: String?,
+        search: String?,
     ): Result<SessionCollection> = Result.failure(UnsupportedOperationException())
 
     override suspend fun listAgents(serverOrigin: String): Result<AgentSettingsCollection> =

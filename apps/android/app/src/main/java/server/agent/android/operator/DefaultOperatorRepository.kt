@@ -29,7 +29,9 @@ class DefaultOperatorRepository(
         serverOrigin: String,
         workspaceId: String?,
         limit: Int,
-    ) = agentApi.listSessions(serverOrigin, workspaceId, limit)
+        cursor: String?,
+        search: String?,
+    ) = agentApi.listSessions(serverOrigin, workspaceId, limit, cursor, search)
 
     override suspend fun listAgents(serverOrigin: String) = agentApi.listAgents(serverOrigin)
 

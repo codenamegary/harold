@@ -84,11 +84,19 @@ class DefaultAgentApi(
         serverOrigin: String,
         workspaceId: String?,
         limit: Int,
+        cursor: String?,
+        search: String?,
     ): Result<SessionCollection> {
         val query = buildMap {
             put("limit", limit.toString())
             if (workspaceId != null) {
                 put("workspaceId", workspaceId)
+            }
+            if (cursor != null) {
+                put("cursor", cursor)
+            }
+            if (search != null) {
+                put("search", search)
             }
         }
 
