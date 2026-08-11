@@ -10,6 +10,7 @@ on:
   pull_request:
     branches:
       - main
+      - "story/**"
     paths:
       - apps/android/**
       - .github/workflows/android.yml
