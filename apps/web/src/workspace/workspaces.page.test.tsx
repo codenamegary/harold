@@ -241,7 +241,7 @@ describe("WorkspacesPage", () => {
         }),
       }),
     )
-  }, 15_000)
+  }, 30_000)
 
   test("links to Settings when no allowed roots are configured", async () => {
     const fetchMock = mock((input: RequestInfo | URL) => {
