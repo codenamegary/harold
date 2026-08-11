@@ -177,8 +177,8 @@ fun AppNavHost(
             CreateSessionScreen(
                 createState = chatUiState.createState,
                 onBack = {
+                    // Pop once via LaunchedEffect when createDialogVisible flips false.
                     chatViewModel.hideCreateDialog()
-                    navController.popBackStack()
                 },
                 onWorkspaceChanged = chatViewModel::onCreateWorkspaceChanged,
                 onAgentChanged = chatViewModel::onCreateAgentChanged,

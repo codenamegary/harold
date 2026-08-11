@@ -181,7 +181,7 @@ class ChatScreenTest {
         composeTestRule.onNodeWithTag("chat_welcome").assertIsDisplayed()
         composeTestRule.onNodeWithText("Chat with an agent").assertIsDisplayed()
         composeTestRule.onNodeWithText("Start a new session or pick an existing one.").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Select session").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("session_selector").assertIsDisplayed()
         composeTestRule.onNodeWithTag("new_session_cta").assertIsDisplayed().performClick()
         assertTrue(createClicked)
     }

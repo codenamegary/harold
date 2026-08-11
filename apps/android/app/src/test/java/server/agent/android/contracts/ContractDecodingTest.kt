@@ -80,7 +80,8 @@ class ContractDecodingTest {
               "path": null,
               "args": [],
               "present": true,
-              "popular": true
+              "popular": true,
+              "deletable": false
             }
             """.trimIndent(),
         )
@@ -90,6 +91,7 @@ class ContractDecodingTest {
         assertEquals(emptyList<String>(), settings.args)
         assertEquals(true, settings.present)
         assertEquals(true, settings.popular)
+        assertEquals(false, settings.deletable)
     }
 
     @Test

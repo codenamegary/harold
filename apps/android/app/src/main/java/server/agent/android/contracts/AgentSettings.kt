@@ -14,6 +14,7 @@ data class AgentSettings(
     val args: List<String> = emptyList(),
     val present: Boolean = false,
     val popular: Boolean = false,
+    val deletable: Boolean = false,
 )
 
 @Serializable
