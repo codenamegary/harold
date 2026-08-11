@@ -187,13 +187,11 @@ class ChatScreenTest {
     }
 
     @Test
-    fun showsCreateFabInSessionPickerAndDropsOverflowNewSession() {
-        var createClicked = false
+    fun overflowMenuNoLongerOffersNewSession() {
         composeTestRule.setContent {
             AgentServerTheme(dynamicColor = false) {
                 ChatScreen(
                     uiState = ChatUiState(
-                        pickerVisible = true,
                         selectedSession = SessionRow(
                             id = "sess_01",
                             name = "Alpha",
@@ -209,7 +207,7 @@ class ChatScreenTest {
                     onDismissPicker = {},
                     onSessionClick = {},
                     onRenameSessionClick = {},
-                    onCreateClick = { createClicked = true },
+                    onCreateClick = {},
                     onComposerTextChanged = {},
                     onComposerSubmit = {},
                     onComposerCancel = {},
@@ -225,10 +223,9 @@ class ChatScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithTag("create_session_fab").assertIsDisplayed().performClick()
-        assertTrue(createClicked)
         composeTestRule.onNodeWithTag("chat_overflow").performClick()
         composeTestRule.onAllNodesWithTag("new_session_menu_item").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("workspaces_menu_item").assertIsDisplayed()
     }
 
     @Test

@@ -43,67 +43,82 @@ fun SessionPickerSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+        SessionPickerContent(
+            uiState = uiState,
+            onSessionClick = onSessionClick,
+            onRenameSessionClick = onRenameSessionClick,
+            onCreateClick = onCreateClick,
+        )
+    }
+}
+
+@Composable
+fun SessionPickerContent(
+    uiState: ChatUiState,
+    onSessionClick: (SessionRow) -> Unit,
+    onRenameSessionClick: (SessionRow) -> Unit,
+    onCreateClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(
-                    text = "Sessions",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.testTag("session_picker_title"),
-                )
+            Text(
+                text = "Sessions",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.testTag("session_picker_title"),
+            )
 
-                when {
-                    uiState.sessionsLoading -> {
-                        Text(text = "Loading sessions…")
-                    }
+            when {
+                uiState.sessionsLoading -> {
+                    Text(text = "Loading sessions…")
+                }
 
-                    uiState.sessionsError != null -> {
-                        Text(
-                            text = uiState.sessionsError,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
+                uiState.sessionsError != null -> {
+                    Text(
+                        text = uiState.sessionsError,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
 
-                    uiState.sessions.isEmpty() -> {
-                        Text(text = "No sessions yet")
-                    }
+                uiState.sessions.isEmpty() -> {
+                    Text(text = "No sessions yet")
+                }
 
-                    else -> {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = PaddingValues(bottom = 88.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            items(uiState.sessions, key = { session -> session.id }) { session ->
-                                SessionPickerRow(
-                                    session = session,
-                                    onClick = { onSessionClick(session) },
-                                    onRenameClick = { onRenameSessionClick(session) },
-                                )
-                            }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(bottom = 88.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(uiState.sessions, key = { session -> session.id }) { session ->
+                            SessionPickerRow(
+                                session = session,
+                                onClick = { onSessionClick(session) },
+                                onRenameClick = { onRenameSessionClick(session) },
+                            )
                         }
                     }
                 }
             }
+        }
 
-            FloatingActionButton(
-                onClick = onCreateClick,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(bottom = 8.dp)
-                    .testTag("create_session_fab"),
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Add,
-                    contentDescription = "New session",
-                )
-            }
+        FloatingActionButton(
+            onClick = onCreateClick,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 8.dp)
+                .testTag("create_session_fab"),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = "New session",
+            )
         }
     }
 }

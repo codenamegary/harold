@@ -144,8 +144,8 @@ fun AppNavHost(
             )
         }
 
-        composable(Routes.CreateSession) {
-            val chatEntry = remember {
+        composable(Routes.CreateSession) { createEntry ->
+            val chatEntry = remember(createEntry) {
                 navController.getBackStackEntry(Routes.Chat)
             }
             val chatViewModel: ChatViewModel = viewModel(
