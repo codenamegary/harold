@@ -5,6 +5,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -18,6 +21,7 @@ import server.agent.android.chat.AddWorkspaceViewModelFactory
 import server.agent.android.chat.ChatScreen
 import server.agent.android.chat.ChatViewModel
 import server.agent.android.chat.ChatViewModelFactory
+import server.agent.android.chat.CreateSessionScreen
 import server.agent.android.chat.WorkspacesScreen
 import server.agent.android.chat.WorkspacesViewModel
 import server.agent.android.chat.WorkspacesViewModelFactory
@@ -28,6 +32,7 @@ import server.agent.android.pairing.PairingViewModelFactory
 import server.agent.android.shell.ShellScreen
 import server.agent.android.shell.ShellViewModel
 import server.agent.android.shell.ShellViewModelFactory
+
 @Composable
 fun AppNavHost(
     appContainer: AppContainer,
@@ -121,12 +126,8 @@ fun AppNavHost(
                 onCreateClick = {
                     chatViewModel.hidePicker()
                     chatViewModel.showCreateDialog()
+                    navController.navigate(Routes.CreateSession)
                 },
-                onDismissCreate = chatViewModel::hideCreateDialog,
-                onCreateWorkspaceChanged = chatViewModel::onCreateWorkspaceChanged,
-                onCreateAgentChanged = chatViewModel::onCreateAgentChanged,
-                onCreatePromptChanged = chatViewModel::onCreatePromptChanged,
-                onCreateSubmit = chatViewModel::submitCreateSession,
                 onComposerTextChanged = chatViewModel::onComposerTextChanged,
                 onComposerSubmit = chatViewModel::submitComposerPrompt,
                 onComposerCancel = chatViewModel::submitCancel,
@@ -140,6 +141,49 @@ fun AppNavHost(
                 onPermissionOptionSelect = chatViewModel::submitPermissionOption,
                 onNotificationPermissionResult = chatViewModel::onNotificationPermissionResult,
                 onDismissNotificationPermissionPrompt = chatViewModel::dismissNotificationPermissionPrompt,
+            )
+        }
+
+        composable(Routes.CreateSession) { createEntry ->
+            val chatEntry = remember(createEntry) {
+                navController.getBackStackEntry(Routes.Chat)
+            }
+            val chatViewModel: ChatViewModel = viewModel(
+                viewModelStoreOwner = chatEntry,
+                factory = ChatViewModelFactory(
+                    savedStateHandle = chatEntry.savedStateHandle,
+                    sessionGateway = appContainer.sessionGateway,
+                    connectionGateway = appContainer.connectionGateway,
+                    operatorRepository = appContainer.operatorRepository,
+                    navigationPreferences = appContainer.navigationPreferences,
+                    eventStreamFactory = appContainer.eventStreamFactory,
+                    activeSessionTracker = appContainer.activeSessionTracker,
+                    sessionStreamBroker = appContainer.sessionStreamBroker,
+                    sessionForegroundCoordinator = appContainer.sessionForegroundCoordinator,
+                    openSessionRequests = appContainer.openSessionRequests,
+                ),
+            )
+            val chatUiState by chatViewModel.uiState.collectAsState()
+            var createFormOpened by remember { mutableStateOf(false) }
+
+            LaunchedEffect(chatUiState.createDialogVisible) {
+                if (chatUiState.createDialogVisible) {
+                    createFormOpened = true
+                } else if (createFormOpened) {
+                    navController.popBackStack()
+                }
+            }
+
+            CreateSessionScreen(
+                createState = chatUiState.createState,
+                onBack = {
+                    chatViewModel.hideCreateDialog()
+                    navController.popBackStack()
+                },
+                onWorkspaceChanged = chatViewModel::onCreateWorkspaceChanged,
+                onAgentChanged = chatViewModel::onCreateAgentChanged,
+                onPromptChanged = chatViewModel::onCreatePromptChanged,
+                onSubmit = chatViewModel::submitCreateSession,
             )
         }
 
