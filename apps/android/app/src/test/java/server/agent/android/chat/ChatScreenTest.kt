@@ -181,7 +181,7 @@ class ChatScreenTest {
         composeTestRule.onNodeWithTag("chat_welcome").assertIsDisplayed()
         composeTestRule.onNodeWithText("Chat with an agent").assertIsDisplayed()
         composeTestRule.onNodeWithText("Start a new session or pick an existing one.").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Select session").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("session_selector").assertIsDisplayed()
         composeTestRule.onNodeWithTag("new_session_cta").assertIsDisplayed().performClick()
         assertTrue(createClicked)
     }
@@ -373,5 +373,56 @@ class ChatScreenTest {
         composeTestRule.onNodeWithTag("chat_overflow").assertIsDisplayed()
         composeTestRule.onAllNodesWithText("More").assertCountEquals(0)
         composeTestRule.onNodeWithTag("session_selector").assertIsDisplayed()
+    }
+
+    @Test
+    fun sendIsIconButtonAndSlashOpensStubMenu() {
+        var uiState by mutableStateOf(
+            ChatUiState(
+                selectedSession = SessionRow(
+                    id = "sess_01",
+                    name = "Alpha",
+                    workspaceId = "ws_01",
+                    workspaceLabel = "agent-server",
+                    agentId = "cursor",
+                    agentLabel = "Cursor",
+                    state = SessionState.Idle,
+                ),
+            ),
+        )
+
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = uiState,
+                    onSessionSelectorClick = {},
+                    onWorkspacesClick = {},
+                    onDismissPicker = {},
+                    onSessionClick = {},
+                    onRenameSessionClick = {},
+                    onCreateClick = {},
+                    onComposerTextChanged = { text ->
+                        uiState = uiState.copy(composerText = text)
+                    },
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onRenameClick = {},
+                    onDismissRename = {},
+                    onRenameNameChanged = {},
+                    onRenameSubmit = {},
+                    onArchiveClick = {},
+                    onDismissArchive = {},
+                    onArchiveSubmit = {},
+                    onPermissionOptionSelect = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("chat_send_button").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Send").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("chat_composer").performTextInput("/")
+        composeTestRule.onNodeWithTag("slash_stub_menu").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("slash_stub_item_stub-skill").assertIsDisplayed().performClick()
+        assertTrue(uiState.composerText.contains("/stub-skill"))
     }
 }

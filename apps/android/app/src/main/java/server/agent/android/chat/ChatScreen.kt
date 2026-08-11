@@ -1,25 +1,37 @@
 package server.agent.android.chat
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -32,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -39,6 +52,8 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import android.Manifest
 import android.content.Intent
@@ -168,7 +183,23 @@ fun ChatScreen(
                                 contentDescription = sessionSelectorContentDescription
                             },
                     ) {
-                        Text(text = "$sessionLabel ▾")
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Text(
+                                text = sessionLabel,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Icon(
+                                imageVector = Icons.Filled.ArrowDropDown,
+                                contentDescription = null,
+                                modifier = Modifier.requiredSize(36.dp),
+                            )
+                        }
                     }
                 },
                 actions = {
@@ -226,6 +257,8 @@ fun ChatScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+                .imePadding()
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -355,19 +388,117 @@ fun ChatScreen(
                     )
                 }
 
+                val slashQuery = activeSlashQuery(uiState.composerText)
+                val slashMatches = slashQuery?.let { query -> filterSlashStubs(query) }
+
+                if (slashMatches != null) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("slash_stub_menu"),
+                    ) {
+                        if (slashMatches.isEmpty()) {
+                            Text(
+                                text = "No matching commands",
+                                modifier = Modifier
+                                    .padding(12.dp)
+                                    .testTag("slash_stub_empty"),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 180.dp),
+                            ) {
+                                items(slashMatches, key = { command -> command.id }) { command ->
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                onComposerTextChanged(
+                                                    insertSlashStub(
+                                                        uiState.composerText,
+                                                        command.name,
+                                                    ),
+                                                )
+                                            }
+                                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                                            .testTag("slash_stub_item_${command.id}"),
+                                    ) {
+                                        Text(
+                                            text = "/${command.name}",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            text = command.description,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.Bottom,
                 ) {
-                    OutlinedTextField(
+                    val composerEnabled = uiState.composerEnabled
+                    val composerInteractionSource = remember { MutableInteractionSource() }
+                    val composerColors = OutlinedTextFieldDefaults.colors()
+                    val composerTextColor = if (composerEnabled) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    }
+
+                    BasicTextField(
                         value = uiState.composerText,
                         onValueChange = onComposerTextChanged,
-                        enabled = uiState.composerEnabled,
-                        label = { Text(text = "Message") },
+                        enabled = composerEnabled,
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = composerTextColor),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        interactionSource = composerInteractionSource,
+                        minLines = 1,
+                        maxLines = 4,
                         modifier = Modifier
                             .weight(1f)
+                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                             .testTag("chat_composer"),
+                        decorationBox = { innerTextField ->
+                            OutlinedTextFieldDefaults.DecorationBox(
+                                value = uiState.composerText,
+                                innerTextField = innerTextField,
+                                enabled = composerEnabled,
+                                singleLine = false,
+                                visualTransformation = VisualTransformation.None,
+                                interactionSource = composerInteractionSource,
+                                placeholder = { Text(text = "Message") },
+                                colors = composerColors,
+                                contentPadding = OutlinedTextFieldDefaults.contentPadding(
+                                    start = 12.dp,
+                                    top = 10.dp,
+                                    end = 12.dp,
+                                    bottom = 10.dp,
+                                ),
+                                container = {
+                                    OutlinedTextFieldDefaults.Container(
+                                        enabled = composerEnabled,
+                                        isError = false,
+                                        interactionSource = composerInteractionSource,
+                                        colors = composerColors,
+                                    )
+                                },
+                            )
+                        },
                     )
 
                     if (uiState.showComposerCancel) {
@@ -385,9 +516,9 @@ fun ChatScreen(
                         }
                     }
 
-                    TextButton(
+                    IconButton(
                         onClick = onComposerSubmit,
-                        enabled = uiState.composerEnabled && uiState.composerText.isNotBlank(),
+                        enabled = composerEnabled && uiState.composerText.isNotBlank(),
                         modifier = Modifier
                             .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                             .testTag("chat_send_button")
@@ -395,7 +526,10 @@ fun ChatScreen(
                                 contentDescription = sendContentDescription
                             },
                     ) {
-                        Text(text = if (uiState.composerSubmitting) "Sending…" else "Send")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = null,
+                        )
                     }
                 }
             }
