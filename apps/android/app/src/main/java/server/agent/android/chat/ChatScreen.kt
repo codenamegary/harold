@@ -63,11 +63,6 @@ fun ChatScreen(
     onSessionClick: (SessionRow) -> Unit,
     onRenameSessionClick: (SessionRow) -> Unit,
     onCreateClick: () -> Unit,
-    onDismissCreate: () -> Unit,
-    onCreateWorkspaceChanged: (String) -> Unit,
-    onCreateAgentChanged: (server.agent.android.contracts.AgentId) -> Unit,
-    onCreatePromptChanged: (String) -> Unit,
-    onCreateSubmit: () -> Unit,
     onComposerTextChanged: (String) -> Unit,
     onComposerSubmit: () -> Unit,
     onComposerCancel: () -> Unit,
@@ -196,14 +191,6 @@ fun ChatScreen(
                         expanded = menuExpanded,
                         onDismissRequest = { menuExpanded = false },
                     ) {
-                        DropdownMenuItem(
-                            text = { Text(text = stringResource(R.string.chat_new_session)) },
-                            onClick = {
-                                menuExpanded = false
-                                onCreateClick()
-                            },
-                            modifier = Modifier.testTag("new_session_menu_item"),
-                        )
                         if (hasSelectedSession) {
                             DropdownMenuItem(
                                 text = { Text(text = "Rename session") },
@@ -422,17 +409,6 @@ fun ChatScreen(
             onSessionClick = onSessionClick,
             onRenameSessionClick = onRenameSessionClick,
             onCreateClick = onCreateClick,
-        )
-    }
-
-    if (uiState.createDialogVisible) {
-        CreateSessionDialog(
-            createState = uiState.createState,
-            onDismiss = onDismissCreate,
-            onWorkspaceChanged = onCreateWorkspaceChanged,
-            onAgentChanged = onCreateAgentChanged,
-            onPromptChanged = onCreatePromptChanged,
-            onSubmit = onCreateSubmit,
         )
     }
 

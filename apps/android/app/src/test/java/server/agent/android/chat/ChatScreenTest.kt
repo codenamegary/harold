@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -74,11 +75,6 @@ class ChatScreenTest {
                     onSessionClick = {},
                     onRenameSessionClick = {},
                     onCreateClick = {},
-                    onDismissCreate = {},
-                    onCreateWorkspaceChanged = {},
-                    onCreateAgentChanged = {},
-                    onCreatePromptChanged = {},
-                    onCreateSubmit = {},
                     onComposerTextChanged = { text ->
                         uiState = uiState.copy(composerText = text)
                     },
@@ -130,11 +126,6 @@ class ChatScreenTest {
                     onSessionClick = {},
                     onRenameSessionClick = {},
                     onCreateClick = {},
-                    onDismissCreate = {},
-                    onCreateWorkspaceChanged = {},
-                    onCreateAgentChanged = {},
-                    onCreatePromptChanged = {},
-                    onCreateSubmit = {},
                     onComposerTextChanged = {},
                     onComposerSubmit = {},
                     onComposerCancel = {},
@@ -171,11 +162,6 @@ class ChatScreenTest {
                     onSessionClick = {},
                     onRenameSessionClick = {},
                     onCreateClick = { createClicked = true },
-                    onDismissCreate = {},
-                    onCreateWorkspaceChanged = {},
-                    onCreateAgentChanged = {},
-                    onCreatePromptChanged = {},
-                    onCreateSubmit = {},
                     onComposerTextChanged = {},
                     onComposerSubmit = {},
                     onComposerCancel = {},
@@ -201,12 +187,13 @@ class ChatScreenTest {
     }
 
     @Test
-    fun showsNewSessionInOverflowMenu() {
+    fun showsCreateFabInSessionPickerAndDropsOverflowNewSession() {
         var createClicked = false
         composeTestRule.setContent {
             AgentServerTheme(dynamicColor = false) {
                 ChatScreen(
                     uiState = ChatUiState(
+                        pickerVisible = true,
                         selectedSession = SessionRow(
                             id = "sess_01",
                             name = "Alpha",
@@ -223,11 +210,6 @@ class ChatScreenTest {
                     onSessionClick = {},
                     onRenameSessionClick = {},
                     onCreateClick = { createClicked = true },
-                    onDismissCreate = {},
-                    onCreateWorkspaceChanged = {},
-                    onCreateAgentChanged = {},
-                    onCreatePromptChanged = {},
-                    onCreateSubmit = {},
                     onComposerTextChanged = {},
                     onComposerSubmit = {},
                     onComposerCancel = {},
@@ -243,9 +225,10 @@ class ChatScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithTag("chat_overflow").performClick()
-        composeTestRule.onNodeWithTag("new_session_menu_item").assertIsDisplayed().performClick()
+        composeTestRule.onNodeWithTag("create_session_fab").assertIsDisplayed().performClick()
         assertTrue(createClicked)
+        composeTestRule.onNodeWithTag("chat_overflow").performClick()
+        composeTestRule.onAllNodesWithTag("new_session_menu_item").assertCountEquals(0)
     }
 
     @Test
@@ -270,11 +253,6 @@ class ChatScreenTest {
                     onSessionClick = {},
                     onRenameSessionClick = {},
                     onCreateClick = {},
-                    onDismissCreate = {},
-                    onCreateWorkspaceChanged = {},
-                    onCreateAgentChanged = {},
-                    onCreatePromptChanged = {},
-                    onCreateSubmit = {},
                     onComposerTextChanged = {},
                     onComposerSubmit = {},
                     onComposerCancel = {},
@@ -336,11 +314,6 @@ class ChatScreenTest {
                     onSessionClick = {},
                     onRenameSessionClick = {},
                     onCreateClick = {},
-                    onDismissCreate = {},
-                    onCreateWorkspaceChanged = {},
-                    onCreateAgentChanged = {},
-                    onCreatePromptChanged = {},
-                    onCreateSubmit = {},
                     onComposerTextChanged = {},
                     onComposerSubmit = {},
                     onComposerCancel = {},
@@ -385,11 +358,6 @@ class ChatScreenTest {
                     onSessionClick = {},
                     onRenameSessionClick = {},
                     onCreateClick = {},
-                    onDismissCreate = {},
-                    onCreateWorkspaceChanged = {},
-                    onCreateAgentChanged = {},
-                    onCreatePromptChanged = {},
-                    onCreateSubmit = {},
                     onComposerTextChanged = {},
                     onComposerSubmit = {},
                     onComposerCancel = {},

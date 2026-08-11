@@ -2,18 +2,24 @@ package server.agent.android.chat
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,68 +29,88 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 
+private val MIN_TOUCH_TARGET = 48.dp
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreateSessionDialog(
+fun CreateSessionScreen(
     createState: CreateSessionUiState,
-    onDismiss: () -> Unit,
+    onBack: () -> Unit,
     onWorkspaceChanged: (String) -> Unit,
     onAgentChanged: (server.agent.android.contracts.AgentId) -> Unit,
     onPromptChanged: (String) -> Unit,
     onSubmit: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(text = "New session") },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                WorkspaceDropdown(
-                    workspaces = createState.workspaces,
-                    selectedWorkspaceId = createState.selectedWorkspaceId,
-                    onWorkspaceChanged = onWorkspaceChanged,
-                )
-
-                AgentDropdown(
-                    agents = createState.agents,
-                    selectedAgentId = createState.selectedAgentId,
-                    onAgentChanged = onAgentChanged,
-                )
-
-                OutlinedTextField(
-                    value = createState.prompt,
-                    onValueChange = onPromptChanged,
-                    label = { Text(text = "Initial prompt") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("create_session_prompt"),
-                    minLines = 3,
-                )
-
-                if (createState.error != null) {
-                    Text(
-                        text = createState.error,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            }
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = { Text(text = "New session") },
+                navigationIcon = {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                            .testTag("create_session_back"),
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Go back from new session",
+                        )
+                    }
+                },
+            )
         },
-        confirmButton = {
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(16.dp)
+                .testTag("create_session_screen"),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            WorkspaceDropdown(
+                workspaces = createState.workspaces,
+                selectedWorkspaceId = createState.selectedWorkspaceId,
+                onWorkspaceChanged = onWorkspaceChanged,
+            )
+
+            AgentDropdown(
+                agents = createState.agents,
+                selectedAgentId = createState.selectedAgentId,
+                onAgentChanged = onAgentChanged,
+            )
+
+            OutlinedTextField(
+                value = createState.prompt,
+                onValueChange = onPromptChanged,
+                label = { Text(text = "Initial prompt") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("create_session_prompt"),
+                minLines = 3,
+            )
+
+            if (createState.error != null) {
+                Text(
+                    text = createState.error,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("create_session_error"),
+                )
+            }
+
             Button(
                 onClick = onSubmit,
                 enabled = !createState.submitting,
-                modifier = Modifier.testTag("create_session_submit"),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("create_session_submit"),
             ) {
                 Text(text = if (createState.submitting) "Creating…" else "Create")
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(text = "Cancel")
-            }
-        },
-    )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
