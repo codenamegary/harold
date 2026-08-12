@@ -217,7 +217,10 @@ const handleInitialize = (request: JsonRpcRequest, config: FakeAcpConfig): Handl
     protocolVersion: 1,
     agentCapabilities: {
       loadSession: config.loadSession,
-      sessionCapabilities: { close: config.sessionClose },
+      sessionCapabilities: {
+        close: config.sessionClose,
+        ...(config.sessionList ? { list: {} } : {}),
+      },
     },
     agentInfo: { name: "fake-acp", version: "0.0.0" },
     authMethods: [],
@@ -230,17 +233,41 @@ const handleAuthenticate = (request: JsonRpcRequest): HandlerResult => ({
   ...emptyHandlerExtras(),
 })
 
+const readCwd = (params: unknown): string => {
+  const value = params as { cwd?: string }
+  return value.cwd ?? ""
+}
+
 const handleSessionNew = (
   request: JsonRpcRequest,
   config: FakeAcpConfig,
   promptState: FakeAcpPromptState,
 ): HandlerResult => {
   const sessionId = config.sessionNewSessionId ?? promptState.allocateSessionId()
+  promptState.recordSession({ sessionId, cwd: readCwd(request.params) })
   return {
     response: jsonRpcResult(request.id, { sessionId }),
     outbound: outboundAfterSessionNew(sessionId, config),
     notifications: [],
     deferredNotifications: [],
+  }
+}
+
+const handleSessionList = (
+  request: JsonRpcRequest,
+  config: FakeAcpConfig,
+  promptState: FakeAcpPromptState,
+): HandlerResult => {
+  if (!config.sessionList) {
+    return {
+      response: jsonRpcError(request.id, -32601, "session/list not supported"),
+      ...emptyHandlerExtras(),
+    }
+  }
+
+  return {
+    response: jsonRpcResult(request.id, { sessions: promptState.listSessions() }),
+    ...emptyHandlerExtras(),
   }
 }
 
@@ -365,6 +392,8 @@ const requestHandlers: Record<string, RequestHandler> = {
   authenticate: (request) => handleAuthenticate(request),
   "session/new": (request, config, promptState) =>
     handleSessionNew(request, config, promptState),
+  "session/list": (request, config, promptState) =>
+    handleSessionList(request, config, promptState),
   "session/load": (request, config) => handleSessionLoad(request, config),
   "session/close": (request, config) => handleSessionClose(request, config),
   "session/prompt": (request, config, promptState) =>

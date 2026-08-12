@@ -34,7 +34,7 @@ describe("resolveAgentProfile", () => {
     ])
   })
 
-  test("builds a generic profile from catalog defaults for non-cursor agents", () => {
+  test("applies opencode auth method override", () => {
     const profile = resolveAgentProfile("opencode")
     if (profile === undefined) {
       throw new Error("expected opencode profile")
@@ -43,7 +43,7 @@ describe("resolveAgentProfile", () => {
     expect(profile).toEqual({
       id: "opencode",
       command: ["opencode", "acp"],
-      authMethodId: "opencode",
+      authMethodId: "opencode-login",
       clientCapabilities: {
         fs: {
           readTextFile: true,

@@ -24,13 +24,15 @@ export const applySessionListEvents = (params: {
     return params.collection
   }
 
-  const hasMatch = params.collection.items.some((item) => stateBySessionId.has(item.id))
+  const hasMatch = params.collection.items.some((item) =>
+    stateBySessionId.has(item.sessionId),
+  )
   if (!hasMatch) {
     return params.collection
   }
 
   const items = params.collection.items.flatMap((item) => {
-    const nextState = stateBySessionId.get(item.id)
+    const nextState = stateBySessionId.get(item.sessionId)
     if (nextState === undefined) {
       return [item]
     }
@@ -39,19 +41,10 @@ export const applySessionListEvents = (params: {
       return []
     }
 
-    return [
-      {
-        ...item,
-        state: nextState,
-      },
-    ]
+    return [item]
   })
 
   return {
     items,
-    page: {
-      ...params.collection.page,
-      count: items.length,
-    },
   }
 }

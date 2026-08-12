@@ -16,6 +16,7 @@ import { PresenceProbeContext } from "../acp/catalog/agent.profile.override"
 import { probePresence } from "../acp/catalog/probe.presence"
 import { resolveCatalogSpawn } from "../acp/catalog/resolve.catalog.spawn"
 import { registrySnapshotSchema } from "../acp/catalog/registry.schema"
+import { agentSupportsSessionList } from "../acp/catalog/session.list.support"
 import {
   isCatalogAgentId,
   isPopularAgentId,
@@ -214,6 +215,7 @@ const toSettingsFromRow = (
     present,
     popular: isPopularAgentId(agentId),
     deletable: !isCatalogAgentId(agentId),
+    sessionListSupported: agentSupportsSessionList(agentId),
   })
 }
 
@@ -429,6 +431,10 @@ export const createAgentSettingsRepository = (
     }
 
     if (body.enabled && !resolveAvailable(agentId)) {
+      return { ok: false, error: { kind: "cannot_enable" } }
+    }
+
+    if (body.enabled && !agentSupportsSessionList(agentId)) {
       return { ok: false, error: { kind: "cannot_enable" } }
     }
 

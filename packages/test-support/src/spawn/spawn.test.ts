@@ -26,7 +26,7 @@ describe("spawnFakeAcp", () => {
       protocolVersion: 1,
       agentCapabilities: {
         loadSession: true,
-        sessionCapabilities: { close: true },
+        sessionCapabilities: { close: true, list: {} },
       },
       agentInfo: { name: "fake-acp", version: "0.0.0" },
       authMethods: [],
@@ -116,7 +116,7 @@ describe("spawnFakeAcp", () => {
         protocolVersion: 1,
         agentCapabilities: {
           loadSession: false,
-          sessionCapabilities: { close: false },
+          sessionCapabilities: { close: false, list: {} },
         },
       },
     })

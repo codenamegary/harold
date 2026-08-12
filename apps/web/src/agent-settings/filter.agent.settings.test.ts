@@ -12,6 +12,7 @@ const cursor: AgentSettings = {
   present: true,
   popular: true,
   deletable: false,
+  sessionListSupported: true,
 }
 
 const claude: AgentSettings = {
@@ -24,6 +25,7 @@ const claude: AgentSettings = {
   present: true,
   popular: true,
   deletable: false,
+  sessionListSupported: true,
 }
 
 describe("filterAgentSettings", () => {

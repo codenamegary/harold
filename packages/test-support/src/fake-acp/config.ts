@@ -1,6 +1,7 @@
 export type FakeAcpCapabilities = {
   loadSession: boolean
   sessionClose: boolean
+  sessionList: boolean
 }
 
 export type FakeAcpConfig = FakeAcpCapabilities & {
@@ -61,6 +62,7 @@ export const readFakeAcpConfig = (
 ): FakeAcpConfig => ({
   loadSession: parseBooleanEnv(env.FAKE_ACP_LOAD_SESSION, false),
   sessionClose: parseBooleanEnv(env.FAKE_ACP_SESSION_CLOSE, false),
+  sessionList: parseBooleanEnv(env.FAKE_ACP_SESSION_LIST, true),
   sessionNewSessionId: env.FAKE_ACP_SESSION_NEW_SESSION_ID,
   sessionLoadSessionId: readEnvString(env, "FAKE_ACP_SESSION_LOAD_SESSION_ID", "fake-session-load"),
   sessionCloseFails: parseBooleanEnv(env.FAKE_ACP_SESSION_CLOSE_FAILS, false),
@@ -124,6 +126,7 @@ const optionalNumberEnv = (
 export const fakeAcpEnvFromCapabilities = (options: FakeAcpEnvOptions): Record<string, string> => ({
   FAKE_ACP_LOAD_SESSION: String(options.capabilities?.loadSession ?? false),
   FAKE_ACP_SESSION_CLOSE: String(options.capabilities?.sessionClose ?? false),
+  FAKE_ACP_SESSION_LIST: String(options.capabilities?.sessionList ?? true),
   ...stringEnv("FAKE_ACP_SESSION_NEW_SESSION_ID", options.sessionNewSessionId),
   ...stringEnv("FAKE_ACP_SESSION_LOAD_SESSION_ID", options.sessionLoadSessionId),
   ...optionalBooleanEnv("FAKE_ACP_SESSION_CLOSE_FAILS", options.sessionCloseFails),

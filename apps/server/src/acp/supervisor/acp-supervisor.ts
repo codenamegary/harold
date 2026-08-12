@@ -6,6 +6,8 @@ import { sanitizeAcpRejection } from "../sanitize-acp-error"
 import {
   AgentCapabilities,
   AgentSettingsReader,
+  AcpCatalogSession,
+  AcpListSessionsResult,
   AcpSessionCloseResult,
   AcpSessionCancelResult,
   AcpSessionOperationResult,
@@ -35,12 +37,14 @@ import { createTurnId } from "../../session/create.turn.id"
 import { createUnavailablePermissionService } from "../../permission/service"
 
 type SupervisorRuntime = {
+  agentId: AgentId
   state: AcpSupervisorState
-  runningAgentId: AgentId | null
   agentCapabilities: AgentCapabilities | null
   process: SpawnedAgentProcess | null
   transport: JsonRpcTransport | null
   exitMonitor: Promise<void> | null
+  acceptUnexpectedExit: boolean
+  restartGeneration: number
 }
 
 const nowIso = (): string => new Date().toISOString()
@@ -61,7 +65,10 @@ const parseAgentCapabilities = (result: unknown): AgentCapabilities => {
   const value = result as {
     agentCapabilities?: {
       loadSession?: boolean
-      sessionCapabilities?: { close?: boolean }
+      sessionCapabilities?: {
+        close?: boolean
+        list?: unknown
+      }
     }
   }
 
@@ -69,6 +76,7 @@ const parseAgentCapabilities = (result: unknown): AgentCapabilities => {
     loadSession: value.agentCapabilities?.loadSession ?? false,
     sessionCapabilities: {
       close: value.agentCapabilities?.sessionCapabilities?.close ?? false,
+      list: value.agentCapabilities?.sessionCapabilities?.list !== undefined,
     },
   }
 }
@@ -76,6 +84,41 @@ const parseAgentCapabilities = (result: unknown): AgentCapabilities => {
 const parsePromptStopReason = (result: unknown): string | undefined => {
   const value = result as { stopReason?: string }
   return value.stopReason
+}
+
+const parseListedSessions = (result: unknown): ReadonlyArray<{
+  sessionId: string
+  cwd: string
+  title: string
+  updatedAt: string
+}> => {
+  const value = result as {
+    sessions?: ReadonlyArray<{
+      sessionId?: string
+      cwd?: string
+      title?: string
+      updatedAt?: string
+    }>
+  }
+
+  if (!Array.isArray(value.sessions)) {
+    return []
+  }
+
+  return value.sessions.flatMap((session) => {
+    if (session.sessionId === undefined) {
+      return []
+    }
+
+    return [
+      {
+        sessionId: session.sessionId,
+        cwd: session.cwd ?? "",
+        title: session.title ?? session.sessionId,
+        updatedAt: session.updatedAt ?? nowIso(),
+      },
+    ]
+  })
 }
 
 const resolveStartConfig = (
@@ -106,12 +149,14 @@ const resolveStartConfig = (
 }
 
 const monitorProcessExit = async (
-  runtime: SupervisorRuntime,
+  runtimes: Map<AgentId, SupervisorRuntime>,
+  agentId: AgentId,
   process: SpawnedAgentProcess,
   onUnexpectedExit: () => void,
 ) => {
   const exitCode = await process.waitForExit()
-  if (runtime.process !== process) {
+  const runtime = runtimes.get(agentId)
+  if (runtime === undefined || runtime.process !== process) {
     return
   }
 
@@ -135,6 +180,38 @@ const wireTransportObserver = (
   transport.onObserverEvent(observer)
 }
 
+const createEmptyRuntime = (agentId: AgentId): SupervisorRuntime => ({
+  agentId,
+  state: "stopped",
+  agentCapabilities: null,
+  process: null,
+  transport: null,
+  exitMonitor: null,
+  acceptUnexpectedExit: false,
+  restartGeneration: 0,
+})
+
+const aggregateStatus = (
+  runtimes: Map<AgentId, SupervisorRuntime>,
+  activeSessions: number,
+): AcpSupervisorStatus => {
+  if (runtimes.size === 0) {
+    return { state: "stopped", activeSessions }
+  }
+
+  const states = [...runtimes.values()].map((runtime) => runtime.state)
+  if (states.some((state) => state === "ready")) {
+    return { state: "ready", activeSessions }
+  }
+  if (states.some((state) => state === "starting")) {
+    return { state: "starting", activeSessions }
+  }
+  if (states.some((state) => state === "error")) {
+    return { state: "error", activeSessions }
+  }
+  return { state: "stopped", activeSessions }
+}
+
 export const createAcpSupervisor = ({
   agentSettingsRepository,
   serverVersion,
@@ -153,67 +230,107 @@ export const createAcpSupervisor = ({
     }),
 }: CreateAcpSupervisorParams): AcpSupervisor => {
   const sessionBindingRegistry = createSessionBindingRegistry()
-  const runtime: SupervisorRuntime = {
-    state: "stopped",
-    runningAgentId: null,
-    agentCapabilities: null,
-    process: null,
-    transport: null,
-    exitMonitor: null,
-  }
-  const acceptUnexpectedExit = { value: false }
-  const restartGeneration = { value: 0 }
+  const runtimes = new Map<AgentId, SupervisorRuntime>()
+  const acpSessionAgentIds = new Map<string, AgentId>()
 
-  const clearRuntime = () => {
-    acceptUnexpectedExit.value = false
+  const unbindAgentSessions = (agentId: AgentId) => {
+    const acpSessionIdsToDelete: string[] = []
+    for (const [acpSessionId, ownerAgentId] of acpSessionAgentIds.entries()) {
+      if (ownerAgentId !== agentId) {
+        continue
+      }
+      sessionBindingRegistry.unbind({ acpSessionId })
+      acpSessionIdsToDelete.push(acpSessionId)
+    }
+    for (const acpSessionId of acpSessionIdsToDelete) {
+      acpSessionAgentIds.delete(acpSessionId)
+    }
+  }
+
+  const clearRuntime = (agentId: AgentId, options?: { keepEntry?: boolean }) => {
+    const runtime = runtimes.get(agentId)
+    if (runtime === undefined) {
+      return
+    }
+
+    runtime.acceptUnexpectedExit = false
     const process = runtime.process
     const transport = runtime.transport
     runtime.transport = null
     runtime.process = null
     runtime.exitMonitor = null
-    runtime.runningAgentId = null
     runtime.agentCapabilities = null
-    sessionBindingRegistry.clear()
+    unbindAgentSessions(agentId)
     transport?.close()
     process?.kill()
+    if (!options?.keepEntry) {
+      runtimes.delete(agentId)
+    }
   }
 
-  const cancelRestart = () => {
-    restartGeneration.value += 1
-  }
-
-  const transitionToError = () => {
-    cancelRestart()
-    if (runtime.state !== "ready" && runtime.state !== "starting") {
-      clearRuntime()
-      runtime.state = "error"
+  const cancelRestart = (agentId: AgentId) => {
+    const runtime = runtimes.get(agentId)
+    if (runtime === undefined) {
       return
     }
-    onBeforeClearRuntime()
-    clearRuntime()
+
+    runtime.restartGeneration += 1
+  }
+
+  const transitionToError = (agentId: AgentId) => {
+    const runtime = runtimes.get(agentId)
+    if (runtime === undefined) {
+      return
+    }
+
+    cancelRestart(agentId)
+    if (runtime.state === "ready" || runtime.state === "starting") {
+      onBeforeClearRuntime()
+    }
+    clearRuntime(agentId, { keepEntry: true })
     runtime.state = "error"
   }
 
-  const stop = async (): Promise<void> => {
-    cancelRestart()
+  const stopRuntime = async (agentId: AgentId): Promise<void> => {
+    const runtime = runtimes.get(agentId)
+    if (runtime === undefined) {
+      return
+    }
+
+    cancelRestart(agentId)
     if (runtime.state === "ready") {
       onBeforeClearRuntime()
     }
-    clearRuntime()
-    runtime.state = "stopped"
+    clearRuntime(agentId)
   }
 
-  const attachExitMonitor = (process: SpawnedAgentProcess) => {
-    acceptUnexpectedExit.value = true
-    runtime.exitMonitor = monitorProcessExit(runtime, process, () => {
-      if (!acceptUnexpectedExit.value) {
+  const stop = async (): Promise<void> => {
+    const activeAgentIds = [...runtimes.keys()]
+    await Promise.all(activeAgentIds.map((agentId) => stopRuntime(agentId)))
+  }
+
+  const attachExitMonitor = (agentId: AgentId, process: SpawnedAgentProcess) => {
+    const runtime = runtimes.get(agentId)
+    if (runtime === undefined) {
+      return
+    }
+
+    runtime.acceptUnexpectedExit = true
+    runtime.exitMonitor = monitorProcessExit(runtimes, agentId, process, () => {
+      const current = runtimes.get(agentId)
+      if (current === undefined || !current.acceptUnexpectedExit) {
         return
       }
-      handleUnexpectedExit()
+      handleUnexpectedExit(agentId)
     })
   }
 
   const spawnAndInitialize = async (agentId: AgentId): Promise<void> => {
+    const runtime = runtimes.get(agentId)
+    if (runtime === undefined) {
+      throw createAcpStartError("ACP supervisor runtime is not available")
+    }
+
     const resolved = resolveStartConfig(agentSettingsRepository, agentId)
     if (!resolved.ok) {
       throw createAcpStartError(resolved.reason)
@@ -228,7 +345,6 @@ export const createAcpSupervisor = ({
 
     runtime.process = process
     runtime.transport = transport
-    runtime.runningAgentId = agentId
 
     if (journalWriter !== undefined) {
       wireTransportObserver(transport, journalWriter, sessionBindingRegistry)
@@ -266,47 +382,67 @@ export const createAcpSupervisor = ({
     })
 
     runtime.state = "ready"
-    attachExitMonitor(process)
+    attachExitMonitor(agentId, process)
     void Promise.resolve(onSupervisorReady())
   }
 
   const beginBoundedRestart = (agentId: AgentId) => {
-    restartGeneration.value += 1
-    const generation = restartGeneration.value
+    const runtime = runtimes.get(agentId)
+    if (runtime === undefined) {
+      return
+    }
+
+    runtime.restartGeneration += 1
+    const generation = runtime.restartGeneration
     runtime.state = "starting"
 
     void (async () => {
       for (const delayMs of restartBackoffMs) {
-        if (generation !== restartGeneration.value) {
+        const current = runtimes.get(agentId)
+        if (current === undefined || generation !== current.restartGeneration) {
           return
         }
 
         await sleepFn(delayMs)
 
-        if (generation !== restartGeneration.value) {
+        const afterSleep = runtimes.get(agentId)
+        if (afterSleep === undefined || generation !== afterSleep.restartGeneration) {
           return
         }
 
         try {
-          clearRuntime()
-          runtime.state = "starting"
+          clearRuntime(agentId, { keepEntry: true })
+          const restarting = runtimes.get(agentId)
+          if (restarting === undefined) {
+            return
+          }
+          restarting.state = "starting"
           await spawnAndInitialize(agentId)
           return
         } catch {
-          clearRuntime()
-          runtime.state = "starting"
+          clearRuntime(agentId, { keepEntry: true })
+          const retrying = runtimes.get(agentId)
+          if (retrying === undefined) {
+            return
+          }
+          retrying.state = "starting"
         }
       }
 
-      if (generation === restartGeneration.value) {
-        runtime.state = "error"
+      const finalRuntime = runtimes.get(agentId)
+      if (finalRuntime !== undefined && generation === finalRuntime.restartGeneration) {
+        finalRuntime.state = "error"
       }
     })()
   }
 
-  const handleUnexpectedExit = () => {
-    acceptUnexpectedExit.value = false
-    const agentId = runtime.runningAgentId
+  const handleUnexpectedExit = (agentId: AgentId) => {
+    const runtime = runtimes.get(agentId)
+    if (runtime === undefined) {
+      return
+    }
+
+    runtime.acceptUnexpectedExit = false
     const wasReady = runtime.state === "ready"
 
     if (!wasReady) {
@@ -314,58 +450,102 @@ export const createAcpSupervisor = ({
     }
 
     onBeforeClearRuntime()
-    clearRuntime()
-    if (agentId !== null) {
-      beginBoundedRestart(agentId)
-      return
-    }
-    runtime.state = "error"
+    clearRuntime(agentId, { keepEntry: true })
+    beginBoundedRestart(agentId)
   }
 
   const start = async (agentId: AgentId): Promise<void> => {
-    if (runtime.state === "starting") {
+    const existing = runtimes.get(agentId)
+    if (existing?.state === "starting") {
       throw createAcpStartError("ACP supervisor is already starting")
     }
 
-    if (runtime.state === "ready" && runtime.runningAgentId === agentId) {
+    if (existing?.state === "ready") {
       return
     }
 
-    await stop()
+    if (existing !== undefined) {
+      await stopRuntime(agentId)
+    }
 
     const resolved = resolveStartConfig(agentSettingsRepository, agentId)
     if (!resolved.ok) {
-      runtime.state = "stopped"
       throw createAcpStartError(resolved.reason)
     }
 
+    const runtime = createEmptyRuntime(agentId)
     runtime.state = "starting"
+    runtimes.set(agentId, runtime)
 
     try {
       await spawnAndInitialize(agentId)
     } catch (error: unknown) {
-      transitionToError()
+      transitionToError(agentId)
       throw createAcpStartError(sanitizeFailureReason(error, "ACP supervisor failed to start"))
     }
   }
 
   const handleAgentDisabled = async (agentId: AgentId): Promise<void> => {
-    if (runtime.runningAgentId === agentId) {
-      await stop()
+    if (runtimes.get(agentId) === undefined) {
+      return
     }
+    await stopRuntime(agentId)
+  }
+
+  const getReadyRuntime = (agentId: AgentId): SupervisorRuntime | null => {
+    const runtime = runtimes.get(agentId)
+    if (runtime === undefined || runtime.state !== "ready" || runtime.transport === null) {
+      return null
+    }
+    return runtime
+  }
+
+  const resolveReadyAgentId = (agentId?: AgentId): AgentId | null => {
+    if (agentId !== undefined) {
+      return getReadyRuntime(agentId) === null ? null : agentId
+    }
+
+    const readyIds = [...runtimes.values()]
+      .filter((runtime) => runtime.state === "ready")
+      .map((runtime) => runtime.agentId)
+    return readyIds[0] ?? null
+  }
+
+  const resolveRuntimeForAcpSession = (acpSessionId: string): SupervisorRuntime | null => {
+    const ownerAgentId = acpSessionAgentIds.get(acpSessionId)
+    if (ownerAgentId !== undefined) {
+      return getReadyRuntime(ownerAgentId)
+    }
+
+    const fallbackAgentId = resolveReadyAgentId()
+    if (fallbackAgentId === null) {
+      return null
+    }
+    return getReadyRuntime(fallbackAgentId)
+  }
+
+  const rememberAcpSession = (agentId: AgentId, acpSessionId: string) => {
+    acpSessionAgentIds.set(acpSessionId, agentId)
   }
 
   const createAcpSession = async ({
+    agentId,
     workspaceCwd,
     sessionId,
     workspaceId,
   }: {
+    agentId?: AgentId
     workspaceCwd: string
     sessionId: string
     workspaceId: string
   }): Promise<AcpSessionOperationResult> => {
-    const transport = runtime.transport
-    if (runtime.state !== "ready" || transport === null) {
+    const resolvedAgentId = resolveReadyAgentId(agentId)
+    if (resolvedAgentId === null) {
+      return { ok: false, reason: "ACP supervisor is not ready" }
+    }
+
+    const runtime = getReadyRuntime(resolvedAgentId)
+    if (runtime === null || runtime.transport === null) {
       return { ok: false, reason: "ACP supervisor is not ready" }
     }
 
@@ -376,7 +556,7 @@ export const createAcpSupervisor = ({
     }
 
     try {
-      const result = await transport.request<{ sessionId: string }>(
+      const result = await runtime.transport.request<{ sessionId: string }>(
         "session/new",
         {
           cwd: workspaceCwd,
@@ -385,6 +565,7 @@ export const createAcpSupervisor = ({
         operationContext,
       )
 
+      rememberAcpSession(resolvedAgentId, result.sessionId)
       sessionBindingRegistry.bind({
         acpSessionId: result.sessionId,
         sessionId,
@@ -399,6 +580,77 @@ export const createAcpSupervisor = ({
     }
   }
 
+  const createCatalogSession = async ({
+    agentId,
+    cwd,
+  }: {
+    agentId: AgentId
+    cwd: string
+  }): Promise<AcpSessionOperationResult> => {
+    const runtime = getReadyRuntime(agentId)
+    if (runtime === null || runtime.transport === null) {
+      return { ok: false, reason: "ACP supervisor is not ready" }
+    }
+
+    try {
+      const result = await runtime.transport.request<{ sessionId: string }>("session/new", {
+        cwd,
+        mcpServers: [],
+      })
+
+      rememberAcpSession(agentId, result.sessionId)
+      return { ok: true, acpSessionId: result.sessionId }
+    } catch (error: unknown) {
+      return { ok: false, reason: sanitizeFailureReason(error, "session/new failed") }
+    }
+  }
+
+  const listAcpSessions = async (params?: {
+    cwd?: string
+  }): Promise<AcpListSessionsResult> => {
+    const readyRuntimes = [...runtimes.values()].filter(
+      (runtime) => runtime.state === "ready" && runtime.transport !== null,
+    )
+
+    const sessions: AcpCatalogSession[] = []
+
+    for (const runtime of readyRuntimes) {
+      if (!runtime.agentCapabilities?.sessionCapabilities.list) {
+        continue
+      }
+
+      if (runtime.transport === null) {
+        continue
+      }
+
+      try {
+        const listed = parseListedSessions(
+          await runtime.transport.request("session/list", params?.cwd === undefined ? {} : { cwd: params.cwd }),
+        )
+        for (const session of listed) {
+          if (params?.cwd !== undefined && session.cwd !== params.cwd) {
+            continue
+          }
+          rememberAcpSession(runtime.agentId, session.sessionId)
+          sessions.push({
+            agentId: runtime.agentId,
+            sessionId: session.sessionId,
+            cwd: session.cwd,
+            title: session.title,
+            updatedAt: session.updatedAt,
+          })
+        }
+      } catch (error: unknown) {
+        return {
+          ok: false,
+          reason: sanitizeFailureReason(error, `session/list failed for ${runtime.agentId}`),
+        }
+      }
+    }
+
+    return { ok: true, sessions }
+  }
+
   const loadAcpSession = async ({
     acpSessionId,
     workspaceCwd,
@@ -410,14 +662,12 @@ export const createAcpSupervisor = ({
     sessionId: string
     workspaceId: string
   }): Promise<AcpSessionOperationResult> => {
-    const transport = runtime.transport
-    const capabilities = runtime.agentCapabilities
-
-    if (runtime.state !== "ready" || transport === null) {
+    const runtime = resolveRuntimeForAcpSession(acpSessionId)
+    if (runtime === null || runtime.transport === null) {
       return { ok: false, reason: "ACP supervisor is not ready" }
     }
 
-    if (!capabilities?.loadSession) {
+    if (!runtime.agentCapabilities?.loadSession) {
       return { ok: false, reason: "Agent does not support session/load" }
     }
 
@@ -429,6 +679,7 @@ export const createAcpSupervisor = ({
       workspaceRoot: workspaceCwd,
       phase: "load_replay",
     })
+    rememberAcpSession(runtime.agentId, acpSessionId)
 
     const operationContext: AcpOperationContext = {
       sessionId,
@@ -437,7 +688,7 @@ export const createAcpSupervisor = ({
     }
 
     try {
-      const result = await transport.request<{ sessionId: string }>(
+      const result = await runtime.transport.request<{ sessionId: string }>(
         "session/load",
         {
           sessionId: acpSessionId,
@@ -455,6 +706,7 @@ export const createAcpSupervisor = ({
         workspaceRoot: workspaceCwd,
         phase: "live",
       })
+      rememberAcpSession(runtime.agentId, result.sessionId)
 
       return { ok: true, acpSessionId: result.sessionId }
     } catch (error: unknown) {
@@ -468,18 +720,16 @@ export const createAcpSupervisor = ({
   }: {
     acpSessionId: string
   }): Promise<AcpSessionCloseResult> => {
-    const transport = runtime.transport
-    const capabilities = runtime.agentCapabilities
-    const binding = sessionBindingRegistry.getBinding(acpSessionId)
-
-    if (runtime.state !== "ready" || transport === null) {
+    const runtime = resolveRuntimeForAcpSession(acpSessionId)
+    if (runtime === null || runtime.transport === null) {
       return { ok: false, reason: "ACP supervisor is not ready" }
     }
 
-    if (!capabilities?.sessionCapabilities.close) {
+    if (!runtime.agentCapabilities?.sessionCapabilities.close) {
       return { ok: false, reason: "Agent does not support session/close" }
     }
 
+    const binding = sessionBindingRegistry.getBinding(acpSessionId)
     const operationContext: AcpOperationContext | undefined =
       binding === undefined
         ? undefined
@@ -490,8 +740,9 @@ export const createAcpSupervisor = ({
           }
 
     try {
-      await transport.request("session/close", { sessionId: acpSessionId }, operationContext)
+      await runtime.transport.request("session/close", { sessionId: acpSessionId }, operationContext)
       sessionBindingRegistry.unbind({ acpSessionId })
+      acpSessionAgentIds.delete(acpSessionId)
       return { ok: true }
     } catch (error: unknown) {
       return { ok: false, reason: sanitizeFailureReason(error, "session/close failed") }
@@ -566,8 +817,8 @@ export const createAcpSupervisor = ({
     acpSessionId: string
     prompt: unknown
   }): Promise<AcpSessionPromptStartResult> => {
-    const transport = runtime.transport
-    if (runtime.state !== "ready" || transport === null) {
+    const runtime = resolveRuntimeForAcpSession(acpSessionId)
+    if (runtime === null || runtime.transport === null) {
       return { ok: false, reason: "ACP supervisor is not ready" }
     }
 
@@ -577,7 +828,7 @@ export const createAcpSupervisor = ({
     }
 
     const turnId = createTurnId()
-    const promptRequestId = transport.allocateRequestId()
+    const promptRequestId = runtime.transport.allocateRequestId()
     const operationContext: AcpOperationContext = {
       sessionId: bound.binding.sessionId,
       workspaceId: bound.binding.workspaceId,
@@ -626,6 +877,7 @@ export const createAcpSupervisor = ({
 
     sessionBindingRegistry.setActiveTurnId({ acpSessionId, turnId })
 
+    const transport = runtime.transport
     const completion = (async (): Promise<AcpSessionPromptResult> => {
       try {
         const result = await transport.request(
@@ -690,8 +942,8 @@ export const createAcpSupervisor = ({
   }: {
     acpSessionId: string
   }): Promise<AcpSessionCancelResult> => {
-    const transport = runtime.transport
-    if (runtime.state !== "ready" || transport === null) {
+    const runtime = resolveRuntimeForAcpSession(acpSessionId)
+    if (runtime === null || runtime.transport === null) {
       return { ok: false, reason: "ACP supervisor is not ready" }
     }
 
@@ -701,7 +953,7 @@ export const createAcpSupervisor = ({
     }
 
     try {
-      transport.notify("session/cancel", { sessionId: acpSessionId })
+      runtime.transport.notify("session/cancel", { sessionId: acpSessionId })
       return { ok: true }
     } catch (error: unknown) {
       return { ok: false, reason: sanitizeFailureReason(error, "session/cancel failed") }
@@ -709,13 +961,13 @@ export const createAcpSupervisor = ({
   }
 
   const ensureSupervisorReadyForAgent = async (agentId: AgentId): Promise<boolean> => {
-    if (runtime.state === "ready" && runtime.runningAgentId === agentId) {
+    if (getReadyRuntime(agentId) !== null) {
       return true
     }
 
     try {
       await start(agentId)
-      return runtime.state === "ready"
+      return getReadyRuntime(agentId) !== null
     } catch {
       return false
     }
@@ -738,12 +990,15 @@ export const createAcpSupervisor = ({
         continue
       }
 
-      const closeSupported = runtime.agentCapabilities?.sessionCapabilities.close === true
+      const runtime = getReadyRuntime(session.agentId)
+      const closeSupported = runtime?.agentCapabilities?.sessionCapabilities.close === true
       if (!closeSupported) {
         sessionBindingRegistry.unbind({ acpSessionId: session.acpSessionId })
+        acpSessionAgentIds.delete(session.acpSessionId)
         continue
       }
 
+      rememberAcpSession(session.agentId, session.acpSessionId)
       const result = await closeAcpSession({ acpSessionId: session.acpSessionId })
       if (!result.ok) {
         failures.push({
@@ -763,22 +1018,39 @@ export const createAcpSupervisor = ({
   }): void => {
     sessions.forEach((session) => {
       sessionBindingRegistry.unbind({ acpSessionId: session.acpSessionId })
+      acpSessionAgentIds.delete(session.acpSessionId)
     })
   }
 
   return {
-    getStatus: (): AcpSupervisorStatus => ({
-      state: runtime.state,
-      activeSessions: sessionBindingRegistry.count(),
-    }),
-    getRunningAgentId: () => runtime.runningAgentId,
-    getAgentCapabilities: () => runtime.agentCapabilities,
-    getTransport: () => runtime.transport,
+    getStatus: (): AcpSupervisorStatus =>
+      aggregateStatus(runtimes, sessionBindingRegistry.count()),
+    getRunningAgentId: () => resolveReadyAgentId(),
+    getRunningAgentIds: () =>
+      [...runtimes.values()]
+        .filter((runtime) => runtime.state === "ready")
+        .map((runtime) => runtime.agentId),
+    getAgentCapabilities: (agentId) => {
+      const resolvedAgentId = resolveReadyAgentId(agentId)
+      if (resolvedAgentId === null) {
+        return null
+      }
+      return getReadyRuntime(resolvedAgentId)?.agentCapabilities ?? null
+    },
+    getTransport: (agentId) => {
+      const resolvedAgentId = resolveReadyAgentId(agentId)
+      if (resolvedAgentId === null) {
+        return null
+      }
+      return getReadyRuntime(resolvedAgentId)?.transport ?? null
+    },
     getSessionBindingRegistry: () => sessionBindingRegistry,
     start,
     stop,
     handleAgentDisabled,
+    listAcpSessions,
     createAcpSession,
+    createCatalogSession,
     loadAcpSession,
     closeAcpSession,
     promptAcpSession,

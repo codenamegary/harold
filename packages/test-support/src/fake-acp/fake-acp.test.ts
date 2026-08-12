@@ -54,6 +54,7 @@ describe("fake ACP protocol", () => {
     const config = readFakeAcpConfig({
       FAKE_ACP_LOAD_SESSION: "true",
       FAKE_ACP_SESSION_CLOSE: "true",
+      FAKE_ACP_SESSION_LIST: "true",
     })
 
     const { response } = handleJsonRpcRequest(
@@ -78,10 +79,76 @@ describe("fake ACP protocol", () => {
         protocolVersion: 1,
         agentCapabilities: {
           loadSession: true,
-          sessionCapabilities: { close: true },
+          sessionCapabilities: { close: true, list: {} },
         },
         agentInfo: { name: "fake-acp", version: "0.0.0" },
         authMethods: [],
+      },
+    })
+  })
+
+  test("session/list is rejected when sessionList is disabled", () => {
+    const config = readFakeAcpConfig({ FAKE_ACP_SESSION_LIST: "false" })
+
+    const { response } = handleJsonRpcRequest(
+      {
+        jsonrpc: "2.0",
+        id: 10,
+        method: "session/list",
+        params: {},
+      },
+      config,
+      createPromptState(),
+    )
+
+    expect(response).toMatchObject({
+      jsonrpc: "2.0",
+      id: 10,
+      error: { code: -32601, message: "session/list not supported" },
+    })
+  })
+
+  test("session/list returns sessions created via session/new", () => {
+    const config = readFakeAcpConfig({
+      FAKE_ACP_SESSION_LIST: "true",
+      FAKE_ACP_SESSION_NEW_SESSION_ID: "listed-session-1",
+    })
+    const promptState = createPromptState()
+
+    handleJsonRpcRequest(
+      {
+        jsonrpc: "2.0",
+        id: 11,
+        method: "session/new",
+        params: { cwd: "/tmp/project-a", mcpServers: [] },
+      },
+      config,
+      promptState,
+    )
+
+    const { response } = handleJsonRpcRequest(
+      {
+        jsonrpc: "2.0",
+        id: 12,
+        method: "session/list",
+        params: {},
+      },
+      config,
+      promptState,
+    )
+
+    expect(response).toEqual({
+      jsonrpc: "2.0",
+      id: 12,
+      result: {
+        sessions: [
+          {
+            sessionId: "listed-session-1",
+            cwd: "/tmp/project-a",
+            title: "listed-session-1",
+            updatedAt: expect.any(String),
+          },
+        ],
       },
     })
   })

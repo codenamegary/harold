@@ -4,7 +4,6 @@ import {
   PROBLEM_TYPES,
 } from "contracts/http/error"
 import {
-  CreateSessionResponseSchema,
   PromptSessionResponseSchema,
   SessionSchema,
 } from "contracts/http/session"
@@ -19,6 +18,7 @@ import {
   createTestApp,
   createTestAppResources,
   enableAgent,
+  seedBoundSession,
   seedWorkspace,
 } from "../test-support/create-test-app"
 
@@ -120,32 +120,29 @@ describe("auto-resume on select, stream, and prompt", () => {
         sessionLoadSessionId: "auto-select-session-loaded",
       },
     )
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const created = CreateSessionResponseSchema.parse(
-      JSON.parse(
-        (
-          await app.inject({
-            method: "POST",
-            url: "/v1/sessions",
-            payload: { workspaceId, agentId: "cursor", text: "Select resume" },
-          })
-        ).body,
-      ),
-    )
-    await waitForSessionIdle(app, created.id)
+    const seeded = await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Select resume",
+    })
+    await waitForSessionIdle(app, seeded.sessionId)
     await unbindAndMarkOffline({
       app,
       acpSupervisor,
       database,
-      sessionId: created.id,
-      acpSessionId: "auto-select-session",
+      sessionId: seeded.sessionId,
+      acpSessionId: seeded.acpSessionId,
     })
 
     const selectResponse = await app.inject({
       method: "POST",
-      url: `/v1/sessions/${created.id}/select`,
+      url: `/v1/sessions/${seeded.sessionId}/select`,
     })
     const selected = SessionSchema.parse(JSON.parse(selectResponse.body))
     expect(selectResponse.statusCode).toBe(200)
@@ -170,27 +167,24 @@ describe("auto-resume on select, stream, and prompt", () => {
         sessionLoadSessionId: "auto-stream-session-loaded",
       },
     )
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const created = CreateSessionResponseSchema.parse(
-      JSON.parse(
-        (
-          await app.inject({
-            method: "POST",
-            url: "/v1/sessions",
-            payload: { workspaceId, agentId: "cursor", text: "Stream resume" },
-          })
-        ).body,
-      ),
-    )
-    await waitForSessionIdle(app, created.id)
+    const seeded = await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Stream resume",
+    })
+    await waitForSessionIdle(app, seeded.sessionId)
     await unbindAndMarkOffline({
       app,
       acpSupervisor,
       database,
-      sessionId: created.id,
-      acpSessionId: "auto-stream-session",
+      sessionId: seeded.sessionId,
+      acpSessionId: seeded.acpSessionId,
     })
 
     await app.listen({ host: config.host, port: 0 })
@@ -198,7 +192,7 @@ describe("auto-resume on select, stream, and prompt", () => {
     if (address === null || typeof address === "string") {
       throw new Error("expected bound server address")
     }
-    const url = `ws://${config.host}:${address.port}/v1/events?sessionId=${created.id}`
+    const url = `ws://${config.host}:${address.port}/v1/events?sessionId=${seeded.sessionId}`
 
     await new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(url)
@@ -218,7 +212,7 @@ describe("auto-resume on select, stream, and prompt", () => {
     })
 
     const after = SessionSchema.parse(
-      JSON.parse((await app.inject({ method: "GET", url: `/v1/sessions/${created.id}` })).body),
+      JSON.parse((await app.inject({ method: "GET", url: `/v1/sessions/${seeded.sessionId}` })).body),
     )
     expect(after.state).toBe("idle")
     expect(
@@ -241,32 +235,29 @@ describe("auto-resume on select, stream, and prompt", () => {
         sessionLoadSessionId: "auto-prompt-session-loaded",
       },
     )
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const created = CreateSessionResponseSchema.parse(
-      JSON.parse(
-        (
-          await app.inject({
-            method: "POST",
-            url: "/v1/sessions",
-            payload: { workspaceId, agentId: "cursor", text: "Prompt resume" },
-          })
-        ).body,
-      ),
-    )
-    await waitForSessionIdle(app, created.id)
+    const seeded = await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Prompt resume",
+    })
+    await waitForSessionIdle(app, seeded.sessionId)
     await unbindAndMarkOffline({
       app,
       acpSupervisor,
       database,
-      sessionId: created.id,
-      acpSessionId: "auto-prompt-session",
+      sessionId: seeded.sessionId,
+      acpSessionId: seeded.acpSessionId,
     })
 
     const promptResponse = await app.inject({
       method: "POST",
-      url: `/v1/sessions/${created.id}/prompt`,
+      url: `/v1/sessions/${seeded.sessionId}/prompt`,
       payload: { text: "after rebind" },
     })
     expect(promptResponse.statusCode).toBe(202)
@@ -292,32 +283,29 @@ describe("auto-resume on select, stream, and prompt", () => {
         sessionLoadFails: true,
       },
     )
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const created = CreateSessionResponseSchema.parse(
-      JSON.parse(
-        (
-          await app.inject({
-            method: "POST",
-            url: "/v1/sessions",
-            payload: { workspaceId, agentId: "cursor", text: "Fail resume" },
-          })
-        ).body,
-      ),
-    )
-    await waitForSessionIdle(app, created.id)
+    const seeded = await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Fail resume",
+    })
+    await waitForSessionIdle(app, seeded.sessionId)
     await unbindAndMarkOffline({
       app,
       acpSupervisor,
       database,
-      sessionId: created.id,
-      acpSessionId: "auto-fail-session",
+      sessionId: seeded.sessionId,
+      acpSessionId: seeded.acpSessionId,
     })
 
     const selectResponse = await app.inject({
       method: "POST",
-      url: `/v1/sessions/${created.id}/select`,
+      url: `/v1/sessions/${seeded.sessionId}/select`,
     })
     const selected = SessionSchema.parse(JSON.parse(selectResponse.body))
     expect(selectResponse.statusCode).toBe(200)
@@ -327,13 +315,13 @@ describe("auto-resume on select, stream, and prompt", () => {
     const row = database.db
       .select()
       .from(sessions)
-      .where(eq(sessions.id, created.id))
+      .where(eq(sessions.id, seeded.sessionId))
       .get()
     expect(row?.resumable).toBe(false)
 
     const selectAgain = await app.inject({
       method: "POST",
-      url: `/v1/sessions/${created.id}/select`,
+      url: `/v1/sessions/${seeded.sessionId}/select`,
     })
     expect(SessionSchema.parse(JSON.parse(selectAgain.body)).state).toBe("error")
     expect(
@@ -342,7 +330,7 @@ describe("auto-resume on select, stream, and prompt", () => {
 
     const promptResponse = await app.inject({
       method: "POST",
-      url: `/v1/sessions/${created.id}/prompt`,
+      url: `/v1/sessions/${seeded.sessionId}/prompt`,
       payload: { text: "should fail" },
     })
     const problem = ConflictProblemSchema.parse(JSON.parse(promptResponse.body))

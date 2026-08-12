@@ -16,13 +16,11 @@ export const useArchiveSessionMutation = () => {
             return existing
           }
           const collection = SessionCollectionSchema.parse(existing)
-          const nextItems = collection.items.filter((item) => item.id !== session.id)
+          const nextItems = collection.items.filter(
+            (item) => item.sessionId !== session.id,
+          )
           return SessionCollectionSchema.parse({
             items: nextItems,
-            page: {
-              ...collection.page,
-              count: nextItems.length,
-            },
           })
         },
       )

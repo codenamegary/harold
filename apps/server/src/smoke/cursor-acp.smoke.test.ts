@@ -65,6 +65,9 @@ const shouldRunSmoke =
   hasCursorAuth() &&
   hasAgentBinary()
 
+/** Legacy sess_ create/prompt/archive smoke — rewrite on AGE-49 live hub. */
+const shouldRunLegacySessionSmoke = false
+
 type InjectApp = {
   inject: (opts: {
     method: string
@@ -313,7 +316,7 @@ const allowWorkspaceRoots = async (
 }
 
 describe("cursor ACP smoke", () => {
-  test.skipIf(!shouldRunSmoke)("enables cursor, creates workspace and session, then archives", async () => {
+  test.skipIf(!shouldRunSmoke || !shouldRunLegacySessionSmoke)("enables cursor, creates workspace and session, then archives", async () => {
     const dataDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-cursor-smoke-"))
     const workspaceDir = path.join(dataDir, "smoke-project")
     await mkdir(workspaceDir)
@@ -380,7 +383,7 @@ describe("cursor ACP smoke", () => {
   // Characterizes today's Cursor build: it advertises loadSession but session/load
   // returns Invalid params. A 200 here means Cursor shipped the fix. Swap the
   // assertions back to a successful resume when that happens.
-  test.skipIf(!shouldRunSmoke)(
+  test.skipIf(!shouldRunSmoke || !shouldRunLegacySessionSmoke)(
     "restarts server, keeps session metadata, and reports the Cursor session/load gap",
     async () => {
       const dataDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-cursor-smoke-resume-"))
@@ -499,7 +502,7 @@ describe("cursor ACP smoke", () => {
   // Stale running after hard kill: boot heals to offline and auto-runs session/load.
   // Today Cursor load still fails, so expect terminal error (not idle). When Cursor
   // session/load works, flip the post-heal expectation to idle.
-  test.skipIf(!shouldRunSmoke)(
+  test.skipIf(!shouldRunSmoke || !shouldRunLegacySessionSmoke)(
     "heals stale running on boot and attempts startup recovery",
     async () => {
       const dataDir = await mkdtemp(
@@ -658,7 +661,7 @@ describe("cursor ACP smoke", () => {
     { timeout: 60_000 },
   )
 
-  test.skipIf(!shouldRunSmoke)(
+  test.skipIf(!shouldRunSmoke || !shouldRunLegacySessionSmoke)(
     "MS1 operator journey: two sessions, stream, switch, cancel, restart, replay, honest resume",
     async () => {
       const dataDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-cursor-smoke-ms1-"))

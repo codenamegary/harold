@@ -12,6 +12,7 @@ export type AgentCapabilities = {
   readonly loadSession: boolean
   readonly sessionCapabilities: {
     readonly close: boolean
+    readonly list: boolean
   }
 }
 
@@ -59,19 +60,38 @@ export type CloseWorkspaceSessionsResult = {
   readonly failures: ReadonlyArray<CloseWorkspaceSessionFailure>
 }
 
+export type AcpCatalogSession = {
+  readonly agentId: AgentId
+  readonly sessionId: string
+  readonly cwd: string
+  readonly title: string
+  readonly updatedAt: string
+}
+
+export type AcpListSessionsResult =
+  | { ok: true; sessions: ReadonlyArray<AcpCatalogSession> }
+  | { ok: false; reason: string }
+
 export type AcpSupervisor = {
   getStatus: () => AcpSupervisorStatus
   getRunningAgentId: () => AgentId | null
-  getAgentCapabilities: () => AgentCapabilities | null
-  getTransport: () => JsonRpcTransport | null
+  getRunningAgentIds: () => ReadonlyArray<AgentId>
+  getAgentCapabilities: (agentId?: AgentId) => AgentCapabilities | null
+  getTransport: (agentId?: AgentId) => JsonRpcTransport | null
   getSessionBindingRegistry: () => SessionBindingRegistry
   start: (agentId: AgentId) => Promise<void>
   stop: () => Promise<void>
   handleAgentDisabled: (agentId: AgentId) => Promise<void>
+  listAcpSessions: (params?: { cwd?: string }) => Promise<AcpListSessionsResult>
   createAcpSession: (params: {
+    agentId?: AgentId
     workspaceCwd: string
     sessionId: string
     workspaceId: string
+  }) => Promise<AcpSessionOperationResult>
+  createCatalogSession: (params: {
+    agentId: AgentId
+    cwd: string
   }) => Promise<AcpSessionOperationResult>
   loadAcpSession: (params: {
     acpSessionId: string

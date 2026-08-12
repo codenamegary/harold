@@ -4,7 +4,6 @@ import { Event } from "contracts/events/event"
 import {
   CancelSessionResponseSchema,
   PromptSessionResponseSchema,
-  CreateSessionResponseSchema,
   SessionSchema,
 } from "contracts/http/session"
 import { WebSocket } from "ws"
@@ -15,6 +14,7 @@ import {
   createTestApp,
   createTestAppResources,
   enableAgent,
+  seedBoundSession,
   seedWorkspace,
 } from "../test-support/create-test-app"
 import { eventDataText } from "../test/event.data.text"
@@ -104,45 +104,34 @@ const collectEventsUntil = (params: {
 describe("HTTP cancel accept-and-stream", () => {
   test("prompt → cancel → idle → second prompt", async () => {
     const dataDir = await createTempDataDir(resources)
-    const { app, database, config } = await createTestApp(
+    const { app, database, acpSupervisor, config } = await createTestApp(
       resources,
       dataDir,
       whichFn,
       undefined,
       {
-        capabilities: { loadSession: true, sessionClose: true },
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
         sessionNewSessionId: "fake-session-cancel-http",
         sessionLoadSessionId: "fake-session-cancel-http",
         emitSessionUpdatesOnPrompt: true,
       },
     )
 
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const created = await app.inject({
-      method: "POST",
-      url: "/v1/sessions",
-      payload: {
-        workspaceId,
-        agentId: "cursor",
-        text: "Cancel stream",
-      },
-    })
-    const session = CreateSessionResponseSchema.parse(JSON.parse(created.body))
-    expect(session.state).toBe("running")
-
-    await waitFor(async () => {
-      const latest = await app.inject({
-        method: "GET",
-        url: `/v1/sessions/${session.id}`,
-      })
-      return SessionSchema.parse(JSON.parse(latest.body)).state === "idle"
+    const { sessionId } = await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Cancel stream",
     })
 
     const { httpBase, wsUrl } = await getListeningUrl(app, config)
     const { eventsPromise, whenOpen } = collectEventsUntil({
-      url: `${wsUrl}?sessionId=${session.id}`,
+      url: `${wsUrl}?sessionId=${sessionId}`,
       timeoutMs: 15000,
       until: (events) => {
         const states = events
@@ -159,7 +148,7 @@ describe("HTTP cancel accept-and-stream", () => {
 
     await whenOpen
 
-    const promptResponse = await fetch(`${httpBase}/v1/sessions/${session.id}/prompt`, {
+    const promptResponse = await fetch(`${httpBase}/v1/sessions/${sessionId}/prompt`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text: "first prompt to cancel" }),
@@ -167,7 +156,7 @@ describe("HTTP cancel accept-and-stream", () => {
     expect(promptResponse.status).toBe(202)
     const promptBody = PromptSessionResponseSchema.parse(await promptResponse.json())
 
-    const cancelResponse = await fetch(`${httpBase}/v1/sessions/${session.id}/cancel`, {
+    const cancelResponse = await fetch(`${httpBase}/v1/sessions/${sessionId}/cancel`, {
       method: "POST",
     })
     expect(cancelResponse.status).toBe(202)
@@ -191,12 +180,12 @@ describe("HTTP cancel accept-and-stream", () => {
     await waitFor(async () => {
       const latest = await app.inject({
         method: "GET",
-        url: `/v1/sessions/${session.id}`,
+        url: `/v1/sessions/${sessionId}`,
       })
       return SessionSchema.parse(JSON.parse(latest.body)).state === "idle"
     })
 
-    const secondPromptResponse = await fetch(`${httpBase}/v1/sessions/${session.id}/prompt`, {
+    const secondPromptResponse = await fetch(`${httpBase}/v1/sessions/${sessionId}/prompt`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text: "second prompt after cancel" }),
@@ -210,7 +199,7 @@ describe("HTTP cancel accept-and-stream", () => {
     await waitFor(async () => {
       const latest = await app.inject({
         method: "GET",
-        url: `/v1/sessions/${session.id}`,
+        url: `/v1/sessions/${sessionId}`,
       })
       return SessionSchema.parse(JSON.parse(latest.body)).state === "idle"
     })
