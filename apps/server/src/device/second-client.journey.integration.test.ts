@@ -13,7 +13,6 @@ import {
 import { createSecondClient } from "test-support/second-client"
 import {
   closeWebSocket,
-  openHostEventStream,
   waitForSocketClose,
 } from "test-support/second-client/streams"
 import {
@@ -23,6 +22,7 @@ import {
   createTestAppResources,
   createWorkspaceDir,
 } from "../test-support/create-test-app"
+import { createEventJournalRepository } from "../event/journal.repository"
 import { clearDevicePresence } from "./presence"
 import { pairingCodes } from "../persistence/schema/pairing-codes"
 
@@ -33,29 +33,45 @@ afterEach(async () => {
   await cleanupTestAppResources(resources)
 })
 
+const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 5_000) => {
+  const startedAt = Date.now()
+  while (!(await predicate())) {
+    if (Date.now() - startedAt > timeoutMs) {
+      throw new Error("timed out waiting for condition")
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+}
+
 describe("second-client journey", () => {
   test("full MS2 lifecycle: pair, reconnect, operate, presence, revoke, access loss", async () => {
     const logCapture = createLogCapture()
     const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir, {
+    const { app, config, database } = await createTestApp(resources, dataDir, {
       logStream: logCapture.stream,
     })
     const { httpBase, wsUrl } = await getListeningEndpoints({
       app,
       host: config.host,
     })
-    const host = await openHostEventStream(wsUrl)
 
     const paired = await pairDevice({
       httpBase,
       body: { name: "Journey client", platform: "test-second-client" },
     })
-    const pairedEvent = await host.waitForType("device.paired")
-    expect(pairedEvent.type).toBe("device.paired")
-    if (pairedEvent.type !== "device.paired") {
-      throw new Error("expected device.paired")
-    }
-    expect(pairedEvent.payload.deviceId).toBe(paired.deviceId)
+
+    const journal = createEventJournalRepository(database)
+    await waitFor(() => {
+      const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
+      return (
+        records.ok &&
+        records.value.some(
+          (record) =>
+            record.kind === "device.paired" &&
+            record.payload.deviceId === paired.deviceId,
+        )
+      )
+    })
 
     const firstClient = createSecondClient({
       httpBase,
@@ -92,12 +108,23 @@ describe("second-client journey", () => {
     expect(workspace.name).toBe("Journey workspace")
 
     const deviceWs = await reconnected.openEventStream()
-    const connected = await host.waitForType("device.connected")
-    expect(connected.type).toBe("device.connected")
-    if (connected.type !== "device.connected") {
-      throw new Error("expected device.connected")
-    }
-    expect(connected.payload.deviceId).toBe(paired.deviceId)
+    await waitFor(async () => {
+      const online = DeviceCollectionSchema.parse(
+        await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
+      )
+      return online.items[0]?.state === "online"
+    })
+    await waitFor(() => {
+      const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
+      return (
+        records.ok &&
+        records.value.some(
+          (record) =>
+            record.kind === "device.connected" &&
+            record.payload.deviceId === paired.deviceId,
+        )
+      )
+    })
 
     const online = DeviceCollectionSchema.parse(
       await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
@@ -116,25 +143,28 @@ describe("second-client journey", () => {
     expect(closed.code).toBe(1008)
     expect(closed.reason).toBe("unauthorized")
 
-    const revokedEvent = await host.waitForType("device.revoked")
-    expect(revokedEvent.type).toBe("device.revoked")
-    if (revokedEvent.type !== "device.revoked") {
-      throw new Error("expected device.revoked")
-    }
-    expect(revokedEvent.payload.deviceId).toBe(paired.deviceId)
-
-    const disconnected = await host.waitForType("device.disconnected")
-    expect(disconnected.type).toBe("device.disconnected")
-    if (disconnected.type !== "device.disconnected") {
-      throw new Error("expected device.disconnected")
-    }
-    expect(disconnected.payload.deviceId).toBe(paired.deviceId)
+    await waitFor(() => {
+      const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
+      return (
+        records.ok &&
+        records.value.some(
+          (record) =>
+            record.kind === "device.revoked" &&
+            record.payload.deviceId === paired.deviceId,
+        ) &&
+        records.value.some(
+          (record) =>
+            record.kind === "device.disconnected" &&
+            record.payload.deviceId === paired.deviceId,
+        )
+      )
+    })
 
     const httpDenied = await reconnected.fetch("/v1/workspaces")
     expect(httpDenied.status).toBe(401)
     UnauthorizedProblemSchema.parse(await httpDenied.json())
 
-    const reopenResponse = await fetch(`${httpBase}/v1/events`, {
+    const reopenResponse = await fetch(`${httpBase}/v1/sessions/stream`, {
       headers: {
         connection: "upgrade",
         upgrade: "websocket",
@@ -152,7 +182,7 @@ describe("second-client journey", () => {
       pairingCode: paired.pairingCode,
     })
 
-    await closeWebSocket(host.ws)
+    await closeWebSocket(deviceWs)
   })
 
   test("recovery: claimed and expired codes return structured errors, regenerate succeeds", async () => {

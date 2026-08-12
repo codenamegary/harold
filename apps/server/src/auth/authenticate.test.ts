@@ -140,6 +140,6 @@ describe("isOpenRoute", () => {
       false,
     )
     expect(isOpenRoute({ method: "GET", routerPath: "/v1/workspaces" })).toBe(false)
-    expect(isOpenRoute({ method: "GET", routerPath: "/v1/events" })).toBe(false)
+    expect(isOpenRoute({ method: "GET", routerPath: "/v1/sessions/stream" })).toBe(false)
   })
 })

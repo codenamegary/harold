@@ -1,6 +1,4 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { EventFrameSchema } from "contracts/events/stream"
-import { Event } from "contracts/events/event"
 import { UnauthorizedProblemSchema, NotFoundProblemSchema } from "contracts/http/error"
 import {
   ClaimPairingCodeResponseSchema,
@@ -16,7 +14,6 @@ import {
   createTestApp,
   createTestAppResources,
 } from "../test-support/create-test-app"
-import { eventDataText } from "../test/event.data.text"
 import { Config } from "../config/config"
 import { createEventJournalRepository } from "../event/journal.repository"
 import { clearDevicePresence } from "./presence"
@@ -43,7 +40,7 @@ const getListeningBase = async (
 
   return {
     httpBase: `http://${config.host}:${address.port}`,
-    wsUrl: `ws://${config.host}:${address.port}/v1/events`,
+    wsUrl: `ws://${config.host}:${address.port}/v1/sessions/stream`,
   }
 }
 
@@ -67,78 +64,6 @@ const pairDevice = async (httpBase: string, body: Record<string, unknown> = {}) 
   expect(claimResponse.status).toBe(201)
   return ClaimPairingCodeResponseSchema.parse(await claimResponse.json())
 }
-
-const openHostStream = (wsUrl: string): Promise<{
-  ws: WebSocket
-  events: Event[]
-  waitForType: (type: Event["type"], timeoutMs?: number) => Promise<Event>
-}> =>
-  new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${wsUrl}?cursor=0`)
-    const events: Event[] = []
-    const waiters: Array<{
-      type: Event["type"]
-      resolve: (event: Event) => void
-      reject: (error: Error) => void
-      timer: ReturnType<typeof setTimeout>
-    }> = []
-
-    const notify = (event: Event) => {
-      events.push(event)
-      const matched = waiters.filter((waiter) => waiter.type === event.type)
-      for (const waiter of matched) {
-        clearTimeout(waiter.timer)
-        const index = waiters.indexOf(waiter)
-        if (index >= 0) {
-          waiters.splice(index, 1)
-        }
-        waiter.resolve(event)
-      }
-    }
-
-    const timer = setTimeout(() => {
-      ws.close()
-      reject(new Error("timeout opening host stream"))
-    }, 2_000)
-
-    ws.addEventListener("open", () => {
-      clearTimeout(timer)
-      resolve({
-        ws,
-        events,
-        waitForType: (type, timeoutMs = 2_000) =>
-          new Promise((waitResolve, waitReject) => {
-            const existing = events.find((event) => event.type === type)
-            if (existing !== undefined) {
-              waitResolve(existing)
-              return
-            }
-
-            const waiterTimer = setTimeout(() => {
-              waitReject(new Error(`timeout waiting for ${type}`))
-            }, timeoutMs)
-            waiters.push({
-              type,
-              resolve: waitResolve,
-              reject: waitReject,
-              timer: waiterTimer,
-            })
-          }),
-      })
-    })
-
-    ws.addEventListener("message", (message) => {
-      const frame = EventFrameSchema.parse(JSON.parse(eventDataText(message.data)))
-      for (const event of frame) {
-        notify(event)
-      }
-    })
-
-    ws.addEventListener("unexpected-response", (_req, res) => {
-      clearTimeout(timer)
-      reject(new Error(`unexpected response ${res.statusCode}`))
-    })
-  })
 
 const openDeviceStream = (wsUrl: string, credential: string): Promise<WebSocket> =>
   new Promise((resolve, reject) => {
@@ -178,26 +103,30 @@ const waitForClose = (ws: WebSocket): Promise<{ code: number; reason: string }> 
     }
   })
 
-const closeSocket = (ws: WebSocket): Promise<void> =>
-  new Promise((resolve) => {
-    if (ws.readyState === WebSocket.CLOSED) {
-      resolve()
-      return
+const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 5_000) => {
+  const startedAt = Date.now()
+  while (!(await predicate())) {
+    if (Date.now() - startedAt > timeoutMs) {
+      throw new Error("timed out waiting for condition")
     }
-    ws.addEventListener("close", () => resolve())
-    ws.close()
-  })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+}
 
 describe("device revoke", () => {
-  test("DELETE revokes device, closes WS, blocks credential, emits device.revoked", async () => {
+  test("DELETE revokes device, closes WS, blocks credential, journals device.revoked", async () => {
     const dataDir = await createTempDataDir(resources)
     const { app, config, database } = await createTestApp(resources, dataDir)
     const { httpBase, wsUrl } = await getListeningBase(app, config)
-    const host = await openHostStream(wsUrl)
     const paired = await pairDevice(httpBase, { name: "To revoke", platform: "android" })
 
     const deviceWs = await openDeviceStream(wsUrl, paired.credential)
-    await host.waitForType("device.connected")
+    await waitFor(async () => {
+      const online = DeviceCollectionSchema.parse(
+        await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
+      )
+      return online.items[0]?.state === "online"
+    })
 
     const closePromise = waitForClose(deviceWs)
 
@@ -212,27 +141,13 @@ describe("device revoke", () => {
     expect(closed.code).toBe(1008)
     expect(closed.reason).toBe("unauthorized")
 
-    const revokedEvent = await host.waitForType("device.revoked")
-    expect(revokedEvent.type).toBe("device.revoked")
-    if (revokedEvent.type !== "device.revoked") {
-      throw new Error("expected device.revoked")
-    }
-    expect(revokedEvent.payload.deviceId).toBe(paired.device.id)
-
-    const disconnected = await host.waitForType("device.disconnected")
-    expect(disconnected.type).toBe("device.disconnected")
-    if (disconnected.type !== "device.disconnected") {
-      throw new Error("expected device.disconnected")
-    }
-    expect(disconnected.payload.deviceId).toBe(paired.device.id)
-
     const httpDenied = await fetch(`${httpBase}/v1/workspaces`, {
       headers: { authorization: `Bearer ${paired.credential}` },
     })
     expect(httpDenied.status).toBe(401)
     UnauthorizedProblemSchema.parse(await httpDenied.json())
 
-    const reopenResponse = await fetch(`${httpBase}/v1/events`, {
+    const reopenResponse = await fetch(`${httpBase}/v1/sessions/stream`, {
       headers: {
         connection: "upgrade",
         upgrade: "websocket",
@@ -252,6 +167,14 @@ describe("device revoke", () => {
     expect(listed.items[0]?.state).toBe("revoked")
 
     const journal = createEventJournalRepository(database)
+    await waitFor(() => {
+      const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
+      return (
+        records.ok &&
+        records.value.some((record) => record.kind === "device.revoked") &&
+        records.value.some((record) => record.kind === "device.disconnected")
+      )
+    })
     const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
     expect(records.ok).toBe(true)
     if (!records.ok) {
@@ -259,24 +182,35 @@ describe("device revoke", () => {
     }
     const revokedKinds = records.value.filter((record) => record.kind === "device.revoked")
     expect(revokedKinds).toHaveLength(1)
-
-    await closeSocket(host.ws)
+    expect(revokedKinds[0]).toMatchObject({
+      kind: "device.revoked",
+      payload: { deviceId: paired.device.id },
+    })
+    expect(
+      records.value.some(
+        (record) =>
+          record.kind === "device.disconnected" &&
+          record.payload.deviceId === paired.device.id,
+      ),
+    ).toBe(true)
   })
 
-  test("idempotent second DELETE returns 204 without re-emitting device.revoked", async () => {
+  test("idempotent second DELETE returns 204 without re-journaling device.revoked", async () => {
     const dataDir = await createTempDataDir(resources)
     const { app, config, database } = await createTestApp(resources, dataDir)
-    const { httpBase, wsUrl } = await getListeningBase(app, config)
-    const host = await openHostStream(wsUrl)
+    const { httpBase } = await getListeningBase(app, config)
     const paired = await pairDevice(httpBase)
 
     const first = await fetch(`${httpBase}${devicePath(paired.device.id)}`, {
       method: "DELETE",
     })
     expect(first.status).toBe(204)
-    await host.waitForType("device.revoked")
 
     const journal = createEventJournalRepository(database)
+    await waitFor(() => {
+      const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
+      return records.ok && records.value.some((record) => record.kind === "device.revoked")
+    })
     const beforeSecond = journal.readAfter({ cursor: 0n, limit: 1_000 })
     expect(beforeSecond.ok).toBe(true)
     if (!beforeSecond.ok) {
@@ -302,8 +236,6 @@ describe("device revoke", () => {
       (record) => record.kind === "device.revoked",
     ).length
     expect(revokedAfter).toBe(revokedBefore)
-
-    await closeSocket(host.ws)
   })
 
   test("unknown deviceId returns 404 Problem+JSON", async () => {
@@ -320,11 +252,10 @@ describe("device revoke", () => {
     NotFoundProblemSchema.parse(await response.json())
   })
 
-  test("hardDelete removes device from list and emits device.revoked", async () => {
+  test("hardDelete removes device from list and journals device.revoked", async () => {
     const dataDir = await createTempDataDir(resources)
     const { app, config, database } = await createTestApp(resources, dataDir)
-    const { httpBase, wsUrl } = await getListeningBase(app, config)
-    const host = await openHostStream(wsUrl)
+    const { httpBase } = await getListeningBase(app, config)
     const paired = await pairDevice(httpBase, { name: "Hard delete me", platform: "ios" })
 
     const response = await fetch(
@@ -333,41 +264,39 @@ describe("device revoke", () => {
     )
     expect(response.status).toBe(204)
 
-    const revokedEvent = await host.waitForType("device.revoked")
-    expect(revokedEvent.type).toBe("device.revoked")
-    if (revokedEvent.type !== "device.revoked") {
-      throw new Error("expected device.revoked")
-    }
-    expect(revokedEvent.payload.deviceId).toBe(paired.device.id)
-
     const listed = DeviceCollectionSchema.parse(
       await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
     )
     expect(listed.items).toHaveLength(0)
 
     const journal = createEventJournalRepository(database)
+    await waitFor(() => {
+      const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
+      return records.ok && records.value.some((record) => record.kind === "device.revoked")
+    })
     const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
     expect(records.ok).toBe(true)
     if (!records.ok) {
       throw new Error("journal read failed")
     }
-    expect(records.value.filter((record) => record.kind === "device.revoked")).toHaveLength(1)
-
-    await closeSocket(host.ws)
+    const revoked = records.value.filter((record) => record.kind === "device.revoked")
+    expect(revoked).toHaveLength(1)
+    expect(revoked[0]).toMatchObject({
+      kind: "device.revoked",
+      payload: { deviceId: paired.device.id },
+    })
   })
 
   test("hardDelete of already-revoked device removes row without second device.revoked", async () => {
     const dataDir = await createTempDataDir(resources)
     const { app, config, database } = await createTestApp(resources, dataDir)
-    const { httpBase, wsUrl } = await getListeningBase(app, config)
-    const host = await openHostStream(wsUrl)
+    const { httpBase } = await getListeningBase(app, config)
     const paired = await pairDevice(httpBase)
 
     const soft = await fetch(`${httpBase}${devicePath(paired.device.id)}`, {
       method: "DELETE",
     })
     expect(soft.status).toBe(204)
-    await host.waitForType("device.revoked")
 
     const afterSoft = DeviceCollectionSchema.parse(
       await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
@@ -376,6 +305,10 @@ describe("device revoke", () => {
     expect(afterSoft.items[0]?.state).toBe("revoked")
 
     const journal = createEventJournalRepository(database)
+    await waitFor(() => {
+      const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
+      return records.ok && records.value.some((record) => record.kind === "device.revoked")
+    })
     const beforeHard = journal.readAfter({ cursor: 0n, limit: 1_000 })
     expect(beforeHard.ok).toBe(true)
     if (!beforeHard.ok) {
@@ -405,7 +338,5 @@ describe("device revoke", () => {
       (record) => record.kind === "device.revoked",
     ).length
     expect(revokedAfter).toBe(revokedBefore)
-
-    await closeSocket(host.ws)
   })
 })

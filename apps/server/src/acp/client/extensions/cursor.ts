@@ -1,37 +1,50 @@
+import { AgentId } from "contracts/http/agent-settings"
+import { createAcpJsonRpcError } from "../../transport/json-rpc-error"
 import { ExtensionHandlers } from "./types"
 
-type CursorAskQuestionParams = {
-  questions?: Array<{
-    id?: string
-    options?: Array<{ id?: string; label?: string }>
-  }>
+export type CreateCursorExtensionHandlersParams = {
+  agentId: AgentId
+  requestCursor: (input: {
+    agentId: AgentId
+    sessionId: string
+    method: string
+    params: unknown
+  }) => Promise<unknown>
 }
 
-const cursorAskQuestionHandler = (params: unknown) => {
-  const request = params as CursorAskQuestionParams
-  const firstQuestion = request.questions?.[0]
-  const firstOptionId = firstQuestion?.options?.[0]?.id
-
-  if (!firstQuestion?.id || !firstOptionId) {
-    return { outcome: { outcome: "skipped" as const } }
-  }
-
-  return {
-    outcome: {
-      outcome: "answered" as const,
-      answers: [{
-        questionId: firstQuestion.id,
-        selectedOptionIds: [firstOptionId],
-      }],
-    },
-  }
+const readSessionId = (params: unknown): string | undefined => {
+  const value = params as { sessionId?: string }
+  return value.sessionId
 }
 
-const cursorCreatePlanHandler = () => ({
-  outcome: { outcome: "accepted" as const },
+export const createCursorExtensionHandlers = ({
+  agentId,
+  requestCursor,
+}: CreateCursorExtensionHandlersParams): ExtensionHandlers => ({
+  "cursor/ask_question": async (params) => {
+    const sessionId = readSessionId(params)
+    if (sessionId === undefined) {
+      throw createAcpJsonRpcError("cursor request missing sessionId", -32000)
+    }
+
+    return requestCursor({
+      agentId,
+      sessionId,
+      method: "cursor/ask_question",
+      params,
+    })
+  },
+  "cursor/create_plan": async (params) => {
+    const sessionId = readSessionId(params)
+    if (sessionId === undefined) {
+      throw createAcpJsonRpcError("cursor request missing sessionId", -32000)
+    }
+
+    return requestCursor({
+      agentId,
+      sessionId,
+      method: "cursor/create_plan",
+      params,
+    })
+  },
 })
-
-export const cursorExtensionHandlers: ExtensionHandlers = {
-  "cursor/ask_question": cursorAskQuestionHandler,
-  "cursor/create_plan": cursorCreatePlanHandler,
-}

@@ -4,7 +4,6 @@ import { JsonRpcTransport } from "../transport/json-rpc-transport"
 import { SpawnedAgentProcess } from "./spawn-agent-process"
 import { SessionBindingRegistry } from "../client/session-binding-registry"
 import { AcpJournalWriter } from "../journal/acp.journal.writer"
-import { PermissionService } from "../../permission/service"
 
 export type AcpSupervisorState = "stopped" | "starting" | "ready" | "error"
 
@@ -42,9 +41,29 @@ export type AcpSessionCancelResult =
   | { ok: false; reason: string }
 
 export type SessionUpdateHandler = (input: {
+  agentId: AgentId
   acpSessionId: string
   update: unknown
 }) => void
+
+export type SessionDiscoveredHandler = (input: {
+  agentId: AgentId
+  sessionId: string
+  cwd: string
+}) => void
+
+export type RequestPermissionFn = (input: {
+  agentId: AgentId
+  sessionId: string
+  params: unknown
+}) => Promise<unknown>
+
+export type RequestCursorFn = (input: {
+  agentId: AgentId
+  sessionId: string
+  method: string
+  params: unknown
+}) => Promise<unknown>
 
 export type LiveWorkspaceSession = {
   readonly acpSessionId: string
@@ -93,6 +112,11 @@ export type AcpSupervisor = {
     agentId: AgentId
     cwd: string
   }) => Promise<AcpSessionOperationResult>
+  loadSession: (params: {
+    agentId: AgentId
+    sessionId: string
+    cwd: string
+  }) => Promise<AcpSessionOperationResult>
   loadAcpSession: (params: {
     acpSessionId: string
     workspaceCwd: string
@@ -133,8 +157,10 @@ export type CreateAcpSupervisorParams = {
   agentSettingsRepository: AgentSettingsReader
   serverVersion: string
   journalWriter?: AcpJournalWriter
-  permissionService?: PermissionService
   onSessionUpdate?: SessionUpdateHandler
+  onSessionDiscovered?: SessionDiscoveredHandler
+  requestPermission?: RequestPermissionFn
+  requestCursor?: RequestCursorFn
   onBeforeClearRuntime?: () => void
   onSupervisorReady?: () => void | Promise<void>
   restartBackoffMs?: ReadonlyArray<number>

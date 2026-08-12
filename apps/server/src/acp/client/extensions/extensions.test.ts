@@ -1,10 +1,25 @@
 import { describe, expect, test } from "bun:test"
-import { cursorExtensionHandlers } from "./cursor"
+import { createCursorExtensionHandlers } from "./cursor"
 import { resolveExtensionHandler } from "./types"
 
 describe("extension handlers", () => {
-  test("cursor ask_question selects the first option", async () => {
-    const result = await cursorExtensionHandlers["cursor/ask_question"]({
+  test("cursor ask_question forwards to requestCursor", async () => {
+    const calls: unknown[] = []
+    const handlers = createCursorExtensionHandlers({
+      agentId: "cursor",
+      requestCursor: async (input) => {
+        calls.push(input)
+        return {
+          outcome: {
+            outcome: "answered",
+            answers: [{ questionId: "q1", selectedOptionIds: ["first"] }],
+          },
+        }
+      },
+    })
+
+    const result = await handlers["cursor/ask_question"]({
+      sessionId: "sess-1",
       toolCallId: "call-1",
       questions: [{
         id: "q1",
@@ -16,6 +31,25 @@ describe("extension handlers", () => {
       }],
     })
 
+    expect(calls).toEqual([
+      {
+        agentId: "cursor",
+        sessionId: "sess-1",
+        method: "cursor/ask_question",
+        params: {
+          sessionId: "sess-1",
+          toolCallId: "call-1",
+          questions: [{
+            id: "q1",
+            prompt: "Pick one",
+            options: [
+              { id: "first", label: "First" },
+              { id: "second", label: "Second" },
+            ],
+          }],
+        },
+      },
+    ])
     expect(result).toEqual({
       outcome: {
         outcome: "answered",
@@ -24,8 +58,16 @@ describe("extension handlers", () => {
     })
   })
 
-  test("cursor create_plan is accepted", async () => {
-    const result = await cursorExtensionHandlers["cursor/create_plan"]({
+  test("cursor create_plan forwards to requestCursor", async () => {
+    const handlers = createCursorExtensionHandlers({
+      agentId: "cursor",
+      requestCursor: async () => ({
+        outcome: { outcome: "accepted" },
+      }),
+    })
+
+    const result = await handlers["cursor/create_plan"]({
+      sessionId: "sess-2",
       toolCallId: "call-2",
       plan: "Plan text",
       todos: [],
@@ -38,9 +80,13 @@ describe("extension handlers", () => {
 
   test("unknown extensions are logged and rejected", async () => {
     const logged: string[] = []
+    const handlers = createCursorExtensionHandlers({
+      agentId: "cursor",
+      requestCursor: async () => ({}),
+    })
     const handler = resolveExtensionHandler({
       method: "vendor/unknown",
-      extensionHandlers: cursorExtensionHandlers,
+      extensionHandlers: handlers,
       onUnknown: (method) => logged.push(method),
     })
 

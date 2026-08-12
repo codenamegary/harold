@@ -1,18 +1,30 @@
+import { AgentId } from "contracts/http/agent-settings"
 import { createAcpFsHandlers } from "./handlers/fs"
 import { createAcpPermissionHandler } from "./handlers/permission"
 import { createAcpTerminalHandlers } from "./handlers/terminal"
+import { createCursorExtensionHandlers } from "./extensions/cursor"
 import { AgentProfile } from "../agent-profile"
 import { resolveExtensionHandler } from "./extensions/types"
 import { isAcpJsonRpcError } from "../transport/json-rpc-error"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
 import { SessionBindingRegistry } from "./session-binding-registry"
-import { PermissionService } from "../../permission/service"
 
 export type RegisterAcpClientHandlersParams = {
   transport: JsonRpcTransport
   profile: AgentProfile
+  agentId: AgentId
   sessionBindingRegistry: SessionBindingRegistry
-  permissionService: PermissionService
+  requestPermission: (input: {
+    agentId: AgentId
+    sessionId: string
+    params: unknown
+  }) => Promise<unknown>
+  requestCursor: (input: {
+    agentId: AgentId
+    sessionId: string
+    method: string
+    params: unknown
+  }) => Promise<unknown>
   logUnknownExtension?: (method: string) => void
 }
 
@@ -25,13 +37,23 @@ const defaultLogUnknownExtension = (method: string) => {
 export const registerAcpClientHandlers = ({
   transport,
   profile,
+  agentId,
   sessionBindingRegistry,
-  permissionService,
+  requestPermission,
+  requestCursor,
   logUnknownExtension = defaultLogUnknownExtension,
 }: RegisterAcpClientHandlersParams) => {
   const fsHandlers = createAcpFsHandlers({ sessionBindingRegistry })
   const terminalHandlers = createAcpTerminalHandlers({ sessionBindingRegistry })
-  const permissionHandlers = createAcpPermissionHandler({ permissionService })
+  const permissionHandlers = createAcpPermissionHandler({
+    agentId,
+    requestPermission,
+  })
+
+  const extensionHandlers = {
+    ...profile.extensionHandlers,
+    ...createCursorExtensionHandlers({ agentId, requestCursor }),
+  }
 
   const coreHandlers: Record<string, AcpRequestHandler> = {
     ...fsHandlers,
@@ -68,14 +90,14 @@ export const registerAcpClientHandlers = ({
     })
   })
 
-  Object.entries(profile.extensionHandlers).forEach(([method, handler]) => {
+  Object.entries(extensionHandlers).forEach(([method, handler]) => {
     registerHandler(method, handler)
   })
 
   transport.onUnhandledRequest(async ({ method, id, params }) => {
     const extensionHandler = resolveExtensionHandler({
       method,
-      extensionHandlers: profile.extensionHandlers,
+      extensionHandlers,
       onUnknown: logUnknownExtension,
     })
 
@@ -98,3 +120,13 @@ export const registerAcpClientHandlers = ({
     }
   })
 }
+
+export const createUnavailableRequestPermission =
+  (): RegisterAcpClientHandlersParams["requestPermission"] => async () => {
+    throw new Error("permission service unavailable")
+  }
+
+export const createUnavailableRequestCursor =
+  (): RegisterAcpClientHandlersParams["requestCursor"] => async () => {
+    throw new Error("cursor request unavailable")
+  }

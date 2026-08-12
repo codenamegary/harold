@@ -51,7 +51,12 @@ const waitForResponse = async (responses: string[], id: number, timeoutMs = 5000
   return read()
 }
 
-const createHarness = (fakeOptions: Parameters<typeof spawnFakeAcp>[0] = {}) => {
+const createHarness = (
+  fakeOptions: Parameters<typeof spawnFakeAcp>[0] = {},
+  supervisorOptions: {
+    requestCursor?: Parameters<typeof createAcpSupervisor>[0]["requestCursor"]
+  } = {},
+) => {
   const responses: string[] = []
   const fake = spawnFakeAcp(fakeOptions)
   fakeProcesses.push(fake)
@@ -72,6 +77,7 @@ const createHarness = (fakeOptions: Parameters<typeof spawnFakeAcp>[0] = {}) => 
     agentSettingsRepository: createRepository(),
     serverVersion: "0.1.0",
     spawnAgentProcessFn,
+    ...supervisorOptions,
   })
 
   return { supervisor, responses, fake }
@@ -196,19 +202,37 @@ describe("ACP client handlers integration", () => {
     await supervisor.stop()
   })
 
-  test("auto-accepts cursor extension methods and rejects unknown extensions", async () => {
+  test("forwards cursor extension methods through requestCursor and rejects unknown extensions", async () => {
     const logged: string[] = []
     const originalWarn = console.warn
     console.warn = (message?: unknown) => {
       logged.push(String(message))
     }
 
-    const { supervisor, responses } = createHarness({
-      emitCursorAskQuestion: true,
-      emitCursorCreatePlan: true,
-      emitUnknownExtension: true,
-      sessionNewSessionId: "extension-session",
-    })
+    const { supervisor, responses } = createHarness(
+      {
+        emitCursorAskQuestion: true,
+        emitCursorCreatePlan: true,
+        emitUnknownExtension: true,
+        sessionNewSessionId: "extension-session",
+      },
+      {
+        requestCursor: async ({ method }) => {
+          if (method === "cursor/ask_question") {
+            return {
+              outcome: {
+                outcome: "answered",
+                answers: [{ questionId: "q1", selectedOptionIds: ["opt-a"] }],
+              },
+            }
+          }
+          if (method === "cursor/create_plan") {
+            return { outcome: { outcome: "accepted" } }
+          }
+          throw new Error(`unexpected cursor method ${method}`)
+        },
+      },
+    )
 
     await supervisor.start("cursor")
     const transport = supervisor.getTransport()

@@ -6,11 +6,8 @@ import {
   ValidationProblemSchema,
 } from "contracts/http/error"
 import {
-  CancelSessionResponseSchema,
   CreateSessionResponseSchema,
-  PromptSessionResponseSchema,
   SessionCollectionSchema,
-  SessionSchema,
 } from "contracts/http/session"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import {
@@ -104,77 +101,7 @@ describe("POST /v1/sessions catalog create", () => {
   })
 })
 
-describe("legacy bound session HTTP", () => {
-  test("get, rename, select, archive, and prompt/cancel", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const whichFn: WhichFn = (binaryName) =>
-      binaryName === "agent" ? "/usr/local/bin/agent" : undefined
-    const { app, database, acpSupervisor } = await createTestApp(
-      resources,
-      dataDir,
-      whichFn,
-      acceptTestExecutablePath,
-      {
-        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
-        sessionNewSessionId: "legacy-bound-1",
-        emitSessionUpdatesOnPrompt: true,
-      },
-    )
-    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
-    await enableAgent(app, "cursor", whichFn)
-
-    const seeded = await seedBoundSession({
-      database,
-      acpSupervisor,
-      workspaceId,
-      workspacePath: workspaceDir,
-      agentId: "cursor",
-      name: "Legacy bound",
-    })
-
-    const getResponse = await app.inject({
-      method: "GET",
-      url: `/v1/sessions/${seeded.sessionId}`,
-    })
-    const session = SessionSchema.parse(JSON.parse(getResponse.body))
-    expect(getResponse.statusCode).toBe(200)
-    expect(session.name).toBe("Legacy bound")
-    expect(session.state).toBe("idle")
-
-    const renameResponse = await app.inject({
-      method: "PATCH",
-      url: `/v1/sessions/${seeded.sessionId}`,
-      payload: { name: "Renamed" },
-    })
-    expect(renameResponse.statusCode).toBe(200)
-    expect(SessionSchema.parse(JSON.parse(renameResponse.body)).name).toBe("Renamed")
-
-    const selectResponse = await app.inject({
-      method: "POST",
-      url: `/v1/sessions/${seeded.sessionId}/select`,
-    })
-    expect(selectResponse.statusCode).toBe(200)
-
-    const promptResponse = await app.inject({
-      method: "POST",
-      url: `/v1/sessions/${seeded.sessionId}/prompt`,
-      payload: { text: "hello from http" },
-    })
-    expect(promptResponse.statusCode).toBe(202)
-    expect(PromptSessionResponseSchema.parse(JSON.parse(promptResponse.body)).turnId).toMatch(
-      /^turn_/,
-    )
-
-    await new Promise((resolve) => setTimeout(resolve, 80))
-
-    const archiveResponse = await app.inject({
-      method: "POST",
-      url: `/v1/sessions/${seeded.sessionId}/archive`,
-    })
-    expect(archiveResponse.statusCode).toBe(200)
-    expect(SessionSchema.parse(JSON.parse(archiveResponse.body)).state).toBe("archived")
-  })
-
+describe("GET /v1/sessions catalog list", () => {
   test("status reports activeSessions for live bindings", async () => {
     const dataDir = await createTempDataDir(resources)
     const whichFn: WhichFn = (binaryName) =>
@@ -238,60 +165,5 @@ describe("legacy bound session HTTP", () => {
         cwd: workspaceDir,
       }),
     ])
-  })
-
-  test("cancel returns 202 while a turn is running", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const whichFn: WhichFn = (binaryName) =>
-      binaryName === "agent" ? "/usr/local/bin/agent" : undefined
-    const { app, database, acpSupervisor } = await createTestApp(
-      resources,
-      dataDir,
-      whichFn,
-      acceptTestExecutablePath,
-      {
-        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
-        emitSessionUpdatesOnPrompt: true,
-        promptCompletionDelayMs: 200,
-      },
-    )
-    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
-    await enableAgent(app, "cursor", whichFn)
-    const seeded = await seedBoundSession({
-      database,
-      acpSupervisor,
-      workspaceId,
-      workspacePath: workspaceDir,
-      agentId: "cursor",
-      name: "Cancel api",
-    })
-
-    const promptResponse = await app.inject({
-      method: "POST",
-      url: `/v1/sessions/${seeded.sessionId}/prompt`,
-      payload: { text: "long turn" },
-    })
-    expect(promptResponse.statusCode).toBe(202)
-    const turnId = PromptSessionResponseSchema.parse(JSON.parse(promptResponse.body)).turnId
-
-    const cancelResponse = await app.inject({
-      method: "POST",
-      url: `/v1/sessions/${seeded.sessionId}/cancel`,
-      payload: {},
-    })
-    expect(cancelResponse.statusCode).toBe(202)
-    expect(CancelSessionResponseSchema.parse(JSON.parse(cancelResponse.body)).turnId).toBe(turnId)
-  })
-
-  test("returns 404 for unknown session", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app } = await createTestApp(resources, dataDir)
-
-    const response = await app.inject({
-      method: "GET",
-      url: "/v1/sessions/sess_unknown",
-    })
-    expect(response.statusCode).toBe(404)
-    expect(NotFoundProblemSchema.parse(JSON.parse(response.body)).type).toBe(PROBLEM_TYPES.notFound)
   })
 })

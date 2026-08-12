@@ -25,6 +25,6 @@ export const getListeningEndpoints = async (params: {
 
   return {
     httpBase: `http://${params.host}:${address.port}`,
-    wsUrl: `ws://${params.host}:${address.port}/v1/events`,
+    wsUrl: `ws://${params.host}:${address.port}/v1/sessions/stream`,
   }
 }

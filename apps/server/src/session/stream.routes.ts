@@ -1,10 +1,9 @@
 import { FastifyInstance, FastifyRequest } from "fastify"
 import { WebSocket } from "ws"
-import { SessionRepository } from "../session/repository"
-import { SessionService } from "../session/service"
-import { WorkspaceRepository } from "../workspace/repository"
-import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
-import { maybeAutoResumeSession } from "../session/resume.session"
+import {
+  SessionStreamClientMessageSchema,
+  SessionStreamServerMessage,
+} from "contracts/http/session.stream"
 import { authorizeActiveFullOperator } from "../auth/authorize"
 import { getRequestPrincipal } from "../auth/middleware"
 import { isHostPrincipalRequest } from "../auth/request.origin"
@@ -13,42 +12,27 @@ import {
   waitForAuthFrame,
 } from "../auth/ws.auth"
 import { hostPrincipal, Principal } from "../auth/principal"
+import { websocketRawDataText } from "../auth/websocket.raw.data.text"
 import { emitDeviceConnectionLifecycle } from "../device/connection.lifecycle"
 import { DeviceRepository } from "../device/repository"
 import { registerDevicePresence } from "../device/presence"
 import { AgentDatabase } from "../persistence/database"
-import { EventCommitPublisher } from "./commit.publisher"
-import { EventJournalRepository } from "./journal.repository"
-import { runStreamConnection } from "./stream.connection"
-import {
-  validateEventStreamHandshake,
-  ValidatedEventStreamHandshake,
-} from "./stream.handshake"
+import { EventCommitPublisher } from "../event/commit.publisher"
+import { EventJournalRepository } from "../event/journal.repository"
+import { SessionHub } from "./hub/session.hub"
 
-const eventStreamHandshakes = new WeakMap<object, ValidatedEventStreamHandshake>()
-const autoResumeCompleted = new WeakSet<object>()
+export const SESSIONS_STREAM_PATH = "/v1/sessions/stream"
 
-type RegisterEventStreamRoutesParams = {
+type RegisterSessionStreamRoutesParams = {
   database: AgentDatabase
   eventJournal: EventJournalRepository
   commitPublisher: EventCommitPublisher
-  workspaceRepository: WorkspaceRepository
-  sessionRepository: SessionRepository
-  sessionService: SessionService
-  acpSupervisor: AcpSupervisor
   deviceRepository: DeviceRepository
+  sessionHub: SessionHub
   getTrustedProxies?: () => readonly string[]
   isLoopbackRequest?: (request: FastifyRequest) => boolean
   wsAuthFrameTimeoutMs?: number
 }
-
-const sendProblem = (
-  reply: {
-    status: (code: number) => { type: (type: string) => { send: (body: unknown) => unknown } }
-  },
-  status: number,
-  problem: unknown,
-) => reply.status(status).type("application/problem+json").send(problem)
 
 const resolveStreamPrincipal = async (params: {
   request: FastifyRequest
@@ -134,9 +118,16 @@ const attachDevicePresence = (params: {
   params.socket.on("error", onClose)
 }
 
-export const registerEventStreamRoutes = (
+const sendJson = (socket: WebSocket, message: SessionStreamServerMessage) => {
+  if (socket.readyState !== socket.OPEN) {
+    return
+  }
+  socket.send(JSON.stringify(message))
+}
+
+export const registerSessionStreamRoutes = (
   app: FastifyInstance,
-  params: RegisterEventStreamRoutesParams,
+  params: RegisterSessionStreamRoutesParams,
 ) => {
   const resolveHostPrincipal =
     params.isLoopbackRequest ??
@@ -146,48 +137,11 @@ export const registerEventStreamRoutes = (
 
   app.route({
     method: "GET",
-    url: "/v1/events",
-    preValidation: async (request, reply) => {
-      const handshakeResult = validateEventStreamHandshake({
-        query: request.query,
-        eventJournal: params.eventJournal,
-        workspaceRepository: params.workspaceRepository,
-        sessionRepository: params.sessionRepository,
-      })
-
-      if (!handshakeResult.ok) {
-        return sendProblem(reply, handshakeResult.status, handshakeResult.problem)
-      }
-
-      const sessionId = handshakeResult.handshake.filters.sessionId
-      const principal = getRequestPrincipal(request)
-      if (
-        sessionId !== undefined &&
-        principal !== undefined &&
-        authorizeActiveFullOperator(principal)
-      ) {
-        await maybeAutoResumeSession({
-          sessionId,
-          sessionRepository: params.sessionRepository,
-          sessionService: params.sessionService,
-          workspaceRepository: params.workspaceRepository,
-          acpSupervisor: params.acpSupervisor,
-        })
-        autoResumeCompleted.add(request)
-      }
-
-      eventStreamHandshakes.set(request, handshakeResult.handshake)
-    },
+    url: SESSIONS_STREAM_PATH,
     handler: (_request, reply) => {
       reply.code(426).send({ message: "Upgrade Required" })
     },
     wsHandler: (socket, request) => {
-      const handshake = eventStreamHandshakes.get(request)
-      if (handshake === undefined) {
-        socket.close(1011, "handshake missing")
-        return
-      }
-
       void (async () => {
         const principal = await resolveStreamPrincipal({
           request,
@@ -204,17 +158,6 @@ export const registerEventStreamRoutes = (
           return
         }
 
-        const sessionId = handshake.filters.sessionId
-        if (sessionId !== undefined && !autoResumeCompleted.has(request)) {
-          await maybeAutoResumeSession({
-            sessionId,
-            sessionRepository: params.sessionRepository,
-            sessionService: params.sessionService,
-            workspaceRepository: params.workspaceRepository,
-            acpSupervisor: params.acpSupervisor,
-          })
-        }
-
         attachDevicePresence({
           principal,
           socket,
@@ -224,12 +167,86 @@ export const registerEventStreamRoutes = (
           deviceRepository: params.deviceRepository,
         })
 
-        await runStreamConnection({
-          socket,
-          eventJournal: params.eventJournal,
-          commitPublisher: params.commitPublisher,
-          handshake,
-          log: request.log,
+        const subscriberId = crypto.randomUUID()
+        params.sessionHub.addSubscriber({
+          id: subscriberId,
+          sessionKey: null,
+          sink: {
+            send: (message) => sendJson(socket, message),
+          },
+        })
+
+        socket.on("message", (data) => {
+          void (async () => {
+            let parsed: unknown
+            try {
+              parsed = JSON.parse(websocketRawDataText(data))
+            } catch {
+              sendJson(socket, {
+                type: "error",
+                message: "Invalid JSON",
+              })
+              return
+            }
+
+            const messageResult = SessionStreamClientMessageSchema.safeParse(parsed)
+            if (!messageResult.success) {
+              sendJson(socket, {
+                type: "error",
+                message: "Invalid session stream message",
+              })
+              return
+            }
+
+            const message = messageResult.data
+            switch (message.type) {
+              case "subscribe":
+                await params.sessionHub.subscribe({
+                  subscriberId,
+                  agentId: message.agentId,
+                  sessionId: message.sessionId,
+                })
+                return
+              case "switch":
+                await params.sessionHub.switchSession({
+                  subscriberId,
+                  agentId: message.agentId,
+                  sessionId: message.sessionId,
+                })
+                return
+              case "prompt":
+                await params.sessionHub.prompt({
+                  subscriberId,
+                  agentId: message.agentId,
+                  sessionId: message.sessionId,
+                  text: message.text,
+                })
+                return
+              case "cancel":
+                await params.sessionHub.cancel({
+                  subscriberId,
+                  agentId: message.agentId,
+                  sessionId: message.sessionId,
+                })
+                return
+              case "permission_reply":
+                params.sessionHub.resolvePermissionReply({
+                  requestId: message.requestId,
+                  optionId: message.optionId,
+                })
+                return
+              case "cursor_reply":
+                params.sessionHub.resolveCursorReply({
+                  requestId: message.requestId,
+                  result: message.result,
+                })
+                return
+            }
+          })()
+        })
+
+        socket.on("close", () => {
+          params.sessionHub.removeSubscriber(subscriberId)
         })
       })()
     },

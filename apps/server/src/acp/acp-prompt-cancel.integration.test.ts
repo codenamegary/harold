@@ -120,6 +120,7 @@ describe("ACP prompt, update, and cancel integration", () => {
     await new Promise((resolve) => setTimeout(resolve, 80))
     expect(sessionUpdates).toHaveLength(1)
     expect(sessionUpdates[0]).toEqual({
+      agentId: "cursor",
       acpSessionId: created.acpSessionId,
       update: {
         sessionUpdate: "agent_message_chunk",
