@@ -788,6 +788,38 @@ describe("session lifecycle", () => {
     expect(response.statusCode).toBe(400)
     expect(body.errors[0]?.pointer).toBe("#/cursor")
   })
+
+  test("filters list by search query", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { app } = await createTestApp(resources, dataDir, whichFn)
+    const { workspaceId } = await seedWorkspace(app, dataDir)
+    await enableAgent(app, "cursor", whichFn)
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { workspaceId, agentId: "cursor", text: "Auth Login" },
+    })
+    await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { workspaceId, agentId: "cursor", text: "Billing" },
+    })
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/sessions?workspaceId=${workspaceId}&search=auth&limit=20`,
+    })
+
+    expect(response.statusCode).toBe(200)
+    const listed = SessionCollectionSchema.parse(JSON.parse(response.body))
+    expect(listed.items.map((session) => session.name)).toEqual(["Auth Login"])
+    expect(listed.page.count).toBe(1)
+    expect(listed.page.limit).toBe(20)
+  })
 })
 
 describe("POST /v1/sessions/:sessionId/prompt", () => {

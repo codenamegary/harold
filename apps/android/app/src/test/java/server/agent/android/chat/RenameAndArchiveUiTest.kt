@@ -1,9 +1,12 @@
 package server.agent.android.chat
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,22 +22,45 @@ class RenameAndArchiveUiTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun renameSheetContentShowsFields() {
+    fun sessionEditDialogShowsNameSaveCancelArchive() {
+        var archived = false
         composeTestRule.setContent {
             AgentServerTheme(dynamicColor = false) {
-                RenameSessionSheetContent(
-                    renameState = RenameSessionUiState(name = "Alpha"),
+                SessionEditDialog(
+                    renameState = RenameSessionUiState(sessionId = "sess_01", name = "Alpha"),
+                    archiveSubmitting = false,
                     onDismiss = {},
                     onNameChanged = {},
-                    onSubmit = {},
+                    onSave = {},
+                    onArchive = { archived = true },
                 )
             }
         }
 
-        composeTestRule.onNodeWithTag("rename_session_sheet").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("rename_session_field").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("rename_session_submit").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Rename session").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("session_edit_dialog").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("session_edit_name").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("session_edit_save").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("session_edit_cancel").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("session_edit_archive").assertIsDisplayed().performClick()
+        assertTrue(archived)
+    }
+
+    @Test
+    fun sessionEditSaveDisabledWhenNameBlank() {
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                SessionEditDialog(
+                    renameState = RenameSessionUiState(sessionId = "sess_01", name = "   "),
+                    archiveSubmitting = false,
+                    onDismiss = {},
+                    onNameChanged = {},
+                    onSave = {},
+                    onArchive = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("session_edit_save").assertIsNotEnabled()
     }
 
     @Test
@@ -55,10 +81,10 @@ class RenameAndArchiveUiTest {
                         ),
                     ),
                     onSessionSelectorClick = {},
+                    onDismissSessionMenu = {},
                     onWorkspacesClick = {},
-                    onDismissPicker = {},
                     onSessionClick = {},
-                    onRenameSessionClick = {},
+                    onSeeAllSessionsClick = {},
                     onCreateClick = {},
                     onComposerTextChanged = {},
                     onComposerSubmit = {},

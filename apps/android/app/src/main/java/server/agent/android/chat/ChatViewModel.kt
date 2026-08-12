@@ -57,6 +57,11 @@ class ChatViewModel(
     private var streamJob: Job? = null
     private var frameCollectJob: Job? = null
     private var activeSessionId: String? = null
+    private var sessionsSearchJob: Job? = null
+    private var sessionsListLoadJob: Job? = null
+    private var sessionsListGeneration: Int = 0
+    private var workspaceLabels: Map<String, String> = emptyMap()
+    private var agentLabels: Map<AgentId, String> = emptyMap()
 
     init {
         savedStateHandle.get<String>(KEY_SELECTED_SESSION_ID)?.let { sessionId ->
@@ -123,11 +128,158 @@ class ChatViewModel(
     }
 
     fun showPicker() {
-        _uiState.update { current -> current.copy(pickerVisible = true) }
+        _uiState.update { current ->
+            current.copy(
+                pickerVisible = true,
+                recentSessionsLoading = true,
+                recentSessionsError = null,
+            )
+        }
+        viewModelScope.launch {
+            loadRecentSessions()
+        }
     }
 
     fun hidePicker() {
         _uiState.update { current -> current.copy(pickerVisible = false) }
+    }
+
+    fun openSessionsList() {
+        hidePicker()
+        sessionsSearchJob?.cancel()
+        sessionsListLoadJob?.cancel()
+        _uiState.update { current ->
+            current.copy(
+                sessionsListSearch = "",
+                sessionsListError = null,
+            )
+        }
+        viewModelScope.launch {
+            refreshSessionsList(search = null)
+        }
+    }
+
+    fun onSessionsSearchChanged(query: String) {
+        _uiState.update { current ->
+            current.copy(sessionsListSearch = query)
+        }
+        sessionsSearchJob?.cancel()
+        sessionsListLoadJob?.cancel()
+        sessionsSearchJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(SESSIONS_SEARCH_DEBOUNCE_MS)
+            val trimmed = query.trim()
+            refreshSessionsList(search = trimmed.takeIf { it.isNotEmpty() })
+        }
+    }
+
+    fun loadMoreSessions() {
+        val state = _uiState.value
+        val cursor = state.sessionsListNextCursor ?: return
+        if (state.sessionsListLoading || state.sessionsListLoadingMore) {
+            return
+        }
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val generation = sessionsListGeneration
+        val search = state.sessionsListSearch.trim().takeIf { it.isNotEmpty() }
+
+        _uiState.update { current -> current.copy(sessionsListLoadingMore = true) }
+        sessionsListLoadJob?.cancel()
+        sessionsListLoadJob = viewModelScope.launch {
+            operatorRepository.listSessions(
+                serverOrigin = paired.serverOrigin,
+                limit = SESSIONS_PAGE_SIZE,
+                cursor = cursor,
+                search = search,
+            ).fold(
+                onSuccess = { collection ->
+                    if (generation != sessionsListGeneration) {
+                        return@fold
+                    }
+                    val rows = collection.items
+                        .filter { session -> session.state != SessionState.Archived }
+                        .map { session -> session.toSessionRow(workspaceLabels, agentLabels) }
+                    _uiState.update { current ->
+                        current.copy(
+                            sessionsList = current.sessionsList + rows,
+                            sessionsListNextCursor = collection.page.nextCursor,
+                            sessionsListLoadingMore = false,
+                            sessionsListError = null,
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    if (generation != sessionsListGeneration) {
+                        return@fold
+                    }
+                    _uiState.update { current ->
+                        current.copy(
+                            sessionsListLoadingMore = false,
+                            sessionsListError = errorMessage(error),
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun selectSessionFromList(row: SessionRow) {
+        selectSession(row)
+    }
+
+    fun showSessionEditDialog(row: SessionRow) {
+        showRenameDialogForSession(row)
+    }
+
+    fun submitArchiveFromEditDialog() {
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val sessionId = _uiState.value.renameState.sessionId
+        if (sessionId.isEmpty()) {
+            return
+        }
+
+        _uiState.update { current ->
+            current.copy(
+                renameState = current.renameState.copy(submitting = true, error = null),
+                archiveSubmitting = true,
+                archiveError = null,
+            )
+        }
+
+        viewModelScope.launch {
+            operatorRepository.archiveSession(
+                serverOrigin = paired.serverOrigin,
+                sessionId = sessionId,
+            ).fold(
+                onSuccess = { archived ->
+                    hideRenameDialog()
+                    _uiState.update { current ->
+                        current.copy(
+                            sessionsList = current.sessionsList.filter { row ->
+                                row.id != archived.id
+                            },
+                            recentSessions = current.recentSessions.filter { row ->
+                                row.id != archived.id
+                            },
+                            archiveSubmitting = false,
+                            archiveError = null,
+                        )
+                    }
+                    removeSessionFromActiveWorkflow(sessionId = archived.id)
+                },
+                onFailure = { error ->
+                    _uiState.update { current ->
+                        current.copy(
+                            renameState = current.renameState.copy(
+                                submitting = false,
+                                error = errorMessage(error),
+                            ),
+                            archiveSubmitting = false,
+                            archiveError = errorMessage(error),
+                        )
+                    }
+                },
+            )
+        }
     }
 
     fun showCreateDialog() {
@@ -404,6 +556,8 @@ class ChatViewModel(
             current.copy(
                 renameDialogVisible = false,
                 renameState = RenameSessionUiState(),
+                archiveSubmitting = false,
+                archiveError = null,
             )
         }
     }
@@ -431,14 +585,18 @@ class ChatViewModel(
             return
         }
 
-        if (name.length > SESSION_NAME_MAX_LENGTH) {
+        if (name.length > RenameSessionUiState.SESSION_NAME_MAX_LENGTH) {
             _uiState.update { current ->
                 current.copy(
                     renameState = current.renameState.copy(
-                        error = "Name must be $SESSION_NAME_MAX_LENGTH characters or fewer",
+                        error = "Name must be ${RenameSessionUiState.SESSION_NAME_MAX_LENGTH} characters or fewer",
                     ),
                 )
             }
+            return
+        }
+
+        if (!renameState.isValid) {
             return
         }
 
@@ -458,6 +616,20 @@ class ChatViewModel(
                             renameDialogVisible = false,
                             renameState = RenameSessionUiState(),
                             sessions = current.sessions.map { row ->
+                                if (row.id == updated.id) {
+                                    row.copy(name = updated.name)
+                                } else {
+                                    row
+                                }
+                            },
+                            sessionsList = current.sessionsList.map { row ->
+                                if (row.id == updated.id) {
+                                    row.copy(name = updated.name)
+                                } else {
+                                    row
+                                }
+                            },
+                            recentSessions = current.recentSessions.map { row ->
                                 if (row.id == updated.id) {
                                     row.copy(name = updated.name)
                                 } else {
@@ -718,8 +890,8 @@ class ChatViewModel(
         val agentsResult = operatorRepository.listAgents(serverOrigin)
 
         val workspaces = workspacesResult.getOrNull()?.items.orEmpty()
-        val workspaceLabels = workspaces.associate { workspace -> workspace.id to workspace.name }
-        val agentLabels = agentsResult.getOrNull()?.items.orEmpty()
+        workspaceLabels = workspaces.associate { workspace -> workspace.id to workspace.name }
+        agentLabels = agentsResult.getOrNull()?.items.orEmpty()
             .associate { agent -> agent.id to agent.displayName }
 
         sessionsResult.fold(
@@ -745,6 +917,84 @@ class ChatViewModel(
                     current.copy(
                         sessionsLoading = false,
                         sessionsError = errorMessage(error),
+                    )
+                }
+            },
+        )
+    }
+
+    private suspend fun loadRecentSessions() {
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        operatorRepository.listSessions(
+            serverOrigin = paired.serverOrigin,
+            limit = RECENT_SESSIONS_LIMIT,
+        ).fold(
+            onSuccess = { collection ->
+                val rows = collection.items
+                    .filter { session -> session.state != SessionState.Archived }
+                    .map { session -> session.toSessionRow(workspaceLabels, agentLabels) }
+                _uiState.update { current ->
+                    current.copy(
+                        recentSessions = rows,
+                        recentSessionsLoading = false,
+                        recentSessionsError = null,
+                    )
+                }
+            },
+            onFailure = { error ->
+                _uiState.update { current ->
+                    current.copy(
+                        recentSessionsLoading = false,
+                        recentSessionsError = errorMessage(error),
+                    )
+                }
+            },
+        )
+    }
+
+    private suspend fun refreshSessionsList(search: String?) {
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        sessionsListLoadJob?.cancel()
+        val generation = ++sessionsListGeneration
+        _uiState.update { current ->
+            current.copy(
+                sessionsListLoading = true,
+                sessionsListLoadingMore = false,
+                sessionsListError = null,
+            )
+        }
+
+        operatorRepository.listSessions(
+            serverOrigin = paired.serverOrigin,
+            limit = SESSIONS_PAGE_SIZE,
+            search = search,
+        ).fold(
+            onSuccess = { collection ->
+                if (generation != sessionsListGeneration) {
+                    return@fold
+                }
+                val rows = collection.items
+                    .filter { session -> session.state != SessionState.Archived }
+                    .map { session -> session.toSessionRow(workspaceLabels, agentLabels) }
+                _uiState.update { current ->
+                    current.copy(
+                        sessionsList = rows,
+                        sessionsListNextCursor = collection.page.nextCursor,
+                        sessionsListLoading = false,
+                        sessionsListLoadingMore = false,
+                        sessionsListError = null,
+                    )
+                }
+            },
+            onFailure = { error ->
+                if (generation != sessionsListGeneration) {
+                    return@fold
+                }
+                _uiState.update { current ->
+                    current.copy(
+                        sessionsListLoading = false,
+                        sessionsListLoadingMore = false,
+                        sessionsListError = errorMessage(error),
                     )
                 }
             },
@@ -822,6 +1072,8 @@ class ChatViewModel(
         _uiState.update { current ->
             current.copy(
                 sessions = current.sessions.filterNot { row -> row.id == sessionId },
+                sessionsList = current.sessionsList.filterNot { row -> row.id == sessionId },
+                recentSessions = current.recentSessions.filterNot { row -> row.id == sessionId },
                 selectedSession = null,
                 transcript = emptyTranscript,
                 composerText = "",
@@ -906,7 +1158,10 @@ class ChatViewModel(
 
     companion object {
         const val KEY_SELECTED_SESSION_ID = "selected_session_id"
-        const val SESSION_NAME_MAX_LENGTH = 120
+        const val SESSION_NAME_MAX_LENGTH = RenameSessionUiState.SESSION_NAME_MAX_LENGTH
+        const val RECENT_SESSIONS_LIMIT = 5
+        const val SESSIONS_PAGE_SIZE = 20
+        const val SESSIONS_SEARCH_DEBOUNCE_MS = 500L
         private const val HTTP_CONFLICT = 409
     }
 }

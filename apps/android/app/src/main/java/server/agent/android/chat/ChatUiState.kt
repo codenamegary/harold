@@ -42,7 +42,27 @@ data class RenameSessionUiState(
     val name: String = "",
     val submitting: Boolean = false,
     val error: String? = null,
-)
+) {
+    val trimmedName: String
+        get() = name.trim()
+
+    val isValid: Boolean
+        get() = trimmedName.isNotEmpty() &&
+            trimmedName.length <= SESSION_NAME_MAX_LENGTH
+
+    val fieldError: String?
+        get() = when {
+            name.isEmpty() -> null
+            trimmedName.isEmpty() -> "Enter a session name"
+            trimmedName.length > SESSION_NAME_MAX_LENGTH ->
+                "Name must be $SESSION_NAME_MAX_LENGTH characters or fewer"
+            else -> null
+        }
+
+    companion object {
+        const val SESSION_NAME_MAX_LENGTH = 120
+    }
+}
 
 data class PermissionUiState(
     val submittingOptionId: String? = null,
@@ -56,6 +76,15 @@ data class ChatUiState(
     val sessionsLoading: Boolean = false,
     val sessionsError: String? = null,
     val pickerVisible: Boolean = false,
+    val recentSessions: List<SessionRow> = emptyList(),
+    val recentSessionsLoading: Boolean = false,
+    val recentSessionsError: String? = null,
+    val sessionsList: List<SessionRow> = emptyList(),
+    val sessionsListSearch: String = "",
+    val sessionsListLoading: Boolean = false,
+    val sessionsListLoadingMore: Boolean = false,
+    val sessionsListError: String? = null,
+    val sessionsListNextCursor: String? = null,
     val createDialogVisible: Boolean = false,
     val createState: CreateSessionUiState = CreateSessionUiState(),
     val transcript: TranscriptState = emptyTranscript,

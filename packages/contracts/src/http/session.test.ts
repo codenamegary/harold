@@ -231,6 +231,28 @@ describe("ListSessionsQuerySchema", () => {
       cursor: "session_02",
     })
   })
+
+  test("accepts search", () => {
+    expect(
+      ListSessionsQuerySchema.parse({
+        workspaceId: "ws-agent-server",
+        search: "auth",
+        limit: 20,
+      }),
+    ).toEqual({
+      workspaceId: "ws-agent-server",
+      search: "auth",
+      limit: 20,
+    })
+  })
+
+  test("rejects empty search", () => {
+    expect(() =>
+      ListSessionsQuerySchema.parse({
+        search: "",
+      }),
+    ).toThrow()
+  })
 })
 
 describe("SessionCollectionSchema", () => {

@@ -37,6 +37,10 @@
     <string name="chat_welcome_select_session_body">Start a new session or pick an existing one.</string>
     <string name="chat_select_session">Select session</string>
     <string name="chat_new_session">New session</string>
+    <string name="sessions_title">Sessions</string>
+    <string name="sessions_search_label">Search sessions</string>
+    <string name="sessions_see_all">See all sessions…</string>
+    <string name="sessions_back_content_description">Go back from sessions</string>
     <string name="shell_brand_subtitle">Operator console</string>
     <string name="shell_status_label">STATUS</string>
     <string name="shell_connection_label">CONNECTION</string>

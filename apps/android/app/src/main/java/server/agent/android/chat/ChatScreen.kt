@@ -73,10 +73,10 @@ private val MIN_TOUCH_TARGET = 48.dp
 fun ChatScreen(
     uiState: ChatUiState,
     onSessionSelectorClick: () -> Unit,
+    onDismissSessionMenu: () -> Unit,
     onWorkspacesClick: () -> Unit,
-    onDismissPicker: () -> Unit,
     onSessionClick: (SessionRow) -> Unit,
-    onRenameSessionClick: (SessionRow) -> Unit,
+    onSeeAllSessionsClick: () -> Unit,
     onCreateClick: () -> Unit,
     onComposerTextChanged: (String) -> Unit,
     onComposerSubmit: () -> Unit,
@@ -88,6 +88,7 @@ fun ChatScreen(
     onArchiveClick: () -> Unit,
     onDismissArchive: () -> Unit,
     onArchiveSubmit: () -> Unit,
+    onArchiveFromEditDialog: () -> Unit = {},
     onPermissionOptionSelect: (String) -> Unit,
     onNotificationPermissionResult: (Boolean) -> Unit = {},
     onDismissNotificationPermissionPrompt: () -> Unit = {},
@@ -171,33 +172,99 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    TextButton(
-                        onClick = onSessionSelectorClick,
-                        colors = ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                        ),
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                            .testTag("session_selector")
-                            .semantics {
-                                contentDescription = sessionSelectorContentDescription
-                            },
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    Box {
+                        TextButton(
+                            onClick = onSessionSelectorClick,
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                            ),
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                                .testTag("session_selector")
+                                .semantics {
+                                    contentDescription = sessionSelectorContentDescription
+                                },
                         ) {
-                            Text(
-                                text = sessionLabel,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f),
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                Text(
+                                    text = sessionLabel,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Icon(
+                                    imageVector = Icons.Filled.ArrowDropDown,
+                                    contentDescription = null,
+                                    modifier = Modifier.requiredSize(36.dp),
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = uiState.pickerVisible,
+                            onDismissRequest = onDismissSessionMenu,
+                            modifier = Modifier.testTag("session_menu"),
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(text = stringResource(R.string.chat_new_session)) },
+                                onClick = {
+                                    onDismissSessionMenu()
+                                    onCreateClick()
+                                },
+                                modifier = Modifier.testTag("session_menu_new"),
                             )
-                            Icon(
-                                imageVector = Icons.Filled.ArrowDropDown,
-                                contentDescription = null,
-                                modifier = Modifier.requiredSize(36.dp),
+
+                            if (uiState.recentSessionsLoading) {
+                                DropdownMenuItem(
+                                    text = { Text(text = "Loading…") },
+                                    onClick = {},
+                                    enabled = false,
+                                    modifier = Modifier.testTag("session_menu_loading"),
+                                )
+                            } else if (uiState.recentSessionsError != null) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = uiState.recentSessionsError,
+                                            color = MaterialTheme.colorScheme.error,
+                                        )
+                                    },
+                                    onClick = {},
+                                    enabled = false,
+                                    modifier = Modifier.testTag("session_menu_error"),
+                                )
+                            } else {
+                                uiState.recentSessions.forEach { session ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = if (uiState.selectedSession?.id == session.id) {
+                                                    "✓ ${session.name}"
+                                                } else {
+                                                    session.name
+                                                },
+                                            )
+                                        },
+                                        onClick = {
+                                            onDismissSessionMenu()
+                                            onSessionClick(session)
+                                        },
+                                        modifier = Modifier.testTag("session_menu_row_${session.id}"),
+                                    )
+                                }
+                            }
+
+                            DropdownMenuItem(
+                                text = { Text(text = stringResource(R.string.sessions_see_all)) },
+                                onClick = {
+                                    onDismissSessionMenu()
+                                    onSeeAllSessionsClick()
+                                },
+                                modifier = Modifier.testTag("session_menu_see_all"),
                             )
                         }
                     }
@@ -536,22 +603,14 @@ fun ChatScreen(
         }
     }
 
-    if (uiState.pickerVisible) {
-        SessionPickerSheet(
-            uiState = uiState,
-            onDismiss = onDismissPicker,
-            onSessionClick = onSessionClick,
-            onRenameSessionClick = onRenameSessionClick,
-            onCreateClick = onCreateClick,
-        )
-    }
-
     if (uiState.renameDialogVisible) {
-        RenameSessionSheet(
+        SessionEditDialog(
             renameState = uiState.renameState,
+            archiveSubmitting = uiState.archiveSubmitting,
             onDismiss = onDismissRename,
             onNameChanged = onRenameNameChanged,
-            onSubmit = onRenameSubmit,
+            onSave = onRenameSubmit,
+            onArchive = onArchiveFromEditDialog,
         )
     }
 

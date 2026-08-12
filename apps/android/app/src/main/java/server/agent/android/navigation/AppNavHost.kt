@@ -22,6 +22,8 @@ import server.agent.android.chat.ChatScreen
 import server.agent.android.chat.ChatViewModel
 import server.agent.android.chat.ChatViewModelFactory
 import server.agent.android.chat.CreateSessionScreen
+import server.agent.android.chat.SessionEditDialog
+import server.agent.android.chat.SessionsScreen
 import server.agent.android.chat.WorkspacesScreen
 import server.agent.android.chat.WorkspacesViewModel
 import server.agent.android.chat.WorkspacesViewModelFactory
@@ -119,10 +121,13 @@ fun AppNavHost(
             ChatScreen(
                 uiState = chatUiState,
                 onSessionSelectorClick = chatViewModel::showPicker,
+                onDismissSessionMenu = chatViewModel::hidePicker,
                 onWorkspacesClick = { navController.navigate(Routes.Workspaces) },
-                onDismissPicker = chatViewModel::hidePicker,
                 onSessionClick = chatViewModel::selectSession,
-                onRenameSessionClick = chatViewModel::showRenameDialogForSession,
+                onSeeAllSessionsClick = {
+                    chatViewModel.openSessionsList()
+                    navController.navigate(Routes.Sessions)
+                },
                 onCreateClick = {
                     chatViewModel.hidePicker()
                     chatViewModel.showCreateDialog()
@@ -138,10 +143,60 @@ fun AppNavHost(
                 onArchiveClick = chatViewModel::showArchiveDialog,
                 onDismissArchive = chatViewModel::hideArchiveDialog,
                 onArchiveSubmit = chatViewModel::submitArchive,
+                onArchiveFromEditDialog = chatViewModel::submitArchiveFromEditDialog,
                 onPermissionOptionSelect = chatViewModel::submitPermissionOption,
                 onNotificationPermissionResult = chatViewModel::onNotificationPermissionResult,
                 onDismissNotificationPermissionPrompt = chatViewModel::dismissNotificationPermissionPrompt,
             )
+        }
+
+        composable(Routes.Sessions) { sessionsEntry ->
+            val chatEntry = remember(sessionsEntry) {
+                navController.getBackStackEntry(Routes.Chat)
+            }
+            val chatViewModel: ChatViewModel = viewModel(
+                viewModelStoreOwner = chatEntry,
+                factory = ChatViewModelFactory(
+                    savedStateHandle = chatEntry.savedStateHandle,
+                    sessionGateway = appContainer.sessionGateway,
+                    connectionGateway = appContainer.connectionGateway,
+                    operatorRepository = appContainer.operatorRepository,
+                    navigationPreferences = appContainer.navigationPreferences,
+                    eventStreamFactory = appContainer.eventStreamFactory,
+                    activeSessionTracker = appContainer.activeSessionTracker,
+                    sessionStreamBroker = appContainer.sessionStreamBroker,
+                    sessionForegroundCoordinator = appContainer.sessionForegroundCoordinator,
+                    openSessionRequests = appContainer.openSessionRequests,
+                ),
+            )
+            val chatUiState by chatViewModel.uiState.collectAsState()
+
+            SessionsScreen(
+                uiState = chatUiState,
+                onBack = { navController.popBackStack() },
+                onSearchChanged = chatViewModel::onSessionsSearchChanged,
+                onSessionClick = { row ->
+                    chatViewModel.selectSessionFromList(row)
+                    navController.popBackStack()
+                },
+                onSessionLongPress = chatViewModel::showSessionEditDialog,
+                onCreateClick = {
+                    chatViewModel.showCreateDialog()
+                    navController.navigate(Routes.CreateSession)
+                },
+                onLoadMore = chatViewModel::loadMoreSessions,
+            )
+
+            if (chatUiState.renameDialogVisible) {
+                SessionEditDialog(
+                    renameState = chatUiState.renameState,
+                    archiveSubmitting = chatUiState.archiveSubmitting,
+                    onDismiss = chatViewModel::hideRenameDialog,
+                    onNameChanged = chatViewModel::onRenameNameChanged,
+                    onSave = chatViewModel::submitRename,
+                    onArchive = chatViewModel::submitArchiveFromEditDialog,
+                )
+            }
         }
 
         composable(Routes.CreateSession) { createEntry ->

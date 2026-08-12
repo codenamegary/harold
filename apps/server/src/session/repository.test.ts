@@ -549,4 +549,79 @@ describe("session repository", () => {
 
     database.close()
   })
+
+  test("filters by case-insensitive name search and keeps cursor paging", async () => {
+    const dataDir = await createTempDataDir()
+    const { database, workspaceId } = await seedWorkspace(dataDir)
+    const repository = createSessionRepository(database)
+
+    const authLogin = repository.create({
+      workspaceId,
+      agentId: "cursor",
+      name: "Auth Login",
+      acpSessionId: "acp-auth-login",
+    })
+    const authLogout = repository.create({
+      workspaceId,
+      agentId: "cursor",
+      name: "AUTH Logout",
+      acpSessionId: "acp-auth-logout",
+    })
+    const billing = repository.create({
+      workspaceId,
+      agentId: "cursor",
+      name: "Billing",
+      acpSessionId: "acp-billing",
+    })
+    expect(authLogin.ok && authLogout.ok && billing.ok).toBe(true)
+    if (!authLogin.ok || !authLogout.ok || !billing.ok) {
+      return
+    }
+
+    database.db
+      .update(sessions)
+      .set({ lastUsedAt: "2026-01-03T00:00:00.000Z" })
+      .where(eq(sessions.id, authLogin.value.id))
+      .run()
+    database.db
+      .update(sessions)
+      .set({ lastUsedAt: "2026-01-02T00:00:00.000Z" })
+      .where(eq(sessions.id, authLogout.value.id))
+      .run()
+    database.db
+      .update(sessions)
+      .set({ lastUsedAt: "2026-01-01T00:00:00.000Z" })
+      .where(eq(sessions.id, billing.value.id))
+      .run()
+
+    const firstPage = repository.list({
+      workspaceId,
+      search: "auth",
+      limit: 1,
+    })
+    expect(firstPage.ok).toBe(true)
+    if (!firstPage.ok) {
+      return
+    }
+
+    expect(firstPage.value.items.map((session) => session.name)).toEqual(["Auth Login"])
+    expect(firstPage.value.count).toBe(2)
+    expect(firstPage.value.nextCursor).toBeDefined()
+
+    const secondPage = repository.list({
+      workspaceId,
+      search: "auth",
+      limit: 1,
+      cursor: firstPage.value.nextCursor,
+    })
+    expect(secondPage.ok).toBe(true)
+    if (!secondPage.ok) {
+      return
+    }
+
+    expect(secondPage.value.items.map((session) => session.name)).toEqual(["AUTH Logout"])
+    expect(secondPage.value.nextCursor).toBeUndefined()
+
+    database.close()
+  })
 })

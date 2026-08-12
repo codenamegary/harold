@@ -231,6 +231,8 @@ private class FakeAddOperatorRepository(
         serverOrigin: String,
         workspaceId: String?,
         limit: Int,
+        cursor: String?,
+        search: String?,
     ): Result<server.agent.android.contracts.SessionCollection> =
         Result.failure(UnsupportedOperationException())
 
