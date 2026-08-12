@@ -25,7 +25,6 @@ import { createSessionRepository } from "../session/repository"
 import { registerSessionRoutes } from "../session/routes"
 import { createWorkspaceService } from "../workspace/service"
 import { createSessionService } from "../session/service"
-import { createPermissionService } from "../permission/service"
 import { createDeviceRepository } from "../device/repository"
 import { createDeviceService } from "../device/service"
 import { registerDeviceRoutes } from "../device/routes"
@@ -40,7 +39,12 @@ import { createAcpSupervisor } from "../acp/supervisor/acp-supervisor"
 import { createAcpJournalWriter } from "../acp/journal/acp.journal.writer"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { SpawnAgentProcessFn } from "../acp/supervisor/spawn-agent-process"
-import { registerEventStreamRoutes } from "../event/stream.routes"
+import { registerSessionStreamRoutes } from "../session/stream.routes"
+import {
+  createSessionCwdCache,
+  createSessionHub,
+  SessionHub,
+} from "../session/hub/session.hub"
 import { runStartupRecovery } from "../session/startup.recovery"
 import { registerAuthMiddleware } from "../auth/middleware"
 import { redactPairingCodeInUrl } from "../device/redact.pairing.code.in.url"
@@ -193,19 +197,8 @@ export const createServer = async ({
   }
 
   const supervisorRef: { current: AcpSupervisor | null } = { current: null }
-
-  const permissionService = createPermissionService({
-    getSessionBindingRegistry: () => {
-      const supervisor = supervisorRef.current
-      if (supervisor === null) {
-        throw new Error("ACP supervisor is not ready")
-      }
-      return supervisor.getSessionBindingRegistry()
-    },
-    sessionRepository,
-    sessionService,
-    journalWriter,
-  })
+  const sessionHubRef: { current: SessionHub | null } = { current: null }
+  const cwdCache = createSessionCwdCache()
 
   const acpSupervisor =
     providedAcpSupervisor ??
@@ -213,8 +206,31 @@ export const createServer = async ({
       agentSettingsRepository,
       serverVersion: runtime.version,
       journalWriter,
-      permissionService,
       spawnAgentProcessFn,
+      onSessionUpdate: ({ agentId, acpSessionId, update }) => {
+        sessionHubRef.current?.handleSessionUpdate({
+          agentId,
+          sessionId: acpSessionId,
+          update,
+        })
+      },
+      onSessionDiscovered: ({ agentId, sessionId, cwd }) => {
+        cwdCache.remember({ agentId, sessionId, cwd })
+      },
+      requestPermission: (input) => {
+        const hub = sessionHubRef.current
+        if (hub === null) {
+          throw new Error("session hub is not ready")
+        }
+        return hub.requestPermission(input)
+      },
+      requestExtensionRpc: (input) => {
+        const hub = sessionHubRef.current
+        if (hub === null) {
+          throw new Error("session hub is not ready")
+        }
+        return hub.requestExtensionRpc(input)
+      },
       onBeforeClearRuntime: () => {
         if (!offlineOnBindingClear.enabled) {
           return
@@ -254,15 +270,40 @@ export const createServer = async ({
 
   supervisorRef.current = acpSupervisor
 
-  registerEventStreamRoutes(app, {
+  const sessionHub = createSessionHub({
+    cwdCache,
+    loadSession: async ({ agentId, sessionId, cwd }) => {
+      const loaded = await acpSupervisor.loadSession({ agentId, sessionId, cwd })
+      return loaded.ok ? { ok: true } : { ok: false, reason: loaded.reason }
+    },
+    promptSession: async ({ sessionId, text }) => {
+      const started = await acpSupervisor.startPromptAcpSession({
+        acpSessionId: sessionId,
+        prompt: [{ type: "text", text }],
+      })
+      if (!started.ok) {
+        return started
+      }
+      void started.completion
+      return { ok: true }
+    },
+    cancelSession: async ({ sessionId }) => {
+      const cancelled = await acpSupervisor.cancelAcpSession({
+        acpSessionId: sessionId,
+      })
+      return cancelled.ok
+        ? { ok: true }
+        : { ok: false, reason: cancelled.reason }
+    },
+  })
+  sessionHubRef.current = sessionHub
+
+  registerSessionStreamRoutes(app, {
     database,
     eventJournal,
     commitPublisher,
-    workspaceRepository,
-    sessionRepository,
-    sessionService,
-    acpSupervisor,
     deviceRepository,
+    sessionHub,
     getTrustedProxies: () => runtimeSettingsRepository.get().trustedProxies,
     isLoopbackRequest,
     wsAuthFrameTimeoutMs,
@@ -303,15 +344,7 @@ export const createServer = async ({
     appliedRuntimeSettings,
     envBindOverrides,
   })
-  registerSessionRoutes(
-    app,
-    sessionRepository,
-    sessionService,
-    workspaceRepository,
-    agentSettingsRepository,
-    acpSupervisor,
-    permissionService,
-  )
+  registerSessionRoutes(app, agentSettingsRepository, acpSupervisor, cwdCache)
 
   const deviceService = createDeviceService({
     database,

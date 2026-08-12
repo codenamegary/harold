@@ -87,7 +87,7 @@ const getBoundUrls = (app: InjectApp, config: Config) => {
 
   return {
     httpBase: `http://${config.host}:${address.port}`,
-    wsUrl: `ws://${config.host}:${address.port}/v1/events`,
+    wsUrl: `ws://${config.host}:${address.port}/v1/sessions/stream`,
   }
 }
 

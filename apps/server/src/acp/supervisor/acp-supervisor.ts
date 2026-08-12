@@ -25,7 +25,8 @@ import {
 } from "./acp-supervisor-types"
 import { isAcpJsonRpcError } from "../transport/json-rpc-error"
 import { AcpOperationContext, createJsonRpcTransport, JsonRpcTransport } from "../transport/json-rpc-transport"
-import { registerAcpClientHandlers } from "../client/register-handlers"
+import { registerAcpClientHandlers, createUnavailableRequestExtensionRpc, createUnavailableRequestPermission } from "../client/register-handlers"
+import { resolveExtensionHandlers } from "../client/extensions/extension.handlers"
 import { createSessionBindingRegistry } from "../client/session-binding-registry"
 import { spawnAgentProcess, SpawnedAgentProcess } from "./spawn-agent-process"
 import { createAcpJsonRpcJournalObserver } from "../journal/json.rpc.observer"
@@ -34,7 +35,6 @@ import {
   sanitizeOperatorPromptText,
 } from "../journal/sanitize.acp.update"
 import { createTurnId } from "../../session/create.turn.id"
-import { createUnavailablePermissionService } from "../../permission/service"
 
 type SupervisorRuntime = {
   agentId: AgentId
@@ -216,8 +216,10 @@ export const createAcpSupervisor = ({
   agentSettingsRepository,
   serverVersion,
   journalWriter,
-  permissionService,
   onSessionUpdate = () => undefined,
+  onSessionDiscovered = () => undefined,
+  requestPermission = createUnavailableRequestPermission(),
+  requestExtensionRpc = createUnavailableRequestExtensionRpc(),
   onBeforeClearRuntime = () => undefined,
   onSupervisorReady = () => undefined,
   restartBackoffMs = DEFAULT_ACP_RESTART_BACKOFF_MS,
@@ -352,9 +354,14 @@ export const createAcpSupervisor = ({
 
     registerAcpClientHandlers({
       transport,
-      profile: resolved.profile,
+      agentId,
       sessionBindingRegistry,
-      permissionService: permissionService ?? createUnavailablePermissionService(),
+      requestPermission,
+      extensionHandlers: resolveExtensionHandlers(
+        agentId,
+        requestExtensionRpc,
+        resolved.profile.extensionHandlers,
+      ),
     })
 
     transport.onNotification("session/update", (params) => {
@@ -364,6 +371,7 @@ export const createAcpSupervisor = ({
       }
 
       onSessionUpdate({
+        agentId,
         acpSessionId: value.sessionId,
         update: value.update,
       })
@@ -599,6 +607,18 @@ export const createAcpSupervisor = ({
       })
 
       rememberAcpSession(agentId, result.sessionId)
+      sessionBindingRegistry.bind({
+        acpSessionId: result.sessionId,
+        sessionId: result.sessionId,
+        workspaceId: result.sessionId,
+        workspaceRoot: cwd,
+        phase: "live",
+      })
+      onSessionDiscovered({
+        agentId,
+        sessionId: result.sessionId,
+        cwd,
+      })
       return { ok: true, acpSessionId: result.sessionId }
     } catch (error: unknown) {
       return { ok: false, reason: sanitizeFailureReason(error, "session/new failed") }
@@ -636,6 +656,11 @@ export const createAcpSupervisor = ({
             }
 
             rememberAcpSession(runtime.agentId, session.sessionId)
+            onSessionDiscovered({
+              agentId: runtime.agentId,
+              sessionId: session.sessionId,
+              cwd: session.cwd,
+            })
             return [
               {
                 agentId: runtime.agentId,
@@ -656,6 +681,24 @@ export const createAcpSupervisor = ({
         reason: sanitizeFailureReason(error, "session/list failed"),
       }
     }
+  }
+
+  const loadSession = async ({
+    agentId,
+    sessionId,
+    cwd,
+  }: {
+    agentId: AgentId
+    sessionId: string
+    cwd: string
+  }): Promise<AcpSessionOperationResult> => {
+    rememberAcpSession(agentId, sessionId)
+    return loadAcpSession({
+      acpSessionId: sessionId,
+      workspaceCwd: cwd,
+      sessionId,
+      workspaceId: sessionId,
+    })
   }
 
   const loadAcpSession = async ({
@@ -1058,6 +1101,7 @@ export const createAcpSupervisor = ({
     listAcpSessions,
     createAcpSession,
     createSession,
+    loadSession,
     loadAcpSession,
     closeAcpSession,
     promptAcpSession,

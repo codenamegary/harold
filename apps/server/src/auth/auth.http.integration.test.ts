@@ -50,7 +50,7 @@ const getListeningHttpBase = async (
 
   return {
     httpBase: `http://${config.host}:${address.port}`,
-    wsUrl: `ws://${config.host}:${address.port}/v1/events`,
+    wsUrl: `ws://${config.host}:${address.port}/v1/sessions/stream`,
   }
 }
 
@@ -399,7 +399,7 @@ describe("device auth WebSocket", () => {
     const { app, config } = await createTestApp(resources, dataDir)
     const { httpBase } = await getListeningHttpBase(app, config)
 
-    const response = await fetch(`${httpBase}/v1/events`, {
+    const response = await fetch(`${httpBase}/v1/sessions/stream`, {
       headers: {
         ...websocketUpgradeHeaders,
         authorization: "Bearer bad-credential",

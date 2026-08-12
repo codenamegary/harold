@@ -1033,7 +1033,7 @@ describe("createAcpSupervisor", () => {
 
   test("routes session/update notifications to onSessionUpdate", async () => {
     const mock = createMockTransport()
-    const updates: Array<{ acpSessionId: string; update: unknown }> = []
+    const updates: Array<{ agentId: string; acpSessionId: string; update: unknown }> = []
     mock.setHandler("initialize", () => ({
       agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
     }))
@@ -1060,6 +1060,7 @@ describe("createAcpSupervisor", () => {
 
     expect(updates).toEqual([
       {
+        agentId: "cursor",
         acpSessionId: "acp-session-update",
         update: { kind: "turn_complete" },
       },

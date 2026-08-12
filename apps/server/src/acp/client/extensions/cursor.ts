@@ -1,37 +1,37 @@
+import { AgentId } from "contracts/http/agent-settings"
+import { RequestExtensionRpcFn } from "../../supervisor/acp-supervisor-types"
+import { createAcpJsonRpcError } from "../../transport/json-rpc-error"
+import { readAcpSessionId } from "../read.acp.session.id"
 import { ExtensionHandlers } from "./types"
 
-type CursorAskQuestionParams = {
-  questions?: Array<{
-    id?: string
-    options?: Array<{ id?: string; label?: string }>
-  }>
-}
+export const createCursorExtensionHandlers = (
+  agentId: AgentId,
+  requestExtensionRpc: RequestExtensionRpcFn,
+): ExtensionHandlers => ({
+  "cursor/ask_question": async (params) => {
+    const sessionId = readAcpSessionId(params)
+    if (sessionId === undefined) {
+      throw createAcpJsonRpcError("cursor request missing sessionId", -32000)
+    }
 
-const cursorAskQuestionHandler = (params: unknown) => {
-  const request = params as CursorAskQuestionParams
-  const firstQuestion = request.questions?.[0]
-  const firstOptionId = firstQuestion?.options?.[0]?.id
+    return requestExtensionRpc({
+      agentId,
+      sessionId,
+      method: "cursor/ask_question",
+      params,
+    })
+  },
+  "cursor/create_plan": async (params) => {
+    const sessionId = readAcpSessionId(params)
+    if (sessionId === undefined) {
+      throw createAcpJsonRpcError("cursor request missing sessionId", -32000)
+    }
 
-  if (!firstQuestion?.id || !firstOptionId) {
-    return { outcome: { outcome: "skipped" as const } }
-  }
-
-  return {
-    outcome: {
-      outcome: "answered" as const,
-      answers: [{
-        questionId: firstQuestion.id,
-        selectedOptionIds: [firstOptionId],
-      }],
-    },
-  }
-}
-
-const cursorCreatePlanHandler = () => ({
-  outcome: { outcome: "accepted" as const },
+    return requestExtensionRpc({
+      agentId,
+      sessionId,
+      method: "cursor/create_plan",
+      params,
+    })
+  },
 })
-
-export const cursorExtensionHandlers: ExtensionHandlers = {
-  "cursor/ask_question": cursorAskQuestionHandler,
-  "cursor/create_plan": cursorCreatePlanHandler,
-}

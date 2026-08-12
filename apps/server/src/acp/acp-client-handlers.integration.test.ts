@@ -9,9 +9,9 @@ import { SpawnedAgentProcess } from "./supervisor/spawn-agent-process"
 const tempDirs: string[] = []
 const fakeProcesses: Array<{ kill: () => void }> = []
 
-const createRepository = () => ({
+const createRepository = (agentId: "cursor" | "opencode" = "cursor") => ({
   list: () => [
-    { id: "cursor" as const, enabled: true, path: "/fake/agent", args: ["acp"] },
+    { id: agentId, enabled: true, path: "/fake/agent", args: ["acp"] },
   ],
 })
 
@@ -51,7 +51,13 @@ const waitForResponse = async (responses: string[], id: number, timeoutMs = 5000
   return read()
 }
 
-const createHarness = (fakeOptions: Parameters<typeof spawnFakeAcp>[0] = {}) => {
+const createHarness = (
+  fakeOptions: Parameters<typeof spawnFakeAcp>[0] = {},
+  supervisorOptions: {
+    requestExtensionRpc?: Parameters<typeof createAcpSupervisor>[0]["requestExtensionRpc"]
+    agentId?: "cursor" | "opencode"
+  } = {},
+) => {
   const responses: string[] = []
   const fake = spawnFakeAcp(fakeOptions)
   fakeProcesses.push(fake)
@@ -68,13 +74,15 @@ const createHarness = (fakeOptions: Parameters<typeof spawnFakeAcp>[0] = {}) => 
     waitForExit: () => fake.process.exited,
   })
 
+  const agentId = supervisorOptions.agentId ?? "cursor"
   const supervisor = createAcpSupervisor({
-    agentSettingsRepository: createRepository(),
+    agentSettingsRepository: createRepository(agentId),
     serverVersion: "0.1.0",
     spawnAgentProcessFn,
+    requestExtensionRpc: supervisorOptions.requestExtensionRpc,
   })
 
-  return { supervisor, responses, fake }
+  return { supervisor, responses, fake, agentId }
 }
 
 afterEach(async () => {
@@ -196,19 +204,37 @@ describe("ACP client handlers integration", () => {
     await supervisor.stop()
   })
 
-  test("auto-accepts cursor extension methods and rejects unknown extensions", async () => {
+  test("forwards cursor extension methods through requestExtensionRpc and rejects unknown extensions", async () => {
     const logged: string[] = []
     const originalWarn = console.warn
     console.warn = (message?: unknown) => {
       logged.push(String(message))
     }
 
-    const { supervisor, responses } = createHarness({
-      emitCursorAskQuestion: true,
-      emitCursorCreatePlan: true,
-      emitUnknownExtension: true,
-      sessionNewSessionId: "extension-session",
-    })
+    const { supervisor, responses } = createHarness(
+      {
+        emitCursorAskQuestion: true,
+        emitCursorCreatePlan: true,
+        emitUnknownExtension: true,
+        sessionNewSessionId: "extension-session",
+      },
+      {
+        requestExtensionRpc: async ({ method }) => {
+          if (method === "cursor/ask_question") {
+            return {
+              outcome: {
+                outcome: "answered",
+                answers: [{ questionId: "q1", selectedOptionIds: ["opt-a"] }],
+              },
+            }
+          }
+          if (method === "cursor/create_plan") {
+            return { outcome: { outcome: "accepted" } }
+          }
+          throw new Error(`unexpected extension method ${method}`)
+        },
+      },
+    )
 
     await supervisor.start("cursor")
     const transport = supervisor.getTransport()
@@ -239,6 +265,36 @@ describe("ACP client handlers integration", () => {
     expect(logged).toContain("unknown ACP extension: vendor/unknown_method")
 
     console.warn = originalWarn
+    await supervisor.stop()
+  })
+
+  test("does not register cursor extension handlers for non-cursor agents", async () => {
+    const extensionCalls: string[] = []
+    const { supervisor, responses, agentId } = createHarness(
+      {
+        emitCursorAskQuestion: true,
+        sessionNewSessionId: "opencode-extension-session",
+      },
+      {
+        agentId: "opencode",
+        requestExtensionRpc: async ({ method }) => {
+          extensionCalls.push(method)
+          return {}
+        },
+      },
+    )
+
+    await supervisor.start(agentId)
+    const transport = supervisor.getTransport()
+    await transport!.request("session/new", { cwd: "/tmp", mcpServers: [] })
+
+    const askResponse = await waitForResponse(responses, 1004)
+    expect(askResponse).toMatchObject({
+      id: 1004,
+      error: { message: "unknown extension: cursor/ask_question" },
+    })
+    expect(extensionCalls).toEqual([])
+
     await supervisor.stop()
   })
 })

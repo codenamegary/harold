@@ -153,11 +153,12 @@ const terminalCreateRequest = (sessionId: string, command: string): JsonRpcReque
   },
 })
 
-const cursorAskQuestionRequest = (): JsonRpcRequest => ({
+const cursorAskQuestionRequest = (sessionId: string): JsonRpcRequest => ({
   jsonrpc: "2.0",
   id: CURSOR_ASK_QUESTION_ID,
   method: "cursor/ask_question",
   params: {
+    sessionId,
     toolCallId: "call-ask",
     questions: [{
       id: "q1",
@@ -170,11 +171,12 @@ const cursorAskQuestionRequest = (): JsonRpcRequest => ({
   },
 })
 
-const cursorCreatePlanRequest = (): JsonRpcRequest => ({
+const cursorCreatePlanRequest = (sessionId: string): JsonRpcRequest => ({
   jsonrpc: "2.0",
   id: CURSOR_CREATE_PLAN_ID,
   method: "cursor/create_plan",
   params: {
+    sessionId,
     toolCallId: "call-plan",
     plan: "Do the thing",
     todos: [{ id: "todo-1", content: "Step one", status: "pending" }],
@@ -202,8 +204,8 @@ const outboundAfterSessionNew = (sessionId: string, config: FakeAcpConfig): Json
   ...(config.emitTerminalCreateRequest
     ? [terminalCreateRequest(sessionId, config.terminalCommand)]
     : []),
-  ...(config.emitCursorAskQuestion ? [cursorAskQuestionRequest()] : []),
-  ...(config.emitCursorCreatePlan ? [cursorCreatePlanRequest()] : []),
+  ...(config.emitCursorAskQuestion ? [cursorAskQuestionRequest(sessionId)] : []),
+  ...(config.emitCursorCreatePlan ? [cursorCreatePlanRequest(sessionId)] : []),
   ...(config.emitUnknownExtension ? [unknownExtensionRequest()] : []),
 ]
 

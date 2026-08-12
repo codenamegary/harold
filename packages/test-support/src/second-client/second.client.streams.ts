@@ -1,40 +1,11 @@
-import { EventFrameSchema } from "contracts/events/stream"
-import { Event } from "contracts/events/event"
 import { WebSocket } from "ws"
-import { websocketRawDataText } from "../websocket.raw.data.text"
-
-export type HostEventStream = {
-  ws: WebSocket
-  events: Event[]
-  waitForType: (type: Event["type"], timeoutMs?: number) => Promise<Event>
-}
 
 const defaultStreamTimeoutMs = 2_000
 
-export const openHostEventStream = (wsUrl: string): Promise<HostEventStream> =>
+/** Opens the host session hub stream (presence attach path). Journal events are not replayed here. */
+export const openHostEventStream = (wsUrl: string): Promise<{ ws: WebSocket }> =>
   new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${wsUrl}?cursor=0`)
-    const events: Event[] = []
-    const waiters: Array<{
-      type: Event["type"]
-      resolve: (event: Event) => void
-      reject: (error: Error) => void
-      timer: ReturnType<typeof setTimeout>
-    }> = []
-
-    const notify = (event: Event) => {
-      events.push(event)
-      const matched = waiters.filter((waiter) => waiter.type === event.type)
-      for (const waiter of matched) {
-        clearTimeout(waiter.timer)
-        const index = waiters.indexOf(waiter)
-        if (index >= 0) {
-          waiters.splice(index, 1)
-        }
-        waiter.resolve(event)
-      }
-    }
-
+    const ws = new WebSocket(wsUrl)
     const timer = setTimeout(() => {
       ws.close()
       reject(new Error("timeout opening host stream"))
@@ -42,35 +13,7 @@ export const openHostEventStream = (wsUrl: string): Promise<HostEventStream> =>
 
     ws.on("open", () => {
       clearTimeout(timer)
-      resolve({
-        ws,
-        events,
-        waitForType: (type, timeoutMs = defaultStreamTimeoutMs) =>
-          new Promise((waitResolve, waitReject) => {
-            const existing = events.find((event) => event.type === type)
-            if (existing !== undefined) {
-              waitResolve(existing)
-              return
-            }
-
-            const waiterTimer = setTimeout(() => {
-              waitReject(new Error(`timeout waiting for ${type}`))
-            }, timeoutMs)
-            waiters.push({
-              type,
-              resolve: waitResolve,
-              reject: waitReject,
-              timer: waiterTimer,
-            })
-          }),
-      })
-    })
-
-    ws.on("message", (message) => {
-      const frame = EventFrameSchema.parse(JSON.parse(websocketRawDataText(message)))
-      for (const event of frame) {
-        notify(event)
-      }
+      resolve({ ws })
     })
 
     ws.on("unexpected-response", (_req, res) => {

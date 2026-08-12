@@ -3,7 +3,7 @@ import { resolveAgentProfile } from "../agent-profile"
 import { buildAgentSpawnCommand } from "../supervisor/spawn-agent-process"
 
 describe("resolveAgentProfile", () => {
-  test("preserves cursor product override command, auth, and extensions", () => {
+  test("preserves cursor product override command and auth", () => {
     const profile = resolveAgentProfile("cursor")
     if (profile === undefined) {
       throw new Error("expected cursor profile")
@@ -20,13 +20,8 @@ describe("resolveAgentProfile", () => {
         },
         terminal: true,
       },
-      extensionHandlers: profile.extensionHandlers,
+      extensionHandlers: {},
     })
-
-    expect(Object.keys(profile.extensionHandlers)).toEqual([
-      "cursor/ask_question",
-      "cursor/create_plan",
-    ])
 
     expect(buildAgentSpawnCommand("/opt/cursor/bin/agent", ["acp"])).toEqual([
       "/opt/cursor/bin/agent",
