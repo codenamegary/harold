@@ -1,4 +1,5 @@
 import { AgentId } from "contracts/http/agent-settings"
+import { readAcpSessionId } from "../read.acp.session.id"
 
 export type CreateAcpPermissionHandlerParams = {
   agentId: AgentId
@@ -19,8 +20,8 @@ export const createAcpPermissionHandler = ({
     respond: (result: unknown) => void
     respondError: (code: number, message: string) => void
   }) => {
-    const params = input.params as { sessionId?: string }
-    if (params.sessionId === undefined) {
+    const sessionId = readAcpSessionId(input.params)
+    if (sessionId === undefined) {
       input.respondError(-32000, "permission request missing session id")
       return
     }
@@ -28,7 +29,7 @@ export const createAcpPermissionHandler = ({
     try {
       const result = await requestPermission({
         agentId,
-        sessionId: params.sessionId,
+        sessionId,
         params: input.params,
       })
       input.respond(result)

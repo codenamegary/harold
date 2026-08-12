@@ -46,7 +46,6 @@ export type PendingClientRpc = {
   readonly method?: string
   readonly params: unknown
   resolve: (result: unknown) => void
-  reject: (error: Error) => void
   settled: boolean
 }
 
@@ -306,23 +305,28 @@ export const createSessionHub = ({
     const key = sessionKey(params.agentId, params.sessionId)
 
     return new Promise((resolve, reject) => {
-      const pending: PendingClientRpc = {
-        requestId,
-        agentId: params.agentId,
-        sessionId: params.sessionId,
-        kind: params.kind,
-        method: params.method,
-        params: params.requestParams,
-        resolve,
-        reject,
-        settled: false,
-      }
-      pendingById.set(requestId, pending)
+      if (params.kind === "cursor") {
+        const method = params.method
+        if (method === undefined || method.length === 0) {
+          reject(new Error("cursor request missing method"))
+          return
+        }
 
-      if (params.kind === "permission") {
-        fanOut(key, {
-          type: "permission_request",
+        const pending: PendingClientRpc = {
           requestId,
+          agentId: params.agentId,
+          sessionId: params.sessionId,
+          kind: "cursor",
+          method,
+          params: params.requestParams,
+          resolve,
+          settled: false,
+        }
+        pendingById.set(requestId, pending)
+        fanOut(key, {
+          type: "cursor_request",
+          requestId,
+          method,
           agentId: params.agentId,
           sessionId: params.sessionId,
           params: params.requestParams,
@@ -330,10 +334,20 @@ export const createSessionHub = ({
         return
       }
 
-      fanOut(key, {
-        type: "cursor_request",
+      const pending: PendingClientRpc = {
         requestId,
-        method: params.method ?? "cursor/unknown",
+        agentId: params.agentId,
+        sessionId: params.sessionId,
+        kind: "permission",
+        method: params.method,
+        params: params.requestParams,
+        resolve,
+        settled: false,
+      }
+      pendingById.set(requestId, pending)
+      fanOut(key, {
+        type: "permission_request",
+        requestId,
         agentId: params.agentId,
         sessionId: params.sessionId,
         params: params.requestParams,

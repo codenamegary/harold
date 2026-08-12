@@ -1,5 +1,6 @@
 import { AgentId } from "contracts/http/agent-settings"
 import { createAcpJsonRpcError } from "../../transport/json-rpc-error"
+import { readAcpSessionId } from "../read.acp.session.id"
 import { ExtensionHandlers } from "./types"
 
 export type CreateCursorExtensionHandlersParams = {
@@ -12,17 +13,12 @@ export type CreateCursorExtensionHandlersParams = {
   }) => Promise<unknown>
 }
 
-const readSessionId = (params: unknown): string | undefined => {
-  const value = params as { sessionId?: string }
-  return value.sessionId
-}
-
 export const createCursorExtensionHandlers = ({
   agentId,
   requestCursor,
 }: CreateCursorExtensionHandlersParams): ExtensionHandlers => ({
   "cursor/ask_question": async (params) => {
-    const sessionId = readSessionId(params)
+    const sessionId = readAcpSessionId(params)
     if (sessionId === undefined) {
       throw createAcpJsonRpcError("cursor request missing sessionId", -32000)
     }
@@ -35,7 +31,7 @@ export const createCursorExtensionHandlers = ({
     })
   },
   "cursor/create_plan": async (params) => {
-    const sessionId = readSessionId(params)
+    const sessionId = readAcpSessionId(params)
     if (sessionId === undefined) {
       throw createAcpJsonRpcError("cursor request missing sessionId", -32000)
     }

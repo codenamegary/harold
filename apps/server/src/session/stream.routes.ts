@@ -178,10 +178,19 @@ export const registerSessionStreamRoutes = (
 
         socket.on("message", (data) => {
           void (async () => {
-            let parsed: unknown
-            try {
-              parsed = JSON.parse(websocketRawDataText(data))
-            } catch {
+            const parseResult = (() => {
+              try {
+                const value: unknown = JSON.parse(websocketRawDataText(data))
+                return {
+                  ok: true as const,
+                  value,
+                }
+              } catch {
+                return { ok: false as const }
+              }
+            })()
+
+            if (!parseResult.ok) {
               sendJson(socket, {
                 type: "error",
                 message: "Invalid JSON",
@@ -189,7 +198,7 @@ export const registerSessionStreamRoutes = (
               return
             }
 
-            const messageResult = SessionStreamClientMessageSchema.safeParse(parsed)
+            const messageResult = SessionStreamClientMessageSchema.safeParse(parseResult.value)
             if (!messageResult.success) {
               sendJson(socket, {
                 type: "error",

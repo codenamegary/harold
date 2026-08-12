@@ -1,11 +1,6 @@
 import { z } from "zod"
 import { AgentIdSchema } from "./agent-settings"
 
-const SessionRefSchema = z.strictObject({
-  agentId: AgentIdSchema,
-  sessionId: z.string().min(1),
-})
-
 export const SessionStreamSubscribeSchema = z.strictObject({
   type: z.literal("subscribe"),
   agentId: AgentIdSchema,
@@ -99,4 +94,3 @@ export const SessionStreamServerMessageSchema = z.discriminatedUnion("type", [
 
 export type SessionStreamClientMessage = z.infer<typeof SessionStreamClientMessageSchema>
 export type SessionStreamServerMessage = z.infer<typeof SessionStreamServerMessageSchema>
-export type SessionStreamSessionRef = z.infer<typeof SessionRefSchema>

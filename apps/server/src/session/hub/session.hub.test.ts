@@ -114,10 +114,10 @@ describe("session hub", () => {
     const cwdCache = createSessionCwdCache()
     cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
 
-    let requestIds = 0
+    const requestIds = { next: 0 }
     const hub = createSessionHub({
       cwdCache,
-      createRequestId: () => `req-${++requestIds}`,
+      createRequestId: () => `req-${++requestIds.next}`,
       loadSession: async () => ({ ok: true }),
       promptSession: async () => ({ ok: true }),
       cancelSession: async () => ({ ok: true }),
