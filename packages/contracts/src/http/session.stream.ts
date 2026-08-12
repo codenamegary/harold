@@ -84,12 +84,26 @@ export const SessionStreamErrorSchema = z.strictObject({
   sessionId: z.string().min(1).optional(),
 })
 
+export const SessionStreamPromptCompleteSchema = z.strictObject({
+  type: z.literal("prompt_complete"),
+  agentId: AgentIdSchema,
+  sessionId: z.string().min(1),
+})
+
+export const SessionStreamCancelledSchema = z.strictObject({
+  type: z.literal("cancelled"),
+  agentId: AgentIdSchema,
+  sessionId: z.string().min(1),
+})
+
 export const SessionStreamServerMessageSchema = z.discriminatedUnion("type", [
   SessionStreamSessionUpdateSchema,
   SessionStreamSubscribedSchema,
   SessionStreamPermissionRequestSchema,
   SessionStreamExtensionRequestSchema,
   SessionStreamErrorSchema,
+  SessionStreamPromptCompleteSchema,
+  SessionStreamCancelledSchema,
 ])
 
 export type SessionStreamClientMessage = z.infer<typeof SessionStreamClientMessageSchema>

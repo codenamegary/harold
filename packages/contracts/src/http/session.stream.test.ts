@@ -68,4 +68,30 @@ describe("session stream contracts", () => {
       result: { outcome: { outcome: "skipped" } },
     })
   })
+
+  test("parses prompt_complete and cancelled frames", () => {
+    expect(
+      SessionStreamServerMessageSchema.parse({
+        type: "prompt_complete",
+        agentId: "cursor",
+        sessionId: "acp-1",
+      }),
+    ).toEqual({
+      type: "prompt_complete",
+      agentId: "cursor",
+      sessionId: "acp-1",
+    })
+
+    expect(
+      SessionStreamServerMessageSchema.parse({
+        type: "cancelled",
+        agentId: "cursor",
+        sessionId: "acp-1",
+      }),
+    ).toEqual({
+      type: "cancelled",
+      agentId: "cursor",
+      sessionId: "acp-1",
+    })
+  })
 })

@@ -8,7 +8,8 @@ import {
 } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
-import { hrefOf, requestUrl } from "../test/request.url"
+import { requestUrl } from "../test/request.url"
+import { FakeSocket, installFakeWebSocket, sentStreamMessages } from "../test/fake.websocket"
 import { ChatPage } from "../shell/pages/ChatPage"
 import {
   clearChatTestSelection,
@@ -44,13 +45,12 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       present: true,
       popular: true,
       deletable: false,
-  sessionListSupported: true,
+      sessionListSupported: true,
     },
   ],
 })
 
 const workspacePath = "/home/operator/agent-server"
-const promptTurnId = "turn_01JFC8C7E77NQCFH0RF9Z22JHH"
 
 const createdSession = CreateSessionResponseSchema.parse({
   agentId: "cursor",
@@ -64,53 +64,16 @@ const sessionsList = SessionCollectionSchema.parse({
   items: [createdSession],
 })
 
-type FakeSocket = {
-  url: string
-  readyState: number
-  close: () => void
-  send: (data: string) => void
-  addEventListener: (type: string, listener: (event: { data?: string }) => void) => void
-  dispatch: (type: string, data?: string) => void
-}
-
 const originalFetch = globalThis.fetch
-const originalWebSocket = globalThis.WebSocket
-
-const createFakeSocket = (url: string): FakeSocket => {
-  const listeners = new Map<string, Array<(event: { data?: string }) => void>>()
-
-  const socket: FakeSocket = {
-    url,
-    readyState: 1,
-    close: () => {
-      socket.readyState = 3
-    },
-    send: () => undefined,
-    addEventListener: (type, listener) => {
-      const current = listeners.get(type) ?? []
-      listeners.set(type, [...current, listener])
-    },
-    dispatch: (type, data) => {
-      const current = listeners.get(type) ?? []
-      current.forEach((listener) => listener({ data }))
-    },
-  }
-
-  return socket
-}
 
 describe("Chat session flow", () => {
   const sockets: FakeSocket[] = []
+  const restoreWebSocket = { current: () => undefined }
 
   beforeEach(() => {
     clearChatTestSelection()
     sockets.length = 0
-
-    globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
-      const socket = createFakeSocket(hrefOf(url))
-      sockets.push(socket)
-      return socket
-    } as unknown as typeof WebSocket
+    restoreWebSocket.current = installFakeWebSocket(sockets)
 
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
@@ -143,33 +106,6 @@ describe("Chat session flow", () => {
         )
       }
 
-      if (url.startsWith(`/v1/sessions/${createdSession.sessionId}/prompt`) && method === "POST") {
-        return Promise.resolve(
-          new Response(JSON.stringify({ turnId: "turn_01JFC8C7E77NQCFH0RF9Z22JHK" }), {
-            status: 202,
-            headers: { "Content-Type": "application/json" },
-          }),
-        )
-      }
-
-      if (url.startsWith(`/v1/sessions/${createdSession.sessionId}/cancel`) && method === "POST") {
-        return Promise.resolve(
-          new Response(JSON.stringify({ turnId: promptTurnId }), {
-            status: 202,
-            headers: { "Content-Type": "application/json" },
-          }),
-        )
-      }
-
-      if (url.startsWith(`/v1/sessions/${createdSession.sessionId}/select`) && method === "POST") {
-        return Promise.resolve(
-          new Response(JSON.stringify(sessionsList.items[0]), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
-        )
-      }
-
       if (url.startsWith("/v1/sessions")) {
         return Promise.resolve(
           new Response(JSON.stringify(sessionsList), {
@@ -186,7 +122,7 @@ describe("Chat session flow", () => {
   afterEach(() => {
     clearChatTestSelection()
     globalThis.fetch = originalFetch
-    globalThis.WebSocket = originalWebSocket
+    restoreWebSocket.current()
   })
 
   const renderChat = () =>
@@ -195,12 +131,6 @@ describe("Chat session flow", () => {
         <ChatPage />
       </MemoryRouter>,
     )
-
-  const selectWorkspaceAndAgent = async (
-    getByRole: ReturnType<typeof renderChat>["getByRole"],
-  ) => {
-    await startNewSession({ getByRole })
-  }
 
   const typeAndSend = async (
     getByRole: ReturnType<typeof renderChat>["getByRole"],
@@ -223,10 +153,13 @@ describe("Chat session flow", () => {
     fireEvent.click(getByRole("button", { name: "Send message" }))
   }
 
-  test("create-with-prompt binds session and opens event stream from cursor 0", async () => {
+  const gatewaySocket = () =>
+    sockets.find((socket) => socket.url.includes("/v1/sessions/stream"))
+
+  test("create-with-prompt subscribes on the gateway stream and renders ACP updates", async () => {
     const fetchMock = globalThis.fetch as ReturnType<typeof mock>
     const { getByRole } = renderChat()
-    await selectWorkspaceAndAgent(getByRole)
+    await startNewSession({ getByRole })
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {
@@ -244,61 +177,54 @@ describe("Chat session flow", () => {
     })
 
     await waitFor(() => {
-      expect(sockets.length).toBeGreaterThan(0)
+      expect(gatewaySocket()).toBeDefined()
     })
 
-    expect(sockets[0]?.url).toContain(`sessionId=${createdSession.sessionId}`)
-    expect(sockets[0]?.url).toContain("cursor=0")
+    const socket = gatewaySocket()
+    expect(socket?.url).toContain("/v1/sessions/stream")
 
     act(() => {
-      sockets[0]?.dispatch(
+      socket?.dispatch(
         "message",
-        JSON.stringify([
-          {
-            type: "turn.started",
-            cursor: "1",
-            occurredAt: "2026-07-24T12:00:00.000Z",
-            workspaceId: "ws_01",
-            sessionId: createdSession.sessionId,
-            payload: {
-              turnId: promptTurnId,
-              text: "Explain auth",
-            },
+        JSON.stringify({
+          type: "subscribed",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+        }),
+      )
+    })
+
+    await waitFor(() => {
+      expect(sentStreamMessages(socket).some((message) => message.type === "subscribe")).toBe(
+        true,
+      )
+      expect(sentStreamMessages(socket).some((message) => message.type === "prompt")).toBe(true)
+    })
+
+    act(() => {
+      socket?.dispatch(
+        "message",
+        JSON.stringify({
+          type: "session_update",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+          update: {
+            sessionUpdate: "agent_thought_chunk",
+            text: "thinking",
           },
-          {
-            type: "session.thought.delta",
-            cursor: "2",
-            occurredAt: "2026-07-24T12:00:01.000Z",
-            workspaceId: "ws_01",
-            sessionId: createdSession.sessionId,
-            payload: {
-              turnId: promptTurnId,
-              text: "thinking",
-            },
+        }),
+      )
+      socket?.dispatch(
+        "message",
+        JSON.stringify({
+          type: "session_update",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+          update: {
+            sessionUpdate: "agent_message_chunk",
+            content: { type: "text", text: "Auth uses JWT" },
           },
-          {
-            type: "session.output.delta",
-            cursor: "3",
-            occurredAt: "2026-07-24T12:00:02.000Z",
-            workspaceId: "ws_01",
-            sessionId: createdSession.sessionId,
-            payload: {
-              turnId: promptTurnId,
-              text: "Auth uses JWT",
-            },
-          },
-          {
-            type: "session.state",
-            cursor: "4",
-            occurredAt: "2026-07-24T12:00:03.000Z",
-            workspaceId: "ws_01",
-            sessionId: createdSession.sessionId,
-            payload: {
-              sessionId: createdSession.sessionId,
-              state: "running",
-            },
-          },
-        ]),
+        }),
       )
     })
 
@@ -312,36 +238,24 @@ describe("Chat session flow", () => {
     expect(getByRole("button", { name: "Cancel turn" })).toBeInTheDocument()
   })
 
-  test("cancel posts while running and prompt posts on existing session", async () => {
-    const fetchMock = globalThis.fetch as ReturnType<typeof mock>
+  test("cancel and a later prompt go on the gateway stream", async () => {
     const { getByRole } = renderChat()
-    await selectWorkspaceAndAgent(getByRole)
+    await startNewSession({ getByRole })
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {
       expect(getByRole("combobox", { name: "Session" })).toHaveValue(createdSession.title)
     })
 
-    await waitFor(() => {
-      expect(sockets.length).toBeGreaterThan(0)
-    })
-
+    const socket = gatewaySocket()
     act(() => {
-      sockets[0]?.dispatch(
+      socket?.dispatch(
         "message",
-        JSON.stringify([
-          {
-            type: "session.state",
-            cursor: "1",
-            occurredAt: "2026-07-24T12:00:00.000Z",
-            workspaceId: "ws_01",
-            sessionId: createdSession.sessionId,
-            payload: {
-              sessionId: createdSession.sessionId,
-              state: "running",
-            },
-          },
-        ]),
+        JSON.stringify({
+          type: "subscribed",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+        }),
       )
     })
 
@@ -352,31 +266,17 @@ describe("Chat session flow", () => {
     fireEvent.click(getByRole("button", { name: "Cancel turn" }))
 
     await waitFor(() => {
-      expect(
-        fetchMock.mock.calls.some(
-          ([input, init]) =>
-            requestUrl(input).includes(`/v1/sessions/${createdSession.sessionId}/cancel`) &&
-            (init as RequestInit | undefined)?.method === "POST",
-        ),
-      ).toBe(true)
+      expect(sentStreamMessages(socket).some((message) => message.type === "cancel")).toBe(true)
     })
 
     act(() => {
-      sockets[0]?.dispatch(
+      socket?.dispatch(
         "message",
-        JSON.stringify([
-          {
-            type: "session.state",
-            cursor: "2",
-            occurredAt: "2026-07-24T12:00:01.000Z",
-            workspaceId: "ws_01",
-            sessionId: createdSession.sessionId,
-            payload: {
-              sessionId: createdSession.sessionId,
-              state: "idle",
-            },
-          },
-        ]),
+        JSON.stringify({
+          type: "cancelled",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+        }),
       )
     })
 
@@ -388,51 +288,41 @@ describe("Chat session flow", () => {
 
     await waitFor(() => {
       expect(
-        fetchMock.mock.calls.some(
-          ([input, init]) =>
-            requestUrl(input).includes(`/v1/sessions/${createdSession.sessionId}/prompt`) &&
-            (init as RequestInit | undefined)?.method === "POST",
-        ),
-      ).toBe(true)
+        sentStreamMessages(socket).filter((message) => message.type === "prompt"),
+      ).toHaveLength(2)
     })
   })
 
-  test("reconnect clears and rebuilds transcript from replay", async () => {
+  test("switch clears transcript then load replay fills it", async () => {
     const { getByRole, getByText, queryByText } = renderChat()
-    await selectWorkspaceAndAgent(getByRole)
+    await startNewSession({ getByRole })
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {
-      expect(sockets.length).toBe(1)
+      expect(gatewaySocket()).toBeDefined()
     })
 
+    const socket = gatewaySocket()
     act(() => {
-      sockets[0]?.dispatch(
+      socket?.dispatch(
         "message",
-        JSON.stringify([
-          {
-            type: "turn.started",
-            cursor: "1",
-            occurredAt: "2026-07-24T12:00:00.000Z",
-            workspaceId: "ws_01",
-            sessionId: createdSession.sessionId,
-            payload: {
-              turnId: promptTurnId,
-              text: "Explain auth",
-            },
+        JSON.stringify({
+          type: "subscribed",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+        }),
+      )
+      socket?.dispatch(
+        "message",
+        JSON.stringify({
+          type: "session_update",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+          update: {
+            sessionUpdate: "agent_message_chunk",
+            text: "stale",
           },
-          {
-            type: "session.output.delta",
-            cursor: "2",
-            occurredAt: "2026-07-24T12:00:01.000Z",
-            workspaceId: "ws_01",
-            sessionId: createdSession.sessionId,
-            payload: {
-              turnId: promptTurnId,
-              text: "stale",
-            },
-          },
-        ]),
+        }),
       )
     })
 
@@ -448,51 +338,44 @@ describe("Chat session flow", () => {
     await joinSessionByName({ getByRole }, createdSession.title)
 
     await waitFor(() => {
-      expect(sockets.length).toBe(2)
+      expect(queryByText("stale")).not.toBeInTheDocument()
     })
 
-    expect(queryByText("stale")).not.toBeInTheDocument()
-
     act(() => {
-      sockets[1]?.dispatch(
+      socket?.dispatch(
         "message",
-        JSON.stringify([
-          {
-            type: "turn.started",
-            cursor: "1",
-            occurredAt: "2026-07-24T12:00:00.000Z",
-            workspaceId: "ws_01",
-            sessionId: createdSession.sessionId,
-            payload: {
-              turnId: promptTurnId,
-              text: "Explain auth",
-            },
+        JSON.stringify({
+          type: "subscribed",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+        }),
+      )
+      socket?.dispatch(
+        "message",
+        JSON.stringify({
+          type: "session_update",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+          update: {
+            sessionUpdate: "tool_call",
+            toolCallId: "tool_01",
+            toolName: "read",
+            kind: "read",
+            status: "pending",
           },
-          {
-            type: "session.tool.started",
-            cursor: "2",
-            occurredAt: "2026-07-24T12:00:01.000Z",
-            workspaceId: "ws_01",
-            sessionId: createdSession.sessionId,
-            payload: {
-              turnId: promptTurnId,
-              toolCallId: "tool_01",
-              toolName: "read",
-              toolKind: "read",
-            },
+        }),
+      )
+      socket?.dispatch(
+        "message",
+        JSON.stringify({
+          type: "session_update",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+          update: {
+            sessionUpdate: "agent_message_chunk",
+            text: "rebuilt",
           },
-          {
-            type: "session.output.delta",
-            cursor: "3",
-            occurredAt: "2026-07-24T12:00:02.000Z",
-            workspaceId: "ws_01",
-            sessionId: createdSession.sessionId,
-            payload: {
-              turnId: promptTurnId,
-              text: "rebuilt",
-            },
-          },
-        ]),
+        }),
       )
     })
 
@@ -502,5 +385,52 @@ describe("Chat session flow", () => {
     expect(getByText("1 tool call · 1 running")).toBeInTheDocument()
     expect(getByText("read · pending")).toBeInTheDocument()
     expect(queryByText("stale")).not.toBeInTheDocument()
+  })
+
+  test("permission reply goes on the gateway stream", async () => {
+    const { getByRole } = renderChat()
+    await startNewSession({ getByRole })
+    await typeAndSend(getByRole, "Explain auth")
+
+    await waitFor(() => {
+      expect(gatewaySocket()).toBeDefined()
+    })
+
+    const socket = gatewaySocket()
+    act(() => {
+      socket?.dispatch(
+        "message",
+        JSON.stringify({
+          type: "subscribed",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+        }),
+      )
+      socket?.dispatch(
+        "message",
+        JSON.stringify({
+          type: "permission_request",
+          requestId: "req-1",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+          params: {
+            options: [{ optionId: "allow-once", name: "Allow once" }],
+            toolCall: { toolCallId: "t1", name: "edit" },
+          },
+        }),
+      )
+    })
+
+    await waitFor(() => {
+      expect(getByRole("button", { name: "Allow once" })).toBeInTheDocument()
+    })
+
+    fireEvent.click(getByRole("button", { name: "Allow once" }))
+
+    await waitFor(() => {
+      expect(
+        sentStreamMessages(socket).some((message) => message.type === "permission_reply"),
+      ).toBe(true)
+    })
   })
 })

@@ -146,4 +146,40 @@ describe("session hub", () => {
       outcome: { outcome: "selected", optionId: "allow-once" },
     })
   })
+
+  test("prompt_complete and cancelled fan out to session subscribers", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      promptSession: async () => ({ ok: true }),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const a = collectSink()
+    const b = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    hub.addSubscriber({ id: "b", sink: b.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+    await hub.subscribe({ subscriberId: "b", agentId: "cursor", sessionId: "s1" })
+
+    await hub.prompt({
+      subscriberId: "a",
+      agentId: "cursor",
+      sessionId: "s1",
+      text: "hello",
+    })
+    expect(a.messages.some((m) => m.type === "prompt_complete")).toBe(true)
+    expect(b.messages.some((m) => m.type === "prompt_complete")).toBe(true)
+
+    await hub.cancel({
+      subscriberId: "b",
+      agentId: "cursor",
+      sessionId: "s1",
+    })
+    expect(a.messages.some((m) => m.type === "cancelled")).toBe(true)
+    expect(b.messages.some((m) => m.type === "cancelled")).toBe(true)
+  })
 })

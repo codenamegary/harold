@@ -1,8 +1,8 @@
 import React from "react"
-import { PermissionRequest } from "contracts/http/permission"
+import { StreamPermission } from "../permission/parse.stream.permission"
 
 type PermissionPanelProps = {
-  request: PermissionRequest
+  request: StreamPermission
   submittingOptionId: string | null
   onSelectOption: (optionId: string) => void
 }

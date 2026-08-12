@@ -398,7 +398,14 @@ export const createSessionHub = ({
           agentId: params.agentId,
           sessionId: params.sessionId,
         })
+        return
       }
+
+      fanOut(sessionKey(params.agentId, params.sessionId), {
+        type: "prompt_complete",
+        agentId: params.agentId,
+        sessionId: params.sessionId,
+      })
     },
     cancel: async (params) => {
       const subscriber = ensureSubscribed(params)
@@ -415,7 +422,14 @@ export const createSessionHub = ({
           agentId: params.agentId,
           sessionId: params.sessionId,
         })
+        return
       }
+
+      fanOut(sessionKey(params.agentId, params.sessionId), {
+        type: "cancelled",
+        agentId: params.agentId,
+        sessionId: params.sessionId,
+      })
     },
     handleSessionUpdate: ({ agentId, sessionId, update }) => {
       fanOut(sessionKey(agentId, sessionId), {
