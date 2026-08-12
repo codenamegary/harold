@@ -26,6 +26,7 @@ import {
 import { isAcpJsonRpcError } from "../transport/json-rpc-error"
 import { AcpOperationContext, createJsonRpcTransport, JsonRpcTransport } from "../transport/json-rpc-transport"
 import { registerAcpClientHandlers, createUnavailableRequestExtensionRpc, createUnavailableRequestPermission } from "../client/register-handlers"
+import { resolveExtensionHandlers } from "../client/extensions/extension.handlers"
 import { createSessionBindingRegistry } from "../client/session-binding-registry"
 import { spawnAgentProcess, SpawnedAgentProcess } from "./spawn-agent-process"
 import { createAcpJsonRpcJournalObserver } from "../journal/json.rpc.observer"
@@ -353,11 +354,14 @@ export const createAcpSupervisor = ({
 
     registerAcpClientHandlers({
       transport,
-      profile: resolved.profile,
       agentId,
       sessionBindingRegistry,
       requestPermission,
-      requestExtensionRpc,
+      extensionHandlers: resolveExtensionHandlers(
+        agentId,
+        requestExtensionRpc,
+        resolved.profile.extensionHandlers,
+      ),
     })
 
     transport.onNotification("session/update", (params) => {

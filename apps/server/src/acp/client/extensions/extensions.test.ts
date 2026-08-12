@@ -1,21 +1,19 @@
 import { describe, expect, test } from "bun:test"
 import { createCursorExtensionHandlers } from "./cursor"
+import { extensionHandlers, resolveExtensionHandlers } from "./extension.handlers"
 import { resolveExtensionHandler } from "./types"
 
 describe("extension handlers", () => {
   test("cursor ask_question forwards to requestExtensionRpc", async () => {
     const calls: unknown[] = []
-    const handlers = createCursorExtensionHandlers({
-      agentId: "cursor",
-      requestExtensionRpc: async (input) => {
-        calls.push(input)
-        return {
-          outcome: {
-            outcome: "answered",
-            answers: [{ questionId: "q1", selectedOptionIds: ["first"] }],
-          },
-        }
-      },
+    const handlers = createCursorExtensionHandlers("cursor", async (input) => {
+      calls.push(input)
+      return {
+        outcome: {
+          outcome: "answered",
+          answers: [{ questionId: "q1", selectedOptionIds: ["first"] }],
+        },
+      }
     })
 
     const result = await handlers["cursor/ask_question"]({
@@ -59,12 +57,9 @@ describe("extension handlers", () => {
   })
 
   test("cursor create_plan forwards to requestExtensionRpc", async () => {
-    const handlers = createCursorExtensionHandlers({
-      agentId: "cursor",
-      requestExtensionRpc: async () => ({
-        outcome: { outcome: "accepted" },
-      }),
-    })
+    const handlers = createCursorExtensionHandlers("cursor", async () => ({
+      outcome: { outcome: "accepted" },
+    }))
 
     const result = await handlers["cursor/create_plan"]({
       sessionId: "sess-2",
@@ -80,10 +75,7 @@ describe("extension handlers", () => {
 
   test("unknown extensions are logged and rejected", async () => {
     const logged: string[] = []
-    const handlers = createCursorExtensionHandlers({
-      agentId: "cursor",
-      requestExtensionRpc: async () => ({}),
-    })
+    const handlers = createCursorExtensionHandlers("cursor", async () => ({}))
     const handler = resolveExtensionHandler({
       method: "vendor/unknown",
       extensionHandlers: handlers,
@@ -92,5 +84,22 @@ describe("extension handlers", () => {
 
     expect(logged).toEqual(["vendor/unknown"])
     expect(() => handler?.({})).toThrow("unknown extension: vendor/unknown")
+  })
+
+  test("resolveExtensionHandlers uses the cursor factory and lets profile handlers win", async () => {
+    expect(extensionHandlers.cursor).toBe(createCursorExtensionHandlers)
+
+    const rpc = async () => ({})
+    const resolved = resolveExtensionHandlers("cursor", rpc, {
+      "cursor/ask_question": () => ({ fromProfile: true }),
+    })
+
+    expect(await resolved["cursor/ask_question"]({})).toEqual({ fromProfile: true })
+    expect(resolved["cursor/create_plan"]).toBeDefined()
+  })
+
+  test("resolveExtensionHandlers returns only profile handlers for agents with no factory", () => {
+    const profile = { "vendor/custom": () => ({ ok: true }) }
+    expect(resolveExtensionHandlers("opencode", async () => ({}), profile)).toEqual(profile)
   })
 })

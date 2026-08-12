@@ -1,17 +1,15 @@
 import { AgentId } from "contracts/http/agent-settings"
+import { RequestExtensionRpcFn } from "../supervisor/acp-supervisor-types"
 import { createAcpFsHandlers } from "./handlers/fs"
 import { createAcpPermissionHandler } from "./handlers/permission"
 import { createAcpTerminalHandlers } from "./handlers/terminal"
-import { createCursorExtensionHandlers } from "./extensions/cursor"
-import { AgentProfile } from "../agent-profile"
-import { resolveExtensionHandler } from "./extensions/types"
+import { ExtensionHandlers, resolveExtensionHandler } from "./extensions/types"
 import { isAcpJsonRpcError } from "../transport/json-rpc-error"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
 import { SessionBindingRegistry } from "./session-binding-registry"
 
 export type RegisterAcpClientHandlersParams = {
   transport: JsonRpcTransport
-  profile: AgentProfile
   agentId: AgentId
   sessionBindingRegistry: SessionBindingRegistry
   requestPermission: (input: {
@@ -19,12 +17,7 @@ export type RegisterAcpClientHandlersParams = {
     sessionId: string
     params: unknown
   }) => Promise<unknown>
-  requestExtensionRpc: (input: {
-    agentId: AgentId
-    sessionId: string
-    method: string
-    params: unknown
-  }) => Promise<unknown>
+  extensionHandlers: ExtensionHandlers
   logUnknownExtension?: (method: string) => void
 }
 
@@ -36,11 +29,10 @@ const defaultLogUnknownExtension = (method: string) => {
 
 export const registerAcpClientHandlers = ({
   transport,
-  profile,
   agentId,
   sessionBindingRegistry,
   requestPermission,
-  requestExtensionRpc,
+  extensionHandlers,
   logUnknownExtension = defaultLogUnknownExtension,
 }: RegisterAcpClientHandlersParams) => {
   const fsHandlers = createAcpFsHandlers({ sessionBindingRegistry })
@@ -49,13 +41,6 @@ export const registerAcpClientHandlers = ({
     agentId,
     requestPermission,
   })
-
-  const extensionHandlers = {
-    ...profile.extensionHandlers,
-    ...(agentId === "cursor"
-      ? createCursorExtensionHandlers({ agentId, requestExtensionRpc })
-      : {}),
-  }
 
   const coreHandlers: Record<string, AcpRequestHandler> = {
     ...fsHandlers,
@@ -129,6 +114,6 @@ export const createUnavailableRequestPermission =
   }
 
 export const createUnavailableRequestExtensionRpc =
-  (): RegisterAcpClientHandlersParams["requestExtensionRpc"] => async () => {
+  (): RequestExtensionRpcFn => async () => {
     throw new Error("extension request unavailable")
   }
