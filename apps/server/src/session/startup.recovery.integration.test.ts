@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { eq } from "drizzle-orm"
 import {
-  CreateSessionResponseSchema,
   SessionSchema,
 } from "contracts/http/session"
 import { PROBLEM_TYPES, ConflictProblemSchema } from "contracts/http/error"
@@ -19,6 +18,7 @@ import {
   createTempDataDir,
   createTestAppResources,
   enableAgent,
+  seedBoundSession,
   seedWorkspace,
 } from "../test-support/create-test-app"
 
@@ -56,11 +56,44 @@ const waitForSessionState = async (params: {
 }
 
 const fakeAcpOptions = {
-  capabilities: { loadSession: true, sessionClose: true },
+  capabilities: { loadSession: true, sessionClose: true, sessionList: true },
   sessionNewSessionId: "startup-recovery-session",
   sessionLoadSessionId: "startup-recovery-session-loaded",
   emitSessionUpdatesOnPrompt: true,
 } as const
+
+const seedRunningSession = async (params: {
+  app: Awaited<ReturnType<typeof createFirstServer>>["app"]
+  database: ReturnType<typeof openDatabase>
+  acpSupervisor: Awaited<ReturnType<typeof createFirstServer>>["acpSupervisor"]
+  workspaceId: string
+  workspaceDir: string
+  name: string
+}) => {
+  const seeded = await seedBoundSession({
+    database: params.database,
+    acpSupervisor: params.acpSupervisor,
+    workspaceId: params.workspaceId,
+    workspacePath: params.workspaceDir,
+    agentId: "cursor",
+    name: params.name,
+  })
+
+  const promptResponse = await params.app.inject({
+    method: "POST",
+    url: `/v1/sessions/${seeded.sessionId}/prompt`,
+    payload: { text: params.name },
+  })
+  expect(promptResponse.statusCode).toBe(202)
+
+  await waitForSessionState({
+    app: params.app,
+    sessionId: seeded.sessionId,
+    expected: "running",
+  })
+
+  return seeded
+}
 
 const createFirstServer = async (dataDir: string) => {
   const config = parseConfig({
@@ -142,36 +175,23 @@ describe("startup recovery for former-running sessions", () => {
   test("auto-loads a former-running offline session to idle when supervisor becomes ready", async () => {
     const dataDir = await createTempDataDir(resources)
     const first = await createFirstServer(dataDir)
-    const { workspaceId } = await seedWorkspace(first.app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(first.app, dataDir)
     await enableAgent(first.app, "cursor", whichFn)
 
-    const created = CreateSessionResponseSchema.parse(
-      JSON.parse(
-        (
-          await first.app.inject({
-            method: "POST",
-            url: "/v1/sessions",
-            payload: {
-              workspaceId,
-              agentId: "cursor",
-              text: "Recover on boot",
-            },
-          })
-        ).body,
-      ),
-    )
-
-    await waitForSessionState({
+    const seeded = await seedRunningSession({
       app: first.app,
-      sessionId: created.id,
-      expected: "running",
+      database: first.database,
+      acpSupervisor: first.acpSupervisor,
+      workspaceId,
+      workspaceDir,
+      name: "Recover on boot",
     })
 
     await shutdownServer(first)
 
     const readDatabase = openDatabase({ dataDir })
     const sessionRepository = createSessionRepository(readDatabase)
-    const offline = sessionRepository.getById({ id: created.id })
+    const offline = sessionRepository.getById({ id: seeded.sessionId })
     expect(offline.ok).toBe(true)
     if (!offline.ok) {
       return
@@ -185,7 +205,7 @@ describe("startup recovery for former-running sessions", () => {
 
     await waitForSessionState({
       app: second.app,
-      sessionId: created.id,
+      sessionId: seeded.sessionId,
       expected: "idle",
     })
 
@@ -199,28 +219,21 @@ describe("startup recovery for former-running sessions", () => {
   test("does not auto-load idle sessions at boot", async () => {
     const dataDir = await createTempDataDir(resources)
     const first = await createFirstServer(dataDir)
-    const { workspaceId } = await seedWorkspace(first.app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(first.app, dataDir)
     await enableAgent(first.app, "cursor", whichFn)
 
-    const created = CreateSessionResponseSchema.parse(
-      JSON.parse(
-        (
-          await first.app.inject({
-            method: "POST",
-            url: "/v1/sessions",
-            payload: {
-              workspaceId,
-              agentId: "cursor",
-              text: "Idle stays waiting",
-            },
-          })
-        ).body,
-      ),
-    )
+    const seeded = await seedBoundSession({
+      database: first.database,
+      acpSupervisor: first.acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Idle stays waiting",
+    })
 
     await waitForSessionState({
       app: first.app,
-      sessionId: created.id,
+      sessionId: seeded.sessionId,
       expected: "idle",
     })
 
@@ -230,7 +243,7 @@ describe("startup recovery for former-running sessions", () => {
     const row = readDatabase.db
       .select()
       .from(sessions)
-      .where(eq(sessions.id, created.id))
+      .where(eq(sessions.id, seeded.sessionId))
       .get()
     expect(row?.state).toBe("idle")
     readDatabase.close()
@@ -243,7 +256,7 @@ describe("startup recovery for former-running sessions", () => {
 
     const after = SessionSchema.parse(
       JSON.parse(
-        (await second.app.inject({ method: "GET", url: `/v1/sessions/${created.id}` })).body,
+        (await second.app.inject({ method: "GET", url: `/v1/sessions/${seeded.sessionId}` })).body,
       ),
     )
     expect(after.state).toBe("idle")
@@ -257,28 +270,21 @@ describe("startup recovery for former-running sessions", () => {
   test("heals stale running on boot then auto-loads to idle", async () => {
     const dataDir = await createTempDataDir(resources)
     const first = await createFirstServer(dataDir)
-    const { workspaceId } = await seedWorkspace(first.app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(first.app, dataDir)
     await enableAgent(first.app, "cursor", whichFn)
 
-    const created = CreateSessionResponseSchema.parse(
-      JSON.parse(
-        (
-          await first.app.inject({
-            method: "POST",
-            url: "/v1/sessions",
-            payload: {
-              workspaceId,
-              agentId: "cursor",
-              text: "Hard kill mid turn",
-            },
-          })
-        ).body,
-      ),
-    )
+    const seeded = await seedBoundSession({
+      database: first.database,
+      acpSupervisor: first.acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Hard kill mid turn",
+    })
 
     await waitForSessionState({
       app: first.app,
-      sessionId: created.id,
+      sessionId: seeded.sessionId,
       expected: "idle",
     })
 
@@ -291,12 +297,12 @@ describe("startup recovery for former-running sessions", () => {
     staleDatabase.db
       .update(sessions)
       .set({ state: "running" })
-      .where(eq(sessions.id, created.id))
+      .where(eq(sessions.id, seeded.sessionId))
       .run()
     const staleRow = staleDatabase.db
       .select()
       .from(sessions)
-      .where(eq(sessions.id, created.id))
+      .where(eq(sessions.id, seeded.sessionId))
       .get()
     expect(staleRow?.state).toBe("running")
     expect(staleRow?.resumable).toBe(true)
@@ -308,7 +314,7 @@ describe("startup recovery for former-running sessions", () => {
 
     await waitForSessionState({
       app: second.app,
-      sessionId: created.id,
+      sessionId: seeded.sessionId,
       expected: "idle",
     })
 
@@ -322,29 +328,16 @@ describe("startup recovery for former-running sessions", () => {
   test("failed load marks error, clears resumable, and keeps history", async () => {
     const dataDir = await createTempDataDir(resources)
     const first = await createFirstServer(dataDir)
-    const { workspaceId } = await seedWorkspace(first.app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(first.app, dataDir)
     await enableAgent(first.app, "cursor", whichFn)
 
-    const created = CreateSessionResponseSchema.parse(
-      JSON.parse(
-        (
-          await first.app.inject({
-            method: "POST",
-            url: "/v1/sessions",
-            payload: {
-              workspaceId,
-              agentId: "cursor",
-              text: "Fail on recovery",
-            },
-          })
-        ).body,
-      ),
-    )
-
-    await waitForSessionState({
+    const seeded = await seedRunningSession({
       app: first.app,
-      sessionId: created.id,
-      expected: "running",
+      database: first.database,
+      acpSupervisor: first.acpSupervisor,
+      workspaceId,
+      workspaceDir,
+      name: "Fail on recovery",
     })
 
     const journal = createEventJournalRepository(first.database)
@@ -363,13 +356,13 @@ describe("startup recovery for former-running sessions", () => {
 
     await waitForSessionState({
       app: second.app,
-      sessionId: created.id,
+      sessionId: seeded.sessionId,
       expected: "error",
     })
 
     const failed = SessionSchema.parse(
       JSON.parse(
-        (await second.app.inject({ method: "GET", url: `/v1/sessions/${created.id}` })).body,
+        (await second.app.inject({ method: "GET", url: `/v1/sessions/${seeded.sessionId}` })).body,
       ),
     )
     expect(failed.name).toBe("Fail on recovery")
@@ -378,7 +371,7 @@ describe("startup recovery for former-running sessions", () => {
     const row = readDatabase.db
       .select()
       .from(sessions)
-      .where(eq(sessions.id, created.id))
+      .where(eq(sessions.id, seeded.sessionId))
       .get()
     expect(row?.resumable).toBe(false)
 
@@ -393,7 +386,7 @@ describe("startup recovery for former-running sessions", () => {
 
     const promptResponse = await second.app.inject({
       method: "POST",
-      url: `/v1/sessions/${created.id}/prompt`,
+      url: `/v1/sessions/${seeded.sessionId}/prompt`,
       payload: { text: "should fail" },
     })
     const problem = ConflictProblemSchema.parse(JSON.parse(promptResponse.body))

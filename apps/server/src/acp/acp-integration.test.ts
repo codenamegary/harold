@@ -88,7 +88,7 @@ describe("ACP supervisor integration", () => {
     expect(status.acp).toEqual({ state: "ready", activeSessions: 0 })
     expect(acpSupervisor.getAgentCapabilities()).toEqual({
       loadSession: false,
-      sessionCapabilities: { close: false },
+      sessionCapabilities: { close: false, list: true },
     })
 
     await acpSupervisor.stop()
@@ -138,7 +138,7 @@ describe("ACP supervisor integration", () => {
     database.close()
   })
 
-  test("PATCH enable does not start the supervisor", async () => {
+  test("PATCH enable starts the supervisor", async () => {
     const { app, acpSupervisor, database } = await createTestHarness()
 
     const enableResponse = await app.inject({
@@ -147,12 +147,14 @@ describe("ACP supervisor integration", () => {
       payload: { enabled: true, path: "/fake/agent" },
     })
     expect(enableResponse.statusCode).toBe(200)
-    expect(acpSupervisor.getStatus().state).toBe("stopped")
+    expect(acpSupervisor.getStatus().state).toBe("ready")
+    expect(acpSupervisor.getRunningAgentIds()).toEqual(["cursor"])
 
     const statusResponse = await app.inject({ method: "GET", url: "/v1/status" })
     const status = StatusSchema.parse(JSON.parse(statusResponse.body))
-    expect(status.acp.state).toBe("stopped")
+    expect(status.acp.state).toBe("ready")
 
+    await acpSupervisor.stop()
     await app.close()
     database.close()
   })

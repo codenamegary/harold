@@ -6,7 +6,6 @@ import {
   ResolvePermissionRequestResponseSchema,
 } from "contracts/http/permission"
 import {
-  CreateSessionResponseSchema,
   SessionSchema,
 } from "contracts/http/session"
 import { WebSocket } from "ws"
@@ -17,6 +16,7 @@ import {
   createTestApp,
   createTestAppResources,
   enableAgent,
+  seedBoundSession,
   seedWorkspace,
 } from "../test-support/create-test-app"
 import { eventDataText } from "../test/event.data.text"
@@ -104,31 +104,36 @@ const collectEventsUntil = (params: {
 }
 
 const createPermissionSession = async (dataDir: string) => {
-  const { app, config } = await createTestApp(resources, dataDir, whichFn, undefined, {
-    capabilities: { loadSession: true, sessionClose: true },
+  const { app, config, database, acpSupervisor } = await createTestApp(resources, dataDir, whichFn, undefined, {
+    capabilities: { loadSession: true, sessionClose: true, sessionList: true },
     sessionNewSessionId: "fake-session-permission-http",
     sessionLoadSessionId: "fake-session-permission-http",
     emitPermissionRequestOnPrompt: true,
   })
 
-  const { workspaceId } = await seedWorkspace(app, dataDir)
+  const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
   await enableAgent(app, "cursor", whichFn)
 
-  const created = await app.inject({
-    method: "POST",
-    url: "/v1/sessions",
-    payload: {
-      workspaceId,
-      agentId: "cursor",
-      text: "Permission prompt",
-    },
+  const seeded = await seedBoundSession({
+    database,
+    acpSupervisor,
+    workspaceId,
+    workspacePath: workspaceDir,
+    agentId: "cursor",
+    name: "Permission prompt",
   })
-  const session = CreateSessionResponseSchema.parse(JSON.parse(created.body))
+
+  const promptResponse = await app.inject({
+    method: "POST",
+    url: `/v1/sessions/${seeded.sessionId}/prompt`,
+    payload: { text: "Permission prompt" },
+  })
+  expect(promptResponse.statusCode).toBe(202)
 
   await waitFor(async () => {
     const pendingResponse = await app.inject({
       method: "GET",
-      url: `/v1/sessions/${session.id}/permissions?status=pending`,
+      url: `/v1/sessions/${seeded.sessionId}/permissions?status=pending`,
     })
     if (pendingResponse.statusCode !== 200) {
       return false
@@ -143,7 +148,7 @@ const createPermissionSession = async (dataDir: string) => {
       (
         await app.inject({
           method: "GET",
-          url: `/v1/sessions/${session.id}/permissions?status=pending`,
+          url: `/v1/sessions/${seeded.sessionId}/permissions?status=pending`,
         })
       ).body,
     ),
@@ -154,38 +159,51 @@ const createPermissionSession = async (dataDir: string) => {
     throw new Error("expected pending permission")
   }
 
-  return { app, config, session, request, workspaceId }
+  return {
+    app,
+    config,
+    session: { id: seeded.sessionId },
+    request,
+    workspaceId,
+    database,
+    acpSupervisor,
+    workspaceDir,
+  }
 }
 
 describe("HTTP permission decisions", () => {
   test("PATCH permission resolves pending ACP work and streams resolution", async () => {
     const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir, whichFn, undefined, {
-      capabilities: { loadSession: true, sessionClose: true },
+    const { app, config, database, acpSupervisor } = await createTestApp(resources, dataDir, whichFn, undefined, {
+      capabilities: { loadSession: true, sessionClose: true, sessionList: true },
       sessionNewSessionId: "fake-session-permission-http",
       sessionLoadSessionId: "fake-session-permission-http",
       emitPermissionRequestOnPrompt: true,
     })
 
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const created = await app.inject({
-      method: "POST",
-      url: "/v1/sessions",
-      payload: {
-        workspaceId,
-        agentId: "cursor",
-        text: "Permission prompt",
-      },
+    const seeded = await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Permission prompt",
     })
-    const session = CreateSessionResponseSchema.parse(JSON.parse(created.body))
-    expect(session.state).toBe("running")
+
+    const promptResponse = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${seeded.sessionId}/prompt`,
+      payload: { text: "Permission prompt" },
+    })
+    expect(promptResponse.statusCode).toBe(202)
 
     await waitFor(async () => {
       const pendingResponse = await app.inject({
         method: "GET",
-        url: `/v1/sessions/${session.id}/permissions?status=pending`,
+        url: `/v1/sessions/${seeded.sessionId}/permissions?status=pending`,
       })
       if (pendingResponse.statusCode !== 200) {
         return false
@@ -200,7 +218,7 @@ describe("HTTP permission decisions", () => {
         (
           await app.inject({
             method: "GET",
-            url: `/v1/sessions/${session.id}/permissions?status=pending`,
+            url: `/v1/sessions/${seeded.sessionId}/permissions?status=pending`,
           })
         ).body,
       ),
@@ -214,21 +232,21 @@ describe("HTTP permission decisions", () => {
 
     await app.inject({
       method: "PATCH",
-      url: `/v1/sessions/${session.id}/permissions/${firstRequest.id}`,
+      url: `/v1/sessions/${seeded.sessionId}/permissions/${firstRequest.id}`,
       payload: { status: "resolved", optionId: "allow-once" },
     })
 
     await waitFor(async () => {
       const latest = await app.inject({
         method: "GET",
-        url: `/v1/sessions/${session.id}`,
+        url: `/v1/sessions/${seeded.sessionId}`,
       })
       return SessionSchema.parse(JSON.parse(latest.body)).state === "idle"
     })
 
     const { wsUrl } = await getListeningUrl(app, config)
     const { eventsPromise, whenOpen } = collectEventsUntil({
-      url: `${wsUrl}?sessionId=${session.id}`,
+      url: `${wsUrl}?sessionId=${seeded.sessionId}`,
       until: (events) =>
         events.some((event) => event.type === "session.permission.requested"),
       timeoutMs: 10000,
@@ -237,7 +255,7 @@ describe("HTTP permission decisions", () => {
     await whenOpen
     await app.inject({
       method: "POST",
-      url: `/v1/sessions/${session.id}/prompt`,
+      url: `/v1/sessions/${seeded.sessionId}/prompt`,
       payload: { text: "Need permission" },
     })
 
@@ -250,7 +268,7 @@ describe("HTTP permission decisions", () => {
 
     const pending = await app.inject({
       method: "GET",
-      url: `/v1/sessions/${session.id}/permissions?status=pending`,
+      url: `/v1/sessions/${seeded.sessionId}/permissions?status=pending`,
     })
     const pendingBody = PermissionRequestCollectionSchema.parse(JSON.parse(pending.body))
     expect(pendingBody.items.length).toBe(1)
@@ -258,7 +276,7 @@ describe("HTTP permission decisions", () => {
 
     const resolved = await app.inject({
       method: "PATCH",
-      url: `/v1/sessions/${session.id}/permissions/${requested.payload.requestId}`,
+      url: `/v1/sessions/${seeded.sessionId}/permissions/${requested.payload.requestId}`,
       payload: { status: "resolved", optionId: "allow-once" },
     })
     const resolvedBody = ResolvePermissionRequestResponseSchema.parse(JSON.parse(resolved.body))
@@ -267,7 +285,7 @@ describe("HTTP permission decisions", () => {
     await waitFor(async () => {
       const latest = await app.inject({
         method: "GET",
-        url: `/v1/sessions/${session.id}`,
+        url: `/v1/sessions/${seeded.sessionId}`,
       })
       return SessionSchema.parse(JSON.parse(latest.body)).state === "idle"
     })
@@ -277,7 +295,7 @@ describe("HTTP permission decisions", () => {
         (
           await app.inject({
             method: "GET",
-            url: `/v1/sessions/${session.id}/permissions?status=pending`,
+            url: `/v1/sessions/${seeded.sessionId}/permissions?status=pending`,
           })
         ).body,
       ),
@@ -328,20 +346,18 @@ describe("HTTP permission decisions", () => {
     const dataDir = await createTempDataDir(resources)
     const first = await createPermissionSession(dataDir)
 
-    const secondCreated = await first.app.inject({
-      method: "POST",
-      url: "/v1/sessions",
-      payload: {
-        workspaceId: first.workspaceId,
-        agentId: "cursor",
-        text: "Second session",
-      },
+    const secondSeeded = await seedBoundSession({
+      database: first.database,
+      acpSupervisor: first.acpSupervisor,
+      workspaceId: first.workspaceId,
+      workspacePath: first.workspaceDir,
+      agentId: "cursor",
+      name: "Second session",
     })
-    const secondSession = CreateSessionResponseSchema.parse(JSON.parse(secondCreated.body))
 
     const wrongSession = await first.app.inject({
       method: "PATCH",
-      url: `/v1/sessions/${secondSession.id}/permissions/${first.request.id}`,
+      url: `/v1/sessions/${secondSeeded.sessionId}/permissions/${first.request.id}`,
       payload: { status: "resolved", optionId: "allow-once" },
     })
     expect(wrongSession.statusCode).toBe(409)
@@ -357,7 +373,7 @@ describe("HTTP permission decisions", () => {
     resources.takeFakeProcesses()
 
     const restarted = await createTestApp(resources, dataDir, whichFn, undefined, {
-      capabilities: { loadSession: true, sessionClose: true },
+      capabilities: { loadSession: true, sessionClose: true, sessionList: true },
       sessionNewSessionId: "fake-session-permission-http",
       sessionLoadSessionId: "fake-session-permission-http",
       emitPermissionRequestOnPrompt: true,

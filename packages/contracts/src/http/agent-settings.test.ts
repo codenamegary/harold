@@ -20,6 +20,7 @@ const validAgentSettings = {
   present: false,
   popular: true,
   deletable: false,
+  sessionListSupported: true,
 }
 
 describe("AgentIdSchema", () => {
@@ -61,6 +62,7 @@ describe("AgentSettingsSchema", () => {
       present: true,
       popular: true,
       deletable: false,
+  sessionListSupported: true,
     }
 
     expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
@@ -77,6 +79,7 @@ describe("AgentSettingsSchema", () => {
       present: true,
       popular: false,
       deletable: true,
+  sessionListSupported: true,
     }
 
     expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
@@ -261,6 +264,7 @@ describe("AgentSettingsCollectionSchema", () => {
           present: false,
           popular: true,
           deletable: false,
+  sessionListSupported: true,
         },
       ],
     }

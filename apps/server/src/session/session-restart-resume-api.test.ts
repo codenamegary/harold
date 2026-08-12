@@ -1,18 +1,19 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { CreateSessionResponseSchema,
-  SessionSchema } from "contracts/http/session"
+import { SessionSchema } from "contracts/http/session"
 import { openDatabase } from "../persistence/database"
 import { createServer } from "../bootstrap/server"
 import { createRuntime } from "../runtime/runtime"
 import { parseConfig } from "../config/config"
 import {
+  acceptTestExecutablePath,
   cleanupTestAppResources,
+  createFakeSpawnFn,
   createTempDataDir,
   createTestApp,
   createTestAppResources,
   enableAgent,
+  seedBoundSession,
   seedWorkspace,
-  acceptTestExecutablePath,
 } from "../test-support/create-test-app"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 
@@ -30,31 +31,28 @@ describe("session restart and resume API", () => {
       binaryName === "agent" ? detectedPath : undefined
 
     const firstApp = await createTestApp(resources, dataDir, whichFn, undefined, {
-      capabilities: { loadSession: true, sessionClose: false },
+      capabilities: { loadSession: true, sessionClose: false, sessionList: true },
       sessionNewSessionId: "restart-session",
       sessionLoadSessionId: "restart-session-loaded",
     })
-    const { workspaceId } = await seedWorkspace(firstApp.app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(firstApp.app, dataDir)
     await enableAgent(firstApp.app, "cursor", whichFn)
 
-    const createResponse = await firstApp.app.inject({
-      method: "POST",
-      url: "/v1/sessions",
-      payload: {
-        workspaceId,
-        agentId: "cursor",
-        text: "Restart me",
-      },
+    const seeded = await seedBoundSession({
+      database: firstApp.database,
+      acpSupervisor: firstApp.acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Restart me",
     })
-    const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
-    expect(createResponse.statusCode).toBe(201)
 
     const waitForIdle = async () => {
       const startedAt = Date.now()
       while (Date.now() - startedAt < 5000) {
         const latest = await firstApp.app.inject({
           method: "GET",
-          url: `/v1/sessions/${created.id}`,
+          url: `/v1/sessions/${seeded.sessionId}`,
         })
         if (SessionSchema.parse(JSON.parse(latest.body)).state === "idle") {
           return
@@ -75,10 +73,8 @@ describe("session restart and resume API", () => {
     })
     const database = openDatabase({ dataDir: config.dataDir })
     const runtime = createRuntime("0.1.0")
-    const { spawnAgentProcessFn } = (
-      await import("../test-support/create-test-app")
-    ).createFakeSpawnFn(resources, {
-      capabilities: { loadSession: true, sessionClose: false },
+    const { spawnAgentProcessFn } = createFakeSpawnFn(resources, {
+      capabilities: { loadSession: true, sessionClose: false, sessionList: true },
       sessionNewSessionId: "restart-session",
       sessionLoadSessionId: "restart-session-loaded",
     })
@@ -94,7 +90,7 @@ describe("session restart and resume API", () => {
 
     const getBeforeResume = await secondApp.inject({
       method: "GET",
-      url: `/v1/sessions/${created.id}`,
+      url: `/v1/sessions/${seeded.sessionId}`,
     })
     const persisted = SessionSchema.parse(JSON.parse(getBeforeResume.body))
     expect(getBeforeResume.statusCode).toBe(200)
@@ -104,7 +100,7 @@ describe("session restart and resume API", () => {
 
     const resumeResponse = await secondApp.inject({
       method: "POST",
-      url: `/v1/sessions/${created.id}/resume`,
+      url: `/v1/sessions/${seeded.sessionId}/resume`,
     })
     const resumed = SessionSchema.parse(JSON.parse(resumeResponse.body))
     expect(resumeResponse.statusCode).toBe(200)

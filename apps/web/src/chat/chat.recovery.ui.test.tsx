@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { act, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router"
+import { Event } from "contracts/events/event"
 import { AgentSettingsCollectionSchema } from "contracts/http/agent-settings"
-import { SessionCollectionSchema } from "contracts/http/session"
+import { SessionCollectionSchema, SessionSchema, SessionState } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
-import { requestUrl } from "../test/request.url"
+import { hrefOf, requestUrl } from "../test/request.url"
 import { ChatPage } from "../shell/pages/ChatPage"
 import {
   clearChatTestSelection,
@@ -38,57 +40,98 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       present: true,
       popular: true,
       deletable: false,
+      sessionListSupported: true,
     },
   ],
 })
 
-const idleSession = {
+const workspacePath = "/home/operator/agent-server"
+
+const idleLegacy = SessionSchema.parse({
   id: "sess_01IDLE00000000000000001",
   workspaceId: "ws_01",
-  agentId: "cursor" as const,
+  agentId: "cursor",
   name: "Idle chat",
-  state: "idle" as const,
+  state: "idle",
   createdAt: "2026-07-24T12:00:00.000Z",
   lastUsedAt: "2026-07-24T12:00:00.000Z",
   archivedAt: null,
-}
+})
 
-const runningSession = {
+const runningLegacy = SessionSchema.parse({
   id: "sess_01RUNNING00000000000002",
   workspaceId: "ws_01",
-  agentId: "cursor" as const,
+  agentId: "cursor",
   name: "Running chat",
-  state: "running" as const,
+  state: "running",
   createdAt: "2026-07-24T12:01:00.000Z",
   lastUsedAt: "2026-07-24T12:01:00.000Z",
   archivedAt: null,
-}
+})
 
-const offlineSession = {
+const offlineLegacy = SessionSchema.parse({
   id: "sess_01OFFLINE00000000000003",
   workspaceId: "ws_01",
-  agentId: "cursor" as const,
+  agentId: "cursor",
   name: "Offline chat",
-  state: "offline" as const,
+  state: "offline",
   createdAt: "2026-07-24T12:02:00.000Z",
   lastUsedAt: "2026-07-24T12:02:00.000Z",
   archivedAt: null,
-}
+})
 
-const errorSession = {
+const errorLegacy = SessionSchema.parse({
   id: "sess_01ERROR0000000000000004",
   workspaceId: "ws_01",
-  agentId: "cursor" as const,
+  agentId: "cursor",
   name: "Error chat",
-  state: "error" as const,
+  state: "error",
   createdAt: "2026-07-24T12:03:00.000Z",
   lastUsedAt: "2026-07-24T12:03:00.000Z",
   archivedAt: null,
+})
+
+const legacyBySessionId: Record<string, typeof idleLegacy> = {
+  [idleLegacy.id]: idleLegacy,
+  [runningLegacy.id]: runningLegacy,
+  [offlineLegacy.id]: offlineLegacy,
+  [errorLegacy.id]: errorLegacy,
+}
+
+const idleSession = {
+  agentId: idleLegacy.agentId,
+  sessionId: idleLegacy.id,
+  cwd: workspacePath,
+  title: idleLegacy.name,
+  updatedAt: idleLegacy.lastUsedAt,
+}
+
+const runningSession = {
+  agentId: runningLegacy.agentId,
+  sessionId: runningLegacy.id,
+  cwd: workspacePath,
+  title: runningLegacy.name,
+  updatedAt: runningLegacy.lastUsedAt,
+}
+
+const offlineSession = {
+  agentId: offlineLegacy.agentId,
+  sessionId: offlineLegacy.id,
+  cwd: workspacePath,
+  title: offlineLegacy.name,
+  updatedAt: offlineLegacy.lastUsedAt,
+}
+
+const errorSession = {
+  agentId: errorLegacy.agentId,
+  sessionId: errorLegacy.id,
+  cwd: workspacePath,
+  title: errorLegacy.name,
+  updatedAt: errorLegacy.lastUsedAt,
 }
 
 const sessionsList = SessionCollectionSchema.parse({
   items: [idleSession, runningSession, offlineSession, errorSession],
-  page: { limit: 100, count: 4 },
 })
 
 const idleSessionLabel = "Idle chat"
@@ -96,8 +139,73 @@ const runningSessionLabel = "Running chat"
 const offlineSessionLabel = "Offline chat"
 const errorSessionLabel = "Error chat"
 
+type FakeSocket = {
+  url: string
+  readyState: number
+  close: () => void
+  send: (data: string) => void
+  addEventListener: (type: string, listener: (event: { data?: string }) => void) => void
+  dispatch: (type: string, data?: string) => void
+}
+
 const originalFetch = globalThis.fetch
 const originalWebSocket = globalThis.WebSocket
+
+const createFakeSocket = (url: string): FakeSocket => {
+  const listeners = new Map<string, Array<(event: { data?: string }) => void>>()
+
+  const socket: FakeSocket = {
+    url,
+    readyState: 1,
+    close: () => {
+      socket.readyState = 3
+    },
+    send: () => undefined,
+    addEventListener: (type, listener) => {
+      const current = listeners.get(type) ?? []
+      listeners.set(type, [...current, listener])
+    },
+    dispatch: (type, data) => {
+      const current = listeners.get(type) ?? []
+      current.forEach((listener) => listener({ data }))
+    },
+  }
+
+  return socket
+}
+
+const isSessionEventSocket = (socket: FakeSocket, sessionId: string) =>
+  socket.url.includes("/v1/events") && socket.url.includes(`sessionId=${sessionId}`)
+
+const sessionStateEvent = (params: {
+  sessionId: string
+  state: SessionState
+}): Event => ({
+  type: "session.state",
+  cursor: "1",
+  occurredAt: "2026-07-24T12:00:00.000Z",
+  workspaceId: "ws_01",
+  sessionId: params.sessionId,
+  payload: {
+    sessionId: params.sessionId,
+    state: params.state,
+  },
+})
+
+const dispatchSessionState = async (
+  sockets: FakeSocket[],
+  sessionId: string,
+  state: SessionState,
+) => {
+  await waitFor(() => {
+    expect(sockets.some((socket) => isSessionEventSocket(socket, sessionId))).toBe(true)
+  })
+
+  const socket = sockets.find((candidate) => isSessionEventSocket(candidate, sessionId))
+  act(() => {
+    socket?.dispatch("message", JSON.stringify([sessionStateEvent({ sessionId, state })]))
+  })
+}
 
 const renderChat = () =>
   renderWithProviders(
@@ -107,15 +215,16 @@ const renderChat = () =>
   )
 
 describe("Chat recovery UI", () => {
+  const sockets: FakeSocket[] = []
+
   beforeEach(() => {
     clearChatTestSelection()
-    globalThis.WebSocket = function FakeWebSocket() {
-      return {
-        readyState: 1,
-        close: () => undefined,
-        send: () => undefined,
-        addEventListener: () => undefined,
-      }
+    sockets.length = 0
+
+    globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
+      const socket = createFakeSocket(hrefOf(url))
+      sockets.push(socket)
+      return socket
     } as unknown as typeof WebSocket
 
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
@@ -142,9 +251,9 @@ describe("Chat recovery UI", () => {
 
       if (url.includes("/select") && method === "POST") {
         const sessionId = url.split("/sessions/")[1]?.split("/")[0] ?? ""
-        const session = sessionsList.items.find((item) => item.id === sessionId)
+        const legacySession = legacyBySessionId[sessionId] ?? idleLegacy
         return Promise.resolve(
-          new Response(JSON.stringify(session ?? idleSession), {
+          new Response(JSON.stringify(legacySession), {
             status: 200,
             headers: { "Content-Type": "application/json" },
           }),
@@ -181,17 +290,23 @@ describe("Chat recovery UI", () => {
   test("idle session enables composer and shows online status dot", async () => {
     const { getByLabelText, getByRole } = renderChat()
     await joinSessionByName({ getByRole }, idleSessionLabel)
+    await dispatchSessionState(sockets, idleSession.sessionId, "idle")
 
     expect(getByRole("combobox", { name: "Session" })).toHaveValue(idleSessionLabel)
-    expect(getByRole("textbox", { name: "Chat message" })).not.toBeDisabled()
+    await waitFor(() => {
+      expect(getByRole("textbox", { name: "Chat message" })).not.toBeDisabled()
+    })
     expect(getByLabelText("online status")).toBeInTheDocument()
   })
 
   test("running session disables composer and shows cancel without blocked copy", async () => {
     const { getByLabelText, getByRole, queryByText } = renderChat()
     await joinSessionByName({ getByRole }, runningSessionLabel)
+    await dispatchSessionState(sockets, runningSession.sessionId, "running")
 
-    expect(getByRole("textbox", { name: "Chat message" })).toBeDisabled()
+    await waitFor(() => {
+      expect(getByRole("textbox", { name: "Chat message" })).toBeDisabled()
+    })
     expect(getByRole("button", { name: "Cancel turn" })).toBeInTheDocument()
     expect(
       queryByText("Session reconnecting. Prompts unlock when it is idle again."),
@@ -205,8 +320,11 @@ describe("Chat recovery UI", () => {
   test("offline session disables composer with reconnect copy", async () => {
     const { getByLabelText, getByRole, getByText } = renderChat()
     await joinSessionByName({ getByRole }, offlineSessionLabel)
+    await dispatchSessionState(sockets, offlineSession.sessionId, "offline")
 
-    expect(getByRole("textbox", { name: "Chat message" })).toBeDisabled()
+    await waitFor(() => {
+      expect(getByRole("textbox", { name: "Chat message" })).toBeDisabled()
+    })
     expect(
       getByText("Session reconnecting. Prompts unlock when it is idle again."),
     ).toBeInTheDocument()
@@ -216,8 +334,11 @@ describe("Chat recovery UI", () => {
   test("error session disables composer with terminal copy", async () => {
     const { getByLabelText, getByRole, getByText } = renderChat()
     await joinSessionByName({ getByRole }, errorSessionLabel)
+    await dispatchSessionState(sockets, errorSession.sessionId, "error")
 
-    expect(getByRole("textbox", { name: "Chat message" })).toBeDisabled()
+    await waitFor(() => {
+      expect(getByRole("textbox", { name: "Chat message" })).toBeDisabled()
+    })
     expect(
       getByText("Session ended with an error. Start a new session to continue."),
     ).toBeInTheDocument()
@@ -227,6 +348,7 @@ describe("Chat recovery UI", () => {
   test("console has no resume control", async () => {
     const { getByRole, queryByRole } = renderChat()
     await joinSessionByName({ getByRole }, offlineSessionLabel)
+    await dispatchSessionState(sockets, offlineSession.sessionId, "offline")
 
     expect(queryByRole("button", { name: /resume/i })).not.toBeInTheDocument()
   })
@@ -235,6 +357,7 @@ describe("Chat recovery UI", () => {
     const fetchMock = globalThis.fetch as ReturnType<typeof mock>
     const { getByRole } = renderChat()
     await joinSessionByName({ getByRole }, runningSessionLabel)
+    await dispatchSessionState(sockets, runningSession.sessionId, "running")
 
     const cancelCallsBefore = fetchMock.mock.calls.filter(
       ([input, init]) =>

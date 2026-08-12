@@ -16,6 +16,7 @@ import {
   createTestAppResources,
   createWorkspaceDir,
   enableAgent,
+  seedBoundSession,
   seedWorkspace,
 } from "../test-support/create-test-app"
 import { eventDataText } from "../test/event.data.text"
@@ -242,32 +243,33 @@ describe("GET /v1/events websocket replay", () => {
     const detectedPath = "/usr/local/bin/agent"
     const whichFn = (binaryName: string) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app, database, config } = await createTestApp(resources, dataDir, whichFn)
+    const { app, database, config, acpSupervisor } = await createTestApp(
+      resources,
+      dataDir,
+      whichFn,
+      undefined,
+      { capabilities: { loadSession: true, sessionClose: true, sessionList: true } },
+    )
     const journal = createEventJournalRepository(database)
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const createResponse = await app.inject({
-      method: "POST",
-      url: "/v1/sessions",
-      payload: {
-        workspaceId,
-        agentId: "cursor",
-        text: "Session A",
-      },
+    const sessionA = await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Session A",
     })
-    const sessionA = JSON.parse(createResponse.body) as { id: string }
-
-    const createSecondResponse = await app.inject({
-      method: "POST",
-      url: "/v1/sessions",
-      payload: {
-        workspaceId,
-        agentId: "cursor",
-        text: "Session B",
-      },
+    const sessionB = await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Session B",
     })
-    const sessionB = JSON.parse(createSecondResponse.body) as { id: string }
 
     journal.append({
       records: [
@@ -276,7 +278,7 @@ describe("GET /v1/events websocket replay", () => {
           kind: "session.state",
           occurredAt: "2026-07-24T12:00:00.000Z",
           workspaceId,
-          sessionId: sessionA.id,
+          sessionId: sessionA.sessionId,
           payload: { state: "idle" },
         },
         {
@@ -284,18 +286,18 @@ describe("GET /v1/events websocket replay", () => {
           kind: "session.state",
           occurredAt: "2026-07-24T12:00:01.000Z",
           workspaceId,
-          sessionId: sessionB.id,
+          sessionId: sessionB.sessionId,
           payload: { state: "idle" },
         },
       ],
     })
 
     const url = await getListeningUrl(app, config)
-    const frames = await collectReplayFrames(`${url}?cursor=0&sessionId=${sessionB.id}`)
+    const frames = await collectReplayFrames(`${url}?cursor=0&sessionId=${sessionB.sessionId}`)
     const replayed = frames.flat()
 
     expect(replayed.length).toBeGreaterThan(0)
-    expect(replayed.every((event) => event.sessionId === sessionB.id)).toBe(true)
+    expect(replayed.every((event) => event.sessionId === sessionB.sessionId)).toBe(true)
     expect(replayed.some((event) => event.type === "session.created")).toBe(true)
     await app.close()
   })
@@ -305,22 +307,25 @@ describe("GET /v1/events websocket replay", () => {
     const detectedPath = "/usr/local/bin/agent"
     const whichFn = (binaryName: string) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app, database, config } = await createTestApp(resources, dataDir, whichFn)
+    const { app, database, config, acpSupervisor } = await createTestApp(
+      resources,
+      dataDir,
+      whichFn,
+      undefined,
+      { capabilities: { loadSession: true, sessionClose: true, sessionList: true } },
+    )
     const journal = createEventJournalRepository(database)
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const createResponse = await app.inject({
-      method: "POST",
-      url: "/v1/sessions",
-      payload: {
-        workspaceId,
-        agentId: "cursor",
-        text: "Filtered",
-      },
+    const seeded = await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Filtered",
     })
-    expect(createResponse.statusCode).toBe(201)
-    const session = JSON.parse(createResponse.body) as { id: string }
 
     journal.append({
       records: [
@@ -329,7 +334,7 @@ describe("GET /v1/events websocket replay", () => {
           kind: "session.state",
           occurredAt: "2026-07-24T12:00:00.000Z",
           workspaceId: "ws-other",
-          sessionId: session.id,
+          sessionId: seeded.sessionId,
           payload: { state: "idle" },
         },
       ],
@@ -337,10 +342,10 @@ describe("GET /v1/events websocket replay", () => {
 
     const url = await getListeningUrl(app, config)
     const frames = await collectReplayFrames(
-      `${url}?cursor=0&workspaceId=${workspaceId}&sessionId=${session.id}`,
+      `${url}?cursor=0&workspaceId=${workspaceId}&sessionId=${seeded.sessionId}`,
     )
 
-    expect(frames.flat().every((event) => event.sessionId === session.id)).toBe(true)
+    expect(frames.flat().every((event) => event.sessionId === seeded.sessionId)).toBe(true)
     expect(frames.flat().every((event) => event.workspaceId === workspaceId)).toBe(true)
     await app.close()
   })
@@ -501,7 +506,7 @@ describe("GET /v1/events websocket handshake validation", () => {
     const detectedPath = "/usr/local/bin/agent"
     const whichFn = (binaryName: string) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app, config } = await createTestApp(resources, dataDir, whichFn)
+    const { app, config, acpSupervisor, database } = await createTestApp(resources, dataDir, whichFn)
     const firstWorkspace = await seedWorkspace(app, dataDir)
     const secondWorkspaceDir = await createWorkspaceDir(dataDir, "second-project")
     const secondWorkspaceResponse = await app.inject({
@@ -512,21 +517,19 @@ describe("GET /v1/events websocket handshake validation", () => {
     const secondWorkspace = JSON.parse(secondWorkspaceResponse.body) as { id: string }
     await enableAgent(app, "cursor", whichFn)
 
-    const createResponse = await app.inject({
-      method: "POST",
-      url: "/v1/sessions",
-      payload: {
-        workspaceId: firstWorkspace.workspaceId,
-        agentId: "cursor",
-        text: "Mismatch test",
-      },
+    const seeded = await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId: firstWorkspace.workspaceId,
+      workspacePath: firstWorkspace.workspaceDir,
+      agentId: "cursor",
+      name: "Mismatch test",
     })
-    const session = JSON.parse(createResponse.body) as { id: string }
 
     const response = await rejectHandshake(
       app,
       config,
-      `?workspaceId=${secondWorkspace.id}&sessionId=${session.id}`,
+      `?workspaceId=${secondWorkspace.id}&sessionId=${seeded.sessionId}`,
     )
 
     NotFoundProblemSchema.parse(response.body)

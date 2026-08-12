@@ -9,6 +9,7 @@ import {
   UpdateAgentSettingsBodySchema,
 } from "contracts/http/agent-settings"
 import { FastifyInstance } from "fastify"
+import { agentSupportsSessionList } from "../acp/catalog/session.list.support"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { AgentSettingsRepository } from "./agent-settings-repository"
 import {
@@ -21,6 +22,7 @@ import {
   buildAgentPathInvalidProblem,
   buildAgentPathNotFoundProblem,
   buildAgentRegistryFetchFailedProblem,
+  buildAgentSessionListUnsupportedProblem,
 } from "./agent-settings-problems"
 
 const sendProblem = (
@@ -108,6 +110,9 @@ export const registerAgentSettingsRoutes = (
 
     if (!result.ok) {
       if (result.error.kind === "cannot_enable") {
+        if (!agentSupportsSessionList(agentId)) {
+          return sendProblem(reply, 409, buildAgentSessionListUnsupportedProblem())
+        }
         return sendProblem(reply, 409, buildAgentCannotEnableProblem())
       }
       if (result.error.kind === "cannot_rename") {
@@ -130,6 +135,22 @@ export const registerAgentSettingsRoutes = (
 
     if ("enabled" in body && !body.enabled) {
       await acpSupervisor.handleAgentDisabled(agentId)
+    }
+
+    if ("enabled" in body && body.enabled) {
+      try {
+        await acpSupervisor.start(agentId)
+      } catch {
+        repository.update({ agentId, body: { enabled: false } })
+        await acpSupervisor.handleAgentDisabled(agentId)
+        return sendProblem(reply, 409, buildAgentCannotEnableProblem("ACP supervisor failed to start"))
+      }
+
+      if (!acpSupervisor.getAgentCapabilities(agentId)?.sessionCapabilities.list) {
+        repository.update({ agentId, body: { enabled: false } })
+        await acpSupervisor.handleAgentDisabled(agentId)
+        return sendProblem(reply, 409, buildAgentSessionListUnsupportedProblem())
+      }
     }
 
     if ("displayName" in body && result.value.id !== agentId) {

@@ -6,27 +6,20 @@ import { applySessionListEvents } from "./apply.list.events"
 const collection = SessionCollectionSchema.parse({
   items: [
     {
-      id: "sess_01SELECTED000000000000001",
-      workspaceId: "ws_01",
       agentId: "cursor",
-      name: "Selected chat",
-      state: "idle",
-      createdAt: "2026-07-24T12:00:00.000Z",
-      lastUsedAt: "2026-07-24T12:00:00.000Z",
-      archivedAt: null,
+      sessionId: "sess_01SELECTED000000000000001",
+      cwd: "/home/operator/agent-server",
+      title: "Selected chat",
+      updatedAt: "2026-07-24T12:00:00.000Z",
     },
     {
-      id: "sess_01OTHER00000000000000002",
-      workspaceId: "ws_01",
       agentId: "cursor",
-      name: "Background chat",
-      state: "idle",
-      createdAt: "2026-07-24T12:01:00.000Z",
-      lastUsedAt: "2026-07-24T12:01:00.000Z",
-      archivedAt: null,
+      sessionId: "sess_01OTHER00000000000000002",
+      cwd: "/home/operator/agent-server",
+      title: "Background chat",
+      updatedAt: "2026-07-24T12:01:00.000Z",
     },
   ],
-  page: { limit: 100, count: 2 },
 })
 
 const sessionStateEvent = (params: {
@@ -46,7 +39,7 @@ const sessionStateEvent = (params: {
 })
 
 describe("applySessionListEvents", () => {
-  test("updates matching session state from session.state", () => {
+  test("keeps catalog rows when session.state is not archived", () => {
     const next = applySessionListEvents({
       collection,
       events: [
@@ -58,9 +51,9 @@ describe("applySessionListEvents", () => {
       ],
     })
 
-    expect(next.items[0]?.state).toBe("idle")
-    expect(next.items[1]?.state).toBe("running")
-    expect(next.items[1]?.name).toBe("Background chat")
+    expect(next.items).toHaveLength(2)
+    expect(next.items[1]?.sessionId).toBe("sess_01OTHER00000000000000002")
+    expect(next.items[1]?.title).toBe("Background chat")
   })
 
   test("removes sessions that become archived", () => {
@@ -76,8 +69,7 @@ describe("applySessionListEvents", () => {
     })
 
     expect(next.items).toHaveLength(1)
-    expect(next.items[0]?.id).toBe("sess_01SELECTED000000000000001")
-    expect(next.page.count).toBe(1)
+    expect(next.items[0]?.sessionId).toBe("sess_01SELECTED000000000000001")
   })
 
   test("ignores session.state for sessions not in the collection", () => {
@@ -95,7 +87,7 @@ describe("applySessionListEvents", () => {
     expect(next).toBe(collection)
   })
 
-  test("keeps last session.state when the same session appears twice", () => {
+  test("keeps catalog row when the same session receives multiple non-archived states", () => {
     const next = applySessionListEvents({
       collection,
       events: [
@@ -112,6 +104,7 @@ describe("applySessionListEvents", () => {
       ],
     })
 
-    expect(next.items[1]?.state).toBe("error")
+    expect(next.items).toHaveLength(2)
+    expect(next.items[1]?.sessionId).toBe("sess_01OTHER00000000000000002")
   })
 })

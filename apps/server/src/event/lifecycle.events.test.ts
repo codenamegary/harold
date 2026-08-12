@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { EventSchema } from "contracts/events/event"
 import {
-  CreateSessionResponseSchema,
   SessionSchema,
 } from "contracts/http/session"
 import {
@@ -10,6 +9,7 @@ import {
   createTestApp,
   createTestAppResources,
   enableAgent,
+  seedBoundSession,
   seedWorkspace,
 } from "../test-support/create-test-app"
 import { createEventJournalRepository } from "./journal.repository"
@@ -258,25 +258,36 @@ describe("lifecycle events integration", () => {
     const detectedPath = "/usr/local/bin/agent"
     const whichFn = (binaryName: string) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app, database } = await createTestApp(resources, dataDir, whichFn)
+    const { app, database, acpSupervisor } = await createTestApp(resources, dataDir, whichFn, undefined, {
+      capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+      emitSessionUpdatesOnPrompt: true,
+    })
     const journal = createEventJournalRepository(database)
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const response = await app.inject({
-      method: "POST",
-      url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", text: "Lifecycle test" },
+    const seeded = await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Lifecycle test",
     })
-    expect(response.statusCode).toBe(201)
+
+    const promptResponse = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${seeded.sessionId}/prompt`,
+      payload: { text: "Lifecycle test" },
+    })
+    expect(promptResponse.statusCode).toBe(202)
 
     const waitForIdle = async () => {
-      const body = CreateSessionResponseSchema.parse(JSON.parse(response.body))
       const startedAt = Date.now()
       while (Date.now() - startedAt < 5000) {
         const latest = await app.inject({
           method: "GET",
-          url: `/v1/sessions/${body.id}`,
+          url: `/v1/sessions/${seeded.sessionId}`,
         })
         if (SessionSchema.parse(JSON.parse(latest.body)).state === "idle") {
           return
@@ -312,24 +323,36 @@ describe("lifecycle events integration", () => {
     const detectedPath = "/usr/local/bin/agent"
     const whichFn = (binaryName: string) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app, database } = await createTestApp(resources, dataDir, whichFn)
+    const { app, database, acpSupervisor } = await createTestApp(resources, dataDir, whichFn, undefined, {
+      capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+      emitSessionUpdatesOnPrompt: true,
+    })
     const journal = createEventJournalRepository(database)
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const createResponse = await app.inject({
-      method: "POST",
-      url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", text: "Archive me" },
+    const seeded = await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Archive me",
     })
-    const session = JSON.parse(createResponse.body) as { id: string }
+
+    const promptResponse = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${seeded.sessionId}/prompt`,
+      payload: { text: "Archive me" },
+    })
+    expect(promptResponse.statusCode).toBe(202)
 
     const waitForIdle = async () => {
       const startedAt = Date.now()
       while (Date.now() - startedAt < 5000) {
         const latest = await app.inject({
           method: "GET",
-          url: `/v1/sessions/${session.id}`,
+          url: `/v1/sessions/${seeded.sessionId}`,
         })
         if (SessionSchema.parse(JSON.parse(latest.body)).state === "idle") {
           return
@@ -342,14 +365,14 @@ describe("lifecycle events integration", () => {
 
     const archiveResponse = await app.inject({
       method: "POST",
-      url: `/v1/sessions/${session.id}/archive`,
+      url: `/v1/sessions/${seeded.sessionId}/archive`,
     })
     expect(archiveResponse.statusCode).toBe(200)
 
     const records = journal.readAfter({
       cursor: 0n,
       limit: 100,
-      sessionId: session.id,
+      sessionId: seeded.sessionId,
     })
     expect(records.ok).toBe(true)
     if (!records.ok) {
@@ -462,24 +485,30 @@ describe("lifecycle events integration", () => {
     const detectedPath = "/usr/local/bin/agent"
     const whichFn = (binaryName: string) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app, database, acpSupervisor } = await createTestApp(resources, dataDir, whichFn)
+    const { app, database, acpSupervisor } = await createTestApp(resources, dataDir, whichFn, undefined, {
+      capabilities: { loadSession: true, sessionClose: false, sessionList: true },
+      sessionNewSessionId: "lifecycle-resume-session",
+      sessionLoadSessionId: "lifecycle-resume-session-loaded",
+    })
     const journal = createEventJournalRepository(database)
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const createResponse = await app.inject({
-      method: "POST",
-      url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", text: "Resume me" },
+    const seeded = await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Resume me",
     })
-    const session = JSON.parse(createResponse.body) as { id: string }
 
     const waitForIdle = async () => {
       const startedAt = Date.now()
       while (Date.now() - startedAt < 5000) {
         const latest = await app.inject({
           method: "GET",
-          url: `/v1/sessions/${session.id}`,
+          url: `/v1/sessions/${seeded.sessionId}`,
         })
         if ((JSON.parse(latest.body) as { state: string }).state === "idle") {
           return
@@ -490,7 +519,7 @@ describe("lifecycle events integration", () => {
     }
     await waitForIdle()
 
-    const live = acpSupervisor.getSessionBindingRegistry().getBinding("fake-session-new")
+    const live = acpSupervisor.getSessionBindingRegistry().getBinding(seeded.acpSessionId)
     expect(live).toBeDefined()
     if (live !== undefined) {
       acpSupervisor.getSessionBindingRegistry().unbind({
@@ -500,13 +529,13 @@ describe("lifecycle events integration", () => {
 
     await app.inject({
       method: "POST",
-      url: `/v1/sessions/${session.id}/resume`,
+      url: `/v1/sessions/${seeded.sessionId}/resume`,
     })
 
     const records = journal.readAfter({
       cursor: 0n,
       limit: 100,
-      sessionId: session.id,
+      sessionId: seeded.sessionId,
     })
     expect(records.ok).toBe(true)
     if (!records.ok) {
@@ -517,7 +546,7 @@ describe("lifecycle events integration", () => {
       .filter((record) => record.kind === "session.state")
       .map((record) => (record.payload as { state: string }).state)
 
-    expect(states).toEqual(["starting", "idle", "running", "idle", "idle"])
+    expect(states).toEqual(["starting", "idle", "idle"])
   })
 
   test("rollback publishes nothing when workspace delete target is missing", async () => {
@@ -554,20 +583,29 @@ describe("lifecycle events integration", () => {
     const detectedPath = "/usr/local/bin/agent"
     const whichFn = (binaryName: string) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app, database } = await createTestApp(resources, dataDir, whichFn)
+    const { app, database, acpSupervisor } = await createTestApp(resources, dataDir, whichFn, undefined, {
+      capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+      emitSessionUpdatesOnPrompt: true,
+    })
     const journal = createEventJournalRepository(database)
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    await app.inject({
-      method: "POST",
-      url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", text: "First" },
+    await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "First",
     })
-    await app.inject({
-      method: "POST",
-      url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", text: "Second" },
+    await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Second",
     })
 
     const records = journal.readAfter({ cursor: 0n, limit: 100 })
@@ -609,15 +647,20 @@ describe("lifecycle events integration", () => {
     const detectedPath = "/usr/local/bin/agent"
     const whichFn = (binaryName: string) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app, database } = await createTestApp(resources, dataDir, whichFn)
+    const { app, database, acpSupervisor } = await createTestApp(resources, dataDir, whichFn, undefined, {
+      capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+    })
     const journal = createEventJournalRepository(database)
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    await app.inject({
-      method: "POST",
-      url: "/v1/sessions",
-      payload: { workspaceId, agentId: "cursor", text: "Gone" },
+    await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Gone",
     })
 
     const beforeDelete = journal.readAfter({ cursor: 0n, limit: 100 })

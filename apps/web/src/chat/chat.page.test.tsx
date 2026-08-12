@@ -36,6 +36,7 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       present: true,
       popular: true,
       deletable: false,
+  sessionListSupported: true,
     },
     {
       id: "claude-acp",
@@ -47,13 +48,13 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       present: true,
       popular: true,
       deletable: false,
+  sessionListSupported: true,
     },
   ],
 })
 
 const emptySessions = SessionCollectionSchema.parse({
   items: [],
-  page: { limit: 100, count: 0 },
 })
 
 const originalFetch = globalThis.fetch

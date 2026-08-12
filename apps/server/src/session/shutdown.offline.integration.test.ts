@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { SessionSchema, CreateSessionResponseSchema } from "contracts/http/session"
+import { SessionSchema } from "contracts/http/session"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { listen } from "../bootstrap/shutdown"
 import { openDatabase } from "../persistence/database"
@@ -14,6 +14,7 @@ import {
   createTempDataDir,
   createTestAppResources,
   enableAgent,
+  seedBoundSession,
   seedWorkspace,
 } from "../test-support/create-test-app"
 
@@ -47,7 +48,7 @@ describe("session offline on shutdown", () => {
     const database = openDatabase({ dataDir: config.dataDir })
     const runtime = createRuntime("0.1.0")
     const { spawnAgentProcessFn } = createFakeSpawnFn(resources, {
-      capabilities: { loadSession: true, sessionClose: true },
+      capabilities: { loadSession: true, sessionClose: true, sessionList: true },
       sessionNewSessionId: "fake-session-shutdown-offline",
       sessionLoadSessionId: "fake-session-shutdown-offline",
       emitSessionUpdatesOnPrompt: true,
@@ -65,25 +66,29 @@ describe("session offline on shutdown", () => {
 
     await listen(app, config, runtimeStatusService)
 
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const created = await app.inject({
-      method: "POST",
-      url: "/v1/sessions",
-      payload: {
-        workspaceId,
-        agentId: "cursor",
-        text: "Shutdown mid turn",
-      },
+    const { sessionId } = await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Shutdown mid turn",
     })
-    expect(created.statusCode).toBe(201)
-    const session = CreateSessionResponseSchema.parse(JSON.parse(created.body))
+
+    const promptResponse = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${sessionId}/prompt`,
+      payload: { text: "Shutdown mid turn" },
+    })
+    expect(promptResponse.statusCode).toBe(202)
 
     await waitFor(async () => {
       const latest = await app.inject({
         method: "GET",
-        url: `/v1/sessions/${session.id}`,
+        url: `/v1/sessions/${sessionId}`,
       })
       return SessionSchema.parse(JSON.parse(latest.body)).state === "running"
     })
@@ -93,7 +98,7 @@ describe("session offline on shutdown", () => {
         (
           await app.inject({
             method: "GET",
-            url: `/v1/sessions/${session.id}`,
+            url: `/v1/sessions/${sessionId}`,
           })
         ).body,
       ),
@@ -121,7 +126,7 @@ describe("session offline on shutdown", () => {
     const sessionRepository = createSessionRepository(readDatabase)
     const journal = createEventJournalRepository(readDatabase)
 
-    const fetched = sessionRepository.getById({ id: session.id })
+    const fetched = sessionRepository.getById({ id: sessionId })
     expect(fetched.ok).toBe(true)
     if (!fetched.ok) {
       return
@@ -140,7 +145,7 @@ describe("session offline on shutdown", () => {
       records.value.some(
         (record) =>
           record.kind === "session.state" &&
-          record.sessionId === session.id &&
+          record.sessionId === sessionId &&
           (record.payload as { state: string }).state === "offline",
       ),
     ).toBe(true)

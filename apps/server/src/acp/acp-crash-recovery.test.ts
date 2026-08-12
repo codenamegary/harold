@@ -7,6 +7,7 @@ import {
   createTestApp,
   createTestAppResources,
   enableAgent,
+  seedBoundSession,
   seedWorkspace,
 } from "../test-support/create-test-app"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
@@ -60,31 +61,43 @@ describe("ACP crash recovery", () => {
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app, acpSupervisor } = await createTestApp(
+    const { app, acpSupervisor, database } = await createTestApp(
       resources,
       dataDir,
       whichFn,
       acceptTestExecutablePath,
       {
-        capabilities: { loadSession: true, sessionClose: false },
+        capabilities: { loadSession: true, sessionClose: false, sessionList: true },
         sessionNewSessionId: "crash-session",
         sessionLoadSessionId: "crash-session-loaded",
+        emitSessionUpdatesOnPrompt: true,
+        promptCompletionDelayMs: 5000,
       },
     )
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const createResponse = await app.inject({
-      method: "POST",
-      url: "/v1/sessions",
-      payload: {
-        workspaceId,
-        agentId: "cursor",
-        text: "Before crash",
-      },
+    const seeded = await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Before crash",
     })
-    expect(createResponse.statusCode).toBe(201)
-    const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
+
+    const promptResponse = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${seeded.sessionId}/prompt`,
+      payload: { text: "Before crash" },
+    })
+    expect(promptResponse.statusCode).toBe(202)
+
+    await waitForSessionState({
+      app,
+      sessionId: seeded.sessionId,
+      expected: "running",
+    })
 
     const fake = resources.getLastFake()
     if (!fake) {
@@ -94,7 +107,7 @@ describe("ACP crash recovery", () => {
 
     await waitForSessionState({
       app,
-      sessionId: created.id,
+      sessionId: seeded.sessionId,
       expected: "offline",
     })
     await waitForSupervisorState(() => acpSupervisor.getStatus().state, "ready")
@@ -104,14 +117,14 @@ describe("ACP crash recovery", () => {
       method: "POST",
       url: "/v1/sessions",
       payload: {
-        workspaceId,
         agentId: "cursor",
-        text: "After crash",
+        cwd: workspaceDir,
       },
     })
     const recovered = CreateSessionResponseSchema.parse(JSON.parse(recoveryResponse.body))
     expect(recoveryResponse.statusCode).toBe(201)
-    expect(recovered.name).toBe("After crash")
+    expect(recovered.agentId).toBe("cursor")
+    expect(recovered.cwd).toBe(workspaceDir)
     expect(acpSupervisor.getStatus().state).toBe("ready")
   })
 })

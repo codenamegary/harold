@@ -14,13 +14,20 @@ export const buildAgentNotFoundProblem = (detail = "Unknown agent id") =>
     detail,
   })
 
-export const buildAgentCannotEnableProblem = (detail = "Agent is not available in this release") =>
+export const buildAgentCannotEnableProblem = (
+  detail = "Agent is not available in this release",
+) =>
   ConflictProblemSchema.parse({
     type: PROBLEM_TYPES.conflict,
     title: "Agent cannot be enabled",
     status: 409,
     detail,
   })
+
+export const buildAgentSessionListUnsupportedProblem = () =>
+  buildAgentCannotEnableProblem(
+    "Agent does not advertise sessionCapabilities.list and cannot join the session gateway",
+  )
 
 export const buildAgentCannotRenameProblem = (
   detail = "Only custom agents can be renamed",

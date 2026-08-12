@@ -38,6 +38,7 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       present: true,
       popular: true,
       deletable: false,
+  sessionListSupported: true,
     },
   ],
 })
@@ -54,8 +55,15 @@ const liveSession = SessionSchema.parse({
 })
 
 const sessionsList = SessionCollectionSchema.parse({
-  items: [liveSession],
-  page: { limit: 100, count: 1 },
+  items: [
+    {
+      agentId: liveSession.agentId,
+      sessionId: liveSession.id,
+      cwd: "/home/operator/agent-server",
+      title: liveSession.name,
+      updatedAt: liveSession.lastUsedAt,
+    },
+  ],
 })
 
 type FakeSocket = {
@@ -337,7 +345,6 @@ describe("Chat session rename and archive", () => {
     })
     const emptyAfterArchive = SessionCollectionSchema.parse({
       items: [],
-      page: { limit: 100, count: 0 },
     })
     const archivedFlag = { value: false }
 

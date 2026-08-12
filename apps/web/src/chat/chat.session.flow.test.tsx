@@ -44,36 +44,24 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       present: true,
       popular: true,
       deletable: false,
+  sessionListSupported: true,
     },
   ],
 })
 
+const workspacePath = "/home/operator/agent-server"
+const promptTurnId = "turn_01JFC8C7E77NQCFH0RF9Z22JHH"
+
 const createdSession = CreateSessionResponseSchema.parse({
-  id: "sess_01JFC8C7E77NQCFH0RF9Z22JHH",
-  workspaceId: "ws_01",
   agentId: "cursor",
-  name: "Explain auth",
-  state: "running",
-  createdAt: "2026-07-24T12:00:00.000Z",
-  lastUsedAt: "2026-07-24T12:00:00.000Z",
-  archivedAt: null,
-  turnId: "turn_01JFC8C7E77NQCFH0RF9Z22JHH",
+  sessionId: "sess_01JFC8C7E77NQCFH0RF9Z22JHH",
+  cwd: workspacePath,
+  title: "Explain auth",
+  updatedAt: "2026-07-24T12:00:00.000Z",
 })
 
 const sessionsList = SessionCollectionSchema.parse({
-  items: [
-    {
-      id: createdSession.id,
-      workspaceId: createdSession.workspaceId,
-      agentId: createdSession.agentId,
-      name: createdSession.name,
-      state: "running",
-      createdAt: createdSession.createdAt,
-      lastUsedAt: createdSession.lastUsedAt,
-      archivedAt: null,
-    },
-  ],
-  page: { limit: 100, count: 1 },
+  items: [createdSession],
 })
 
 type FakeSocket = {
@@ -155,7 +143,7 @@ describe("Chat session flow", () => {
         )
       }
 
-      if (url.startsWith(`/v1/sessions/${createdSession.id}/prompt`) && method === "POST") {
+      if (url.startsWith(`/v1/sessions/${createdSession.sessionId}/prompt`) && method === "POST") {
         return Promise.resolve(
           new Response(JSON.stringify({ turnId: "turn_01JFC8C7E77NQCFH0RF9Z22JHK" }), {
             status: 202,
@@ -164,16 +152,16 @@ describe("Chat session flow", () => {
         )
       }
 
-      if (url.startsWith(`/v1/sessions/${createdSession.id}/cancel`) && method === "POST") {
+      if (url.startsWith(`/v1/sessions/${createdSession.sessionId}/cancel`) && method === "POST") {
         return Promise.resolve(
-          new Response(JSON.stringify({ turnId: createdSession.turnId }), {
+          new Response(JSON.stringify({ turnId: promptTurnId }), {
             status: 202,
             headers: { "Content-Type": "application/json" },
           }),
         )
       }
 
-      if (url.startsWith(`/v1/sessions/${createdSession.id}/select`) && method === "POST") {
+      if (url.startsWith(`/v1/sessions/${createdSession.sessionId}/select`) && method === "POST") {
         return Promise.resolve(
           new Response(JSON.stringify(sessionsList.items[0]), {
             status: 200,
@@ -252,14 +240,14 @@ describe("Chat session flow", () => {
     })
 
     await waitFor(() => {
-      expect(getByRole("combobox", { name: "Session" })).toHaveValue(createdSession.name)
+      expect(getByRole("combobox", { name: "Session" })).toHaveValue(createdSession.title)
     })
 
     await waitFor(() => {
       expect(sockets.length).toBeGreaterThan(0)
     })
 
-    expect(sockets[0]?.url).toContain(`sessionId=${createdSession.id}`)
+    expect(sockets[0]?.url).toContain(`sessionId=${createdSession.sessionId}`)
     expect(sockets[0]?.url).toContain("cursor=0")
 
     act(() => {
@@ -271,9 +259,9 @@ describe("Chat session flow", () => {
             cursor: "1",
             occurredAt: "2026-07-24T12:00:00.000Z",
             workspaceId: "ws_01",
-            sessionId: createdSession.id,
+            sessionId: createdSession.sessionId,
             payload: {
-              turnId: createdSession.turnId,
+              turnId: promptTurnId,
               text: "Explain auth",
             },
           },
@@ -282,9 +270,9 @@ describe("Chat session flow", () => {
             cursor: "2",
             occurredAt: "2026-07-24T12:00:01.000Z",
             workspaceId: "ws_01",
-            sessionId: createdSession.id,
+            sessionId: createdSession.sessionId,
             payload: {
-              turnId: createdSession.turnId,
+              turnId: promptTurnId,
               text: "thinking",
             },
           },
@@ -293,9 +281,9 @@ describe("Chat session flow", () => {
             cursor: "3",
             occurredAt: "2026-07-24T12:00:02.000Z",
             workspaceId: "ws_01",
-            sessionId: createdSession.id,
+            sessionId: createdSession.sessionId,
             payload: {
-              turnId: createdSession.turnId,
+              turnId: promptTurnId,
               text: "Auth uses JWT",
             },
           },
@@ -304,9 +292,9 @@ describe("Chat session flow", () => {
             cursor: "4",
             occurredAt: "2026-07-24T12:00:03.000Z",
             workspaceId: "ws_01",
-            sessionId: createdSession.id,
+            sessionId: createdSession.sessionId,
             payload: {
-              sessionId: createdSession.id,
+              sessionId: createdSession.sessionId,
               state: "running",
             },
           },
@@ -331,7 +319,7 @@ describe("Chat session flow", () => {
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {
-      expect(getByRole("combobox", { name: "Session" })).toHaveValue(createdSession.name)
+      expect(getByRole("combobox", { name: "Session" })).toHaveValue(createdSession.title)
     })
 
     await waitFor(() => {
@@ -347,9 +335,9 @@ describe("Chat session flow", () => {
             cursor: "1",
             occurredAt: "2026-07-24T12:00:00.000Z",
             workspaceId: "ws_01",
-            sessionId: createdSession.id,
+            sessionId: createdSession.sessionId,
             payload: {
-              sessionId: createdSession.id,
+              sessionId: createdSession.sessionId,
               state: "running",
             },
           },
@@ -367,7 +355,7 @@ describe("Chat session flow", () => {
       expect(
         fetchMock.mock.calls.some(
           ([input, init]) =>
-            requestUrl(input).includes(`/v1/sessions/${createdSession.id}/cancel`) &&
+            requestUrl(input).includes(`/v1/sessions/${createdSession.sessionId}/cancel`) &&
             (init as RequestInit | undefined)?.method === "POST",
         ),
       ).toBe(true)
@@ -382,9 +370,9 @@ describe("Chat session flow", () => {
             cursor: "2",
             occurredAt: "2026-07-24T12:00:01.000Z",
             workspaceId: "ws_01",
-            sessionId: createdSession.id,
+            sessionId: createdSession.sessionId,
             payload: {
-              sessionId: createdSession.id,
+              sessionId: createdSession.sessionId,
               state: "idle",
             },
           },
@@ -402,7 +390,7 @@ describe("Chat session flow", () => {
       expect(
         fetchMock.mock.calls.some(
           ([input, init]) =>
-            requestUrl(input).includes(`/v1/sessions/${createdSession.id}/prompt`) &&
+            requestUrl(input).includes(`/v1/sessions/${createdSession.sessionId}/prompt`) &&
             (init as RequestInit | undefined)?.method === "POST",
         ),
       ).toBe(true)
@@ -427,9 +415,9 @@ describe("Chat session flow", () => {
             cursor: "1",
             occurredAt: "2026-07-24T12:00:00.000Z",
             workspaceId: "ws_01",
-            sessionId: createdSession.id,
+            sessionId: createdSession.sessionId,
             payload: {
-              turnId: createdSession.turnId,
+              turnId: promptTurnId,
               text: "Explain auth",
             },
           },
@@ -438,9 +426,9 @@ describe("Chat session flow", () => {
             cursor: "2",
             occurredAt: "2026-07-24T12:00:01.000Z",
             workspaceId: "ws_01",
-            sessionId: createdSession.id,
+            sessionId: createdSession.sessionId,
             payload: {
-              turnId: createdSession.turnId,
+              turnId: promptTurnId,
               text: "stale",
             },
           },
@@ -457,7 +445,7 @@ describe("Chat session flow", () => {
       { getByRole },
       { workspaceName: "agent-server", agentName: "Cursor" },
     )
-    await joinSessionByName({ getByRole }, createdSession.name)
+    await joinSessionByName({ getByRole }, createdSession.title)
 
     await waitFor(() => {
       expect(sockets.length).toBe(2)
@@ -474,9 +462,9 @@ describe("Chat session flow", () => {
             cursor: "1",
             occurredAt: "2026-07-24T12:00:00.000Z",
             workspaceId: "ws_01",
-            sessionId: createdSession.id,
+            sessionId: createdSession.sessionId,
             payload: {
-              turnId: createdSession.turnId,
+              turnId: promptTurnId,
               text: "Explain auth",
             },
           },
@@ -485,9 +473,9 @@ describe("Chat session flow", () => {
             cursor: "2",
             occurredAt: "2026-07-24T12:00:01.000Z",
             workspaceId: "ws_01",
-            sessionId: createdSession.id,
+            sessionId: createdSession.sessionId,
             payload: {
-              turnId: createdSession.turnId,
+              turnId: promptTurnId,
               toolCallId: "tool_01",
               toolName: "read",
               toolKind: "read",
@@ -498,9 +486,9 @@ describe("Chat session flow", () => {
             cursor: "3",
             occurredAt: "2026-07-24T12:00:02.000Z",
             workspaceId: "ws_01",
-            sessionId: createdSession.id,
+            sessionId: createdSession.sessionId,
             payload: {
-              turnId: createdSession.turnId,
+              turnId: promptTurnId,
               text: "rebuilt",
             },
           },

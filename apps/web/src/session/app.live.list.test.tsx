@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { act, waitFor } from "@testing-library/react"
 import { AgentSettingsCollectionSchema } from "contracts/http/agent-settings"
-import { SessionCollectionSchema } from "contracts/http/session"
+import { SessionCollectionSchema, SessionSchema } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import {
   clearChatTestSelection,
@@ -51,35 +51,53 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       present: true,
       popular: true,
       deletable: false,
+      sessionListSupported: true,
     },
   ],
 })
 
-const selectedSession = {
+const workspacePath = "/home/operator/agent-server"
+
+const legacySelectedSession = SessionSchema.parse({
   id: "sess_01SELECTED000000000000001",
   workspaceId: "ws_01",
-  agentId: "cursor" as const,
+  agentId: "cursor",
   name: "Selected chat",
-  state: "idle" as const,
+  state: "idle",
   createdAt: "2026-07-24T12:00:00.000Z",
   lastUsedAt: "2026-07-24T12:00:00.000Z",
   archivedAt: null,
-}
+})
 
-const otherSession = {
+const legacyOtherSession = SessionSchema.parse({
   id: "sess_01OTHER00000000000000002",
   workspaceId: "ws_01",
-  agentId: "cursor" as const,
+  agentId: "cursor",
   name: "Background chat",
-  state: "idle" as const,
+  state: "idle",
   createdAt: "2026-07-24T12:01:00.000Z",
   lastUsedAt: "2026-07-24T12:01:00.000Z",
   archivedAt: null,
+})
+
+const selectedSession = {
+  agentId: legacySelectedSession.agentId,
+  sessionId: legacySelectedSession.id,
+  cwd: workspacePath,
+  title: legacySelectedSession.name,
+  updatedAt: legacySelectedSession.lastUsedAt,
+}
+
+const otherSession = {
+  agentId: legacyOtherSession.agentId,
+  sessionId: legacyOtherSession.id,
+  cwd: workspacePath,
+  title: legacyOtherSession.name,
+  updatedAt: legacyOtherSession.lastUsedAt,
 }
 
 const sessionsList = SessionCollectionSchema.parse({
   items: [selectedSession, otherSession],
-  page: { limit: 100, count: 2 },
 })
 
 type FakeSocket = {
@@ -172,11 +190,11 @@ describe("App live session list", () => {
       }
 
       if (
-        url.startsWith(`/v1/sessions/${selectedSession.id}/select`) &&
+        url.startsWith(`/v1/sessions/${selectedSession.sessionId}/select`) &&
         method === "POST"
       ) {
         return Promise.resolve(
-          new Response(JSON.stringify(selectedSession), {
+          new Response(JSON.stringify(legacySelectedSession), {
             status: 200,
             headers: { "Content-Type": "application/json" },
           }),
@@ -184,11 +202,11 @@ describe("App live session list", () => {
       }
 
       if (
-        url.startsWith(`/v1/sessions/${otherSession.id}/select`) &&
+        url.startsWith(`/v1/sessions/${otherSession.sessionId}/select`) &&
         method === "POST"
       ) {
         return Promise.resolve(
-          new Response(JSON.stringify(otherSession), {
+          new Response(JSON.stringify(legacyOtherSession), {
             status: 200,
             headers: { "Content-Type": "application/json" },
           }),
@@ -215,15 +233,15 @@ describe("App live session list", () => {
   })
 
   test("session list updates from app stream while another session is selected", async () => {
-    const { getByRole } = renderWithProviders(<AppRoutes />, {
+    const { getByRole, queryByRole } = renderWithProviders(<AppRoutes />, {
       initialEntries: ["/chat"],
     })
 
-    await joinSessionByName({ getByRole }, "Selected chat")
+    await joinSessionByName({ getByRole }, selectedSession.title)
 
     await waitFor(() => {
       expect(sockets.some(isAppEventSocket)).toBe(true)
-      expect(sockets.some((socket) => isSessionEventSocket(socket, selectedSession.id))).toBe(
+      expect(sockets.some((socket) => isSessionEventSocket(socket, selectedSession.sessionId))).toBe(
         true,
       )
     })
@@ -232,7 +250,7 @@ describe("App live session list", () => {
     expect(appSocket).toBeDefined()
 
     await openComboboxOptions({ getByRole }, "Session")
-    expect(getByRole("option", { name: /Background chat/ })).toBeInTheDocument()
+    expect(getByRole("option", { name: new RegExp(otherSession.title) })).toBeInTheDocument()
     await userEvent.setup().keyboard("{Escape}")
 
     act(() => {
@@ -244,10 +262,10 @@ describe("App live session list", () => {
             cursor: "42",
             occurredAt: "2026-07-24T12:02:00.000Z",
             workspaceId: "ws_01",
-            sessionId: otherSession.id,
+            sessionId: otherSession.sessionId,
             payload: {
-              sessionId: otherSession.id,
-              state: "running",
+              sessionId: otherSession.sessionId,
+              state: "archived",
             },
           },
         ]),
@@ -256,27 +274,27 @@ describe("App live session list", () => {
 
     await openComboboxOptions({ getByRole }, "Session")
     await waitFor(() => {
-      expect(getByRole("option", { name: /Background chat/ })).toHaveTextContent("running")
+      expect(queryByRole("option", { name: new RegExp(otherSession.title) })).not.toBeInTheDocument()
     })
-    expect(getByRole("combobox", { name: "Session" })).toHaveValue("Selected chat")
-    expect(getByRole("option", { name: /Selected chat/ })).toHaveTextContent("idle")
+    expect(getByRole("combobox", { name: "Session" })).toHaveValue(selectedSession.title)
+    expect(getByRole("option", { name: new RegExp(selectedSession.title) })).toBeInTheDocument()
   })
 
   test("switching selected session keeps the app stream open", async () => {
-    const { getByRole } = renderWithProviders(<AppRoutes />, {
+    const { getByRole, queryByRole } = renderWithProviders(<AppRoutes />, {
       initialEntries: ["/chat"],
     })
 
-    await joinSessionByName({ getByRole }, "Selected chat")
+    await joinSessionByName({ getByRole }, selectedSession.title)
 
     const appSocketBefore = sockets.find(isAppEventSocket)
     expect(appSocketBefore).toBeDefined()
     expect(appSocketBefore?.readyState).toBe(1)
 
-    await joinSessionByName({ getByRole }, "Background chat")
+    await joinSessionByName({ getByRole }, otherSession.title)
 
     await waitFor(() => {
-      expect(sockets.some((socket) => isSessionEventSocket(socket, otherSession.id))).toBe(
+      expect(sockets.some((socket) => isSessionEventSocket(socket, otherSession.sessionId))).toBe(
         true,
       )
     })
@@ -293,10 +311,10 @@ describe("App live session list", () => {
             cursor: "43",
             occurredAt: "2026-07-24T12:03:00.000Z",
             workspaceId: "ws_01",
-            sessionId: selectedSession.id,
+            sessionId: selectedSession.sessionId,
             payload: {
-              sessionId: selectedSession.id,
-              state: "error",
+              sessionId: selectedSession.sessionId,
+              state: "archived",
             },
           },
         ]),
@@ -305,7 +323,11 @@ describe("App live session list", () => {
 
     await openComboboxOptions({ getByRole }, "Session")
     await waitFor(() => {
-      expect(getByRole("option", { name: /Selected chat/ })).toHaveTextContent("error")
+      expect(
+        queryByRole("option", { name: new RegExp(selectedSession.title) }),
+      ).not.toBeInTheDocument()
     })
+    expect(getByRole("option", { name: new RegExp(otherSession.title) })).toBeInTheDocument()
+    expect(getByRole("combobox", { name: "Session" })).toHaveValue(otherSession.title)
   })
 })

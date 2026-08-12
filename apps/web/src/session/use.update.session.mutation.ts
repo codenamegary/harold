@@ -27,9 +27,8 @@ export const useUpdateSessionMutation = () => {
           const collection = SessionCollectionSchema.parse(existing)
           return SessionCollectionSchema.parse({
             items: collection.items.map((item) =>
-              item.id === session.id ? session : item,
+              item.sessionId === session.id ? { ...item, title: session.name } : item,
             ),
-            page: collection.page,
           })
         },
       )

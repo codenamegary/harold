@@ -21,11 +21,9 @@ import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { AgentSettingsRepository } from "../agent-settings/agent-settings-repository"
 import { PermissionService } from "../permission/service"
 import { WorkspaceRepository } from "../workspace/repository"
-import { deriveSessionNameFromPrompt } from "./derive.session.name"
 import { SessionRepository } from "./repository"
 import { maybeAutoResumeSession, resumeSession } from "./resume.session"
 import {
-  agentAdvertisesResumable,
   ensureSupervisorReady,
   isArchivedSession,
 } from "./session.acp.ready"
@@ -35,7 +33,6 @@ import {
   buildAgentDisabledProblem,
   buildAgentNotFoundProblem,
   buildAgentUnavailableProblem,
-  buildInvalidCursorProblem,
   buildNoActiveTurnProblem,
   buildPermissionConflictProblem,
   buildPermissionNotFoundProblem,
@@ -120,11 +117,6 @@ export const registerSessionRoutes = (
   app.post("/v1/sessions", async (request, reply) => {
     const body = CreateSessionBodySchema.parse(request.body)
 
-    const workspace = workspaceRepository.getById({ id: body.workspaceId })
-    if (!workspace.ok) {
-      return sendProblem(reply, 404, buildWorkspaceNotFoundProblem())
-    }
-
     const agentSettings = agentSettingsRepository
       .list()
       .find((settings) => settings.id === body.agentId)
@@ -141,87 +133,55 @@ export const registerSessionRoutes = (
       return sendProblem(reply, 409, buildAgentDisabledProblem())
     }
 
-    const created = sessionService.createStarting({
-      workspaceId: body.workspaceId,
-      agentId: body.agentId,
-      name: deriveSessionNameFromPrompt(body.text),
-    })
-
-    if (!created.ok) {
-      throw new Error("session create failed unexpectedly")
-    }
-
     const supervisorReady = await ensureSupervisorReady(acpSupervisor, body.agentId)
     if (!supervisorReady) {
-      sessionService.markError({ id: created.value.id })
       return sendProblem(reply, 409, buildAcpUnavailableProblem())
     }
 
-    const acpResult = await acpSupervisor.createAcpSession({
-      workspaceCwd: workspace.value.path,
-      sessionId: created.value.id,
-      workspaceId: body.workspaceId,
+    if (!acpSupervisor.getAgentCapabilities(body.agentId)?.sessionCapabilities.list) {
+      return sendProblem(
+        reply,
+        409,
+        buildAcpUnavailableProblem("Agent does not support session/list"),
+      )
+    }
+
+    const acpResult = await acpSupervisor.createSession({
+      agentId: body.agentId,
+      cwd: body.cwd,
     })
 
     if (!acpResult.ok) {
-      sessionService.markError({ id: created.value.id })
       return sendProblem(reply, 409, buildAcpUnavailableProblem(acpResult.reason))
     }
 
-    const ready = sessionService.markReady({
-      id: created.value.id,
-      acpSessionId: acpResult.acpSessionId,
-      resumable: agentAdvertisesResumable(acpSupervisor),
-    })
-
-    if (!ready.ok) {
-      throw new Error("session mark ready failed unexpectedly")
-    }
-
-    const prompted = await startAcceptedPrompt({
-      sessionId: ready.value.id,
-      acpSessionId: acpResult.acpSessionId,
-      agentId: body.agentId,
-      text: body.text,
-    })
-
-    if (!prompted.ok) {
-      sessionService.markError({ id: created.value.id })
-      return sendProblem(reply, prompted.status, prompted.problem)
-    }
-
+    const updatedAt = new Date().toISOString()
     return reply.status(201).send(
       CreateSessionResponseSchema.parse({
-        ...prompted.session,
-        turnId: prompted.turnId,
+        agentId: body.agentId,
+        sessionId: acpResult.acpSessionId,
+        cwd: body.cwd,
+        title: acpResult.acpSessionId,
+        updatedAt,
       }),
     )
   })
 
   app.get("/v1/sessions", async (request, reply) => {
     const query = ListSessionsQuerySchema.parse(request.query)
-    const result = sessionRepository.list({
-      workspaceId: query.workspaceId,
-      limit: query.limit,
-      cursor: query.cursor,
-      search: query.search,
-    })
+    const listed = await acpSupervisor.listAcpSessions(
+      query.cwd === undefined ? undefined : { cwd: query.cwd },
+    )
 
-    if (!result.ok) {
-      return sendProblem(reply, 400, buildInvalidCursorProblem())
+    if (!listed.ok) {
+      return sendProblem(reply, 409, buildAcpUnavailableProblem(listed.reason))
     }
 
-    const collection = SessionCollectionSchema.parse({
-      items: result.value.items,
-      page: {
-        limit: result.value.limit,
-        nextCursor: result.value.nextCursor,
-        previousCursor: result.value.previousCursor,
-        count: result.value.count,
-      },
-    })
-
-    return reply.status(200).send(collection)
+    return reply.status(200).send(
+      SessionCollectionSchema.parse({
+        items: listed.sessions,
+      }),
+    )
   })
 
   app.get("/v1/sessions/:sessionId", async (request, reply) => {

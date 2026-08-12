@@ -41,36 +41,24 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       present: true,
       popular: true,
       deletable: false,
+  sessionListSupported: true,
     },
   ],
 })
 
+const workspacePath = "/home/operator/agent-server"
+const promptTurnId = "turn_01JFC8C7E77NQCFH0RF9Z22JHH"
+
 const createdSession = CreateSessionResponseSchema.parse({
-  id: "sess_01JFC8C7E77NQCFH0RF9Z22JHH",
-  workspaceId: "ws_01",
   agentId: "cursor",
-  name: "Explain auth",
-  state: "running",
-  createdAt: "2026-07-24T12:00:00.000Z",
-  lastUsedAt: "2026-07-24T12:00:00.000Z",
-  archivedAt: null,
-  turnId: "turn_01JFC8C7E77NQCFH0RF9Z22JHH",
+  sessionId: "sess_01JFC8C7E77NQCFH0RF9Z22JHH",
+  cwd: workspacePath,
+  title: "Explain auth",
+  updatedAt: "2026-07-24T12:00:00.000Z",
 })
 
 const sessionsList = SessionCollectionSchema.parse({
-  items: [
-    {
-      id: createdSession.id,
-      workspaceId: createdSession.workspaceId,
-      agentId: createdSession.agentId,
-      name: createdSession.name,
-      state: "idle",
-      createdAt: createdSession.createdAt,
-      lastUsedAt: createdSession.lastUsedAt,
-      archivedAt: null,
-    },
-  ],
-  page: { limit: 100, count: 1 },
+  items: [createdSession],
 })
 
 type FakeSocket = {
@@ -157,7 +145,7 @@ describe("Session stream reconnect rebuild", () => {
         )
       }
 
-      if (url.startsWith(`/v1/sessions/${createdSession.id}/select`) && method === "POST") {
+      if (url.startsWith(`/v1/sessions/${createdSession.sessionId}/select`) && method === "POST") {
         return Promise.resolve(
           new Response(JSON.stringify(sessionsList.items[0]), {
             status: 200,
@@ -225,17 +213,17 @@ describe("Session stream reconnect rebuild", () => {
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {
-      expect(getByRole("combobox", { name: "Session" })).toHaveValue(createdSession.name)
+      expect(getByRole("combobox", { name: "Session" })).toHaveValue(createdSession.title)
     })
 
     await waitFor(() => {
       expect(
-        sockets.some((socket) => isSessionEventSocket(socket, createdSession.id)),
+        sockets.some((socket) => isSessionEventSocket(socket, createdSession.sessionId)),
       ).toBe(true)
     })
 
     const firstSocket = sockets.find((socket) =>
-      isSessionEventSocket(socket, createdSession.id),
+      isSessionEventSocket(socket, createdSession.sessionId),
     )
     expect(firstSocket).toBeDefined()
     expect(firstSocket?.url).toContain("cursor=0")
@@ -249,9 +237,9 @@ describe("Session stream reconnect rebuild", () => {
             cursor: "1",
             occurredAt: "2026-07-24T12:00:00.000Z",
             workspaceId: "ws_01",
-            sessionId: createdSession.id,
+            sessionId: createdSession.sessionId,
             payload: {
-              turnId: createdSession.turnId,
+              turnId: promptTurnId,
               text: "Explain auth",
             },
           },
@@ -260,9 +248,9 @@ describe("Session stream reconnect rebuild", () => {
             cursor: "2",
             occurredAt: "2026-07-24T12:00:01.000Z",
             workspaceId: "ws_01",
-            sessionId: createdSession.id,
+            sessionId: createdSession.sessionId,
             payload: {
-              turnId: createdSession.turnId,
+              turnId: promptTurnId,
               text: "Auth uses JWT",
             },
           },
@@ -271,9 +259,9 @@ describe("Session stream reconnect rebuild", () => {
             cursor: "3",
             occurredAt: "2026-07-24T12:00:02.000Z",
             workspaceId: "ws_01",
-            sessionId: createdSession.id,
+            sessionId: createdSession.sessionId,
             payload: {
-              sessionId: createdSession.id,
+              sessionId: createdSession.sessionId,
               state: "idle",
             },
           },
@@ -299,7 +287,7 @@ describe("Session stream reconnect rebuild", () => {
 
     const reopened = sockets
       .slice(socketsBeforeClose)
-      .find((socket) => isSessionEventSocket(socket, createdSession.id))
+      .find((socket) => isSessionEventSocket(socket, createdSession.sessionId))
     expect(reopened).toBeDefined()
     expect(reopened?.url).toContain("cursor=0")
 
@@ -316,9 +304,9 @@ describe("Session stream reconnect rebuild", () => {
             cursor: "1",
             occurredAt: "2026-07-24T12:00:00.000Z",
             workspaceId: "ws_01",
-            sessionId: createdSession.id,
+            sessionId: createdSession.sessionId,
             payload: {
-              turnId: createdSession.turnId,
+              turnId: promptTurnId,
               text: "Explain auth",
             },
           },
@@ -327,9 +315,9 @@ describe("Session stream reconnect rebuild", () => {
             cursor: "2",
             occurredAt: "2026-07-24T12:00:01.000Z",
             workspaceId: "ws_01",
-            sessionId: createdSession.id,
+            sessionId: createdSession.sessionId,
             payload: {
-              turnId: createdSession.turnId,
+              turnId: promptTurnId,
               text: "Auth uses JWT",
             },
           },
@@ -338,9 +326,9 @@ describe("Session stream reconnect rebuild", () => {
             cursor: "3",
             occurredAt: "2026-07-24T12:00:02.000Z",
             workspaceId: "ws_01",
-            sessionId: createdSession.id,
+            sessionId: createdSession.sessionId,
             payload: {
-              sessionId: createdSession.id,
+              sessionId: createdSession.sessionId,
               state: "idle",
             },
           },
@@ -366,12 +354,12 @@ describe("Session stream reconnect rebuild", () => {
 
     await waitFor(() => {
       expect(
-        sockets.some((socket) => isSessionEventSocket(socket, createdSession.id)),
+        sockets.some((socket) => isSessionEventSocket(socket, createdSession.sessionId)),
       ).toBe(true)
     })
 
     const firstSocket = sockets.find((socket) =>
-      isSessionEventSocket(socket, createdSession.id),
+      isSessionEventSocket(socket, createdSession.sessionId),
     )
     expect(firstSocket).toBeDefined()
 
@@ -384,9 +372,9 @@ describe("Session stream reconnect rebuild", () => {
             cursor: "7",
             occurredAt: "2026-07-24T12:00:00.000Z",
             workspaceId: "ws_01",
-            sessionId: createdSession.id,
+            sessionId: createdSession.sessionId,
             payload: {
-              sessionId: createdSession.id,
+              sessionId: createdSession.sessionId,
               state: "idle",
             },
           },
@@ -406,7 +394,7 @@ describe("Session stream reconnect rebuild", () => {
 
     const reopened = sockets
       .slice(socketsBeforeError)
-      .find((socket) => isSessionEventSocket(socket, createdSession.id))
+      .find((socket) => isSessionEventSocket(socket, createdSession.sessionId))
     expect(reopened).toBeDefined()
     // Clear + full replay from 0 is the correct rebuild after onReconnect clears transcript.
     expect(reopened?.url).toContain("cursor=0")

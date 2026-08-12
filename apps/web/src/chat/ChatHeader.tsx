@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react"
-import { Session, SessionState } from "contracts/http/session"
+import { AcpSession, SessionState } from "contracts/http/session"
 import { AgentId } from "contracts/http/agent-settings"
 import { Workspace } from "contracts/http/workspace"
 import { Combobox, ComboboxOptionItem } from "../design-system/Combobox"
@@ -17,11 +17,11 @@ const NEW_SESSION_VALUE = ""
 type ChatHeaderProps = {
   workspaces: ReadonlyArray<Workspace>
   agents: ReadonlyArray<{ id: AgentId; displayName: string; enabled: boolean }>
-  sessions: ReadonlyArray<Session>
+  sessions: ReadonlyArray<AcpSession>
   workspaceId: string
   agentId: string
   sessionId: string
-  selectedSession: Session | undefined
+  selectedSession: AcpSession | undefined
   selectedSessionState: SessionState | null
   onJoinSession: (sessionId: string) => void
   onStartNewSession: (selection: { workspaceId: string; agentId: AgentId }) => void
@@ -46,10 +46,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false)
   const updateSessionMutation = useUpdateSessionMutation()
 
-  const liveSessions = sessions.filter(
-    (session) => session.state !== "archived" && session.archivedAt === null,
-  )
-
   const sessionOptions = useMemo((): ComboboxOptionItem[] => {
     const items: ComboboxOptionItem[] = [
       {
@@ -57,10 +53,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         label: "New session",
         description: "Pick a workspace and agent",
       },
-      ...liveSessions.map((session) => ({
-        value: session.id,
-        label: session.name,
-        description: `${session.state}`,
+      ...sessions.map((session) => ({
+        value: session.sessionId,
+        label: session.title,
+        description: session.cwd,
       })),
     ]
 
@@ -77,7 +73,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     }
 
     return items
-  }, [liveSessions, selectedSession, selectedSessionState, sessionId])
+  }, [sessions, selectedSession, selectedSessionState, sessionId])
 
   const sessionPickerValue =
     sessionId === "" && workspaceId !== "" && agentId !== ""
@@ -131,7 +127,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     }
 
     await updateSessionMutation.mutateAsync({
-      sessionId: selectedSession.id,
+      sessionId: selectedSession.sessionId,
       body: { name },
     })
   }
@@ -158,13 +154,13 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             ) : null}
             {isEditingName && selectedSession !== undefined ? (
               <InlineEditableText
-                value={selectedSession.name}
+                value={selectedSession.title}
                 onSave={handleRenameSave}
                 onCancel={handleRenameCancel}
                 onEditingChange={setIsEditingName}
                 isSaving={updateSessionMutation.isPending}
                 error={renameError}
-                ariaLabel={`Rename ${selectedSession.name}`}
+                ariaLabel={`Rename ${selectedSession.title}`}
               />
             ) : (
               <Combobox
@@ -182,7 +178,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               <>
                 <button
                   type="button"
-                  aria-label={`Edit name for ${selectedSession.name}`}
+                  aria-label={`Edit name for ${selectedSession.title}`}
                   className="flex size-5 shrink-0 items-center justify-center self-center rounded text-xs text-dim hover:text-body"
                   onClick={() => setIsEditingName(true)}
                 >
@@ -190,7 +186,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 </button>
                 <button
                   type="button"
-                  aria-label={`Archive ${selectedSession.name}`}
+                  aria-label={`Archive ${selectedSession.title}`}
                   className="flex size-5 shrink-0 items-center justify-center self-center rounded text-base leading-none text-dim hover:text-red-400"
                   onClick={() => setIsArchiveModalOpen(true)}
                 >
@@ -206,8 +202,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       </header>
       {selectedSession !== undefined ? (
         <ArchiveSessionModal
-          sessionId={selectedSession.id}
-          sessionName={selectedSession.name}
+          sessionId={selectedSession.sessionId}
+          sessionName={selectedSession.title}
           open={isArchiveModalOpen}
           onClose={() => setIsArchiveModalOpen(false)}
           onArchived={onSessionArchived}

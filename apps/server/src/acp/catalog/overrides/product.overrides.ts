@@ -6,6 +6,7 @@ import { codexAcpAgentProfileOverride } from "./codex.acp.override"
 import { cursorAgentProfileOverride } from "./cursor.override"
 import { geminiAgentProfileOverride } from "./gemini.override"
 import { githubCopilotCliAgentProfileOverride } from "./github.copilot.cli.override"
+import { opencodeAgentProfileOverride } from "./opencode.override"
 import { piAcpAgentProfileOverride } from "./pi.acp.override"
 
 /**
@@ -15,11 +16,12 @@ import { piAcpAgentProfileOverride } from "./pi.acp.override"
 export const productAgentOverridesById: Partial<
   Record<AgentId, AgentProfileOverride>
 > = {
-  cursor: cursorAgentProfileOverride,
+  "cursor": cursorAgentProfileOverride,
   "claude-acp": claudeAcpAgentProfileOverride,
   "codex-acp": codexAcpAgentProfileOverride,
-  gemini: geminiAgentProfileOverride,
+  "gemini": geminiAgentProfileOverride,
   "github-copilot-cli": githubCopilotCliAgentProfileOverride,
+  "opencode": opencodeAgentProfileOverride,
   "pi-acp": piAcpAgentProfileOverride,
-  auggie: auggieAgentProfileOverride,
+  "auggie": auggieAgentProfileOverride,
 }

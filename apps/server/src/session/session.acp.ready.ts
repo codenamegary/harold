@@ -10,20 +10,19 @@ export const ensureSupervisorReady = async (
   acpSupervisor: AcpSupervisor,
   agentId: AgentId,
 ): Promise<boolean> => {
-  const runningAgentId = acpSupervisor.getRunningAgentId()
-  const status = acpSupervisor.getStatus()
-
-  if (status.state === "ready" && runningAgentId === agentId) {
+  if (acpSupervisor.getRunningAgentIds().includes(agentId)) {
     return true
   }
 
   try {
     await acpSupervisor.start(agentId)
-    return acpSupervisor.getStatus().state === "ready"
+    return acpSupervisor.getRunningAgentIds().includes(agentId)
   } catch {
     return false
   }
 }
 
-export const agentAdvertisesResumable = (acpSupervisor: AcpSupervisor): boolean =>
-  acpSupervisor.getAgentCapabilities()?.loadSession === true
+export const agentAdvertisesResumable = (
+  acpSupervisor: AcpSupervisor,
+  agentId?: AgentId,
+): boolean => acpSupervisor.getAgentCapabilities(agentId)?.loadSession === true

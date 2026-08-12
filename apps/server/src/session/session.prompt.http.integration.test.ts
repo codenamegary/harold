@@ -3,7 +3,6 @@ import { EventFrameSchema } from "contracts/events/stream"
 import { Event } from "contracts/events/event"
 import {
   PromptSessionResponseSchema,
-  CreateSessionResponseSchema,
   SessionSchema,
 } from "contracts/http/session"
 import { WebSocket } from "ws"
@@ -14,6 +13,7 @@ import {
   createTestApp,
   createTestAppResources,
   enableAgent,
+  seedBoundSession,
   seedWorkspace,
 } from "../test-support/create-test-app"
 import { eventDataText } from "../test/event.data.text"
@@ -103,45 +103,34 @@ const collectEventsUntil = (params: {
 describe("HTTP prompt accept-and-stream", () => {
   test("POST prompt returns 202 and streams turn.started text, output deltas, then idle", async () => {
     const dataDir = await createTempDataDir(resources)
-    const { app, database, config } = await createTestApp(
+    const { app, database, acpSupervisor, config } = await createTestApp(
       resources,
       dataDir,
       whichFn,
       undefined,
       {
-        capabilities: { loadSession: true, sessionClose: true },
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
         sessionNewSessionId: "fake-session-prompt-http",
         sessionLoadSessionId: "fake-session-prompt-http",
         emitSessionUpdatesOnPrompt: true,
       },
     )
 
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const created = await app.inject({
-      method: "POST",
-      url: "/v1/sessions",
-      payload: {
-        workspaceId,
-        agentId: "cursor",
-        text: "Prompt stream",
-      },
-    })
-    const session = CreateSessionResponseSchema.parse(JSON.parse(created.body))
-    expect(session.state).toBe("running")
-
-    await waitFor(async () => {
-      const latest = await app.inject({
-        method: "GET",
-        url: `/v1/sessions/${session.id}`,
-      })
-      return SessionSchema.parse(JSON.parse(latest.body)).state === "idle"
+    const { sessionId } = await seedBoundSession({
+      database,
+      acpSupervisor,
+      workspaceId,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+      name: "Prompt stream",
     })
 
     const { httpBase, wsUrl } = await getListeningUrl(app, config)
     const { eventsPromise, whenOpen } = collectEventsUntil({
-      url: `${wsUrl}?sessionId=${session.id}`,
+      url: `${wsUrl}?sessionId=${sessionId}`,
       until: (events) =>
         events.some((event) => event.type === "turn.completed") &&
         events.some(
@@ -157,7 +146,7 @@ describe("HTTP prompt accept-and-stream", () => {
 
     await whenOpen
 
-    const promptResponse = await fetch(`${httpBase}/v1/sessions/${session.id}/prompt`, {
+    const promptResponse = await fetch(`${httpBase}/v1/sessions/${sessionId}/prompt`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text: "operator prompt text" }),
@@ -169,7 +158,7 @@ describe("HTTP prompt accept-and-stream", () => {
 
     const running = await app.inject({
       method: "GET",
-      url: `/v1/sessions/${session.id}`,
+      url: `/v1/sessions/${sessionId}`,
     })
     expect(SessionSchema.parse(JSON.parse(running.body)).state).toBe("running")
 
@@ -188,14 +177,14 @@ describe("HTTP prompt accept-and-stream", () => {
     await waitFor(async () => {
       const latest = await app.inject({
         method: "GET",
-        url: `/v1/sessions/${session.id}`,
+        url: `/v1/sessions/${sessionId}`,
       })
       return SessionSchema.parse(JSON.parse(latest.body)).state === "idle"
     })
 
     const idle = await app.inject({
       method: "GET",
-      url: `/v1/sessions/${session.id}`,
+      url: `/v1/sessions/${sessionId}`,
     })
     expect(SessionSchema.parse(JSON.parse(idle.body)).state).toBe("idle")
 

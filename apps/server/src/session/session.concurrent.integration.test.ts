@@ -5,7 +5,6 @@ import { Event } from "contracts/events/event"
 import {
   CancelSessionResponseSchema,
   PromptSessionResponseSchema,
-  CreateSessionResponseSchema,
   SessionSchema,
 } from "contracts/http/session"
 import { WebSocket } from "ws"
@@ -17,6 +16,7 @@ import {
   createTestApp,
   createTestAppResources,
   enableAgent,
+  seedBoundSession,
   seedWorkspace,
 } from "../test-support/create-test-app"
 import { eventDataText } from "../test/event.data.text"
@@ -28,7 +28,7 @@ const whichFn: WhichFn = (binaryName) =>
   binaryName === "agent" ? "/usr/local/bin/agent" : undefined
 
 const multiSessionFakeAcp = {
-  capabilities: { loadSession: true, sessionClose: true },
+  capabilities: { loadSession: true, sessionClose: true, sessionList: true },
   emitSessionUpdatesOnPrompt: true,
   promptCompletionDelayMs: 400,
 } as const
@@ -79,29 +79,29 @@ const waitForIdle = async (
   })
 }
 
-const createIdleSession = async (
+const createIdleSession = async (params: {
   app: {
     inject: (opts: {
       method: string
       url: string
       payload?: Record<string, string>
     }) => Promise<{ body: string; statusCode: number }>
-  },
-  params: { workspaceId: string; text: string },
-) => {
-  const created = await app.inject({
-    method: "POST",
-    url: "/v1/sessions",
-    payload: {
-      workspaceId: params.workspaceId,
-      agentId: "cursor",
-      text: params.text,
-    },
+  }
+  database: Parameters<typeof seedBoundSession>[0]["database"]
+  acpSupervisor: Parameters<typeof seedBoundSession>[0]["acpSupervisor"]
+  workspaceId: string
+  workspaceDir: string
+  name: string
+}) => {
+  const seeded = await seedBoundSession({
+    database: params.database,
+    acpSupervisor: params.acpSupervisor,
+    workspaceId: params.workspaceId,
+    workspacePath: params.workspaceDir,
+    agentId: "cursor",
+    name: params.name,
   })
-  const session = CreateSessionResponseSchema.parse(JSON.parse(created.body))
-  expect(session.state).toBe("running")
-  await waitForIdle(app, session.id)
-  return session
+  return { id: seeded.sessionId }
 }
 
 const collectEventsUntil = (params: {
@@ -160,7 +160,7 @@ const hasTurnCancelled = (events: Event[], turnId: string) =>
 describe("concurrent session routing isolation", () => {
   test("session A slow prompt keeps running after select B and prompt B", async () => {
     const dataDir = await createTempDataDir(resources)
-    const { app, database, config } = await createTestApp(
+    const { app, database, acpSupervisor, config } = await createTestApp(
       resources,
       dataDir,
       whichFn,
@@ -168,16 +168,24 @@ describe("concurrent session routing isolation", () => {
       multiSessionFakeAcp,
     )
 
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const sessionA = await createIdleSession(app, {
+    const sessionA = await createIdleSession({
+      app,
+      database,
+      acpSupervisor,
       workspaceId,
-      text: "Session A seed",
+      workspaceDir,
+      name: "Session A seed",
     })
-    const sessionB = await createIdleSession(app, {
+    const sessionB = await createIdleSession({
+      app,
+      database,
+      acpSupervisor,
       workspaceId,
-      text: "Session B seed",
+      workspaceDir,
+      name: "Session B seed",
     })
     expect(sessionA.id).not.toBe(sessionB.id)
 
@@ -320,7 +328,7 @@ describe("concurrent session routing isolation", () => {
 
   test("cancel on one session does not cancel the other", async () => {
     const dataDir = await createTempDataDir(resources)
-    const { app, database, config } = await createTestApp(
+    const { app, database, acpSupervisor, config } = await createTestApp(
       resources,
       dataDir,
       whichFn,
@@ -328,16 +336,24 @@ describe("concurrent session routing isolation", () => {
       multiSessionFakeAcp,
     )
 
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const sessionA = await createIdleSession(app, {
+    const sessionA = await createIdleSession({
+      app,
+      database,
+      acpSupervisor,
       workspaceId,
-      text: "Cancel A seed",
+      workspaceDir,
+      name: "Cancel A seed",
     })
-    const sessionB = await createIdleSession(app, {
+    const sessionB = await createIdleSession({
+      app,
+      database,
+      acpSupervisor,
       workspaceId,
-      text: "Cancel B seed",
+      workspaceDir,
+      name: "Cancel B seed",
     })
 
     const { httpBase, wsUrl } = await getListeningUrl(app, config)
@@ -419,7 +435,7 @@ describe("concurrent session routing isolation", () => {
 
   test("same-session concurrent double prompt returns 409", async () => {
     const dataDir = await createTempDataDir(resources)
-    const { app, database } = await createTestApp(
+    const { app, database, acpSupervisor } = await createTestApp(
       resources,
       dataDir,
       whichFn,
@@ -427,12 +443,16 @@ describe("concurrent session routing isolation", () => {
       multiSessionFakeAcp,
     )
 
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const session = await createIdleSession(app, {
+    const session = await createIdleSession({
+      app,
+      database,
+      acpSupervisor,
       workspaceId,
-      text: "Double prompt seed",
+      workspaceDir,
+      name: "Double prompt seed",
     })
 
     const [first, second] = await Promise.all([
@@ -464,7 +484,7 @@ describe("concurrent session routing isolation", () => {
 
   test("select has no execution side effect on other running session", async () => {
     const dataDir = await createTempDataDir(resources)
-    const { app, database } = await createTestApp(
+    const { app, database, acpSupervisor } = await createTestApp(
       resources,
       dataDir,
       whichFn,
@@ -472,16 +492,24 @@ describe("concurrent session routing isolation", () => {
       multiSessionFakeAcp,
     )
 
-    const { workspaceId } = await seedWorkspace(app, dataDir)
+    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
 
-    const sessionA = await createIdleSession(app, {
+    const sessionA = await createIdleSession({
+      app,
+      database,
+      acpSupervisor,
       workspaceId,
-      text: "Select side A",
+      workspaceDir,
+      name: "Select side A",
     })
-    const sessionB = await createIdleSession(app, {
+    const sessionB = await createIdleSession({
+      app,
+      database,
+      acpSupervisor,
       workspaceId,
-      text: "Select side B",
+      workspaceDir,
+      name: "Select side B",
     })
 
     const promptA = await app.inject({

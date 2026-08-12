@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { mkdtemp, rm } from "node:fs/promises"
-import os from "node:os"
-import path from "node:path"
 import { catalogAgentIds } from "../acp/catalog/generated/catalog.agents.generated"
 import {
+  ConflictProblemSchema,
   InternalProblemSchema,
   NotFoundProblemSchema,
   ValidationProblemSchema,
@@ -14,24 +12,24 @@ import {
   DetectAgentPathResponseSchema,
   ImportDetectResponseSchema,
 } from "contracts/http/agent-settings"
+import { WhichFn } from "../agent-settings/resolve-agent-path"
+import { ValidateExecutablePathFn, validateExecutablePath } from "../agent-settings/validate-agent-path"
+import { FetchRegistryFn } from "../agent-settings/agent-settings-repository"
 import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
-import { WhichFn } from "../agent-settings/resolve-agent-path"
-import { ValidateExecutablePathFn, validateExecutablePath } from "../agent-settings/validate-agent-path"
-import { FetchRegistryFn } from "../agent-settings/agent-settings-repository"
+import {
+  acceptTestExecutablePath,
+  cleanupTestAppResources,
+  createFakeSpawnFn,
+  createTempDataDir as createTempDataDirWithResources,
+  createTestAppResources,
+} from "../test-support/create-test-app"
 
-const tempDirs: string[] = []
-const apps: Awaited<ReturnType<typeof createServer>>["app"][] = []
+const resources = createTestAppResources()
 
-const createTempDataDir = async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-agent-settings-api-"))
-  tempDirs.push(dir)
-  return dir
-}
-
-const acceptTestExecutablePath: ValidateExecutablePathFn = () => true
+const createTempDataDir = () => createTempDataDirWithResources(resources)
 
 const createTestApp = async (
   dataDir: string,
@@ -46,21 +44,28 @@ const createTestApp = async (
   })
   const database = openDatabase({ dataDir: config.dataDir })
   const runtime = createRuntime("0.1.0")
-  const { app } = await createServer({
+  const { spawnAgentProcessFn } = createFakeSpawnFn(resources, {
+    capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+  })
+  const { app, acpSupervisor, disposeOfflineOnBindingClear } = await createServer({
     config,
     runtime,
     database,
     whichFn,
     validateExecutablePathFn,
     fetchRegistryFn,
+    spawnAgentProcessFn,
   })
-  apps.push(app)
+  resources.addApp(app)
+  resources.addTeardown(async () => {
+    disposeOfflineOnBindingClear()
+    await acpSupervisor.stop()
+  })
   return { app, database, config }
 }
 
 afterEach(async () => {
-  await Promise.all(apps.splice(0).map((app) => app.close()))
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+  await cleanupTestAppResources(resources)
 })
 
 const findAgent = (
@@ -225,6 +230,30 @@ describe("POST /v1/settings/agents/:agentId/detect-path", () => {
 })
 
 describe("PATCH /v1/settings/agents/:agentId", () => {
+  test("rejects enable for agents without session/list", async () => {
+    const dataDir = await createTempDataDir()
+    const whichFn: WhichFn = () => undefined
+    const { app } = await createTestApp(dataDir, whichFn)
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/settings/agents/gemini",
+      payload: { enabled: true, path: "/usr/local/bin/gemini" },
+    })
+
+    expect(response.statusCode).toBe(409)
+    const problem = ConflictProblemSchema.parse(JSON.parse(response.body))
+    expect(problem.detail).toContain("sessionCapabilities.list")
+
+    const listed = await app.inject({ method: "GET", url: "/v1/settings/agents" })
+    const gemini = findAgent(
+      AgentSettingsCollectionSchema.parse(JSON.parse(listed.body)),
+      "gemini",
+    )
+    expect(gemini.enabled).toBe(false)
+    expect(gemini.sessionListSupported).toBe(false)
+  })
+
   test("enables cursor and auto-detects executable path", async () => {
     const dataDir = await createTempDataDir()
     const detectedPath = "/usr/local/bin/agent"
@@ -439,6 +468,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
       present: false,
       popular: true,
       deletable: false,
+  sessionListSupported: true,
     })
   })
 
@@ -592,6 +622,7 @@ describe("POST /v1/settings/agents/import/detect and apply", () => {
       present: true,
       popular: false,
       deletable: true,
+  sessionListSupported: true,
     })
     expect(applyBody.items[0]?.id).toBe("brand-new-agent")
   })
@@ -637,6 +668,7 @@ describe("POST /v1/settings/agents custom create", () => {
       present: false,
       popular: false,
       deletable: true,
+  sessionListSupported: true,
     })
 
     const secondResponse = await app.inject({
@@ -807,42 +839,19 @@ describe("agent settings durability", () => {
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
 
-    const firstConfig = parseConfig({
-      AGENT_SERVER_HOST: "127.0.0.1",
-      AGENT_SERVER_PORT: "0",
-      AGENT_SERVER_DATA_DIR: dataDir,
-    })
-    const firstDatabase = openDatabase({ dataDir: firstConfig.dataDir })
-    const firstRuntime = createRuntime("0.1.0")
-    const { app: firstApp } = await createServer({
-      config: firstConfig,
-      runtime: firstRuntime,
-      database: firstDatabase,
-      whichFn,
-      validateExecutablePathFn: acceptTestExecutablePath,
-    })
-
-    await firstApp.inject({
+    const first = await createTestApp(dataDir, whichFn)
+    const enableResponse = await first.app.inject({
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true },
     })
+    expect(enableResponse.statusCode).toBe(200)
 
-    await firstApp.close()
-    firstDatabase.close()
+    await first.app.close()
+    first.database.close()
 
-    const secondDatabase = openDatabase({ dataDir })
-    const secondRuntime = createRuntime("0.1.0")
-    const { app: secondApp } = await createServer({
-      config: firstConfig,
-      runtime: secondRuntime,
-      database: secondDatabase,
-      whichFn,
-      validateExecutablePathFn: acceptTestExecutablePath,
-    })
-    apps.push(secondApp)
-
-    const response = await secondApp.inject({
+    const second = await createTestApp(dataDir, whichFn)
+    const response = await second.app.inject({
       method: "GET",
       url: "/v1/settings/agents",
     })
@@ -852,7 +861,5 @@ describe("agent settings durability", () => {
     expect(cursor.enabled).toBe(true)
     expect(cursor.path).toBe(detectedPath)
     expect(cursor.args).toEqual(["acp"])
-
-    secondDatabase.close()
   })
 })

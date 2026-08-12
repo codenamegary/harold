@@ -59,11 +59,10 @@ describe("SessionSchema", () => {
 })
 
 describe("CreateSessionBodySchema", () => {
-  test("accepts a valid create body with prompt text", () => {
+  test("accepts agentId and cwd", () => {
     const body = {
-      workspaceId: "ws-agent-server",
       agentId: "cursor",
-      text: "Explain the auth flow",
+      cwd: "/tmp/project",
     }
 
     expect(CreateSessionBodySchema.parse(body)).toEqual(body)
@@ -72,9 +71,8 @@ describe("CreateSessionBodySchema", () => {
   test("accepts open agent ids", () => {
     expect(
       CreateSessionBodySchema.parse({
-        workspaceId: "ws-agent-server",
         agentId: "not-a-catalog-agent",
-        text: "Explain the auth flow",
+        cwd: "/tmp/project",
       }).agentId,
     ).toBe("not-a-catalog-agent")
   })
@@ -82,81 +80,56 @@ describe("CreateSessionBodySchema", () => {
   test("rejects empty agent id", () => {
     expect(() =>
       CreateSessionBodySchema.parse({
-        workspaceId: "ws-agent-server",
         agentId: "",
+        cwd: "/tmp/project",
+      }),
+    ).toThrow()
+  })
+
+  test("rejects empty cwd", () => {
+    expect(() =>
+      CreateSessionBodySchema.parse({
+        agentId: "cursor",
+        cwd: "",
+      }),
+    ).toThrow()
+  })
+
+  test("rejects workspaceId and first-prompt text", () => {
+    expect(() =>
+      CreateSessionBodySchema.parse({
+        agentId: "cursor",
+        cwd: "/tmp/project",
+        workspaceId: "ws-agent-server",
         text: "Explain the auth flow",
-      }),
-    ).toThrow()
-  })
-
-  test("rejects empty text", () => {
-    expect(() =>
-      CreateSessionBodySchema.parse({
-        workspaceId: "ws-agent-server",
-        agentId: "cursor",
-        text: "",
-      }),
-    ).toThrow()
-  })
-
-  test("rejects text over 32768 characters", () => {
-    expect(() =>
-      CreateSessionBodySchema.parse({
-        workspaceId: "ws-agent-server",
-        agentId: "cursor",
-        text: "a".repeat(32_769),
-      }),
-    ).toThrow()
-  })
-
-  test("rejects client name field", () => {
-    expect(() =>
-      CreateSessionBodySchema.parse({
-        workspaceId: "ws-agent-server",
-        agentId: "cursor",
-        text: "Explain the auth flow",
-        name: "Auth flow",
-      }),
-    ).toThrow()
-  })
-
-  test("rejects internal acpSessionId", () => {
-    expect(() =>
-      CreateSessionBodySchema.parse({
-        workspaceId: "ws-agent-server",
-        agentId: "cursor",
-        text: "Explain the auth flow",
-        acpSessionId: "acp-session-1",
-      }),
-    ).toThrow()
-  })
-
-  test("rejects prototype state field", () => {
-    expect(() =>
-      CreateSessionBodySchema.parse({
-        workspaceId: "ws-agent-server",
-        agentId: "cursor",
-        text: "Explain the auth flow",
-        state: "idle",
       }),
     ).toThrow()
   })
 })
 
 describe("CreateSessionResponseSchema", () => {
-  test("accepts session fields plus turnId", () => {
-    const body = {
-      ...validSession,
-      turnId: validTurnId,
-    }
+  const catalogSession = {
+    agentId: "cursor",
+    sessionId: "acp-session-1",
+    cwd: "/tmp/project",
+    title: "acp-session-1",
+    updatedAt: "2026-08-11T12:00:00.000Z",
+  } as const
 
-    expect(CreateSessionResponseSchema.parse(body)).toEqual(body)
+  test("accepts an ACP catalog session row", () => {
+    expect(CreateSessionResponseSchema.parse(catalogSession)).toEqual(catalogSession)
   })
 
-  test("rejects response without turnId", () => {
-    expect(() => CreateSessionResponseSchema.parse(validSession)).toThrow()
+  test("rejects legacy turnId create response", () => {
+    expect(() =>
+      CreateSessionResponseSchema.parse({
+        ...validSession,
+        turnId: validTurnId,
+      }),
+    ).toThrow()
   })
 })
+
 
 describe("UpdateSessionBodySchema", () => {
   test("accepts a valid update body", () => {
@@ -195,81 +168,54 @@ describe("UpdateSessionBodySchema", () => {
 })
 
 describe("ListSessionsQuerySchema", () => {
-  test("defaults limit to 100", () => {
-    expect(
-      ListSessionsQuerySchema.parse({ workspaceId: "ws-agent-server" }),
-    ).toEqual({
-      workspaceId: "ws-agent-server",
-      limit: 100,
+  test("accepts empty query", () => {
+    expect(ListSessionsQuerySchema.parse({})).toEqual({})
+  })
+
+  test("accepts optional cwd", () => {
+    expect(ListSessionsQuerySchema.parse({ cwd: "/tmp/project" })).toEqual({
+      cwd: "/tmp/project",
     })
   })
 
-  test("rejects limit above 200", () => {
+  test("rejects empty cwd", () => {
+    expect(() => ListSessionsQuerySchema.parse({ cwd: "" })).toThrow()
+  })
+
+  test("rejects legacy workspaceId pagination fields", () => {
     expect(() =>
       ListSessionsQuerySchema.parse({
         workspaceId: "ws-agent-server",
-        limit: 201,
-      }),
-    ).toThrow()
-  })
-
-  test("defaults limit when workspaceId omitted", () => {
-    expect(ListSessionsQuerySchema.parse({})).toEqual({
-      limit: 100,
-    })
-  })
-
-  test("accepts cursor", () => {
-    expect(
-      ListSessionsQuerySchema.parse({
-        workspaceId: "ws-agent-server",
+        limit: 100,
         cursor: "session_02",
-      }),
-    ).toEqual({
-      workspaceId: "ws-agent-server",
-      limit: 100,
-      cursor: "session_02",
-    })
-  })
-
-  test("accepts search", () => {
-    expect(
-      ListSessionsQuerySchema.parse({
-        workspaceId: "ws-agent-server",
         search: "auth",
-        limit: 20,
-      }),
-    ).toEqual({
-      workspaceId: "ws-agent-server",
-      search: "auth",
-      limit: 20,
-    })
-  })
-
-  test("rejects empty search", () => {
-    expect(() =>
-      ListSessionsQuerySchema.parse({
-        search: "",
       }),
     ).toThrow()
   })
 })
 
 describe("SessionCollectionSchema", () => {
-  test("accepts a session collection", () => {
+  const catalogSession = {
+    agentId: "cursor",
+    sessionId: "acp-session-1",
+    cwd: "/tmp/project",
+    title: "Auth flow",
+    updatedAt: "2026-08-11T12:00:00.000Z",
+  } as const
+
+  test("accepts an ACP catalog collection", () => {
     const collection = {
-      items: [validSession],
-      page: { limit: 20, nextCursor: "session_02", count: 1 },
+      items: [catalogSession],
     }
 
     expect(SessionCollectionSchema.parse(collection)).toEqual(collection)
   })
 
-  test("rejects prototype hasMore on page", () => {
+  test("rejects legacy page metadata", () => {
     expect(() =>
       SessionCollectionSchema.parse({
-        items: [validSession],
-        page: { limit: 20, hasMore: true },
+        items: [catalogSession],
+        page: { limit: 20, nextCursor: "session_02", count: 1 },
       }),
     ).toThrow()
   })

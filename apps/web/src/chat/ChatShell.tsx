@@ -63,9 +63,10 @@ export const ChatShell: React.FC = () => {
   const workspaces =
     workspacesQuery.data?.pages.flatMap((page) => page.items) ?? []
   const agents = agentsQuery.data?.items ?? []
-  const sessions = (sessionsQuery.data?.items ?? []).filter(
-    (session) => session.state !== "archived" && session.archivedAt === null,
-  )
+  const sessions = sessionsQuery.data?.items ?? []
+
+  const workspaceIdForCwd = (cwd: string) =>
+    workspaces.find((workspace) => workspace.path === cwd)?.id ?? ""
 
   const persistSelection = (next: {
     workspaceId: string
@@ -89,22 +90,33 @@ export const ChatShell: React.FC = () => {
       return
     }
 
-    const matched = sessions.find((session) => session.id === saved.sessionId)
+    const sessionItems = sessionsQuery.data?.items ?? []
+    const matched = sessionItems.find((session) => session.sessionId === saved.sessionId)
     if (matched === undefined) {
       clearChatSelection()
       return
     }
 
-    setWorkspaceId(matched.workspaceId)
+    const workspaceItems =
+      workspacesQuery.data?.pages.flatMap((page) => page.items) ?? []
+    const resolvedWorkspaceId =
+      workspaceItems.find((workspace) => workspace.path === matched.cwd)?.id ?? ""
+    setWorkspaceId(resolvedWorkspaceId)
     setAgentId(matched.agentId)
-    setSessionId(matched.id)
-    persistSelection({
-      workspaceId: matched.workspaceId,
+    setSessionId(matched.sessionId)
+    writeChatSelection({
+      workspaceId: resolvedWorkspaceId,
       agentId: matched.agentId,
-      sessionId: matched.id,
+      sessionId: matched.sessionId,
     })
-    selectSessionMutation.mutate(matched.id)
-  }, [sessions, sessionsQuery.isError, sessionsQuery.isLoading, selectSessionMutation])
+    selectSessionMutation.mutate(matched.sessionId)
+  }, [
+    sessionsQuery.data?.items,
+    sessionsQuery.isError,
+    sessionsQuery.isLoading,
+    selectSessionMutation,
+    workspacesQuery.data?.pages,
+  ])
 
   const handleEvents = (events: ReadonlyArray<Event>) => {
     setTranscript((current) => foldTranscriptEvents(current, events))
@@ -149,7 +161,7 @@ export const ChatShell: React.FC = () => {
     onReconnect: handleReconnect,
   })
 
-  const selectedSession = sessions.find((session) => session.id === sessionId)
+  const selectedSession = sessions.find((session) => session.sessionId === sessionId)
 
   const handleSessionArchived = () => {
     setSessionId("")
@@ -160,7 +172,7 @@ export const ChatShell: React.FC = () => {
   const effectiveSessionState = resolveEffectiveSessionState({
     sessionId,
     transcriptSessionState: transcript.sessionState,
-    listSessionState: selectedSession?.state,
+    listSessionState: undefined,
   })
   const runningFromSession =
     effectiveSessionState === "running" || effectiveSessionState === "awaiting-permission"
@@ -200,19 +212,20 @@ export const ChatShell: React.FC = () => {
   const blockedMessage = composerBlockedMessage(effectiveSessionState)
 
   const handleJoinSession = (nextSessionId: string) => {
-    const nextSession = sessions.find((session) => session.id === nextSessionId)
+    const nextSession = sessions.find((session) => session.sessionId === nextSessionId)
     if (nextSession === undefined) {
       return
     }
 
-    setWorkspaceId(nextSession.workspaceId)
+    const nextWorkspaceId = workspaceIdForCwd(nextSession.cwd)
+    setWorkspaceId(nextWorkspaceId)
     setAgentId(nextSession.agentId)
-    setSessionId(nextSession.id)
+    setSessionId(nextSession.sessionId)
     setTranscript(emptyTranscript)
     persistSelection({
-      workspaceId: nextSession.workspaceId,
+      workspaceId: nextWorkspaceId,
       agentId: nextSession.agentId,
-      sessionId: nextSession.id,
+      sessionId: nextSession.sessionId,
     })
     selectSessionMutation.mutate(nextSessionId)
   }
@@ -238,20 +251,28 @@ export const ChatShell: React.FC = () => {
     }
 
     if (sessionId === "") {
+      const workspace = workspaces.find((item) => item.id === workspaceId)
+      if (workspace === undefined) {
+        return
+      }
+
       createSessionMutation.mutate(
         {
-          workspaceId,
           agentId,
-          text,
+          cwd: workspace.path,
         },
         {
           onSuccess: (created) => {
-            setSessionId(created.id)
+            setSessionId(created.sessionId)
             setTranscript(emptyTranscript)
             persistSelection({
-              workspaceId: created.workspaceId,
+              workspaceId,
               agentId: created.agentId,
-              sessionId: created.id,
+              sessionId: created.sessionId,
+            })
+            promptSessionMutation.mutate({
+              sessionId: created.sessionId,
+              body: { text },
             })
           },
         },

@@ -151,7 +151,7 @@ describe("createAcpSupervisor", () => {
     expect(supervisor.getRunningAgentId()).toBe("cursor")
     expect(supervisor.getAgentCapabilities()).toEqual({
       loadSession: true,
-      sessionCapabilities: { close: true },
+      sessionCapabilities: { close: true, list: false },
     })
   })
 
@@ -530,6 +530,255 @@ describe("createAcpSupervisor", () => {
     await supervisor.handleAgentDisabled("cursor")
 
     expect(supervisor.getStatus().state).toBe("stopped")
+  })
+
+  test("keeps two enabled agents ready at the same time", async () => {
+    const cursorMock = createMockTransport()
+    cursorMock.setHandler("initialize", () => ({
+      agentCapabilities: {
+        loadSession: false,
+        sessionCapabilities: { close: false, list: {} },
+      },
+    }))
+    cursorMock.setHandler("authenticate", () => ({}))
+
+    const opencodeMock = createMockTransport()
+    opencodeMock.setHandler("initialize", () => ({
+      agentCapabilities: {
+        loadSession: false,
+        sessionCapabilities: { close: false, list: {} },
+      },
+    }))
+    opencodeMock.setHandler("authenticate", () => ({}))
+
+    const transportsByPath = new Map<string, JsonRpcTransport>([
+      ["/bin/cursor", cursorMock.transport],
+      ["/bin/opencode", opencodeMock.transport],
+    ])
+    const spawnedPaths: string[] = []
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/cursor" },
+        { id: "opencode", enabled: true, path: "/bin/opencode" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: ({ executablePath }) => {
+        spawnedPaths.push(executablePath)
+        return createMockProcess()
+      },
+      createTransportFn: () => {
+        const path = spawnedPaths.at(-1)
+        const transport = path === undefined ? undefined : transportsByPath.get(path)
+        if (transport === undefined) {
+          throw new Error(`missing transport for ${path}`)
+        }
+        return transport
+      },
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    await supervisor.start("opencode")
+
+    expect(supervisor.getRunningAgentIds()).toEqual(["cursor", "opencode"])
+    expect(supervisor.getStatus().state).toBe("ready")
+    expect(supervisor.getAgentCapabilities("cursor")).toEqual({
+      loadSession: false,
+      sessionCapabilities: { close: false, list: true },
+    })
+    expect(supervisor.getAgentCapabilities("opencode")).toEqual({
+      loadSession: false,
+      sessionCapabilities: { close: false, list: true },
+    })
+  })
+
+  test("handleAgentDisabled stops one agent without stopping another", async () => {
+    const cursorMock = createMockTransport()
+    cursorMock.setHandler("initialize", () => ({
+      agentCapabilities: {
+        loadSession: false,
+        sessionCapabilities: { close: false, list: {} },
+      },
+    }))
+    cursorMock.setHandler("authenticate", () => ({}))
+
+    const opencodeMock = createMockTransport()
+    opencodeMock.setHandler("initialize", () => ({
+      agentCapabilities: {
+        loadSession: false,
+        sessionCapabilities: { close: false, list: {} },
+      },
+    }))
+    opencodeMock.setHandler("authenticate", () => ({}))
+
+    const transportsByPath = new Map<string, JsonRpcTransport>([
+      ["/bin/cursor", cursorMock.transport],
+      ["/bin/opencode", opencodeMock.transport],
+    ])
+    const spawnedPaths: string[] = []
+    const killedByPath = new Map<string, boolean>()
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/cursor" },
+        { id: "opencode", enabled: true, path: "/bin/opencode" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: ({ executablePath }) => {
+        spawnedPaths.push(executablePath)
+        return {
+          ...createMockProcess(),
+          kill: () => {
+            killedByPath.set(executablePath, true)
+          },
+        }
+      },
+      createTransportFn: () => {
+        const path = spawnedPaths.at(-1)
+        const transport = path === undefined ? undefined : transportsByPath.get(path)
+        if (transport === undefined) {
+          throw new Error(`missing transport for ${path}`)
+        }
+        return transport
+      },
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    await supervisor.start("opencode")
+    await supervisor.handleAgentDisabled("cursor")
+
+    expect(killedByPath.get("/bin/cursor")).toBe(true)
+    expect(killedByPath.get("/bin/opencode")).toBeUndefined()
+    expect(supervisor.getRunningAgentIds()).toEqual(["opencode"])
+    expect(supervisor.getStatus().state).toBe("ready")
+  })
+
+  test("listAcpSessions unions session/list rows tagged with agentId", async () => {
+    const cursorMock = createMockTransport()
+    cursorMock.setHandler("initialize", () => ({
+      agentCapabilities: {
+        loadSession: false,
+        sessionCapabilities: { close: false, list: {} },
+      },
+    }))
+    cursorMock.setHandler("authenticate", () => ({}))
+    cursorMock.setHandler("session/list", () => ({
+      sessions: [
+        {
+          sessionId: "cursor-sess-1",
+          cwd: "/tmp/a",
+          title: "Cursor A",
+          updatedAt: "2026-08-11T12:00:00.000Z",
+        },
+      ],
+    }))
+
+    const opencodeMock = createMockTransport()
+    opencodeMock.setHandler("initialize", () => ({
+      agentCapabilities: {
+        loadSession: false,
+        sessionCapabilities: { close: false, list: {} },
+      },
+    }))
+    opencodeMock.setHandler("authenticate", () => ({}))
+    opencodeMock.setHandler("session/list", () => ({
+      sessions: [
+        {
+          sessionId: "opencode-sess-1",
+          cwd: "/tmp/b",
+          title: "OpenCode B",
+          updatedAt: "2026-08-11T13:00:00.000Z",
+        },
+      ],
+    }))
+
+    const transportsByPath = new Map<string, JsonRpcTransport>([
+      ["/bin/cursor", cursorMock.transport],
+      ["/bin/opencode", opencodeMock.transport],
+    ])
+    const spawnedPaths: string[] = []
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/cursor" },
+        { id: "opencode", enabled: true, path: "/bin/opencode" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: ({ executablePath }) => {
+        spawnedPaths.push(executablePath)
+        return createMockProcess()
+      },
+      createTransportFn: () => {
+        const path = spawnedPaths.at(-1)
+        const transport = path === undefined ? undefined : transportsByPath.get(path)
+        if (transport === undefined) {
+          throw new Error(`missing transport for ${path}`)
+        }
+        return transport
+      },
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    await supervisor.start("opencode")
+
+    const listed = await supervisor.listAcpSessions()
+    expect(listed).toEqual({
+      ok: true,
+      sessions: [
+        {
+          agentId: "cursor",
+          sessionId: "cursor-sess-1",
+          cwd: "/tmp/a",
+          title: "Cursor A",
+          updatedAt: "2026-08-11T12:00:00.000Z",
+        },
+        {
+          agentId: "opencode",
+          sessionId: "opencode-sess-1",
+          cwd: "/tmp/b",
+          title: "OpenCode B",
+          updatedAt: "2026-08-11T13:00:00.000Z",
+        },
+      ],
+    })
+  })
+
+  test("createSession calls session/new with cwd for the chosen agent", async () => {
+    const mock = createMockTransport()
+    const sessionNewCalls: unknown[] = []
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: {
+        loadSession: false,
+        sessionCapabilities: { close: false, list: {} },
+      },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+    mock.setHandler("session/new", (params) => {
+      sessionNewCalls.push(params)
+      return { sessionId: "catalog-sess-1" }
+    })
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: () => createMockProcess(),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    const created = await supervisor.createSession({
+      agentId: "cursor",
+      cwd: "/tmp/project",
+    })
+
+    expect(created).toEqual({ ok: true, acpSessionId: "catalog-sess-1" })
+    expect(sessionNewCalls).toEqual([{ cwd: "/tmp/project", mcpServers: [] }])
   })
 
   test("createAcpSession updates activeSessions count", async () => {

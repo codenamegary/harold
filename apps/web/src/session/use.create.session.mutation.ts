@@ -12,35 +12,21 @@ export const useCreateSessionMutation = () => {
   return useMutation({
     mutationFn: (body: CreateSessionBody) => createSession(body),
     onSuccess: async (session) => {
-      const key = queryKeys.sessions(session.workspaceId)
-      const existing = queryClient.getQueryData(key)
-      if (existing !== undefined) {
-        const collection = SessionCollectionSchema.parse(existing)
-        const withoutCreated = collection.items.filter((item) => item.id !== session.id)
-        const nextCount = withoutCreated.length + 1
-        queryClient.setQueryData(
-          key,
-          SessionCollectionSchema.parse({
-            items: [
-              {
-                id: session.id,
-                workspaceId: session.workspaceId,
-                agentId: session.agentId,
-                name: session.name,
-                state: session.state,
-                createdAt: session.createdAt,
-                lastUsedAt: session.lastUsedAt,
-                archivedAt: session.archivedAt,
-              },
-              ...withoutCreated,
-            ],
-            page: {
-              ...collection.page,
-              count: nextCount,
-            },
-          }),
-        )
-      }
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.sessionsRoot },
+        (existing: unknown) => {
+          if (existing === undefined) {
+            return existing
+          }
+          const collection = SessionCollectionSchema.parse(existing)
+          const withoutCreated = collection.items.filter(
+            (item) => item.sessionId !== session.sessionId,
+          )
+          return SessionCollectionSchema.parse({
+            items: [session, ...withoutCreated],
+          })
+        },
+      )
 
       await queryClient.invalidateQueries({ queryKey: queryKeys.sessionsRoot })
     },

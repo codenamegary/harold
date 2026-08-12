@@ -1,7 +1,7 @@
 import { SessionCollectionSchema } from "contracts/http/session"
 
 export type FetchSessionsParams = {
-  workspaceId?: string
+  cwd?: string
   limit?: number
   cursor?: string
 }
@@ -9,8 +9,8 @@ export type FetchSessionsParams = {
 export const fetchSessions = async (params: FetchSessionsParams = {}) => {
   const searchParams = new URLSearchParams()
 
-  if (params.workspaceId !== undefined && params.workspaceId !== "") {
-    searchParams.set("workspaceId", params.workspaceId)
+  if (params.cwd !== undefined && params.cwd !== "") {
+    searchParams.set("cwd", params.cwd)
   }
   if (params.limit !== undefined) {
     searchParams.set("limit", String(params.limit))
