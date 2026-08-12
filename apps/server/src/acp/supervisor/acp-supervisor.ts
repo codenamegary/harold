@@ -6,7 +6,7 @@ import { sanitizeAcpRejection } from "../sanitize-acp-error"
 import {
   AgentCapabilities,
   AgentSettingsReader,
-  AcpCatalogSession,
+  AcpSession,
   AcpListSessionsResult,
   AcpSessionCloseResult,
   AcpSessionCancelResult,
@@ -580,7 +580,7 @@ export const createAcpSupervisor = ({
     }
   }
 
-  const createCatalogSession = async ({
+  const createSession = async ({
     agentId,
     cwd,
   }: {
@@ -609,46 +609,53 @@ export const createAcpSupervisor = ({
     cwd?: string
   }): Promise<AcpListSessionsResult> => {
     const readyRuntimes = [...runtimes.values()].filter(
-      (runtime) => runtime.state === "ready" && runtime.transport !== null,
+      (runtime) =>
+        runtime.state === "ready" &&
+        runtime.transport !== null &&
+        runtime.agentCapabilities?.sessionCapabilities.list === true,
     )
 
-    const sessions: AcpCatalogSession[] = []
-
-    for (const runtime of readyRuntimes) {
-      if (!runtime.agentCapabilities?.sessionCapabilities.list) {
-        continue
-      }
-
-      if (runtime.transport === null) {
-        continue
-      }
-
-      try {
-        const listed = parseListedSessions(
-          await runtime.transport.request("session/list", params?.cwd === undefined ? {} : { cwd: params.cwd }),
-        )
-        for (const session of listed) {
-          if (params?.cwd !== undefined && session.cwd !== params.cwd) {
-            continue
+    try {
+      const listedByAgent = await Promise.all(
+        readyRuntimes.map(async (runtime) => {
+          const transport = runtime.transport
+          if (transport === null) {
+            return [] as AcpSession[]
           }
-          rememberAcpSession(runtime.agentId, session.sessionId)
-          sessions.push({
-            agentId: runtime.agentId,
-            sessionId: session.sessionId,
-            cwd: session.cwd,
-            title: session.title,
-            updatedAt: session.updatedAt,
+
+          const listed = parseListedSessions(
+            await transport.request(
+              "session/list",
+              params?.cwd === undefined ? {} : { cwd: params.cwd },
+            ),
+          )
+
+          return listed.flatMap((session) => {
+            if (params?.cwd !== undefined && session.cwd !== params.cwd) {
+              return []
+            }
+
+            rememberAcpSession(runtime.agentId, session.sessionId)
+            return [
+              {
+                agentId: runtime.agentId,
+                sessionId: session.sessionId,
+                cwd: session.cwd,
+                title: session.title,
+                updatedAt: session.updatedAt,
+              },
+            ]
           })
-        }
-      } catch (error: unknown) {
-        return {
-          ok: false,
-          reason: sanitizeFailureReason(error, `session/list failed for ${runtime.agentId}`),
-        }
+        }),
+      )
+
+      return { ok: true, sessions: listedByAgent.flat() }
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        reason: sanitizeFailureReason(error, "session/list failed"),
       }
     }
-
-    return { ok: true, sessions }
   }
 
   const loadAcpSession = async ({
@@ -1050,7 +1057,7 @@ export const createAcpSupervisor = ({
     handleAgentDisabled,
     listAcpSessions,
     createAcpSession,
-    createCatalogSession,
+    createSession,
     loadAcpSession,
     closeAcpSession,
     promptAcpSession,

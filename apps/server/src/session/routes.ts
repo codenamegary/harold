@@ -146,7 +146,7 @@ export const registerSessionRoutes = (
       )
     }
 
-    const acpResult = await acpSupervisor.createCatalogSession({
+    const acpResult = await acpSupervisor.createSession({
       agentId: body.agentId,
       cwd: body.cwd,
     })

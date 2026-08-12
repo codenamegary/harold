@@ -60,7 +60,7 @@ export type CloseWorkspaceSessionsResult = {
   readonly failures: ReadonlyArray<CloseWorkspaceSessionFailure>
 }
 
-export type AcpCatalogSession = {
+export type AcpSession = {
   readonly agentId: AgentId
   readonly sessionId: string
   readonly cwd: string
@@ -69,7 +69,7 @@ export type AcpCatalogSession = {
 }
 
 export type AcpListSessionsResult =
-  | { ok: true; sessions: ReadonlyArray<AcpCatalogSession> }
+  | { ok: true; sessions: ReadonlyArray<AcpSession> }
   | { ok: false; reason: string }
 
 export type AcpSupervisor = {
@@ -89,7 +89,7 @@ export type AcpSupervisor = {
     sessionId: string
     workspaceId: string
   }) => Promise<AcpSessionOperationResult>
-  createCatalogSession: (params: {
+  createSession: (params: {
     agentId: AgentId
     cwd: string
   }) => Promise<AcpSessionOperationResult>

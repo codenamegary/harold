@@ -26,8 +26,8 @@ export const SessionSchema = z.strictObject({
   archivedAt: TimestampSchema.nullable(),
 })
 
-/** ACP gateway catalog row from session/list (or session/new). */
-export const AcpCatalogSessionSchema = z.strictObject({
+/** ACP gateway session row from session/list (or session/new). */
+export const AcpSessionSchema = z.strictObject({
   agentId: AgentIdSchema,
   sessionId: z.string().min(1),
   cwd: z.string(),
@@ -40,14 +40,14 @@ export const CreateSessionBodySchema = z.strictObject({
   cwd: z.string().min(1),
 })
 
-export const CreateSessionResponseSchema = AcpCatalogSessionSchema
+export const CreateSessionResponseSchema = AcpSessionSchema
 
 export const UpdateSessionBodySchema = z.strictObject({
   name: z.string().min(1).max(120),
 })
 
 export const SessionCollectionSchema = z.strictObject({
-  items: z.array(AcpCatalogSessionSchema),
+  items: z.array(AcpSessionSchema),
 })
 
 export const ListSessionsQuerySchema = z.strictObject({
@@ -70,7 +70,7 @@ export const CancelSessionResponseSchema = z.strictObject({
 
 export type Session = z.infer<typeof SessionSchema>
 export type SessionState = z.infer<typeof SessionStateSchema>
-export type AcpCatalogSession = z.infer<typeof AcpCatalogSessionSchema>
+export type AcpSession = z.infer<typeof AcpSessionSchema>
 export type CreateSessionBody = z.infer<typeof CreateSessionBodySchema>
 export type CreateSessionResponse = z.infer<typeof CreateSessionResponseSchema>
 export type UpdateSessionBody = z.infer<typeof UpdateSessionBodySchema>

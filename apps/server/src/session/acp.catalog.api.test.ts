@@ -99,11 +99,11 @@ describe("ACP catalog sessions HTTP", () => {
     await acpSupervisor.start("cursor")
     await acpSupervisor.start("opencode")
 
-    const cursorCreate = await acpSupervisor.createCatalogSession({
+    const cursorCreate = await acpSupervisor.createSession({
       agentId: "cursor",
       cwd: "/tmp/cursor-ws",
     })
-    const opencodeCreate = await acpSupervisor.createCatalogSession({
+    const opencodeCreate = await acpSupervisor.createSession({
       agentId: "opencode",
       cwd: "/tmp/opencode-ws",
     })

@@ -746,7 +746,7 @@ describe("createAcpSupervisor", () => {
     })
   })
 
-  test("createCatalogSession calls session/new with cwd for the chosen agent", async () => {
+  test("createSession calls session/new with cwd for the chosen agent", async () => {
     const mock = createMockTransport()
     const sessionNewCalls: unknown[] = []
     mock.setHandler("initialize", () => ({
@@ -772,7 +772,7 @@ describe("createAcpSupervisor", () => {
     supervisors.push(supervisor)
 
     await supervisor.start("cursor")
-    const created = await supervisor.createCatalogSession({
+    const created = await supervisor.createSession({
       agentId: "cursor",
       cwd: "/tmp/project",
     })

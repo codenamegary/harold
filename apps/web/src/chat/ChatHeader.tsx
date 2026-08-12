@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react"
-import { AcpCatalogSession, SessionState } from "contracts/http/session"
+import { AcpSession, SessionState } from "contracts/http/session"
 import { AgentId } from "contracts/http/agent-settings"
 import { Workspace } from "contracts/http/workspace"
 import { Combobox, ComboboxOptionItem } from "../design-system/Combobox"
@@ -17,11 +17,11 @@ const NEW_SESSION_VALUE = ""
 type ChatHeaderProps = {
   workspaces: ReadonlyArray<Workspace>
   agents: ReadonlyArray<{ id: AgentId; displayName: string; enabled: boolean }>
-  sessions: ReadonlyArray<AcpCatalogSession>
+  sessions: ReadonlyArray<AcpSession>
   workspaceId: string
   agentId: string
   sessionId: string
-  selectedSession: AcpCatalogSession | undefined
+  selectedSession: AcpSession | undefined
   selectedSessionState: SessionState | null
   onJoinSession: (sessionId: string) => void
   onStartNewSession: (selection: { workspaceId: string; agentId: AgentId }) => void
