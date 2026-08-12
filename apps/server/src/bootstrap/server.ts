@@ -224,12 +224,12 @@ export const createServer = async ({
         }
         return hub.requestPermission(input)
       },
-      requestCursor: (input) => {
+      requestExtensionRpc: (input) => {
         const hub = sessionHubRef.current
         if (hub === null) {
           throw new Error("session hub is not ready")
         }
-        return hub.requestCursor(input)
+        return hub.requestExtensionRpc(input)
       },
       onBeforeClearRuntime: () => {
         if (!offlineOnBindingClear.enabled) {

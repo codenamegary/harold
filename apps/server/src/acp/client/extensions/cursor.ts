@@ -5,7 +5,7 @@ import { ExtensionHandlers } from "./types"
 
 export type CreateCursorExtensionHandlersParams = {
   agentId: AgentId
-  requestCursor: (input: {
+  requestExtensionRpc: (input: {
     agentId: AgentId
     sessionId: string
     method: string
@@ -15,7 +15,7 @@ export type CreateCursorExtensionHandlersParams = {
 
 export const createCursorExtensionHandlers = ({
   agentId,
-  requestCursor,
+  requestExtensionRpc,
 }: CreateCursorExtensionHandlersParams): ExtensionHandlers => ({
   "cursor/ask_question": async (params) => {
     const sessionId = readAcpSessionId(params)
@@ -23,7 +23,7 @@ export const createCursorExtensionHandlers = ({
       throw createAcpJsonRpcError("cursor request missing sessionId", -32000)
     }
 
-    return requestCursor({
+    return requestExtensionRpc({
       agentId,
       sessionId,
       method: "cursor/ask_question",
@@ -36,7 +36,7 @@ export const createCursorExtensionHandlers = ({
       throw createAcpJsonRpcError("cursor request missing sessionId", -32000)
     }
 
-    return requestCursor({
+    return requestExtensionRpc({
       agentId,
       sessionId,
       method: "cursor/create_plan",

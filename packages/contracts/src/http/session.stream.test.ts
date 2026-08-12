@@ -40,4 +40,32 @@ describe("session stream contracts", () => {
       }),
     ).toThrow()
   })
+
+  test("parses extension_request and extension_reply frames", () => {
+    expect(
+      SessionStreamServerMessageSchema.parse({
+        type: "extension_request",
+        requestId: "req-1",
+        method: "cursor/ask_question",
+        agentId: "cursor",
+        sessionId: "acp-1",
+        params: { sessionId: "acp-1" },
+      }),
+    ).toMatchObject({
+      type: "extension_request",
+      method: "cursor/ask_question",
+    })
+
+    expect(
+      SessionStreamClientMessageSchema.parse({
+        type: "extension_reply",
+        requestId: "req-1",
+        result: { outcome: { outcome: "skipped" } },
+      }),
+    ).toEqual({
+      type: "extension_reply",
+      requestId: "req-1",
+      result: { outcome: { outcome: "skipped" } },
+    })
+  })
 })

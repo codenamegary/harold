@@ -42,7 +42,7 @@ export type PendingClientRpc = {
   readonly requestId: string
   readonly agentId: AgentId
   readonly sessionId: string
-  readonly kind: "permission" | "cursor"
+  readonly kind: "permission" | "extension"
   readonly method?: string
   readonly params: unknown
   resolve: (result: unknown) => void
@@ -91,7 +91,7 @@ export type SessionHub = {
     sessionId: string
     params: unknown
   }) => Promise<unknown>
-  requestCursor: (params: {
+  requestExtensionRpc: (params: {
     agentId: AgentId
     sessionId: string
     method: string
@@ -101,7 +101,7 @@ export type SessionHub = {
     requestId: string
     optionId: string
   }) => void
-  resolveCursorReply: (params: {
+  resolveExtensionReply: (params: {
     requestId: string
     result: unknown
   }) => void
@@ -297,7 +297,7 @@ export const createSessionHub = ({
   const beginClientRpc = (params: {
     agentId: AgentId
     sessionId: string
-    kind: "permission" | "cursor"
+    kind: "permission" | "extension"
     method?: string
     requestParams: unknown
   }): Promise<unknown> => {
@@ -305,10 +305,10 @@ export const createSessionHub = ({
     const key = sessionKey(params.agentId, params.sessionId)
 
     return new Promise((resolve, reject) => {
-      if (params.kind === "cursor") {
+      if (params.kind === "extension") {
         const method = params.method
         if (method === undefined || method.length === 0) {
-          reject(new Error("cursor request missing method"))
+          reject(new Error("extension request missing method"))
           return
         }
 
@@ -316,7 +316,7 @@ export const createSessionHub = ({
           requestId,
           agentId: params.agentId,
           sessionId: params.sessionId,
-          kind: "cursor",
+          kind: "extension",
           method,
           params: params.requestParams,
           resolve,
@@ -324,7 +324,7 @@ export const createSessionHub = ({
         }
         pendingById.set(requestId, pending)
         fanOut(key, {
-          type: "cursor_request",
+          type: "extension_request",
           requestId,
           method,
           agentId: params.agentId,
@@ -432,11 +432,11 @@ export const createSessionHub = ({
         kind: "permission",
         requestParams: params,
       }),
-    requestCursor: ({ agentId, sessionId, method, params }) =>
+    requestExtensionRpc: ({ agentId, sessionId, method, params }) =>
       beginClientRpc({
         agentId,
         sessionId,
-        kind: "cursor",
+        kind: "extension",
         method,
         requestParams: params,
       }),
@@ -448,7 +448,7 @@ export const createSessionHub = ({
         },
       })
     },
-    resolveCursorReply: ({ requestId, result }) => {
+    resolveExtensionReply: ({ requestId, result }) => {
       settlePending(requestId, result)
     },
   }

@@ -244,8 +244,8 @@ export const registerSessionStreamRoutes = (
                   optionId: message.optionId,
                 })
                 return
-              case "cursor_reply":
-                params.sessionHub.resolveCursorReply({
+              case "extension_reply":
+                params.sessionHub.resolveExtensionReply({
                   requestId: message.requestId,
                   result: message.result,
                 })

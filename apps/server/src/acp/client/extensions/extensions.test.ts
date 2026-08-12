@@ -3,11 +3,11 @@ import { createCursorExtensionHandlers } from "./cursor"
 import { resolveExtensionHandler } from "./types"
 
 describe("extension handlers", () => {
-  test("cursor ask_question forwards to requestCursor", async () => {
+  test("cursor ask_question forwards to requestExtensionRpc", async () => {
     const calls: unknown[] = []
     const handlers = createCursorExtensionHandlers({
       agentId: "cursor",
-      requestCursor: async (input) => {
+      requestExtensionRpc: async (input) => {
         calls.push(input)
         return {
           outcome: {
@@ -58,10 +58,10 @@ describe("extension handlers", () => {
     })
   })
 
-  test("cursor create_plan forwards to requestCursor", async () => {
+  test("cursor create_plan forwards to requestExtensionRpc", async () => {
     const handlers = createCursorExtensionHandlers({
       agentId: "cursor",
-      requestCursor: async () => ({
+      requestExtensionRpc: async () => ({
         outcome: { outcome: "accepted" },
       }),
     })
@@ -82,7 +82,7 @@ describe("extension handlers", () => {
     const logged: string[] = []
     const handlers = createCursorExtensionHandlers({
       agentId: "cursor",
-      requestCursor: async () => ({}),
+      requestExtensionRpc: async () => ({}),
     })
     const handler = resolveExtensionHandler({
       method: "vendor/unknown",

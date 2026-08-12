@@ -58,7 +58,7 @@ export type RequestPermissionFn = (input: {
   params: unknown
 }) => Promise<unknown>
 
-export type RequestCursorFn = (input: {
+export type RequestExtensionRpcFn = (input: {
   agentId: AgentId
   sessionId: string
   method: string
@@ -160,7 +160,7 @@ export type CreateAcpSupervisorParams = {
   onSessionUpdate?: SessionUpdateHandler
   onSessionDiscovered?: SessionDiscoveredHandler
   requestPermission?: RequestPermissionFn
-  requestCursor?: RequestCursorFn
+  requestExtensionRpc?: RequestExtensionRpcFn
   onBeforeClearRuntime?: () => void
   onSupervisorReady?: () => void | Promise<void>
   restartBackoffMs?: ReadonlyArray<number>

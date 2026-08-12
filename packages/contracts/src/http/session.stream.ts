@@ -32,8 +32,8 @@ export const SessionStreamPermissionReplySchema = z.strictObject({
   optionId: z.string().min(1),
 })
 
-export const SessionStreamCursorReplySchema = z.strictObject({
-  type: z.literal("cursor_reply"),
+export const SessionStreamExtensionReplySchema = z.strictObject({
+  type: z.literal("extension_reply"),
   requestId: z.string().min(1),
   result: z.unknown(),
 })
@@ -44,7 +44,7 @@ export const SessionStreamClientMessageSchema = z.discriminatedUnion("type", [
   SessionStreamPromptSchema,
   SessionStreamCancelSchema,
   SessionStreamPermissionReplySchema,
-  SessionStreamCursorReplySchema,
+  SessionStreamExtensionReplySchema,
 ])
 
 export const SessionStreamSessionUpdateSchema = z.strictObject({
@@ -68,8 +68,8 @@ export const SessionStreamPermissionRequestSchema = z.strictObject({
   params: z.unknown(),
 })
 
-export const SessionStreamCursorRequestSchema = z.strictObject({
-  type: z.literal("cursor_request"),
+export const SessionStreamExtensionRequestSchema = z.strictObject({
+  type: z.literal("extension_request"),
   requestId: z.string().min(1),
   method: z.string().min(1),
   agentId: AgentIdSchema,
@@ -88,7 +88,7 @@ export const SessionStreamServerMessageSchema = z.discriminatedUnion("type", [
   SessionStreamSessionUpdateSchema,
   SessionStreamSubscribedSchema,
   SessionStreamPermissionRequestSchema,
-  SessionStreamCursorRequestSchema,
+  SessionStreamExtensionRequestSchema,
   SessionStreamErrorSchema,
 ])
 

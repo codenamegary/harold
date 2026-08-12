@@ -19,7 +19,7 @@ export type RegisterAcpClientHandlersParams = {
     sessionId: string
     params: unknown
   }) => Promise<unknown>
-  requestCursor: (input: {
+  requestExtensionRpc: (input: {
     agentId: AgentId
     sessionId: string
     method: string
@@ -40,7 +40,7 @@ export const registerAcpClientHandlers = ({
   agentId,
   sessionBindingRegistry,
   requestPermission,
-  requestCursor,
+  requestExtensionRpc,
   logUnknownExtension = defaultLogUnknownExtension,
 }: RegisterAcpClientHandlersParams) => {
   const fsHandlers = createAcpFsHandlers({ sessionBindingRegistry })
@@ -52,7 +52,9 @@ export const registerAcpClientHandlers = ({
 
   const extensionHandlers = {
     ...profile.extensionHandlers,
-    ...createCursorExtensionHandlers({ agentId, requestCursor }),
+    ...(agentId === "cursor"
+      ? createCursorExtensionHandlers({ agentId, requestExtensionRpc })
+      : {}),
   }
 
   const coreHandlers: Record<string, AcpRequestHandler> = {
@@ -126,7 +128,7 @@ export const createUnavailableRequestPermission =
     throw new Error("permission service unavailable")
   }
 
-export const createUnavailableRequestCursor =
-  (): RegisterAcpClientHandlersParams["requestCursor"] => async () => {
-    throw new Error("cursor request unavailable")
+export const createUnavailableRequestExtensionRpc =
+  (): RegisterAcpClientHandlersParams["requestExtensionRpc"] => async () => {
+    throw new Error("extension request unavailable")
   }

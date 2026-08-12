@@ -25,7 +25,7 @@ import {
 } from "./acp-supervisor-types"
 import { isAcpJsonRpcError } from "../transport/json-rpc-error"
 import { AcpOperationContext, createJsonRpcTransport, JsonRpcTransport } from "../transport/json-rpc-transport"
-import { registerAcpClientHandlers, createUnavailableRequestCursor, createUnavailableRequestPermission } from "../client/register-handlers"
+import { registerAcpClientHandlers, createUnavailableRequestExtensionRpc, createUnavailableRequestPermission } from "../client/register-handlers"
 import { createSessionBindingRegistry } from "../client/session-binding-registry"
 import { spawnAgentProcess, SpawnedAgentProcess } from "./spawn-agent-process"
 import { createAcpJsonRpcJournalObserver } from "../journal/json.rpc.observer"
@@ -218,7 +218,7 @@ export const createAcpSupervisor = ({
   onSessionUpdate = () => undefined,
   onSessionDiscovered = () => undefined,
   requestPermission = createUnavailableRequestPermission(),
-  requestCursor = createUnavailableRequestCursor(),
+  requestExtensionRpc = createUnavailableRequestExtensionRpc(),
   onBeforeClearRuntime = () => undefined,
   onSupervisorReady = () => undefined,
   restartBackoffMs = DEFAULT_ACP_RESTART_BACKOFF_MS,
@@ -357,7 +357,7 @@ export const createAcpSupervisor = ({
       agentId,
       sessionBindingRegistry,
       requestPermission,
-      requestCursor,
+      requestExtensionRpc,
     })
 
     transport.onNotification("session/update", (params) => {
