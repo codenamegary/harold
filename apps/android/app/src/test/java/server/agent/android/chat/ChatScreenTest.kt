@@ -40,15 +40,17 @@ class ChatScreenTest {
         var uiState by mutableStateOf(
             ChatUiState(
                 selectedSession = SessionRow(
-                    id = "sess_01",
+                    sessionId = "sess_01",
                     name = "Alpha",
+                    cwd = "/tmp/agent-server",
                     workspaceId = "ws_01",
                     workspaceLabel = "agent-server",
                     agentId = "cursor",
                     agentLabel = "Cursor",
                     state = SessionState.Idle,
+                    updatedAt = "2026-08-05T01:00:00.000Z",
                 ),
-                transcript = TranscriptState(
+                transcript = AcpTranscriptState(
                     rows = listOf(
                         TranscriptUserRow(
                             turnId = "turn_01",
@@ -60,7 +62,6 @@ class ChatScreenTest {
                         ),
                     ),
                     sessionState = SessionState.Idle,
-                    cursor = 4,
                 ),
             ),
         )
@@ -80,13 +81,6 @@ class ChatScreenTest {
                     },
                     onComposerSubmit = { submitted = true },
                     onComposerCancel = {},
-                    onRenameClick = {},
-                    onDismissRename = {},
-                    onRenameNameChanged = {},
-                    onRenameSubmit = {},
-                    onArchiveClick = {},
-                    onDismissArchive = {},
-                    onArchiveSubmit = {},
                     onPermissionOptionSelect = {},
                 )
             }
@@ -110,15 +104,17 @@ class ChatScreenTest {
                 ChatScreen(
                     uiState = ChatUiState(
                         selectedSession = SessionRow(
-                            id = "sess_01",
+                            sessionId = "sess_01",
                             name = "Alpha",
+                            cwd = "/tmp/agent-server",
                             workspaceId = "ws_01",
                             workspaceLabel = "agent-server",
                             agentId = "cursor",
                             agentLabel = "Cursor",
                             state = SessionState.Running,
+                            updatedAt = "2026-08-05T01:00:00.000Z",
                         ),
-                        transcript = TranscriptState(sessionState = SessionState.Running),
+                        transcript = AcpTranscriptState(sessionState = SessionState.Running),
                     ),
                     onSessionSelectorClick = {},
                     onDismissSessionMenu = {},
@@ -129,13 +125,6 @@ class ChatScreenTest {
                     onComposerTextChanged = {},
                     onComposerSubmit = {},
                     onComposerCancel = {},
-                    onRenameClick = {},
-                    onDismissRename = {},
-                    onRenameNameChanged = {},
-                    onRenameSubmit = {},
-                    onArchiveClick = {},
-                    onDismissArchive = {},
-                    onArchiveSubmit = {},
                     onPermissionOptionSelect = {},
                 )
             }
@@ -165,13 +154,6 @@ class ChatScreenTest {
                     onComposerTextChanged = {},
                     onComposerSubmit = {},
                     onComposerCancel = {},
-                    onRenameClick = {},
-                    onDismissRename = {},
-                    onRenameNameChanged = {},
-                    onRenameSubmit = {},
-                    onArchiveClick = {},
-                    onDismissArchive = {},
-                    onArchiveSubmit = {},
                     onPermissionOptionSelect = {},
                 )
             }
@@ -193,13 +175,15 @@ class ChatScreenTest {
                 ChatScreen(
                     uiState = ChatUiState(
                         selectedSession = SessionRow(
-                            id = "sess_01",
+                            sessionId = "sess_01",
                             name = "Alpha",
+                            cwd = "/tmp/agent-server",
                             workspaceId = "ws_01",
                             workspaceLabel = "agent-server",
                             agentId = "cursor",
                             agentLabel = "Cursor",
                             state = SessionState.Idle,
+                            updatedAt = "2026-08-05T01:00:00.000Z",
                         ),
                     ),
                     onSessionSelectorClick = {},
@@ -211,13 +195,6 @@ class ChatScreenTest {
                     onComposerTextChanged = {},
                     onComposerSubmit = {},
                     onComposerCancel = {},
-                    onRenameClick = {},
-                    onDismissRename = {},
-                    onRenameNameChanged = {},
-                    onRenameSubmit = {},
-                    onArchiveClick = {},
-                    onDismissArchive = {},
-                    onArchiveSubmit = {},
                     onPermissionOptionSelect = {},
                 )
             }
@@ -235,13 +212,15 @@ class ChatScreenTest {
                 ChatScreen(
                     uiState = ChatUiState(
                         selectedSession = SessionRow(
-                            id = "sess_01",
+                            sessionId = "sess_01",
                             name = "Alpha",
+                            cwd = "/tmp/agent-server",
                             workspaceId = "ws_01",
                             workspaceLabel = "agent-server",
                             agentId = "cursor",
                             agentLabel = "Cursor",
                             state = SessionState.Idle,
+                            updatedAt = "2026-08-05T01:00:00.000Z",
                         ),
                     ),
                     onSessionSelectorClick = {},
@@ -253,13 +232,6 @@ class ChatScreenTest {
                     onComposerTextChanged = {},
                     onComposerSubmit = {},
                     onComposerCancel = {},
-                    onRenameClick = {},
-                    onDismissRename = {},
-                    onRenameNameChanged = {},
-                    onRenameSubmit = {},
-                    onArchiveClick = {},
-                    onDismissArchive = {},
-                    onArchiveSubmit = {},
                     onPermissionOptionSelect = {},
                 )
             }
@@ -295,13 +267,15 @@ class ChatScreenTest {
                 ChatScreen(
                     uiState = ChatUiState(
                         selectedSession = SessionRow(
-                            id = "sess_01",
+                            sessionId = "sess_01",
                             name = "Alpha",
+                            cwd = "/tmp/agent-server",
                             workspaceId = "ws_01",
                             workspaceLabel = "agent-server",
                             agentId = "cursor",
                             agentLabel = "Cursor",
                             state = SessionState.AwaitingPermission,
+                            updatedAt = "2026-08-05T01:00:00.000Z",
                         ),
                         pendingPermissions = listOf(request),
                     ),
@@ -314,13 +288,6 @@ class ChatScreenTest {
                     onComposerTextChanged = {},
                     onComposerSubmit = {},
                     onComposerCancel = {},
-                    onRenameClick = {},
-                    onDismissRename = {},
-                    onRenameNameChanged = {},
-                    onRenameSubmit = {},
-                    onArchiveClick = {},
-                    onDismissArchive = {},
-                    onArchiveSubmit = {},
                     onPermissionOptionSelect = { optionId -> selectedOption = optionId },
                 )
             }
@@ -340,13 +307,15 @@ class ChatScreenTest {
                 ChatScreen(
                     uiState = ChatUiState(
                         selectedSession = SessionRow(
-                            id = "sess_01",
+                            sessionId = "sess_01",
                             name = "Alpha",
+                            cwd = "/tmp/agent-server",
                             workspaceId = "ws_01",
                             workspaceLabel = "agent-server",
                             agentId = "cursor",
                             agentLabel = "Cursor",
                             state = SessionState.Idle,
+                            updatedAt = "2026-08-05T01:00:00.000Z",
                         ),
                     ),
                     onSessionSelectorClick = {},
@@ -358,13 +327,6 @@ class ChatScreenTest {
                     onComposerTextChanged = {},
                     onComposerSubmit = {},
                     onComposerCancel = {},
-                    onRenameClick = {},
-                    onDismissRename = {},
-                    onRenameNameChanged = {},
-                    onRenameSubmit = {},
-                    onArchiveClick = {},
-                    onDismissArchive = {},
-                    onArchiveSubmit = {},
                     onPermissionOptionSelect = {},
                 )
             }
@@ -380,13 +342,15 @@ class ChatScreenTest {
         var uiState by mutableStateOf(
             ChatUiState(
                 selectedSession = SessionRow(
-                    id = "sess_01",
+                    sessionId = "sess_01",
                     name = "Alpha",
+                    cwd = "/tmp/agent-server",
                     workspaceId = "ws_01",
                     workspaceLabel = "agent-server",
                     agentId = "cursor",
                     agentLabel = "Cursor",
                     state = SessionState.Idle,
+                    updatedAt = "2026-08-05T01:00:00.000Z",
                 ),
             ),
         )
@@ -406,13 +370,6 @@ class ChatScreenTest {
                     },
                     onComposerSubmit = {},
                     onComposerCancel = {},
-                    onRenameClick = {},
-                    onDismissRename = {},
-                    onRenameNameChanged = {},
-                    onRenameSubmit = {},
-                    onArchiveClick = {},
-                    onDismissArchive = {},
-                    onArchiveSubmit = {},
                     onPermissionOptionSelect = {},
                 )
             }

@@ -39,12 +39,5 @@ fun eventStreamUrl(
         else -> origin
     }
 
-    val query = buildString {
-        append("cursor=$cursor")
-        if (sessionId != null) {
-            append("&sessionId=$sessionId")
-        }
-    }
-
-    return "$socketOrigin/v1/events?$query"
+    return "$socketOrigin/v1/sessions/stream"
 }

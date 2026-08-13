@@ -22,6 +22,9 @@ type ChatHeaderProps = {
   onJoinSession: (params: { agentId: string; sessionId: string }) => void
   onStartNewSession: (selection: { workspaceId: string; agentId: AgentId }) => void
   onSessionMenuOpen: () => void
+  onDeleteSession: (params: { agentId: string; sessionId: string }) => void
+  deletingSessionKey: string | null
+  deleteError: string | null
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -36,6 +39,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onJoinSession,
   onStartNewSession,
   onSessionMenuOpen,
+  onDeleteSession,
+  deletingSessionKey,
+  deleteError,
 }) => {
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false)
 
@@ -58,6 +64,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         }),
         label: session.title,
         description: `${session.agentId} · ${session.cwd}`,
+        deletable: true,
       })),
     ]
 
@@ -142,6 +149,14 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               value={sessionPickerValue}
               onChange={handleSessionPickerChange}
               onOpen={onSessionMenuOpen}
+              onDeleteOption={(value) => {
+                const parsed = parseCatalogSessionKey(value)
+                if (parsed === null) {
+                  return
+                }
+                onDeleteSession(parsed)
+              }}
+              deletingOptionValue={deletingSessionKey}
               options={sessionDisplayOptions}
               placeholder="Select a session"
               emptyMessage="No sessions"
@@ -150,6 +165,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           </div>
           {contextSubtitle !== null ? (
             <p className="m-0 truncate text-xs text-dim">{contextSubtitle}</p>
+          ) : null}
+          {deleteError !== null ? (
+            <p className="m-0 text-xs text-danger" role="alert">
+              {deleteError}
+            </p>
           ) : null}
         </div>
       </header>

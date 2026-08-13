@@ -10,23 +10,22 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
 import server.agent.android.connection.ConnectionGateway
 import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.CreateSessionBody
-import server.agent.android.contracts.EventEnvelope
-import server.agent.android.contracts.PromptSessionBody
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionState
-import server.agent.android.contracts.UpdateSessionBody
+import server.agent.android.contracts.SessionStreamClientMessage
+import server.agent.android.contracts.SessionStreamServerMessage
 import server.agent.android.contracts.WorkspaceState
+import server.agent.android.contracts.catalogSessionKey
 import server.agent.android.events.ConnectionStatus
-import server.agent.android.events.EventStreamFactory
+import server.agent.android.events.SessionStreamFactory
 import server.agent.android.foreground.ActiveSessionSnapshot
 import server.agent.android.foreground.ActiveSessionTracker
 import server.agent.android.foreground.OpenSessionRequests
 import server.agent.android.foreground.SessionForegroundCoordinator
-import server.agent.android.foreground.SessionStreamBroker
-import server.agent.android.foreground.StreamPinReason
 import server.agent.android.navigation.NavigationPreferences
 import server.agent.android.network.AgentApiError
 import server.agent.android.network.AgentApiException
@@ -40,33 +39,30 @@ class ChatViewModel(
     private val connectionGateway: ConnectionGateway,
     private val operatorRepository: OperatorRepository,
     private val navigationPreferences: NavigationPreferences,
-    eventStreamFactory: EventStreamFactory,
-    sessionEventSource: SessionEventSource? = null,
+    sessionStreamFactory: SessionStreamFactory,
+    sessionStreamClient: SessionStreamClient? = null,
     private val activeSessionTracker: ActiveSessionTracker? = null,
-    private val sessionStreamBroker: SessionStreamBroker? = null,
     private val sessionForegroundCoordinator: SessionForegroundCoordinator? = null,
     private val openSessionRequests: OpenSessionRequests? = null,
 ) : ViewModel() {
-    private val sessionChatStream: SessionEventSource = sessionEventSource ?: SessionChatStream(
-        streamFactory = eventStreamFactory,
+    private val sessionStream: SessionStreamClient = sessionStreamClient ?: DefaultSessionStreamClient(
+        streamFactory = sessionStreamFactory,
         scope = viewModelScope,
     )
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     private var streamJob: Job? = null
-    private var frameCollectJob: Job? = null
-    private var activeSessionId: String? = null
-    private var sessionsSearchJob: Job? = null
-    private var sessionsListLoadJob: Job? = null
-    private var sessionsListGeneration: Int = 0
-    private var workspaceLabels: Map<String, String> = emptyMap()
+    private var workspaceByPath: Map<String, WorkspaceRow> = emptyMap()
     private var agentLabels: Map<AgentId, String> = emptyMap()
+    private var pendingPrompt: String? = null
+    private var turnSerial: Int = 0
+    private var catalog: List<SessionRow> = emptyList()
 
     init {
-        savedStateHandle.get<String>(KEY_SELECTED_SESSION_ID)?.let { sessionId ->
+        savedStateHandle.get<String>(KEY_SELECTED_SESSION_ID)?.let { sessionKey ->
             viewModelScope.launch {
-                selectSessionLocally(sessionId)
+                selectSessionLocally(sessionKey)
             }
         }
 
@@ -88,7 +84,8 @@ class ChatViewModel(
             sessionGateway.pairedState.collect { paired ->
                 if (paired is PairedState.Paired) {
                     sessionForegroundCoordinator?.setServerOrigin(paired.serverOrigin)
-                    refreshOperatorData(paired.serverOrigin)
+                    startSessionStream(paired.serverOrigin)
+                    refreshCatalog()
                 } else {
                     sessionForegroundCoordinator?.setServerOrigin(null)
                     stopSessionStream()
@@ -115,6 +112,14 @@ class ChatViewModel(
         }
     }
 
+    fun onResume() {
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        sessionForegroundCoordinator?.setServerOrigin(paired.serverOrigin)
+        viewModelScope.launch {
+            refreshCatalog()
+        }
+    }
+
     fun dismissNotificationPermissionPrompt() {
         sessionForegroundCoordinator?.dismissPermissionPrompt()
         _uiState.update { current -> current.copy(notificationPermissionDenied = false) }
@@ -136,7 +141,11 @@ class ChatViewModel(
             )
         }
         viewModelScope.launch {
-            loadRecentSessions()
+            refreshCatalog()
+            publishDerivedSessionLists()
+            _uiState.update { current ->
+                current.copy(recentSessionsLoading = false)
+            }
         }
     }
 
@@ -146,16 +155,17 @@ class ChatViewModel(
 
     fun openSessionsList() {
         hidePicker()
-        sessionsSearchJob?.cancel()
-        sessionsListLoadJob?.cancel()
         _uiState.update { current ->
             current.copy(
                 sessionsListSearch = "",
                 sessionsListError = null,
+                sessionsListLoading = true,
             )
         }
         viewModelScope.launch {
-            refreshSessionsList(search = null)
+            refreshCatalog()
+            publishDerivedSessionLists()
+            _uiState.update { current -> current.copy(sessionsListLoading = false) }
         }
     }
 
@@ -163,123 +173,11 @@ class ChatViewModel(
         _uiState.update { current ->
             current.copy(sessionsListSearch = query)
         }
-        sessionsSearchJob?.cancel()
-        sessionsListLoadJob?.cancel()
-        sessionsSearchJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(SESSIONS_SEARCH_DEBOUNCE_MS)
-            val trimmed = query.trim()
-            refreshSessionsList(search = trimmed.takeIf { it.isNotEmpty() })
-        }
-    }
-
-    fun loadMoreSessions() {
-        val state = _uiState.value
-        val cursor = state.sessionsListNextCursor ?: return
-        if (state.sessionsListLoading || state.sessionsListLoadingMore) {
-            return
-        }
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
-        val generation = sessionsListGeneration
-        val search = state.sessionsListSearch.trim().takeIf { it.isNotEmpty() }
-
-        _uiState.update { current -> current.copy(sessionsListLoadingMore = true) }
-        sessionsListLoadJob?.cancel()
-        sessionsListLoadJob = viewModelScope.launch {
-            operatorRepository.listSessions(
-                serverOrigin = paired.serverOrigin,
-                limit = SESSIONS_PAGE_SIZE,
-                cursor = cursor,
-                search = search,
-            ).fold(
-                onSuccess = { collection ->
-                    if (generation != sessionsListGeneration) {
-                        return@fold
-                    }
-                    val rows = collection.items
-                        .filter { session -> session.state != SessionState.Archived }
-                        .map { session -> session.toSessionRow(workspaceLabels, agentLabels) }
-                    _uiState.update { current ->
-                        current.copy(
-                            sessionsList = current.sessionsList + rows,
-                            sessionsListNextCursor = collection.page.nextCursor,
-                            sessionsListLoadingMore = false,
-                            sessionsListError = null,
-                        )
-                    }
-                },
-                onFailure = { error ->
-                    if (generation != sessionsListGeneration) {
-                        return@fold
-                    }
-                    _uiState.update { current ->
-                        current.copy(
-                            sessionsListLoadingMore = false,
-                            sessionsListError = errorMessage(error),
-                        )
-                    }
-                },
-            )
-        }
+        publishDerivedSessionLists()
     }
 
     fun selectSessionFromList(row: SessionRow) {
         selectSession(row)
-    }
-
-    fun showSessionEditDialog(row: SessionRow) {
-        showRenameDialogForSession(row)
-    }
-
-    fun submitArchiveFromEditDialog() {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
-        val sessionId = _uiState.value.renameState.sessionId
-        if (sessionId.isEmpty()) {
-            return
-        }
-
-        _uiState.update { current ->
-            current.copy(
-                renameState = current.renameState.copy(submitting = true, error = null),
-                archiveSubmitting = true,
-                archiveError = null,
-            )
-        }
-
-        viewModelScope.launch {
-            operatorRepository.archiveSession(
-                serverOrigin = paired.serverOrigin,
-                sessionId = sessionId,
-            ).fold(
-                onSuccess = { archived ->
-                    hideRenameDialog()
-                    _uiState.update { current ->
-                        current.copy(
-                            sessionsList = current.sessionsList.filter { row ->
-                                row.id != archived.id
-                            },
-                            recentSessions = current.recentSessions.filter { row ->
-                                row.id != archived.id
-                            },
-                            archiveSubmitting = false,
-                            archiveError = null,
-                        )
-                    }
-                    removeSessionFromActiveWorkflow(sessionId = archived.id)
-                },
-                onFailure = { error ->
-                    _uiState.update { current ->
-                        current.copy(
-                            renameState = current.renameState.copy(
-                                submitting = false,
-                                error = errorMessage(error),
-                            ),
-                            archiveSubmitting = false,
-                            archiveError = errorMessage(error),
-                        )
-                    }
-                },
-            )
-        }
     }
 
     fun showCreateDialog() {
@@ -349,8 +247,9 @@ class ChatViewModel(
         val workspaceId = createState.selectedWorkspaceId
         val agentId = createState.selectedAgentId
         val prompt = createState.prompt.trim()
+        val workspace = createState.workspaces.firstOrNull { row -> row.id == workspaceId }
 
-        if (workspaceId.isEmpty()) {
+        if (workspaceId.isEmpty() || workspace == null) {
             _uiState.update { current ->
                 current.copy(createState = current.createState.copy(error = "Choose a workspace"))
             }
@@ -379,18 +278,17 @@ class ChatViewModel(
             val result = operatorRepository.createSession(
                 serverOrigin = paired.serverOrigin,
                 body = CreateSessionBody(
-                    workspaceId = workspaceId,
                     agentId = agentId,
-                    text = prompt,
+                    cwd = workspace.path,
                 ),
             )
 
             result.fold(
                 onSuccess = { created ->
-                    navigationPreferences.saveLastSessionId(created.id)
-                    persistSelectedSession(created.id)
+                    pendingPrompt = prompt
                     hideCreateDialog()
-                    refreshOperatorData(paired.serverOrigin)
+                    refreshCatalog()
+                    activateSession(created.toSessionRow())
                 },
                 onFailure = { error ->
                     _uiState.update { current ->
@@ -407,7 +305,6 @@ class ChatViewModel(
     }
 
     fun submitComposerPrompt() {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
         val session = _uiState.value.selectedSession ?: return
         val prompt = _uiState.value.composerText.trim()
 
@@ -415,41 +312,27 @@ class ChatViewModel(
             return
         }
 
+        val turnId = nextTurnId()
         _uiState.update { current ->
-            current.copy(composerSubmitting = true, composerError = null)
-        }
-
-        viewModelScope.launch {
-            operatorRepository.promptSession(
-                serverOrigin = paired.serverOrigin,
-                sessionId = session.id,
-                body = PromptSessionBody(text = prompt),
-            ).fold(
-                onSuccess = {
-                    _uiState.update { current ->
-                        current.copy(
-                            composerText = "",
-                            composerSubmitting = false,
-                        )
-                    }
-                },
-                onFailure = { error ->
-                    _uiState.update { current ->
-                        current.copy(
-                            composerSubmitting = false,
-                            composerError = errorMessage(error),
-                        )
-                    }
-                },
+            current.copy(
+                composerText = "",
+                composerSubmitting = false,
+                composerError = null,
+                transcript = beginUserTurn(current.transcript, turnId, prompt),
             )
         }
+        syncSelectedState(SessionState.Running)
+        sessionStream.send(
+            SessionStreamClientMessage.Prompt(
+                agentId = session.agentId,
+                sessionId = session.sessionId,
+                text = prompt,
+            ),
+        )
     }
 
     fun submitPermissionOption(optionId: String) {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
-        val session = _uiState.value.selectedSession ?: return
         val active = _uiState.value.activePermissionRequest ?: return
-
         if (_uiState.value.permissionUiState.submittingOptionId != null) {
             return
         }
@@ -460,50 +343,26 @@ class ChatViewModel(
                     submittingOptionId = optionId,
                     error = null,
                 ),
+                transcript = applyPermissionResolved(current.transcript),
+                pendingPermissions = current.pendingPermissions.filterNot { item ->
+                    item.id == active.id
+                },
             )
         }
-
-        viewModelScope.launch {
-            operatorRepository.resolvePermission(
-                serverOrigin = paired.serverOrigin,
-                sessionId = session.id,
+        syncSelectedState(SessionState.Running)
+        sessionStream.send(
+            SessionStreamClientMessage.PermissionReply(
                 requestId = active.id,
                 optionId = optionId,
-            ).fold(
-                onSuccess = {
-                    _uiState.update { current ->
-                        current.copy(permissionUiState = PermissionUiState())
-                    }
-                },
-                onFailure = { error ->
-                    val apiError = (error as? AgentApiException)?.error
-                    val shouldRefresh = apiError is AgentApiError.Problem && apiError.status == HTTP_CONFLICT
-
-                    if (shouldRefresh) {
-                        refreshPendingPermissions(
-                            serverOrigin = paired.serverOrigin,
-                            sessionId = session.id,
-                            authoritative = true,
-                        )
-                    }
-
-                    _uiState.update { current ->
-                        current.copy(
-                            permissionUiState = current.permissionUiState.copy(
-                                submittingOptionId = null,
-                                error = errorMessage(error),
-                            ),
-                        )
-                    }
-                },
-            )
+            ),
+        )
+        _uiState.update { current ->
+            current.copy(permissionUiState = PermissionUiState())
         }
     }
 
     fun submitCancel() {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
         val session = _uiState.value.selectedSession ?: return
-
         if (!_uiState.value.showComposerCancel) {
             return
         }
@@ -511,406 +370,327 @@ class ChatViewModel(
         _uiState.update { current ->
             current.copy(cancelSubmitting = true, cancelError = null)
         }
-
-        viewModelScope.launch {
-            operatorRepository.cancelSession(
-                serverOrigin = paired.serverOrigin,
-                sessionId = session.id,
-            ).fold(
-                onSuccess = {
-                    _uiState.update { current ->
-                        current.copy(cancelSubmitting = false)
-                    }
-                },
-                onFailure = { error ->
-                    _uiState.update { current ->
-                        current.copy(
-                            cancelSubmitting = false,
-                            cancelError = errorMessage(error),
-                        )
-                    }
-                },
-            )
+        sessionStream.send(
+            SessionStreamClientMessage.Cancel(
+                agentId = session.agentId,
+                sessionId = session.sessionId,
+            ),
+        )
+        _uiState.update { current ->
+            current.copy(cancelSubmitting = false)
         }
     }
 
-    fun showRenameDialog() {
-        val session = _uiState.value.selectedSession ?: return
-        showRenameDialogForSession(session)
-    }
-
-    fun showRenameDialogForSession(row: SessionRow) {
+    fun onExtensionReplyChanged(text: String) {
         _uiState.update { current ->
             current.copy(
-                renameDialogVisible = true,
-                renameState = RenameSessionUiState(
-                    sessionId = row.id,
-                    name = row.name,
-                ),
-            )
-        }
-    }
-
-    fun hideRenameDialog() {
-        _uiState.update { current ->
-            current.copy(
-                renameDialogVisible = false,
-                renameState = RenameSessionUiState(),
-                archiveSubmitting = false,
-                archiveError = null,
-            )
-        }
-    }
-
-    fun onRenameNameChanged(name: String) {
-        _uiState.update { current ->
-            current.copy(
-                renameState = current.renameState.copy(
-                    name = name,
+                extensionUiState = current.extensionUiState.copy(
+                    replyText = text,
                     error = null,
                 ),
             )
         }
     }
 
-    fun submitRename() {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
-        val renameState = _uiState.value.renameState
-        val name = renameState.name.trim()
-
-        if (name.isEmpty()) {
-            _uiState.update { current ->
-                current.copy(renameState = current.renameState.copy(error = "Enter a session name"))
-            }
-            return
-        }
-
-        if (name.length > RenameSessionUiState.SESSION_NAME_MAX_LENGTH) {
+    fun submitExtensionReply() {
+        val request = _uiState.value.extensionUiState.request ?: return
+        val parsed = runCatching {
+            server.agent.android.contracts.AgentServerJson.parseToJsonElement(
+                _uiState.value.extensionUiState.replyText,
+            )
+        }.getOrElse {
             _uiState.update { current ->
                 current.copy(
-                    renameState = current.renameState.copy(
-                        error = "Name must be ${RenameSessionUiState.SESSION_NAME_MAX_LENGTH} characters or fewer",
+                    extensionUiState = current.extensionUiState.copy(
+                        error = "Result must be JSON.",
                     ),
                 )
             }
             return
         }
 
-        if (!renameState.isValid) {
-            return
-        }
-
         _uiState.update { current ->
-            current.copy(renameState = current.renameState.copy(submitting = true, error = null))
+            current.copy(extensionUiState = current.extensionUiState.copy(submitting = true))
         }
-
-        viewModelScope.launch {
-            operatorRepository.updateSession(
-                serverOrigin = paired.serverOrigin,
-                sessionId = renameState.sessionId,
-                body = UpdateSessionBody(name = name),
-            ).fold(
-                onSuccess = { updated ->
-                    _uiState.update { current ->
-                        current.copy(
-                            renameDialogVisible = false,
-                            renameState = RenameSessionUiState(),
-                            sessions = current.sessions.map { row ->
-                                if (row.id == updated.id) {
-                                    row.copy(name = updated.name)
-                                } else {
-                                    row
-                                }
-                            },
-                            sessionsList = current.sessionsList.map { row ->
-                                if (row.id == updated.id) {
-                                    row.copy(name = updated.name)
-                                } else {
-                                    row
-                                }
-                            },
-                            recentSessions = current.recentSessions.map { row ->
-                                if (row.id == updated.id) {
-                                    row.copy(name = updated.name)
-                                } else {
-                                    row
-                                }
-                            },
-                            selectedSession = current.selectedSession?.let { selected ->
-                                if (selected.id == updated.id) {
-                                    selected.copy(name = updated.name)
-                                } else {
-                                    selected
-                                }
-                            },
-                        )
-                    }
-                },
-                onFailure = { error ->
-                    _uiState.update { current ->
-                        current.copy(
-                            renameState = current.renameState.copy(
-                                submitting = false,
-                                error = errorMessage(error),
-                            ),
-                        )
-                    }
-                },
-            )
+        sessionStream.send(
+            SessionStreamClientMessage.ExtensionReply(
+                requestId = request.requestId,
+                result = parsed,
+            ),
+        )
+        _uiState.update { current ->
+            current.copy(extensionUiState = ExtensionUiState())
         }
     }
 
-    fun showArchiveDialog() {
+    fun skipExtension() {
+        val request = _uiState.value.extensionUiState.request ?: return
+        sessionStream.send(
+            SessionStreamClientMessage.ExtensionReply(
+                requestId = request.requestId,
+                result = JsonObject(emptyMap()),
+            ),
+        )
         _uiState.update { current ->
-            current.copy(
-                archiveDialogVisible = true,
-                archiveError = null,
-            )
+            current.copy(extensionUiState = ExtensionUiState())
         }
     }
 
-    fun hideArchiveDialog() {
-        _uiState.update { current ->
-            current.copy(
-                archiveDialogVisible = false,
-                archiveSubmitting = false,
-                archiveError = null,
-            )
-        }
-    }
-
-    fun submitArchive() {
+    fun deleteSession(row: SessionRow) {
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
-        val session = _uiState.value.selectedSession ?: return
-
-        _uiState.update { current ->
-            current.copy(archiveSubmitting = true, archiveError = null)
-        }
 
         viewModelScope.launch {
-            operatorRepository.archiveSession(
+            operatorRepository.deleteSession(
                 serverOrigin = paired.serverOrigin,
-                sessionId = session.id,
+                agentId = row.agentId,
+                sessionId = row.sessionId,
             ).fold(
-                onSuccess = { archived ->
-                    hideArchiveDialog()
-                    removeSessionFromActiveWorkflow(sessionId = archived.id)
+                onSuccess = {
+                    dropSession(row)
                 },
                 onFailure = { error ->
-                    _uiState.update { current ->
-                        current.copy(
-                            archiveSubmitting = false,
-                            archiveError = errorMessage(error),
-                        )
+                    val apiError = (error as? AgentApiException)?.error
+                    if (apiError is AgentApiError.Problem && apiError.status == HTTP_CONFLICT) {
+                        _uiState.update { current ->
+                            current.copy(
+                                deleteUnsupportedMessage = apiError.detail
+                                    ?: "Agent does not support session/close",
+                            )
+                        }
+                    } else {
+                        _uiState.update { current ->
+                            current.copy(sessionsError = errorMessage(error))
+                        }
                     }
                 },
             )
         }
+    }
+
+    fun dismissDeleteUnsupported() {
+        _uiState.update { current -> current.copy(deleteUnsupportedMessage = null) }
     }
 
     fun selectSession(row: SessionRow) {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
-
+        pendingPrompt = null
         viewModelScope.launch {
-            selectSession(paired.serverOrigin, row)
+            activateSession(row)
         }
     }
 
-    private suspend fun selectSession(serverOrigin: String, row: SessionRow) {
-        operatorRepository.selectSession(serverOrigin, row.id).fold(
-            onSuccess = { session ->
-                navigationPreferences.saveLastSessionId(session.id)
-                persistSelectedSession(session.id)
-                val selected = row.copy(
-                    name = session.name,
-                    state = session.state,
-                )
-                _uiState.update { current ->
-                    current.copy(
-                        selectedSession = selected,
-                        pickerVisible = false,
-                        transcript = emptyTranscript,
-                        composerText = "",
-                        composerError = null,
-                        pendingPermissions = emptyList(),
-                        permissionUiState = PermissionUiState(),
-                        streamReconnecting = false,
-                    )
-                }
-                startSessionStream(serverOrigin, session.id)
-                loadPendingPermissions(serverOrigin, session.id)
-            },
-            onFailure = { error ->
-                _uiState.update { current ->
-                    current.copy(sessionsError = errorMessage(error))
-                }
-            },
-        )
+    private suspend fun activateSession(row: SessionRow) {
+        navigationPreferences.saveLastSessionId(row.id)
+        persistSelectedSession(row.id)
+        _uiState.update { current ->
+            current.copy(
+                selectedSession = row,
+                pickerVisible = false,
+                transcript = emptyAcpTranscript,
+                composerText = "",
+                composerError = null,
+                pendingPermissions = emptyList(),
+                permissionUiState = PermissionUiState(),
+                extensionUiState = ExtensionUiState(),
+                streamReconnecting = false,
+            )
+        }
+        sessionStream.setTarget(row.agentId, row.sessionId)
+        syncActiveSessionsFromUiState()
     }
 
-    private fun startSessionStream(serverOrigin: String, sessionId: String) {
-        if (activeSessionId == sessionId && (streamJob?.isActive == true || frameCollectJob?.isActive == true)) {
+    private fun startSessionStream(serverOrigin: String) {
+        if (streamJob?.isActive == true) {
             return
         }
 
-        stopSessionStream()
-        activeSessionId = sessionId
-
-        val broker = sessionStreamBroker
-        if (broker != null) {
-            broker.pin(serverOrigin, sessionId, StreamPinReason.Ui)
-            frameCollectJob = viewModelScope.launch {
-                broker.frames.collect { frame ->
-                    if (frame.sessionId != sessionId) {
-                        return@collect
-                    }
-                    if (frame.reconnect) {
-                        _uiState.update { current ->
-                            current.copy(
-                                transcript = emptyTranscript,
-                                pendingPermissions = emptyList(),
-                                permissionUiState = PermissionUiState(),
-                                streamReconnecting = true,
-                            )
-                        }
-                        refreshPendingPermissions(serverOrigin, sessionId)
-                    } else {
-                        applySessionEvents(sessionId, frame.events)
-                    }
-                }
-            }
-            return
-        }
-
-        streamJob = sessionChatStream.observe(
+        streamJob = sessionStream.start(
             serverOrigin = serverOrigin,
-            sessionId = sessionId,
             onReconnect = {
+                pendingPrompt = null
                 _uiState.update { current ->
                     current.copy(
-                        transcript = emptyTranscript,
+                        transcript = applyReconnect(),
                         pendingPermissions = emptyList(),
                         permissionUiState = PermissionUiState(),
+                        extensionUiState = ExtensionUiState(),
                         streamReconnecting = true,
                     )
                 }
-                viewModelScope.launch {
-                    refreshPendingPermissions(serverOrigin, sessionId)
-                }
+                syncSelectedState(SessionState.Offline)
             },
-            onEvents = { frame -> applySessionEvents(sessionId, frame) },
+            onMessage = ::applyStreamMessage,
         )
+        _uiState.value.selectedSession?.let { selected ->
+            sessionStream.setTarget(selected.agentId, selected.sessionId)
+        }
     }
 
-    private fun applySessionEvents(sessionId: String, frame: List<EventEnvelope>) {
-        _uiState.update { current ->
-            val nextSessions = applySessionListStateEvents(current.sessions, frame)
-            val nextTranscript = foldTranscriptEvents(
-                state = current.transcript,
-                events = frame,
-                sessionId = sessionId,
-            )
-            val nextSessionState = resolveEffectiveSessionState(
-                sessionId = sessionId,
-                transcriptSessionState = nextTranscript.sessionState,
-                listSessionState = nextSessions.firstOrNull { row -> row.id == sessionId }?.state
-                    ?: current.selectedSession?.state,
-            )
+    private fun applyStreamMessage(message: SessionStreamServerMessage) {
+        val selected = _uiState.value.selectedSession
 
-            val selectedStillActive = nextSessions.any { row -> row.id == sessionId }
-            val nextSelected = when {
-                current.selectedSession?.id != sessionId -> current.selectedSession
-                !selectedStillActive -> null
-                else -> current.selectedSession?.let { session ->
-                    val listRow = nextSessions.first { row -> row.id == sessionId }
-                    nextSessionState?.let { session.copy(state = it, name = listRow.name) }
-                        ?: session.copy(name = listRow.name)
+        when (message) {
+            is SessionStreamServerMessage.SessionUpdate -> {
+                if (!belongsToSelection(message.agentId, message.sessionId, selected)) {
+                    return
+                }
+                _uiState.update { current ->
+                    current.copy(
+                        transcript = foldAcpUpdate(current.transcript, parseAcpUpdate(message.update)),
+                        streamReconnecting = false,
+                    )
+                }
+                syncSelectedState(_uiState.value.transcript.sessionState)
+            }
+            is SessionStreamServerMessage.Subscribed -> {
+                if (!belongsToSelection(message.agentId, message.sessionId, selected)) {
+                    return
+                }
+                _uiState.update { current ->
+                    current.copy(
+                        transcript = applySubscribed(current.transcript),
+                        streamReconnecting = false,
+                    )
+                }
+                val queued = pendingPrompt
+                pendingPrompt = null
+                if (queued != null) {
+                    val turnId = nextTurnId()
+                    _uiState.update { current ->
+                        current.copy(transcript = beginUserTurn(current.transcript, turnId, queued))
+                    }
+                    sessionStream.send(
+                        SessionStreamClientMessage.Prompt(
+                            agentId = message.agentId,
+                            sessionId = message.sessionId,
+                            text = queued,
+                        ),
+                    )
+                }
+                syncSelectedState(_uiState.value.transcript.sessionState)
+            }
+            is SessionStreamServerMessage.PromptComplete -> {
+                if (!belongsToSelection(message.agentId, message.sessionId, selected)) {
+                    return
+                }
+                _uiState.update { current ->
+                    current.copy(transcript = applyPromptComplete(current.transcript))
+                }
+                syncSelectedState(SessionState.Idle)
+            }
+            is SessionStreamServerMessage.Cancelled -> {
+                if (!belongsToSelection(message.agentId, message.sessionId, selected)) {
+                    return
+                }
+                _uiState.update { current ->
+                    current.copy(transcript = applyCancelled(current.transcript))
+                }
+                syncSelectedState(SessionState.Idle)
+            }
+            is SessionStreamServerMessage.PermissionRequest -> {
+                if (!belongsToSelection(message.agentId, message.sessionId, selected)) {
+                    return
+                }
+                val parsed = parseStreamPermission(
+                    requestId = message.requestId,
+                    sessionId = message.sessionId,
+                    params = message.params,
+                ) ?: return
+                _uiState.update { current ->
+                    current.copy(
+                        pendingPermissions = listOf(parsed),
+                        transcript = applyPermissionRequested(current.transcript),
+                    )
+                }
+                syncSelectedState(SessionState.AwaitingPermission)
+            }
+            is SessionStreamServerMessage.ExtensionRequest -> {
+                if (!belongsToSelection(message.agentId, message.sessionId, selected)) {
+                    return
+                }
+                _uiState.update { current ->
+                    current.copy(
+                        extensionUiState = ExtensionUiState(
+                            request = StreamExtension(
+                                requestId = message.requestId,
+                                method = message.method,
+                                params = message.params,
+                            ),
+                        ),
+                    )
                 }
             }
-
-            val nextPending = applyPermissionEvents(current.pendingPermissions, frame)
-
-            current.copy(
-                sessions = nextSessions,
-                transcript = nextTranscript,
-                pendingPermissions = nextPending,
-                streamReconnecting = false,
-                selectedSession = nextSelected,
-            )
-        }
-
-        syncActiveSessionsFromUiState()
-
-        if (_uiState.value.selectedSession == null && activeSessionId == sessionId) {
-            viewModelScope.launch { clearPersistedSession() }
-            stopSessionStream()
+            is SessionStreamServerMessage.Error -> {
+                if (
+                    message.sessionId != null &&
+                    message.sessionId != selected?.sessionId
+                ) {
+                    return
+                }
+                _uiState.update { current ->
+                    current.copy(transcript = applyStreamError(current.transcript))
+                }
+                syncSelectedState(SessionState.Error)
+            }
         }
     }
 
-    private fun syncActiveSessionsFromUiState() {
-        val tracker = activeSessionTracker ?: return
-        val rows = _uiState.value.sessions
-        tracker.replaceAll(
-            rows.map { row ->
-                ActiveSessionSnapshot(id = row.id, name = row.name, state = row.state)
-            },
-        )
-        sessionForegroundCoordinator?.onSessionsChanged()
-    }
+    private fun belongsToSelection(
+        agentId: AgentId,
+        sessionId: String,
+        selected: SessionRow?,
+    ): Boolean = selected != null &&
+        selected.agentId == agentId &&
+        selected.sessionId == sessionId
 
     private fun stopSessionStream() {
         streamJob?.cancel()
         streamJob = null
-        frameCollectJob?.cancel()
-        frameCollectJob = null
-        val sessionId = activeSessionId
-        activeSessionId = null
-        if (sessionId != null) {
-            sessionStreamBroker?.unpin(sessionId, StreamPinReason.Ui)
-        }
+        sessionStream.stop()
     }
 
     private suspend fun openSessionFromNotification(sessionId: String) {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
-        if (_uiState.value.selectedSession?.id == sessionId) {
+        if (_uiState.value.selectedSession?.sessionId == sessionId) {
             return
         }
-
-        val row = _uiState.value.sessions.firstOrNull { session -> session.id == sessionId } ?: return
-        selectSession(paired.serverOrigin, row)
+        val row = catalog.firstOrNull { session -> session.sessionId == sessionId } ?: return
+        activateSession(row)
     }
 
-    private suspend fun refreshOperatorData(serverOrigin: String) {
+    private suspend fun refreshCatalog() {
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
         _uiState.update { current ->
             current.copy(sessionsLoading = true, sessionsError = null)
         }
 
-        val workspacesResult = operatorRepository.listWorkspaces(serverOrigin)
-        val sessionsResult = operatorRepository.listSessions(serverOrigin)
-        val agentsResult = operatorRepository.listAgents(serverOrigin)
+        val workspacesResult = operatorRepository.listWorkspaces(paired.serverOrigin)
+        val sessionsResult = operatorRepository.listSessions(paired.serverOrigin)
+        val agentsResult = operatorRepository.listAgents(paired.serverOrigin)
 
-        val workspaces = workspacesResult.getOrNull()?.items.orEmpty()
-        workspaceLabels = workspaces.associate { workspace -> workspace.id to workspace.name }
+        val workspaces = workspacesResult.getOrNull()?.items.orEmpty().map { workspace ->
+            WorkspaceRow(
+                id = workspace.id,
+                name = workspace.name,
+                path = workspace.path,
+                state = workspace.state,
+            )
+        }
+        workspaceByPath = workspaces.associateBy { workspace -> workspace.path }
         agentLabels = agentsResult.getOrNull()?.items.orEmpty()
             .associate { agent -> agent.id to agent.displayName }
 
         sessionsResult.fold(
             onSuccess = { collection ->
-                val rows = collection.items
-                    .filter { session -> session.state != SessionState.Archived }
-                    .map { session ->
-                        session.toSessionRow(workspaceLabels, agentLabels)
-                    }
+                catalog = collection.items.map { session -> session.toSessionRow() }
                 _uiState.update { current ->
                     current.copy(
-                        sessions = rows,
+                        sessions = catalog,
                         sessionsLoading = false,
                         sessionsError = null,
                     )
                 }
-
+                publishDerivedSessionLists()
                 syncActiveSessionsFromUiState()
-                restoreLastSession(serverOrigin, rows)
+                restoreLastSession()
             },
             onFailure = { error ->
                 _uiState.update { current ->
@@ -923,111 +703,44 @@ class ChatViewModel(
         )
     }
 
-    private suspend fun loadRecentSessions() {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
-        operatorRepository.listSessions(
-            serverOrigin = paired.serverOrigin,
-            limit = RECENT_SESSIONS_LIMIT,
-        ).fold(
-            onSuccess = { collection ->
-                val rows = collection.items
-                    .filter { session -> session.state != SessionState.Archived }
-                    .map { session -> session.toSessionRow(workspaceLabels, agentLabels) }
-                _uiState.update { current ->
-                    current.copy(
-                        recentSessions = rows,
-                        recentSessionsLoading = false,
-                        recentSessionsError = null,
-                    )
-                }
-            },
-            onFailure = { error ->
-                _uiState.update { current ->
-                    current.copy(
-                        recentSessionsLoading = false,
-                        recentSessionsError = errorMessage(error),
-                    )
-                }
-            },
-        )
-    }
-
-    private suspend fun refreshSessionsList(search: String?) {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
-        sessionsListLoadJob?.cancel()
-        val generation = ++sessionsListGeneration
+    private fun publishDerivedSessionLists() {
+        val search = _uiState.value.sessionsListSearch.trim()
+        val recent = catalog
+            .sortedByDescending { row -> row.updatedAt }
+            .take(RECENT_SESSIONS_LIMIT)
+        val list = if (search.isEmpty()) {
+            catalog.sortedByDescending { row -> row.updatedAt }
+        } else {
+            catalog
+                .filter { row -> row.name.contains(search, ignoreCase = true) }
+                .sortedByDescending { row -> row.updatedAt }
+        }
         _uiState.update { current ->
             current.copy(
-                sessionsListLoading = true,
-                sessionsListLoadingMore = false,
-                sessionsListError = null,
+                recentSessions = recent,
+                sessionsList = list,
             )
         }
-
-        operatorRepository.listSessions(
-            serverOrigin = paired.serverOrigin,
-            limit = SESSIONS_PAGE_SIZE,
-            search = search,
-        ).fold(
-            onSuccess = { collection ->
-                if (generation != sessionsListGeneration) {
-                    return@fold
-                }
-                val rows = collection.items
-                    .filter { session -> session.state != SessionState.Archived }
-                    .map { session -> session.toSessionRow(workspaceLabels, agentLabels) }
-                _uiState.update { current ->
-                    current.copy(
-                        sessionsList = rows,
-                        sessionsListNextCursor = collection.page.nextCursor,
-                        sessionsListLoading = false,
-                        sessionsListLoadingMore = false,
-                        sessionsListError = null,
-                    )
-                }
-            },
-            onFailure = { error ->
-                if (generation != sessionsListGeneration) {
-                    return@fold
-                }
-                _uiState.update { current ->
-                    current.copy(
-                        sessionsListLoading = false,
-                        sessionsListLoadingMore = false,
-                        sessionsListError = errorMessage(error),
-                    )
-                }
-            },
-        )
     }
 
-    private suspend fun restoreLastSession(
-        serverOrigin: String,
-        rows: List<SessionRow>,
-    ) {
+    private suspend fun restoreLastSession() {
         val savedId = savedStateHandle.get<String>(KEY_SELECTED_SESSION_ID)
             ?: navigationPreferences.loadLastSessionId()
             ?: return
 
-        val row = rows.firstOrNull { session -> session.id == savedId } ?: return
-        if (activeSessionId == row.id && streamJob?.isActive == true) {
+        val row = catalog.firstOrNull { session -> session.id == savedId }
+            ?: catalog.firstOrNull { session -> session.sessionId == savedId }
+            ?: return
+        if (_uiState.value.selectedSession?.id == row.id) {
+            sessionStream.setTarget(row.agentId, row.sessionId)
             return
         }
-        selectSession(serverOrigin, row)
+        activateSession(row)
     }
 
-    private suspend fun selectSessionLocally(sessionId: String) {
-        val row = _uiState.value.sessions.firstOrNull { session -> session.id == sessionId }
-            ?: SessionRow(
-                id = sessionId,
-                name = "Session",
-                workspaceId = "",
-                workspaceLabel = "",
-                agentId = "cursor",
-                agentLabel = "",
-                state = SessionState.Idle,
-            )
-
+    private suspend fun selectSessionLocally(sessionKey: String) {
+        val row = catalog.firstOrNull { session -> session.id == sessionKey }
+            ?: return
         _uiState.update { current -> current.copy(selectedSession = row) }
     }
 
@@ -1055,8 +768,8 @@ class ChatViewModel(
         )
     }
 
-    private fun persistSelectedSession(sessionId: String) {
-        savedStateHandle[KEY_SELECTED_SESSION_ID] = sessionId
+    private fun persistSelectedSession(sessionKey: String) {
+        savedStateHandle[KEY_SELECTED_SESSION_ID] = sessionKey
     }
 
     private suspend fun clearPersistedSession() {
@@ -1064,83 +777,75 @@ class ChatViewModel(
         navigationPreferences.clearLastSessionId()
     }
 
-    private fun removeSessionFromActiveWorkflow(sessionId: String) {
-        stopSessionStream()
-        viewModelScope.launch {
-            clearPersistedSession()
+    private fun dropSession(row: SessionRow) {
+        catalog = catalog.filterNot { item -> item.id == row.id }
+        val selectedWasDeleted = _uiState.value.selectedSession?.id == row.id
+        if (selectedWasDeleted) {
+            sessionStream.setTarget(null, null)
+            viewModelScope.launch { clearPersistedSession() }
         }
         _uiState.update { current ->
             current.copy(
-                sessions = current.sessions.filterNot { row -> row.id == sessionId },
-                sessionsList = current.sessionsList.filterNot { row -> row.id == sessionId },
-                recentSessions = current.recentSessions.filterNot { row -> row.id == sessionId },
-                selectedSession = null,
-                transcript = emptyTranscript,
-                composerText = "",
-                composerError = null,
-                cancelError = null,
-                pendingPermissions = emptyList(),
-                permissionUiState = PermissionUiState(),
+                sessions = catalog,
+                selectedSession = if (selectedWasDeleted) null else current.selectedSession,
+                transcript = if (selectedWasDeleted) emptyAcpTranscript else current.transcript,
+                composerText = if (selectedWasDeleted) "" else current.composerText,
+                pendingPermissions = if (selectedWasDeleted) emptyList() else current.pendingPermissions,
+                permissionUiState = if (selectedWasDeleted) PermissionUiState() else current.permissionUiState,
+                extensionUiState = if (selectedWasDeleted) ExtensionUiState() else current.extensionUiState,
                 pickerVisible = false,
             )
         }
+        publishDerivedSessionLists()
+        syncActiveSessionsFromUiState()
     }
 
-    private fun loadPendingPermissions(serverOrigin: String, sessionId: String) {
-        viewModelScope.launch {
-            operatorRepository.listPendingPermissions(serverOrigin, sessionId).fold(
-                onSuccess = { items ->
-                    _uiState.update { current ->
-                        current.copy(pendingPermissions = items)
-                    }
-                },
-                onFailure = {
-                    _uiState.update { current ->
-                        current.copy(pendingPermissions = emptyList())
-                    }
-                },
+    private fun syncSelectedState(state: SessionState?) {
+        if (state == null) {
+            return
+        }
+        _uiState.update { current ->
+            val selected = current.selectedSession ?: return@update current
+            val next = selected.copy(state = state)
+            catalog = catalog.map { row -> if (row.id == next.id) next else row }
+            current.copy(
+                selectedSession = next,
+                sessions = catalog,
             )
         }
+        publishDerivedSessionLists()
+        syncActiveSessionsFromUiState()
     }
 
-    private suspend fun refreshPendingPermissions(
-        serverOrigin: String,
-        sessionId: String,
-        authoritative: Boolean = false,
-    ) {
-        operatorRepository.listPendingPermissions(serverOrigin, sessionId).fold(
-            onSuccess = { items ->
-                _uiState.update { current ->
-                    current.copy(
-                        pendingPermissions = if (authoritative) {
-                            items
-                        } else {
-                            mergePendingRead(current.pendingPermissions, items)
-                        },
-                        permissionUiState = PermissionUiState(),
-                    )
-                }
+    private fun syncActiveSessionsFromUiState() {
+        val tracker = activeSessionTracker ?: return
+        tracker.replaceAll(
+            catalog.map { row ->
+                ActiveSessionSnapshot(id = row.sessionId, name = row.name, state = row.state)
             },
-            onFailure = {
-                _uiState.update { current ->
-                    current.copy(pendingPermissions = emptyList())
-                }
-            },
+        )
+        sessionForegroundCoordinator?.onSessionsChanged()
+    }
+
+    private fun Session.toSessionRow(): SessionRow {
+        val workspace = workspaceByPath[cwd]
+        return SessionRow(
+            sessionId = sessionId,
+            name = title.ifBlank { sessionId },
+            cwd = cwd,
+            workspaceId = workspace?.id.orEmpty(),
+            workspaceLabel = workspace?.name ?: cwd,
+            agentId = agentId,
+            agentLabel = agentLabels[agentId] ?: agentId,
+            state = SessionState.Idle,
+            updatedAt = updatedAt,
         )
     }
 
-    private fun Session.toSessionRow(
-        workspaceLabels: Map<String, String>,
-        agentLabels: Map<AgentId, String>,
-    ): SessionRow = SessionRow(
-        id = id,
-        name = name,
-        workspaceId = workspaceId,
-        workspaceLabel = workspaceLabels[workspaceId] ?: workspaceId,
-        agentId = agentId,
-        agentLabel = agentLabels[agentId] ?: agentId,
-        state = state,
-    )
+    private fun nextTurnId(): String {
+        turnSerial += 1
+        return "turn-$turnSerial"
+    }
 
     private fun errorMessage(error: Throwable): String =
         when (val apiError = (error as? AgentApiException)?.error) {
@@ -1158,10 +863,7 @@ class ChatViewModel(
 
     companion object {
         const val KEY_SELECTED_SESSION_ID = "selected_session_id"
-        const val SESSION_NAME_MAX_LENGTH = RenameSessionUiState.SESSION_NAME_MAX_LENGTH
         const val RECENT_SESSIONS_LIMIT = 5
-        const val SESSIONS_PAGE_SIZE = 20
-        const val SESSIONS_SEARCH_DEBOUNCE_MS = 500L
         private const val HTTP_CONFLICT = 409
     }
 }
@@ -1172,9 +874,8 @@ class ChatViewModelFactory(
     private val connectionGateway: ConnectionGateway,
     private val operatorRepository: OperatorRepository,
     private val navigationPreferences: NavigationPreferences,
-    private val eventStreamFactory: EventStreamFactory,
+    private val sessionStreamFactory: SessionStreamFactory,
     private val activeSessionTracker: ActiveSessionTracker,
-    private val sessionStreamBroker: SessionStreamBroker,
     private val sessionForegroundCoordinator: SessionForegroundCoordinator,
     private val openSessionRequests: OpenSessionRequests,
 ) : ViewModelProvider.Factory {
@@ -1187,9 +888,8 @@ class ChatViewModelFactory(
                 connectionGateway = connectionGateway,
                 operatorRepository = operatorRepository,
                 navigationPreferences = navigationPreferences,
-                eventStreamFactory = eventStreamFactory,
+                sessionStreamFactory = sessionStreamFactory,
                 activeSessionTracker = activeSessionTracker,
-                sessionStreamBroker = sessionStreamBroker,
                 sessionForegroundCoordinator = sessionForegroundCoordinator,
                 openSessionRequests = openSessionRequests,
             ) as T

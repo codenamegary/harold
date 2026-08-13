@@ -100,21 +100,18 @@ class ContractDecodingTest {
             Session.serializer(),
             """
             {
-              "id": "sess_01",
-              "workspaceId": "ws_01",
               "agentId": "claude",
-              "name": "Fix the transport",
-              "state": "awaiting-permission",
-              "createdAt": "2026-08-05T00:00:00.000Z",
-              "lastUsedAt": "2026-08-05T01:00:00.000Z",
-              "archivedAt": null
+              "sessionId": "sess_01",
+              "cwd": "/tmp/agent-server",
+              "title": "Fix the transport",
+              "updatedAt": "2026-08-05T01:00:00.000Z"
             }
             """.trimIndent(),
         )
 
         assertEquals("claude", session.agentId)
-        assertEquals(SessionState.AwaitingPermission, session.state)
-        assertNull(session.archivedAt)
+        assertEquals("sess_01", session.sessionId)
+        assertEquals("Fix the transport", session.title)
     }
 
     @Test

@@ -35,7 +35,7 @@ class SessionForegroundCoordinatorTest {
         advanceUntilIdle()
 
         assertTrue(launcher.isRunning)
-        assertEquals(setOf("s1"), broker.pinnedSessionIds())
+        assertTrue(broker.pinnedSessionIds().isEmpty())
         assertEquals("One · Running", coordinator.state.value.notification?.text)
         assertFalse(coordinator.state.value.permissionDenied)
     }

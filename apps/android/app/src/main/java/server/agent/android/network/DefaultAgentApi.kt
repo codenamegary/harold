@@ -13,25 +13,18 @@ import server.agent.android.contracts.AgentServerJson
 import server.agent.android.contracts.AgentSettings
 import server.agent.android.contracts.AgentSettingsCollection
 import server.agent.android.contracts.ConflictProblem
-import server.agent.android.contracts.CancelSessionResponse
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateSessionResponse
 import server.agent.android.contracts.CreateWorkspaceBody
 import server.agent.android.contracts.FilesystemDirectoryCollection
-import server.agent.android.contracts.PromptSessionBody
-import server.agent.android.contracts.PromptSessionResponse
 import server.agent.android.contracts.InternalProblem
 import server.agent.android.contracts.ItemCollection
 import server.agent.android.contracts.NotFoundProblem
-import server.agent.android.contracts.PermissionRequest
-import server.agent.android.contracts.PermissionRequestCollection
-import server.agent.android.contracts.ResolvePermissionRequestBody
 import server.agent.android.contracts.ProblemDetails
 import server.agent.android.contracts.RuntimeSettingsView
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionCollection
 import server.agent.android.contracts.UnauthorizedProblem
-import server.agent.android.contracts.UpdateSessionBody
 import server.agent.android.contracts.Workspace
 import server.agent.android.contracts.WorkspaceCollection
 
@@ -82,21 +75,11 @@ class DefaultAgentApi(
 
     override suspend fun listSessions(
         serverOrigin: String,
-        workspaceId: String?,
-        limit: Int,
-        cursor: String?,
-        search: String?,
+        cwd: String?,
     ): Result<SessionCollection> {
         val query = buildMap {
-            put("limit", limit.toString())
-            if (workspaceId != null) {
-                put("workspaceId", workspaceId)
-            }
-            if (cursor != null) {
-                put("cursor", cursor)
-            }
-            if (search != null) {
-                put("search", search)
+            if (cwd != null) {
+                put("cwd", cwd)
             }
         }
 
@@ -105,7 +88,7 @@ class DefaultAgentApi(
             pathSegments = "v1/sessions",
             query = query,
         ) { body ->
-            json.decodeFromString(ItemCollection.serializer(Session.serializer()), body)
+            json.decodeFromString(SessionCollection.serializer(), body)
         }
     }
 
@@ -125,88 +108,38 @@ class DefaultAgentApi(
         pathSegments = "v1/sessions",
         body = json.encodeToString(CreateSessionBody.serializer(), body),
     ) { responseBody ->
-        json.decodeFromString(CreateSessionResponse.serializer(), responseBody)
-    }
-
-    override suspend fun selectSession(
-        serverOrigin: String,
-        sessionId: String,
-    ): Result<Session> = post(
-        serverOrigin = serverOrigin,
-        pathSegments = "v1/sessions/$sessionId/select",
-        body = "{}",
-    ) { responseBody ->
         json.decodeFromString(Session.serializer(), responseBody)
     }
 
-    override suspend fun promptSession(
+    override suspend fun deleteSession(
         serverOrigin: String,
+        agentId: server.agent.android.contracts.AgentId,
         sessionId: String,
-        body: PromptSessionBody,
-    ): Result<PromptSessionResponse> = post(
-        serverOrigin = serverOrigin,
-        pathSegments = "v1/sessions/$sessionId/prompt",
-        body = json.encodeToString(PromptSessionBody.serializer(), body),
-    ) { responseBody ->
-        json.decodeFromString(PromptSessionResponse.serializer(), responseBody)
-    }
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val url = buildSessionUrl(serverOrigin, sessionId, mapOf("agentId" to agentId))
+            ?: return@withContext failure(
+                AgentApiError.Transport(IllegalArgumentException("Invalid server origin")),
+            )
 
-    override suspend fun updateSession(
-        serverOrigin: String,
-        sessionId: String,
-        body: UpdateSessionBody,
-    ): Result<Session> = patch(
-        serverOrigin = serverOrigin,
-        pathSegments = "v1/sessions/$sessionId",
-        body = json.encodeToString(UpdateSessionBody.serializer(), body),
-    ) { responseBody ->
-        json.decodeFromString(Session.serializer(), responseBody)
-    }
+        val request = Request.Builder()
+            .url(url)
+            .delete()
+            .build()
 
-    override suspend fun cancelSession(
-        serverOrigin: String,
-        sessionId: String,
-    ): Result<CancelSessionResponse> = post(
-        serverOrigin = serverOrigin,
-        pathSegments = "v1/sessions/$sessionId/cancel",
-        body = "{}",
-    ) { responseBody ->
-        json.decodeFromString(CancelSessionResponse.serializer(), responseBody)
-    }
-
-    override suspend fun archiveSession(
-        serverOrigin: String,
-        sessionId: String,
-    ): Result<Session> = post(
-        serverOrigin = serverOrigin,
-        pathSegments = "v1/sessions/$sessionId/archive",
-        body = "{}",
-    ) { responseBody ->
-        json.decodeFromString(Session.serializer(), responseBody)
-    }
-
-    override suspend fun listPendingPermissions(
-        serverOrigin: String,
-        sessionId: String,
-    ): Result<PermissionRequestCollection> = get(
-        serverOrigin = serverOrigin,
-        pathSegments = "v1/sessions/$sessionId/permissions",
-        query = mapOf("status" to "pending"),
-    ) { body ->
-        json.decodeFromString(ItemCollection.serializer(PermissionRequest.serializer()), body)
-    }
-
-    override suspend fun resolvePermission(
-        serverOrigin: String,
-        sessionId: String,
-        requestId: String,
-        body: ResolvePermissionRequestBody,
-    ): Result<PermissionRequest> = patch(
-        serverOrigin = serverOrigin,
-        pathSegments = "v1/sessions/$sessionId/permissions/$requestId",
-        body = json.encodeToString(ResolvePermissionRequestBody.serializer(), body),
-    ) { responseBody ->
-        json.decodeFromString(PermissionRequest.serializer(), responseBody)
+        try {
+            client.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string().orEmpty()
+                if (response.code == HTTP_NO_CONTENT) {
+                    return@withContext Result.success(Unit)
+                }
+                if (!response.isSuccessful) {
+                    return@withContext failure(errorFor(response.code, responseBody))
+                }
+                Result.success(Unit)
+            }
+        } catch (error: Throwable) {
+            failure(AgentApiError.Transport(error))
+        }
     }
 
     private suspend fun <T> get(
@@ -233,20 +166,6 @@ class DefaultAgentApi(
         pathSegments = pathSegments,
         query = emptyMap(),
         method = "POST",
-        body = body,
-        decode = decode,
-    )
-
-    private suspend fun <T> patch(
-        serverOrigin: String,
-        pathSegments: String,
-        body: String,
-        decode: (String) -> T,
-    ): Result<T> = request(
-        serverOrigin = serverOrigin,
-        pathSegments = pathSegments,
-        query = emptyMap(),
-        method = "PATCH",
         body = body,
         decode = decode,
     )
@@ -322,11 +241,27 @@ class DefaultAgentApi(
             .build()
     }
 
+    private fun buildSessionUrl(
+        serverOrigin: String,
+        sessionId: String,
+        query: Map<String, String>,
+    ): HttpUrl? {
+        val base = serverOrigin.trim().trimEnd('/').toHttpUrlOrNull() ?: return null
+
+        return base.newBuilder()
+            .addPathSegment("v1")
+            .addPathSegment("sessions")
+            .addPathSegment(sessionId)
+            .apply { query.forEach { (name, value) -> addQueryParameter(name, value) } }
+            .build()
+    }
+
     private fun <T> failure(error: AgentApiError): Result<T> =
         Result.failure(AgentApiException(error))
 
     private companion object {
         const val HTTP_UNAUTHORIZED = 401
+        const val HTTP_NO_CONTENT = 204
         val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
 }

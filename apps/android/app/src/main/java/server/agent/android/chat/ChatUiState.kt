@@ -1,19 +1,26 @@
 package server.agent.android.chat
 
+import kotlinx.serialization.json.JsonElement
 import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.PermissionRequest
 import server.agent.android.contracts.SessionState
 import server.agent.android.contracts.WorkspaceState
+import server.agent.android.contracts.catalogSessionKey
 
 data class SessionRow(
-    val id: String,
+    val sessionId: String,
     val name: String,
+    val cwd: String,
     val workspaceId: String,
     val workspaceLabel: String,
     val agentId: AgentId,
     val agentLabel: String,
     val state: SessionState,
-)
+    val updatedAt: String,
+) {
+    val id: String
+        get() = catalogSessionKey(agentId, sessionId)
+}
 
 data class WorkspaceRow(
     val id: String,
@@ -37,35 +44,21 @@ data class CreateSessionUiState(
     val error: String? = null,
 )
 
-data class RenameSessionUiState(
-    val sessionId: String = "",
-    val name: String = "",
-    val submitting: Boolean = false,
-    val error: String? = null,
-) {
-    val trimmedName: String
-        get() = name.trim()
-
-    val isValid: Boolean
-        get() = trimmedName.isNotEmpty() &&
-            trimmedName.length <= SESSION_NAME_MAX_LENGTH
-
-    val fieldError: String?
-        get() = when {
-            name.isEmpty() -> null
-            trimmedName.isEmpty() -> "Enter a session name"
-            trimmedName.length > SESSION_NAME_MAX_LENGTH ->
-                "Name must be $SESSION_NAME_MAX_LENGTH characters or fewer"
-            else -> null
-        }
-
-    companion object {
-        const val SESSION_NAME_MAX_LENGTH = 120
-    }
-}
-
 data class PermissionUiState(
     val submittingOptionId: String? = null,
+    val error: String? = null,
+)
+
+data class StreamExtension(
+    val requestId: String,
+    val method: String,
+    val params: JsonElement,
+)
+
+data class ExtensionUiState(
+    val request: StreamExtension? = null,
+    val replyText: String = "{}",
+    val submitting: Boolean = false,
     val error: String? = null,
 )
 
@@ -82,25 +75,20 @@ data class ChatUiState(
     val sessionsList: List<SessionRow> = emptyList(),
     val sessionsListSearch: String = "",
     val sessionsListLoading: Boolean = false,
-    val sessionsListLoadingMore: Boolean = false,
     val sessionsListError: String? = null,
-    val sessionsListNextCursor: String? = null,
     val createDialogVisible: Boolean = false,
     val createState: CreateSessionUiState = CreateSessionUiState(),
-    val transcript: TranscriptState = emptyTranscript,
+    val transcript: AcpTranscriptState = emptyAcpTranscript,
     val composerText: String = "",
     val composerSubmitting: Boolean = false,
     val composerError: String? = null,
     val cancelSubmitting: Boolean = false,
     val cancelError: String? = null,
-    val renameDialogVisible: Boolean = false,
-    val renameState: RenameSessionUiState = RenameSessionUiState(),
-    val archiveDialogVisible: Boolean = false,
-    val archiveSubmitting: Boolean = false,
-    val archiveError: String? = null,
     val streamReconnecting: Boolean = false,
     val pendingPermissions: List<PermissionRequest> = emptyList(),
     val permissionUiState: PermissionUiState = PermissionUiState(),
+    val extensionUiState: ExtensionUiState = ExtensionUiState(),
+    val deleteUnsupportedMessage: String? = null,
     val notificationPermissionDenied: Boolean = false,
 ) {
     val activePermissionRequest: PermissionRequest?
@@ -108,7 +96,7 @@ data class ChatUiState(
 
     val effectiveSessionState: SessionState?
         get() = resolveEffectiveSessionState(
-            sessionId = selectedSession?.id.orEmpty(),
+            sessionId = selectedSession?.sessionId.orEmpty(),
             transcriptSessionState = transcript.sessionState,
             listSessionState = selectedSession?.state,
         )
@@ -119,7 +107,7 @@ data class ChatUiState(
             return isComposerPromptable(
                 workspaceId = session.workspaceId,
                 agentId = session.agentId,
-                sessionId = session.id,
+                sessionId = session.sessionId,
                 sessionState = effectiveSessionState,
             ) && !composerSubmitting && !streamReconnecting
         }

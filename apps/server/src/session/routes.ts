@@ -1,6 +1,7 @@
 import {
   CreateSessionBodySchema,
   CreateSessionResponseSchema,
+  DeleteSessionQuerySchema,
   ListSessionsQuerySchema,
   SessionCollectionSchema,
 } from "contracts/http/session"
@@ -114,5 +115,50 @@ export const registerSessionRoutes = (
         items: listed.sessions,
       }),
     )
+  })
+
+  app.delete("/v1/sessions/:sessionId", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string }
+    const query = DeleteSessionQuerySchema.parse(request.query)
+
+    const agentSettings = agentSettingsRepository
+      .list()
+      .find((settings) => settings.id === query.agentId)
+
+    if (agentSettings === undefined) {
+      return sendProblem(reply, 404, buildAgentNotFoundProblem())
+    }
+
+    if (!agentSettings.available) {
+      return sendProblem(reply, 409, buildAgentUnavailableProblem())
+    }
+
+    if (!agentSettings.enabled) {
+      return sendProblem(reply, 409, buildAgentDisabledProblem())
+    }
+
+    const supervisorReady = await ensureSupervisorReady(acpSupervisor, query.agentId)
+    if (!supervisorReady) {
+      return sendProblem(reply, 409, buildAcpUnavailableProblem())
+    }
+
+    if (!acpSupervisor.getAgentCapabilities(query.agentId)?.sessionCapabilities.close) {
+      return sendProblem(
+        reply,
+        409,
+        buildAcpUnavailableProblem("Agent does not support session/close"),
+      )
+    }
+
+    const closed = await acpSupervisor.closeAcpSession({
+      agentId: query.agentId,
+      sessionId,
+    })
+
+    if (!closed.ok) {
+      return sendProblem(reply, 409, buildAcpUnavailableProblem(closed.reason))
+    }
+
+    return reply.status(204).send()
   })
 }

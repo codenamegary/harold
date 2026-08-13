@@ -298,7 +298,11 @@ const handleSessionLoad = (request: JsonRpcRequest, config: FakeAcpConfig): Hand
   }
 }
 
-const handleSessionClose = (request: JsonRpcRequest, config: FakeAcpConfig): HandlerResult => {
+const handleSessionClose = (
+  request: JsonRpcRequest,
+  config: FakeAcpConfig,
+  promptState: FakeAcpPromptState,
+): HandlerResult => {
   if (!config.sessionClose) {
     return {
       response: jsonRpcError(request.id, -32601, "session close not supported"),
@@ -311,6 +315,11 @@ const handleSessionClose = (request: JsonRpcRequest, config: FakeAcpConfig): Han
       response: jsonRpcError(request.id, -32000, "session close failed"),
       ...emptyHandlerExtras(),
     }
+  }
+
+  const sessionId = readSessionId(request.params)
+  if (sessionId !== undefined) {
+    promptState.removeSession(sessionId)
   }
 
   return {
@@ -397,7 +406,8 @@ const requestHandlers: Record<string, RequestHandler> = {
   "session/list": (request, config, promptState) =>
     handleSessionList(request, config, promptState),
   "session/load": (request, config) => handleSessionLoad(request, config),
-  "session/close": (request, config) => handleSessionClose(request, config),
+  "session/close": (request, config, promptState) =>
+    handleSessionClose(request, config, promptState),
   "session/prompt": (request, config, promptState) =>
     handleSessionPrompt(request, config, promptState),
 }

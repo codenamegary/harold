@@ -1,5 +1,6 @@
 package server.agent.android.operator
 
+import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateWorkspaceBody
 import server.agent.android.network.AgentApi
@@ -27,11 +28,8 @@ class DefaultOperatorRepository(
 
     override suspend fun listSessions(
         serverOrigin: String,
-        workspaceId: String?,
-        limit: Int,
-        cursor: String?,
-        search: String?,
-    ) = agentApi.listSessions(serverOrigin, workspaceId, limit, cursor, search)
+        cwd: String?,
+    ) = agentApi.listSessions(serverOrigin, cwd)
 
     override suspend fun listAgents(serverOrigin: String) = agentApi.listAgents(serverOrigin)
 
@@ -40,49 +38,9 @@ class DefaultOperatorRepository(
         body: CreateSessionBody,
     ) = agentApi.createSession(serverOrigin, body)
 
-    override suspend fun selectSession(
+    override suspend fun deleteSession(
         serverOrigin: String,
+        agentId: AgentId,
         sessionId: String,
-    ) = agentApi.selectSession(serverOrigin, sessionId)
-
-    override suspend fun promptSession(
-        serverOrigin: String,
-        sessionId: String,
-        body: server.agent.android.contracts.PromptSessionBody,
-    ) = agentApi.promptSession(serverOrigin, sessionId, body)
-
-    override suspend fun updateSession(
-        serverOrigin: String,
-        sessionId: String,
-        body: server.agent.android.contracts.UpdateSessionBody,
-    ) = agentApi.updateSession(serverOrigin, sessionId, body)
-
-    override suspend fun cancelSession(
-        serverOrigin: String,
-        sessionId: String,
-    ) = agentApi.cancelSession(serverOrigin, sessionId)
-
-    override suspend fun archiveSession(
-        serverOrigin: String,
-        sessionId: String,
-    ) = agentApi.archiveSession(serverOrigin, sessionId)
-
-    override suspend fun listPendingPermissions(
-        serverOrigin: String,
-        sessionId: String,
-    ) = agentApi.listPendingPermissions(serverOrigin, sessionId).map { collection ->
-        collection.items
-    }
-
-    override suspend fun resolvePermission(
-        serverOrigin: String,
-        sessionId: String,
-        requestId: String,
-        optionId: String,
-    ) = agentApi.resolvePermission(
-        serverOrigin = serverOrigin,
-        sessionId = sessionId,
-        requestId = requestId,
-        body = server.agent.android.contracts.ResolvePermissionRequestBody(optionId = optionId),
-    )
+    ) = agentApi.deleteSession(serverOrigin, agentId, sessionId)
 }

@@ -14,6 +14,8 @@ import server.agent.android.credentials.CredentialStore
 import server.agent.android.credentials.DefaultCredentialStore
 import server.agent.android.events.EventStreamFactory
 import server.agent.android.events.OkHttpEventStream
+import server.agent.android.events.OkHttpSessionStreamFactory
+import server.agent.android.events.SessionStreamFactory
 import server.agent.android.foreground.ActiveSessionTracker
 import server.agent.android.foreground.AndroidNotificationPermissionChecker
 import server.agent.android.foreground.AndroidSessionForegroundLauncher
@@ -52,6 +54,7 @@ interface AppContainer {
     val agentApi: AgentApi
     val connectionGateway: ConnectionGateway
     val eventStreamFactory: EventStreamFactory
+    val sessionStreamFactory: SessionStreamFactory
     val navigationPreferences: NavigationPreferences
     val operatorRepository: OperatorRepository
     val activeSessionTracker: ActiveSessionTracker
@@ -94,6 +97,9 @@ class DefaultAppContainer(
     override val eventStreamFactory: EventStreamFactory = EventStreamFactory { serverOrigin ->
         OkHttpEventStream(client = authenticatedClient, serverOrigin = serverOrigin)
     }
+    override val sessionStreamFactory: SessionStreamFactory = OkHttpSessionStreamFactory(
+        client = authenticatedClient,
+    )
     override val connectionGateway: ConnectionGateway = DefaultConnectionGateway(
         streamFactory = eventStreamFactory,
         scope = applicationScope,

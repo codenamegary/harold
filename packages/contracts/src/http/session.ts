@@ -1,7 +1,17 @@
 import { z } from "zod"
 import { TurnIdSchema } from "../events/primitives"
-import { AgentIdSchema } from "./agent-settings"
+import { AgentId, AgentIdSchema } from "./agent-settings"
 import { IdSchema, TimestampSchema } from "./primitives"
+
+export const SESSIONS_PATH = "/v1/sessions" as const
+
+export const sessionPath = (sessionId: string) =>
+  `${SESSIONS_PATH}/${encodeURIComponent(sessionId)}`
+
+export const deleteSessionPath = (
+  sessionId: string,
+  query: { agentId: AgentId },
+) => `${sessionPath(sessionId)}?agentId=${encodeURIComponent(query.agentId)}`
 
 export const SessionStateSchema = z.enum([
   "starting",
@@ -54,6 +64,10 @@ export const ListSessionsQuerySchema = z.strictObject({
   cwd: z.string().min(1).optional(),
 })
 
+export const DeleteSessionQuerySchema = z.strictObject({
+  agentId: AgentIdSchema,
+})
+
 export const PromptSessionBodySchema = z.strictObject({
   text: z.string().min(1).max(32_768),
 })
@@ -76,6 +90,7 @@ export type CreateSessionResponse = z.infer<typeof CreateSessionResponseSchema>
 export type UpdateSessionBody = z.infer<typeof UpdateSessionBodySchema>
 export type SessionCollection = z.infer<typeof SessionCollectionSchema>
 export type ListSessionsQuery = z.infer<typeof ListSessionsQuerySchema>
+export type DeleteSessionQuery = z.infer<typeof DeleteSessionQuerySchema>
 export type PromptSessionBody = z.infer<typeof PromptSessionBodySchema>
 export type PromptSessionResponse = z.infer<typeof PromptSessionResponseSchema>
 export type CancelSessionBody = z.infer<typeof CancelSessionBodySchema>

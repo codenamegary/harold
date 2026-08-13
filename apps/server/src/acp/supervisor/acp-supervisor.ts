@@ -766,11 +766,13 @@ export const createAcpSupervisor = ({
   }
 
   const closeAcpSession = async ({
-    acpSessionId,
+    agentId,
+    sessionId,
   }: {
-    acpSessionId: string
+    agentId: AgentId
+    sessionId: string
   }): Promise<AcpSessionCloseResult> => {
-    const runtime = resolveRuntimeForAcpSession(acpSessionId)
+    const runtime = getReadyRuntime(agentId)
     if (runtime === null || runtime.transport === null) {
       return { ok: false, reason: "ACP supervisor is not ready" }
     }
@@ -779,7 +781,8 @@ export const createAcpSupervisor = ({
       return { ok: false, reason: "Agent does not support session/close" }
     }
 
-    const binding = sessionBindingRegistry.getBinding(acpSessionId)
+    rememberAcpSession(agentId, sessionId)
+    const binding = sessionBindingRegistry.getBinding(sessionId)
     const operationContext: AcpOperationContext | undefined =
       binding === undefined
         ? undefined
@@ -790,9 +793,9 @@ export const createAcpSupervisor = ({
           }
 
     try {
-      await runtime.transport.request("session/close", { sessionId: acpSessionId }, operationContext)
-      sessionBindingRegistry.unbind({ acpSessionId })
-      acpSessionAgentIds.delete(acpSessionId)
+      await runtime.transport.request("session/close", { sessionId }, operationContext)
+      sessionBindingRegistry.unbind({ acpSessionId: sessionId })
+      acpSessionAgentIds.delete(sessionId)
       return { ok: true }
     } catch (error: unknown) {
       return { ok: false, reason: sanitizeFailureReason(error, "session/close failed") }
@@ -1049,7 +1052,10 @@ export const createAcpSupervisor = ({
       }
 
       rememberAcpSession(session.agentId, session.acpSessionId)
-      const result = await closeAcpSession({ acpSessionId: session.acpSessionId })
+      const result = await closeAcpSession({
+        agentId: session.agentId,
+        sessionId: session.acpSessionId,
+      })
       if (!result.ok) {
         failures.push({
           acpSessionId: session.acpSessionId,

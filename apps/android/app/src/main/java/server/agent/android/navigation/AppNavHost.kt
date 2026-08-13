@@ -22,7 +22,6 @@ import server.agent.android.chat.ChatScreen
 import server.agent.android.chat.ChatViewModel
 import server.agent.android.chat.ChatViewModelFactory
 import server.agent.android.chat.CreateSessionScreen
-import server.agent.android.chat.SessionEditDialog
 import server.agent.android.chat.SessionsScreen
 import server.agent.android.chat.WorkspacesScreen
 import server.agent.android.chat.WorkspacesViewModel
@@ -109,14 +108,24 @@ fun AppNavHost(
                     connectionGateway = appContainer.connectionGateway,
                     operatorRepository = appContainer.operatorRepository,
                     navigationPreferences = appContainer.navigationPreferences,
-                    eventStreamFactory = appContainer.eventStreamFactory,
+                    sessionStreamFactory = appContainer.sessionStreamFactory,
                     activeSessionTracker = appContainer.activeSessionTracker,
-                    sessionStreamBroker = appContainer.sessionStreamBroker,
                     sessionForegroundCoordinator = appContainer.sessionForegroundCoordinator,
                     openSessionRequests = appContainer.openSessionRequests,
                 ),
             )
             val chatUiState by chatViewModel.uiState.collectAsState()
+            val lifecycleOwner = LocalLifecycleOwner.current
+
+            DisposableEffect(lifecycleOwner, chatViewModel) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME) {
+                        chatViewModel.onResume()
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
 
             ChatScreen(
                 uiState = chatUiState,
@@ -136,15 +145,12 @@ fun AppNavHost(
                 onComposerTextChanged = chatViewModel::onComposerTextChanged,
                 onComposerSubmit = chatViewModel::submitComposerPrompt,
                 onComposerCancel = chatViewModel::submitCancel,
-                onRenameClick = chatViewModel::showRenameDialog,
-                onDismissRename = chatViewModel::hideRenameDialog,
-                onRenameNameChanged = chatViewModel::onRenameNameChanged,
-                onRenameSubmit = chatViewModel::submitRename,
-                onArchiveClick = chatViewModel::showArchiveDialog,
-                onDismissArchive = chatViewModel::hideArchiveDialog,
-                onArchiveSubmit = chatViewModel::submitArchive,
-                onArchiveFromEditDialog = chatViewModel::submitArchiveFromEditDialog,
+                onDeleteSession = chatViewModel::deleteSession,
+                onDismissDeleteUnsupported = chatViewModel::dismissDeleteUnsupported,
                 onPermissionOptionSelect = chatViewModel::submitPermissionOption,
+                onExtensionReplyChanged = chatViewModel::onExtensionReplyChanged,
+                onExtensionReply = chatViewModel::submitExtensionReply,
+                onExtensionSkip = chatViewModel::skipExtension,
                 onNotificationPermissionResult = chatViewModel::onNotificationPermissionResult,
                 onDismissNotificationPermissionPrompt = chatViewModel::dismissNotificationPermissionPrompt,
             )
@@ -162,9 +168,8 @@ fun AppNavHost(
                     connectionGateway = appContainer.connectionGateway,
                     operatorRepository = appContainer.operatorRepository,
                     navigationPreferences = appContainer.navigationPreferences,
-                    eventStreamFactory = appContainer.eventStreamFactory,
+                    sessionStreamFactory = appContainer.sessionStreamFactory,
                     activeSessionTracker = appContainer.activeSessionTracker,
-                    sessionStreamBroker = appContainer.sessionStreamBroker,
                     sessionForegroundCoordinator = appContainer.sessionForegroundCoordinator,
                     openSessionRequests = appContainer.openSessionRequests,
                 ),
@@ -179,24 +184,12 @@ fun AppNavHost(
                     chatViewModel.selectSessionFromList(row)
                     navController.popBackStack()
                 },
-                onSessionLongPress = chatViewModel::showSessionEditDialog,
+                onDeleteSession = chatViewModel::deleteSession,
                 onCreateClick = {
                     chatViewModel.showCreateDialog()
                     navController.navigate(Routes.CreateSession)
                 },
-                onLoadMore = chatViewModel::loadMoreSessions,
             )
-
-            if (chatUiState.renameDialogVisible) {
-                SessionEditDialog(
-                    renameState = chatUiState.renameState,
-                    archiveSubmitting = chatUiState.archiveSubmitting,
-                    onDismiss = chatViewModel::hideRenameDialog,
-                    onNameChanged = chatViewModel::onRenameNameChanged,
-                    onSave = chatViewModel::submitRename,
-                    onArchive = chatViewModel::submitArchiveFromEditDialog,
-                )
-            }
         }
 
         composable(Routes.CreateSession) { createEntry ->
@@ -211,9 +204,8 @@ fun AppNavHost(
                     connectionGateway = appContainer.connectionGateway,
                     operatorRepository = appContainer.operatorRepository,
                     navigationPreferences = appContainer.navigationPreferences,
-                    eventStreamFactory = appContainer.eventStreamFactory,
+                    sessionStreamFactory = appContainer.sessionStreamFactory,
                     activeSessionTracker = appContainer.activeSessionTracker,
-                    sessionStreamBroker = appContainer.sessionStreamBroker,
                     sessionForegroundCoordinator = appContainer.sessionForegroundCoordinator,
                     openSessionRequests = appContainer.openSessionRequests,
                 ),

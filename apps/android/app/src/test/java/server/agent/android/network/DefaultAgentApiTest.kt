@@ -12,13 +12,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateWorkspaceBody
-import server.agent.android.contracts.UpdateSessionBody
-import server.agent.android.contracts.PermissionStatus
-import server.agent.android.contracts.ResolvePermissionRequestBody
-import server.agent.android.contracts.SessionState
 import server.agent.android.contracts.WorkspaceState
 
 @RunWith(RobolectricTestRunner::class)
@@ -158,7 +153,7 @@ class DefaultAgentApiTest {
     }
 
     @Test
-    fun listSessionsWithoutWorkspaceIdUsesGlobalEndpoint() = runTest {
+    fun listSessionsUsesGatewayCollection() = runTest {
         server.enqueue(
             MockResponse()
                 .setResponseCode(200)
@@ -167,17 +162,13 @@ class DefaultAgentApiTest {
                     {
                       "items": [
                         {
-                          "id": "sess_01",
-                          "workspaceId": "ws_01",
                           "agentId": "cursor",
-                          "name": "Debug",
-                          "state": "idle",
-                          "createdAt": "2026-08-05T00:00:00.000Z",
-                          "lastUsedAt": "2026-08-05T01:00:00.000Z",
-                          "archivedAt": null
+                          "sessionId": "sess_01",
+                          "cwd": "/tmp/agent-server",
+                          "title": "Debug",
+                          "updatedAt": "2026-08-05T01:00:00.000Z"
                         }
-                      ],
-                      "page": { "limit": 100, "count": 1 }
+                      ]
                     }
                     """.trimIndent(),
                 ),
@@ -186,53 +177,39 @@ class DefaultAgentApiTest {
         val result = agentApi.listSessions(serverOrigin = origin())
 
         val recorded = server.takeRequest()
-        assertEquals("/v1/sessions?limit=100", recorded.path)
-        assertEquals(1, result.getOrThrow().items.size)
+        assertEquals("/v1/sessions", recorded.path)
+        val item = result.getOrThrow().items.single()
+        assertEquals("sess_01", item.sessionId)
+        assertEquals("Debug", item.title)
     }
 
     @Test
-    fun listSessionsIncludesSearchAndCursor() = runTest {
+    fun listSessionsIncludesCwdFilter() = runTest {
         server.enqueue(
             MockResponse()
                 .setResponseCode(200)
-                .setBody(
-                    """
-                    {
-                      "items": [],
-                      "page": { "limit": 20, "count": 0, "nextCursor": null }
-                    }
-                    """.trimIndent(),
-                ),
+                .setBody("""{ "items": [] }"""),
         )
 
-        agentApi.listSessions(
-            serverOrigin = origin(),
-            limit = 20,
-            cursor = "cursor_01",
-            search = "auth",
-        )
+        agentApi.listSessions(serverOrigin = origin(), cwd = "/tmp/agent-server")
 
         val recorded = server.takeRequest()
-        assertEquals("/v1/sessions?limit=20&cursor=cursor_01&search=auth", recorded.path)
+        assertEquals("/v1/sessions?cwd=%2Ftmp%2Fagent-server", recorded.path)
     }
 
     @Test
-    fun createSessionPostsBody() = runTest {
+    fun createSessionPostsAgentIdAndCwd() = runTest {
         server.enqueue(
             MockResponse()
                 .setResponseCode(201)
                 .setBody(
                     """
                     {
-                      "id": "sess_01",
-                      "workspaceId": "ws_01",
                       "agentId": "cursor",
-                      "name": "Ship it",
-                      "state": "running",
-                      "createdAt": "2026-08-05T00:00:00.000Z",
-                      "lastUsedAt": "2026-08-05T00:00:00.000Z",
-                      "archivedAt": null,
-                      "turnId": "turn_01"
+                      "sessionId": "sess_01",
+                      "cwd": "/tmp/agent-server",
+                      "title": "New session",
+                      "updatedAt": "2026-08-05T00:00:00.000Z"
                     }
                     """.trimIndent(),
                 ),
@@ -241,171 +218,66 @@ class DefaultAgentApiTest {
         val result = agentApi.createSession(
             serverOrigin = origin(),
             body = CreateSessionBody(
-                workspaceId = "ws_01",
                 agentId = "cursor",
-                text = "Ship it",
+                cwd = "/tmp/agent-server",
             ),
         )
 
         val recorded = server.takeRequest()
         assertEquals("POST", recorded.method)
         assertEquals("/v1/sessions", recorded.path)
-        assertTrue(recorded.body.readUtf8().contains("Ship it"))
-        assertEquals("sess_01", result.getOrThrow().id)
+        assertTrue(recorded.body.readUtf8().contains("/tmp/agent-server"))
+        assertEquals("sess_01", result.getOrThrow().sessionId)
     }
 
     @Test
-    fun updateSessionPatchesName() = runTest {
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setBody(
-                    """
-                    {
-                      "id": "sess_01",
-                      "workspaceId": "ws_01",
-                      "agentId": "cursor",
-                      "name": "Renamed",
-                      "state": "idle",
-                      "createdAt": "2026-08-05T00:00:00.000Z",
-                      "lastUsedAt": "2026-08-05T01:00:00.000Z",
-                      "archivedAt": null
-                    }
-                    """.trimIndent(),
-                ),
-        )
+    fun deleteSessionSendsAgentIdQuery() = runTest {
+        server.enqueue(MockResponse().setResponseCode(204))
 
-        val result = agentApi.updateSession(
+        val result = agentApi.deleteSession(
             serverOrigin = origin(),
+            agentId = "cursor",
             sessionId = "sess_01",
-            body = UpdateSessionBody(name = "Renamed"),
         )
 
         val recorded = server.takeRequest()
-        assertEquals("PATCH", recorded.method)
-        assertEquals("/v1/sessions/sess_01", recorded.path)
-        assertEquals("Renamed", result.getOrThrow().name)
+        assertEquals("DELETE", recorded.method)
+        assertEquals("/v1/sessions/sess_01?agentId=cursor", recorded.path)
+        assertTrue(result.isSuccess)
     }
 
     @Test
-    fun cancelSessionPostsEmptyBody() = runTest {
+    fun deleteSessionMapsConflictWhenCloseUnsupported() = runTest {
         server.enqueue(
             MockResponse()
-                .setResponseCode(202)
-                .setBody("""{ "turnId": "turn_01" }"""),
-        )
-
-        val result = agentApi.cancelSession(serverOrigin = origin(), sessionId = "sess_01")
-
-        val recorded = server.takeRequest()
-        assertEquals("POST", recorded.method)
-        assertEquals("/v1/sessions/sess_01/cancel", recorded.path)
-        assertEquals("{}", recorded.body.readUtf8())
-        assertEquals("turn_01", result.getOrThrow().turnId)
-    }
-
-    @Test
-    fun archiveSessionPostsEmptyBody() = runTest {
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(200)
+                .setResponseCode(409)
                 .setBody(
                     """
                     {
-                      "id": "sess_01",
-                      "workspaceId": "ws_01",
-                      "agentId": "cursor",
-                      "name": "Archived",
-                      "state": "archived",
-                      "createdAt": "2026-08-05T00:00:00.000Z",
-                      "lastUsedAt": "2026-08-05T01:00:00.000Z",
-                      "archivedAt": "2026-08-05T02:00:00.000Z"
+                      "type": "https://agent-server.local/problems/conflict",
+                      "title": "Conflict",
+                      "status": 409,
+                      "detail": "Agent does not support session/close"
                     }
                     """.trimIndent(),
                 ),
         )
 
-        val result = agentApi.archiveSession(serverOrigin = origin(), sessionId = "sess_01")
-
-        val recorded = server.takeRequest()
-        assertEquals("POST", recorded.method)
-        assertEquals("/v1/sessions/sess_01/archive", recorded.path)
-        assertEquals(SessionState.Archived, result.getOrThrow().state)
-    }
-
-    @Test
-    fun listPendingPermissionsUsesStatusQuery() = runTest {
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setBody(
-                    """
-                    {
-                      "items": [
-                        {
-                          "id": "perm_01",
-                          "sessionId": "sess_01",
-                          "turnId": "turn_01",
-                          "toolCallId": "tool_01",
-                          "toolName": "fake-tool",
-                          "status": "pending",
-                          "options": [
-                            { "optionId": "allow-once", "name": "Allow once", "kind": "allow" }
-                          ],
-                          "createdAt": "2026-08-06T00:00:00.000Z"
-                        }
-                      ],
-                      "page": { "limit": 100, "count": 1 }
-                    }
-                    """.trimIndent(),
-                ),
+        val error = errorOf(
+            agentApi.deleteSession(
+                serverOrigin = origin(),
+                agentId = "cursor",
+                sessionId = "sess_01",
+            ),
         )
 
-        val result = agentApi.listPendingPermissions(serverOrigin = origin(), sessionId = "sess_01")
-
-        val recorded = server.takeRequest()
-        assertEquals("GET", recorded.method)
-        assertEquals("/v1/sessions/sess_01/permissions?status=pending", recorded.path)
-        assertEquals("perm_01", result.getOrThrow().items.single().id)
-    }
-
-    @Test
-    fun resolvePermissionSendsPatchBody() = runTest {
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setBody(
-                    """
-                    {
-                      "id": "perm_01",
-                      "sessionId": "sess_01",
-                      "turnId": "turn_01",
-                      "toolCallId": "tool_01",
-                      "toolName": "fake-tool",
-                      "status": "resolved",
-                      "options": [
-                        { "optionId": "allow-once", "name": "Allow once", "kind": "allow" }
-                      ],
-                      "createdAt": "2026-08-06T00:00:00.000Z"
-                    }
-                    """.trimIndent(),
-                ),
-        )
-
-        val result = agentApi.resolvePermission(
-            serverOrigin = origin(),
-            sessionId = "sess_01",
-            requestId = "perm_01",
-            body = ResolvePermissionRequestBody(optionId = "allow-once"),
-        )
-
-        val recorded = server.takeRequest()
-        assertEquals("PATCH", recorded.method)
-        assertEquals("/v1/sessions/sess_01/permissions/perm_01", recorded.path)
-        assertTrue(recorded.body.readUtf8().contains("\"optionId\":\"allow-once\""))
         assertEquals(
-            PermissionStatus.Resolved,
-            result.getOrThrow().status,
+            AgentApiError.Problem(
+                status = 409,
+                title = "Conflict",
+                detail = "Agent does not support session/close",
+            ),
+            error,
         )
     }
 
