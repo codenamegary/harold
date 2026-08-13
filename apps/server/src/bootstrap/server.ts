@@ -35,6 +35,7 @@ import { createAcpSupervisor } from "../acp/supervisor/acp-supervisor"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { SpawnAgentProcessFn } from "../acp/supervisor/spawn-agent-process"
 import { registerSessionStreamRoutes } from "../session/stream.routes"
+import { createAcpHubPromptSession } from "../session/hub/acp.hub.prompt"
 import {
   createSessionCwdCache,
   createSessionHub,
@@ -210,17 +211,9 @@ export const createServer = async ({
       const loaded = await acpSupervisor.loadSession({ agentId, sessionId, cwd })
       return loaded.ok ? { ok: true } : { ok: false, reason: loaded.reason }
     },
-    promptSession: async ({ sessionId, text }) => {
-      const started = await acpSupervisor.startPromptAcpSession({
-        acpSessionId: sessionId,
-        prompt: [{ type: "text", text }],
-      })
-      if (!started.ok) {
-        return started
-      }
-      void started.completion
-      return { ok: true }
-    },
+    promptSession: createAcpHubPromptSession({
+      startPrompt: (params) => acpSupervisor.startPromptAcpSession(params),
+    }),
     cancelSession: async ({ sessionId }) => {
       const cancelled = await acpSupervisor.cancelAcpSession({
         acpSessionId: sessionId,
