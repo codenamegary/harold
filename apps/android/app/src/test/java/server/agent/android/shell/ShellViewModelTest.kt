@@ -263,58 +263,23 @@ private class FakeAgentApi(
 
     override suspend fun listSessions(
         serverOrigin: String,
-        workspaceId: String?,
-        limit: Int,
-        cursor: String?,
-        search: String?,
-    ): Result<SessionCollection> = Result.failure(UnsupportedOperationException())
+        cwd: String?,
+    ): Result<server.agent.android.contracts.SessionCollection> =
+        Result.failure(UnsupportedOperationException())
 
-    override suspend fun listAgents(serverOrigin: String): Result<AgentSettingsCollection> =
+    override suspend fun listAgents(serverOrigin: String): Result<server.agent.android.contracts.AgentSettingsCollection> =
         Result.failure(UnsupportedOperationException())
 
     override suspend fun createSession(
         serverOrigin: String,
-        body: CreateSessionBody,
-    ): Result<CreateSessionResponse> = Result.failure(UnsupportedOperationException())
-
-    override suspend fun selectSession(
-        serverOrigin: String,
-        sessionId: String,
-    ): Result<Session> = Result.failure(UnsupportedOperationException())
-
-    override suspend fun promptSession(
-        serverOrigin: String,
-        sessionId: String,
-        body: server.agent.android.contracts.PromptSessionBody,
-    ): Result<server.agent.android.contracts.PromptSessionResponse> =
+        body: server.agent.android.contracts.CreateSessionBody,
+    ): Result<server.agent.android.contracts.CreateSessionResponse> =
         Result.failure(UnsupportedOperationException())
 
-    override suspend fun updateSession(
+    override suspend fun deleteSession(
         serverOrigin: String,
+        agentId: server.agent.android.contracts.AgentId,
         sessionId: String,
-        body: server.agent.android.contracts.UpdateSessionBody,
-    ): Result<Session> = Result.failure(UnsupportedOperationException())
+    ): Result<Unit> = Result.failure(UnsupportedOperationException())
 
-    override suspend fun cancelSession(
-        serverOrigin: String,
-        sessionId: String,
-    ): Result<server.agent.android.contracts.CancelSessionResponse> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun archiveSession(
-        serverOrigin: String,
-        sessionId: String,
-    ): Result<Session> = Result.failure(UnsupportedOperationException())
-
-    override suspend fun listPendingPermissions(
-        serverOrigin: String,
-        sessionId: String,
-    ): Result<PermissionRequestCollection> = Result.failure(UnsupportedOperationException())
-
-    override suspend fun resolvePermission(
-        serverOrigin: String,
-        sessionId: String,
-        requestId: String,
-        body: ResolvePermissionRequestBody,
-    ): Result<PermissionRequest> = Result.failure(UnsupportedOperationException())
 }

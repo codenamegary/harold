@@ -7,11 +7,13 @@ import {
 } from "@headlessui/react"
 import { ChevronDown } from "lucide-react"
 import React, { useMemo, useState } from "react"
+import { ConfirmDeleteIconButton } from "./ConfirmDeleteIconButton"
 
 export type ComboboxOptionItem = {
   value: string
   label: string
   description?: string
+  deletable?: boolean
 }
 
 type ComboboxFilter = "client" | "external"
@@ -29,6 +31,8 @@ type ComboboxProps = {
   filter?: ComboboxFilter
   onQueryChange?: (query: string) => void
   onOpen?: () => void
+  onDeleteOption?: (value: string) => void
+  deletingOptionValue?: string | null
   className?: string
   trailing?: React.ReactNode
   variant?: ComboboxVariant
@@ -56,6 +60,8 @@ export const Combobox: React.FC<ComboboxProps> = ({
   filter = "client",
   onQueryChange,
   onOpen,
+  onDeleteOption,
+  deletingOptionValue = null,
   className = "",
   trailing,
   variant = "field",
@@ -151,12 +157,37 @@ export const Combobox: React.FC<ComboboxProps> = ({
                   value={option}
                   className="cursor-pointer px-3.5 py-2.5 text-sm text-body data-focus:bg-hover-surface data-focus:text-white data-selected:text-lime"
                 >
-                  <span className="block truncate font-medium">{option.label}</span>
-                  {option.description !== undefined ? (
-                    <span className="mt-1 block truncate font-mono text-xs text-dim">
-                      {option.description}
+                  <span className="flex items-start gap-2">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{option.label}</span>
+                      {option.description !== undefined ? (
+                        <span className="mt-1 block truncate font-mono text-xs text-dim">
+                          {option.description}
+                        </span>
+                      ) : null}
                     </span>
-                  ) : null}
+                    {option.deletable === true && onDeleteOption !== undefined ? (
+                      <span
+                        className="shrink-0"
+                        onClick={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                        }}
+                        onPointerDown={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                        }}
+                      >
+                        <ConfirmDeleteIconButton
+                          aria-label={`Delete ${option.label}`}
+                          pending={deletingOptionValue === option.value}
+                          onConfirm={() => {
+                            onDeleteOption(option.value)
+                          }}
+                        />
+                      </span>
+                    ) : null}
+                  </span>
                 </ComboboxOption>
               ))
             )}

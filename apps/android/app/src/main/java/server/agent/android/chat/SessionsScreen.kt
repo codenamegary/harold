@@ -1,9 +1,7 @@
 package server.agent.android.chat
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.defaultMinSize
@@ -31,16 +29,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import server.agent.android.R
 
@@ -53,25 +48,9 @@ fun SessionsScreen(
     onBack: () -> Unit,
     onSearchChanged: (String) -> Unit,
     onSessionClick: (SessionRow) -> Unit,
-    onSessionLongPress: (SessionRow) -> Unit,
+    onDeleteSession: (SessionRow) -> Unit,
     onCreateClick: () -> Unit,
-    onLoadMore: () -> Unit,
 ) {
-    val listState = rememberLazyListState()
-    val shouldLoadMore by remember {
-        derivedStateOf {
-            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            val total = listState.layoutInfo.totalItemsCount
-            total > 0 && lastVisible >= total - 3
-        }
-    }
-
-    LaunchedEffect(shouldLoadMore, uiState.sessionsListNextCursor, uiState.sessionsListLoadingMore) {
-        if (shouldLoadMore && uiState.sessionsListNextCursor != null && !uiState.sessionsListLoadingMore) {
-            onLoadMore()
-        }
-    }
-
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -109,10 +88,9 @@ fun SessionsScreen(
     ) { innerPadding ->
         SessionsListContent(
             uiState = uiState,
-            listState = listState,
             onSearchChanged = onSearchChanged,
             onSessionClick = onSessionClick,
-            onSessionLongPress = onSessionLongPress,
+            onDeleteSession = onDeleteSession,
             modifier = Modifier.padding(innerPadding),
         )
     }
@@ -123,7 +101,7 @@ fun SessionsListContent(
     uiState: ChatUiState,
     onSearchChanged: (String) -> Unit,
     onSessionClick: (SessionRow) -> Unit,
-    onSessionLongPress: (SessionRow) -> Unit,
+    onDeleteSession: (SessionRow) -> Unit,
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
 ) {
@@ -186,28 +164,14 @@ fun SessionsListContent(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(uiState.sessionsList, key = { session -> session.id }) { session ->
-                        SessionListRow(
-                            session = session,
-                            onClick = { onSessionClick(session) },
-                            onLongClick = { onSessionLongPress(session) },
-                        )
-                    }
-
-                    if (uiState.sessionsListLoadingMore) {
-                        item(key = "sessions_loading_more") {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(8.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .testTag("sessions_loading_more"),
-                                    strokeWidth = 2.dp,
-                                )
-                            }
+                        SwipeToRevealDelete(
+                            rowTag = session.id,
+                            onDelete = { onDeleteSession(session) },
+                        ) {
+                            SessionListRow(
+                                session = session,
+                                onClick = { onSessionClick(session) },
+                            )
                         }
                     }
                 }
@@ -216,14 +180,13 @@ fun SessionsListContent(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SessionListRow(
     session: SessionRow,
     onClick: () -> Unit,
-    onLongClick: () -> Unit,
 ) {
     Card(
+        shape = RectangleShape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             contentColor = MaterialTheme.colorScheme.onSurface,
@@ -231,25 +194,19 @@ private fun SessionListRow(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("session_row_${session.id}")
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick,
-            ),
+            .clickable(onClick = onClick),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(text = session.name, style = MaterialTheme.typography.titleMedium)
             Text(
-                text = "${session.workspaceLabel} · ${session.agentLabel}",
+                text = "${session.workspaceLabel} · ${session.agentLabel} · ${sessionStatusLabel(session.state)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = sessionStatusLabel(session.state),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }

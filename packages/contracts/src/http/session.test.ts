@@ -4,12 +4,15 @@ import {
   CancelSessionResponseSchema,
   CreateSessionBodySchema,
   CreateSessionResponseSchema,
+  DeleteSessionQuerySchema,
   ListSessionsQuerySchema,
   PromptSessionBodySchema,
   PromptSessionResponseSchema,
   SessionCollectionSchema,
   SessionSchema,
   UpdateSessionBodySchema,
+  deleteSessionPath,
+  sessionPath,
 } from "./session"
 
 const validTurnId = "turn_01JFC8C7E77NQCFH0RF9Z22JHH"
@@ -218,6 +221,31 @@ describe("SessionCollectionSchema", () => {
         page: { limit: 20, nextCursor: "session_02", count: 1 },
       }),
     ).toThrow()
+  })
+})
+
+describe("deleteSessionPath", () => {
+  test("encodes sessionId and agentId on DELETE /v1/sessions/{sessionId}", () => {
+    expect(sessionPath("acp-1")).toBe("/v1/sessions/acp-1")
+    expect(deleteSessionPath("acp:1/two", { agentId: "cursor" })).toBe(
+      "/v1/sessions/acp%3A1%2Ftwo?agentId=cursor",
+    )
+  })
+})
+
+describe("DeleteSessionQuerySchema", () => {
+  test("accepts agentId", () => {
+    expect(DeleteSessionQuerySchema.parse({ agentId: "cursor" })).toEqual({
+      agentId: "cursor",
+    })
+  })
+
+  test("rejects missing agentId", () => {
+    expect(() => DeleteSessionQuerySchema.parse({})).toThrow()
+  })
+
+  test("rejects empty agentId", () => {
+    expect(() => DeleteSessionQuerySchema.parse({ agentId: "" })).toThrow()
   })
 })
 

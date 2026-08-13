@@ -97,4 +97,29 @@ describe("Combobox", () => {
 
     expect(queryByRole("option", { name: /Alpha/ })).not.toBeInTheDocument()
   })
+
+  test("delete confirm does not select the option", async () => {
+    const user = userEvent.setup()
+    const deleted: string[] = []
+    const { getByRole } = render(
+      <Combobox
+        label="Workspace"
+        aria-label="Workspace"
+        value=""
+        onChange={() => {
+          throw new Error("select should not run")
+        }}
+        onDeleteOption={(value) => {
+          deleted.push(value)
+        }}
+        options={[{ value: "ws_a", label: "Alpha", deletable: true }]}
+      />,
+    )
+
+    await user.click(getByRole("combobox", { name: "Workspace" }))
+    await user.click(getByRole("button", { name: "Delete Alpha" }))
+    await user.click(getByRole("button", { name: "Confirm" }))
+
+    expect(deleted).toEqual(["ws_a"])
+  })
 })

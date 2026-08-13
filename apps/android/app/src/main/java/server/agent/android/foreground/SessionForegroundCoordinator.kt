@@ -104,21 +104,7 @@ class SessionForegroundCoordinator(
             return
         }
 
-        if (origin != null) {
-            val desiredIds = active.map { snapshot -> snapshot.id }.toSet()
-            active.forEach { snapshot ->
-                streamBroker.pin(
-                    serverOrigin = origin,
-                    sessionId = snapshot.id,
-                    reason = StreamPinReason.Service,
-                )
-            }
-            streamBroker.sessionIdsPinnedFor(StreamPinReason.Service)
-                .filterNot { sessionId -> sessionId in desiredIds }
-                .forEach { sessionId ->
-                    streamBroker.unpin(sessionId, StreamPinReason.Service)
-                }
-        }
+        streamBroker.unpinAll(StreamPinReason.Service)
 
         _state.value = ForegroundCoordinatorState(
             serviceDesired = true,

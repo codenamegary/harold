@@ -123,7 +123,10 @@ export type AcpSupervisor = {
     sessionId: string
     workspaceId: string
   }) => Promise<AcpSessionOperationResult>
-  closeAcpSession: (params: { acpSessionId: string }) => Promise<AcpSessionCloseResult>
+  closeAcpSession: (params: {
+    agentId: AgentId
+    sessionId: string
+  }) => Promise<AcpSessionCloseResult>
   promptAcpSession: (params: {
     acpSessionId: string
     prompt: unknown

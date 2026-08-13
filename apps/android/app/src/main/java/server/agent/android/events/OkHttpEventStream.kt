@@ -22,7 +22,6 @@ private const val HTTP_UNAUTHORIZED = 401
 class OkHttpEventStream(
     private val client: OkHttpClient,
     private val serverOrigin: String,
-    private val decoder: EventDecoder = EventDecoder(),
 ) : EventStream {
     override fun connect(cursor: String, sessionId: String?): Flow<StreamEvent> = callbackFlow {
         val finished = AtomicBoolean(false)
@@ -40,13 +39,7 @@ class OkHttpEventStream(
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                decoder.decode(text).fold(
-                    onSuccess = { frame -> trySend(StreamEvent.Frame(frame)) },
-                    onFailure = { error ->
-                        finish(DisconnectCause.Protocol(error.message ?: "Malformed event frame"))
-                        webSocket.cancel()
-                    },
-                )
+                // Liveness only. Chat owns /v1/sessions/stream protocol frames.
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {

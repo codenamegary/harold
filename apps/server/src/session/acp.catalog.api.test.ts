@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import {
+  ConflictProblemSchema,
+  NotFoundProblemSchema,
+  PROBLEM_TYPES,
+} from "contracts/http/error"
+import {
   CreateSessionResponseSchema,
   SessionCollectionSchema,
+  deleteSessionPath,
 } from "contracts/http/session"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import {
@@ -129,5 +135,97 @@ describe("ACP catalog sessions HTTP", () => {
       ]),
     )
     expect(collection.items).toHaveLength(2)
+  })
+
+  test("DELETE /v1/sessions/:sessionId closes via session/close and drops the catalog row", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? "/usr/local/bin/agent" : undefined
+    const { app } = await createTestApp(
+      resources,
+      dataDir,
+      whichFn,
+      acceptTestExecutablePath,
+      {
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+        sessionNewSessionId: "catalog-close-1",
+      },
+    )
+    await enableAgent(app, "cursor", whichFn)
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: {
+        agentId: "cursor",
+        cwd: "/tmp/catalog-close",
+      },
+    })
+    expect(createResponse.statusCode).toBe(201)
+    const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: deleteSessionPath(created.sessionId, { agentId: "cursor" }),
+    })
+    expect(deleteResponse.statusCode).toBe(204)
+    expect(deleteResponse.body).toBe("")
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/sessions",
+    })
+    const collection = SessionCollectionSchema.parse(JSON.parse(listResponse.body))
+    expect(collection.items).toEqual([])
+  })
+
+  test("DELETE /v1/sessions/:sessionId returns 409 when the agent has no session/close", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? "/usr/local/bin/agent" : undefined
+    const { app } = await createTestApp(
+      resources,
+      dataDir,
+      whichFn,
+      acceptTestExecutablePath,
+      {
+        capabilities: { loadSession: true, sessionClose: false, sessionList: true },
+        sessionNewSessionId: "catalog-close-unsupported",
+      },
+    )
+    await enableAgent(app, "cursor", whichFn)
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: {
+        agentId: "cursor",
+        cwd: "/tmp/catalog-close",
+      },
+    })
+    expect(createResponse.statusCode).toBe(201)
+    const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: deleteSessionPath(created.sessionId, { agentId: "cursor" }),
+    })
+    const body = ConflictProblemSchema.parse(JSON.parse(deleteResponse.body))
+    expect(deleteResponse.statusCode).toBe(409)
+    expect(body.type).toBe(PROBLEM_TYPES.conflict)
+    expect(body.detail).toBe("Agent does not support session/close")
+  })
+
+  test("DELETE /v1/sessions/:sessionId returns 404 for unknown agent id", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app } = await createTestApp(resources, dataDir)
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: deleteSessionPath("acp-1", { agentId: "unknown" }),
+    })
+    const body = NotFoundProblemSchema.parse(JSON.parse(deleteResponse.body))
+    expect(deleteResponse.statusCode).toBe(404)
+    expect(body.type).toBe(PROBLEM_TYPES.notFound)
   })
 })

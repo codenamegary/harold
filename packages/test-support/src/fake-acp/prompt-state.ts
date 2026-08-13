@@ -14,6 +14,7 @@ export type FakeAcpListedSession = {
 export type FakeAcpPromptState = {
   allocateSessionId: () => string
   recordSession: (params: { sessionId: string; cwd: string }) => void
+  removeSession: (sessionId: string) => void
   listSessions: () => readonly FakeAcpListedSession[]
   start: (params: { sessionId: string; requestId: JsonRpcId }) => void
   cancel: (sessionId: string) => JsonRpcId | undefined
@@ -39,6 +40,10 @@ export const createFakeAcpPromptState = (): FakeAcpPromptState => {
         title: sessionId,
         updatedAt: new Date().toISOString(),
       })
+    },
+    removeSession: (sessionId) => {
+      sessions.delete(sessionId)
+      prompts.delete(sessionId)
     },
     listSessions: () => [...sessions.values()],
     start: ({ sessionId, requestId }) => {

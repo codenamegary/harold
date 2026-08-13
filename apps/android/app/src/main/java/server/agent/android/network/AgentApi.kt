@@ -1,18 +1,12 @@
 package server.agent.android.network
 
 import server.agent.android.contracts.AgentSettingsCollection
-import server.agent.android.contracts.CancelSessionResponse
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateSessionResponse
 import server.agent.android.contracts.CreateWorkspaceBody
 import server.agent.android.contracts.FilesystemDirectoryCollection
-import server.agent.android.contracts.PermissionRequest
-import server.agent.android.contracts.PermissionRequestCollection
-import server.agent.android.contracts.ResolvePermissionRequestBody
 import server.agent.android.contracts.RuntimeSettingsView
-import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionCollection
-import server.agent.android.contracts.UpdateSessionBody
 import server.agent.android.contracts.Workspace
 import server.agent.android.contracts.WorkspaceCollection
 
@@ -61,10 +55,7 @@ interface AgentApi {
 
     suspend fun listSessions(
         serverOrigin: String,
-        workspaceId: String? = null,
-        limit: Int = 100,
-        cursor: String? = null,
-        search: String? = null,
+        cwd: String? = null,
     ): Result<SessionCollection>
 
     suspend fun listAgents(serverOrigin: String): Result<AgentSettingsCollection>
@@ -74,42 +65,9 @@ interface AgentApi {
         body: CreateSessionBody,
     ): Result<CreateSessionResponse>
 
-    suspend fun selectSession(
+    suspend fun deleteSession(
         serverOrigin: String,
+        agentId: server.agent.android.contracts.AgentId,
         sessionId: String,
-    ): Result<Session>
-
-    suspend fun promptSession(
-        serverOrigin: String,
-        sessionId: String,
-        body: server.agent.android.contracts.PromptSessionBody,
-    ): Result<server.agent.android.contracts.PromptSessionResponse>
-
-    suspend fun updateSession(
-        serverOrigin: String,
-        sessionId: String,
-        body: UpdateSessionBody,
-    ): Result<Session>
-
-    suspend fun cancelSession(
-        serverOrigin: String,
-        sessionId: String,
-    ): Result<CancelSessionResponse>
-
-    suspend fun archiveSession(
-        serverOrigin: String,
-        sessionId: String,
-    ): Result<Session>
-
-    suspend fun listPendingPermissions(
-        serverOrigin: String,
-        sessionId: String,
-    ): Result<PermissionRequestCollection>
-
-    suspend fun resolvePermission(
-        serverOrigin: String,
-        sessionId: String,
-        requestId: String,
-        body: ResolvePermissionRequestBody,
-    ): Result<PermissionRequest>
+    ): Result<Unit>
 }

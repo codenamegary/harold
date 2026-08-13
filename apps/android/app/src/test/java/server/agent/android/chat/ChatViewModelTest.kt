@@ -1,5 +1,6 @@
 package server.agent.android.chat
 
+import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -11,6 +12,8 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -18,36 +21,27 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import server.agent.android.connection.ConnectionGateway
-import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.AgentSettings
 import server.agent.android.contracts.AgentSettingsCollection
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateSessionResponse
-import server.agent.android.contracts.EventEnvelope
-import server.agent.android.contracts.ItemCollection
 import server.agent.android.contracts.PageInfo
-import server.agent.android.contracts.PromptSessionBody
-import server.agent.android.contracts.PromptSessionResponse
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionCollection
 import server.agent.android.contracts.SessionState
-import server.agent.android.contracts.UpdateSessionBody
-import server.agent.android.contracts.PermissionOption
-import server.agent.android.contracts.PermissionOptionKind
-import server.agent.android.contracts.PermissionRequest
-import server.agent.android.contracts.PermissionStatus
-import server.agent.android.network.AgentApiError
-import server.agent.android.network.AgentApiException
+import server.agent.android.contracts.SessionStreamClientMessage
+import server.agent.android.contracts.SessionStreamServerMessage
 import server.agent.android.contracts.Workspace
 import server.agent.android.contracts.WorkspaceCollection
 import server.agent.android.contracts.WorkspaceState
 import server.agent.android.events.ConnectionState
-import server.agent.android.events.EventStreamFactory
+import server.agent.android.events.SessionStreamFactory
 import server.agent.android.navigation.NavigationPreferences
+import server.agent.android.network.AgentApiError
+import server.agent.android.network.AgentApiException
 import server.agent.android.operator.OperatorRepository
 import server.agent.android.session.PairedState
 import server.agent.android.session.SessionGateway
-import androidx.lifecycle.SavedStateHandle
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModelTest {
@@ -66,14 +60,18 @@ class ChatViewModelTest {
     @Test
     fun loadsSessionsAndRestoresLastSession() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository()
-        val navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02")
-        val viewModel = createViewModel(repository, navigation)
+        val stream = FakeSessionStreamClient()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            stream = stream,
+        )
 
         advanceUntilIdle()
 
-        assertEquals("Selected", viewModel.uiState.value.selectedSession?.name)
+        assertEquals("Alpha", viewModel.uiState.value.selectedSession?.name)
         assertEquals(2, viewModel.uiState.value.sessions.size)
-        assertEquals(listOf("sess_02"), repository.selectCalls)
+        assertEquals("cursor" to "sess_02", stream.target)
     }
 
     @Test
@@ -92,9 +90,14 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun createSessionSubmitsWhenValid() = runTest(dispatcher) {
+    fun createSessionSubmitsWhenValidThenPromptsAfterSubscribe() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository()
-        val viewModel = createViewModel(repository, ChatFakeNavigationPreferences())
+        val stream = FakeSessionStreamClient()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            stream = stream,
+        )
 
         advanceUntilIdle()
         viewModel.showCreateDialog()
@@ -107,288 +110,221 @@ class ChatViewModelTest {
 
         assertFalse(viewModel.uiState.value.createDialogVisible)
         assertEquals(1, repository.createCalls.size)
-        assertTrue(repository.selectCalls.contains("sess_new"))
+        assertEquals("/tmp/agent-server", repository.createCalls.first().cwd)
+        assertEquals("sess_new", viewModel.uiState.value.selectedSession?.sessionId)
+
+        stream.emit(
+            SessionStreamServerMessage.Subscribed(agentId = "cursor", sessionId = "sess_new"),
+        )
+        advanceUntilIdle()
+
+        val prompt = stream.sent.filterIsInstance<SessionStreamClientMessage.Prompt>().single()
+        assertEquals("Ship it", prompt.text)
+        assertTrue(viewModel.uiState.value.transcript.rows.first() is TranscriptUserRow)
     }
 
     @Test
     fun streamsTranscriptAndAllowsFollowUpPrompt() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository()
-        val eventSource = FakeSessionEventSource()
+        val stream = FakeSessionStreamClient()
         val viewModel = createViewModel(
-            repository = repository,
+            repository = ChatFakeOperatorRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-            eventSource = eventSource,
+            stream = stream,
         )
 
         advanceUntilIdle()
-
-        eventSource.emit(
-            listOf(
-                turnStarted(cursor = "1", text = "Explain auth", sessionId = "sess_02"),
-                thoughtDelta(cursor = "2", text = "plan", sessionId = "sess_02"),
-                outputDelta(cursor = "3", text = "done", sessionId = "sess_02"),
-                sessionState(cursor = "4", state = SessionState.Idle, sessionId = "sess_02"),
-            ),
+        stream.emit(
+            SessionStreamServerMessage.Subscribed(agentId = "cursor", sessionId = "sess_02"),
         )
         advanceUntilIdle()
-
-        val transcript = viewModel.uiState.value.transcript
-        assertEquals(3, transcript.rows.size)
-        assertTrue(transcript.rows[0] is TranscriptUserRow)
-        assertEquals(SessionState.Idle, viewModel.uiState.value.effectiveSessionState)
-        assertTrue(viewModel.uiState.value.composerEnabled)
 
         viewModel.onComposerTextChanged("Follow up")
         viewModel.submitComposerPrompt()
         advanceUntilIdle()
 
-        assertEquals(1, repository.promptCalls.size)
-        assertEquals("Follow up", repository.promptCalls.first().text)
+        val prompt = stream.sent.filterIsInstance<SessionStreamClientMessage.Prompt>().single()
+        assertEquals("Follow up", prompt.text)
         assertEquals("", viewModel.uiState.value.composerText)
+        assertEquals(SessionState.Running, viewModel.uiState.value.effectiveSessionState)
     }
 
     @Test
-    fun blocksComposerWhileSessionRunning() = runTest(dispatcher) {
-        val eventSource = FakeSessionEventSource()
+    fun cancelSessionSendsStreamCancel() = runTest(dispatcher) {
+        val stream = FakeSessionStreamClient()
         val viewModel = createViewModel(
             repository = ChatFakeOperatorRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-            eventSource = eventSource,
+            stream = stream,
         )
 
         advanceUntilIdle()
-
-        eventSource.emit(
-            listOf(
-                turnStarted(cursor = "1", sessionId = "sess_02"),
-                sessionState(cursor = "2", state = SessionState.Running, sessionId = "sess_02"),
-            ),
+        stream.emit(
+            SessionStreamServerMessage.Subscribed(agentId = "cursor", sessionId = "sess_02"),
         )
-        advanceUntilIdle()
-
-        assertFalse(viewModel.uiState.value.composerEnabled)
-        assertTrue(viewModel.uiState.value.showProgress)
-    }
-
-    @Test
-    fun reconnectClearsTranscriptBeforeReplay() = runTest(dispatcher) {
-        val eventSource = FakeSessionEventSource()
-        val viewModel = createViewModel(
-            repository = ChatFakeOperatorRepository(),
-            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-            eventSource = eventSource,
-        )
-
-        advanceUntilIdle()
-
-        eventSource.emit(listOf(turnStarted(cursor = "1", text = "first", sessionId = "sess_02")))
-        advanceUntilIdle()
-        assertEquals(1, viewModel.uiState.value.transcript.rows.size)
-
-        eventSource.triggerReconnect()
-        advanceUntilIdle()
-        assertTrue(viewModel.uiState.value.streamReconnecting)
-        assertEquals(0, viewModel.uiState.value.transcript.rows.size)
-
-        eventSource.emit(
-            listOf(
-                turnStarted(cursor = "1", text = "first", sessionId = "sess_02"),
-                outputDelta(cursor = "2", text = "reply", sessionId = "sess_02"),
-                sessionState(cursor = "3", state = SessionState.Idle, sessionId = "sess_02"),
-            ),
-        )
-        advanceUntilIdle()
-
-        assertFalse(viewModel.uiState.value.streamReconnecting)
-        assertEquals(2, viewModel.uiState.value.transcript.rows.size)
-    }
-
-    @Test
-    fun cancelSessionCallsRepository() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository()
-        val eventSource = FakeSessionEventSource()
-        val viewModel = createViewModel(
-            repository = repository,
-            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-            eventSource = eventSource,
-        )
-
-        advanceUntilIdle()
-        eventSource.emit(
-            listOf(sessionState(cursor = "1", state = SessionState.Running, sessionId = "sess_02")),
-        )
+        viewModel.onComposerTextChanged("Go")
+        viewModel.submitComposerPrompt()
         advanceUntilIdle()
         viewModel.submitCancel()
         advanceUntilIdle()
 
-        assertEquals(listOf("sess_02"), repository.cancelCalls)
+        assertTrue(stream.sent.any { message -> message is SessionStreamClientMessage.Cancel })
     }
 
     @Test
-    fun renameSessionUpdatesListAndHeader() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository()
-        val viewModel = createViewModel(
-            repository = repository,
-            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-        )
-
-        advanceUntilIdle()
-        viewModel.showRenameDialog()
-        viewModel.onRenameNameChanged("Renamed session")
-        viewModel.submitRename()
-        advanceUntilIdle()
-
-        assertEquals("Renamed session", viewModel.uiState.value.selectedSession?.name)
-        assertEquals(
-            "Renamed session",
-            viewModel.uiState.value.sessions.first { it.id == "sess_02" }.name,
-        )
-    }
-
-    @Test
-    fun renameFromSessionListUpdatesNonSelectedRow() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository()
-        val viewModel = createViewModel(
-            repository = repository,
-            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-        )
-
-        advanceUntilIdle()
-        val listRow = viewModel.uiState.value.sessions.first { it.id == "sess_01" }
-        viewModel.showRenameDialogForSession(listRow)
-        viewModel.onRenameNameChanged("List rename proof")
-        viewModel.submitRename()
-        advanceUntilIdle()
-
-        assertEquals("Selected", viewModel.uiState.value.selectedSession?.name)
-        assertEquals(
-            "List rename proof",
-            viewModel.uiState.value.sessions.first { it.id == "sess_01" }.name,
-        )
-    }
-
-    @Test
-    fun archiveSessionClearsSelection() = runTest(dispatcher) {
+    fun deleteSessionRemovesRowAndClearsSelection() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository()
         val navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02")
         val viewModel = createViewModel(repository, navigation)
 
         advanceUntilIdle()
-        viewModel.submitArchive()
+        val selected = viewModel.uiState.value.selectedSession!!
+        viewModel.deleteSession(selected)
         advanceUntilIdle()
 
         assertEquals(null, viewModel.uiState.value.selectedSession)
-        assertTrue(viewModel.uiState.value.sessions.none { it.id == "sess_02" })
+        assertTrue(viewModel.uiState.value.sessions.none { row -> row.sessionId == "sess_02" })
+        assertEquals("sess_02", repository.deleteCalls.single().second)
         assertEquals(null, navigation.savedSessionId)
     }
 
     @Test
-    fun sessionStateEventUpdatesListRow() = runTest(dispatcher) {
-        val eventSource = FakeSessionEventSource()
-        val viewModel = createViewModel(
-            repository = ChatFakeOperatorRepository(),
-            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-            eventSource = eventSource,
-        )
-
-        advanceUntilIdle()
-
-        eventSource.emit(
-            listOf(sessionState(cursor = "1", state = SessionState.Stopping, sessionId = "sess_02")),
-        )
-        advanceUntilIdle()
-
-        assertEquals(SessionState.Stopping, viewModel.uiState.value.sessions.first { it.id == "sess_02" }.state)
-        assertEquals(SessionState.Stopping, viewModel.uiState.value.effectiveSessionState)
-    }
-
-    @Test
-    fun loadsPendingPermissionsAfterSessionSelect() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository()
+    fun deleteSessionShowsUnsupportedDialogOnConflict() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository(deleteConflict = true)
         val viewModel = createViewModel(
             repository = repository,
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
         )
 
         advanceUntilIdle()
+        viewModel.deleteSession(viewModel.uiState.value.selectedSession!!)
+        advanceUntilIdle()
 
-        assertEquals(1, repository.pendingCalls.size)
-        assertEquals("perm_01", viewModel.uiState.value.activePermissionRequest?.id)
+        assertEquals(
+            "Agent does not support session/close",
+            viewModel.uiState.value.deleteUnsupportedMessage,
+        )
+        assertEquals("sess_02", viewModel.uiState.value.selectedSession?.sessionId)
     }
 
     @Test
-    fun permissionEventsUpdatePendingState() = runTest(dispatcher) {
-        val eventSource = FakeSessionEventSource()
+    fun reconnectClearsTranscriptBeforeReplay() = runTest(dispatcher) {
+        val stream = FakeSessionStreamClient()
         val viewModel = createViewModel(
             repository = ChatFakeOperatorRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-            eventSource = eventSource,
+            stream = stream,
         )
 
         advanceUntilIdle()
+        stream.emit(
+            SessionStreamServerMessage.Subscribed(agentId = "cursor", sessionId = "sess_02"),
+        )
+        viewModel.onComposerTextChanged("first")
+        viewModel.submitComposerPrompt()
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.transcript.rows.size)
 
-        eventSource.emit(listOf(permissionRequested(cursor = "1", sessionId = "sess_02")))
+        stream.triggerReconnect()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.streamReconnecting)
+        assertEquals(0, viewModel.uiState.value.transcript.rows.size)
+        assertEquals(SessionState.Offline, viewModel.uiState.value.effectiveSessionState)
+    }
+
+    @Test
+    fun permissionRequestUpdatesPendingState() = runTest(dispatcher) {
+        val stream = FakeSessionStreamClient()
+        val viewModel = createViewModel(
+            repository = ChatFakeOperatorRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            stream = stream,
+        )
+
+        advanceUntilIdle()
+        stream.emit(
+            SessionStreamServerMessage.PermissionRequest(
+                requestId = "perm_01",
+                agentId = "cursor",
+                sessionId = "sess_02",
+                params = JsonObject(
+                    mapOf(
+                        "toolName" to JsonPrimitive("fake-tool"),
+                        "options" to kotlinx.serialization.json.JsonArray(
+                            listOf(
+                                JsonObject(
+                                    mapOf(
+                                        "optionId" to JsonPrimitive("allow-once"),
+                                        "name" to JsonPrimitive("Allow once"),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
         advanceUntilIdle()
 
         assertEquals("fake-tool", viewModel.uiState.value.activePermissionRequest?.toolName)
-        assertEquals(2, viewModel.uiState.value.activePermissionRequest?.options?.size)
+        viewModel.submitPermissionOption("allow-once")
+        advanceUntilIdle()
+        assertTrue(
+            stream.sent.any { message ->
+                message is SessionStreamClientMessage.PermissionReply &&
+                    message.optionId == "allow-once"
+            },
+        )
     }
 
     @Test
-    fun resolvePermissionClearsSubmittingState() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository()
-        val eventSource = FakeSessionEventSource()
-        val viewModel = createViewModel(
-            repository = repository,
-            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-            eventSource = eventSource,
+    fun recentMenuTakesFiveNewestByUpdatedAt() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository(
+            extraSessions = (1..8).map { index ->
+                session(
+                    id = "sess_$index",
+                    title = "S$index",
+                    updatedAt = "2026-08-05T0$index:00:00.000Z",
+                )
+            },
         )
+        val viewModel = createViewModel(repository, ChatFakeNavigationPreferences())
 
         advanceUntilIdle()
-        eventSource.emit(listOf(permissionRequested(cursor = "1", sessionId = "sess_02")))
+        viewModel.showPicker()
         advanceUntilIdle()
 
-        viewModel.submitPermissionOption("allow-once")
-        advanceUntilIdle()
-
-        assertEquals(1, repository.resolveCalls.size)
-        assertEquals(null, viewModel.uiState.value.permissionUiState.submittingOptionId)
+        assertEquals(5, viewModel.uiState.value.recentSessions.size)
+        assertEquals("S8", viewModel.uiState.value.recentSessions.first().name)
     }
 
     @Test
-    fun resolvePermissionConflictRefreshesPendingAndShowsError() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository(resolveConflict = true)
-        val eventSource = FakeSessionEventSource()
+    fun sessionsSearchFiltersTitlesClientSide() = runTest(dispatcher) {
         val viewModel = createViewModel(
-            repository = repository,
-            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-            eventSource = eventSource,
+            ChatFakeOperatorRepository(),
+            ChatFakeNavigationPreferences(),
         )
 
         advanceUntilIdle()
-        eventSource.emit(listOf(permissionRequested(cursor = "1", sessionId = "sess_02")))
+        viewModel.openSessionsList()
+        advanceUntilIdle()
+        viewModel.onSessionsSearchChanged("alp")
         advanceUntilIdle()
 
-        viewModel.submitPermissionOption("allow-once")
-        advanceUntilIdle()
-
-        assertEquals(2, repository.pendingCalls.size)
-        assertEquals(null, viewModel.uiState.value.activePermissionRequest)
-        assertTrue(viewModel.uiState.value.permissionUiState.error?.isNotBlank() == true)
+        assertEquals(listOf("Alpha"), viewModel.uiState.value.sessionsList.map { it.name })
     }
 
     private fun createViewModel(
         repository: ChatFakeOperatorRepository,
         navigation: ChatFakeNavigationPreferences,
-        eventSource: FakeSessionEventSource = FakeSessionEventSource(),
+        stream: FakeSessionStreamClient = FakeSessionStreamClient(),
     ): ChatViewModel = ChatViewModel(
         savedStateHandle = SavedStateHandle(),
         sessionGateway = ChatFakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
         connectionGateway = ChatFakeConnectionGateway(),
         operatorRepository = repository,
         navigationPreferences = navigation,
-        eventStreamFactory = EventStreamFactory { _ -> error("unused in tests") },
-        sessionEventSource = eventSource,
+        sessionStreamFactory = SessionStreamFactory { _, _ -> error("unused in tests") },
+        sessionStreamClient = stream,
     )
 
     private companion object {
@@ -435,23 +371,39 @@ private class ChatFakeNavigationPreferences(
     }
 }
 
-private class FakeSessionEventSource : SessionEventSource {
-    private var onEvents: ((List<EventEnvelope>) -> Unit)? = null
+private class FakeSessionStreamClient : SessionStreamClient {
+    val sent = mutableListOf<SessionStreamClientMessage>()
+    var target: Pair<String, String>? = null
+        private set
+    private var onMessage: ((SessionStreamServerMessage) -> Unit)? = null
     private var onReconnect: (() -> Unit)? = null
 
-    override fun observe(
+    override fun start(
         serverOrigin: String,
-        sessionId: String,
         onReconnect: () -> Unit,
-        onEvents: (List<EventEnvelope>) -> Unit,
+        onMessage: (SessionStreamServerMessage) -> Unit,
     ): Job {
         this.onReconnect = onReconnect
-        this.onEvents = onEvents
+        this.onMessage = onMessage
         return Job()
     }
 
-    fun emit(events: List<EventEnvelope>) {
-        onEvents?.invoke(events)
+    override fun send(message: SessionStreamClientMessage) {
+        sent += message
+    }
+
+    override fun setTarget(agentId: String?, sessionId: String?) {
+        target = if (agentId == null || sessionId == null) {
+            null
+        } else {
+            agentId to sessionId
+        }
+    }
+
+    override fun stop() = Unit
+
+    fun emit(message: SessionStreamServerMessage) {
+        onMessage?.invoke(message)
     }
 
     fun triggerReconnect() {
@@ -460,17 +412,18 @@ private class FakeSessionEventSource : SessionEventSource {
 }
 
 private class ChatFakeOperatorRepository(
-    private val resolveConflict: Boolean = false,
+    private val deleteConflict: Boolean = false,
+    extraSessions: List<Session> = emptyList(),
 ) : OperatorRepository {
-    val selectCalls = mutableListOf<String>()
     val createCalls = mutableListOf<CreateSessionBody>()
-    val promptCalls = mutableListOf<PromptSessionBody>()
-    val cancelCalls = mutableListOf<String>()
-    val updateCalls = mutableListOf<UpdateSessionBody>()
-    val archiveCalls = mutableListOf<String>()
-    val pendingCalls = mutableListOf<String>()
-    val resolveCalls = mutableListOf<Pair<String, String>>()
+    val deleteCalls = mutableListOf<Pair<String, String>>()
     private val createdSessions = mutableListOf<Session>()
+    private val seed = extraSessions.ifEmpty {
+        listOf(
+            session("sess_02", "Alpha", updatedAt = "2026-08-05T02:00:00.000Z"),
+            session("sess_01", "Beta", updatedAt = "2026-08-05T01:00:00.000Z"),
+        )
+    }
 
     override suspend fun listWorkspaces(
         serverOrigin: String,
@@ -508,36 +461,10 @@ private class ChatFakeOperatorRepository(
 
     override suspend fun listSessions(
         serverOrigin: String,
-        workspaceId: String?,
-        limit: Int,
-        cursor: String?,
-        search: String?,
-    ): Result<ItemCollection<Session>> {
-        val all = createdSessions + listOf(
-            session("sess_02", "Alpha"),
-            session("sess_01", "Beta"),
-        )
-        val filtered = if (search.isNullOrBlank()) {
-            all
-        } else {
-            all.filter { session ->
-                session.name.contains(search, ignoreCase = true)
-            }
-        }
-        val end = minOf(limit, filtered.size)
-        val pageItems = filtered.subList(0, end)
-        val nextCursor = if (filtered.size > limit) "cursor_more" else null
-        return Result.success(
-            ItemCollection(
-                items = pageItems,
-                page = PageInfo(
-                    limit = limit,
-                    count = filtered.size,
-                    nextCursor = nextCursor,
-                ),
-            ),
-        )
-    }
+        cwd: String?,
+    ): Result<SessionCollection> = Result.success(
+        SessionCollection(items = createdSessions + seed),
+    )
 
     override suspend fun listAgents(serverOrigin: String) = Result.success(
         AgentSettingsCollection(
@@ -558,127 +485,40 @@ private class ChatFakeOperatorRepository(
         body: CreateSessionBody,
     ): Result<CreateSessionResponse> {
         createCalls += body
-
-        val created = CreateSessionResponse(
-            id = "sess_new",
-            workspaceId = body.workspaceId,
-            agentId = body.agentId,
-            name = body.text,
-            state = SessionState.Running,
-            createdAt = "2026-08-05T00:00:00.000Z",
-            lastUsedAt = "2026-08-05T00:00:00.000Z",
-            archivedAt = null,
-            turnId = "turn_01",
-        )
-        createdSessions += session(created.id, created.name)
-
+        val created = session("sess_new", "New session", updatedAt = "2026-08-05T03:00:00.000Z")
+        createdSessions += created
         return Result.success(created)
     }
 
-    override suspend fun selectSession(
+    override suspend fun deleteSession(
         serverOrigin: String,
+        agentId: String,
         sessionId: String,
-    ): Result<Session> {
-        selectCalls += sessionId
-
-        return Result.success(session(sessionId, "Selected"))
-    }
-
-    override suspend fun promptSession(
-        serverOrigin: String,
-        sessionId: String,
-        body: PromptSessionBody,
-    ): Result<PromptSessionResponse> {
-        promptCalls += body
-        return Result.success(PromptSessionResponse(turnId = "turn_follow_up"))
-    }
-
-    override suspend fun updateSession(
-        serverOrigin: String,
-        sessionId: String,
-        body: UpdateSessionBody,
-    ): Result<Session> {
-        updateCalls += body
-        return Result.success(session(sessionId, body.name))
-    }
-
-    override suspend fun cancelSession(
-        serverOrigin: String,
-        sessionId: String,
-    ): Result<server.agent.android.contracts.CancelSessionResponse> {
-        cancelCalls += sessionId
-        return Result.success(server.agent.android.contracts.CancelSessionResponse(turnId = "turn_cancel"))
-    }
-
-    override suspend fun archiveSession(
-        serverOrigin: String,
-        sessionId: String,
-    ): Result<Session> {
-        archiveCalls += sessionId
-        return Result.success(
-            session(sessionId, "Archived").copy(
-                state = SessionState.Archived,
-                archivedAt = "2026-08-06T00:00:00.000Z",
-            ),
-        )
-    }
-
-    override suspend fun listPendingPermissions(
-        serverOrigin: String,
-        sessionId: String,
-    ): Result<List<PermissionRequest>> {
-        pendingCalls += sessionId
-        return if (resolveConflict && pendingCalls.size > 1) {
-            Result.success(emptyList())
-        } else {
-            Result.success(listOf(samplePermission(sessionId)))
-        }
-    }
-
-    override suspend fun resolvePermission(
-        serverOrigin: String,
-        sessionId: String,
-        requestId: String,
-        optionId: String,
-    ): Result<PermissionRequest> {
-        resolveCalls += requestId to optionId
-        return if (resolveConflict) {
-            Result.failure(
+    ): Result<Unit> {
+        deleteCalls += agentId to sessionId
+        if (deleteConflict) {
+            return Result.failure(
                 AgentApiException(
                     AgentApiError.Problem(
                         status = 409,
                         title = "Conflict",
-                        detail = "permission request already resolved",
+                        detail = "Agent does not support session/close",
                     ),
                 ),
             )
-        } else {
-            Result.success(samplePermission(sessionId).copy(status = PermissionStatus.Resolved))
         }
+        return Result.success(Unit)
     }
-
-    private fun samplePermission(sessionId: String): PermissionRequest = PermissionRequest(
-        id = "perm_01",
-        sessionId = sessionId,
-        turnId = "turn_01",
-        toolCallId = "tool_01",
-        toolName = "fake-tool",
-        status = PermissionStatus.Pending,
-        options = listOf(
-            PermissionOption("allow-once", "Allow once", PermissionOptionKind.Allow),
-            PermissionOption("reject-once", "Reject once", PermissionOptionKind.Deny),
-        ),
-        createdAt = "2026-08-06T00:00:00.000Z",
-    )
-
-    private fun session(id: String, name: String): Session = Session(
-        id = id,
-        workspaceId = "ws_01",
-        agentId = "cursor",
-        name = name,
-        state = SessionState.Idle,
-        createdAt = "2026-08-05T00:00:00.000Z",
-        lastUsedAt = "2026-08-05T00:00:00.000Z",
-        archivedAt = null,
-    )
 }
+
+private fun session(
+    id: String,
+    title: String,
+    updatedAt: String = "2026-08-05T01:00:00.000Z",
+): Session = Session(
+    agentId = "cursor",
+    sessionId = id,
+    cwd = "/tmp/agent-server",
+    title = title,
+    updatedAt = updatedAt,
+)

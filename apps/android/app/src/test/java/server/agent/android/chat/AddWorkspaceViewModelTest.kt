@@ -229,10 +229,7 @@ private class FakeAddOperatorRepository(
 
     override suspend fun listSessions(
         serverOrigin: String,
-        workspaceId: String?,
-        limit: Int,
-        cursor: String?,
-        search: String?,
+        cwd: String?,
     ): Result<server.agent.android.contracts.SessionCollection> =
         Result.failure(UnsupportedOperationException())
 
@@ -245,49 +242,9 @@ private class FakeAddOperatorRepository(
     ): Result<server.agent.android.contracts.CreateSessionResponse> =
         Result.failure(UnsupportedOperationException())
 
-    override suspend fun selectSession(
+    override suspend fun deleteSession(
         serverOrigin: String,
+        agentId: server.agent.android.contracts.AgentId,
         sessionId: String,
-    ): Result<server.agent.android.contracts.Session> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun promptSession(
-        serverOrigin: String,
-        sessionId: String,
-        body: server.agent.android.contracts.PromptSessionBody,
-    ): Result<server.agent.android.contracts.PromptSessionResponse> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun updateSession(
-        serverOrigin: String,
-        sessionId: String,
-        body: server.agent.android.contracts.UpdateSessionBody,
-    ): Result<server.agent.android.contracts.Session> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun cancelSession(
-        serverOrigin: String,
-        sessionId: String,
-    ): Result<server.agent.android.contracts.CancelSessionResponse> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun archiveSession(
-        serverOrigin: String,
-        sessionId: String,
-    ): Result<server.agent.android.contracts.Session> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun listPendingPermissions(
-        serverOrigin: String,
-        sessionId: String,
-    ): Result<List<server.agent.android.contracts.PermissionRequest>> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun resolvePermission(
-        serverOrigin: String,
-        sessionId: String,
-        requestId: String,
-        optionId: String,
-    ): Result<server.agent.android.contracts.PermissionRequest> =
-        Result.failure(UnsupportedOperationException())
+    ): Result<Unit> = Result.failure(UnsupportedOperationException())
 }

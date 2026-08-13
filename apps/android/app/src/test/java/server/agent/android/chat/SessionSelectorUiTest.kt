@@ -22,13 +22,15 @@ class SessionSelectorUiTest {
     val composeTestRule = createComposeRule()
 
     private val sampleSession = SessionRow(
-        id = "sess_01",
+        sessionId = "sess_01",
         name = "Alpha",
+        cwd = "/tmp/agent-server",
         workspaceId = "ws_01",
         workspaceLabel = "agent-server",
         agentId = "cursor",
         agentLabel = "Cursor",
         state = SessionState.Idle,
+        updatedAt = "2026-08-05T01:00:00.000Z",
     )
 
     @Test
@@ -50,13 +52,6 @@ class SessionSelectorUiTest {
                     onComposerTextChanged = {},
                     onComposerSubmit = {},
                     onComposerCancel = {},
-                    onRenameClick = {},
-                    onDismissRename = {},
-                    onRenameNameChanged = {},
-                    onRenameSubmit = {},
-                    onArchiveClick = {},
-                    onDismissArchive = {},
-                    onArchiveSubmit = {},
                     onPermissionOptionSelect = {},
                 )
             }
@@ -80,25 +75,18 @@ class SessionSelectorUiTest {
                     onSessionSelectorClick = {},
                     onDismissSessionMenu = {},
                     onWorkspacesClick = {},
-                    onSessionClick = { selected = it.id },
+                    onSessionClick = { selected = it.sessionId },
                     onSeeAllSessionsClick = {},
                     onCreateClick = {},
                     onComposerTextChanged = {},
                     onComposerSubmit = {},
                     onComposerCancel = {},
-                    onRenameClick = {},
-                    onDismissRename = {},
-                    onRenameNameChanged = {},
-                    onRenameSubmit = {},
-                    onArchiveClick = {},
-                    onDismissArchive = {},
-                    onArchiveSubmit = {},
                     onPermissionOptionSelect = {},
                 )
             }
         }
 
-        composeTestRule.onNodeWithTag("session_menu_row_sess_01").assertIsDisplayed().performClick()
+        composeTestRule.onNodeWithTag("session_menu_row_cursor:sess_01").assertIsDisplayed().performClick()
         assertEquals("sess_01", selected)
     }
 
@@ -118,13 +106,6 @@ class SessionSelectorUiTest {
                     onComposerTextChanged = {},
                     onComposerSubmit = {},
                     onComposerCancel = {},
-                    onRenameClick = {},
-                    onDismissRename = {},
-                    onRenameNameChanged = {},
-                    onRenameSubmit = {},
-                    onArchiveClick = {},
-                    onDismissArchive = {},
-                    onArchiveSubmit = {},
                     onPermissionOptionSelect = {},
                 )
             }
@@ -146,16 +127,15 @@ class SessionSelectorUiTest {
                     uiState = ChatUiState(
                         sessionsList = listOf(
                             sampleSession,
-                            sampleSession.copy(id = "sess_02", name = "Beta"),
+                            sampleSession.copy(sessionId = "sess_02", name = "Beta"),
                         ),
-                        sessionsListNextCursor = "cursor_more",
+                        
                     ),
                     onBack = {},
                     onSearchChanged = { searchValue = it },
-                    onSessionClick = { clickedId = it.id },
-                    onSessionLongPress = {},
+                    onSessionClick = { clickedId = it.sessionId },
+                    onDeleteSession = {},
                     onCreateClick = { createClicked = true },
-                    onLoadMore = {},
                 )
             }
         }
@@ -163,7 +143,7 @@ class SessionSelectorUiTest {
         composeTestRule.onNodeWithTag("sessions_search").assertIsDisplayed().performTextInput("al")
         assertEquals("al", searchValue)
         composeTestRule.onNodeWithTag("sessions_list").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("session_row_sess_01").assertIsDisplayed().performClick()
+        composeTestRule.onNodeWithTag("session_row_cursor:sess_01").assertIsDisplayed().performClick()
         assertEquals("sess_01", clickedId)
         composeTestRule.onNodeWithTag("sessions_create_fab").assertIsDisplayed().performClick()
         assertTrue(createClicked)
@@ -180,12 +160,12 @@ class SessionSelectorUiTest {
                     ),
                     onSearchChanged = {},
                     onSessionClick = {},
-                    onSessionLongPress = {},
+                    onDeleteSession = {},
                 )
             }
         }
 
         composeTestRule.onNodeWithTag("sessions_search_loading").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("session_row_sess_01").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("session_row_cursor:sess_01").assertIsDisplayed()
     }
 }

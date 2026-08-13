@@ -17,7 +17,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import server.agent.android.contracts.EventType
 import server.agent.android.network.BearerAuthInterceptor
 
 @RunWith(RobolectricTestRunner::class)
@@ -43,11 +42,11 @@ class OkHttpEventStreamTest {
     @Test
     fun derivesWebSocketSchemeFromTheServerOrigin() {
         assertEquals(
-            "ws://127.0.0.1:8787/v1/events?cursor=0",
+            "ws://127.0.0.1:8787/v1/sessions/stream",
             eventStreamUrl("http://127.0.0.1:8787", "0"),
         )
         assertEquals(
-            "wss://agent.example/v1/events?cursor=42",
+            "wss://agent.example/v1/sessions/stream",
             eventStreamUrl("https://agent.example/", "42"),
         )
     }
@@ -55,7 +54,7 @@ class OkHttpEventStreamTest {
     @Test
     fun includesSessionIdWhenProvided() {
         assertEquals(
-            "ws://127.0.0.1:8787/v1/events?cursor=0&sessionId=sess_01",
+            "ws://127.0.0.1:8787/v1/sessions/stream",
             eventStreamUrl("http://127.0.0.1:8787", "0", "sess_01"),
         )
     }
@@ -67,7 +66,7 @@ class OkHttpEventStreamTest {
         collect(cursor = START_CURSOR)
 
         val upgrade = server.takeRequest()
-        assertEquals("/v1/events?cursor=0", upgrade.path)
+        assertEquals("/v1/sessions/stream", upgrade.path)
         assertEquals("Bearer devcred_test_secret", upgrade.getHeader("Authorization"))
         assertEquals("websocket", upgrade.getHeader("Upgrade")?.lowercase())
     }
@@ -88,38 +87,25 @@ class OkHttpEventStreamTest {
     }
 
     @Test
-    fun resumesFromTheLastAppliedCursor() {
+    fun ignoresCursorInTheSessionStreamUrl() {
         enqueueSocket { socket -> socket.close(1000, "done") }
 
         collect(cursor = "128")
 
-        assertEquals("/v1/events?cursor=128", server.takeRequest().path)
+        assertEquals("/v1/sessions/stream", server.takeRequest().path)
     }
 
     @Test
-    fun emitsOpenThenDecodedFrames() {
+    fun emitsOpenAndIgnoresProtocolFrames() {
         enqueueSocket { socket ->
-            socket.send(
-                """
-                [
-                  {
-                    "type": "device.connected",
-                    "cursor": "1",
-                    "occurredAt": "2026-08-05T00:00:00.000Z",
-                    "payload": { "deviceId": "device_01" }
-                  }
-                ]
-                """.trimIndent(),
-            )
+            socket.send("""{"type":"subscribed","agentId":"cursor","sessionId":"sess_01"}""")
             socket.close(1000, "done")
         }
 
         val events = collect(cursor = START_CURSOR)
 
         assertEquals(StreamEvent.Open, events.first())
-        val frame = events.filterIsInstance<StreamEvent.Frame>().single()
-        assertEquals(EventType.DeviceConnected, frame.frame.single().type)
-        assertEquals("1", frame.frame.single().cursor)
+        assertTrue(events.filterIsInstance<StreamEvent.Frame>().isEmpty())
     }
 
     @Test
@@ -169,17 +155,6 @@ class OkHttpEventStreamTest {
     }
 
     @Test
-    fun reportsContractDriftAsAProtocolFailure() {
-        enqueueSocket { socket ->
-            socket.send("""[{ "type": "session.telepathy", "cursor": "1" }]""")
-        }
-
-        val cause = closeCauseOf(collect())
-
-        assertTrue("expected protocol failure but was $cause", cause is DisconnectCause.Protocol)
-    }
-
-    @Test
     fun opensAFreshSocketForEveryConnect() {
         enqueueSocket { socket -> socket.close(1000, "done") }
         enqueueSocket { socket -> socket.close(1000, "done") }
@@ -188,8 +163,8 @@ class OkHttpEventStreamTest {
         runBlocking { withTimeout(TIMEOUT_MS) { stream.connect(START_CURSOR).toList() } }
         runBlocking { withTimeout(TIMEOUT_MS) { stream.connect("5").toList() } }
 
-        assertEquals("/v1/events?cursor=0", server.takeRequest().path)
-        assertEquals("/v1/events?cursor=5", server.takeRequest().path)
+        assertEquals("/v1/sessions/stream", server.takeRequest().path)
+        assertEquals("/v1/sessions/stream", server.takeRequest().path)
     }
 
     private fun eventStream(): EventStream =

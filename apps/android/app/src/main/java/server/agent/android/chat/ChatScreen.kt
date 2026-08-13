@@ -2,6 +2,7 @@ package server.agent.android.chat
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
@@ -44,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -52,9 +55,11 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -67,29 +72,52 @@ import android.content.pm.PackageManager
 import server.agent.android.R
 
 private val MIN_TOUCH_TARGET = 48.dp
+private val SessionMenuItemPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+private val SessionMenuMinWidth = 280.dp
+
+@Composable
+private fun SessionMenuRow(
+    text: String,
+    onClick: () -> Unit,
+    testTag: String,
+    enabled: Boolean = true,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyLarge.copy(
+            fontSize = 16.sp,
+            lineHeight = 24.sp,
+            fontWeight = FontWeight.Medium,
+        ),
+        color = if (enabled) color else color.copy(alpha = 0.38f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(SessionMenuItemPadding)
+            .testTag(testTag),
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     uiState: ChatUiState,
-    onSessionSelectorClick: () -> Unit,
-    onDismissSessionMenu: () -> Unit,
-    onWorkspacesClick: () -> Unit,
-    onSessionClick: (SessionRow) -> Unit,
-    onSeeAllSessionsClick: () -> Unit,
-    onCreateClick: () -> Unit,
-    onComposerTextChanged: (String) -> Unit,
-    onComposerSubmit: () -> Unit,
-    onComposerCancel: () -> Unit,
-    onRenameClick: () -> Unit,
-    onDismissRename: () -> Unit,
-    onRenameNameChanged: (String) -> Unit,
-    onRenameSubmit: () -> Unit,
-    onArchiveClick: () -> Unit,
-    onDismissArchive: () -> Unit,
-    onArchiveSubmit: () -> Unit,
-    onArchiveFromEditDialog: () -> Unit = {},
-    onPermissionOptionSelect: (String) -> Unit,
+    onSessionSelectorClick: () -> Unit = {},
+    onDismissSessionMenu: () -> Unit = {},
+    onWorkspacesClick: () -> Unit = {},
+    onSessionClick: (SessionRow) -> Unit = {},
+    onSeeAllSessionsClick: () -> Unit = {},
+    onCreateClick: () -> Unit = {},
+    onComposerTextChanged: (String) -> Unit = {},
+    onComposerSubmit: () -> Unit = {},
+    onComposerCancel: () -> Unit = {},
+    onDismissDeleteUnsupported: () -> Unit = {},
+    onPermissionOptionSelect: (String) -> Unit = {},
+    onExtensionReplyChanged: (String) -> Unit = {},
+    onExtensionReply: () -> Unit = {},
+    onExtensionSkip: () -> Unit = {},
     onNotificationPermissionResult: (Boolean) -> Unit = {},
     onDismissNotificationPermissionPrompt: () -> Unit = {},
 ) {
@@ -192,6 +220,7 @@ fun ChatScreen(
                             ) {
                                 Text(
                                     text = sessionLabel,
+                                    style = MaterialTheme.typography.titleSmall,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f),
@@ -207,64 +236,58 @@ fun ChatScreen(
                         DropdownMenu(
                             expanded = uiState.pickerVisible,
                             onDismissRequest = onDismissSessionMenu,
-                            modifier = Modifier.testTag("session_menu"),
+                            modifier = Modifier
+                                .widthIn(min = SessionMenuMinWidth)
+                                .testTag("session_menu"),
                         ) {
-                            DropdownMenuItem(
-                                text = { Text(text = stringResource(R.string.chat_new_session)) },
+                            SessionMenuRow(
+                                text = stringResource(R.string.chat_new_session),
                                 onClick = {
                                     onDismissSessionMenu()
                                     onCreateClick()
                                 },
-                                modifier = Modifier.testTag("session_menu_new"),
+                                testTag = "session_menu_new",
                             )
 
                             if (uiState.recentSessionsLoading) {
-                                DropdownMenuItem(
-                                    text = { Text(text = "Loading…") },
+                                SessionMenuRow(
+                                    text = "Loading…",
                                     onClick = {},
                                     enabled = false,
-                                    modifier = Modifier.testTag("session_menu_loading"),
+                                    testTag = "session_menu_loading",
                                 )
                             } else if (uiState.recentSessionsError != null) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = uiState.recentSessionsError,
-                                            color = MaterialTheme.colorScheme.error,
-                                        )
-                                    },
+                                SessionMenuRow(
+                                    text = uiState.recentSessionsError,
                                     onClick = {},
                                     enabled = false,
-                                    modifier = Modifier.testTag("session_menu_error"),
+                                    color = MaterialTheme.colorScheme.error,
+                                    testTag = "session_menu_error",
                                 )
                             } else {
                                 uiState.recentSessions.forEach { session ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                text = if (uiState.selectedSession?.id == session.id) {
-                                                    "✓ ${session.name}"
-                                                } else {
-                                                    session.name
-                                                },
-                                            )
+                                    SessionMenuRow(
+                                        text = if (uiState.selectedSession?.id == session.id) {
+                                            "✓ ${session.name}"
+                                        } else {
+                                            session.name
                                         },
                                         onClick = {
                                             onDismissSessionMenu()
                                             onSessionClick(session)
                                         },
-                                        modifier = Modifier.testTag("session_menu_row_${session.id}"),
+                                        testTag = "session_menu_row_${session.id}",
                                     )
                                 }
                             }
 
-                            DropdownMenuItem(
-                                text = { Text(text = stringResource(R.string.sessions_see_all)) },
+                            SessionMenuRow(
+                                text = stringResource(R.string.sessions_see_all),
                                 onClick = {
                                     onDismissSessionMenu()
                                     onSeeAllSessionsClick()
                                 },
-                                modifier = Modifier.testTag("session_menu_see_all"),
+                                testTag = "session_menu_see_all",
                             )
                         }
                     }
@@ -289,24 +312,6 @@ fun ChatScreen(
                         expanded = menuExpanded,
                         onDismissRequest = { menuExpanded = false },
                     ) {
-                        if (hasSelectedSession) {
-                            DropdownMenuItem(
-                                text = { Text(text = "Rename session") },
-                                onClick = {
-                                    menuExpanded = false
-                                    onRenameClick()
-                                },
-                                modifier = Modifier.testTag("rename_menu_item"),
-                            )
-                            DropdownMenuItem(
-                                text = { Text(text = "Archive session") },
-                                onClick = {
-                                    menuExpanded = false
-                                    onArchiveClick()
-                                },
-                                modifier = Modifier.testTag("archive_menu_item"),
-                            )
-                        }
                         DropdownMenuItem(
                             text = { Text(text = "Workspaces") },
                             onClick = {
@@ -442,6 +447,16 @@ fun ChatScreen(
                         submittingOptionId = uiState.permissionUiState.submittingOptionId,
                         error = uiState.permissionUiState.error,
                         onSelectOption = onPermissionOptionSelect,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                }
+
+                if (uiState.extensionUiState.request != null) {
+                    ExtensionPanel(
+                        uiState = uiState.extensionUiState,
+                        onReplyChanged = onExtensionReplyChanged,
+                        onReply = onExtensionReply,
+                        onSkip = onExtensionSkip,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                 }
@@ -603,51 +618,20 @@ fun ChatScreen(
         }
     }
 
-    if (uiState.renameDialogVisible) {
-        SessionEditDialog(
-            renameState = uiState.renameState,
-            archiveSubmitting = uiState.archiveSubmitting,
-            onDismiss = onDismissRename,
-            onNameChanged = onRenameNameChanged,
-            onSave = onRenameSubmit,
-            onArchive = onArchiveFromEditDialog,
-        )
-    }
-
-    if (uiState.archiveDialogVisible) {
+    if (uiState.deleteUnsupportedMessage != null) {
         AlertDialog(
-            onDismissRequest = onDismissArchive,
-            title = { Text(text = "Archive session?") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "Archived sessions leave the active workflow.")
-                    uiState.archiveError?.let { message ->
-                        Text(
-                            text = message,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.testTag("archive_error"),
-                        )
-                    }
-                }
-            },
+            onDismissRequest = onDismissDeleteUnsupported,
+            title = { Text(text = "Close not supported") },
+            text = { Text(text = uiState.deleteUnsupportedMessage) },
             confirmButton = {
                 TextButton(
-                    onClick = onArchiveSubmit,
-                    enabled = !uiState.archiveSubmitting,
-                    modifier = Modifier.testTag("archive_confirm"),
+                    onClick = onDismissDeleteUnsupported,
+                    modifier = Modifier.testTag("close_unsupported_confirm"),
                 ) {
-                    Text(text = if (uiState.archiveSubmitting) "Archiving…" else "Archive")
+                    Text(text = "OK")
                 }
             },
-            dismissButton = {
-                TextButton(
-                    onClick = onDismissArchive,
-                    modifier = Modifier.testTag("archive_cancel"),
-                ) {
-                    Text(text = "Cancel")
-                }
-            },
-            modifier = Modifier.testTag("archive_session_dialog"),
+            modifier = Modifier.testTag("close_unsupported_dialog"),
         )
     }
 }

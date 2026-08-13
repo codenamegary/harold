@@ -812,7 +812,10 @@ describe("createAcpSupervisor", () => {
     expect(supervisor.getStatus().activeSessions).toBe(1)
 
     if (created.ok) {
-      const closed = await supervisor.closeAcpSession({ acpSessionId: created.acpSessionId })
+      const closed = await supervisor.closeAcpSession({
+        agentId: "cursor",
+        sessionId: created.acpSessionId,
+      })
       expect(closed.ok).toBe(true)
     }
     expect(supervisor.getStatus().activeSessions).toBe(0)

@@ -6,6 +6,9 @@ import { useAgentSettingsQuery } from "../agent-settings/use.agent.settings.quer
 import { useWorkspacesInfiniteQuery } from "../workspace/use.workspaces.infinite.query"
 import { useSessionsQuery } from "../session/use.sessions.query"
 import { useCreateSessionMutation } from "../session/use.create.session.mutation"
+import { useDeleteSessionMutation } from "../session/use.delete.session.mutation"
+import { isSessionDeleteError } from "../session/delete.session"
+import { catalogSessionKey } from "../session/catalog.session.key"
 import { useSessionStream } from "../session/use.session.stream"
 import { ChatHeader } from "./ChatHeader"
 import { WelcomeMessage } from "./WelcomeMessage"
@@ -48,6 +51,7 @@ export const ChatShell: React.FC = () => {
   const [pendingExtension, setPendingExtension] = useState<StreamExtension | null>(null)
   const [submittingOptionId, setSubmittingOptionId] = useState<string | null>(null)
   const [submittingExtension, setSubmittingExtension] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const hasAttemptedResume = useRef(false)
   const pendingPromptRef = useRef<string | null>(null)
   const transcriptScrollRef = useRef<HTMLDivElement>(null)
@@ -58,6 +62,7 @@ export const ChatShell: React.FC = () => {
   const sessionsQuery = useSessionsQuery()
 
   const createSessionMutation = useCreateSessionMutation()
+  const deleteSessionMutation = useDeleteSessionMutation()
 
   const workspaces =
     workspacesQuery.data?.pages.flatMap((page) => page.items) ?? []
@@ -400,6 +405,47 @@ export const ChatShell: React.FC = () => {
     })
   }
 
+  const handleDeleteSession = (params: { agentId: string; sessionId: string }) => {
+    const parsedAgent = AgentIdSchema.safeParse(params.agentId)
+    if (!parsedAgent.success) {
+      return
+    }
+
+    setDeleteError(null)
+    deleteSessionMutation.mutate(
+      {
+        agentId: parsedAgent.data,
+        sessionId: params.sessionId,
+      },
+      {
+        onSuccess: () => {
+          if (params.sessionId !== sessionId || params.agentId !== agentId) {
+            return
+          }
+
+          setSessionId("")
+          pendingPromptRef.current = null
+          clearLiveState()
+          persistSelection({
+            workspaceId,
+            agentId: parsedAgent.data,
+            sessionId: "",
+          })
+        },
+        onError: (error) => {
+          setDeleteError(
+            isSessionDeleteError(error) ? error.problem.detail : error.message,
+          )
+        },
+      },
+    )
+  }
+
+  const deletingSessionKey =
+    deleteSessionMutation.isPending && deleteSessionMutation.variables !== undefined
+      ? catalogSessionKey(deleteSessionMutation.variables)
+      : null
+
   const showWelcome = sessionId === "" && transcript.rows.length === 0
 
   useLayoutEffect(() => {
@@ -432,6 +478,9 @@ export const ChatShell: React.FC = () => {
         onSessionMenuOpen={() => {
           void sessionsQuery.refetch()
         }}
+        onDeleteSession={handleDeleteSession}
+        deletingSessionKey={deletingSessionKey}
+        deleteError={deleteError}
       />
       <div
         ref={transcriptScrollRef}

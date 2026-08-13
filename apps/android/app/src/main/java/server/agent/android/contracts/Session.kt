@@ -32,14 +32,14 @@ enum class SessionState {
 
 @Serializable
 data class Session(
-    val id: String,
-    val workspaceId: String,
     val agentId: AgentId,
-    val name: String,
-    val state: SessionState,
-    val createdAt: String,
-    val lastUsedAt: String,
-    val archivedAt: String?,
+    val sessionId: String,
+    val cwd: String,
+    val title: String,
+    val updatedAt: String,
 )
 
-typealias SessionCollection = ItemCollection<Session>
+@Serializable
+data class SessionCollection(
+    val items: List<Session>,
+)
