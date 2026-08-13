@@ -21,22 +21,17 @@ import { AppliedRuntimeSettingsHolder } from "../runtime-settings/applied.runtim
 import { createWorkspaceRepository } from "../workspace/repository"
 import { registerWorkspaceRoutes } from "../workspace/routes"
 import { registerFilesystemBrowseRoutes } from "../filesystem/routes"
-import { createSessionRepository } from "../session/repository"
 import { registerSessionRoutes } from "../session/routes"
 import { createWorkspaceService } from "../workspace/service"
-import { createSessionService } from "../session/service"
 import { createDeviceRepository } from "../device/repository"
 import { createDeviceService } from "../device/service"
 import { registerDeviceRoutes } from "../device/routes"
 import { createConnectionTestService } from "../connection-test/connection.test.service"
 import { registerConnectionTestRoutes } from "../connection-test/routes"
-import { createEventJournalRepository, EventJournalRepository } from "../event/journal.repository"
-import { createEventCommitPublisher } from "../event/commit.publisher"
 import { createRuntimeStatusService } from "../runtime/status.service"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
 import { createAcpSupervisor } from "../acp/supervisor/acp-supervisor"
-import { createAcpJournalWriter } from "../acp/journal/acp.journal.writer"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { SpawnAgentProcessFn } from "../acp/supervisor/spawn-agent-process"
 import { registerSessionStreamRoutes } from "../session/stream.routes"
@@ -45,7 +40,6 @@ import {
   createSessionHub,
   SessionHub,
 } from "../session/hub/session.hub"
-import { runStartupRecovery } from "../session/startup.recovery"
 import { registerAuthMiddleware } from "../auth/middleware"
 import { redactPairingCodeInUrl } from "../device/redact.pairing.code.in.url"
 import { FetchRegistryFn } from "../agent-settings/agent-settings-repository"
@@ -69,7 +63,6 @@ export type CreateServerOptions = {
   config: Config
   runtime: Runtime
   database: AgentDatabase
-  eventJournal?: EventJournalRepository
   registerTestRoutes?: boolean
   whichFn?: WhichFn
   validateExecutablePathFn?: ValidateExecutablePathFn
@@ -125,7 +118,6 @@ export const createServer = async ({
   config,
   runtime,
   database,
-  eventJournal: providedEventJournal,
   registerTestRoutes: withTestRoutes = false,
   whichFn,
   validateExecutablePathFn,
@@ -173,30 +165,10 @@ export const createServer = async ({
     fetchRegistryFn,
     registryUrl,
   })
-  const eventJournal = providedEventJournal ?? createEventJournalRepository(database)
-  const commitPublisher = createEventCommitPublisher()
-  const journalWriter = createAcpJournalWriter({
-    database,
-    eventJournal,
-    commitPublisher,
-  })
   const workspaceRepository = createWorkspaceRepository(database, {
     getAllowedRoots: () => runtimeSettingsRepository.get().allowedRoots,
   })
-  const sessionRepository = createSessionRepository(database)
-  const sessionService = createSessionService({
-    database,
-    sessionRepository,
-    eventJournal,
-    commitPublisher,
-  })
 
-  const offlineOnBindingClear = { enabled: true }
-  const disposeOfflineOnBindingClear = () => {
-    offlineOnBindingClear.enabled = false
-  }
-
-  const supervisorRef: { current: AcpSupervisor | null } = { current: null }
   const sessionHubRef: { current: SessionHub | null } = { current: null }
   const cwdCache = createSessionCwdCache()
 
@@ -205,7 +177,6 @@ export const createServer = async ({
     createAcpSupervisor({
       agentSettingsRepository,
       serverVersion: runtime.version,
-      journalWriter,
       spawnAgentProcessFn,
       onSessionUpdate: ({ agentId, acpSessionId, update }) => {
         sessionHubRef.current?.handleSessionUpdate({
@@ -231,44 +202,7 @@ export const createServer = async ({
         }
         return hub.requestExtensionRpc(input)
       },
-      onBeforeClearRuntime: () => {
-        if (!offlineOnBindingClear.enabled) {
-          return
-        }
-        try {
-          const marked = sessionService.markLiveSessionsOffline()
-          if (!marked.ok) {
-            throw new Error("failed to mark live sessions offline")
-          }
-        } catch (error: unknown) {
-          if (!offlineOnBindingClear.enabled) {
-            return
-          }
-          if (
-            error instanceof RangeError &&
-            error.message.includes("closed database")
-          ) {
-            return
-          }
-          throw error
-        }
-      },
-      onSupervisorReady: () => {
-        const supervisor = supervisorRef.current
-        if (supervisor === null) {
-          return
-        }
-
-        return runStartupRecovery({
-          sessionRepository,
-          sessionService,
-          workspaceRepository,
-          acpSupervisor: supervisor,
-        })
-      },
     })
-
-  supervisorRef.current = acpSupervisor
 
   const sessionHub = createSessionHub({
     cwdCache,
@@ -299,9 +233,6 @@ export const createServer = async ({
   sessionHubRef.current = sessionHub
 
   registerSessionStreamRoutes(app, {
-    database,
-    eventJournal,
-    commitPublisher,
     deviceRepository,
     sessionHub,
     getTrustedProxies: () => runtimeSettingsRepository.get().trustedProxies,
@@ -311,26 +242,14 @@ export const createServer = async ({
 
   registerStatusRoutes(app, runtime, config, acpSupervisor)
   const workspaceService = createWorkspaceService({
-    database,
     workspaceRepository,
-    eventJournal,
-    commitPublisher,
   })
   const runtimeStatusService = createRuntimeStatusService({
-    database,
     runtime,
-    eventJournal,
-    commitPublisher,
   })
   runtimeStatusService.persistStarting()
 
-  registerWorkspaceRoutes(
-    app,
-    workspaceRepository,
-    workspaceService,
-    sessionRepository,
-    acpSupervisor,
-  )
+  registerWorkspaceRoutes(app, workspaceRepository, workspaceService, acpSupervisor)
   registerFilesystemBrowseRoutes(app, () => runtimeSettingsRepository.get().allowedRoots)
   registerAgentSettingsRoutes(app, agentSettingsRepository, acpSupervisor)
   registerRuntimeSettingsRoutes(app, runtimeSettingsRepository, {
@@ -339,7 +258,6 @@ export const createServer = async ({
     },
     workspaceRepository,
     workspaceService,
-    sessionRepository,
     acpSupervisor,
     appliedRuntimeSettings,
     envBindOverrides,
@@ -349,8 +267,6 @@ export const createServer = async ({
   const deviceService = createDeviceService({
     database,
     deviceRepository,
-    eventJournal,
-    commitPublisher,
     config,
     runtimeSettingsRepository,
   })
@@ -369,11 +285,7 @@ export const createServer = async ({
   return {
     app,
     acpSupervisor,
-    eventJournal,
-    commitPublisher,
     runtimeStatusService,
-    sessionService,
     runtimeSettingsRepository,
-    disposeOfflineOnBindingClear,
   }
 }

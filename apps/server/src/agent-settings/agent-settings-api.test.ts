@@ -47,7 +47,7 @@ const createTestApp = async (
   const { spawnAgentProcessFn } = createFakeSpawnFn(resources, {
     capabilities: { loadSession: true, sessionClose: true, sessionList: true },
   })
-  const { app, acpSupervisor, disposeOfflineOnBindingClear } = await createServer({
+  const { app, acpSupervisor } = await createServer({
     config,
     runtime,
     database,
@@ -58,8 +58,7 @@ const createTestApp = async (
   })
   resources.addApp(app)
   resources.addTeardown(async () => {
-    disposeOfflineOnBindingClear()
-    await acpSupervisor.stop()
+        await acpSupervisor.stop()
   })
   return { app, database, config }
 }

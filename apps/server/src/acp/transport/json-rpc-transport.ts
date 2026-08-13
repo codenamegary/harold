@@ -1,4 +1,4 @@
-import { JournalPhase } from "contracts/events/journal-record"
+import { SessionPhase } from "../client/session.phase"
 import { createAcpJsonRpcError, readSafeJsonRpcErrorData } from "./json-rpc-error"
 
 type PendingRequest = {
@@ -25,7 +25,7 @@ export type AcpOperationContext = {
   sessionId: string
   workspaceId: string
   turnId?: string
-  phase: JournalPhase
+  phase: SessionPhase
 }
 
 export type JsonRpcObserverEvent =

@@ -8,7 +8,6 @@ import {
 } from "contracts/http/workspace"
 import { FastifyInstance } from "fastify"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
-import { SessionRepository } from "../session/repository"
 import { WorkspaceRepository } from "./repository"
 import { WorkspaceService } from "./service"
 import {
@@ -31,7 +30,6 @@ export const registerWorkspaceRoutes = (
   app: FastifyInstance,
   repository: WorkspaceRepository,
   workspaceService: WorkspaceService,
-  sessionRepository: SessionRepository,
   acpSupervisor: AcpSupervisor,
 ) => {
   app.post("/v1/workspaces", async (request, reply) => {
@@ -110,7 +108,6 @@ export const registerWorkspaceRoutes = (
       force,
       workspaceRepository: repository,
       workspaceService,
-      sessionRepository,
       acpSupervisor,
     })
 

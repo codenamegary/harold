@@ -71,7 +71,7 @@ afterEach(async () => {
 
 describe("ACP supervisor integration", () => {
   test("status reports ready after supervisor start with fake ACP", async () => {
-    const { app, acpSupervisor, database, disposeOfflineOnBindingClear } = await createTestHarness()
+    const { app, acpSupervisor, database } = await createTestHarness()
 
     const enableResponse = await app.inject({
       method: "PATCH",
@@ -92,8 +92,7 @@ describe("ACP supervisor integration", () => {
     })
 
     await acpSupervisor.stop()
-    disposeOfflineOnBindingClear()
-    await app.close()
+        await app.close()
     database.close()
   })
 
@@ -169,7 +168,7 @@ describe("ACP supervisor integration", () => {
     })
     const database = openDatabase({ dataDir: config.dataDir })
     const runtime = createRuntime("0.1.0")
-    const { app, acpSupervisor, disposeOfflineOnBindingClear } = await createServer({
+    const { app, acpSupervisor } = await createServer({
       config,
       runtime,
       database,
@@ -190,8 +189,7 @@ describe("ACP supervisor integration", () => {
     expect(killed.value).toBe(true)
     expect(acpSupervisor.getStatus().state).toBe("stopped")
 
-    disposeOfflineOnBindingClear()
-    await app.close()
+        await app.close()
     database.close()
   })
 })

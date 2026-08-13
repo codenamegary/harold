@@ -4,13 +4,9 @@ import {
   PairingCodeValueSchema,
 } from "contracts/http/pairing-code"
 import { DeviceCollection, DeviceCredentialResponse, ListDevicesQuery } from "contracts/http/device"
-import { JOURNAL_SCHEMA_VERSION } from "contracts/events/journal-record"
 import { Config } from "../config/config"
 import { RuntimeSettingsRepository } from "../runtime-settings/repository"
 import { AgentDatabase } from "../persistence/database"
-import { EventCommitPublisher } from "../event/commit.publisher"
-import { EventJournalRepository } from "../event/journal.repository"
-import { runTransactionalJournal, TransactionalJournalError } from "../event/journal.transactional"
 import { createDeviceCredential } from "./create.device.credential"
 import { DeviceError } from "./errors"
 import { generatePairingCode, normalizePairingCode } from "./generate.pairing.code"
@@ -23,16 +19,13 @@ const PAIRING_CODE_TTL_MS = 10 * 60 * 1000
 const DEFAULT_DEVICE_NAME = "Paired device"
 const PROBE_DEVICE_NAME = "Connection test probe"
 
-
 export type DeviceServiceResult<T> =
   | { ok: true; value: T }
-  | { ok: false; error: DeviceError | TransactionalJournalError | { kind: "invalid_cursor" } }
+  | { ok: false; error: DeviceError | { kind: "invalid_cursor" } }
 
 type DeviceServiceContext = {
   database: AgentDatabase
   deviceRepository: DeviceRepository
-  eventJournal: EventJournalRepository
-  commitPublisher: EventCommitPublisher
   config: Config
   runtimeSettingsRepository: RuntimeSettingsRepository
 }
@@ -66,18 +59,6 @@ const findMatchingPairingCode = async (params: {
 }
 
 export const createDeviceService = (context: DeviceServiceContext) => {
-  const transactional = <T, E>(
-    work: Parameters<typeof runTransactionalJournal<T, E>>[1],
-  ) =>
-    runTransactionalJournal<T, E>(
-      {
-        database: context.database,
-        eventJournal: context.eventJournal,
-        commitPublisher: context.commitPublisher,
-      },
-      work,
-    )
-
   const createPairingCode = async (): Promise<
     DeviceServiceResult<CreatePairingCodeResponse>
   > => {
@@ -139,45 +120,16 @@ export const createDeviceService = (context: DeviceServiceContext) => {
       const name = params.body.name ?? DEFAULT_DEVICE_NAME
       const platform = params.body.platform ?? null
 
-      const claimed = transactional<DeviceCredentialResponse, DeviceError>((txParams) => {
-        const result = context.deviceRepository.claimPairingCode({
+      const claimed = context.database.db.transaction((tx) =>
+        context.deviceRepository.claimPairingCode({
           pairingCodeId: activeMatch.id,
           name,
           platform,
           credentialHash,
           pairedAt: now,
-          executor: txParams.executor,
-        })
-        if (!result.ok) {
-          return result
-        }
-
-        const appendResult = txParams.append([
-          {
-            schemaVersion: JOURNAL_SCHEMA_VERSION,
-            kind: "device.paired",
-            occurredAt: now,
-            payload: {
-              deviceId: result.value.id,
-              name: result.value.name,
-              platform: result.value.platform,
-            },
-          },
-        ])
-
-        if (!appendResult.ok) {
-          return appendResult
-        }
-
-        return {
-          ok: true,
-          value: {
-            device: result.value,
-            credential,
-          },
-          appendedRecords: appendResult.value,
-        }
-      })
+          executor: tx,
+        }),
+      )
 
       if (!claimed.ok) {
         if (claimed.error.kind === "pairing_code_race") {
@@ -202,7 +154,13 @@ export const createDeviceService = (context: DeviceServiceContext) => {
         return claimed
       }
 
-      return claimed
+      return {
+        ok: true,
+        value: {
+          device: claimed.value,
+          credential,
+        },
+      }
     }
 
     const unusableRows = context.deviceRepository.listPairingCodesByStates({
@@ -258,41 +216,25 @@ export const createDeviceService = (context: DeviceServiceContext) => {
     const now = nowIso()
     const hardDelete = params.hardDelete === true
 
-    const result = transactional<{ newlyRevoked: boolean }, DeviceError>((txParams) => {
+    const result = context.database.db.transaction((tx) => {
       const revoked = context.deviceRepository.revoke({
         deviceId: params.deviceId,
         revokedAt: now,
-        executor: txParams.executor,
+        executor: tx,
       })
 
       if (!revoked.ok) {
         return revoked
       }
 
-      const newlyRevoked = revoked.value.newlyRevoked
-      const appendedRecords = newlyRevoked
-        ? txParams.append([
-            {
-              schemaVersion: JOURNAL_SCHEMA_VERSION,
-              kind: "device.revoked",
-              occurredAt: now,
-              payload: { deviceId: params.deviceId },
-            },
-          ])
-        : { ok: true as const, value: [] }
-
-      if (!appendedRecords.ok) {
-        return appendedRecords
-      }
-
       if (hardDelete) {
         context.deviceRepository.clearPairingCodeDeviceRefs({
           deviceId: params.deviceId,
-          executor: txParams.executor,
+          executor: tx,
         })
         const deleted = context.deviceRepository.deleteById({
           deviceId: params.deviceId,
-          executor: txParams.executor,
+          executor: tx,
         })
         if (!deleted.ok) {
           return deleted
@@ -300,9 +242,8 @@ export const createDeviceService = (context: DeviceServiceContext) => {
       }
 
       return {
-        ok: true,
-        value: { newlyRevoked },
-        appendedRecords: appendedRecords.value,
+        ok: true as const,
+        value: { newlyRevoked: revoked.value.newlyRevoked },
       }
     })
 
@@ -319,47 +260,27 @@ export const createDeviceService = (context: DeviceServiceContext) => {
     const credential = createDeviceCredential()
     const credentialHash = hashDeviceCredential(credential)
 
-    const inserted = transactional<DeviceCredentialResponse, DeviceError>((txParams) => {
-      const result = context.deviceRepository.insertProbeDevice({
+    const inserted = context.database.db.transaction((tx) =>
+      context.deviceRepository.insertProbeDevice({
         name: PROBE_DEVICE_NAME,
         platform: null,
         credentialHash,
         pairedAt: now,
-        executor: txParams.executor,
-      })
+        executor: tx,
+      }),
+    )
 
-      if (!result.ok) {
-        return result
-      }
+    if (!inserted.ok) {
+      return inserted
+    }
 
-      const appendResult = txParams.append([
-        {
-          schemaVersion: JOURNAL_SCHEMA_VERSION,
-          kind: "device.paired",
-          occurredAt: now,
-          payload: {
-            deviceId: result.value.id,
-            name: result.value.name,
-            platform: result.value.platform,
-          },
-        },
-      ])
-
-      if (!appendResult.ok) {
-        return appendResult
-      }
-
-      return {
-        ok: true,
-        value: {
-          device: result.value,
-          credential,
-        },
-        appendedRecords: appendResult.value,
-      }
-    })
-
-    return inserted
+    return {
+      ok: true,
+      value: {
+        device: inserted.value,
+        credential,
+      },
+    }
   }
 
   return {

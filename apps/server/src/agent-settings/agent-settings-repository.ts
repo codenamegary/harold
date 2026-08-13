@@ -10,7 +10,6 @@ import {
 } from "contracts/http/agent-settings"
 import { AgentDatabase } from "../persistence/database"
 import { agentSettings } from "../persistence/schema/agent-settings"
-import { sessions } from "../persistence/schema/sessions"
 import { ensureCatalogAgentSettingsRows } from "../acp/catalog/ensure.catalog.agent.settings"
 import { PresenceProbeContext } from "../acp/catalog/agent.profile.override"
 import { probePresence } from "../acp/catalog/probe.presence"
@@ -379,14 +378,6 @@ export const createAgentSettingsRepository = (
     )
     const updatedAt = nowIso()
 
-    if (nextId !== agentId) {
-      database.db
-        .update(sessions)
-        .set({ agentId: nextId })
-        .where(eq(sessions.agentId, agentId))
-        .run()
-    }
-
     database.db
       .update(agentSettings)
       .set({
@@ -551,7 +542,6 @@ export const createAgentSettingsRepository = (
       return { ok: false, error: { kind: "not_found" } }
     }
 
-    database.db.delete(sessions).where(eq(sessions.agentId, agentId)).run()
     database.db.delete(agentSettings).where(eq(agentSettings.agentId, agentId)).run()
 
     return { ok: true, value: undefined }

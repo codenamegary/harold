@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { act, fireEvent, waitFor } from "@testing-library/react"
+import { fireEvent, waitFor } from "@testing-library/react"
 import { AppRoutes } from "../shell/AppRouter"
 import { renderWithProviders } from "../query/render.with.providers"
 import { hrefOf, requestUrl } from "../test/request.url"
@@ -52,12 +52,6 @@ const createFakeSocket = (url: string): FakeSocket => {
 
   return socket
 }
-
-const isAppEventSocket = (socket: FakeSocket) =>
-  socket.url.includes("/v1/events") &&
-  !socket.url.includes("sessionId=") &&
-  !socket.url.includes("workspaceId=") &&
-  !socket.url.includes("cursor=")
 
 describe("Connection status recovery", () => {
   const sockets: FakeSocket[] = []
@@ -146,7 +140,7 @@ describe("Connection status recovery", () => {
     })
   })
 
-  test("app stream close reopens and refetches status", async () => {
+  test("console does not open a journal /v1/events socket", async () => {
     statusReachable.value = true
 
     const { getByText } = renderWithProviders(<AppRoutes />, {
@@ -157,28 +151,6 @@ describe("Connection status recovery", () => {
       expect(getByText("API connected")).toBeInTheDocument()
     })
 
-    await waitFor(() => {
-      expect(sockets.some(isAppEventSocket)).toBe(true)
-    })
-
-    const appSocket = sockets.find(isAppEventSocket)
-    expect(appSocket).toBeDefined()
-
-    const socketsBeforeClose = sockets.length
-    const statusBeforeClose = statusCallCount.value
-
-    act(() => {
-      appSocket?.dispatch("close")
-    })
-
-    await waitFor(() => {
-      expect(sockets.length).toBeGreaterThan(socketsBeforeClose)
-    })
-
-    expect(sockets.slice(socketsBeforeClose).some(isAppEventSocket)).toBe(true)
-
-    await waitFor(() => {
-      expect(statusCallCount.value).toBeGreaterThan(statusBeforeClose)
-    })
+    expect(sockets.some((socket) => socket.url.includes("/v1/events"))).toBe(false)
   })
 })

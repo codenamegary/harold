@@ -9,7 +9,7 @@ import { CopyButton } from "../design-system/CopyButton"
 import { FieldLabel } from "../design-system/FieldLabel"
 import { StatusPill } from "../design-system/StatusPill"
 import { TextInput } from "../design-system/TextInput"
-import { openAppEventStream } from "../session/open.app.event.stream"
+import { pollForPairedDevice } from "./poll.for.paired.device"
 import {
   advertisedUrlFromHost,
   hostFromAdvertisedUrl,
@@ -531,6 +531,7 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack, endpointHint })
   const [pairingCode, setPairingCode] = useState<CreatePairingCodeResponse | null>(null)
   const [pairedDeviceName, setPairedDeviceName] = useState<string | null>(null)
   const [isCreatingPairingCode, setIsCreatingPairingCode] = useState(true)
+  const [pairPollEpoch, setPairPollEpoch] = useState(0)
 
   useEffect(() => {
     const active = { value: true }
@@ -557,24 +558,16 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack, endpointHint })
   }, [mutateAsync])
 
   useEffect(() => {
-    const stream = openAppEventStream({
-      handlers: {
-        onEvents: (events) => {
-          const paired = events.find((event) => event.type === "device.paired")
-          if (paired?.type === "device.paired") {
-            setPairedDeviceName(paired.payload.name)
-          }
-        },
+    return pollForPairedDevice({
+      onPaired: (device) => {
+        setPairedDeviceName(device.name)
       },
     })
-
-    return () => {
-      stream.close()
-    }
-  }, [])
+  }, [pairPollEpoch])
 
   const handleRegenerate = () => {
     setPairedDeviceName(null)
+    setPairPollEpoch((epoch) => epoch + 1)
     setIsCreatingPairingCode(true)
     const promise = mutateAsync()
     void promise.then(

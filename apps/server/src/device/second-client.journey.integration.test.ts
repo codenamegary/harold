@@ -22,7 +22,6 @@ import {
   createTestAppResources,
   createWorkspaceDir,
 } from "../test-support/create-test-app"
-import { createEventJournalRepository } from "../event/journal.repository"
 import { clearDevicePresence } from "./presence"
 import { pairingCodes } from "../persistence/schema/pairing-codes"
 
@@ -47,7 +46,7 @@ describe("second-client journey", () => {
   test("full MS2 lifecycle: pair, reconnect, operate, presence, revoke, access loss", async () => {
     const logCapture = createLogCapture()
     const dataDir = await createTempDataDir(resources)
-    const { app, config, database } = await createTestApp(resources, dataDir, {
+    const { app, config } = await createTestApp(resources, dataDir, {
       logStream: logCapture.stream,
     })
     const { httpBase, wsUrl } = await getListeningEndpoints({
@@ -58,19 +57,6 @@ describe("second-client journey", () => {
     const paired = await pairDevice({
       httpBase,
       body: { name: "Journey client", platform: "test-second-client" },
-    })
-
-    const journal = createEventJournalRepository(database)
-    await waitFor(() => {
-      const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
-      return (
-        records.ok &&
-        records.value.some(
-          (record) =>
-            record.kind === "device.paired" &&
-            record.payload.deviceId === paired.deviceId,
-        )
-      )
     })
 
     const firstClient = createSecondClient({
@@ -114,18 +100,6 @@ describe("second-client journey", () => {
       )
       return online.items[0]?.state === "online"
     })
-    await waitFor(() => {
-      const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
-      return (
-        records.ok &&
-        records.value.some(
-          (record) =>
-            record.kind === "device.connected" &&
-            record.payload.deviceId === paired.deviceId,
-        )
-      )
-    })
-
     const online = DeviceCollectionSchema.parse(
       await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
     )
@@ -143,22 +117,10 @@ describe("second-client journey", () => {
     expect(closed.code).toBe(1008)
     expect(closed.reason).toBe("unauthorized")
 
-    await waitFor(() => {
-      const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
-      return (
-        records.ok &&
-        records.value.some(
-          (record) =>
-            record.kind === "device.revoked" &&
-            record.payload.deviceId === paired.deviceId,
-        ) &&
-        records.value.some(
-          (record) =>
-            record.kind === "device.disconnected" &&
-            record.payload.deviceId === paired.deviceId,
-        )
-      )
-    })
+    const listedAfterRevoke = DeviceCollectionSchema.parse(
+      await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
+    )
+    expect(listedAfterRevoke.items[0]?.state).toBe("revoked")
 
     const httpDenied = await reconnected.fetch("/v1/workspaces")
     expect(httpDenied.status).toBe(401)

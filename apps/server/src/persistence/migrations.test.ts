@@ -10,7 +10,7 @@ import { openDatabase } from "./database"
 const tempDirs: string[] = []
 const migrationsFolder = path.join(import.meta.dir, "drizzle")
 const ms1MigrationCount = 4
-const currentMigrationCount = 8
+const currentMigrationCount = 9
 
 const createTempDataDir = async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-test-"))
@@ -137,89 +137,16 @@ describe("drizzle migrations", () => {
     database.close()
   })
 
-  test("creates sessions table with resumable default and cascade fk", async () => {
+  test("drops sessions and events tables", async () => {
     const dataDir = await createTempDataDir()
     const database = openDatabase({ dataDir })
 
     const tables = tableNames(database.sqlite)
-    expect(tables).toContain("sessions")
-
-    const columns = database.sqlite
-      .query<{ name: string; dflt_value: string | null }, []>("PRAGMA table_info(sessions)")
-      .all()
-
-    expect(columns.map((row) => row.name)).toEqual([
-      "id",
-      "workspace_id",
-      "agent_id",
-      "name",
-      "state",
-      "acp_session_id",
-      "created_at",
-      "last_used_at",
-      "archived_at",
-      "resumable",
-    ])
-
-    const resumable = columns.find((row) => row.name === "resumable")
-    expect(resumable?.dflt_value).toBe("false")
-
-    const foreignKeys = database.sqlite
-      .query<{ table: string; on_delete: string }, []>("PRAGMA foreign_key_list(sessions)")
-      .all()
-
-    expect(foreignKeys).toEqual([
-      expect.objectContaining({
-        table: "workspaces",
-        on_delete: "CASCADE",
-      }),
-    ])
-
-    database.close()
-  })
-
-  test("creates events table with constraints and indexes", async () => {
-    const dataDir = await createTempDataDir()
-    const database = openDatabase({ dataDir })
-
-    const tables = tableNames(database.sqlite)
-    expect(tables).toContain("events")
-
-    const columns = database.sqlite
-      .query<{ name: string }, []>("PRAGMA table_info(events)")
-      .all()
-      .map((row) => row.name)
-
-    expect(columns).toEqual([
-      "cursor",
-      "schema_version",
-      "kind",
-      "occurred_at",
-      "workspace_id",
-      "session_id",
-      "session_sequence",
-      "turn_id",
-      "protocol_version",
-      "direction",
-      "method",
-      "phase",
-      "payload",
-    ])
-
-    const indexes = database.sqlite
-      .query<{ name: string }, []>(
-        "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'events' ORDER BY name",
-      )
-      .all()
-      .map((row) => row.name)
-
-    expect(indexes).toEqual([
-      "events_session_id_cursor_idx",
-      "events_session_id_session_sequence_idx",
-      "events_session_id_session_sequence_unique",
-      "events_turn_id_cursor_idx",
-      "events_workspace_id_cursor_idx",
-    ])
+    expect(tables).not.toContain("sessions")
+    expect(tables).not.toContain("events")
+    expect(tables).toContain("workspaces")
+    expect(tables).toContain("devices")
+    expect(migrationCount(database.sqlite)).toBe(currentMigrationCount)
 
     database.close()
   })
@@ -322,6 +249,8 @@ describe("drizzle migrations", () => {
 
     const before = new Database(path.join(dataDir, "agent-server.db"))
     expect(migrationCount(before)).toBe(ms1MigrationCount)
+    expect(tableNames(before)).toContain("sessions")
+    expect(tableNames(before)).toContain("events")
     expect(tableNames(before)).not.toContain("devices")
     expect(tableNames(before)).not.toContain("pairing_codes")
     before.close()
@@ -329,6 +258,8 @@ describe("drizzle migrations", () => {
     const database = openDatabase({ dataDir })
 
     expect(migrationCount(database.sqlite)).toBe(currentMigrationCount)
+    expect(tableNames(database.sqlite)).not.toContain("sessions")
+    expect(tableNames(database.sqlite)).not.toContain("events")
     expect(tableNames(database.sqlite)).toContain("devices")
     expect(tableNames(database.sqlite)).toContain("pairing_codes")
 

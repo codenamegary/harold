@@ -18,8 +18,8 @@ private const val HTTP_UNAUTHORIZED = 401
 
 data class SessionStreamHandlers(
     val onMessage: (SessionStreamServerMessage) -> Unit,
-    val onClose: () -> Unit = {},
-    val onError: () -> Unit = {},
+    val onOpen: () -> Unit = {},
+    val onDisconnect: (DisconnectCause) -> Unit = {},
 )
 
 interface SessionStream {
@@ -41,26 +41,18 @@ class OkHttpSessionStreamFactory(
         val queued = mutableListOf<String>()
         var socket: WebSocket? = null
 
-        fun finishError() {
+        fun finish(cause: DisconnectCause) {
             if (intentionalClose.get()) {
                 return
             }
             if (finished.compareAndSet(false, true)) {
-                handlers.onError()
-            }
-        }
-
-        fun finishClose() {
-            if (intentionalClose.get()) {
-                return
-            }
-            if (finished.compareAndSet(false, true)) {
-                handlers.onClose()
+                handlers.onDisconnect(cause)
             }
         }
 
         val listener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                handlers.onOpen()
                 queued.forEach { encoded -> webSocket.send(encoded) }
                 queued.clear()
             }
@@ -68,8 +60,8 @@ class OkHttpSessionStreamFactory(
             override fun onMessage(webSocket: WebSocket, text: String) {
                 val parsed = runCatching {
                     json.decodeFromString(SessionStreamServerMessage.serializer(), text)
-                }.getOrElse {
-                    finishError()
+                }.getOrElse { error ->
+                    finish(DisconnectCause.Protocol(error.message ?: "unknown type"))
                     webSocket.cancel()
                     return
                 }
@@ -78,27 +70,15 @@ class OkHttpSessionStreamFactory(
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
                 webSocket.close(NORMAL_CLOSURE, null)
-                if (code == UNAUTHORIZED_CLOSE_CODE && reason == UNAUTHORIZED_CLOSE_REASON) {
-                    finishError()
-                } else {
-                    finishClose()
-                }
+                finish(closeCause(code, reason))
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                if (code == UNAUTHORIZED_CLOSE_CODE && reason == UNAUTHORIZED_CLOSE_REASON) {
-                    finishError()
-                } else {
-                    finishClose()
-                }
+                finish(closeCause(code, reason))
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                if (response?.code == HTTP_UNAUTHORIZED) {
-                    finishError()
-                } else {
-                    finishClose()
-                }
+                finish(failureCause(t, response))
             }
         }
 
@@ -128,3 +108,17 @@ class OkHttpSessionStreamFactory(
         }
     }
 }
+
+private fun closeCause(code: Int, reason: String): DisconnectCause =
+    if (code == UNAUTHORIZED_CLOSE_CODE && reason == UNAUTHORIZED_CLOSE_REASON) {
+        DisconnectCause.Unauthorized(detail = reason)
+    } else {
+        DisconnectCause.Retryable(message = reason.ifBlank { "closed with code $code" })
+    }
+
+private fun failureCause(cause: Throwable, response: Response?): DisconnectCause =
+    if (response?.code == HTTP_UNAUTHORIZED) {
+        DisconnectCause.Unauthorized(detail = null)
+    } else {
+        DisconnectCause.Retryable(message = cause.message ?: "Session stream failed")
+    }

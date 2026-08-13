@@ -3,7 +3,6 @@ import { AgentProfile } from "../agent-profile"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
 import { SpawnedAgentProcess } from "./spawn-agent-process"
 import { SessionBindingRegistry } from "../client/session-binding-registry"
-import { AcpJournalWriter } from "../journal/acp.journal.writer"
 
 export type AcpSupervisorState = "stopped" | "starting" | "ready" | "error"
 
@@ -98,6 +97,7 @@ export type AcpSupervisor = {
   getAgentCapabilities: (agentId?: AgentId) => AgentCapabilities | null
   getTransport: (agentId?: AgentId) => JsonRpcTransport | null
   getSessionBindingRegistry: () => SessionBindingRegistry
+  listLiveByWorkspaceRoot: (workspaceRoot: string) => ReadonlyArray<LiveWorkspaceSession>
   start: (agentId: AgentId) => Promise<void>
   stop: () => Promise<void>
   handleAgentDisabled: (agentId: AgentId) => Promise<void>
@@ -159,7 +159,6 @@ export const DEFAULT_ACP_RESTART_BACKOFF_MS = [250, 500, 1000, 2000, 4000] as co
 export type CreateAcpSupervisorParams = {
   agentSettingsRepository: AgentSettingsReader
   serverVersion: string
-  journalWriter?: AcpJournalWriter
   onSessionUpdate?: SessionUpdateHandler
   onSessionDiscovered?: SessionDiscoveredHandler
   requestPermission?: RequestPermissionFn

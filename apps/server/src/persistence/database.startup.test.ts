@@ -31,23 +31,14 @@ describe("startup with database", () => {
     })
     const database = openDatabase({ dataDir: config.dataDir })
     const runtime = createRuntime("0.1.0")
-    const { app, acpSupervisor, runtimeStatusService, sessionService, disposeOfflineOnBindingClear } =
-      await createServer({
-        config,
-        runtime,
-        database,
-        registerTestRoutes: true,
-      })
-
-    registerShutdown(
-      app,
+    const { app, acpSupervisor, runtimeStatusService } = await createServer({
+      config,
+      runtime,
       database,
-      acpSupervisor,
-      runtimeStatusService,
-      sessionService,
-      disposeOfflineOnBindingClear,
-      [],
-    )
+      registerTestRoutes: true,
+    })
+
+    registerShutdown(app, database, acpSupervisor, runtimeStatusService, [])
     await listen(app, config, runtimeStatusService)
 
     const address = app.server.address()

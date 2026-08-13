@@ -13,20 +13,14 @@ import {
 } from "../auth/ws.auth"
 import { hostPrincipal, Principal } from "../auth/principal"
 import { websocketRawDataText } from "../auth/websocket.raw.data.text"
-import { emitDeviceConnectionLifecycle } from "../device/connection.lifecycle"
+import { touchDeviceLastSeen } from "../device/connection.lifecycle"
 import { DeviceRepository } from "../device/repository"
 import { registerDevicePresence } from "../device/presence"
-import { AgentDatabase } from "../persistence/database"
-import { EventCommitPublisher } from "../event/commit.publisher"
-import { EventJournalRepository } from "../event/journal.repository"
 import { SessionHub } from "./hub/session.hub"
 
 export const SESSIONS_STREAM_PATH = "/v1/sessions/stream"
 
 type RegisterSessionStreamRoutesParams = {
-  database: AgentDatabase
-  eventJournal: EventJournalRepository
-  commitPublisher: EventCommitPublisher
   deviceRepository: DeviceRepository
   sessionHub: SessionHub
   getTrustedProxies?: () => readonly string[]
@@ -68,9 +62,6 @@ const resolveStreamPrincipal = async (params: {
 const attachDevicePresence = (params: {
   principal: Principal
   socket: WebSocket
-  database: AgentDatabase
-  eventJournal: EventJournalRepository
-  commitPublisher: EventCommitPublisher
   deviceRepository: DeviceRepository
 }): void => {
   if (params.principal.kind !== "device") {
@@ -78,19 +69,10 @@ const attachDevicePresence = (params: {
   }
 
   const deviceId = params.principal.deviceId
-  const connected = emitDeviceConnectionLifecycle({
-    database: params.database,
-    eventJournal: params.eventJournal,
-    commitPublisher: params.commitPublisher,
+  touchDeviceLastSeen({
     deviceRepository: params.deviceRepository,
     deviceId,
-    kind: "device.connected",
   })
-
-  if (!connected.ok) {
-    params.socket.close(1011, "device connect event failed")
-    return
-  }
 
   const unregisterPresence = registerDevicePresence({
     deviceId,
@@ -104,13 +86,9 @@ const attachDevicePresence = (params: {
     }
     closedConnections.add(params.socket)
     unregisterPresence()
-    emitDeviceConnectionLifecycle({
-      database: params.database,
-      eventJournal: params.eventJournal,
-      commitPublisher: params.commitPublisher,
+    touchDeviceLastSeen({
       deviceRepository: params.deviceRepository,
       deviceId,
-      kind: "device.disconnected",
     })
   }
 
@@ -161,9 +139,6 @@ export const registerSessionStreamRoutes = (
         attachDevicePresence({
           principal,
           socket,
-          database: params.database,
-          eventJournal: params.eventJournal,
-          commitPublisher: params.commitPublisher,
           deviceRepository: params.deviceRepository,
         })
 

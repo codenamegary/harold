@@ -14,7 +14,6 @@ import {
   createTestAppResources,
 } from "../test-support/create-test-app"
 import { Config } from "../config/config"
-import { createEventJournalRepository } from "../event/journal.repository"
 import { clearDevicePresence } from "./presence"
 
 const resources = createTestAppResources()
@@ -149,37 +148,31 @@ describe("device registry and presence", () => {
     expect(listed.page.count).toBe(1)
   })
 
-  test("claim emits device.paired on journal", async () => {
+  test("claim persists paired device in registry", async () => {
     const dataDir = await createTempDataDir(resources)
-    const { app, config, database } = await createTestApp(resources, dataDir)
+    const { app, config } = await createTestApp(resources, dataDir)
     const { httpBase } = await getListeningBase(app, config)
 
     const paired = await pairDevice(httpBase, { name: "Watch", platform: "wearos" })
 
-    const journal = createEventJournalRepository(database)
-    const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
-    expect(records.ok).toBe(true)
-    if (!records.ok) {
-      throw new Error("journal read failed")
-    }
-    expect(records.value.some((record) => record.kind === "device.paired")).toBe(true)
-    const pairedRecord = records.value.find((record) => record.kind === "device.paired")
-    expect(pairedRecord).toMatchObject({
-      kind: "device.paired",
-      payload: {
-        deviceId: paired.device.id,
+    const listResponse = await fetch(`${httpBase}${DEVICES_PATH}`)
+    expect(listResponse.status).toBe(200)
+    const listed = DeviceCollectionSchema.parse(await listResponse.json())
+    expect(listed.items).toEqual([
+      expect.objectContaining({
+        id: paired.device.id,
         name: "Watch",
         platform: "wearos",
-      },
-    })
+        state: "offline",
+      }),
+    ])
   })
 
-  test("list state follows real WS presence and emits connect/disconnect journal rows", async () => {
+  test("list state follows real WS presence for connect/disconnect", async () => {
     const dataDir = await createTempDataDir(resources)
-    const { app, config, database } = await createTestApp(resources, dataDir)
+    const { app, config } = await createTestApp(resources, dataDir)
     const { httpBase, wsUrl } = await getListeningBase(app, config)
     const paired = await pairDevice(httpBase)
-    const journal = createEventJournalRepository(database)
 
     const beforeConnect = DeviceCollectionSchema.parse(
       await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
@@ -201,13 +194,6 @@ describe("device registry and presence", () => {
     )
     expect(onlineFilter.items).toHaveLength(1)
 
-    const afterConnect = journal.readAfter({ cursor: 0n, limit: 1_000 })
-    expect(afterConnect.ok).toBe(true)
-    if (!afterConnect.ok) {
-      throw new Error("journal read failed")
-    }
-    expect(afterConnect.value.some((record) => record.kind === "device.connected")).toBe(true)
-
     await closeSocket(deviceWs)
     await waitFor(async () => {
       const offline = DeviceCollectionSchema.parse(
@@ -215,15 +201,6 @@ describe("device registry and presence", () => {
       )
       return offline.items[0]?.state === "offline"
     })
-
-    const afterDisconnect = journal.readAfter({ cursor: 0n, limit: 1_000 })
-    expect(afterDisconnect.ok).toBe(true)
-    if (!afterDisconnect.ok) {
-      throw new Error("journal read failed")
-    }
-    expect(afterDisconnect.value.some((record) => record.kind === "device.disconnected")).toBe(
-      true,
-    )
   })
 
   test("host streams do not mark devices online", async () => {

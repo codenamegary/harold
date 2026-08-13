@@ -1,10 +1,8 @@
 import { FastifyInstance } from "fastify"
 import { Config } from "../config/config"
-import { closeAllStreamConnections } from "../event/stream.connections"
 import { AgentDatabase } from "../persistence/database"
 import { RuntimeStatusService } from "../runtime/status.service"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
-import { SessionService } from "../session/service"
 
 export const listen = async (
   app: FastifyInstance,
@@ -20,8 +18,6 @@ type RunShutdownParams = {
   database: AgentDatabase
   acpSupervisor: AcpSupervisor
   runtimeStatusService: RuntimeStatusService
-  sessionService: SessionService
-  disposeOfflineOnBindingClear?: () => void
   signal?: NodeJS.Signals
   exit?: (code: number) => never
 }
@@ -29,13 +25,7 @@ type RunShutdownParams = {
 export const runShutdown = async (params: RunShutdownParams): Promise<void> => {
   params.app.log.info({ signal: params.signal }, "shutting down")
   params.runtimeStatusService.persistShuttingDown()
-  closeAllStreamConnections()
-  const marked = params.sessionService.markLiveSessionsOffline()
-  if (!marked.ok) {
-    throw new Error("failed to mark live sessions offline on shutdown")
-  }
   await params.acpSupervisor.stop()
-  params.disposeOfflineOnBindingClear?.()
   await params.app.close()
   params.runtimeStatusService.persistOffline()
   params.database.close()
@@ -48,8 +38,6 @@ export const registerShutdown = (
   database: AgentDatabase,
   acpSupervisor: AcpSupervisor,
   runtimeStatusService: RuntimeStatusService,
-  sessionService: SessionService,
-  disposeOfflineOnBindingClear?: () => void,
   signals: ReadonlyArray<NodeJS.Signals> = ["SIGINT", "SIGTERM"],
 ) => {
   const shutdown = async (signal: NodeJS.Signals) => {
@@ -58,8 +46,6 @@ export const registerShutdown = (
       database,
       acpSupervisor,
       runtimeStatusService,
-      sessionService,
-      disposeOfflineOnBindingClear,
       signal,
     })
   }

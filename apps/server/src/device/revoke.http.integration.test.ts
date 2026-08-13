@@ -15,7 +15,6 @@ import {
   createTestAppResources,
 } from "../test-support/create-test-app"
 import { Config } from "../config/config"
-import { createEventJournalRepository } from "../event/journal.repository"
 import { clearDevicePresence } from "./presence"
 
 const resources = createTestAppResources()
@@ -114,9 +113,9 @@ const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 
 }
 
 describe("device revoke", () => {
-  test("DELETE revokes device, closes WS, blocks credential, journals device.revoked", async () => {
+  test("DELETE revokes device, closes WS, blocks credential", async () => {
     const dataDir = await createTempDataDir(resources)
-    const { app, config, database } = await createTestApp(resources, dataDir)
+    const { app, config } = await createTestApp(resources, dataDir)
     const { httpBase, wsUrl } = await getListeningBase(app, config)
     const paired = await pairDevice(httpBase, { name: "To revoke", platform: "android" })
 
@@ -166,38 +165,11 @@ describe("device revoke", () => {
     expect(listed.items[0]?.id).toBe(paired.device.id)
     expect(listed.items[0]?.state).toBe("revoked")
 
-    const journal = createEventJournalRepository(database)
-    await waitFor(() => {
-      const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
-      return (
-        records.ok &&
-        records.value.some((record) => record.kind === "device.revoked") &&
-        records.value.some((record) => record.kind === "device.disconnected")
-      )
-    })
-    const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
-    expect(records.ok).toBe(true)
-    if (!records.ok) {
-      throw new Error("journal read failed")
-    }
-    const revokedKinds = records.value.filter((record) => record.kind === "device.revoked")
-    expect(revokedKinds).toHaveLength(1)
-    expect(revokedKinds[0]).toMatchObject({
-      kind: "device.revoked",
-      payload: { deviceId: paired.device.id },
-    })
-    expect(
-      records.value.some(
-        (record) =>
-          record.kind === "device.disconnected" &&
-          record.payload.deviceId === paired.device.id,
-      ),
-    ).toBe(true)
   })
 
-  test("idempotent second DELETE returns 204 without re-journaling device.revoked", async () => {
+  test("idempotent second DELETE returns 204", async () => {
     const dataDir = await createTempDataDir(resources)
-    const { app, config, database } = await createTestApp(resources, dataDir)
+    const { app, config } = await createTestApp(resources, dataDir)
     const { httpBase } = await getListeningBase(app, config)
     const paired = await pairDevice(httpBase)
 
@@ -206,36 +178,15 @@ describe("device revoke", () => {
     })
     expect(first.status).toBe(204)
 
-    const journal = createEventJournalRepository(database)
-    await waitFor(() => {
-      const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
-      return records.ok && records.value.some((record) => record.kind === "device.revoked")
-    })
-    const beforeSecond = journal.readAfter({ cursor: 0n, limit: 1_000 })
-    expect(beforeSecond.ok).toBe(true)
-    if (!beforeSecond.ok) {
-      throw new Error("journal read failed")
-    }
-    const revokedBefore = beforeSecond.value.filter(
-      (record) => record.kind === "device.revoked",
-    ).length
-
     const second = await fetch(`${httpBase}${devicePath(paired.device.id)}`, {
       method: "DELETE",
     })
     expect(second.status).toBe(204)
 
-    await new Promise((resolve) => setTimeout(resolve, 100))
-
-    const afterSecond = journal.readAfter({ cursor: 0n, limit: 1_000 })
-    expect(afterSecond.ok).toBe(true)
-    if (!afterSecond.ok) {
-      throw new Error("journal read failed")
-    }
-    const revokedAfter = afterSecond.value.filter(
-      (record) => record.kind === "device.revoked",
-    ).length
-    expect(revokedAfter).toBe(revokedBefore)
+    const listed = DeviceCollectionSchema.parse(
+      await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
+    )
+    expect(listed.items[0]?.state).toBe("revoked")
   })
 
   test("unknown deviceId returns 404 Problem+JSON", async () => {
@@ -252,9 +203,9 @@ describe("device revoke", () => {
     NotFoundProblemSchema.parse(await response.json())
   })
 
-  test("hardDelete removes device from list and journals device.revoked", async () => {
+  test("hardDelete removes device from list", async () => {
     const dataDir = await createTempDataDir(resources)
-    const { app, config, database } = await createTestApp(resources, dataDir)
+    const { app, config } = await createTestApp(resources, dataDir)
     const { httpBase } = await getListeningBase(app, config)
     const paired = await pairDevice(httpBase, { name: "Hard delete me", platform: "ios" })
 
@@ -268,28 +219,11 @@ describe("device revoke", () => {
       await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
     )
     expect(listed.items).toHaveLength(0)
-
-    const journal = createEventJournalRepository(database)
-    await waitFor(() => {
-      const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
-      return records.ok && records.value.some((record) => record.kind === "device.revoked")
-    })
-    const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
-    expect(records.ok).toBe(true)
-    if (!records.ok) {
-      throw new Error("journal read failed")
-    }
-    const revoked = records.value.filter((record) => record.kind === "device.revoked")
-    expect(revoked).toHaveLength(1)
-    expect(revoked[0]).toMatchObject({
-      kind: "device.revoked",
-      payload: { deviceId: paired.device.id },
-    })
   })
 
-  test("hardDelete of already-revoked device removes row without second device.revoked", async () => {
+  test("hardDelete of already-revoked device removes row", async () => {
     const dataDir = await createTempDataDir(resources)
-    const { app, config, database } = await createTestApp(resources, dataDir)
+    const { app, config } = await createTestApp(resources, dataDir)
     const { httpBase } = await getListeningBase(app, config)
     const paired = await pairDevice(httpBase)
 
@@ -304,20 +238,6 @@ describe("device revoke", () => {
     expect(afterSoft.items).toHaveLength(1)
     expect(afterSoft.items[0]?.state).toBe("revoked")
 
-    const journal = createEventJournalRepository(database)
-    await waitFor(() => {
-      const records = journal.readAfter({ cursor: 0n, limit: 1_000 })
-      return records.ok && records.value.some((record) => record.kind === "device.revoked")
-    })
-    const beforeHard = journal.readAfter({ cursor: 0n, limit: 1_000 })
-    expect(beforeHard.ok).toBe(true)
-    if (!beforeHard.ok) {
-      throw new Error("journal read failed")
-    }
-    const revokedBefore = beforeHard.value.filter(
-      (record) => record.kind === "device.revoked",
-    ).length
-
     const hard = await fetch(
       `${httpBase}${deleteDevicePath(paired.device.id, { hardDelete: true })}`,
       { method: "DELETE" },
@@ -328,15 +248,5 @@ describe("device revoke", () => {
       await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
     )
     expect(listed.items).toHaveLength(0)
-
-    const afterHard = journal.readAfter({ cursor: 0n, limit: 1_000 })
-    expect(afterHard.ok).toBe(true)
-    if (!afterHard.ok) {
-      throw new Error("journal read failed")
-    }
-    const revokedAfter = afterHard.value.filter(
-      (record) => record.kind === "device.revoked",
-    ).length
-    expect(revokedAfter).toBe(revokedBefore)
   })
 })

@@ -106,7 +106,7 @@ describe("GET /v1/sessions catalog list", () => {
     const dataDir = await createTempDataDir(resources)
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? "/usr/local/bin/agent" : undefined
-    const { app, database, acpSupervisor } = await createTestApp(
+    const { app, acpSupervisor } = await createTestApp(
       resources,
       dataDir,
       whichFn,
@@ -115,15 +115,12 @@ describe("GET /v1/sessions catalog list", () => {
         capabilities: { loadSession: true, sessionClose: true, sessionList: true },
       },
     )
-    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
+    const { workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
     await seedBoundSession({
-      database,
       acpSupervisor,
-      workspaceId,
       workspacePath: workspaceDir,
       agentId: "cursor",
-      name: "Status session",
     })
 
     expect(acpSupervisor.getStatus().activeSessions).toBe(1)
@@ -134,7 +131,7 @@ describe("GET /v1/sessions catalog list", () => {
     const dataDir = await createTempDataDir(resources)
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? "/usr/local/bin/agent" : undefined
-    const { app, database, acpSupervisor } = await createTestApp(
+    const { app, acpSupervisor } = await createTestApp(
       resources,
       dataDir,
       whichFn,
@@ -144,15 +141,12 @@ describe("GET /v1/sessions catalog list", () => {
         sessionNewSessionId: "listed-acp-1",
       },
     )
-    const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
+    const { workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
     await seedBoundSession({
-      database,
       acpSupervisor,
-      workspaceId,
       workspacePath: workspaceDir,
       agentId: "cursor",
-      name: "Listed",
     })
 
     const listResponse = await app.inject({ method: "GET", url: "/v1/sessions" })

@@ -23,7 +23,7 @@ describe("DELETE /v1/workspaces/:id cascade", () => {
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app, database, acpSupervisor } = await createTestApp(resources, dataDir, whichFn, undefined, {
+    const { app, acpSupervisor } = await createTestApp(resources, dataDir, whichFn, undefined, {
       capabilities: { loadSession: true, sessionClose: true, sessionList: true },
       sessionNewSessionId: "cascade-session",
       sessionLoadSessionId: "cascade-session",
@@ -32,12 +32,9 @@ describe("DELETE /v1/workspaces/:id cascade", () => {
     await enableAgent(app, "cursor", whichFn)
 
     const { sessionId } = await seedBoundSession({
-      database,
       acpSupervisor,
-      workspaceId,
       workspacePath: workspaceDir,
       agentId: "cursor",
-      name: "Cascade session",
     })
 
     const deleteResponse = await app.inject({
@@ -52,11 +49,13 @@ describe("DELETE /v1/workspaces/:id cascade", () => {
     })
     expect(getWorkspaceResponse.statusCode).toBe(404)
 
-    const getSessionResponse = await app.inject({
+    const listSessions = await app.inject({
       method: "GET",
-      url: `/v1/sessions/${sessionId}`,
+      url: `/v1/sessions?cwd=${encodeURIComponent(workspaceDir)}`,
     })
-    expect(getSessionResponse.statusCode).toBe(404)
+    expect(listSessions.statusCode).toBe(200)
+    const listed = JSON.parse(listSessions.body) as { items: Array<{ sessionId: string }> }
+    expect(listed.items.some((item) => item.sessionId === sessionId)).toBe(false)
   })
 
   test("returns 409 with forceDeleteAvailable when close fails, then succeeds with force=true", async () => {
@@ -64,7 +63,7 @@ describe("DELETE /v1/workspaces/:id cascade", () => {
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app, database, acpSupervisor } = await createTestApp(resources, dataDir, whichFn, undefined, {
+    const { app, acpSupervisor } = await createTestApp(resources, dataDir, whichFn, undefined, {
       capabilities: { loadSession: true, sessionClose: true, sessionList: true },
       sessionNewSessionId: "force-delete-session",
       sessionCloseFails: true,
@@ -73,12 +72,9 @@ describe("DELETE /v1/workspaces/:id cascade", () => {
     await enableAgent(app, "cursor", whichFn)
 
     await seedBoundSession({
-      database,
       acpSupervisor,
-      workspaceId,
       workspacePath: workspaceDir,
       agentId: "cursor",
-      name: "Force delete session",
     })
 
     const deleteResponse = await app.inject({

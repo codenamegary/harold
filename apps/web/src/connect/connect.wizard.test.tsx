@@ -173,6 +173,17 @@ describe("ConnectWizard", () => {
   const connectionTestRequests: string[] = []
   let connectionTestResponse: typeof passingConnectionTest = passingConnectionTest
   let runtimeSettings = { ...defaultRuntimeSettings }
+  let deviceCollection = {
+    items: [] as Array<{
+      id: string
+      name: string
+      platform: string | null
+      state: "online" | "offline" | "revoked"
+      pairedAt: string
+      lastSeenAt: string | null
+    }>,
+    page: { limit: 100, count: 0 },
+  }
 
   beforeEach(() => {
     sockets.length = 0
@@ -182,6 +193,7 @@ describe("ConnectWizard", () => {
     connectionTestRequests.length = 0
     connectionTestResponse = passingConnectionTest
     runtimeSettings = { ...defaultRuntimeSettings }
+    deviceCollection = { items: [], page: { limit: 100, count: 0 } }
 
     globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
       const socket = createFakeSocket(hrefOf(url))
@@ -243,6 +255,15 @@ describe("ConnectWizard", () => {
         return Promise.resolve(
           new Response(JSON.stringify(body), {
             status: 201,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url.startsWith("/v1/devices") && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(deviceCollection), {
+            status: 200,
             headers: { "Content-Type": "application/json" },
           }),
         )
@@ -763,7 +784,7 @@ describe("ConnectWizard", () => {
     expect(pairingRequests).toHaveLength(2)
   })
 
-  test("device paired event enables navigation to Devices", async () => {
+  test("device list poll enables navigation to Devices after pair", async () => {
     const { getByRole, getByLabelText } = renderWithProviders(
       <>
         <ConnectWizard />
@@ -781,30 +802,28 @@ describe("ConnectWizard", () => {
       expect(getByRole("status", { name: /pairing code/i })).toHaveTextContent("J7K-9P2")
     })
 
-    const appSocket = sockets.find((socket) => socket.url.includes("/v1/events"))
-    expect(appSocket).toBeDefined()
+    expect(sockets.some((socket) => socket.url.includes("/v1/events"))).toBe(false)
 
-    act(() => {
-      appSocket?.dispatch(
-        "message",
-        JSON.stringify([
-          {
-            type: "device.paired",
-            cursor: "100",
-            occurredAt: "2026-08-02T21:02:00.000Z",
-            payload: {
-              deviceId: "dev_phone",
-              name: "Field phone",
-              platform: "iOS",
-            },
-          },
-        ]),
-      )
-    })
+    deviceCollection = {
+      items: [
+        {
+          id: "dev_phone",
+          name: "Field phone",
+          platform: "iOS",
+          state: "online",
+          pairedAt: "2026-08-02T21:02:00.000Z",
+          lastSeenAt: "2026-08-02T21:02:00.000Z",
+        },
+      ],
+      page: { limit: 100, count: 1 },
+    }
 
-    await waitFor(() => {
-      expect(getByRole("button", { name: /view paired devices/i })).toBeEnabled()
-    })
+    await waitFor(
+      () => {
+        expect(getByRole("button", { name: /view paired devices/i })).toBeEnabled()
+      },
+      { timeout: 5000 },
+    )
 
     fireEvent.click(getByRole("button", { name: /view paired devices/i }))
     expect(getByLabelText("Current route")).toHaveTextContent("/devices")
