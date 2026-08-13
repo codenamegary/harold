@@ -3,12 +3,8 @@ import { AcpSession, SessionState } from "contracts/http/session"
 import { AgentId } from "contracts/http/agent-settings"
 import { Workspace } from "contracts/http/workspace"
 import { Combobox, ComboboxOptionItem } from "../design-system/Combobox"
-import { InlineEditableText } from "../design-system/InlineEditableText"
 import { StatusDot } from "../design-system/StatusDot"
-import { isSessionUpdateError } from "../session/update.session"
-import { ArchiveSessionModal } from "../session/ArchiveSessionModal"
-import { sessionMutationErrorMessage } from "../session/session.mutation.error.message"
-import { useUpdateSessionMutation } from "../session/use.update.session.mutation"
+import { catalogSessionKey, parseCatalogSessionKey } from "../session/catalog.session.key"
 import { NewSessionModal } from "./NewSessionModal"
 import { sessionStatusDotVariant } from "./session.status.dot.variant"
 
@@ -23,9 +19,9 @@ type ChatHeaderProps = {
   sessionId: string
   selectedSession: AcpSession | undefined
   selectedSessionState: SessionState | null
-  onJoinSession: (sessionId: string) => void
+  onJoinSession: (params: { agentId: string; sessionId: string }) => void
   onStartNewSession: (selection: { workspaceId: string; agentId: AgentId }) => void
-  onSessionArchived: () => void
+  onSessionMenuOpen: () => void
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -39,12 +35,14 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   selectedSessionState,
   onJoinSession,
   onStartNewSession,
-  onSessionArchived,
+  onSessionMenuOpen,
 }) => {
-  const [isEditingName, setIsEditingName] = useState(false)
-  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false)
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false)
-  const updateSessionMutation = useUpdateSessionMutation()
+
+  const selectedKey =
+    sessionId === "" || agentId === ""
+      ? ""
+      : catalogSessionKey({ agentId, sessionId })
 
   const sessionOptions = useMemo((): ComboboxOptionItem[] => {
     const items: ComboboxOptionItem[] = [
@@ -54,31 +52,34 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         description: "Pick a workspace and agent",
       },
       ...sessions.map((session) => ({
-        value: session.sessionId,
+        value: catalogSessionKey({
+          agentId: session.agentId,
+          sessionId: session.sessionId,
+        }),
         label: session.title,
-        description: session.cwd,
+        description: `${session.agentId} · ${session.cwd}`,
       })),
     ]
 
     if (
-      sessionId !== "" &&
+      selectedKey !== "" &&
       selectedSession === undefined &&
-      !items.some((item) => item.value === sessionId)
+      !items.some((item) => item.value === selectedKey)
     ) {
       items.splice(1, 0, {
-        value: sessionId,
+        value: selectedKey,
         label: "Current session",
         description: selectedSessionState ?? undefined,
       })
     }
 
     return items
-  }, [sessions, selectedSession, selectedSessionState, sessionId])
+  }, [sessions, selectedSession, selectedSessionState, selectedKey])
 
   const sessionPickerValue =
     sessionId === "" && workspaceId !== "" && agentId !== ""
       ? NEW_SESSION_VALUE
-      : sessionId
+      : selectedKey
 
   const sessionDisplayOptions = useMemo((): ComboboxOptionItem[] => {
     if (sessionPickerValue !== NEW_SESSION_VALUE) {
@@ -113,35 +114,18 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const selectedStatusDotVariant =
     selectedSessionState === null ? null : sessionStatusDotVariant(selectedSessionState)
 
-  const renameError = updateSessionMutation.isError
-    ? sessionMutationErrorMessage(
-        updateSessionMutation.error,
-        isSessionUpdateError,
-        "Could not rename session.",
-      )
-    : undefined
-
-  const handleRenameSave = async (name: string) => {
-    if (selectedSession === undefined) {
-      return
-    }
-
-    await updateSessionMutation.mutateAsync({
-      sessionId: selectedSession.sessionId,
-      body: { name },
-    })
-  }
-
-  const handleRenameCancel = () => {
-    updateSessionMutation.reset()
-  }
-
-  const handleSessionPickerChange = (nextSessionId: string) => {
-    if (nextSessionId === NEW_SESSION_VALUE) {
+  const handleSessionPickerChange = (nextValue: string) => {
+    if (nextValue === NEW_SESSION_VALUE) {
       setIsNewSessionModalOpen(true)
       return
     }
-    onJoinSession(nextSessionId)
+
+    const parsed = parseCatalogSessionKey(nextValue)
+    if (parsed === null) {
+      return
+    }
+
+    onJoinSession(parsed)
   }
 
   return (
@@ -152,63 +136,23 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             {selectedStatusDotVariant !== null ? (
               <StatusDot variant={selectedStatusDotVariant} />
             ) : null}
-            {isEditingName && selectedSession !== undefined ? (
-              <InlineEditableText
-                value={selectedSession.title}
-                onSave={handleRenameSave}
-                onCancel={handleRenameCancel}
-                onEditingChange={setIsEditingName}
-                isSaving={updateSessionMutation.isPending}
-                error={renameError}
-                ariaLabel={`Rename ${selectedSession.title}`}
-              />
-            ) : (
-              <Combobox
-                variant="title"
-                aria-label="Session"
-                value={sessionPickerValue}
-                onChange={handleSessionPickerChange}
-                options={sessionDisplayOptions}
-                placeholder="Select a session"
-                emptyMessage="No sessions"
-                className="min-w-0 flex-1"
-              />
-            )}
-            {selectedSession !== undefined && !isEditingName ? (
-              <>
-                <button
-                  type="button"
-                  aria-label={`Edit name for ${selectedSession.title}`}
-                  className="flex size-5 shrink-0 items-center justify-center self-center rounded text-xs text-dim hover:text-body"
-                  onClick={() => setIsEditingName(true)}
-                >
-                  ✎
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Archive ${selectedSession.title}`}
-                  className="flex size-5 shrink-0 items-center justify-center self-center rounded text-base leading-none text-dim hover:text-red-400"
-                  onClick={() => setIsArchiveModalOpen(true)}
-                >
-                  ×
-                </button>
-              </>
-            ) : null}
+            <Combobox
+              variant="title"
+              aria-label="Session"
+              value={sessionPickerValue}
+              onChange={handleSessionPickerChange}
+              onOpen={onSessionMenuOpen}
+              options={sessionDisplayOptions}
+              placeholder="Select a session"
+              emptyMessage="No sessions"
+              className="min-w-0 flex-1"
+            />
           </div>
           {contextSubtitle !== null ? (
             <p className="m-0 truncate text-xs text-dim">{contextSubtitle}</p>
           ) : null}
         </div>
       </header>
-      {selectedSession !== undefined ? (
-        <ArchiveSessionModal
-          sessionId={selectedSession.sessionId}
-          sessionName={selectedSession.title}
-          open={isArchiveModalOpen}
-          onClose={() => setIsArchiveModalOpen(false)}
-          onArchived={onSessionArchived}
-        />
-      ) : null}
       <NewSessionModal
         open={isNewSessionModalOpen}
         agents={agents}

@@ -8,12 +8,10 @@ import {
 } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
-import { hrefOf, requestUrl } from "../test/request.url"
+import { requestUrl } from "../test/request.url"
+import { FakeSocket, installFakeWebSocket } from "../test/fake.websocket"
 import { ChatPage } from "../shell/pages/ChatPage"
-import {
-  clearChatTestSelection,
-  startNewSession,
-} from "../chat/select.combobox.option"
+import { clearChatTestSelection, startNewSession } from "../chat/select.combobox.option"
 
 const workspaceCollection = WorkspaceCollectionSchema.parse({
   items: [
@@ -41,13 +39,12 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       present: true,
       popular: true,
       deletable: false,
-  sessionListSupported: true,
+      sessionListSupported: true,
     },
   ],
 })
 
 const workspacePath = "/home/operator/agent-server"
-const promptTurnId = "turn_01JFC8C7E77NQCFH0RF9Z22JHH"
 
 const createdSession = CreateSessionResponseSchema.parse({
   agentId: "cursor",
@@ -61,59 +58,16 @@ const sessionsList = SessionCollectionSchema.parse({
   items: [createdSession],
 })
 
-type FakeSocket = {
-  url: string
-  readyState: number
-  close: () => void
-  send: (data: string) => void
-  addEventListener: (type: string, listener: (event: { data?: string }) => void) => void
-  dispatch: (type: string, data?: string) => void
-}
-
 const originalFetch = globalThis.fetch
-const originalWebSocket = globalThis.WebSocket
-
-const createFakeSocket = (url: string): FakeSocket => {
-  const listeners = new Map<string, Array<(event: { data?: string }) => void>>()
-
-  const socket: FakeSocket = {
-    url,
-    readyState: 1,
-    close: () => {
-      socket.readyState = 3
-      const current = listeners.get("close") ?? []
-      current.forEach((listener) => listener({}))
-    },
-    send: () => undefined,
-    addEventListener: (type, listener) => {
-      const current = listeners.get(type) ?? []
-      listeners.set(type, [...current, listener])
-    },
-    dispatch: (type, data) => {
-      const current = listeners.get(type) ?? []
-      current.forEach((listener) => listener({ data }))
-    },
-  }
-
-  return socket
-}
-
-const isSessionEventSocket = (socket: FakeSocket, sessionId: string) =>
-  socket.url.includes("/v1/events") && socket.url.includes(`sessionId=${sessionId}`)
 
 describe("Session stream reconnect rebuild", () => {
   const sockets: FakeSocket[] = []
+  const restoreWebSocket = { current: () => undefined }
 
   beforeEach(() => {
     clearChatTestSelection()
     sockets.length = 0
-
-    globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
-      const socket = createFakeSocket(hrefOf(url))
-      sockets.push(socket)
-      return socket
-    } as unknown as typeof WebSocket
-
+    restoreWebSocket.current = installFakeWebSocket(sockets)
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
       const method = init?.method ?? "GET"
@@ -145,15 +99,6 @@ describe("Session stream reconnect rebuild", () => {
         )
       }
 
-      if (url.startsWith(`/v1/sessions/${createdSession.sessionId}/select`) && method === "POST") {
-        return Promise.resolve(
-          new Response(JSON.stringify(sessionsList.items[0]), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
-        )
-      }
-
       if (url.startsWith("/v1/sessions")) {
         return Promise.resolve(
           new Response(JSON.stringify(sessionsList), {
@@ -170,7 +115,7 @@ describe("Session stream reconnect rebuild", () => {
   afterEach(() => {
     clearChatTestSelection()
     globalThis.fetch = originalFetch
-    globalThis.WebSocket = originalWebSocket
+    restoreWebSocket.current()
   })
 
   const renderChat = () =>
@@ -180,12 +125,6 @@ describe("Session stream reconnect rebuild", () => {
       </MemoryRouter>,
     )
 
-  const selectWorkspaceAndAgent = async (
-    getByRole: ReturnType<typeof renderChat>["getByRole"],
-  ) => {
-    await startNewSession({ getByRole })
-  }
-
   const typeAndSend = async (
     getByRole: ReturnType<typeof renderChat>["getByRole"],
     text: string,
@@ -194,209 +133,115 @@ describe("Session stream reconnect rebuild", () => {
     await waitFor(() => {
       expect(textarea).not.toBeDisabled()
     })
-
     await act(async () => {
       textarea.value = text
       textarea.dispatchEvent(new Event("input", { bubbles: true }))
     })
-
-    await waitFor(() => {
-      expect(getByRole("button", { name: "Send message" })).not.toBeDisabled()
-    })
-
     fireEvent.click(getByRole("button", { name: "Send message" }))
   }
 
-  test("close reopens stream and rebuilds transcript from journal replay only", async () => {
-    const { getByRole, queryByText } = renderChat()
-    await selectWorkspaceAndAgent(getByRole)
+  const gatewaySockets = () =>
+    sockets.filter((socket) => socket.url.includes("/v1/sessions/stream"))
+
+  test("close reopens the gateway stream and rebuilds from ACP replay", async () => {
+    const { getByRole, getByText, queryByText } = renderChat()
+    await startNewSession({ getByRole })
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {
-      expect(getByRole("combobox", { name: "Session" })).toHaveValue(createdSession.title)
+      expect(gatewaySockets().length).toBeGreaterThan(0)
     })
 
-    await waitFor(() => {
-      expect(
-        sockets.some((socket) => isSessionEventSocket(socket, createdSession.sessionId)),
-      ).toBe(true)
-    })
-
-    const firstSocket = sockets.find((socket) =>
-      isSessionEventSocket(socket, createdSession.sessionId),
-    )
-    expect(firstSocket).toBeDefined()
-    expect(firstSocket?.url).toContain("cursor=0")
-
+    const first = gatewaySockets()[0]
     act(() => {
-      firstSocket?.dispatch(
+      first?.dispatch(
         "message",
-        JSON.stringify([
-          {
-            type: "turn.started",
-            cursor: "1",
-            occurredAt: "2026-07-24T12:00:00.000Z",
-            workspaceId: "ws_01",
-            sessionId: createdSession.sessionId,
-            payload: {
-              turnId: promptTurnId,
-              text: "Explain auth",
-            },
-          },
-          {
-            type: "session.output.delta",
-            cursor: "2",
-            occurredAt: "2026-07-24T12:00:01.000Z",
-            workspaceId: "ws_01",
-            sessionId: createdSession.sessionId,
-            payload: {
-              turnId: promptTurnId,
-              text: "Auth uses JWT",
-            },
-          },
-          {
-            type: "session.state",
-            cursor: "3",
-            occurredAt: "2026-07-24T12:00:02.000Z",
-            workspaceId: "ws_01",
-            sessionId: createdSession.sessionId,
-            payload: {
-              sessionId: createdSession.sessionId,
-              state: "idle",
-            },
-          },
-        ]),
+        JSON.stringify({
+          type: "subscribed",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+        }),
+      )
+      first?.dispatch(
+        "message",
+        JSON.stringify({
+          type: "session_update",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+          update: { sessionUpdate: "agent_message_chunk", text: "stale" },
+        }),
       )
     })
 
     await waitFor(() => {
-      expect(getByRole("region", { name: "Chat transcript" })).toHaveTextContent(
-        "Auth uses JWT",
-      )
+      expect(getByText("stale")).toBeInTheDocument()
     })
 
     const socketsBeforeClose = sockets.length
-
     act(() => {
-      firstSocket?.dispatch("close")
+      first?.dispatch("close")
     })
 
     await waitFor(() => {
       expect(sockets.length).toBeGreaterThan(socketsBeforeClose)
     })
 
-    const reopened = sockets
-      .slice(socketsBeforeClose)
-      .find((socket) => isSessionEventSocket(socket, createdSession.sessionId))
-    expect(reopened).toBeDefined()
-    expect(reopened?.url).toContain("cursor=0")
+    expect(queryByText("stale")).not.toBeInTheDocument()
 
-    await waitFor(() => {
-      expect(queryByText("Auth uses JWT")).not.toBeInTheDocument()
-    })
-
+    const reopened = gatewaySockets()[gatewaySockets().length - 1]
     act(() => {
       reopened?.dispatch(
         "message",
-        JSON.stringify([
-          {
-            type: "turn.started",
-            cursor: "1",
-            occurredAt: "2026-07-24T12:00:00.000Z",
-            workspaceId: "ws_01",
-            sessionId: createdSession.sessionId,
-            payload: {
-              turnId: promptTurnId,
-              text: "Explain auth",
-            },
-          },
-          {
-            type: "session.output.delta",
-            cursor: "2",
-            occurredAt: "2026-07-24T12:00:01.000Z",
-            workspaceId: "ws_01",
-            sessionId: createdSession.sessionId,
-            payload: {
-              turnId: promptTurnId,
-              text: "Auth uses JWT",
-            },
-          },
-          {
-            type: "session.state",
-            cursor: "3",
-            occurredAt: "2026-07-24T12:00:02.000Z",
-            workspaceId: "ws_01",
-            sessionId: createdSession.sessionId,
-            payload: {
-              sessionId: createdSession.sessionId,
-              state: "idle",
-            },
-          },
-        ]),
+        JSON.stringify({
+          type: "session_update",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+          update: { sessionUpdate: "agent_message_chunk", text: "Auth uses JWT" },
+        }),
+      )
+      reopened?.dispatch(
+        "message",
+        JSON.stringify({
+          type: "subscribed",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+        }),
+      )
+      reopened?.dispatch(
+        "message",
+        JSON.stringify({
+          type: "prompt_complete",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+        }),
       )
     })
 
     await waitFor(() => {
-      expect(getByRole("region", { name: "Chat transcript" })).toHaveTextContent(
-        "Auth uses JWT",
-      )
+      expect(getByRole("region", { name: "Chat transcript" })).toHaveTextContent("Auth uses JWT")
     })
-    expect(getByRole("region", { name: "Chat transcript" })).toHaveTextContent(
-      "Explain auth",
-    )
+    expect(queryByText("stale")).not.toBeInTheDocument()
     expect(getByRole("textbox", { name: "Chat message" })).not.toBeDisabled()
   })
 
-  test("error reopens stream with cursor 0 after clear for full replay", async () => {
+  test("error reopens the gateway stream", async () => {
     const { getByRole } = renderChat()
-    await selectWorkspaceAndAgent(getByRole)
+    await startNewSession({ getByRole })
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {
-      expect(
-        sockets.some((socket) => isSessionEventSocket(socket, createdSession.sessionId)),
-      ).toBe(true)
+      expect(gatewaySockets().length).toBeGreaterThan(0)
     })
 
-    const firstSocket = sockets.find((socket) =>
-      isSessionEventSocket(socket, createdSession.sessionId),
-    )
-    expect(firstSocket).toBeDefined()
-
-    act(() => {
-      firstSocket?.dispatch(
-        "message",
-        JSON.stringify([
-          {
-            type: "session.state",
-            cursor: "7",
-            occurredAt: "2026-07-24T12:00:00.000Z",
-            workspaceId: "ws_01",
-            sessionId: createdSession.sessionId,
-            payload: {
-              sessionId: createdSession.sessionId,
-              state: "idle",
-            },
-          },
-        ]),
-      )
-    })
-
+    const first = gatewaySockets()[0]
     const socketsBeforeError = sockets.length
-
     act(() => {
-      firstSocket?.dispatch("error")
+      first?.dispatch("error")
     })
 
     await waitFor(() => {
       expect(sockets.length).toBeGreaterThan(socketsBeforeError)
     })
-
-    const reopened = sockets
-      .slice(socketsBeforeError)
-      .find((socket) => isSessionEventSocket(socket, createdSession.sessionId))
-    expect(reopened).toBeDefined()
-    // Clear + full replay from 0 is the correct rebuild after onReconnect clears transcript.
-    expect(reopened?.url).toContain("cursor=0")
+    expect(gatewaySockets()[gatewaySockets().length - 1]?.url).toContain("/v1/sessions/stream")
   })
 })

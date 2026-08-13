@@ -2,14 +2,12 @@ import { useEffect, useRef } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Event } from "contracts/events/event"
 import { DeviceCollection } from "contracts/http/device"
-import { SessionCollection } from "contracts/http/session"
 import {
   applyDeviceEvents,
   hasDeviceEvents,
   hasDevicePairedEvents,
 } from "../devices/apply.device.events"
 import { queryKeys } from "../query/query.keys"
-import { applySessionListEvents } from "./apply.list.events"
 import { openAppEventStream } from "./open.app.event.stream"
 
 export const APP_STREAM_RECONNECT_BASE_DELAY_MS = 250
@@ -24,17 +22,6 @@ const reconnectDelayMs = (attempt: number): number =>
     APP_STREAM_RECONNECT_BASE_DELAY_MS * 2 ** Math.max(0, attempt - 1),
     APP_STREAM_RECONNECT_MAX_DELAY_MS,
   )
-
-const workspaceIdsFromCreatedEvents = (
-  events: ReadonlyArray<Event>,
-): ReadonlyArray<string> =>
-  [
-    ...new Set(
-      events.flatMap((event) =>
-        event.type === "session.created" ? [event.payload.workspaceId] : [],
-      ),
-    ),
-  ]
 
 export const useAppEventStream = (params: UseAppEventStreamParams) => {
   const queryClient = useQueryClient()
@@ -57,21 +44,6 @@ export const useAppEventStream = (params: UseAppEventStreamParams) => {
 
     const applyEvents = (events: ReadonlyArray<Event>) => {
       const client = queryClientRef.current
-      const sessionQueries = client.getQueriesData<SessionCollection>({
-        queryKey: queryKeys.sessionsRoot,
-      })
-
-      sessionQueries.forEach(([key, data]) => {
-        if (data === undefined) {
-          return
-        }
-
-        const next = applySessionListEvents({ collection: data, events })
-        if (next !== data) {
-          client.setQueryData(key, next)
-        }
-      })
-
       const deviceQueries = client.getQueriesData<DeviceCollection>({
         queryKey: queryKeys.devicesRoot,
       })
@@ -92,12 +64,6 @@ export const useAppEventStream = (params: UseAppEventStreamParams) => {
           queryKey: queryKeys.devicesRoot,
         })
       }
-
-      workspaceIdsFromCreatedEvents(events).forEach((workspaceId) => {
-        void client.invalidateQueries({
-          queryKey: queryKeys.sessions(workspaceId),
-        })
-      })
     }
 
     const connect = (isReconnect: boolean) => {

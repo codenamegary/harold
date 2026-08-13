@@ -7,6 +7,7 @@ import { SessionCollectionSchema } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
 import { requestUrl } from "../test/request.url"
+import { FakeSocket, installFakeWebSocket } from "../test/fake.websocket"
 import { ChatPage } from "../shell/pages/ChatPage"
 import { clearChatTestSelection, openNewSessionModal, confirmNewSessionModal } from "./select.combobox.option"
 
@@ -58,18 +59,15 @@ const emptySessions = SessionCollectionSchema.parse({
 })
 
 const originalFetch = globalThis.fetch
-const originalWebSocket = globalThis.WebSocket
-
-const renderChatPage = () =>
-  renderWithProviders(
-    <MemoryRouter>
-      <ChatPage />
-    </MemoryRouter>,
-  )
 
 describe("ChatPage", () => {
+  const sockets: FakeSocket[] = []
+  const restoreWebSocket = { current: () => undefined }
+
   beforeEach(() => {
     clearChatTestSelection()
+    sockets.length = 0
+    restoreWebSocket.current = installFakeWebSocket(sockets)
     globalThis.fetch = mock((input: RequestInfo | URL) => {
       const url = requestUrl(input)
 
@@ -107,8 +105,15 @@ describe("ChatPage", () => {
   afterEach(() => {
     clearChatTestSelection()
     globalThis.fetch = originalFetch
-    globalThis.WebSocket = originalWebSocket
+    restoreWebSocket.current()
   })
+
+  const renderChatPage = () =>
+    renderWithProviders(
+      <MemoryRouter>
+        <ChatPage />
+      </MemoryRouter>,
+    )
 
   test("renders page landmark and welcome copy", async () => {
     const { getByRole, getByText } = renderChatPage()

@@ -28,6 +28,7 @@ type ComboboxProps = {
   emptyMessage?: string
   filter?: ComboboxFilter
   onQueryChange?: (query: string) => void
+  onOpen?: () => void
   className?: string
   trailing?: React.ReactNode
   variant?: ComboboxVariant
@@ -54,6 +55,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
   emptyMessage = "No matches",
   filter = "client",
   onQueryChange,
+  onOpen,
   className = "",
   trailing,
   variant = "field",
@@ -122,12 +124,18 @@ export const Combobox: React.FC<ComboboxProps> = ({
                 query === "" ? (option?.label ?? "") : query
               }
               onChange={(event) => handleQueryChange(event.target.value)}
+              onFocus={() => {
+                onOpen?.()
+              }}
               placeholder={placeholder}
               className={inputClassName}
             />
             <ComboboxButton
               aria-label={`Toggle ${ariaLabel} options`}
               className={toggleButtonClassName}
+              onClick={() => {
+                onOpen?.()
+              }}
             >
               <ChevronDown aria-hidden className={chevronClassName} />
             </ComboboxButton>

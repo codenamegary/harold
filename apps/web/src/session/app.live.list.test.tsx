@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { act, waitFor } from "@testing-library/react"
+import { waitFor } from "@testing-library/react"
 import { AgentSettingsCollectionSchema } from "contracts/http/agent-settings"
-import { SessionCollectionSchema, SessionSchema } from "contracts/http/session"
+import { SessionCollectionSchema } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import {
   clearChatTestSelection,
@@ -9,9 +9,9 @@ import {
   openComboboxOptions,
 } from "../chat/select.combobox.option"
 import { renderWithProviders } from "../query/render.with.providers"
-import { hrefOf, requestUrl } from "../test/request.url"
+import { requestUrl } from "../test/request.url"
+import { FakeSocket, installFakeWebSocket } from "../test/fake.websocket"
 import { AppRoutes } from "../shell/AppRouter"
-import userEvent from "@testing-library/user-event"
 
 const validStatus = {
   version: "0.1.0",
@@ -58,109 +58,36 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
 
 const workspacePath = "/home/operator/agent-server"
 
-const legacySelectedSession = SessionSchema.parse({
-  id: "sess_01SELECTED000000000000001",
-  workspaceId: "ws_01",
-  agentId: "cursor",
-  name: "Selected chat",
-  state: "idle",
-  createdAt: "2026-07-24T12:00:00.000Z",
-  lastUsedAt: "2026-07-24T12:00:00.000Z",
-  archivedAt: null,
-})
-
-const legacyOtherSession = SessionSchema.parse({
-  id: "sess_01OTHER00000000000000002",
-  workspaceId: "ws_01",
-  agentId: "cursor",
-  name: "Background chat",
-  state: "idle",
-  createdAt: "2026-07-24T12:01:00.000Z",
-  lastUsedAt: "2026-07-24T12:01:00.000Z",
-  archivedAt: null,
-})
-
 const selectedSession = {
-  agentId: legacySelectedSession.agentId,
-  sessionId: legacySelectedSession.id,
+  agentId: "cursor" as const,
+  sessionId: "sess_01SELECTED000000000000001",
   cwd: workspacePath,
-  title: legacySelectedSession.name,
-  updatedAt: legacySelectedSession.lastUsedAt,
+  title: "Selected chat",
+  updatedAt: "2026-07-24T12:00:00.000Z",
 }
 
 const otherSession = {
-  agentId: legacyOtherSession.agentId,
-  sessionId: legacyOtherSession.id,
+  agentId: "cursor" as const,
+  sessionId: "sess_01OTHER00000000000000002",
   cwd: workspacePath,
-  title: legacyOtherSession.name,
-  updatedAt: legacyOtherSession.lastUsedAt,
-}
-
-const sessionsList = SessionCollectionSchema.parse({
-  items: [selectedSession, otherSession],
-})
-
-type FakeSocket = {
-  url: string
-  readyState: number
-  close: () => void
-  send: (data: string) => void
-  addEventListener: (type: string, listener: (event: { data?: string }) => void) => void
-  dispatch: (type: string, data?: string) => void
+  title: "Background chat",
+  updatedAt: "2026-07-24T12:01:00.000Z",
 }
 
 const originalFetch = globalThis.fetch
-const originalWebSocket = globalThis.WebSocket
-
-const createFakeSocket = (url: string): FakeSocket => {
-  const listeners = new Map<string, Array<(event: { data?: string }) => void>>()
-
-  const socket: FakeSocket = {
-    url,
-    readyState: 1,
-    close: () => {
-      socket.readyState = 3
-    },
-    send: () => undefined,
-    addEventListener: (type, listener) => {
-      const current = listeners.get(type) ?? []
-      listeners.set(type, [...current, listener])
-    },
-    dispatch: (type, data) => {
-      const current = listeners.get(type) ?? []
-      current.forEach((listener) => listener({ data }))
-    },
-  }
-
-  return socket
-}
-
-const isAppEventSocket = (socket: FakeSocket) =>
-  socket.url.includes("/v1/events") &&
-  !socket.url.includes("sessionId=") &&
-  !socket.url.includes("workspaceId=") &&
-  !socket.url.includes("cursor=")
-
-const isSessionEventSocket = (socket: FakeSocket, sessionId: string) =>
-  socket.url.includes("/v1/events") &&
-  socket.url.includes(`sessionId=${sessionId}`)
 
 describe("App live session list", () => {
   const sockets: FakeSocket[] = []
+  const restoreWebSocket = { current: () => undefined }
+  const sessionItems = { current: [selectedSession, otherSession] }
 
   beforeEach(() => {
     clearChatTestSelection()
     sockets.length = 0
-
-    globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
-      const socket = createFakeSocket(hrefOf(url))
-      sockets.push(socket)
-      return socket
-    } as unknown as typeof WebSocket
-
-    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+    sessionItems.current = [selectedSession, otherSession]
+    restoreWebSocket.current = installFakeWebSocket(sockets)
+    globalThis.fetch = mock((input: RequestInfo | URL) => {
       const url = requestUrl(input)
-      const method = init?.method ?? "GET"
 
       if (url === "/v1/status" || url.startsWith("/v1/status?")) {
         return Promise.resolve(
@@ -189,33 +116,9 @@ describe("App live session list", () => {
         )
       }
 
-      if (
-        url.startsWith(`/v1/sessions/${selectedSession.sessionId}/select`) &&
-        method === "POST"
-      ) {
-        return Promise.resolve(
-          new Response(JSON.stringify(legacySelectedSession), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
-        )
-      }
-
-      if (
-        url.startsWith(`/v1/sessions/${otherSession.sessionId}/select`) &&
-        method === "POST"
-      ) {
-        return Promise.resolve(
-          new Response(JSON.stringify(legacyOtherSession), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
-        )
-      }
-
       if (url.startsWith("/v1/sessions")) {
         return Promise.resolve(
-          new Response(JSON.stringify(sessionsList), {
+          new Response(JSON.stringify(SessionCollectionSchema.parse({ items: sessionItems.current })), {
             status: 200,
             headers: { "Content-Type": "application/json" },
           }),
@@ -229,105 +132,75 @@ describe("App live session list", () => {
   afterEach(() => {
     clearChatTestSelection()
     globalThis.fetch = originalFetch
-    globalThis.WebSocket = originalWebSocket
+    restoreWebSocket.current()
   })
 
-  test("session list updates from app stream while another session is selected", async () => {
+  test("opening the session picker refetches the catalog", async () => {
+    const fetchMock = globalThis.fetch as ReturnType<typeof mock>
     const { getByRole, queryByRole } = renderWithProviders(<AppRoutes />, {
       initialEntries: ["/chat"],
     })
 
     await joinSessionByName({ getByRole }, selectedSession.title)
 
+    const getsBeforeOpen = fetchMock.mock.calls.filter(
+      ([input]) => requestUrl(input).startsWith("/v1/sessions"),
+    ).length
+
+    sessionItems.current = [selectedSession]
+    await openComboboxOptions({ getByRole }, "Session")
+
     await waitFor(() => {
-      expect(sockets.some(isAppEventSocket)).toBe(true)
-      expect(sockets.some((socket) => isSessionEventSocket(socket, selectedSession.sessionId))).toBe(
-        true,
-      )
+      expect(
+        fetchMock.mock.calls.filter(([input]) => requestUrl(input).startsWith("/v1/sessions"))
+          .length,
+      ).toBeGreaterThan(getsBeforeOpen)
     })
 
-    const appSocket = sockets.find(isAppEventSocket)
-    expect(appSocket).toBeDefined()
-
-    await openComboboxOptions({ getByRole }, "Session")
-    expect(getByRole("option", { name: new RegExp(otherSession.title) })).toBeInTheDocument()
-    await userEvent.setup().keyboard("{Escape}")
-
-    act(() => {
-      appSocket?.dispatch(
-        "message",
-        JSON.stringify([
-          {
-            type: "session.state",
-            cursor: "42",
-            occurredAt: "2026-07-24T12:02:00.000Z",
-            workspaceId: "ws_01",
-            sessionId: otherSession.sessionId,
-            payload: {
-              sessionId: otherSession.sessionId,
-              state: "archived",
-            },
-          },
-        ]),
-      )
-    })
-
-    await openComboboxOptions({ getByRole }, "Session")
     await waitFor(() => {
       expect(queryByRole("option", { name: new RegExp(otherSession.title) })).not.toBeInTheDocument()
     })
-    expect(getByRole("combobox", { name: "Session" })).toHaveValue(selectedSession.title)
     expect(getByRole("option", { name: new RegExp(selectedSession.title) })).toBeInTheDocument()
   })
 
-  test("switching selected session keeps the app stream open", async () => {
-    const { getByRole, queryByRole } = renderWithProviders(<AppRoutes />, {
+  test("window focus refetches the catalog", async () => {
+    const fetchMock = globalThis.fetch as ReturnType<typeof mock>
+    renderWithProviders(<AppRoutes />, {
+      initialEntries: ["/chat"],
+    })
+
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(([input]) => requestUrl(input).startsWith("/v1/sessions")),
+      ).toBe(true)
+    })
+
+    const getsBeforeFocus = fetchMock.mock.calls.filter(
+      ([input]) => requestUrl(input).startsWith("/v1/sessions"),
+    ).length
+
+    window.dispatchEvent(new Event("focus"))
+
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.filter(([input]) => requestUrl(input).startsWith("/v1/sessions"))
+          .length,
+      ).toBeGreaterThan(getsBeforeFocus)
+    })
+  })
+
+  test("switching selected session keeps one gateway stream", async () => {
+    const { getByRole } = renderWithProviders(<AppRoutes />, {
       initialEntries: ["/chat"],
     })
 
     await joinSessionByName({ getByRole }, selectedSession.title)
-
-    const appSocketBefore = sockets.find(isAppEventSocket)
-    expect(appSocketBefore).toBeDefined()
-    expect(appSocketBefore?.readyState).toBe(1)
+    const gatewayBefore = sockets.filter((socket) => socket.url.includes("/v1/sessions/stream"))
+    expect(gatewayBefore.length).toBe(1)
 
     await joinSessionByName({ getByRole }, otherSession.title)
 
-    await waitFor(() => {
-      expect(sockets.some((socket) => isSessionEventSocket(socket, otherSession.sessionId))).toBe(
-        true,
-      )
-    })
-
-    expect(appSocketBefore?.readyState).toBe(1)
-    expect(sockets.filter(isAppEventSocket)).toHaveLength(1)
-
-    act(() => {
-      appSocketBefore?.dispatch(
-        "message",
-        JSON.stringify([
-          {
-            type: "session.state",
-            cursor: "43",
-            occurredAt: "2026-07-24T12:03:00.000Z",
-            workspaceId: "ws_01",
-            sessionId: selectedSession.sessionId,
-            payload: {
-              sessionId: selectedSession.sessionId,
-              state: "archived",
-            },
-          },
-        ]),
-      )
-    })
-
-    await openComboboxOptions({ getByRole }, "Session")
-    await waitFor(() => {
-      expect(
-        queryByRole("option", { name: new RegExp(selectedSession.title) }),
-      ).not.toBeInTheDocument()
-    })
-    expect(getByRole("option", { name: new RegExp(otherSession.title) })).toBeInTheDocument()
+    expect(sockets.filter((socket) => socket.url.includes("/v1/sessions/stream"))).toHaveLength(1)
     expect(getByRole("combobox", { name: "Session" })).toHaveValue(otherSession.title)
   })
 })
