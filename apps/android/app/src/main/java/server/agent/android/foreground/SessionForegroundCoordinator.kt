@@ -28,12 +28,12 @@ data class ForegroundCoordinatorState(
 /**
  * Starts the foreground service only when active sessions exist and notification
  * permission is granted. Otherwise surfaces permission-denied UX.
+ * Keep-alive chat traffic stays on [server.agent.android.connection.ConnectionGateway].
  */
 class SessionForegroundCoordinator(
     private val tracker: ActiveSessionTracker,
     private val permissionChecker: NotificationPermissionChecker,
     private val launcher: SessionForegroundLauncher,
-    private val streamBroker: SessionStreamBroker,
 ) {
     private val _state = MutableStateFlow(ForegroundCoordinatorState())
     val state: StateFlow<ForegroundCoordinatorState> = _state.asStateFlow()
@@ -44,7 +44,6 @@ class SessionForegroundCoordinator(
     fun setServerOrigin(origin: String?) {
         serverOrigin = origin
         if (origin == null) {
-            streamBroker.unpinAll(StreamPinReason.Service)
             tracker.replaceAll(emptyList())
             permissionPromptDismissed = false
         }
@@ -71,10 +70,8 @@ class SessionForegroundCoordinator(
         val active = tracker.sessions.value
         val desired = active.isNotEmpty()
         val permitted = permissionChecker.hasPostNotificationsPermission()
-        val origin = serverOrigin
 
         if (!desired) {
-            streamBroker.unpinAll(StreamPinReason.Service)
             if (launcher.isRunning) {
                 launcher.stop()
             }
@@ -94,7 +91,6 @@ class SessionForegroundCoordinator(
             if (launcher.isRunning) {
                 launcher.stop()
             }
-            streamBroker.unpinAll(StreamPinReason.Service)
             _state.value = ForegroundCoordinatorState(
                 serviceDesired = true,
                 permissionDenied = !permissionPromptDismissed,
@@ -103,8 +99,6 @@ class SessionForegroundCoordinator(
             )
             return
         }
-
-        streamBroker.unpinAll(StreamPinReason.Service)
 
         _state.value = ForegroundCoordinatorState(
             serviceDesired = true,

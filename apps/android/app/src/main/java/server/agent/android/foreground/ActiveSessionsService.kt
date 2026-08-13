@@ -8,7 +8,7 @@ import server.agent.android.AgentServerApplication
 
 /**
  * Keeps the process alive while any session is in user-visible active work.
- * Owns pinned session streams through [SessionStreamBroker] via the coordinator.
+ * Session-stream keep-alive stays on ConnectionGateway, not this service.
  */
 class ActiveSessionsService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null

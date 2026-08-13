@@ -13,11 +13,7 @@ import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
 import { SpawnedAgentProcess } from "../acp/supervisor/spawn-agent-process"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { Config } from "../config/config"
-import { createEventCommitPublisher } from "../event/commit.publisher"
-import { createEventJournalRepository } from "../event/journal.repository"
-import { createSessionRepository } from "../session/repository"
 import { ensureSupervisorReady } from "../session/session.acp.ready"
-import { createSessionService } from "../session/service"
 
 type TestServerApp = Awaited<ReturnType<typeof createServer>>["app"]
 
@@ -100,7 +96,6 @@ export type TestApp = {
   database: AgentDatabase
   config: Config
   acpSupervisor: AcpSupervisor
-  commitPublisher: Awaited<ReturnType<typeof createServer>>["commitPublisher"]
   resources: TestAppResources
 }
 
@@ -147,7 +142,7 @@ export const createTestApp = async (
       sessionLoadSessionId: "fake-session-new",
     },
   )
-  const { app, acpSupervisor, commitPublisher, disposeOfflineOnBindingClear } = await createServer({
+  const { app, acpSupervisor } = await createServer({
     config,
     runtime,
     database,
@@ -160,7 +155,6 @@ export const createTestApp = async (
   })
   resources.addApp(app)
   resources.addTeardown(async () => {
-    disposeOfflineOnBindingClear()
     await acpSupervisor.stop()
     await Promise.resolve()
     try {
@@ -169,7 +163,7 @@ export const createTestApp = async (
       // Test may already have closed the database.
     }
   })
-  return { app, database, config, acpSupervisor, commitPublisher, resources }
+  return { app, database, config, acpSupervisor, resources }
 }
 
 export const cleanupTestAppResources = async (resources: TestAppResources) => {
@@ -234,62 +228,28 @@ export const enableAgent = async (
 }
 
 /**
- * Seeds a SQLite-backed live session bound to ACP (legacy until AGE-52).
- * HTTP POST /v1/sessions no longer creates these rows.
+ * Seeds a live ACP session bound under the workspace path (gateway path).
  */
 export const seedBoundSession = async (params: {
-  database: AgentDatabase
   acpSupervisor: AcpSupervisor
-  workspaceId: string
   workspacePath: string
   agentId: AgentId
-  name: string
 }): Promise<{ sessionId: string; acpSessionId: string }> => {
-  const sessionRepository = createSessionRepository(params.database)
-  const eventJournal = createEventJournalRepository(params.database)
-  const commitPublisher = createEventCommitPublisher()
-  const sessionService = createSessionService({
-    database: params.database,
-    sessionRepository,
-    eventJournal,
-    commitPublisher,
-  })
-
-  const created = sessionService.createStarting({
-    workspaceId: params.workspaceId,
-    agentId: params.agentId,
-    name: params.name,
-  })
-  if (!created.ok) {
-    throw new Error("failed to create starting session")
-  }
-
   const ready = await ensureSupervisorReady(params.acpSupervisor, params.agentId)
   if (!ready) {
     throw new Error("ACP supervisor failed to start for seeded session")
   }
 
-  const acpResult = await params.acpSupervisor.createAcpSession({
+  const acpResult = await params.acpSupervisor.createSession({
     agentId: params.agentId,
-    workspaceCwd: params.workspacePath,
-    sessionId: created.value.id,
-    workspaceId: params.workspaceId,
+    cwd: params.workspacePath,
   })
   if (!acpResult.ok) {
     throw new Error(`session/new failed: ${acpResult.reason}`)
   }
 
-  const marked = sessionService.markReady({
-    id: created.value.id,
-    acpSessionId: acpResult.acpSessionId,
-    resumable: params.acpSupervisor.getAgentCapabilities(params.agentId)?.loadSession === true,
-  })
-  if (!marked.ok) {
-    throw new Error("failed to mark seeded session ready")
-  }
-
   return {
-    sessionId: marked.value.id,
+    sessionId: acpResult.acpSessionId,
     acpSessionId: acpResult.acpSessionId,
   }
 }

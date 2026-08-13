@@ -57,6 +57,13 @@
       "when": 1786310000000,
       "tag": "0007_add_agent_settings_args",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1786619751034,
+      "tag": "0008_drop_sessions_and_events_tables",
+      "breakpoints": true
     }
   ]
 }

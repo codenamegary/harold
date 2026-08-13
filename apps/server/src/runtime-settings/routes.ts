@@ -6,7 +6,6 @@ import {
 import { FastifyInstance } from "fastify"
 import { EnvBindOverrides } from "../config/env.bind.overrides"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
-import { SessionRepository } from "../session/repository"
 import { deleteWorkspaceWithCascade } from "../workspace/delete.workspace.cascade"
 import { WorkspaceRepository } from "../workspace/repository"
 import { WorkspaceService } from "../workspace/service"
@@ -24,7 +23,6 @@ export type RegisterRuntimeSettingsRoutesOptions = {
   onLogLevelChanged?: (logLevel: LogLevel) => void
   workspaceRepository?: WorkspaceRepository
   workspaceService?: WorkspaceService
-  sessionRepository?: SessionRepository
   acpSupervisor?: AcpSupervisor
   appliedRuntimeSettings?: AppliedRuntimeSettingsHolder
   envBindOverrides?: EnvBindOverrides
@@ -116,7 +114,6 @@ export const registerRuntimeSettingsRoutes = (
         affected.length > 0 &&
         force &&
         options.workspaceService !== undefined &&
-        options.sessionRepository !== undefined &&
         options.acpSupervisor !== undefined
       ) {
         for (const workspace of affected) {
@@ -125,7 +122,6 @@ export const registerRuntimeSettingsRoutes = (
             force: true,
             workspaceRepository: options.workspaceRepository,
             workspaceService: options.workspaceService,
-            sessionRepository: options.sessionRepository,
             acpSupervisor: options.acpSupervisor,
           })
 

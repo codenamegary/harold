@@ -1,5 +1,4 @@
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
-import { SessionRepository } from "../session/repository"
 import { WorkspaceRepository } from "./repository"
 import { WorkspaceService } from "./service"
 
@@ -13,7 +12,6 @@ export const deleteWorkspaceWithCascade = async (params: {
   force: boolean
   workspaceRepository: WorkspaceRepository
   workspaceService: WorkspaceService
-  sessionRepository: SessionRepository
   acpSupervisor: AcpSupervisor
 }): Promise<DeleteWorkspaceCascadeResult> => {
   const workspace = params.workspaceRepository.getById({ id: params.workspaceId })
@@ -21,14 +19,9 @@ export const deleteWorkspaceWithCascade = async (params: {
     return { ok: false, kind: "not_found" }
   }
 
-  const liveSessions = params.sessionRepository.listLiveByWorkspace({
-    workspaceId: params.workspaceId,
-  })
+  const liveSessions = params.acpSupervisor.listLiveByWorkspaceRoot(workspace.value.path)
   const closeResult = await params.acpSupervisor.closeWorkspaceSessions({
-    sessions: liveSessions.map((session) => ({
-      acpSessionId: session.acpSessionId,
-      agentId: session.agentId,
-    })),
+    sessions: liveSessions,
   })
 
   if (closeResult.failures.length > 0 && !params.force) {

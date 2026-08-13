@@ -19,8 +19,6 @@ import {
 import { parseConfig } from "../config/config"
 import { createDeviceService } from "../device/service"
 import { createDeviceRepository } from "../device/repository"
-import { createEventJournalRepository } from "../event/journal.repository"
-import { createEventCommitPublisher } from "../event/commit.publisher"
 import Fastify from "fastify"
 
 describe("connection test API", () => {
@@ -67,8 +65,6 @@ describe("connection test API", () => {
     const deviceService = createDeviceService({
       database,
       deviceRepository,
-      eventJournal: createEventJournalRepository(database),
-      commitPublisher: createEventCommitPublisher(),
       config,
       runtimeSettingsRepository,
     })
@@ -143,8 +139,6 @@ describe("connection test API", () => {
     const deviceService = createDeviceService({
       database,
       deviceRepository,
-      eventJournal: createEventJournalRepository(database),
-      commitPublisher: createEventCommitPublisher(),
       config,
       runtimeSettingsRepository,
     })
@@ -205,8 +199,6 @@ describe("connection test API", () => {
     const deviceService = createDeviceService({
       database,
       deviceRepository,
-      eventJournal: createEventJournalRepository(database),
-      commitPublisher: createEventCommitPublisher(),
       config,
       runtimeSettingsRepository,
     })
@@ -264,8 +256,6 @@ describe("connection test API", () => {
     const deviceService = createDeviceService({
       database,
       deviceRepository,
-      eventJournal: createEventJournalRepository(database),
-      commitPublisher: createEventCommitPublisher(),
       config,
       runtimeSettingsRepository,
     })

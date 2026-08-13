@@ -2,8 +2,11 @@ package server.agent.android.shell
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -15,6 +18,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import server.agent.android.connection.ConnectionGateway
+import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.ItemCollection
 import server.agent.android.contracts.PageInfo
 import server.agent.android.contracts.Workspace
@@ -26,6 +30,8 @@ import server.agent.android.contracts.PermissionRequestCollection
 import server.agent.android.contracts.ResolvePermissionRequestBody
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionCollection
+import server.agent.android.contracts.SessionStreamClientMessage
+import server.agent.android.contracts.SessionStreamServerMessage
 import server.agent.android.contracts.WorkspaceCollection
 import server.agent.android.contracts.WorkspaceState
 import server.agent.android.events.ConnectionState
@@ -208,6 +214,12 @@ private class FakeConnectionGateway : ConnectionGateway {
     private val _state = MutableStateFlow(ConnectionState())
     override val state: StateFlow<ConnectionState> = _state.asStateFlow()
 
+    private val _messages = MutableSharedFlow<SessionStreamServerMessage>(extraBufferCapacity = 1)
+    override val messages: SharedFlow<SessionStreamServerMessage> = _messages.asSharedFlow()
+
+    private val _streamResets = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    override val streamResets: SharedFlow<Unit> = _streamResets.asSharedFlow()
+
     val connects = mutableListOf<String>()
     var retries = 0
         private set
@@ -229,6 +241,10 @@ private class FakeConnectionGateway : ConnectionGateway {
     override fun disconnect() {
         disconnects += 1
     }
+
+    override fun send(message: SessionStreamClientMessage) = Unit
+
+    override fun setTarget(agentId: AgentId?, sessionId: String?) = Unit
 }
 
 private class FakeAgentApi(

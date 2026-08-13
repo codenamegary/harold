@@ -36,13 +36,7 @@ const main = async () => {
       ? undefined
       : createWriteStream(applied.logPath, { flags: "a" })
   const runtime = createRuntime(packageJson.version)
-  const {
-    app,
-    acpSupervisor,
-    runtimeStatusService,
-    sessionService,
-    disposeOfflineOnBindingClear,
-  } = await createServer({
+  const { app, acpSupervisor, runtimeStatusService } = await createServer({
     config,
     runtime,
     database,
@@ -53,14 +47,7 @@ const main = async () => {
     logStream,
   })
 
-  registerShutdown(
-    app,
-    database,
-    acpSupervisor,
-    runtimeStatusService,
-    sessionService,
-    disposeOfflineOnBindingClear,
-  )
+  registerShutdown(app, database, acpSupervisor, runtimeStatusService)
   await listen(app, config, runtimeStatusService)
   app.log.info(
     { host: config.host, port: config.port, dataDir: config.dataDir },

@@ -12,8 +12,6 @@ import server.agent.android.connection.DefaultConnectionGateway
 import server.agent.android.credentials.CredentialHolder
 import server.agent.android.credentials.CredentialStore
 import server.agent.android.credentials.DefaultCredentialStore
-import server.agent.android.events.EventStreamFactory
-import server.agent.android.events.OkHttpEventStream
 import server.agent.android.events.OkHttpSessionStreamFactory
 import server.agent.android.events.SessionStreamFactory
 import server.agent.android.foreground.ActiveSessionTracker
@@ -21,10 +19,8 @@ import server.agent.android.foreground.AndroidNotificationPermissionChecker
 import server.agent.android.foreground.AndroidSessionForegroundLauncher
 import server.agent.android.foreground.DefaultActiveSessionTracker
 import server.agent.android.foreground.DefaultOpenSessionRequests
-import server.agent.android.foreground.DefaultSessionStreamBroker
 import server.agent.android.foreground.OpenSessionRequests
 import server.agent.android.foreground.SessionForegroundCoordinator
-import server.agent.android.foreground.SessionStreamBroker
 import server.agent.android.navigation.DefaultNavigationPreferences
 import server.agent.android.navigation.NavigationPreferences
 import server.agent.android.network.AgentApi
@@ -53,12 +49,9 @@ interface AppContainer {
     val deviceNameProvider: () -> String
     val agentApi: AgentApi
     val connectionGateway: ConnectionGateway
-    val eventStreamFactory: EventStreamFactory
-    val sessionStreamFactory: SessionStreamFactory
     val navigationPreferences: NavigationPreferences
     val operatorRepository: OperatorRepository
     val activeSessionTracker: ActiveSessionTracker
-    val sessionStreamBroker: SessionStreamBroker
     val sessionForegroundCoordinator: SessionForegroundCoordinator
     val openSessionRequests: OpenSessionRequests
 }
@@ -94,30 +87,22 @@ class DefaultAppContainer(
     override val deviceNameProvider: () -> String = ::defaultDeviceName
 
     override val agentApi: AgentApi = DefaultAgentApi(client = authenticatedClient)
-    override val eventStreamFactory: EventStreamFactory = EventStreamFactory { serverOrigin ->
-        OkHttpEventStream(client = authenticatedClient, serverOrigin = serverOrigin)
-    }
-    override val sessionStreamFactory: SessionStreamFactory = OkHttpSessionStreamFactory(
+    private val sessionStreamFactory: SessionStreamFactory = OkHttpSessionStreamFactory(
         client = authenticatedClient,
     )
     override val connectionGateway: ConnectionGateway = DefaultConnectionGateway(
-        streamFactory = eventStreamFactory,
+        streamFactory = sessionStreamFactory,
         scope = applicationScope,
     )
     override val navigationPreferences: NavigationPreferences = DefaultNavigationPreferences(context)
     override val operatorRepository: OperatorRepository = DefaultOperatorRepository(agentApi)
 
     override val activeSessionTracker: ActiveSessionTracker = DefaultActiveSessionTracker()
-    override val sessionStreamBroker: SessionStreamBroker = DefaultSessionStreamBroker(
-        streamFactory = eventStreamFactory,
-        scope = applicationScope,
-    )
     override val openSessionRequests: OpenSessionRequests = DefaultOpenSessionRequests()
     override val sessionForegroundCoordinator: SessionForegroundCoordinator =
         SessionForegroundCoordinator(
             tracker = activeSessionTracker,
             permissionChecker = AndroidNotificationPermissionChecker(context),
             launcher = AndroidSessionForegroundLauncher(context),
-            streamBroker = sessionStreamBroker,
         )
 }

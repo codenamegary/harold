@@ -4,7 +4,6 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,7 +20,6 @@ import server.agent.android.contracts.SessionStreamServerMessage
 import server.agent.android.contracts.WorkspaceState
 import server.agent.android.contracts.catalogSessionKey
 import server.agent.android.events.ConnectionStatus
-import server.agent.android.events.SessionStreamFactory
 import server.agent.android.foreground.ActiveSessionSnapshot
 import server.agent.android.foreground.ActiveSessionTracker
 import server.agent.android.foreground.OpenSessionRequests
@@ -39,20 +37,13 @@ class ChatViewModel(
     private val connectionGateway: ConnectionGateway,
     private val operatorRepository: OperatorRepository,
     private val navigationPreferences: NavigationPreferences,
-    sessionStreamFactory: SessionStreamFactory,
-    sessionStreamClient: SessionStreamClient? = null,
     private val activeSessionTracker: ActiveSessionTracker? = null,
     private val sessionForegroundCoordinator: SessionForegroundCoordinator? = null,
     private val openSessionRequests: OpenSessionRequests? = null,
 ) : ViewModel() {
-    private val sessionStream: SessionStreamClient = sessionStreamClient ?: DefaultSessionStreamClient(
-        streamFactory = sessionStreamFactory,
-        scope = viewModelScope,
-    )
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
-    private var streamJob: Job? = null
     private var workspaceByPath: Map<String, WorkspaceRow> = emptyMap()
     private var agentLabels: Map<AgentId, String> = emptyMap()
     private var pendingPrompt: String? = null
@@ -81,14 +72,36 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
+            connectionGateway.streamResets.collect {
+                pendingPrompt = null
+                _uiState.update { current ->
+                    current.copy(
+                        transcript = applyReconnect(),
+                        pendingPermissions = emptyList(),
+                        permissionUiState = PermissionUiState(),
+                        extensionUiState = ExtensionUiState(),
+                        streamReconnecting = true,
+                    )
+                }
+                syncSelectedState(SessionState.Offline)
+            }
+        }
+
+        viewModelScope.launch {
+            connectionGateway.messages.collect(::applyStreamMessage)
+        }
+
+        viewModelScope.launch {
             sessionGateway.pairedState.collect { paired ->
                 if (paired is PairedState.Paired) {
                     sessionForegroundCoordinator?.setServerOrigin(paired.serverOrigin)
-                    startSessionStream(paired.serverOrigin)
+                    _uiState.value.selectedSession?.let { selected ->
+                        connectionGateway.setTarget(selected.agentId, selected.sessionId)
+                    }
                     refreshCatalog()
                 } else {
                     sessionForegroundCoordinator?.setServerOrigin(null)
-                    stopSessionStream()
+                    connectionGateway.setTarget(null, null)
                 }
             }
         }
@@ -322,7 +335,7 @@ class ChatViewModel(
             )
         }
         syncSelectedState(SessionState.Running)
-        sessionStream.send(
+        connectionGateway.send(
             SessionStreamClientMessage.Prompt(
                 agentId = session.agentId,
                 sessionId = session.sessionId,
@@ -350,7 +363,7 @@ class ChatViewModel(
             )
         }
         syncSelectedState(SessionState.Running)
-        sessionStream.send(
+        connectionGateway.send(
             SessionStreamClientMessage.PermissionReply(
                 requestId = active.id,
                 optionId = optionId,
@@ -370,7 +383,7 @@ class ChatViewModel(
         _uiState.update { current ->
             current.copy(cancelSubmitting = true, cancelError = null)
         }
-        sessionStream.send(
+        connectionGateway.send(
             SessionStreamClientMessage.Cancel(
                 agentId = session.agentId,
                 sessionId = session.sessionId,
@@ -412,7 +425,7 @@ class ChatViewModel(
         _uiState.update { current ->
             current.copy(extensionUiState = current.extensionUiState.copy(submitting = true))
         }
-        sessionStream.send(
+        connectionGateway.send(
             SessionStreamClientMessage.ExtensionReply(
                 requestId = request.requestId,
                 result = parsed,
@@ -425,7 +438,7 @@ class ChatViewModel(
 
     fun skipExtension() {
         val request = _uiState.value.extensionUiState.request ?: return
-        sessionStream.send(
+        connectionGateway.send(
             SessionStreamClientMessage.ExtensionReply(
                 requestId = request.requestId,
                 result = JsonObject(emptyMap()),
@@ -494,35 +507,8 @@ class ChatViewModel(
                 streamReconnecting = false,
             )
         }
-        sessionStream.setTarget(row.agentId, row.sessionId)
+        connectionGateway.setTarget(row.agentId, row.sessionId)
         syncActiveSessionsFromUiState()
-    }
-
-    private fun startSessionStream(serverOrigin: String) {
-        if (streamJob?.isActive == true) {
-            return
-        }
-
-        streamJob = sessionStream.start(
-            serverOrigin = serverOrigin,
-            onReconnect = {
-                pendingPrompt = null
-                _uiState.update { current ->
-                    current.copy(
-                        transcript = applyReconnect(),
-                        pendingPermissions = emptyList(),
-                        permissionUiState = PermissionUiState(),
-                        extensionUiState = ExtensionUiState(),
-                        streamReconnecting = true,
-                    )
-                }
-                syncSelectedState(SessionState.Offline)
-            },
-            onMessage = ::applyStreamMessage,
-        )
-        _uiState.value.selectedSession?.let { selected ->
-            sessionStream.setTarget(selected.agentId, selected.sessionId)
-        }
     }
 
     private fun applyStreamMessage(message: SessionStreamServerMessage) {
@@ -558,7 +544,7 @@ class ChatViewModel(
                     _uiState.update { current ->
                         current.copy(transcript = beginUserTurn(current.transcript, turnId, queued))
                     }
-                    sessionStream.send(
+                    connectionGateway.send(
                         SessionStreamClientMessage.Prompt(
                             agentId = message.agentId,
                             sessionId = message.sessionId,
@@ -641,12 +627,6 @@ class ChatViewModel(
     ): Boolean = selected != null &&
         selected.agentId == agentId &&
         selected.sessionId == sessionId
-
-    private fun stopSessionStream() {
-        streamJob?.cancel()
-        streamJob = null
-        sessionStream.stop()
-    }
 
     private suspend fun openSessionFromNotification(sessionId: String) {
         if (_uiState.value.selectedSession?.sessionId == sessionId) {
@@ -732,7 +712,7 @@ class ChatViewModel(
             ?: catalog.firstOrNull { session -> session.sessionId == savedId }
             ?: return
         if (_uiState.value.selectedSession?.id == row.id) {
-            sessionStream.setTarget(row.agentId, row.sessionId)
+            connectionGateway.setTarget(row.agentId, row.sessionId)
             return
         }
         activateSession(row)
@@ -781,7 +761,7 @@ class ChatViewModel(
         catalog = catalog.filterNot { item -> item.id == row.id }
         val selectedWasDeleted = _uiState.value.selectedSession?.id == row.id
         if (selectedWasDeleted) {
-            sessionStream.setTarget(null, null)
+            connectionGateway.setTarget(null, null)
             viewModelScope.launch { clearPersistedSession() }
         }
         _uiState.update { current ->
@@ -857,7 +837,7 @@ class ChatViewModel(
         }
 
     override fun onCleared() {
-        stopSessionStream()
+        connectionGateway.setTarget(null, null)
         super.onCleared()
     }
 
@@ -874,7 +854,6 @@ class ChatViewModelFactory(
     private val connectionGateway: ConnectionGateway,
     private val operatorRepository: OperatorRepository,
     private val navigationPreferences: NavigationPreferences,
-    private val sessionStreamFactory: SessionStreamFactory,
     private val activeSessionTracker: ActiveSessionTracker,
     private val sessionForegroundCoordinator: SessionForegroundCoordinator,
     private val openSessionRequests: OpenSessionRequests,
@@ -888,7 +867,6 @@ class ChatViewModelFactory(
                 connectionGateway = connectionGateway,
                 operatorRepository = operatorRepository,
                 navigationPreferences = navigationPreferences,
-                sessionStreamFactory = sessionStreamFactory,
                 activeSessionTracker = activeSessionTracker,
                 sessionForegroundCoordinator = sessionForegroundCoordinator,
                 openSessionRequests = openSessionRequests,

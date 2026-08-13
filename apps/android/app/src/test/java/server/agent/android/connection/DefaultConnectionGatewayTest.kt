@@ -1,101 +1,72 @@
 package server.agent.android.connection
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.asFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.JsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import server.agent.android.contracts.EventEnvelope
-import server.agent.android.contracts.EventType
+import server.agent.android.contracts.SessionStreamClientMessage
+import server.agent.android.contracts.SessionStreamServerMessage
 import server.agent.android.events.ConnectionStatus
 import server.agent.android.events.DisconnectCause
-import server.agent.android.events.EventStream
-import server.agent.android.events.EventStreamFactory
-import server.agent.android.events.START_CURSOR
-import server.agent.android.events.StreamEvent
+import server.agent.android.events.SessionStream
+import server.agent.android.events.SessionStreamFactory
+import server.agent.android.events.SessionStreamHandlers
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DefaultConnectionGatewayTest {
     @Test
-    fun coldStartsFromCursorZero() = runTest {
-        val stream = ScriptedEventStream(listOf(liveThen(DisconnectCause.Protocol("stop"))))
-        val gateway = gateway(stream)
+    fun opensASingleSessionStreamOnConnect() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(liveThen(DisconnectCause.Protocol("stop"))),
+        )
+        val gateway = gateway(factory)
 
         gateway.connect(ORIGIN)
         advanceUntilIdle()
 
-        assertEquals(listOf(START_CURSOR), stream.cursors)
+        assertEquals(1, factory.openCount)
+        assertEquals(ConnectionStatus.TransportError("stop"), gateway.state.value.status)
     }
 
     @Test
-    fun reconnectsFromTheLastAppliedCursor() = runTest {
-        val stream = ScriptedEventStream(
+    fun reconnectsAfterRetryableDisconnect() = runTest {
+        val factory = ScriptedSessionStreamFactory(
             listOf(
-                listOf(
-                    StreamEvent.Open,
-                    StreamEvent.Frame(frameOf("1", "2", "3")),
-                    StreamEvent.Closed(DisconnectCause.Retryable("closed")),
-                ),
+                liveThen(DisconnectCause.Retryable("closed")),
                 liveThen(DisconnectCause.Protocol("stop")),
             ),
         )
-        val gateway = gateway(stream)
+        val gateway = gateway(factory)
 
         gateway.connect(ORIGIN)
         advanceUntilIdle()
 
-        assertEquals(listOf("0", "3"), stream.cursors)
-        assertEquals("3", gateway.state.value.cursor)
-    }
-
-    @Test
-    fun doesNotReapplyDuplicateCursorsAfterAReconnect() = runTest {
-        val stream = ScriptedEventStream(
-            listOf(
-                listOf(
-                    StreamEvent.Open,
-                    StreamEvent.Frame(frameOf("1", "2")),
-                    StreamEvent.Closed(DisconnectCause.Retryable("closed")),
-                ),
-                listOf(
-                    StreamEvent.Open,
-                    StreamEvent.Frame(frameOf("1", "2", "3")),
-                    StreamEvent.Closed(DisconnectCause.Protocol("stop")),
-                ),
-            ),
-        )
-        val gateway = gateway(stream)
-
-        gateway.connect(ORIGIN)
-        advanceUntilIdle()
-
-        assertEquals("3", gateway.state.value.cursor)
-        assertEquals(3, gateway.state.value.appliedEvents)
+        assertEquals(2, factory.openCount)
+        assertEquals(ConnectionStatus.TransportError("stop"), gateway.state.value.status)
     }
 
     @Test
     fun backsOffExponentiallyWithoutJitter() = runTest {
-        val stream = ScriptedEventStream(
+        val factory = ScriptedSessionStreamFactory(
             scripts = List(4) { closedWith(DisconnectCause.Retryable("refused")) } +
                 listOf(closedWith(DisconnectCause.Protocol("stop"))),
             now = { testScheduler.currentTime },
         )
-        val gateway = gateway(stream)
+        val gateway = gateway(factory)
 
         gateway.connect(ORIGIN)
         advanceUntilIdle()
 
-        assertEquals(listOf(0L, 250L, 750L, 1_750L, 3_750L), stream.connectedAt)
+        assertEquals(listOf(0L, 250L, 750L, 1_750L, 3_750L), factory.openedAt)
     }
 
     @Test
     fun restartsTheBackoffScheduleOnceASocketOpens() = runTest {
-        val stream = ScriptedEventStream(
+        val factory = ScriptedSessionStreamFactory(
             scripts = listOf(
                 closedWith(DisconnectCause.Retryable("refused")),
                 closedWith(DisconnectCause.Retryable("refused")),
@@ -105,161 +76,224 @@ class DefaultConnectionGatewayTest {
             ),
             now = { testScheduler.currentTime },
         )
-        val gateway = gateway(stream)
+        val gateway = gateway(factory)
 
         gateway.connect(ORIGIN)
         advanceUntilIdle()
 
-        assertEquals(listOf(0L, 250L, 750L, 1_000L, 1_500L), stream.connectedAt)
+        assertEquals(listOf(0L, 250L, 750L, 1_000L, 1_500L), factory.openedAt)
     }
 
     @Test
-    fun stopsAutoRetryOnUnauthorizedAndKeepsTheCursor() = runTest {
-        val stream = ScriptedEventStream(
-            listOf(
-                listOf(
-                    StreamEvent.Open,
-                    StreamEvent.Frame(frameOf("9")),
-                    StreamEvent.Closed(DisconnectCause.Unauthorized("unauthorized")),
-                ),
-            ),
+    fun stopsAutoRetryOnUnauthorized() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(liveThen(DisconnectCause.Unauthorized("unauthorized"))),
         )
-        val gateway = gateway(stream)
+        val gateway = gateway(factory)
 
         gateway.connect(ORIGIN)
         advanceUntilIdle()
 
-        assertEquals(1, stream.cursors.size)
+        assertEquals(1, factory.openCount)
         assertEquals(ConnectionStatus.AuthFailed(detail = "unauthorized"), gateway.state.value.status)
-        assertEquals("9", gateway.state.value.cursor)
     }
 
     @Test
-    fun retryAfterAuthFailureResumesFromTheAppliedCursor() = runTest {
-        val stream = ScriptedEventStream(
+    fun retryAfterAuthFailureOpensAgain() = runTest {
+        val factory = ScriptedSessionStreamFactory(
             listOf(
-                listOf(
-                    StreamEvent.Open,
-                    StreamEvent.Frame(frameOf("9")),
-                    StreamEvent.Closed(DisconnectCause.Unauthorized("unauthorized")),
-                ),
+                liveThen(DisconnectCause.Unauthorized("unauthorized")),
                 liveThen(DisconnectCause.Protocol("stop")),
             ),
         )
-        val gateway = gateway(stream)
+        val gateway = gateway(factory)
 
         gateway.connect(ORIGIN)
         advanceUntilIdle()
         gateway.retry()
         advanceUntilIdle()
 
-        assertEquals(listOf("0", "9"), stream.cursors)
+        assertEquals(2, factory.openCount)
+        assertEquals(ConnectionStatus.TransportError("stop"), gateway.state.value.status)
+    }
+
+    @Test
+    fun setTargetSendsSubscribeOnTheOpenSocket() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(holdOpen()),
+        )
+        val gateway = gateway(factory)
+
+        gateway.connect(ORIGIN)
+        advanceUntilIdle()
+        gateway.setTarget("cursor", "sess_01")
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(
+                SessionStreamClientMessage.Subscribe(agentId = "cursor", sessionId = "sess_01"),
+            ),
+            factory.lastStream!!.sent,
+        )
+        gateway.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun setTargetSwitchUsesSwitchAfterSubscribe() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(holdOpen()),
+        )
+        val gateway = gateway(factory)
+
+        gateway.connect(ORIGIN)
+        advanceUntilIdle()
+        gateway.setTarget("cursor", "sess_01")
+        gateway.setTarget("cursor", "sess_02")
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(
+                SessionStreamClientMessage.Subscribe(agentId = "cursor", sessionId = "sess_01"),
+                SessionStreamClientMessage.Switch(agentId = "cursor", sessionId = "sess_02"),
+            ),
+            factory.lastStream!!.sent,
+        )
+        gateway.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun emitsStreamResetBeforeResubscribeOnReconnect() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(
+                liveThen(DisconnectCause.Retryable("closed")),
+                holdOpen(),
+            ),
+        )
+        val gateway = gateway(factory)
+        var resets = 0
+        val resetsJob = launch {
+            gateway.streamResets.collect { resets += 1 }
+        }
+
+        gateway.connect(ORIGIN)
+        gateway.setTarget("cursor", "sess_01")
+        advanceUntilIdle()
+
+        assertEquals(2, factory.openCount)
+        assertTrue("expected a stream reset on reconnect", resets >= 1)
+        assertEquals(
+            SessionStreamClientMessage.Subscribe(agentId = "cursor", sessionId = "sess_01"),
+            factory.lastStream!!.sent.single(),
+        )
+        resetsJob.cancel()
+        gateway.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun disconnectStopsTheLoop() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(liveThen(DisconnectCause.Retryable("closed"))),
+        )
+        val gateway = gateway(factory)
+
+        gateway.connect(ORIGIN)
+        gateway.disconnect()
+        advanceUntilIdle()
+
+        assertTrue(factory.openCount <= 1)
+        assertEquals(ConnectionStatus.Idle, gateway.state.value.status)
     }
 
     @Test
     fun coldStartsAgainWhenThePairedServerChanges() = runTest {
-        val stream = ScriptedEventStream(
+        val factory = ScriptedSessionStreamFactory(
             listOf(
-                listOf(
-                    StreamEvent.Open,
-                    StreamEvent.Frame(frameOf("1", "2")),
-                    StreamEvent.Closed(DisconnectCause.Protocol("stop")),
-                ),
+                liveThen(DisconnectCause.Protocol("stop")),
                 liveThen(DisconnectCause.Protocol("stop")),
             ),
         )
-        val gateway = gateway(stream)
+        val gateway = gateway(factory)
 
         gateway.connect(ORIGIN)
         advanceUntilIdle()
         gateway.connect("http://192.168.1.20:8787")
         advanceUntilIdle()
 
-        assertEquals(listOf("0", "0"), stream.cursors)
-        assertEquals(START_CURSOR, gateway.state.value.cursor)
+        assertEquals(2, factory.openCount)
+        assertEquals(ConnectionStatus.TransportError("stop"), gateway.state.value.status)
     }
 
-    @Test
-    fun stopsAutoRetryOnContractDrift() = runTest {
-        val stream = ScriptedEventStream(listOf(liveThen(DisconnectCause.Protocol("unknown type"))))
-        val gateway = gateway(stream)
-
-        gateway.connect(ORIGIN)
-        advanceUntilIdle()
-
-        assertEquals(1, stream.cursors.size)
-        assertEquals(ConnectionStatus.TransportError("unknown type"), gateway.state.value.status)
-    }
-
-    @Test
-    fun keepsReconnectingAfterASlowConsumerClose() = runTest {
-        val stream = ScriptedEventStream(
-            listOf(
-                liveThen(DisconnectCause.Retryable("slow consumer")),
-                liveThen(DisconnectCause.Protocol("stop")),
-            ),
-        )
-        val gateway = gateway(stream)
-
-        gateway.connect(ORIGIN)
-        advanceUntilIdle()
-
-        assertEquals(2, stream.cursors.size)
-    }
-
-    @Test
-    fun disconnectStopsTheLoop() = runTest {
-        val stream = ScriptedEventStream(listOf(liveThen(DisconnectCause.Retryable("closed"))))
-        val gateway = gateway(stream)
-
-        gateway.connect(ORIGIN)
-        gateway.disconnect()
-        advanceUntilIdle()
-
-        assertTrue(stream.cursors.size <= 1)
-        assertEquals(ConnectionStatus.Idle, gateway.state.value.status)
-    }
-
-    private fun TestScope.gateway(stream: EventStream): DefaultConnectionGateway =
+    private fun TestScope.gateway(factory: SessionStreamFactory): DefaultConnectionGateway =
         DefaultConnectionGateway(
-            streamFactory = EventStreamFactory { stream },
+            streamFactory = factory,
             scope = this,
         )
 
-    private fun liveThen(cause: DisconnectCause): List<StreamEvent> =
-        listOf(StreamEvent.Open, StreamEvent.Closed(cause))
+    private fun liveThen(cause: DisconnectCause): Script =
+        Script.LiveThenClose(cause)
 
-    /** The socket never opened, so the attempt counter keeps climbing. */
-    private fun closedWith(cause: DisconnectCause): List<StreamEvent> =
-        listOf(StreamEvent.Closed(cause))
+    private fun closedWith(cause: DisconnectCause): Script =
+        Script.ImmediateClose(cause)
 
-    private fun frameOf(vararg cursors: String): List<EventEnvelope> =
-        cursors.map { cursor ->
-            EventEnvelope(
-                type = EventType.DeviceConnected,
-                cursor = cursor,
-                occurredAt = "2026-08-05T00:00:00.000Z",
-                payload = JsonObject(emptyMap()),
-            )
-        }
+    private fun holdOpen(): Script = Script.HoldOpen
 
     private companion object {
         const val ORIGIN = "http://127.0.0.1:8787"
     }
 }
 
-private class ScriptedEventStream(
-    private val scripts: List<List<StreamEvent>>,
+private sealed interface Script {
+    data class LiveThenClose(val cause: DisconnectCause) : Script
+    data class ImmediateClose(val cause: DisconnectCause) : Script
+    data object HoldOpen : Script
+}
+
+private class ScriptedSessionStreamFactory(
+    private val scripts: List<Script>,
     private val now: () -> Long = { 0L },
-) : EventStream {
-    val cursors = mutableListOf<String>()
-    val connectedAt = mutableListOf<Long>()
+) : SessionStreamFactory {
+    var openCount = 0
+        private set
+    val openedAt = mutableListOf<Long>()
+    var lastStream: ScriptedSessionStream? = null
+        private set
 
-    override fun connect(cursor: String, sessionId: String?): Flow<StreamEvent> {
-        val index = cursors.size
-        cursors += cursor
-        connectedAt += now()
+    override fun open(serverOrigin: String, handlers: SessionStreamHandlers): SessionStream {
+        val index = openCount
+        openCount += 1
+        openedAt += now()
+        val script = scripts.getOrElse(index) { scripts.last() }
+        val stream = ScriptedSessionStream(handlers)
+        lastStream = stream
 
-        return scripts.getOrElse(index) { scripts.last() }.asFlow()
+        when (script) {
+            is Script.ImmediateClose -> handlers.onDisconnect(script.cause)
+            is Script.LiveThenClose -> {
+                handlers.onOpen()
+                handlers.onDisconnect(script.cause)
+            }
+            Script.HoldOpen -> handlers.onOpen()
+        }
+
+        return stream
+    }
+}
+
+private class ScriptedSessionStream(
+    private val handlers: SessionStreamHandlers,
+) : SessionStream {
+    val sent = mutableListOf<SessionStreamClientMessage>()
+
+    override fun send(message: SessionStreamClientMessage) {
+        sent += message
+    }
+
+    override fun close() = Unit
+
+    fun emit(message: SessionStreamServerMessage) {
+        handlers.onMessage(message)
     }
 }
