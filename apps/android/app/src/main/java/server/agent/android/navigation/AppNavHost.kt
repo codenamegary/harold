@@ -145,7 +145,6 @@ fun AppNavHost(
                 onComposerTextChanged = chatViewModel::onComposerTextChanged,
                 onComposerSubmit = chatViewModel::submitComposerPrompt,
                 onComposerCancel = chatViewModel::submitCancel,
-                onDeleteSession = chatViewModel::deleteSession,
                 onDismissDeleteUnsupported = chatViewModel::dismissDeleteUnsupported,
                 onPermissionOptionSelect = chatViewModel::submitPermissionOption,
                 onExtensionReplyChanged = chatViewModel::onExtensionReplyChanged,
