@@ -106,8 +106,12 @@ export const AppShell: React.FC = () => {
         </div>
       </aside>
 
-      <div className="min-h-screen ml-[224px] max-[820px]:ml-0">
-        <header className="sticky top-0 z-30 flex h-[73px] items-center justify-between border-b border-line-soft bg-[rgba(8,10,13,0.89)] px-[34px] backdrop-blur-[18px] max-[820px]:justify-start max-[820px]:px-[18px]">
+      <div
+        className={`flex flex-col ml-[224px] max-[820px]:ml-0 ${
+          pathname === "/chat" ? "h-svh overflow-hidden" : "min-h-screen"
+        }`}
+      >
+        <header className="sticky top-0 z-30 flex h-[73px] shrink-0 items-center justify-between border-b border-line-soft bg-[rgba(8,10,13,0.89)] px-[34px] backdrop-blur-[18px] max-[820px]:justify-start max-[820px]:px-[18px]">
           <IconButton
             aria-label="Toggle navigation"
             className="mr-3 hidden max-[820px]:grid"
@@ -147,9 +151,15 @@ export const AppShell: React.FC = () => {
           </div>
         </header>
 
-        <div className="mx-auto max-w-[1550px] px-[35px] py-[35px] max-[820px]:px-[18px] max-[820px]:py-[25px] max-[640px]:px-[13px] max-[640px]:py-[22px]">
-          <Outlet />
-        </div>
+        {pathname === "/chat" ? (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <Outlet />
+          </div>
+        ) : (
+          <div className="mx-auto max-w-[1550px] px-[35px] py-[35px] max-[820px]:px-[18px] max-[820px]:py-[25px] max-[640px]:px-[13px] max-[640px]:py-[22px]">
+            <Outlet />
+          </div>
+        )}
       </div>
     </div>
   )

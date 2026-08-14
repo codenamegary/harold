@@ -42,27 +42,47 @@ export const selectComboboxOption = async (
   })
 }
 
-export const openComboboxOptions = async (
+/** Session title picker is a listbox button (not an editable combobox). */
+export const sessionPickerButton = (queries: RoleQueries) =>
+  queries.getByRole("button", { name: "Session" })
+
+export const expectSessionPickerLabel = async (
   queries: RoleQueries,
-  comboboxName = "Session",
+  label: string,
 ) => {
+  await waitFor(() => {
+    const button = sessionPickerButton(queries)
+    if (!button.textContent?.includes(label)) {
+      throw new Error(
+        `Session picker expected label ${label}, got ${button.textContent ?? ""}`,
+      )
+    }
+  })
+}
+
+export const openSessionOptions = async (queries: RoleQueries) => {
   const user = userEvent.setup()
-  await user.click(
-    queries.getByRole("button", { name: `Toggle ${comboboxName} options` }),
-  )
+  await user.click(sessionPickerButton(queries))
   await waitFor(() => {
     queries.getByRole("listbox")
   })
 }
 
+export const selectSessionOption = async (
+  queries: RoleQueries,
+  optionLabel: string,
+) => {
+  const user = userEvent.setup()
+  await openSessionOptions(queries)
+  await user.click(queries.getByRole("option", { name: new RegExp(optionLabel) }))
+  await expectSessionPickerLabel(queries, optionLabel)
+}
+
 /** Open the New session modal from the session picker. */
 export const openNewSessionModal = async (queries: RoleQueries) => {
   const user = userEvent.setup()
-  const input = queries.getByRole("combobox", { name: "Session" })
-  await user.click(input)
-  await user.clear(input)
-  await user.type(input, "New session")
-  await user.keyboard("{ArrowDown}{Enter}")
+  await openSessionOptions(queries)
+  await user.click(queries.getByRole("option", { name: /New session/ }))
 
   await waitFor(() => {
     queries.getByRole("dialog", { name: "New session" })
@@ -79,12 +99,7 @@ export const confirmNewSessionModal = async (
   await selectComboboxOption({ getByRole: queries.getByRole }, "Agent", params.agentName)
   await user.click(queries.getByRole("button", { name: "Continue" }))
 
-  await waitFor(() => {
-    const input = queries.getByRole("combobox", { name: "Session" }) as HTMLInputElement
-    if (input.value !== "New session") {
-      throw new Error(`expected New session, got ${input.value}`)
-    }
-  })
+  await expectSessionPickerLabel(queries, "New session")
 }
 
 export const startNewSession = async (
@@ -95,9 +110,8 @@ export const startNewSession = async (
   },
 ) => {
   await waitFor(() => {
-    const input = queries.getByRole("combobox", { name: "Session" })
-    if ((input as HTMLInputElement).disabled) {
-      throw new Error("Session combobox disabled")
+    if (sessionPickerButton(queries).hasAttribute("disabled")) {
+      throw new Error("Session picker disabled")
     }
   })
   await openNewSessionModal(queries)
@@ -109,12 +123,11 @@ export const joinSessionByName = async (
   sessionName: string,
 ) => {
   await waitFor(() => {
-    const input = queries.getByRole("combobox", { name: "Session" })
-    if ((input as HTMLInputElement).disabled) {
-      throw new Error("Session combobox disabled")
+    if (sessionPickerButton(queries).hasAttribute("disabled")) {
+      throw new Error("Session picker disabled")
     }
   })
-  await selectComboboxOption(queries, "Session", sessionName)
+  await selectSessionOption(queries, sessionName)
 }
 
 export type NewSessionSelection = {

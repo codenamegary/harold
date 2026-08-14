@@ -130,10 +130,10 @@ describe("ChatPage", () => {
     const user = userEvent.setup()
 
     await waitFor(() => {
-      expect(getByRole("combobox", { name: "Session" })).not.toBeDisabled()
+      expect(getByRole("button", { name: "Session" })).not.toBeDisabled()
     })
 
-    await user.click(getByRole("combobox", { name: "Session" }))
+    await user.click(getByRole("button", { name: "Session" }))
     await waitFor(() => {
       expect(getByRole("option", { name: /New session/ })).toBeInTheDocument()
     })
@@ -144,7 +144,7 @@ describe("ChatPage", () => {
     const { getByRole } = renderChatPage()
 
     await waitFor(() => {
-      expect(getByRole("combobox", { name: "Session" })).not.toBeDisabled()
+      expect(getByRole("button", { name: "Session" })).not.toBeDisabled()
     })
 
     await openNewSessionModal({ getByRole })
@@ -162,7 +162,7 @@ describe("ChatPage", () => {
       expect(getByRole("textbox", { name: "Chat message" })).not.toBeDisabled()
     })
     expect(getByRole("button", { name: "Send message" })).toBeDisabled()
-    expect(getByRole("combobox", { name: "Session" })).toHaveValue("New session")
+    expect(getByRole("button", { name: "Session" })).toHaveTextContent("New session")
     expect(getByRole("main").ownerDocument.body).toHaveTextContent("agent-server · Cursor")
   })
 

@@ -122,4 +122,27 @@ describe("Combobox", () => {
 
     expect(deleted).toEqual(["ws_a"])
   })
+
+  test("title variant shows selected label as plain text", async () => {
+    const user = userEvent.setup()
+    const { getByRole, queryByRole } = render(
+      <Combobox
+        variant="title"
+        aria-label="Session"
+        value="ws_a"
+        onChange={() => undefined}
+        options={options}
+        placeholder="Select a session"
+      />,
+    )
+
+    expect(getByRole("button", { name: "Session" })).toHaveTextContent("Alpha")
+    expect(queryByRole("combobox", { name: "Session" })).not.toBeInTheDocument()
+    expect(queryByRole("textbox", { name: "Session" })).not.toBeInTheDocument()
+
+    await user.click(getByRole("button", { name: "Session" }))
+    await waitFor(() => {
+      expect(getByRole("option", { name: /Beta/ })).toBeInTheDocument()
+    })
+  })
 })

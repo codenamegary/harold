@@ -137,7 +137,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
   return (
     <>
-      <header className="flex min-h-[64px] items-center justify-between gap-3 border-b border-line-soft px-5 max-[820px]:flex-wrap max-[820px]:p-[13px]">
+      <header className="flex min-h-[64px] shrink-0 items-center justify-between gap-3 border-b border-line-soft px-5 max-[820px]:flex-wrap max-[820px]:p-[13px]">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex min-w-0 items-center gap-2">
             {selectedStatusDotVariant !== null ? (

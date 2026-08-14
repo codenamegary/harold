@@ -113,9 +113,11 @@ describe("Chat session rename and archive", () => {
     await joinSessionByName({ getByRole }, "Explain auth")
 
     await waitFor(() => {
-      expect(getByRole("combobox", { name: "Session" })).toHaveValue("Explain auth")
+      expect(getByRole("button", { name: "Session" })).toHaveTextContent("Explain auth")
     })
 
+    expect(queryByRole("textbox", { name: "Session" })).not.toBeInTheDocument()
+    expect(queryByRole("combobox", { name: "Session" })).not.toBeInTheDocument()
     expect(queryByRole("button", { name: "Edit name for Explain auth" })).not.toBeInTheDocument()
     expect(queryByRole("button", { name: "Archive Explain auth" })).not.toBeInTheDocument()
   })

@@ -173,7 +173,7 @@ describe("Chat session flow", () => {
     })
 
     await waitFor(() => {
-      expect(getByRole("combobox", { name: "Session" })).toHaveValue(createdSession.title)
+      expect(getByRole("button", { name: "Session" })).toHaveTextContent(createdSession.title)
     })
 
     await waitFor(() => {
@@ -244,7 +244,7 @@ describe("Chat session flow", () => {
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {
-      expect(getByRole("combobox", { name: "Session" })).toHaveValue(createdSession.title)
+      expect(getByRole("button", { name: "Session" })).toHaveTextContent(createdSession.title)
     })
 
     const socket = gatewaySocket()
