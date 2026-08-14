@@ -464,27 +464,29 @@ export const ChatShell: React.FC = () => {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-panel">
-      <ChatHeader
-        workspaces={workspaces}
-        agents={agents}
-        sessions={sessions}
-        workspaceId={workspaceId}
-        agentId={agentId}
-        sessionId={sessionId}
-        selectedSession={selectedSession}
-        selectedSessionState={effectiveSessionState}
-        onJoinSession={handleJoinSession}
-        onStartNewSession={handleStartNewSession}
-        onSessionMenuOpen={() => {
-          void sessionsQuery.refetch()
-        }}
-        onDeleteSession={handleDeleteSession}
-        deletingSessionKey={deletingSessionKey}
-        deleteError={deleteError}
-      />
+      <div className="shrink-0">
+        <ChatHeader
+          workspaces={workspaces}
+          agents={agents}
+          sessions={sessions}
+          workspaceId={workspaceId}
+          agentId={agentId}
+          sessionId={sessionId}
+          selectedSession={selectedSession}
+          selectedSessionState={effectiveSessionState}
+          onJoinSession={handleJoinSession}
+          onStartNewSession={handleStartNewSession}
+          onSessionMenuOpen={() => {
+            void sessionsQuery.refetch()
+          }}
+          onDeleteSession={handleDeleteSession}
+          deletingSessionKey={deletingSessionKey}
+          deleteError={deleteError}
+        />
+      </div>
       <div
         ref={transcriptScrollRef}
-        className="flex-1 overflow-y-auto px-[max(25px,calc((100%-800px)/2))] py-[25px] [scrollbar-color:#252b34_transparent] max-[820px]:px-[13px] max-[820px]:py-[18px]"
+        className="min-h-0 flex-1 overflow-y-auto px-[max(25px,calc((100%-800px)/2))] py-[25px] [scrollbar-color:#252b34_transparent] max-[820px]:px-[13px] max-[820px]:py-[18px]"
       >
         {showWelcome ? (
           <WelcomeMessage />
@@ -499,7 +501,7 @@ export const ChatShell: React.FC = () => {
           </>
         )}
       </div>
-      <div className="px-5 pb-5 max-[820px]:px-2.5 max-[820px]:pb-2.5">
+      <div className="shrink-0 px-5 pb-5 max-[820px]:px-2.5 max-[820px]:pb-2.5">
         {pendingPermission !== null ? (
           <PermissionPanel
             request={pendingPermission}
