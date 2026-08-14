@@ -44,6 +44,7 @@ import {
 import { registerAuthMiddleware } from "../auth/middleware"
 import { redactPairingCodeInUrl } from "../device/redact.pairing.code.in.url"
 import { FetchRegistryFn } from "../agent-settings/agent-settings-repository"
+import { startEnabledAgents } from "./start.enabled.agents"
 
 const TestBodySchema = z.object({
   name: z.string().min(1),
@@ -274,6 +275,12 @@ export const createServer = async ({
   if (withTestRoutes) {
     registerTestRoutes(app)
   }
+
+  await startEnabledAgents({
+    agentSettingsRepository,
+    acpSupervisor,
+    log: app.log,
+  })
 
   return {
     app,
