@@ -87,6 +87,7 @@ jobs:
             coverage/**/lcov.info
             coverage/html/
           if-no-files-found: warn
+          retention-days: 3
 
   upload-fs:
     needs: check

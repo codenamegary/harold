@@ -53,6 +53,7 @@ jobs:
           name: android-apks
           path: apps/android/artifacts/
           if-no-files-found: error
+          retention-days: 3
 
   upload-fs:
     needs: build
