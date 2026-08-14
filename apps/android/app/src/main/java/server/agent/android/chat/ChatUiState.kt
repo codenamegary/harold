@@ -88,7 +88,6 @@ data class ChatUiState(
     val pendingPermissions: List<PermissionRequest> = emptyList(),
     val permissionUiState: PermissionUiState = PermissionUiState(),
     val extensionUiState: ExtensionUiState = ExtensionUiState(),
-    val deleteUnsupportedMessage: String? = null,
     val notificationPermissionDenied: Boolean = false,
 ) {
     val activePermissionRequest: PermissionRequest?

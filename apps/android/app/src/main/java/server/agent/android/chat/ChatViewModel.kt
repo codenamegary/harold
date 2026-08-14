@@ -462,26 +462,12 @@ class ChatViewModel(
                     dropSession(row)
                 },
                 onFailure = { error ->
-                    val apiError = (error as? AgentApiException)?.error
-                    if (apiError is AgentApiError.Problem && apiError.status == HTTP_CONFLICT) {
-                        _uiState.update { current ->
-                            current.copy(
-                                deleteUnsupportedMessage = apiError.detail
-                                    ?: "Agent does not support session/close",
-                            )
-                        }
-                    } else {
-                        _uiState.update { current ->
-                            current.copy(sessionsError = errorMessage(error))
-                        }
+                    _uiState.update { current ->
+                        current.copy(sessionsError = errorMessage(error))
                     }
                 },
             )
         }
-    }
-
-    fun dismissDeleteUnsupported() {
-        _uiState.update { current -> current.copy(deleteUnsupportedMessage = null) }
     }
 
     fun selectSession(row: SessionRow) {
@@ -844,7 +830,6 @@ class ChatViewModel(
     companion object {
         const val KEY_SELECTED_SESSION_ID = "selected_session_id"
         const val RECENT_SESSIONS_LIMIT = 5
-        private const val HTTP_CONFLICT = 409
     }
 }
 

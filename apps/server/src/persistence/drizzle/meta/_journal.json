@@ -64,6 +64,13 @@
       "when": 1786619751034,
       "tag": "0008_drop_sessions_and_events_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1786679293495,
+      "tag": "0009_add_archived_acp_sessions_table",
+      "breakpoints": true
     }
   ]
 }

@@ -113,7 +113,6 @@ fun ChatScreen(
     onComposerTextChanged: (String) -> Unit = {},
     onComposerSubmit: () -> Unit = {},
     onComposerCancel: () -> Unit = {},
-    onDismissDeleteUnsupported: () -> Unit = {},
     onPermissionOptionSelect: (String) -> Unit = {},
     onExtensionReplyChanged: (String) -> Unit = {},
     onExtensionReply: () -> Unit = {},
@@ -616,22 +615,5 @@ fun ChatScreen(
                 }
             }
         }
-    }
-
-    if (uiState.deleteUnsupportedMessage != null) {
-        AlertDialog(
-            onDismissRequest = onDismissDeleteUnsupported,
-            title = { Text(text = "Close not supported") },
-            text = { Text(text = uiState.deleteUnsupportedMessage) },
-            confirmButton = {
-                TextButton(
-                    onClick = onDismissDeleteUnsupported,
-                    modifier = Modifier.testTag("close_unsupported_confirm"),
-                ) {
-                    Text(text = "OK")
-                }
-            },
-            modifier = Modifier.testTag("close_unsupported_dialog"),
-        )
     }
 }

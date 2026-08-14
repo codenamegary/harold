@@ -22,6 +22,7 @@ import { createWorkspaceRepository } from "../workspace/repository"
 import { registerWorkspaceRoutes } from "../workspace/routes"
 import { registerFilesystemBrowseRoutes } from "../filesystem/routes"
 import { registerSessionRoutes } from "../session/routes"
+import { createArchivedAcpSessionsStore } from "../session/archived.acp.sessions.store"
 import { createWorkspaceService } from "../workspace/service"
 import { createDeviceRepository } from "../device/repository"
 import { createDeviceService } from "../device/service"
@@ -167,6 +168,7 @@ export const createServer = async ({
     fetchRegistryFn,
     registryUrl,
   })
+  const archivedAcpSessions = createArchivedAcpSessionsStore(database)
   const workspaceRepository = createWorkspaceRepository(database, {
     getAllowedRoots: () => runtimeSettingsRepository.get().allowedRoots,
   })
@@ -256,7 +258,13 @@ export const createServer = async ({
     appliedRuntimeSettings,
     envBindOverrides,
   })
-  registerSessionRoutes(app, agentSettingsRepository, acpSupervisor, cwdCache)
+  registerSessionRoutes(
+    app,
+    agentSettingsRepository,
+    acpSupervisor,
+    cwdCache,
+    archivedAcpSessions,
+  )
 
   const deviceService = createDeviceService({
     database,

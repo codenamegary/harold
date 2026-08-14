@@ -10,7 +10,7 @@ import { openDatabase } from "./database"
 const tempDirs: string[] = []
 const migrationsFolder = path.join(import.meta.dir, "drizzle")
 const ms1MigrationCount = 4
-const currentMigrationCount = 9
+const currentMigrationCount = 10
 
 const createTempDataDir = async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-test-"))
@@ -146,7 +146,32 @@ describe("drizzle migrations", () => {
     expect(tables).not.toContain("events")
     expect(tables).toContain("workspaces")
     expect(tables).toContain("devices")
+    expect(tables).toContain("archived_acp_sessions")
     expect(migrationCount(database.sqlite)).toBe(currentMigrationCount)
+
+    database.close()
+  })
+
+  test("creates archived_acp_sessions with composite primary key", async () => {
+    const dataDir = await createTempDataDir()
+    const database = openDatabase({ dataDir })
+
+    const columns = database.sqlite
+      .query<{ name: string }, []>("PRAGMA table_info(archived_acp_sessions)")
+      .all()
+      .map((row) => row.name)
+
+    expect(columns).toEqual(["agent_id", "session_id"])
+
+    const tableSql = database.sqlite
+      .query<{ sql: string }, []>(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'archived_acp_sessions'",
+      )
+      .get()?.sql
+
+    expect(tableSql).toContain("PRIMARY KEY")
+    expect(tableSql).toContain("agent_id")
+    expect(tableSql).toContain("session_id")
 
     database.close()
   })

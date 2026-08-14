@@ -247,7 +247,7 @@ class DefaultAgentApiTest {
     }
 
     @Test
-    fun deleteSessionMapsConflictWhenCloseUnsupported() = runTest {
+    fun deleteSessionMapsConflictProblem() = runTest {
         server.enqueue(
             MockResponse()
                 .setResponseCode(409)
@@ -257,7 +257,7 @@ class DefaultAgentApiTest {
                       "type": "https://agent-server.local/problems/conflict",
                       "title": "Conflict",
                       "status": 409,
-                      "detail": "Agent does not support session/close"
+                      "detail": "Agent is disabled"
                     }
                     """.trimIndent(),
                 ),
@@ -275,7 +275,7 @@ class DefaultAgentApiTest {
             AgentApiError.Problem(
                 status = 409,
                 title = "Conflict",
-                detail = "Agent does not support session/close",
+                detail = "Agent is disabled",
             ),
             error,
         )
