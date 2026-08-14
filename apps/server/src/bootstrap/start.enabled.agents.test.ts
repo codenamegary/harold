@@ -21,17 +21,17 @@ describe("startEnabledAgents", () => {
     const info = mock(() => undefined)
     const warn = mock(() => undefined)
 
-    const results = await startEnabledAgents({
-      agentSettingsRepository: {
+    const results = await startEnabledAgents(
+      {
         list: () => [
           agent({ id: "cursor", enabled: true }),
           agent({ id: "opencode", enabled: false }),
           agent({ id: "claude-acp", enabled: true }),
         ],
       },
-      acpSupervisor: { start },
-      log: { info, warn },
-    })
+      { start },
+      { info, warn },
+    )
 
     expect(start).toHaveBeenCalledTimes(2)
     expect(start.mock.calls.map((call) => call[0]).sort()).toEqual([
@@ -50,13 +50,13 @@ describe("startEnabledAgents", () => {
     const info = mock(() => undefined)
     const warn = mock(() => undefined)
 
-    const results = await startEnabledAgents({
-      agentSettingsRepository: {
+    const results = await startEnabledAgents(
+      {
         list: () => [agent({ id: "cursor", enabled: false })],
       },
-      acpSupervisor: { start },
-      log: { info, warn },
-    })
+      { start },
+      { info, warn },
+    )
 
     expect(start).not.toHaveBeenCalled()
     expect(results).toEqual([])
@@ -73,16 +73,16 @@ describe("startEnabledAgents", () => {
     const info = mock(() => undefined)
     const warn = mock(() => undefined)
 
-    const results = await startEnabledAgents({
-      agentSettingsRepository: {
+    const results = await startEnabledAgents(
+      {
         list: () => [
           agent({ id: "cursor", enabled: true }),
           agent({ id: "opencode", enabled: true }),
         ],
       },
-      acpSupervisor: { start },
-      log: { info, warn },
-    })
+      { start },
+      { info, warn },
+    )
 
     expect(results).toEqual([
       { agentId: "cursor", ok: false, error: expect.any(Error) },

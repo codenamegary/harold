@@ -7,20 +7,16 @@ export type StartEnabledAgentsLog = {
   warn: (obj: object, msg: string) => void
 }
 
-export type StartEnabledAgentsParams = {
-  agentSettingsRepository: Pick<AgentSettingsRepository, "list">
-  acpSupervisor: Pick<AcpSupervisor, "start">
-  log: StartEnabledAgentsLog
-}
-
 export type StartEnabledAgentResult =
   | { agentId: AgentId; ok: true }
   | { agentId: AgentId; ok: false; error: unknown }
 
 export const startEnabledAgents = async (
-  params: StartEnabledAgentsParams,
+  agentSettingsRepository: Pick<AgentSettingsRepository, "list">,
+  acpSupervisor: Pick<AcpSupervisor, "start">,
+  log: StartEnabledAgentsLog,
 ): Promise<ReadonlyArray<StartEnabledAgentResult>> => {
-  const enabledIds = params.agentSettingsRepository
+  const enabledIds = agentSettingsRepository
     .list()
     .filter((agent) => agent.enabled)
     .map((agent) => agent.id)
@@ -29,12 +25,12 @@ export const startEnabledAgents = async (
     return []
   }
 
-  params.log.info({ agentIds: enabledIds }, "starting enabled ACP agents")
+  log.info({ agentIds: enabledIds }, "starting enabled ACP agents")
 
   const results = await Promise.all(
     enabledIds.map(async (agentId): Promise<StartEnabledAgentResult> => {
       try {
-        await params.acpSupervisor.start(agentId)
+        await acpSupervisor.start(agentId)
         return { agentId, ok: true }
       } catch (error: unknown) {
         return { agentId, ok: false, error }
@@ -44,11 +40,11 @@ export const startEnabledAgents = async (
 
   results.forEach((result) => {
     if (result.ok) {
-      params.log.info({ agentId: result.agentId }, "enabled ACP agent ready")
+      log.info({ agentId: result.agentId }, "enabled ACP agent ready")
       return
     }
 
-    params.log.warn(
+    log.warn(
       { agentId: result.agentId, err: result.error },
       "failed to start enabled ACP agent",
     )

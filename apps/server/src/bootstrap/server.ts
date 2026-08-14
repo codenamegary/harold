@@ -276,11 +276,7 @@ export const createServer = async ({
     registerTestRoutes(app)
   }
 
-  await startEnabledAgents({
-    agentSettingsRepository,
-    acpSupervisor,
-    log: app.log,
-  })
+  await startEnabledAgents(agentSettingsRepository, acpSupervisor, app.log)
 
   return {
     app,
