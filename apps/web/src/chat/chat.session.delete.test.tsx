@@ -12,7 +12,7 @@ import { ChatPage } from "../shell/pages/ChatPage"
 import {
   clearChatTestSelection,
   joinSessionByName,
-  openComboboxOptions,
+  openSessionOptions,
 } from "./select.combobox.option"
 
 const workspaceCollection = WorkspaceCollectionSchema.parse({
@@ -125,10 +125,10 @@ describe("Chat session delete", () => {
     await joinSessionByName({ getByRole }, listedSession.title)
 
     await waitFor(() => {
-      expect(getByRole("combobox", { name: "Session" })).toHaveValue(listedSession.title)
+      expect(getByRole("button", { name: "Session" })).toHaveTextContent(listedSession.title)
     })
 
-    await openComboboxOptions({ getByRole }, "Session")
+    await openSessionOptions({ getByRole })
     await user.click(getByRole("button", { name: `Delete ${listedSession.title}` }))
     await user.click(getByRole("button", { name: "Confirm" }))
 

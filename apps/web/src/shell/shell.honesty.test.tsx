@@ -419,7 +419,7 @@ describe("shell honesty", () => {
 
       await waitForShellReady(getByRole)
 
-      expect(getByRole("combobox", { name: "Session" })).not.toBeDisabled()
+      expect(getByRole("button", { name: "Session" })).not.toBeDisabled()
       expect(getByRole("textbox", { name: "Chat message" })).toBeDisabled()
       expect(getByRole("button", { name: "Send message" })).toBeDisabled()
       expect(queryByRole("menu", { name: "Slash commands" })).not.toBeInTheDocument()

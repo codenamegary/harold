@@ -6,7 +6,7 @@ import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import {
   clearChatTestSelection,
   joinSessionByName,
-  openComboboxOptions,
+  openSessionOptions,
 } from "../chat/select.combobox.option"
 import { renderWithProviders } from "../query/render.with.providers"
 import { requestUrl } from "../test/request.url"
@@ -148,7 +148,7 @@ describe("App live session list", () => {
     ).length
 
     sessionItems.current = [selectedSession]
-    await openComboboxOptions({ getByRole }, "Session")
+    await openSessionOptions({ getByRole })
 
     await waitFor(() => {
       expect(
@@ -201,6 +201,6 @@ describe("App live session list", () => {
     await joinSessionByName({ getByRole }, otherSession.title)
 
     expect(sockets.filter((socket) => socket.url.includes("/v1/sessions/stream"))).toHaveLength(1)
-    expect(getByRole("combobox", { name: "Session" })).toHaveValue(otherSession.title)
+    expect(getByRole("button", { name: "Session" })).toHaveTextContent(otherSession.title)
   })
 })

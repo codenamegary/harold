@@ -4,6 +4,10 @@ import {
   ComboboxInput,
   ComboboxOption,
   ComboboxOptions,
+  Listbox,
+  ListboxButton,
+  ListboxOption,
+  ListboxOptions,
 } from "@headlessui/react"
 import { ChevronDown } from "lucide-react"
 import React, { useMemo, useState } from "react"
@@ -48,6 +52,53 @@ const matchesQuery = (option: ComboboxOptionItem, query: string) => {
   return haystack.includes(normalized)
 }
 
+type OptionRowProps = {
+  option: ComboboxOptionItem
+  onDeleteOption?: (value: string) => void
+  deletingOptionValue: string | null
+}
+
+const OptionRow: React.FC<OptionRowProps> = ({
+  option,
+  onDeleteOption,
+  deletingOptionValue,
+}) => (
+  <span className="flex items-start gap-2">
+    <span className="min-w-0 flex-1">
+      <span className="block truncate font-medium">{option.label}</span>
+      {option.description !== undefined ? (
+        <span className="mt-1 block truncate font-mono text-xs text-dim">
+          {option.description}
+        </span>
+      ) : null}
+    </span>
+    {option.deletable === true && onDeleteOption !== undefined ? (
+      <span
+        className="shrink-0"
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+        }}
+        onPointerDown={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+        }}
+      >
+        <ConfirmDeleteIconButton
+          aria-label={`Delete ${option.label}`}
+          pending={deletingOptionValue === option.value}
+          onConfirm={() => {
+            onDeleteOption(option.value)
+          }}
+        />
+      </span>
+    ) : null}
+  </span>
+)
+
+const optionItemClassName =
+  "cursor-pointer px-3.5 py-2.5 text-sm text-body data-focus:bg-hover-surface data-focus:text-white data-selected:text-lime"
+
 export const Combobox: React.FC<ComboboxProps> = ({
   label,
   "aria-label": ariaLabel,
@@ -82,25 +133,76 @@ export const Combobox: React.FC<ComboboxProps> = ({
     onQueryChange?.(nextQuery)
   }
 
-  const isTitle = variant === "title"
-  const shellClassName = isTitle
-    ? `relative min-w-[180px] max-w-full ${disabled ? "cursor-not-allowed opacity-50" : ""}`
-    : `relative w-full min-h-10 rounded-md border border-line-input bg-surface-deep px-3 py-2 focus-within:border-lime/40 ${
-        disabled ? "cursor-not-allowed opacity-50" : ""
-      }`
-  const inputClassName = isTitle
-    ? "block w-full min-w-0 border-0 bg-transparent p-0 text-base font-semibold text-white outline-none placeholder:text-dim"
-    : "block w-full min-w-0 border-0 bg-transparent p-0 text-sm text-input outline-none placeholder:text-dim"
-  const optionsClassName = isTitle
-    ? "absolute top-full left-0 z-50 mt-1.5 max-h-60 min-w-[280px] w-max overflow-auto rounded-md border border-line bg-panel-elevated py-1.5 shadow-lg empty:invisible"
-    : "absolute top-full right-0 left-0 z-50 mt-1.5 max-h-60 w-full overflow-auto rounded-md border border-line bg-panel-elevated py-1.5 shadow-lg empty:invisible"
-  const toggleButtonClassName = isTitle
-    ? "grid size-8 shrink-0 place-items-center rounded border-0 bg-transparent p-0 text-dim hover:text-body"
-    : "grid size-7 shrink-0 place-items-center rounded border-0 bg-transparent p-0 text-dim hover:text-body"
-  const chevronClassName = isTitle ? "size-5 stroke-[2.25]" : "size-4 stroke-2"
+  if (variant === "title") {
+    const displayLabel = selected?.label ?? placeholder
+    const titleShellClassName = `relative min-w-[180px] max-w-full ${
+      disabled ? "cursor-not-allowed opacity-50" : ""
+    }`
+
+    return (
+      <div className={`flex min-w-0 items-center gap-2 ${className}`}>
+        <Listbox
+          value={selected}
+          disabled={disabled}
+          by="value"
+          onChange={(option) => {
+            if (option === null) {
+              return
+            }
+            onChange(option.value)
+          }}
+        >
+          <div className={titleShellClassName}>
+            <ListboxButton
+              aria-label={ariaLabel}
+              className="flex min-w-0 max-w-full items-center gap-2 border-0 bg-transparent p-0 text-left outline-none"
+              onClick={() => {
+                onOpen?.()
+              }}
+            >
+              <span className="min-w-0 flex-1 truncate text-base font-semibold text-white">
+                {displayLabel}
+              </span>
+              <span
+                aria-hidden
+                className="grid size-8 shrink-0 place-items-center rounded text-dim"
+              >
+                <ChevronDown className="size-5 stroke-[2.25]" />
+              </span>
+            </ListboxButton>
+
+            <ListboxOptions className="absolute top-full left-0 z-50 mt-1.5 max-h-60 min-w-[280px] w-max overflow-auto rounded-md border border-line bg-panel-elevated py-1.5 shadow-lg empty:invisible">
+              {options.length === 0 ? (
+                <div className="px-3.5 py-2.5 text-sm text-dim">{emptyMessage}</div>
+              ) : (
+                options.map((option) => (
+                  <ListboxOption
+                    key={option.value === "" ? "__empty" : option.value}
+                    value={option}
+                    className={optionItemClassName}
+                  >
+                    <OptionRow
+                      option={option}
+                      onDeleteOption={onDeleteOption}
+                      deletingOptionValue={deletingOptionValue}
+                    />
+                  </ListboxOption>
+                ))
+              )}
+            </ListboxOptions>
+          </div>
+        </Listbox>
+        {trailing}
+      </div>
+    )
+  }
+
+  const shellClassName = `relative w-full min-h-10 rounded-md border border-line-input bg-surface-deep px-3 py-2 focus-within:border-lime/40 ${
+    disabled ? "cursor-not-allowed opacity-50" : ""
+  }`
 
   return (
-    <div className={`flex min-w-0 items-center gap-2 ${isTitle ? "" : "w-full"} ${className}`}>
+    <div className={`flex min-w-0 w-full items-center gap-2 ${className}`}>
       <HeadlessCombobox
         value={selected}
         disabled={disabled}
@@ -120,10 +222,10 @@ export const Combobox: React.FC<ComboboxProps> = ({
         }}
       >
         <div className={shellClassName}>
-          {label !== undefined && !isTitle ? (
+          {label !== undefined ? (
             <span className="mb-1.5 block font-mono text-2xs text-label">{label}</span>
           ) : null}
-          <div className={`flex items-center ${isTitle ? "gap-2" : "gap-1.5"}`}>
+          <div className="flex items-center gap-1.5">
             <ComboboxInput
               aria-label={ariaLabel}
               displayValue={(option: ComboboxOptionItem | null) =>
@@ -134,20 +236,20 @@ export const Combobox: React.FC<ComboboxProps> = ({
                 onOpen?.()
               }}
               placeholder={placeholder}
-              className={inputClassName}
+              className="block w-full min-w-0 border-0 bg-transparent p-0 text-sm text-input outline-none placeholder:text-dim"
             />
             <ComboboxButton
               aria-label={`Toggle ${ariaLabel} options`}
-              className={toggleButtonClassName}
+              className="grid size-7 shrink-0 place-items-center rounded border-0 bg-transparent p-0 text-dim hover:text-body"
               onClick={() => {
                 onOpen?.()
               }}
             >
-              <ChevronDown aria-hidden className={chevronClassName} />
+              <ChevronDown aria-hidden className="size-4 stroke-2" />
             </ComboboxButton>
           </div>
 
-          <ComboboxOptions className={optionsClassName}>
+          <ComboboxOptions className="absolute top-full right-0 left-0 z-50 mt-1.5 max-h-60 w-full overflow-auto rounded-md border border-line bg-panel-elevated py-1.5 shadow-lg empty:invisible">
             {visibleOptions.length === 0 ? (
               <div className="px-3.5 py-2.5 text-sm text-dim">{emptyMessage}</div>
             ) : (
@@ -155,39 +257,13 @@ export const Combobox: React.FC<ComboboxProps> = ({
                 <ComboboxOption
                   key={option.value === "" ? "__empty" : option.value}
                   value={option}
-                  className="cursor-pointer px-3.5 py-2.5 text-sm text-body data-focus:bg-hover-surface data-focus:text-white data-selected:text-lime"
+                  className={optionItemClassName}
                 >
-                  <span className="flex items-start gap-2">
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{option.label}</span>
-                      {option.description !== undefined ? (
-                        <span className="mt-1 block truncate font-mono text-xs text-dim">
-                          {option.description}
-                        </span>
-                      ) : null}
-                    </span>
-                    {option.deletable === true && onDeleteOption !== undefined ? (
-                      <span
-                        className="shrink-0"
-                        onClick={(event) => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                        }}
-                        onPointerDown={(event) => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                        }}
-                      >
-                        <ConfirmDeleteIconButton
-                          aria-label={`Delete ${option.label}`}
-                          pending={deletingOptionValue === option.value}
-                          onConfirm={() => {
-                            onDeleteOption(option.value)
-                          }}
-                        />
-                      </span>
-                    ) : null}
-                  </span>
+                  <OptionRow
+                    option={option}
+                    onDeleteOption={onDeleteOption}
+                    deletingOptionValue={deletingOptionValue}
+                  />
                 </ComboboxOption>
               ))
             )}

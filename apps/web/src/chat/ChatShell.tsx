@@ -463,7 +463,7 @@ export const ChatShell: React.FC = () => {
   }, [showWelcome, transcript.rows, running, pendingPermission, pendingExtension])
 
   return (
-    <div className="flex h-[calc(100vh-143px)] min-h-[600px] flex-col overflow-hidden rounded-[10px] border border-line-soft bg-panel max-[820px]:h-[calc(100vh-123px)] max-[820px]:min-h-[520px]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-panel">
       <ChatHeader
         workspaces={workspaces}
         agents={agents}
