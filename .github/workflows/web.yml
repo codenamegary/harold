@@ -62,9 +62,6 @@ jobs:
           {
             echo "## Test coverage"
             echo ""
-            echo "Download the \`coverage\` artifact."
-            echo "Open \`html/server/index.html\` or \`html/web/index.html\`."
-            echo ""
             echo "### apps/server"
             echo ""
             echo '```'
@@ -78,32 +75,10 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload coverage
-        if: always() && steps.coverage.outcome == 'success'
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage
-          path: |
-            coverage/**/lcov.info
-            coverage/html/
-          if-no-files-found: warn
-          retention-days: 3
-
-  upload-fs:
-    needs: check
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Download coverage artifact
-        uses: actions/download-artifact@v7
-        with:
-          name: coverage
-          path: coverage
-
       - name: Upload coverage to fs
+        if: >-
+          github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+          always() && steps.coverage.outcome == 'success'
         env:
           FS_URL: ${{ secrets.FS_URL }}
           FS_USER: ${{ secrets.FS_USER }}

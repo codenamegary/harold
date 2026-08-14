@@ -40,36 +40,9 @@ jobs:
       - name: Android checks
         run: ./gradlew --no-daemon --stacktrace --warning-mode=all lintRelease testDebugUnitTest assembleDebug assembleRelease
 
-      - name: Stage APK artifacts
-        run: |
-          mkdir -p artifacts
-          cp app/build/outputs/apk/debug/app-debug.apk artifacts/app-debug.apk
-          cp app/build/outputs/apk/release/app-release-unsigned.apk \
-            artifacts/app-release-unsigned.apk
-
-      - name: Upload APK artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: android-apks
-          path: apps/android/artifacts/
-          if-no-files-found: error
-          retention-days: 3
-
-  upload-fs:
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Download APK artifacts
-        uses: actions/download-artifact@v7
-        with:
-          name: android-apks
-          path: apks
-
       - name: Upload APKs to fs
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: .
         env:
           FS_URL: ${{ secrets.FS_URL }}
           FS_USER: ${{ secrets.FS_USER }}
@@ -77,8 +50,10 @@ jobs:
         run: |
           stamp=$(date -u +%Y%m%d-%H%M%S)
           mkdir -p staged
-          cp apks/app-debug.apk "staged/${stamp}-debug-app.apk"
-          cp apks/app-release-unsigned.apk "staged/${stamp}-release-app.apk"
+          cp apps/android/app/build/outputs/apk/debug/app-debug.apk \
+            "staged/${stamp}-debug-app.apk"
+          cp apps/android/app/build/outputs/apk/release/app-release-unsigned.apk \
+            "staged/${stamp}-release-app.apk"
           export LOCAL_PATH=staged
           export REMOTE_PATH=agent-server/apk
           bash .github/scripts/upload-to-fs.sh
