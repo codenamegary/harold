@@ -10,6 +10,7 @@ import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
 import { SpawnedAgentProcess } from "./supervisor/spawn-agent-process"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
+import { createAgentSettingsRepository } from "../agent-settings/agent-settings-repository"
 
 const tempDirs: string[] = []
 const fakeProcesses: Array<{ kill: () => void }> = []
@@ -190,6 +191,49 @@ describe("ACP supervisor integration", () => {
     expect(acpSupervisor.getStatus().state).toBe("stopped")
 
         await app.close()
+    database.close()
+  })
+
+  test("createServer starts agents that were left enabled in the database", async () => {
+    const dataDir = await createTempDataDir()
+    const config = parseConfig({
+      AGENT_SERVER_HOST: "127.0.0.1",
+      AGENT_SERVER_PORT: "3848",
+      AGENT_SERVER_DATA_DIR: dataDir,
+    })
+    const database = openDatabase({ dataDir: config.dataDir })
+    const runtime = createRuntime("0.1.0")
+    const { spawnAgentProcessFn, spawned } = createFakeSpawnFn()
+
+    const seedRepository = createAgentSettingsRepository(database, {
+      validateExecutablePathFn: acceptTestExecutablePath,
+    })
+    const seeded = seedRepository.update({
+      agentId: "cursor",
+      body: { enabled: true, path: "/fake/agent" },
+    })
+    expect(seeded.ok).toBe(true)
+
+    const { app, acpSupervisor } = await createServer({
+      config,
+      runtime,
+      database,
+      validateExecutablePathFn: acceptTestExecutablePath,
+      spawnAgentProcessFn,
+    })
+
+    expect(acpSupervisor.getRunningAgentIds()).toEqual(["cursor"])
+    expect(acpSupervisor.getStatus().state).toBe("ready")
+    expect(spawned).toHaveLength(1)
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/sessions",
+    })
+    expect(listResponse.statusCode).toBe(200)
+
+    await acpSupervisor.stop()
+    await app.close()
     database.close()
   })
 })
