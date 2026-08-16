@@ -18,6 +18,8 @@ export type ComboboxOptionItem = {
   label: string
   description?: string
   deletable?: boolean
+  /** Renders as a full-width action button instead of a plain list row. */
+  presentation?: "default" | "button"
 }
 
 type ComboboxFilter = "client" | "external"
@@ -62,42 +64,62 @@ const OptionRow: React.FC<OptionRowProps> = ({
   option,
   onDeleteOption,
   deletingOptionValue,
-}) => (
-  <span className="flex items-start gap-2">
-    <span className="min-w-0 flex-1">
-      <span className="block truncate font-medium">{option.label}</span>
-      {option.description !== undefined ? (
-        <span className="mt-1 block truncate font-mono text-xs text-dim">
-          {option.description}
+}) => {
+  if (option.presentation === "button") {
+    return (
+      <span className="flex w-full flex-col gap-1">
+        <span className="flex w-full items-center justify-center rounded-[7px] border border-line-strong bg-panel-2 px-3.5 py-2 text-sm font-semibold text-body group-data-focus/option:border-line-hover-strong group-data-focus/option:bg-hover-surface-strong group-data-focus/option:text-white">
+          {option.label}
+        </span>
+        {option.description !== undefined ? (
+          <span className="block text-center font-mono text-2xs text-dim">
+            {option.description}
+          </span>
+        ) : null}
+      </span>
+    )
+  }
+
+  return (
+    <span className="flex items-start gap-2">
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-medium">{option.label}</span>
+        {option.description !== undefined ? (
+          <span className="mt-1 block truncate font-mono text-xs text-dim">
+            {option.description}
+          </span>
+        ) : null}
+      </span>
+      {option.deletable === true && onDeleteOption !== undefined ? (
+        <span
+          className="shrink-0"
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+          }}
+          onPointerDown={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+          }}
+        >
+          <ConfirmDeleteIconButton
+            aria-label={`Delete ${option.label}`}
+            pending={deletingOptionValue === option.value}
+            onConfirm={() => {
+              onDeleteOption(option.value)
+            }}
+          />
         </span>
       ) : null}
     </span>
-    {option.deletable === true && onDeleteOption !== undefined ? (
-      <span
-        className="shrink-0"
-        onClick={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-        }}
-        onPointerDown={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-        }}
-      >
-        <ConfirmDeleteIconButton
-          aria-label={`Delete ${option.label}`}
-          pending={deletingOptionValue === option.value}
-          onConfirm={() => {
-            onDeleteOption(option.value)
-          }}
-        />
-      </span>
-    ) : null}
-  </span>
-)
+  )
+}
 
 const optionItemClassName =
   "cursor-pointer px-3.5 py-2.5 text-sm text-body data-focus:bg-hover-surface data-focus:text-white data-selected:text-lime"
+
+const buttonOptionItemClassName =
+  "group/option cursor-pointer border-t border-line-soft px-2.5 pt-2.5 pb-1.5 text-sm"
 
 export const Combobox: React.FC<ComboboxProps> = ({
   label,
@@ -179,7 +201,11 @@ export const Combobox: React.FC<ComboboxProps> = ({
                   <ListboxOption
                     key={option.value === "" ? "__empty" : option.value}
                     value={option}
-                    className={optionItemClassName}
+                    className={
+                      option.presentation === "button"
+                        ? buttonOptionItemClassName
+                        : optionItemClassName
+                    }
                   >
                     <OptionRow
                       option={option}
@@ -257,7 +283,11 @@ export const Combobox: React.FC<ComboboxProps> = ({
                 <ComboboxOption
                   key={option.value === "" ? "__empty" : option.value}
                   value={option}
-                  className={optionItemClassName}
+                  className={
+                    option.presentation === "button"
+                      ? buttonOptionItemClassName
+                      : optionItemClassName
+                  }
                 >
                   <OptionRow
                     option={option}

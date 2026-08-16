@@ -1,40 +1,55 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQueryClient, QueryClient } from "@tanstack/react-query"
 import {
   SessionCollectionSchema,
   SessionDeleteTarget,
 } from "contracts/http/session"
 import { queryKeys } from "../query/query.keys"
-import { deleteSessions } from "./delete.session"
+import {
+  deleteSessions,
+  DeleteSessionsSettledEvent,
+} from "./delete.session"
+
+export type DeleteSessionsMutationVariables = {
+  items: ReadonlyArray<SessionDeleteTarget>
+  onSettled?: (event: DeleteSessionsSettledEvent) => void
+}
+
+const dropSessionFromCache = (
+  queryClient: QueryClient,
+  item: SessionDeleteTarget,
+) => {
+  const key = `${item.agentId}\0${item.sessionId}`
+  queryClient.setQueriesData(
+    { queryKey: queryKeys.sessionsRoot },
+    (existing: unknown) => {
+      if (existing === undefined) {
+        return existing
+      }
+      const collection = SessionCollectionSchema.parse(existing)
+      return SessionCollectionSchema.parse({
+        items: collection.items.filter(
+          (row) => `${row.agentId}\0${row.sessionId}` !== key,
+        ),
+      })
+    },
+  )
+}
 
 export const useDeleteSessionsMutation = () => {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (items: ReadonlyArray<SessionDeleteTarget>) =>
-      deleteSessions(items),
-    onSuccess: async (result) => {
-      const deletedKeys = new Set(
-        result.deleted.map(
-          (item) => `${item.agentId}\0${item.sessionId}`,
-        ),
-      )
-
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.sessionsRoot },
-        (existing: unknown) => {
-          if (existing === undefined) {
-            return existing
+    mutationFn: (variables: DeleteSessionsMutationVariables) =>
+      deleteSessions(variables.items, {
+        concurrency: 10,
+        onSettled: (event) => {
+          if (event.ok) {
+            dropSessionFromCache(queryClient, event.item)
           }
-          const collection = SessionCollectionSchema.parse(existing)
-          return SessionCollectionSchema.parse({
-            items: collection.items.filter(
-              (item) =>
-                !deletedKeys.has(`${item.agentId}\0${item.sessionId}`),
-            ),
-          })
+          variables.onSettled?.(event)
         },
-      )
-
+      }),
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.sessionsRoot })
     },
   })

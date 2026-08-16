@@ -145,4 +145,41 @@ describe("Combobox", () => {
       expect(getByRole("option", { name: /Beta/ })).toBeInTheDocument()
     })
   })
+
+  test("button presentation renders a distinct action option", async () => {
+    const user = userEvent.setup()
+    const selected: string[] = []
+    const { getByRole } = render(
+      <Combobox
+        variant="title"
+        aria-label="Session"
+        value="ws_a"
+        onChange={(value) => {
+          selected.push(value)
+        }}
+        options={[
+          ...options,
+          {
+            value: "__see_all__",
+            label: "See all sessions",
+            description: "Search and manage",
+            presentation: "button",
+          },
+        ]}
+        placeholder="Select a session"
+      />,
+    )
+
+    await user.click(getByRole("button", { name: "Session" }))
+    const seeAll = await waitFor(() =>
+      getByRole("option", { name: /See all sessions/ }),
+    )
+
+    expect(seeAll).toHaveTextContent("See all sessions")
+    expect(seeAll).toHaveTextContent("Search and manage")
+    expect(seeAll.className).toContain("border-t")
+
+    await user.click(seeAll)
+    expect(selected).toEqual(["__see_all__"])
+  })
 })

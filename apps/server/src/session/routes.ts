@@ -1,12 +1,9 @@
 import {
-  BulkDeleteSessionsBodySchema,
-  BulkDeleteSessionsResponseSchema,
   CreateSessionBodySchema,
   CreateSessionResponseSchema,
   DeleteSessionQuerySchema,
   ListSessionsQuerySchema,
   SessionCollectionSchema,
-  SessionDeleteTarget,
 } from "contracts/http/session"
 import { FastifyInstance } from "fastify"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
@@ -128,32 +125,6 @@ export const registerSessionRoutes = (
       SessionCollectionSchema.parse({
         items: visible,
       }),
-    )
-  })
-
-  app.delete("/v1/sessions", async (request, reply) => {
-    const body = BulkDeleteSessionsBodySchema.parse(request.body)
-    const deleted: SessionDeleteTarget[] = []
-    const failed: Array<SessionDeleteTarget & { reason: string }> = []
-
-    for (const item of body.items) {
-      const result = await deleteAcpSession({
-        agentId: item.agentId,
-        sessionId: item.sessionId,
-        agentSettingsRepository,
-        acpSupervisor,
-        archivedAcpSessions,
-      })
-
-      if (result.ok) {
-        deleted.push(item)
-      } else {
-        failed.push({ ...item, reason: result.reason })
-      }
-    }
-
-    return reply.status(200).send(
-      BulkDeleteSessionsResponseSchema.parse({ deleted, failed }),
     )
   })
 

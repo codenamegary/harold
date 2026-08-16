@@ -4,7 +4,6 @@ import {
   PROBLEM_TYPES,
 } from "contracts/http/error"
 import {
-  BulkDeleteSessionsResponseSchema,
   CreateSessionResponseSchema,
   SessionCollectionSchema,
   deleteSessionPath,
@@ -320,7 +319,7 @@ describe("ACP catalog sessions HTTP", () => {
     expect(body.type).toBe(PROBLEM_TYPES.notFound)
   })
 
-  test("DELETE /v1/sessions bulk archives selected rows and reports failures", async () => {
+  test("DELETE /v1/sessions/:sessionId succeeds while unknown agent returns 404", async () => {
     const dataDir = await createTempDataDir(resources)
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? "/usr/local/bin/agent" : undefined
@@ -331,7 +330,7 @@ describe("ACP catalog sessions HTTP", () => {
       acceptTestExecutablePath,
       {
         capabilities: { loadSession: true, sessionClose: true, sessionList: true },
-        sessionNewSessionId: "catalog-bulk-1",
+        sessionNewSessionId: "catalog-parallel-1",
       },
     )
     await enableAgent(app, "cursor", whichFn)
@@ -341,37 +340,23 @@ describe("ACP catalog sessions HTTP", () => {
       url: "/v1/sessions",
       payload: {
         agentId: "cursor",
-        cwd: "/tmp/catalog-bulk",
+        cwd: "/tmp/catalog-parallel",
       },
     })
     expect(createResponse.statusCode).toBe(201)
     const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
 
-    const deleteResponse = await app.inject({
+    const deleteOk = await app.inject({
       method: "DELETE",
-      url: "/v1/sessions",
-      payload: {
-        items: [
-          { agentId: "cursor", sessionId: created.sessionId },
-          { agentId: "unknown", sessionId: "sess_missing" },
-        ],
-      },
+      url: deleteSessionPath(created.sessionId, { agentId: "cursor" }),
     })
-    expect(deleteResponse.statusCode).toBe(200)
-    const result = BulkDeleteSessionsResponseSchema.parse(
-      JSON.parse(deleteResponse.body),
-    )
-    expect(result.deleted).toEqual([
-      { agentId: "cursor", sessionId: created.sessionId },
-    ])
-    expect(result.failed).toEqual([
-      {
-        agentId: "unknown",
-        sessionId: "sess_missing",
-        reason: expect.any(String),
-      },
-    ])
-    expect(result.failed[0]?.reason.length).toBeGreaterThan(0)
+    expect(deleteOk.statusCode).toBe(204)
+
+    const deleteUnknown = await app.inject({
+      method: "DELETE",
+      url: deleteSessionPath("sess_missing", { agentId: "unknown" }),
+    })
+    expect(deleteUnknown.statusCode).toBe(404)
 
     const listResponse = await app.inject({
       method: "GET",

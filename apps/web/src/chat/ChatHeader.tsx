@@ -85,8 +85,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       })),
       {
         value: SEE_ALL_SESSIONS_VALUE,
-        label: "See all sessions…",
+        label: "See all sessions",
         description: "Search, select, and bulk delete",
+        presentation: "button",
       },
     ]
 

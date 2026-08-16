@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test"
 import {
-  BulkDeleteSessionsBodySchema,
-  BulkDeleteSessionsResponseSchema,
   CancelSessionBodySchema,
   CancelSessionResponseSchema,
   CreateSessionBodySchema,
@@ -15,7 +13,6 @@ import {
   UpdateSessionBodySchema,
   deleteSessionPath,
   sessionPath,
-  SESSIONS_PATH,
 } from "./session"
 
 const validTurnId = "turn_01JFC8C7E77NQCFH0RF9Z22JHH"
@@ -249,52 +246,6 @@ describe("DeleteSessionQuerySchema", () => {
 
   test("rejects empty agentId", () => {
     expect(() => DeleteSessionQuerySchema.parse({ agentId: "" })).toThrow()
-  })
-})
-
-describe("BulkDeleteSessionsBodySchema", () => {
-  test("accepts one or more agentId/sessionId pairs", () => {
-    const body = {
-      items: [
-        { agentId: "cursor" as const, sessionId: "sess_1" },
-        { agentId: "opencode" as const, sessionId: "sess_2" },
-      ],
-    }
-
-    expect(BulkDeleteSessionsBodySchema.parse(body)).toEqual(body)
-  })
-
-  test("rejects empty items", () => {
-    expect(() => BulkDeleteSessionsBodySchema.parse({ items: [] })).toThrow()
-  })
-
-  test("rejects missing sessionId", () => {
-    expect(() =>
-      BulkDeleteSessionsBodySchema.parse({
-        items: [{ agentId: "cursor" }],
-      }),
-    ).toThrow()
-  })
-})
-
-describe("BulkDeleteSessionsResponseSchema", () => {
-  test("accepts deleted and failed lists", () => {
-    const response = {
-      deleted: [{ agentId: "cursor" as const, sessionId: "sess_1" }],
-      failed: [
-        {
-          agentId: "cursor" as const,
-          sessionId: "sess_2",
-          reason: "Agent is disabled",
-        },
-      ],
-    }
-
-    expect(BulkDeleteSessionsResponseSchema.parse(response)).toEqual(response)
-  })
-
-  test("collection delete targets SESSIONS_PATH", () => {
-    expect(SESSIONS_PATH).toBe("/v1/sessions")
   })
 })
 

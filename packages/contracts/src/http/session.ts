@@ -73,21 +73,6 @@ export const SessionDeleteTargetSchema = z.strictObject({
   sessionId: z.string().min(1),
 })
 
-export const BulkDeleteSessionsBodySchema = z.strictObject({
-  items: z.array(SessionDeleteTargetSchema).min(1),
-})
-
-export const BulkDeleteSessionsFailedItemSchema = z.strictObject({
-  agentId: AgentIdSchema,
-  sessionId: z.string().min(1),
-  reason: z.string().min(1),
-})
-
-export const BulkDeleteSessionsResponseSchema = z.strictObject({
-  deleted: z.array(SessionDeleteTargetSchema),
-  failed: z.array(BulkDeleteSessionsFailedItemSchema),
-})
-
 export const PromptSessionBodySchema = z.strictObject({
   text: z.string().min(1).max(32_768),
 })
@@ -112,13 +97,6 @@ export type SessionCollection = z.infer<typeof SessionCollectionSchema>
 export type ListSessionsQuery = z.infer<typeof ListSessionsQuerySchema>
 export type DeleteSessionQuery = z.infer<typeof DeleteSessionQuerySchema>
 export type SessionDeleteTarget = z.infer<typeof SessionDeleteTargetSchema>
-export type BulkDeleteSessionsBody = z.infer<typeof BulkDeleteSessionsBodySchema>
-export type BulkDeleteSessionsFailedItem = z.infer<
-  typeof BulkDeleteSessionsFailedItemSchema
->
-export type BulkDeleteSessionsResponse = z.infer<
-  typeof BulkDeleteSessionsResponseSchema
->
 export type PromptSessionBody = z.infer<typeof PromptSessionBodySchema>
 export type PromptSessionResponse = z.infer<typeof PromptSessionResponseSchema>
 export type CancelSessionBody = z.infer<typeof CancelSessionBodySchema>

@@ -25,20 +25,16 @@ const targetKey = (target: SessionDeleteTarget) =>
     sessionId: target.sessionId,
   })
 
-const clearSelectionIfDeleted = (
-  deleted: ReadonlyArray<SessionDeleteTarget>,
-) => {
+const clearSelectionIfDeleted = (deleted: SessionDeleteTarget) => {
   const selection = readChatSelection()
   if (selection === null || selection.sessionId === "") {
     return
   }
 
-  const hit = deleted.some(
-    (item) =>
-      item.sessionId === selection.sessionId &&
-      item.agentId === selection.agentId,
-  )
-  if (!hit) {
+  if (
+    deleted.sessionId !== selection.sessionId ||
+    deleted.agentId !== selection.agentId
+  ) {
     return
   }
 
@@ -64,6 +60,10 @@ export const SessionsPage: React.FC = () => {
     () => new Set(),
   )
   const [bulkConfirming, setBulkConfirming] = useState(false)
+  const [deleteProgress, setDeleteProgress] = useState<{
+    done: number
+    total: number
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false)
 
@@ -73,6 +73,7 @@ export const SessionsPage: React.FC = () => {
   const createSessionMutation = useCreateSessionMutation()
   const deleteSessionsMutation = useDeleteSessionsMutation()
 
+  const deleting = deleteSessionsMutation.isPending
   const workspaces =
     workspacesQuery.data?.pages.flatMap((page) => page.items) ?? []
   const agents = agentsQuery.data?.items ?? []
@@ -157,6 +158,10 @@ export const SessionsPage: React.FC = () => {
     sessionId: string
     cwd: string
   }) => {
+    if (deleting) {
+      return
+    }
+
     const parsedAgent = AgentIdSchema.safeParse(session.agentId)
     if (!parsedAgent.success) {
       return
@@ -173,29 +178,46 @@ export const SessionsPage: React.FC = () => {
   }
 
   const runDelete = (items: ReadonlyArray<SessionDeleteTarget>) => {
+    if (items.length === 0) {
+      return
+    }
+
     setError(null)
-    deleteSessionsMutation.mutate(items, {
-      onSuccess: (result) => {
-        clearSelectionIfDeleted(result.deleted)
-        setSelectedKeys((current) => {
-          const next = new Set(current)
-          for (const item of result.deleted) {
-            next.delete(targetKey(item))
+    setDeleteProgress({ done: 0, total: items.length })
+    deleteSessionsMutation.mutate(
+      {
+        items,
+        onSettled: (event) => {
+          setDeleteProgress({ done: event.done, total: event.total })
+          if (!event.ok) {
+            return
           }
-          return next
-        })
-        setBulkConfirming(false)
-        if (result.failed.length > 0) {
-          setError(
-            `Failed to delete ${result.failed.length} session${result.failed.length === 1 ? "" : "s"}.`,
-          )
-        }
+          clearSelectionIfDeleted(event.item)
+          setSelectedKeys((current) => {
+            const next = new Set(current)
+            next.delete(targetKey(event.item))
+            return next
+          })
+        },
       },
-      onError: (err) => {
-        setBulkConfirming(false)
-        setError(isSessionDeleteError(err) ? err.problem.detail : err.message)
+      {
+        onSuccess: (result) => {
+          setDeleteProgress(null)
+          if (result.failed.length > 0) {
+            setError(
+              `Failed to delete ${result.failed.length} session${result.failed.length === 1 ? "" : "s"}.`,
+            )
+            return
+          }
+          setBulkConfirming(false)
+        },
+        onError: (err) => {
+          setDeleteProgress(null)
+          setBulkConfirming(false)
+          setError(isSessionDeleteError(err) ? err.problem.detail : err.message)
+        },
       },
-    })
+    )
   }
 
   const handleStartNewSession = (selection: {
@@ -237,6 +259,7 @@ export const SessionsPage: React.FC = () => {
             <TextInput
               aria-label="Search sessions"
               className="min-h-0 border-0 bg-transparent p-0 text-sm focus:border-transparent"
+              disabled={deleting}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search sessions…"
               role="searchbox"
@@ -245,24 +268,24 @@ export const SessionsPage: React.FC = () => {
             />
           </label>
 
-          {selectedTargets.length > 0 ? (
+          {selectedTargets.length > 0 || (deleting && bulkConfirming) ? (
             <div className="flex items-center gap-2">
               {bulkConfirming ? (
                 <>
                   <Button
                     variant="danger"
                     size="sm"
-                    disabled={deleteSessionsMutation.isPending}
+                    disabled={deleting}
                     onClick={() => runDelete(selectedTargets)}
                   >
-                    {deleteSessionsMutation.isPending
-                      ? "Deleting…"
+                    {deleting && deleteProgress !== null
+                      ? `Deleting ${deleteProgress.done}/${deleteProgress.total}…`
                       : `Confirm delete ${selectedTargets.length}`}
                   </Button>
                   <Button
                     variant="secondary"
                     size="sm"
-                    disabled={deleteSessionsMutation.isPending}
+                    disabled={deleting}
                     onClick={() => setBulkConfirming(false)}
                   >
                     Cancel
@@ -272,6 +295,7 @@ export const SessionsPage: React.FC = () => {
                 <Button
                   variant="danger"
                   size="sm"
+                  disabled={deleting}
                   onClick={() => setBulkConfirming(true)}
                 >
                   Delete selected ({selectedTargets.length})
@@ -315,7 +339,7 @@ export const SessionsPage: React.FC = () => {
                     type="checkbox"
                     aria-label="Select all sessions"
                     checked={allVisibleSelected}
-                    disabled={visibleSessions.length === 0}
+                    disabled={visibleSessions.length === 0 || deleting}
                     onChange={toggleSelectAllVisible}
                     className="size-4"
                   />
@@ -367,8 +391,8 @@ export const SessionsPage: React.FC = () => {
                   })
                   const checked = selectedKeys.has(key)
                   const deletingThis =
-                    deleteSessionsMutation.isPending &&
-                    deleteSessionsMutation.variables?.some(
+                    deleting &&
+                    deleteSessionsMutation.variables?.items.some(
                       (item) => targetKey(item) === key,
                     ) === true
 
@@ -382,6 +406,7 @@ export const SessionsPage: React.FC = () => {
                           type="checkbox"
                           aria-label={`Select ${session.title}`}
                           checked={checked}
+                          disabled={deleting}
                           onChange={() => toggleSelected(key)}
                           className="size-4"
                         />
@@ -389,8 +414,9 @@ export const SessionsPage: React.FC = () => {
                       <td className="min-w-0 px-3 py-3 align-middle">
                         <button
                           type="button"
-                          className="max-w-full border-0 bg-transparent p-0 text-left"
+                          className="max-w-full border-0 bg-transparent p-0 text-left disabled:opacity-50"
                           aria-label={`Open ${session.title}`}
+                          disabled={deleting}
                           onClick={() => handleJoin(session)}
                         >
                           <span className="block truncate text-sm font-medium text-white">
@@ -413,7 +439,8 @@ export const SessionsPage: React.FC = () => {
                       <td className="px-5 py-3 align-middle">
                         <ConfirmDeleteIconButton
                           aria-label={`Delete ${session.title}`}
-                          pending={deletingThis && selectedTargets.length <= 1}
+                          disabled={deleting}
+                          pending={deletingThis && (deleteProgress?.total ?? 0) <= 1}
                           onConfirm={() =>
                             runDelete([
                               {

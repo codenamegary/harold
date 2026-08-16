@@ -65,13 +65,13 @@ const listedSession = {
 const originalFetch = globalThis.fetch
 
 describe("Sessions page and hybrid picker", () => {
-  const deletedBodies: unknown[] = []
+  const deletedUrls: string[] = []
   const sockets: FakeSocket[] = []
   const restoreWebSocket = { current: () => undefined }
 
   beforeEach(() => {
     clearChatTestSelection()
-    deletedBodies.length = 0
+    deletedUrls.length = 0
     sockets.length = 0
     restoreWebSocket.current = installFakeWebSocket(sockets)
     let items = [listedSession, olderSession]
@@ -97,29 +97,13 @@ describe("Sessions page and hybrid picker", () => {
         )
       }
 
-      if (method === "DELETE" && url === "/v1/sessions") {
-        const rawBody =
-          typeof init?.body === "string"
-            ? init.body
-            : JSON.stringify(init?.body ?? {})
-        const body = JSON.parse(rawBody) as {
-          items: Array<{ agentId: string; sessionId: string }>
-        }
-        deletedBodies.push(body)
-        const deletedIds = new Set(body.items.map((item) => item.sessionId))
-        items = items.filter((item) => !deletedIds.has(item.sessionId))
-        return Promise.resolve(
-          new Response(
-            JSON.stringify({
-              deleted: body.items,
-              failed: [],
-            }),
-            {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            },
-          ),
+      if (method === "DELETE" && url.startsWith("/v1/sessions/")) {
+        deletedUrls.push(url)
+        const sessionId = decodeURIComponent(
+          url.slice("/v1/sessions/".length).split("?")[0] ?? "",
         )
+        items = items.filter((item) => item.sessionId !== sessionId)
+        return Promise.resolve(new Response(null, { status: 204 }))
       }
 
       if (url.startsWith("/v1/sessions")) {
@@ -187,25 +171,103 @@ describe("Sessions page and hybrid picker", () => {
     await user.click(getByRole("button", { name: "Confirm delete 2" }))
 
     await waitFor(() => {
-      expect(deletedBodies).toEqual([
-        {
-          items: [
-            {
-              agentId: "cursor",
-              sessionId: listedSession.sessionId,
-            },
-            {
-              agentId: "cursor",
-              sessionId: olderSession.sessionId,
-            },
-          ],
-        },
-      ])
+      expect(deletedUrls).toHaveLength(2)
+      expect(deletedUrls).toContain(
+        `/v1/sessions/${encodeURIComponent(listedSession.sessionId)}?agentId=cursor`,
+      )
+      expect(deletedUrls).toContain(
+        `/v1/sessions/${encodeURIComponent(olderSession.sessionId)}?agentId=cursor`,
+      )
     })
 
     await waitFor(() => {
       expect(queryByRole("row", { name: /Explain auth/ })).not.toBeInTheDocument()
       expect(getByText("No sessions match.")).toBeInTheDocument()
+    })
+  })
+
+  test("sessions page bulk delete keeps confirm mode on partial failure", async () => {
+    const user = userEvent.setup()
+    let items = [listedSession, olderSession]
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url.startsWith("/v1/workspaces")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(workspaceCollection), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url.startsWith("/v1/settings/agents")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(agentsCollection), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (method === "DELETE" && url.includes(listedSession.sessionId)) {
+        deletedUrls.push(url)
+        items = items.filter((item) => item.sessionId !== listedSession.sessionId)
+        return Promise.resolve(new Response(null, { status: 204 }))
+      }
+
+      if (method === "DELETE" && url.includes(olderSession.sessionId)) {
+        deletedUrls.push(url)
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              type: "https://agent-server.local/problems/conflict",
+              title: "Conflict",
+              status: 409,
+              detail: "Agent is unavailable",
+            }),
+            {
+              status: 409,
+              headers: { "Content-Type": "application/problem+json" },
+            },
+          ),
+        )
+      }
+
+      if (url.startsWith("/v1/sessions")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(SessionCollectionSchema.parse({ items })),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const { getByRole, getByText } = renderWithProviders(
+      <MemoryRouter initialEntries={["/sessions"]}>
+        <AppRoutes />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(getByRole("table", { name: "Sessions" })).toBeInTheDocument()
+    })
+
+    await user.click(getByRole("checkbox", { name: "Select Explain auth" }))
+    await user.click(getByRole("checkbox", { name: "Select Older session" }))
+    await user.click(getByRole("button", { name: "Delete selected (2)" }))
+    await user.click(getByRole("button", { name: "Confirm delete 2" }))
+
+    await waitFor(() => {
+      expect(getByText("Failed to delete 1 session.")).toBeInTheDocument()
+      expect(getByRole("button", { name: "Confirm delete 1" })).toBeInTheDocument()
     })
   })
 
