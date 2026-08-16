@@ -7,6 +7,7 @@ import { SessionCollectionSchema } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
 import { requestUrl } from "../test/request.url"
+import { FakeSocket, installFakeWebSocket } from "../test/fake.websocket"
 import { AppRoutes } from "../shell/AppRouter"
 import {
   clearChatTestSelection,
@@ -65,10 +66,14 @@ const originalFetch = globalThis.fetch
 
 describe("Sessions page and hybrid picker", () => {
   const deletedBodies: unknown[] = []
+  const sockets: FakeSocket[] = []
+  const restoreWebSocket = { current: () => undefined }
 
   beforeEach(() => {
     clearChatTestSelection()
     deletedBodies.length = 0
+    sockets.length = 0
+    restoreWebSocket.current = installFakeWebSocket(sockets)
     let items = [listedSession, olderSession]
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
@@ -133,6 +138,7 @@ describe("Sessions page and hybrid picker", () => {
   afterEach(() => {
     clearChatTestSelection()
     globalThis.fetch = originalFetch
+    restoreWebSocket.current()
   })
 
   test("chat menu shows recent sessions and See all without delete", async () => {
