@@ -1,15 +1,19 @@
 import {
+  BulkDeleteSessionsBodySchema,
+  BulkDeleteSessionsResponseSchema,
   CreateSessionBodySchema,
   CreateSessionResponseSchema,
   DeleteSessionQuerySchema,
   ListSessionsQuerySchema,
   SessionCollectionSchema,
+  SessionDeleteTarget,
 } from "contracts/http/session"
 import { FastifyInstance } from "fastify"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { AgentSettingsRepository } from "../agent-settings/agent-settings-repository"
 import { SessionCwdCache } from "./hub/session.hub"
 import { ArchivedAcpSessionsStore } from "./archived.acp.sessions.store"
+import { deleteAcpSession } from "./delete.acp.session"
 import { ensureSupervisorReady } from "./session.acp.ready"
 import {
   buildAcpUnavailableProblem,
@@ -127,40 +131,62 @@ export const registerSessionRoutes = (
     )
   })
 
+  app.delete("/v1/sessions", async (request, reply) => {
+    const body = BulkDeleteSessionsBodySchema.parse(request.body)
+    const deleted: SessionDeleteTarget[] = []
+    const failed: Array<SessionDeleteTarget & { reason: string }> = []
+
+    for (const item of body.items) {
+      const result = await deleteAcpSession({
+        agentId: item.agentId,
+        sessionId: item.sessionId,
+        agentSettingsRepository,
+        acpSupervisor,
+        archivedAcpSessions,
+      })
+
+      if (result.ok) {
+        deleted.push(item)
+      } else {
+        failed.push({ ...item, reason: result.reason })
+      }
+    }
+
+    return reply.status(200).send(
+      BulkDeleteSessionsResponseSchema.parse({ deleted, failed }),
+    )
+  })
+
   app.delete("/v1/sessions/:sessionId", async (request, reply) => {
     const { sessionId } = request.params as { sessionId: string }
     const query = DeleteSessionQuerySchema.parse(request.query)
 
-    const agentSettings = agentSettingsRepository
-      .list()
-      .find((settings) => settings.id === query.agentId)
-
-    if (agentSettings === undefined) {
-      return sendProblem(reply, 404, buildAgentNotFoundProblem())
-    }
-
-    if (!agentSettings.available) {
-      return sendProblem(reply, 409, buildAgentUnavailableProblem())
-    }
-
-    if (!agentSettings.enabled) {
-      return sendProblem(reply, 409, buildAgentDisabledProblem())
-    }
-
-    archivedAcpSessions.archive({
+    const result = await deleteAcpSession({
       agentId: query.agentId,
       sessionId,
+      agentSettingsRepository,
+      acpSupervisor,
+      archivedAcpSessions,
     })
 
-    const supervisorReady = await ensureSupervisorReady(acpSupervisor, query.agentId)
-    if (
-      supervisorReady &&
-      acpSupervisor.getAgentCapabilities(query.agentId)?.sessionCapabilities.close
-    ) {
-      await acpSupervisor.closeAcpSession({
-        agentId: query.agentId,
-        sessionId,
-      })
+    if (!result.ok) {
+      const agentSettings = agentSettingsRepository
+        .list()
+        .find((settings) => settings.id === query.agentId)
+
+      if (agentSettings === undefined) {
+        return sendProblem(reply, 404, buildAgentNotFoundProblem())
+      }
+
+      if (!agentSettings.available) {
+        return sendProblem(reply, 409, buildAgentUnavailableProblem())
+      }
+
+      if (!agentSettings.enabled) {
+        return sendProblem(reply, 409, buildAgentDisabledProblem())
+      }
+
+      return sendProblem(reply, 409, buildAcpUnavailableProblem(result.reason))
     }
 
     return reply.status(204).send()

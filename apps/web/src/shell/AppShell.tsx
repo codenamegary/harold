@@ -18,6 +18,7 @@ const routeMetaByPath: Record<string, RouteMeta> = {
   "/workspaces": { eyebrow: "PROJECTS & AGENTS", title: "Workspaces" },
   "/devices": { eyebrow: "ACCESS CONTROL", title: "Devices" },
   "/chat": { eyebrow: "SESSIONS", title: "Chat" },
+  "/sessions": { eyebrow: "SESSIONS", title: "Sessions" },
   "/settings": { eyebrow: "SERVER", title: "Settings" },
 }
 

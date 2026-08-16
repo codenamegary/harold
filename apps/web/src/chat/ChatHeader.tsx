@@ -1,14 +1,17 @@
 import React, { useMemo, useState } from "react"
+import { useNavigate } from "react-router"
 import { AcpSession, SessionState } from "contracts/http/session"
 import { AgentId } from "contracts/http/agent-settings"
 import { Workspace } from "contracts/http/workspace"
 import { Combobox, ComboboxOptionItem } from "../design-system/Combobox"
 import { StatusDot } from "../design-system/StatusDot"
 import { catalogSessionKey, parseCatalogSessionKey } from "../session/catalog.session.key"
+import { recentSessions, RECENT_SESSIONS_LIMIT } from "../session/session.list.helpers"
 import { NewSessionModal } from "./NewSessionModal"
 import { sessionStatusDotVariant } from "./session.status.dot.variant"
 
 const NEW_SESSION_VALUE = ""
+export const SEE_ALL_SESSIONS_VALUE = "__see_all_sessions__"
 
 type ChatHeaderProps = {
   workspaces: ReadonlyArray<Workspace>
@@ -22,9 +25,6 @@ type ChatHeaderProps = {
   onJoinSession: (params: { agentId: string; sessionId: string }) => void
   onStartNewSession: (selection: { workspaceId: string; agentId: AgentId }) => void
   onSessionMenuOpen: () => void
-  onDeleteSession: (params: { agentId: string; sessionId: string }) => void
-  deletingSessionKey: string | null
-  deleteError: string | null
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -39,10 +39,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onJoinSession,
   onStartNewSession,
   onSessionMenuOpen,
-  onDeleteSession,
-  deletingSessionKey,
-  deleteError,
 }) => {
+  const navigate = useNavigate()
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false)
 
   const selectedKey =
@@ -51,21 +49,45 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       : catalogSessionKey({ agentId, sessionId })
 
   const sessionOptions = useMemo((): ComboboxOptionItem[] => {
+    const recent = recentSessions(sessions)
+    const recentKeys = new Set(
+      recent.map((session) =>
+        catalogSessionKey({
+          agentId: session.agentId,
+          sessionId: session.sessionId,
+        }),
+      ),
+    )
+    const menuSessions =
+      selectedSession !== undefined &&
+      !recentKeys.has(
+        catalogSessionKey({
+          agentId: selectedSession.agentId,
+          sessionId: selectedSession.sessionId,
+        }),
+      )
+        ? [selectedSession, ...recent].slice(0, RECENT_SESSIONS_LIMIT)
+        : recent
+
     const items: ComboboxOptionItem[] = [
       {
         value: NEW_SESSION_VALUE,
         label: "New session",
         description: "Pick a workspace and agent",
       },
-      ...sessions.map((session) => ({
+      ...menuSessions.map((session) => ({
         value: catalogSessionKey({
           agentId: session.agentId,
           sessionId: session.sessionId,
         }),
         label: session.title,
         description: `${session.agentId} · ${session.cwd}`,
-        deletable: true,
       })),
+      {
+        value: SEE_ALL_SESSIONS_VALUE,
+        label: "See all sessions…",
+        description: "Search, select, and bulk delete",
+      },
     ]
 
     if (
@@ -127,6 +149,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       return
     }
 
+    if (nextValue === SEE_ALL_SESSIONS_VALUE) {
+      void navigate("/sessions")
+      return
+    }
+
     const parsed = parseCatalogSessionKey(nextValue)
     if (parsed === null) {
       return
@@ -149,14 +176,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               value={sessionPickerValue}
               onChange={handleSessionPickerChange}
               onOpen={onSessionMenuOpen}
-              onDeleteOption={(value) => {
-                const parsed = parseCatalogSessionKey(value)
-                if (parsed === null) {
-                  return
-                }
-                onDeleteSession(parsed)
-              }}
-              deletingOptionValue={deletingSessionKey}
               options={sessionDisplayOptions}
               placeholder="Select a session"
               emptyMessage="No sessions"
@@ -165,11 +184,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           </div>
           {contextSubtitle !== null ? (
             <p className="m-0 truncate text-xs text-dim">{contextSubtitle}</p>
-          ) : null}
-          {deleteError !== null ? (
-            <p className="m-0 text-xs text-danger" role="alert">
-              {deleteError}
-            </p>
           ) : null}
         </div>
       </header>

@@ -24,6 +24,7 @@ const shellRoutes = [
   { path: "/workspaces" },
   { path: "/devices" },
   { path: "/chat" },
+  { path: "/sessions" },
   { path: "/settings" },
 ] as const
 
