@@ -1,4 +1,5 @@
 import { AgentId } from "contracts/http/agent-settings"
+import { sanitizeAcpErrorMessage } from "../acp/sanitize-acp-error"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 
 export const isArchivedSession = (session: {
@@ -6,19 +7,31 @@ export const isArchivedSession = (session: {
   state: string
 }): boolean => session.archivedAt !== null || session.state === "archived"
 
+export type EnsureSupervisorReadyResult =
+  | { ok: true }
+  | { ok: false; reason: string }
+
 export const ensureSupervisorReady = async (
-  acpSupervisor: AcpSupervisor,
+  acpSupervisor: Pick<AcpSupervisor, "getRunningAgentIds" | "start">,
   agentId: AgentId,
-): Promise<boolean> => {
+): Promise<EnsureSupervisorReadyResult> => {
   if (acpSupervisor.getRunningAgentIds().includes(agentId)) {
-    return true
+    return { ok: true }
   }
 
   try {
     await acpSupervisor.start(agentId)
-    return acpSupervisor.getRunningAgentIds().includes(agentId)
-  } catch {
-    return false
+    if (!acpSupervisor.getRunningAgentIds().includes(agentId)) {
+      return { ok: false, reason: "ACP supervisor failed to become ready" }
+    }
+    return { ok: true }
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "ACP supervisor failed to start"
+    return {
+      ok: false,
+      reason: sanitizeAcpErrorMessage(message),
+    }
   }
 }
 

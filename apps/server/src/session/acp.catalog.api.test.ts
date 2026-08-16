@@ -319,6 +319,66 @@ describe("ACP catalog sessions HTTP", () => {
     expect(body.type).toBe(PROBLEM_TYPES.notFound)
   })
 
+  test("GET /v1/sessions after disable/enable lists sessions from the restarted agent", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? "/usr/local/bin/agent" : undefined
+    const { app } = await createTestApp(
+      resources,
+      dataDir,
+      whichFn,
+      acceptTestExecutablePath,
+      {
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+        sessionNewSessionId: "after-respawn-1",
+      },
+    )
+    await enableAgent(app, "cursor", whichFn)
+
+    const createBefore = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { agentId: "cursor", cwd: "/tmp/before-respawn" },
+    })
+    expect(createBefore.statusCode).toBe(201)
+
+    const disableResponse = await app.inject({
+      method: "PATCH",
+      url: "/v1/settings/agents/cursor",
+      payload: { enabled: false },
+    })
+    expect(disableResponse.statusCode).toBe(200)
+
+    const enableResponse = await app.inject({
+      method: "PATCH",
+      url: "/v1/settings/agents/cursor",
+      payload: { enabled: true, path: "/usr/local/bin/agent" },
+    })
+    expect(enableResponse.statusCode).toBe(200)
+
+    const createAfter = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { agentId: "cursor", cwd: "/tmp/after-respawn" },
+    })
+    expect(createAfter.statusCode).toBe(201)
+    const created = CreateSessionResponseSchema.parse(JSON.parse(createAfter.body))
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/sessions",
+    })
+    expect(listResponse.statusCode).toBe(200)
+    const collection = SessionCollectionSchema.parse(JSON.parse(listResponse.body))
+    expect(collection.items).toEqual([
+      expect.objectContaining({
+        agentId: "cursor",
+        sessionId: created.sessionId,
+        cwd: "/tmp/after-respawn",
+      }),
+    ])
+  })
+
   test("DELETE /v1/sessions/:sessionId succeeds while unknown agent returns 404", async () => {
     const dataDir = await createTempDataDir(resources)
     const whichFn: WhichFn = (binaryName) =>

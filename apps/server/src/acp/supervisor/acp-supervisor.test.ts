@@ -745,6 +745,92 @@ describe("createAcpSupervisor", () => {
     })
   })
 
+  test("listAcpSessions returns ACP catalog rows after stop and start", async () => {
+    const diskSessions = [
+      {
+        sessionId: "disk-sess-1",
+        cwd: "/tmp/project",
+        title: "Disk One",
+        updatedAt: "2026-08-16T12:00:00.000Z",
+      },
+      {
+        sessionId: "disk-sess-2",
+        cwd: "/tmp/other",
+        title: "Disk Two",
+        updatedAt: "2026-08-16T13:00:00.000Z",
+      },
+    ]
+
+    const createReadyMock = () => {
+      const mock = createMockTransport()
+      mock.setHandler("initialize", () => ({
+        agentCapabilities: {
+          loadSession: true,
+          sessionCapabilities: { close: true, list: {} },
+        },
+      }))
+      mock.setHandler("authenticate", () => ({}))
+      mock.setHandler("session/list", () => ({ sessions: diskSessions }))
+      return mock
+    }
+
+    const firstMock = createReadyMock()
+    const secondMock = createReadyMock()
+    const transports = [firstMock.transport, secondMock.transport]
+    const spawnCount = { value: 0 }
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: () => createMockProcess(),
+      createTransportFn: () => {
+        const transport = transports[spawnCount.value]
+        spawnCount.value += 1
+        if (transport === undefined) {
+          throw new Error("unexpected extra spawn")
+        }
+        return transport
+      },
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    const before = await supervisor.listAcpSessions()
+    expect(before.ok).toBe(true)
+    if (!before.ok) {
+      throw new Error(before.reason)
+    }
+    expect(before.sessions).toHaveLength(2)
+
+    await supervisor.handleAgentDisabled("cursor")
+    expect(supervisor.getRunningAgentIds()).toEqual([])
+
+    await supervisor.start("cursor")
+    const after = await supervisor.listAcpSessions()
+    expect(after).toEqual({
+      ok: true,
+      sessions: [
+        {
+          agentId: "cursor",
+          sessionId: "disk-sess-1",
+          cwd: "/tmp/project",
+          title: "Disk One",
+          updatedAt: "2026-08-16T12:00:00.000Z",
+        },
+        {
+          agentId: "cursor",
+          sessionId: "disk-sess-2",
+          cwd: "/tmp/other",
+          title: "Disk Two",
+          updatedAt: "2026-08-16T13:00:00.000Z",
+        },
+      ],
+    })
+    expect(spawnCount.value).toBe(2)
+  })
+
   test("createSession calls session/new with cwd for the chosen agent", async () => {
     const mock = createMockTransport()
     const sessionNewCalls: unknown[] = []
