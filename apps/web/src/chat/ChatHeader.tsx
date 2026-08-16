@@ -11,8 +11,6 @@ import { recentSessions, RECENT_SESSIONS_LIMIT } from "../session/session.list.h
 import { NewSessionModal } from "./NewSessionModal"
 import { sessionStatusDotVariant } from "./session.status.dot.variant"
 
-export const SEE_ALL_SESSIONS_VALUE = "__see_all_sessions__"
-
 type ChatHeaderProps = {
   workspaces: ReadonlyArray<Workspace>
   agents: ReadonlyArray<{ id: AgentId; displayName: string; enabled: boolean }>
@@ -72,22 +70,14 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         ? [selectedSession, ...recent].slice(0, RECENT_SESSIONS_LIMIT)
         : recent
 
-    const items: ComboboxOptionItem[] = [
-      ...menuSessions.map((session) => ({
-        value: catalogSessionKey({
-          agentId: session.agentId,
-          sessionId: session.sessionId,
-        }),
-        label: session.title,
-        description: `${session.agentId} · ${session.cwd}`,
-      })),
-      {
-        value: SEE_ALL_SESSIONS_VALUE,
-        label: "See all sessions",
-        description: "Search, select, and bulk delete",
-        presentation: "button",
-      },
-    ]
+    const items: ComboboxOptionItem[] = menuSessions.map((session) => ({
+      value: catalogSessionKey({
+        agentId: session.agentId,
+        sessionId: session.sessionId,
+      }),
+      label: session.title,
+      description: `${session.agentId} · ${session.cwd}`,
+    }))
 
     if (
       selectedKey !== "" &&
@@ -120,11 +110,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     selectedSessionState === null ? null : sessionStatusDotVariant(selectedSessionState)
 
   const handleSessionPickerChange = (nextValue: string) => {
-    if (nextValue === SEE_ALL_SESSIONS_VALUE) {
-      void navigate("/sessions")
-      return
-    }
-
     const parsed = parseCatalogSessionKey(nextValue)
     if (parsed === null) {
       return
@@ -157,12 +142,22 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             <p className="m-0 truncate text-xs text-dim">{contextSubtitle}</p>
           ) : null}
         </div>
-        <Button
-          variant="primary"
-          onClick={() => setIsNewSessionModalOpen(true)}
-        >
-          New session
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              void navigate("/sessions")
+            }}
+          >
+            All sessions
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => setIsNewSessionModalOpen(true)}
+          >
+            New session
+          </Button>
+        </div>
       </header>
       <NewSessionModal
         open={isNewSessionModalOpen}

@@ -125,19 +125,22 @@ describe("ChatPage", () => {
     expect(getByText("Send a prompt directly to an agent without leaving the console.")).toBeInTheDocument()
   })
 
-  test("session picker lists recent sessions without New session", async () => {
+  test("session picker lists recent sessions without All sessions or New session", async () => {
     const { getByRole, queryByRole } = renderChatPage()
     const user = userEvent.setup()
 
     await waitFor(() => {
       expect(getByRole("button", { name: "Session" })).not.toBeDisabled()
     })
+    expect(getByRole("button", { name: "All sessions" })).toBeInTheDocument()
     expect(getByRole("button", { name: "New session" })).toBeInTheDocument()
 
     await user.click(getByRole("button", { name: "Session" }))
     await waitFor(() => {
-      expect(getByRole("option", { name: /See all sessions/ })).toBeInTheDocument()
+      expect(getByRole("listbox", { name: "Session" })).toBeInTheDocument()
     })
+    expect(queryByRole("option", { name: /All sessions/ })).not.toBeInTheDocument()
+    expect(queryByRole("option", { name: /See all sessions/ })).not.toBeInTheDocument()
     expect(queryByRole("option", { name: /New session/ })).not.toBeInTheDocument()
     await user.keyboard("{Escape}")
   })

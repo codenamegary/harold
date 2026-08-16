@@ -125,7 +125,7 @@ describe("Sessions page and hybrid picker", () => {
     restoreWebSocket.current()
   })
 
-  test("chat menu shows recent sessions and See all without delete", async () => {
+  test("chat header All sessions opens sessions page without delete in menu", async () => {
     const user = userEvent.setup()
     const { getByRole, queryByRole } = renderWithProviders(
       <MemoryRouter initialEntries={["/chat"]}>
@@ -140,13 +140,15 @@ describe("Sessions page and hybrid picker", () => {
     await openSessionOptions({ getByRole })
     expect(getByRole("option", { name: /Explain auth/ })).toBeInTheDocument()
     expect(getByRole("option", { name: /Older session/ })).toBeInTheDocument()
-    expect(getByRole("option", { name: /See all sessions/ })).toBeInTheDocument()
+    expect(queryByRole("option", { name: /See all sessions/ })).not.toBeInTheDocument()
+    expect(queryByRole("option", { name: /All sessions/ })).not.toBeInTheDocument()
     expect(queryByRole("option", { name: /New session/ })).not.toBeInTheDocument()
     expect(
       queryByRole("button", { name: `Delete ${listedSession.title}` }),
     ).not.toBeInTheDocument()
+    await user.keyboard("{Escape}")
 
-    await user.click(getByRole("option", { name: /See all sessions/ }))
+    await user.click(getByRole("button", { name: "All sessions" }))
     await waitFor(() => {
       expect(getByRole("button", { name: "New session" })).toBeInTheDocument()
       expect(getByRole("table", { name: "Sessions" })).toBeInTheDocument()
