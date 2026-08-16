@@ -56,8 +56,8 @@ export const registerSessionRoutes = (
     }
 
     const supervisorReady = await ensureSupervisorReady(acpSupervisor, body.agentId)
-    if (!supervisorReady) {
-      return sendProblem(reply, 409, buildAcpUnavailableProblem())
+    if (!supervisorReady.ok) {
+      return sendProblem(reply, 409, buildAcpUnavailableProblem(supervisorReady.reason))
     }
 
     if (!acpSupervisor.getAgentCapabilities(body.agentId)?.sessionCapabilities.list) {

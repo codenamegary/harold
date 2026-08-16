@@ -236,8 +236,8 @@ export const seedBoundSession = async (params: {
   agentId: AgentId
 }): Promise<{ sessionId: string; acpSessionId: string }> => {
   const ready = await ensureSupervisorReady(params.acpSupervisor, params.agentId)
-  if (!ready) {
-    throw new Error("ACP supervisor failed to start for seeded session")
+  if (!ready.ok) {
+    throw new Error(`ACP supervisor failed to start for seeded session: ${ready.reason}`)
   }
 
   const acpResult = await params.acpSupervisor.createSession({

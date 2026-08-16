@@ -55,7 +55,7 @@ export const deleteAcpSession = async (params: {
     params.agentId,
   )
   if (
-    supervisorReady &&
+    supervisorReady.ok &&
     params.acpSupervisor.getAgentCapabilities(params.agentId)?.sessionCapabilities
       .close
   ) {

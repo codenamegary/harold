@@ -30,9 +30,24 @@ export const spawnAgentProcess: SpawnAgentProcessFn = ({
     stderr: "pipe",
   })
 
-  if (!subprocess.stdin || !subprocess.stdout) {
+  if (!subprocess.stdin || !subprocess.stdout || !subprocess.stderr) {
     throw new Error("failed to spawn agent process with stdio pipes")
   }
+
+  // Drain stderr so a chatty agent cannot stall on a full pipe buffer.
+  void (async () => {
+    const reader = subprocess.stderr.getReader()
+    try {
+      while (true) {
+        const { done } = await reader.read()
+        if (done) {
+          return
+        }
+      }
+    } catch {
+      // Process exited or the stream was cancelled.
+    }
+  })()
 
   return {
     stdin: subprocess.stdin,
