@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { Link, Outlet, useLocation } from "react-router"
+import { Outlet, useLocation } from "react-router"
 import { connectionPhaseChromeByPhase } from "../connection/connection.phase"
 import { useConnection } from "../connection/use.connection"
 import { IconButton } from "../design-system/IconButton"
@@ -25,7 +25,7 @@ const routeMetaByPath: Record<string, RouteMeta> = {
 export const AppShell: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { pathname } = useLocation()
-  const { connection, refetch } = useConnection()
+  const { connection } = useConnection()
   const routeMeta = routeMetaByPath[pathname]
   const eyebrow = routeMeta?.eyebrow ?? ""
   const title = routeMeta?.title ?? ""
@@ -38,7 +38,6 @@ export const AppShell: React.FC = () => {
   const sidebarVersion =
     connection.phase === "online" ? connection.status.version : "—"
 
-  const closeSidebar = () => setSidebarOpen(false)
   const toggleSidebar = () => setSidebarOpen((open) => !open)
 
   return (
@@ -140,17 +139,6 @@ export const AppShell: React.FC = () => {
               <StatusDot variant={phaseChrome.sidebarDotVariant} />
               <span>{phaseChrome.topbarLabel}</span>
             </div>
-            <IconButton aria-label="Refresh data" onClick={() => void refetch()}>
-              ↻
-            </IconButton>
-            <Link
-              to="/chat"
-              onClick={closeSidebar}
-              className="inline-flex min-h-9 items-center justify-center gap-3 rounded-[7px] border border-lime bg-lime px-3.5 text-base font-semibold whitespace-nowrap text-lime-ink shadow-[0_0_0_1px_rgba(0,0,0,0.18),inset_0_1px_rgba(255,255,255,0.25)] hover:bg-lime-hover max-[640px]:hidden"
-            >
-              <span>Open chat</span>
-              <span aria-hidden>→</span>
-            </Link>
           </div>
         </header>
 

@@ -78,11 +78,10 @@ export const selectSessionOption = async (
   await expectSessionPickerLabel(queries, optionLabel)
 }
 
-/** Open the New session modal from the session picker. */
+/** Open the New session modal from the chat header button. */
 export const openNewSessionModal = async (queries: RoleQueries) => {
   const user = userEvent.setup()
-  await openSessionOptions(queries)
-  await user.click(queries.getByRole("option", { name: /New session/ }))
+  await user.click(queries.getByRole("button", { name: "New session" }))
 
   await waitFor(() => {
     queries.getByRole("dialog", { name: "New session" })

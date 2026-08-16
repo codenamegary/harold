@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { fireEvent, waitFor } from "@testing-library/react"
+import { waitFor } from "@testing-library/react"
 import { AppRoutes } from "../shell/AppRouter"
 import { renderWithProviders } from "../query/render.with.providers"
 import { hrefOf, requestUrl } from "../test/request.url"
@@ -120,10 +120,10 @@ describe("Connection status recovery", () => {
     expect(getByRole("complementary", { name: "Sidebar" })).toBeInTheDocument()
   })
 
-  test("manual refresh still refetches status while online", async () => {
+  test("topbar has no refresh or open chat controls", async () => {
     statusReachable.value = true
 
-    const { getByRole, getByText } = renderWithProviders(<AppRoutes />, {
+    const { getByText, queryByRole } = renderWithProviders(<AppRoutes />, {
       initialEntries: ["/"],
     })
 
@@ -131,13 +131,8 @@ describe("Connection status recovery", () => {
       expect(getByText("API connected")).toBeInTheDocument()
     })
 
-    const initialStatusCalls = statusCallCount.value
-
-    fireEvent.click(getByRole("button", { name: "Refresh data" }))
-
-    await waitFor(() => {
-      expect(statusCallCount.value).toBe(initialStatusCalls + 1)
-    })
+    expect(queryByRole("button", { name: "Refresh data" })).not.toBeInTheDocument()
+    expect(queryByRole("link", { name: /open chat/i })).not.toBeInTheDocument()
   })
 
   test("console does not open a journal /v1/events socket", async () => {

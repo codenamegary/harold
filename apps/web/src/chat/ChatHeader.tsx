@@ -3,6 +3,7 @@ import { useNavigate } from "react-router"
 import { AcpSession, SessionState } from "contracts/http/session"
 import { AgentId } from "contracts/http/agent-settings"
 import { Workspace } from "contracts/http/workspace"
+import { Button } from "../design-system/Button"
 import { Combobox, ComboboxOptionItem } from "../design-system/Combobox"
 import { StatusDot } from "../design-system/StatusDot"
 import { catalogSessionKey, parseCatalogSessionKey } from "../session/catalog.session.key"
@@ -10,7 +11,6 @@ import { recentSessions, RECENT_SESSIONS_LIMIT } from "../session/session.list.h
 import { NewSessionModal } from "./NewSessionModal"
 import { sessionStatusDotVariant } from "./session.status.dot.variant"
 
-const NEW_SESSION_VALUE = ""
 export const SEE_ALL_SESSIONS_VALUE = "__see_all_sessions__"
 
 type ChatHeaderProps = {
@@ -48,6 +48,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       ? ""
       : catalogSessionKey({ agentId, sessionId })
 
+  const readyForNewSession =
+    sessionId === "" && workspaceId !== "" && agentId !== ""
+
   const sessionOptions = useMemo((): ComboboxOptionItem[] => {
     const recent = recentSessions(sessions)
     const recentKeys = new Set(
@@ -70,11 +73,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         : recent
 
     const items: ComboboxOptionItem[] = [
-      {
-        value: NEW_SESSION_VALUE,
-        label: "New session",
-        description: "Pick a workspace and agent",
-      },
       ...menuSessions.map((session) => ({
         value: catalogSessionKey({
           agentId: session.agentId,
@@ -96,7 +94,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       selectedSession === undefined &&
       !items.some((item) => item.value === selectedKey)
     ) {
-      items.splice(1, 0, {
+      items.unshift({
         value: selectedKey,
         label: "Current session",
         description: selectedSessionState ?? undefined,
@@ -105,29 +103,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
     return items
   }, [sessions, selectedSession, selectedSessionState, selectedKey])
-
-  const sessionPickerValue =
-    sessionId === "" && workspaceId !== "" && agentId !== ""
-      ? NEW_SESSION_VALUE
-      : selectedKey
-
-  const sessionDisplayOptions = useMemo((): ComboboxOptionItem[] => {
-    if (sessionPickerValue !== NEW_SESSION_VALUE) {
-      return sessionOptions
-    }
-
-    const withoutDuplicateNew = sessionOptions.filter(
-      (option) => option.value !== NEW_SESSION_VALUE,
-    )
-    return [
-      {
-        value: NEW_SESSION_VALUE,
-        label: "New session",
-        description: "Ready to send a prompt",
-      },
-      ...withoutDuplicateNew,
-    ]
-  }, [sessionOptions, sessionPickerValue])
 
   const workspaceName =
     workspaces.find((workspace) => workspace.id === workspaceId)?.name ??
@@ -145,11 +120,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     selectedSessionState === null ? null : sessionStatusDotVariant(selectedSessionState)
 
   const handleSessionPickerChange = (nextValue: string) => {
-    if (nextValue === NEW_SESSION_VALUE) {
-      setIsNewSessionModalOpen(true)
-      return
-    }
-
     if (nextValue === SEE_ALL_SESSIONS_VALUE) {
       void navigate("/sessions")
       return
@@ -174,11 +144,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             <Combobox
               variant="title"
               aria-label="Session"
-              value={sessionPickerValue}
+              value={selectedKey}
               onChange={handleSessionPickerChange}
               onOpen={onSessionMenuOpen}
-              options={sessionDisplayOptions}
-              placeholder="Select a session"
+              options={sessionOptions}
+              placeholder={readyForNewSession ? "New session" : "Select a session"}
               emptyMessage="No sessions"
               className="min-w-0 flex-1"
             />
@@ -187,6 +157,12 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             <p className="m-0 truncate text-xs text-dim">{contextSubtitle}</p>
           ) : null}
         </div>
+        <Button
+          variant="primary"
+          onClick={() => setIsNewSessionModalOpen(true)}
+        >
+          New session
+        </Button>
       </header>
       <NewSessionModal
         open={isNewSessionModalOpen}

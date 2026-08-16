@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { fireEvent, waitFor, within } from "@testing-library/react"
+import { waitFor, within } from "@testing-library/react"
 import { AppRoutes } from "../shell/AppRouter"
 import { renderWithProviders } from "../query/render.with.providers"
-import { hrefOf, requestUrl } from "../test/request.url"
+import { hrefOf } from "../test/request.url"
 import { fetchStatus } from "./fetch.status"
 
 const validStatus = {
@@ -125,15 +125,8 @@ describe("connection shell wiring", () => {
     expect(within(connectLink).queryByText("2")).not.toBeInTheDocument()
   })
 
-  test("refresh button refetches status", async () => {
-    const statusCallCount = { value: 0 }
-    const fetchMock = mock((input: RequestInfo | URL) => {
-      const url = requestUrl(input)
-
-      if (url === "/v1/status") {
-        statusCallCount.value += 1
-      }
-
+  test("status badge shows connected after load", async () => {
+    const fetchMock = mock((_input: RequestInfo | URL) => {
       return Promise.resolve(
         new Response(JSON.stringify(validStatus), {
           status: 200,
@@ -143,20 +136,14 @@ describe("connection shell wiring", () => {
     })
     globalThis.fetch = fetchMock as typeof fetch
 
-    const { getByRole, getByText } = renderWithProviders(<AppRoutes />, {
+    const { getByText, queryByRole } = renderWithProviders(<AppRoutes />, {
       initialEntries: ["/"],
     })
 
     await waitFor(() => {
       expect(getByText("API connected")).toBeInTheDocument()
     })
-
-    const initialStatusCalls = statusCallCount.value
-
-    fireEvent.click(getByRole("button", { name: "Refresh data" }))
-
-    await waitFor(() => {
-      expect(statusCallCount.value).toBe(initialStatusCalls + 1)
-    })
+    expect(queryByRole("button", { name: "Refresh data" })).not.toBeInTheDocument()
+    expect(queryByRole("link", { name: /open chat/i })).not.toBeInTheDocument()
   })
 })

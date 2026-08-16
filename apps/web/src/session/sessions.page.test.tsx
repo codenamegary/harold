@@ -138,10 +138,10 @@ describe("Sessions page and hybrid picker", () => {
     })
 
     await openSessionOptions({ getByRole })
-    expect(getByRole("option", { name: /New session/ })).toBeInTheDocument()
     expect(getByRole("option", { name: /Explain auth/ })).toBeInTheDocument()
     expect(getByRole("option", { name: /Older session/ })).toBeInTheDocument()
     expect(getByRole("option", { name: /See all sessions/ })).toBeInTheDocument()
+    expect(queryByRole("option", { name: /New session/ })).not.toBeInTheDocument()
     expect(
       queryByRole("button", { name: `Delete ${listedSession.title}` }),
     ).not.toBeInTheDocument()
