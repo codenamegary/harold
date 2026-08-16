@@ -59,16 +59,18 @@ const parseAgentCapabilities = (result: unknown): AgentCapabilities => {
     agentCapabilities?: {
       loadSession?: boolean
       sessionCapabilities?: {
-        close?: boolean
+        close?: unknown
         list?: unknown
       }
     }
   }
 
+  const closeCapability = value.agentCapabilities?.sessionCapabilities?.close
+
   return {
     loadSession: value.agentCapabilities?.loadSession ?? false,
     sessionCapabilities: {
-      close: value.agentCapabilities?.sessionCapabilities?.close ?? false,
+      close: closeCapability !== undefined && closeCapability !== false,
       list: value.agentCapabilities?.sessionCapabilities?.list !== undefined,
     },
   }

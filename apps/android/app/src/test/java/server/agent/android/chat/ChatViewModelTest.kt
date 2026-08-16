@@ -190,7 +190,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun deleteSessionShowsUnsupportedDialogOnConflict() = runTest(dispatcher) {
+    fun deleteSessionShowsErrorOnConflict() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository(deleteConflict = true)
         val viewModel = createViewModel(
             repository = repository,
@@ -202,8 +202,8 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            "Agent does not support session/close",
-            viewModel.uiState.value.deleteUnsupportedMessage,
+            "Agent is disabled",
+            viewModel.uiState.value.sessionsError,
         )
         assertEquals("sess_02", viewModel.uiState.value.selectedSession?.sessionId)
     }
@@ -492,7 +492,7 @@ private class ChatFakeOperatorRepository(
                     AgentApiError.Problem(
                         status = 409,
                         title = "Conflict",
-                        detail = "Agent does not support session/close",
+                        detail = "Agent is disabled",
                     ),
                 ),
             )

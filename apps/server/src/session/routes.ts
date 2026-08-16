@@ -9,6 +9,7 @@ import { FastifyInstance } from "fastify"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { AgentSettingsRepository } from "../agent-settings/agent-settings-repository"
 import { SessionCwdCache } from "./hub/session.hub"
+import { ArchivedAcpSessionsStore } from "./archived.acp.sessions.store"
 import { ensureSupervisorReady } from "./session.acp.ready"
 import {
   buildAcpUnavailableProblem,
@@ -32,6 +33,7 @@ export const registerSessionRoutes = (
   agentSettingsRepository: AgentSettingsRepository,
   acpSupervisor: AcpSupervisor,
   cwdCache: SessionCwdCache,
+  archivedAcpSessions: ArchivedAcpSessionsStore,
 ) => {
   app.post("/v1/sessions", async (request, reply) => {
     const body = CreateSessionBodySchema.parse(request.body)
@@ -102,7 +104,15 @@ export const registerSessionRoutes = (
       return sendProblem(reply, 409, buildAcpUnavailableProblem(listed.reason))
     }
 
-    listed.sessions.forEach((session) => {
+    const visible = listed.sessions.filter(
+      (session) =>
+        !archivedAcpSessions.isArchived({
+          agentId: session.agentId,
+          sessionId: session.sessionId,
+        }),
+    )
+
+    visible.forEach((session) => {
       cwdCache.remember({
         agentId: session.agentId,
         sessionId: session.sessionId,
@@ -112,7 +122,7 @@ export const registerSessionRoutes = (
 
     return reply.status(200).send(
       SessionCollectionSchema.parse({
-        items: listed.sessions,
+        items: visible,
       }),
     )
   })
@@ -137,26 +147,20 @@ export const registerSessionRoutes = (
       return sendProblem(reply, 409, buildAgentDisabledProblem())
     }
 
-    const supervisorReady = await ensureSupervisorReady(acpSupervisor, query.agentId)
-    if (!supervisorReady) {
-      return sendProblem(reply, 409, buildAcpUnavailableProblem())
-    }
-
-    if (!acpSupervisor.getAgentCapabilities(query.agentId)?.sessionCapabilities.close) {
-      return sendProblem(
-        reply,
-        409,
-        buildAcpUnavailableProblem("Agent does not support session/close"),
-      )
-    }
-
-    const closed = await acpSupervisor.closeAcpSession({
+    archivedAcpSessions.archive({
       agentId: query.agentId,
       sessionId,
     })
 
-    if (!closed.ok) {
-      return sendProblem(reply, 409, buildAcpUnavailableProblem(closed.reason))
+    const supervisorReady = await ensureSupervisorReady(acpSupervisor, query.agentId)
+    if (
+      supervisorReady &&
+      acpSupervisor.getAgentCapabilities(query.agentId)?.sessionCapabilities.close
+    ) {
+      await acpSupervisor.closeAcpSession({
+        agentId: query.agentId,
+        sessionId,
+      })
     }
 
     return reply.status(204).send()
