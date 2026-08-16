@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { AgentIdSchema } from "contracts/http/agent-settings"
+import { requestUrl } from "../test/request.url"
 import { deleteSessions } from "./delete.session"
 
 const agentId = AgentIdSchema.parse("cursor")
@@ -39,8 +40,7 @@ describe("deleteSessions", () => {
     const controller = new AbortController()
 
     globalThis.fetch = async (input: RequestInfo | URL) => {
-      const url = String(input)
-      started.push(url)
+      started.push(requestUrl(input))
       if (started.length === 1) {
         controller.abort()
       }
