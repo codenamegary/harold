@@ -59,7 +59,9 @@ export const deleteAcpSession = async (params: {
     params.acpSupervisor.getAgentCapabilities(params.agentId)?.sessionCapabilities
       .close
   ) {
-    await params.acpSupervisor.closeAcpSession({
+    // Catalog hide is the delete contract; close is best-effort and must not
+    // hold the HTTP response behind agent RPC latency.
+    void params.acpSupervisor.closeAcpSession({
       agentId: params.agentId,
       sessionId: params.sessionId,
     })

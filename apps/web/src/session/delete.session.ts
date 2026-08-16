@@ -3,7 +3,6 @@ import {
   SessionDeleteTarget,
   deleteSessionPath,
 } from "contracts/http/session"
-import { mapWithConcurrency } from "./map.with.concurrency"
 import {
   parseSessionProblem,
   SessionProblemDetails,
@@ -31,11 +30,9 @@ export type DeleteSessionsSettledEvent = {
 }
 
 export type DeleteSessionsOptions = {
-  concurrency?: number
+  signal?: AbortSignal
   onSettled?: (event: DeleteSessionsSettledEvent) => void
 }
-
-const DEFAULT_DELETE_CONCURRENCY = 10
 
 const createSessionDeleteError = (
   problem: SessionProblemDetails,
@@ -51,13 +48,18 @@ export const isSessionDeleteError = (
 ): error is SessionDeleteError =>
   error instanceof Error && error.name === "SessionDeleteError"
 
+const isAbortError = (error: unknown): boolean =>
+  (error instanceof DOMException && error.name === "AbortError") ||
+  (error instanceof Error && error.name === "AbortError")
+
 export const deleteSession = async (params: {
   agentId: AgentId
   sessionId: string
+  signal?: AbortSignal
 }): Promise<void> => {
   const response = await fetch(
     deleteSessionPath(params.sessionId, { agentId: params.agentId }),
-    { method: "DELETE" },
+    { method: "DELETE", signal: params.signal },
   )
 
   if (!response.ok) {
@@ -71,21 +73,30 @@ export const deleteSessions = async (
   options: DeleteSessionsOptions = {},
 ): Promise<DeleteSessionsResult> => {
   const total = items.length
-  const concurrency = options.concurrency ?? DEFAULT_DELETE_CONCURRENCY
+  const deleted: SessionDeleteTarget[] = []
+  const failed: DeleteSessionsFailedItem[] = []
   const progress = { done: 0 }
 
-  const outcomes = await mapWithConcurrency(items, concurrency, async (item) => {
+  for (const item of items) {
+    if (options.signal?.aborted) {
+      break
+    }
+
     try {
-      await deleteSession(item)
+      await deleteSession({ ...item, signal: options.signal })
       progress.done += 1
+      deleted.push(item)
       options.onSettled?.({
         done: progress.done,
         total,
         item,
         ok: true,
       })
-      return { ok: true as const, item }
     } catch (error) {
+      if (isAbortError(error) || options.signal?.aborted) {
+        break
+      }
+
       const sessionError = isSessionDeleteError(error)
         ? error
         : createSessionDeleteError({
@@ -93,6 +104,7 @@ export const deleteSessions = async (
               error instanceof Error ? error.message : "Delete failed",
           })
       progress.done += 1
+      failed.push({ ...item, reason: sessionError.problem.detail })
       options.onSettled?.({
         done: progress.done,
         total,
@@ -100,22 +112,8 @@ export const deleteSessions = async (
         ok: false,
         error: sessionError,
       })
-      return {
-        ok: false as const,
-        item,
-        reason: sessionError.problem.detail,
-      }
     }
-  })
-
-  return {
-    deleted: outcomes.flatMap((outcome) =>
-      outcome.ok ? [outcome.item] : [],
-    ),
-    failed: outcomes.flatMap((outcome) =>
-      outcome.ok
-        ? []
-        : [{ ...outcome.item, reason: outcome.reason }],
-    ),
   }
+
+  return { deleted, failed }
 }

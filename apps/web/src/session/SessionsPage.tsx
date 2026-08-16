@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react"
+import React, { useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router"
 import { AgentId, AgentIdSchema } from "contracts/http/agent-settings"
 import { SessionDeleteTarget } from "contracts/http/session"
@@ -66,6 +66,7 @@ export const SessionsPage: React.FC = () => {
   } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false)
+  const deleteAbortRef = useRef<AbortController | null>(null)
 
   const sessionsQuery = useSessionsQuery()
   const workspacesQuery = useWorkspacesInfiniteQuery({})
@@ -177,17 +178,32 @@ export const SessionsPage: React.FC = () => {
     void navigate("/chat")
   }
 
+  const stopBulkDelete = () => {
+    deleteAbortRef.current?.abort()
+    deleteAbortRef.current = null
+    setDeleteProgress(null)
+    setBulkConfirming(false)
+  }
+
   const runDelete = (items: ReadonlyArray<SessionDeleteTarget>) => {
-    if (items.length === 0) {
+    if (items.length === 0 || deleting) {
       return
     }
+
+    deleteAbortRef.current?.abort()
+    const controller = new AbortController()
+    deleteAbortRef.current = controller
 
     setError(null)
     setDeleteProgress({ done: 0, total: items.length })
     deleteSessionsMutation.mutate(
       {
         items,
+        signal: controller.signal,
         onSettled: (event) => {
+          if (controller.signal.aborted) {
+            return
+          }
           setDeleteProgress({ done: event.done, total: event.total })
           if (!event.ok) {
             return
@@ -202,7 +218,11 @@ export const SessionsPage: React.FC = () => {
       },
       {
         onSuccess: (result) => {
+          deleteAbortRef.current = null
           setDeleteProgress(null)
+          if (controller.signal.aborted) {
+            return
+          }
           if (result.failed.length > 0) {
             setError(
               `Failed to delete ${result.failed.length} session${result.failed.length === 1 ? "" : "s"}.`,
@@ -212,7 +232,11 @@ export const SessionsPage: React.FC = () => {
           setBulkConfirming(false)
         },
         onError: (err) => {
+          deleteAbortRef.current = null
           setDeleteProgress(null)
+          if (controller.signal.aborted) {
+            return
+          }
           setBulkConfirming(false)
           setError(isSessionDeleteError(err) ? err.problem.detail : err.message)
         },
@@ -285,8 +309,7 @@ export const SessionsPage: React.FC = () => {
                   <Button
                     variant="secondary"
                     size="sm"
-                    disabled={deleting}
-                    onClick={() => setBulkConfirming(false)}
+                    onClick={stopBulkDelete}
                   >
                     Cancel
                   </Button>

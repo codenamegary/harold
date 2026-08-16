@@ -273,6 +273,108 @@ describe("Sessions page and hybrid picker", () => {
     })
   })
 
+  test("sessions page cancel stops remaining deletes", async () => {
+    const user = userEvent.setup()
+    let items = [listedSession, olderSession]
+    const releaseFirstDelete = {
+      resolve: () => undefined as void,
+    }
+    const firstDeleteGate = new Promise<void>((resolve) => {
+      releaseFirstDelete.resolve = resolve
+    })
+    let firstDeleteStarted = false
+
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url.startsWith("/v1/workspaces")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(workspaceCollection), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url.startsWith("/v1/settings/agents")) {
+        return Promise.resolve(
+          new Response(JSON.stringify(agentsCollection), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (method === "DELETE" && url.startsWith("/v1/sessions/")) {
+        deletedUrls.push(url)
+        const sessionId = decodeURIComponent(
+          url.slice("/v1/sessions/".length).split("?")[0] ?? "",
+        )
+
+        if (!firstDeleteStarted) {
+          firstDeleteStarted = true
+          return firstDeleteGate.then(() => {
+            if (init?.signal?.aborted) {
+              const error = new Error("The operation was aborted.")
+              error.name = "AbortError"
+              throw error
+            }
+            items = items.filter((item) => item.sessionId !== sessionId)
+            return new Response(null, { status: 204 })
+          })
+        }
+
+        items = items.filter((item) => item.sessionId !== sessionId)
+        return Promise.resolve(new Response(null, { status: 204 }))
+      }
+
+      if (url.startsWith("/v1/sessions")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(SessionCollectionSchema.parse({ items })),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const { getByRole, queryByRole } = renderWithProviders(
+      <MemoryRouter initialEntries={["/sessions"]}>
+        <AppRoutes />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(getByRole("table", { name: "Sessions" })).toBeInTheDocument()
+    })
+
+    await user.click(getByRole("checkbox", { name: "Select Explain auth" }))
+    await user.click(getByRole("checkbox", { name: "Select Older session" }))
+    await user.click(getByRole("button", { name: "Delete selected (2)" }))
+    await user.click(getByRole("button", { name: "Confirm delete 2" }))
+
+    await waitFor(() => {
+      expect(getByRole("button", { name: "Cancel" })).toBeEnabled()
+      expect(deletedUrls).toHaveLength(1)
+    })
+
+    await user.click(getByRole("button", { name: "Cancel" }))
+    releaseFirstDelete.resolve()
+
+    await waitFor(() => {
+      expect(getByRole("button", { name: "Delete selected (2)" })).toBeInTheDocument()
+    })
+
+    expect(deletedUrls).toHaveLength(1)
+    expect(queryByRole("button", { name: /Confirm delete/ })).not.toBeInTheDocument()
+  })
+
   test("row click joins session and opens chat", async () => {
     const user = userEvent.setup()
     const { getByRole } = renderWithProviders(

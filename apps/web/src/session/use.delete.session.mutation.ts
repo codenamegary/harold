@@ -11,6 +11,7 @@ import {
 
 export type DeleteSessionsMutationVariables = {
   items: ReadonlyArray<SessionDeleteTarget>
+  signal?: AbortSignal
   onSettled?: (event: DeleteSessionsSettledEvent) => void
 }
 
@@ -41,8 +42,11 @@ export const useDeleteSessionsMutation = () => {
   return useMutation({
     mutationFn: (variables: DeleteSessionsMutationVariables) =>
       deleteSessions(variables.items, {
-        concurrency: 10,
+        signal: variables.signal,
         onSettled: (event) => {
+          if (variables.signal?.aborted) {
+            return
+          }
           if (event.ok) {
             dropSessionFromCache(queryClient, event.item)
           }
