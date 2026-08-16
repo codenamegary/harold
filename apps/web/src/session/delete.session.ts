@@ -1,5 +1,11 @@
 import { AgentId } from "contracts/http/agent-settings"
-import { deleteSessionPath } from "contracts/http/session"
+import {
+  BulkDeleteSessionsBodySchema,
+  BulkDeleteSessionsResponseSchema,
+  BulkDeleteSessionsResponse,
+  SessionDeleteTarget,
+  SESSIONS_PATH,
+} from "contracts/http/session"
 import {
   parseSessionProblem,
   SessionProblemDetails,
@@ -23,20 +29,33 @@ export const isSessionDeleteError = (
 ): error is SessionDeleteError =>
   error instanceof Error && error.name === "SessionDeleteError"
 
+export const deleteSessions = async (
+  items: ReadonlyArray<SessionDeleteTarget>,
+): Promise<BulkDeleteSessionsResponse> => {
+  const body = BulkDeleteSessionsBodySchema.parse({ items })
+  const response = await fetch(SESSIONS_PATH, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    const problem = await parseSessionProblem(response)
+    throw createSessionDeleteError(problem)
+  }
+
+  return BulkDeleteSessionsResponseSchema.parse(await response.json())
+}
+
 export const deleteSession = async (params: {
   agentId: AgentId
   sessionId: string
 }) => {
-  const response = await fetch(deleteSessionPath(params.sessionId, {
-    agentId: params.agentId,
-  }), {
-    method: "DELETE",
-  })
-
-  if (response.status === 204) {
-    return
+  const result = await deleteSessions([params])
+  const failure = result.failed[0]
+  if (failure !== undefined) {
+    throw createSessionDeleteError({
+      detail: failure.reason,
+    })
   }
-
-  const problem = await parseSessionProblem(response)
-  throw createSessionDeleteError(problem)
 }

@@ -4,6 +4,7 @@ import {
   PROBLEM_TYPES,
 } from "contracts/http/error"
 import {
+  BulkDeleteSessionsResponseSchema,
   CreateSessionResponseSchema,
   SessionCollectionSchema,
   deleteSessionPath,
@@ -317,5 +318,66 @@ describe("ACP catalog sessions HTTP", () => {
     const body = NotFoundProblemSchema.parse(JSON.parse(deleteResponse.body))
     expect(deleteResponse.statusCode).toBe(404)
     expect(body.type).toBe(PROBLEM_TYPES.notFound)
+  })
+
+  test("DELETE /v1/sessions bulk archives selected rows and reports failures", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? "/usr/local/bin/agent" : undefined
+    const { app } = await createTestApp(
+      resources,
+      dataDir,
+      whichFn,
+      acceptTestExecutablePath,
+      {
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+        sessionNewSessionId: "catalog-bulk-1",
+      },
+    )
+    await enableAgent(app, "cursor", whichFn)
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: {
+        agentId: "cursor",
+        cwd: "/tmp/catalog-bulk",
+      },
+    })
+    expect(createResponse.statusCode).toBe(201)
+    const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: "/v1/sessions",
+      payload: {
+        items: [
+          { agentId: "cursor", sessionId: created.sessionId },
+          { agentId: "unknown", sessionId: "sess_missing" },
+        ],
+      },
+    })
+    expect(deleteResponse.statusCode).toBe(200)
+    const result = BulkDeleteSessionsResponseSchema.parse(
+      JSON.parse(deleteResponse.body),
+    )
+    expect(result.deleted).toEqual([
+      { agentId: "cursor", sessionId: created.sessionId },
+    ])
+    expect(result.failed).toEqual([
+      {
+        agentId: "unknown",
+        sessionId: "sess_missing",
+        reason: expect.any(String),
+      },
+    ])
+    expect(result.failed[0]?.reason.length).toBeGreaterThan(0)
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/sessions",
+    })
+    const collection = SessionCollectionSchema.parse(JSON.parse(listResponse.body))
+    expect(collection.items).toEqual([])
   })
 })

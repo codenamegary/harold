@@ -1,16 +1,24 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { AgentId } from "contracts/http/agent-settings"
-import { SessionCollectionSchema } from "contracts/http/session"
+import {
+  SessionCollectionSchema,
+  SessionDeleteTarget,
+} from "contracts/http/session"
 import { queryKeys } from "../query/query.keys"
-import { deleteSession } from "./delete.session"
+import { deleteSessions } from "./delete.session"
 
-export const useDeleteSessionMutation = () => {
+export const useDeleteSessionsMutation = () => {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (params: { agentId: AgentId; sessionId: string }) =>
-      deleteSession(params),
-    onSuccess: async (_void, params) => {
+    mutationFn: (items: ReadonlyArray<SessionDeleteTarget>) =>
+      deleteSessions(items),
+    onSuccess: async (result) => {
+      const deletedKeys = new Set(
+        result.deleted.map(
+          (item) => `${item.agentId}\0${item.sessionId}`,
+        ),
+      )
+
       queryClient.setQueriesData(
         { queryKey: queryKeys.sessionsRoot },
         (existing: unknown) => {
@@ -21,8 +29,7 @@ export const useDeleteSessionMutation = () => {
           return SessionCollectionSchema.parse({
             items: collection.items.filter(
               (item) =>
-                item.sessionId !== params.sessionId ||
-                item.agentId !== params.agentId,
+                !deletedKeys.has(`${item.agentId}\0${item.sessionId}`),
             ),
           })
         },

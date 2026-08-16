@@ -18,6 +18,7 @@ const routeMetaByPath: Record<string, RouteMeta> = {
   "/workspaces": { eyebrow: "PROJECTS & AGENTS", title: "Workspaces" },
   "/devices": { eyebrow: "ACCESS CONTROL", title: "Devices" },
   "/chat": { eyebrow: "SESSIONS", title: "Chat" },
+  "/sessions": { eyebrow: "SESSIONS", title: "Sessions" },
   "/settings": { eyebrow: "SERVER", title: "Settings" },
 }
 
@@ -108,7 +109,9 @@ export const AppShell: React.FC = () => {
 
       <div
         className={`flex flex-col ml-[224px] max-[820px]:ml-0 ${
-          pathname === "/chat" ? "h-svh overflow-hidden" : "min-h-screen"
+          pathname === "/chat" || pathname === "/sessions"
+            ? "h-svh overflow-hidden"
+            : "min-h-screen"
         }`}
       >
         <header className="sticky top-0 z-30 flex h-[73px] shrink-0 items-center justify-between border-b border-line-soft bg-[rgba(8,10,13,0.89)] px-[34px] backdrop-blur-[18px] max-[820px]:justify-start max-[820px]:px-[18px]">
@@ -151,7 +154,7 @@ export const AppShell: React.FC = () => {
           </div>
         </header>
 
-        {pathname === "/chat" ? (
+        {pathname === "/chat" || pathname === "/sessions" ? (
           <div className="flex min-h-0 flex-1 flex-col">
             <Outlet />
           </div>
