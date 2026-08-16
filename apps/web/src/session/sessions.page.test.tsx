@@ -164,7 +164,8 @@ describe("Sessions page and hybrid picker", () => {
 
     await user.click(getByRole("option", { name: /See all sessions/ }))
     await waitFor(() => {
-      expect(getByRole("heading", { name: "Manage sessions" })).toBeInTheDocument()
+      expect(getByRole("button", { name: "New session" })).toBeInTheDocument()
+      expect(getByRole("table", { name: "Sessions" })).toBeInTheDocument()
     })
   })
 
@@ -177,7 +178,7 @@ describe("Sessions page and hybrid picker", () => {
     )
 
     await waitFor(() => {
-      expect(getByRole("list", { name: "Sessions" })).toBeInTheDocument()
+      expect(getByRole("table", { name: "Sessions" })).toBeInTheDocument()
     })
 
     await user.click(getByRole("checkbox", { name: "Select Explain auth" }))
@@ -203,7 +204,7 @@ describe("Sessions page and hybrid picker", () => {
     })
 
     await waitFor(() => {
-      expect(queryByRole("list", { name: "Sessions" })).not.toBeInTheDocument()
+      expect(queryByRole("row", { name: /Explain auth/ })).not.toBeInTheDocument()
       expect(getByText("No sessions match.")).toBeInTheDocument()
     })
   })

@@ -49,6 +49,14 @@ const clearSelectionIfDeleted = (
   })
 }
 
+const formatUpdatedAt = (value: string): string => {
+  const parsed = Date.parse(value)
+  if (Number.isNaN(parsed)) {
+    return value
+  }
+  return new Date(parsed).toLocaleString()
+}
+
 export const SessionsPage: React.FC = () => {
   const navigate = useNavigate()
   const [search, setSearch] = useState("")
@@ -93,6 +101,17 @@ export const SessionsPage: React.FC = () => {
       }))
   }, [visibleSessions, selectedKeys])
 
+  const allVisibleSelected =
+    visibleSessions.length > 0 &&
+    visibleSessions.every((session) =>
+      selectedKeys.has(
+        catalogSessionKey({
+          agentId: session.agentId,
+          sessionId: session.sessionId,
+        }),
+      ),
+    )
+
   const toggleSelected = (key: string) => {
     setSelectedKeys((current) => {
       const next = new Set(current)
@@ -100,6 +119,34 @@ export const SessionsPage: React.FC = () => {
         next.delete(key)
       } else {
         next.add(key)
+      }
+      return next
+    })
+  }
+
+  const toggleSelectAllVisible = () => {
+    setSelectedKeys((current) => {
+      if (allVisibleSelected) {
+        const next = new Set(current)
+        for (const session of visibleSessions) {
+          next.delete(
+            catalogSessionKey({
+              agentId: session.agentId,
+              sessionId: session.sessionId,
+            }),
+          )
+        }
+        return next
+      }
+
+      const next = new Set(current)
+      for (const session of visibleSessions) {
+        next.add(
+          catalogSessionKey({
+            agentId: session.agentId,
+            sessionId: session.sessionId,
+          }),
+        )
       }
       return next
     })
@@ -182,142 +229,209 @@ export const SessionsPage: React.FC = () => {
   }
 
   return (
-    <main>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="m-0 text-lg font-semibold text-white">Manage sessions</h2>
-          <p className="mt-1 mb-0 text-sm text-dim">
-            Search, open, and delete agent sessions.
-          </p>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-panel">
+      <header className="flex min-h-[64px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line-soft px-5 max-[820px]:p-[13px]">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+          <label className="flex h-9 w-[280px] max-w-full items-center gap-2 rounded-[7px] border border-line bg-[#0c0f14] px-[11px] text-dim">
+            <span aria-hidden>⌕</span>
+            <TextInput
+              aria-label="Search sessions"
+              className="min-h-0 border-0 bg-transparent p-0 text-sm focus:border-transparent"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search sessions…"
+              role="searchbox"
+              type="search"
+              value={search}
+            />
+          </label>
+
+          {selectedTargets.length > 0 ? (
+            <div className="flex items-center gap-2">
+              {bulkConfirming ? (
+                <>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    disabled={deleteSessionsMutation.isPending}
+                    onClick={() => runDelete(selectedTargets)}
+                  >
+                    {deleteSessionsMutation.isPending
+                      ? "Deleting…"
+                      : `Confirm delete ${selectedTargets.length}`}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={deleteSessionsMutation.isPending}
+                    onClick={() => setBulkConfirming(false)}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setBulkConfirming(true)}
+                >
+                  Delete selected ({selectedTargets.length})
+                </Button>
+              )}
+            </div>
+          ) : null}
+
+          {error !== null ? (
+            <p className="m-0 text-sm text-danger" role="alert">
+              {error}
+            </p>
+          ) : null}
         </div>
+
         <Button
           variant="primary"
           onClick={() => setIsNewSessionModalOpen(true)}
         >
           New session
         </Button>
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-color:#252b34_transparent]">
+        {sessionsQuery.isLoading ? (
+          <p className="m-0 px-5 py-6 text-sm text-dim">Loading sessions…</p>
+        ) : sessionsQuery.isError ? (
+          <p className="m-0 px-5 py-6 text-sm text-danger" role="alert">
+            Failed to load sessions.
+          </p>
+        ) : (
+          <table
+            className="w-full border-collapse text-left"
+            role="table"
+            aria-label="Sessions"
+          >
+            <thead className="sticky top-0 z-10 bg-panel">
+              <tr className="border-b border-line-soft">
+                <th scope="col" className="w-10 px-5 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all sessions"
+                    checked={allVisibleSelected}
+                    disabled={visibleSessions.length === 0}
+                    onChange={toggleSelectAllVisible}
+                    className="size-4"
+                  />
+                </th>
+                <th
+                  scope="col"
+                  className="px-3 py-3 font-mono text-2xs font-medium tracking-wide text-label"
+                >
+                  Title
+                </th>
+                <th
+                  scope="col"
+                  className="px-3 py-3 font-mono text-2xs font-medium tracking-wide text-label max-[820px]:hidden"
+                >
+                  Agent
+                </th>
+                <th
+                  scope="col"
+                  className="px-3 py-3 font-mono text-2xs font-medium tracking-wide text-label max-[820px]:hidden"
+                >
+                  Path
+                </th>
+                <th
+                  scope="col"
+                  className="px-3 py-3 font-mono text-2xs font-medium tracking-wide text-label max-[640px]:hidden"
+                >
+                  Updated
+                </th>
+                <th scope="col" className="w-16 px-5 py-3">
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleSessions.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-5 py-8 text-sm text-dim"
+                  >
+                    No sessions match.
+                  </td>
+                </tr>
+              ) : (
+                visibleSessions.map((session) => {
+                  const key = catalogSessionKey({
+                    agentId: session.agentId,
+                    sessionId: session.sessionId,
+                  })
+                  const checked = selectedKeys.has(key)
+                  const deletingThis =
+                    deleteSessionsMutation.isPending &&
+                    deleteSessionsMutation.variables?.some(
+                      (item) => targetKey(item) === key,
+                    ) === true
+
+                  return (
+                    <tr
+                      key={key}
+                      className="border-b border-line-soft last:border-b-0 hover:bg-hover-surface/40"
+                    >
+                      <td className="px-5 py-3 align-middle">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${session.title}`}
+                          checked={checked}
+                          onChange={() => toggleSelected(key)}
+                          className="size-4"
+                        />
+                      </td>
+                      <td className="min-w-0 px-3 py-3 align-middle">
+                        <button
+                          type="button"
+                          className="max-w-full border-0 bg-transparent p-0 text-left"
+                          aria-label={`Open ${session.title}`}
+                          onClick={() => handleJoin(session)}
+                        >
+                          <span className="block truncate text-sm font-medium text-white">
+                            {session.title}
+                          </span>
+                          <span className="mt-0.5 block truncate font-mono text-xs text-dim min-[821px]:hidden">
+                            {session.agentId} · {session.cwd}
+                          </span>
+                        </button>
+                      </td>
+                      <td className="px-3 py-3 align-middle font-mono text-xs text-dim max-[820px]:hidden">
+                        {session.agentId}
+                      </td>
+                      <td className="max-w-[28rem] truncate px-3 py-3 align-middle font-mono text-xs text-dim max-[820px]:hidden">
+                        {session.cwd}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3 align-middle text-xs text-body-soft max-[640px]:hidden">
+                        {formatUpdatedAt(session.updatedAt)}
+                      </td>
+                      <td className="px-5 py-3 align-middle">
+                        <ConfirmDeleteIconButton
+                          aria-label={`Delete ${session.title}`}
+                          pending={deletingThis && selectedTargets.length <= 1}
+                          onConfirm={() =>
+                            runDelete([
+                              {
+                                agentId: session.agentId,
+                                sessionId: session.sessionId,
+                              },
+                            ])
+                          }
+                        />
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
-
-      <div className="mb-3 flex flex-wrap items-center gap-3">
-        <label className="flex h-9 w-[280px] max-w-full items-center gap-2 rounded-[7px] border border-line bg-[#0c0f14] px-[11px] text-dim">
-          <span aria-hidden>⌕</span>
-          <TextInput
-            aria-label="Search sessions"
-            className="min-h-0 border-0 bg-transparent p-0 text-sm focus:border-transparent"
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search sessions…"
-            role="searchbox"
-            type="search"
-            value={search}
-          />
-        </label>
-
-        {selectedTargets.length > 0 ? (
-          <div className="flex items-center gap-2">
-            {bulkConfirming ? (
-              <>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  disabled={deleteSessionsMutation.isPending}
-                  onClick={() => runDelete(selectedTargets)}
-                >
-                  {deleteSessionsMutation.isPending
-                    ? "Deleting…"
-                    : `Confirm delete ${selectedTargets.length}`}
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={deleteSessionsMutation.isPending}
-                  onClick={() => setBulkConfirming(false)}
-                >
-                  Cancel
-                </Button>
-              </>
-            ) : (
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => setBulkConfirming(true)}
-              >
-                Delete selected ({selectedTargets.length})
-              </Button>
-            )}
-          </div>
-        ) : null}
-      </div>
-
-      {error !== null ? (
-        <p className="m-0 mb-3 text-sm text-danger" role="alert">
-          {error}
-        </p>
-      ) : null}
-
-      {sessionsQuery.isLoading ? (
-        <p className="m-0 text-sm text-dim">Loading sessions…</p>
-      ) : sessionsQuery.isError ? (
-        <p className="m-0 text-sm text-danger" role="alert">
-          Failed to load sessions.
-        </p>
-      ) : visibleSessions.length === 0 ? (
-        <p className="m-0 text-sm text-dim">No sessions match.</p>
-      ) : (
-        <ul className="m-0 list-none space-y-2 p-0" aria-label="Sessions">
-          {visibleSessions.map((session) => {
-            const key = catalogSessionKey({
-              agentId: session.agentId,
-              sessionId: session.sessionId,
-            })
-            const checked = selectedKeys.has(key)
-            const deletingThis =
-              deleteSessionsMutation.isPending &&
-              deleteSessionsMutation.variables?.some(
-                (item) => targetKey(item) === key,
-              ) === true
-
-            return (
-              <li
-                key={key}
-                className="flex items-center gap-3 rounded-lg border border-line-soft bg-[#0d1015] px-3 py-2.5"
-              >
-                <input
-                  type="checkbox"
-                  aria-label={`Select ${session.title}`}
-                  checked={checked}
-                  onChange={() => toggleSelected(key)}
-                  className="size-4 shrink-0"
-                />
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 border-0 bg-transparent p-0 text-left"
-                  aria-label={`Open ${session.title}`}
-                  onClick={() => handleJoin(session)}
-                >
-                  <span className="block truncate text-sm font-medium text-white">
-                    {session.title}
-                  </span>
-                  <span className="mt-0.5 block truncate font-mono text-xs text-dim">
-                    {session.agentId} · {session.cwd}
-                  </span>
-                </button>
-                <ConfirmDeleteIconButton
-                  aria-label={`Delete ${session.title}`}
-                  pending={deletingThis && selectedTargets.length <= 1}
-                  onConfirm={() =>
-                    runDelete([
-                      {
-                        agentId: session.agentId,
-                        sessionId: session.sessionId,
-                      },
-                    ])
-                  }
-                />
-              </li>
-            )
-          })}
-        </ul>
-      )}
 
       <NewSessionModal
         open={isNewSessionModalOpen}
@@ -328,6 +442,6 @@ export const SessionsPage: React.FC = () => {
           handleStartNewSession(selection)
         }}
       />
-    </main>
+    </div>
   )
 }
