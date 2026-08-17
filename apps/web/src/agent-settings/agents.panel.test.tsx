@@ -832,6 +832,7 @@ describe("AgentsPanel", () => {
 
     await waitFor(() => {
       expect(view.getByText("Could not load agent settings.")).toBeInTheDocument()
+      expect(view.getByLabelText("Refresh agents")).not.toBeDisabled()
     })
   })
 
@@ -1212,6 +1213,7 @@ describe("AgentsPanel", () => {
     await waitFor(() => {
       const row = view.getByRole("row", { name: "Cursor agent" })
       expect(within(row).getByText("spawn exploded")).toBeInTheDocument()
+      expect(within(row).getByLabelText("Cursor runtime status")).toHaveTextContent("error")
       expect(within(row).getByLabelText("Enable Cursor")).toBeChecked()
     })
   }, mutationFlowTimeoutMs)

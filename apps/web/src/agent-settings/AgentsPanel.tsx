@@ -126,9 +126,7 @@ export const AgentsPanel: React.FC = () => {
             aria-label="Refresh agents"
             aria-busy={agentSettingsQuery.isFetching ? "true" : undefined}
             disabled={
-              connection.phase === "unreachable" ||
-              agentSettingsQuery.isError ||
-              agentSettingsQuery.isFetching
+              connection.phase === "unreachable" || agentSettingsQuery.isFetching
             }
             className="grid size-8 shrink-0 place-items-center rounded-[7px] border border-line-strong bg-panel-2 text-dim transition-colors hover:border-line-hover-strong hover:bg-hover-surface-strong hover:text-lime cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => {

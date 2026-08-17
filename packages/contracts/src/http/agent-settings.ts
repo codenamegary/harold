@@ -1,31 +1,26 @@
 import { z } from "zod"
 import { AgentIdSchema } from "./agent.id.generated"
-import { AcpStateSchema } from "./status"
 
 export { AgentIdSchema }
 
-export const AgentRuntimeStateSchema = z
-  .strictObject({
-    status: AcpStateSchema,
-    error: z.string().min(1).nullable(),
-  })
-  .superRefine((value, ctx) => {
-    if (value.status === "error" && value.error === null) {
-      ctx.addIssue({
-        code: "custom",
-        message: "error is required when status is error",
-        path: ["error"],
-      })
-    }
-
-    if (value.status !== "error" && value.error !== null) {
-      ctx.addIssue({
-        code: "custom",
-        message: "error must be null unless status is error",
-        path: ["error"],
-      })
-    }
-  })
+export const AgentRuntimeStateSchema = z.discriminatedUnion("status", [
+  z.strictObject({
+    status: z.literal("stopped"),
+    error: z.null(),
+  }),
+  z.strictObject({
+    status: z.literal("starting"),
+    error: z.null(),
+  }),
+  z.strictObject({
+    status: z.literal("ready"),
+    error: z.null(),
+  }),
+  z.strictObject({
+    status: z.literal("error"),
+    error: z.string().min(1),
+  }),
+])
 
 export const stoppedAgentRuntimeState = {
   status: "stopped",

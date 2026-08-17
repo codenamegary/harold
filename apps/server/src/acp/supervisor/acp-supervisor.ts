@@ -491,13 +491,18 @@ export const createAcpSupervisor = ({
       return { status: "stopped", error: null }
     }
 
-    if (runtime.state !== "error") {
-      return { status: runtime.state, error: null }
-    }
-
-    return {
-      status: "error",
-      error: runtime.lastError ?? "ACP supervisor failed",
+    switch (runtime.state) {
+      case "stopped":
+      case "starting":
+      case "ready":
+        return { status: runtime.state, error: null }
+      case "error": {
+        const error = runtime.lastError
+        if (error === null) {
+          throw new Error("ACP error runtime is missing lastError")
+        }
+        return { status: "error", error }
+      }
     }
   }
 

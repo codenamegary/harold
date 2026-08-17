@@ -41,6 +41,9 @@ const sendProblem = (
   problem: unknown,
 ) => reply.status(status).type("application/problem+json").send(problem)
 
+const acpStartFailureReason = (error: unknown): string =>
+  isAcpStartError(error) ? error.message : "ACP supervisor failed to start"
+
 export const registerAgentSettingsRoutes = (
   app: FastifyInstance,
   repository: AgentSettingsRepository,
@@ -134,17 +137,15 @@ export const registerAgentSettingsRoutes = (
         try {
           await acpSupervisor.respawn(agentId)
         } catch (error: unknown) {
-          app.log.warn({ agentId, err: error }, "ACP agent respawn failed")
-          const detail = isAcpStartError(error)
-            ? error.message
-            : "ACP supervisor failed to start"
-          return sendProblem(reply, 409, buildAgentCannotRespawnProblem(detail))
+          const reason = acpStartFailureReason(error)
+          app.log.warn({ agentId, reason }, "ACP agent respawn failed")
+          return sendProblem(reply, 409, buildAgentCannotRespawnProblem(reason))
         }
 
         if (!acpSupervisor.getAgentCapabilities(agentId)?.sessionCapabilities.list) {
           app.log.warn(
-            { agentId },
-            "ACP agent respawn failed because session/list is unsupported",
+            { agentId, reason: "Agent does not support session/list" },
+            "ACP agent respawn failed",
           )
           return sendProblem(reply, 409, buildAgentSessionListUnsupportedProblem())
         }
@@ -197,7 +198,8 @@ export const registerAgentSettingsRoutes = (
       try {
         await acpSupervisor.start(agentId)
       } catch (error: unknown) {
-        app.log.warn({ agentId, err: error }, "ACP agent start failed")
+        const reason = acpStartFailureReason(error)
+        app.log.warn({ agentId, reason }, "ACP agent start failed")
         repository.update({ agentId, body: { enabled: false } })
         await acpSupervisor.handleAgentDisabled(agentId)
         return sendProblem(reply, 409, buildAgentCannotEnableProblem("ACP supervisor failed to start"))
