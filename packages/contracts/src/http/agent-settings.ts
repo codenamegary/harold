@@ -1,7 +1,36 @@
 import { z } from "zod"
 import { AgentIdSchema } from "./agent.id.generated"
+import { AcpStateSchema } from "./status"
 
 export { AgentIdSchema }
+
+export const AgentRuntimeStateSchema = z
+  .strictObject({
+    status: AcpStateSchema,
+    error: z.string().min(1).nullable(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.status === "error" && value.error === null) {
+      ctx.addIssue({
+        code: "custom",
+        message: "error is required when status is error",
+        path: ["error"],
+      })
+    }
+
+    if (value.status !== "error" && value.error !== null) {
+      ctx.addIssue({
+        code: "custom",
+        message: "error must be null unless status is error",
+        path: ["error"],
+      })
+    }
+  })
+
+export const stoppedAgentRuntimeState = {
+  status: "stopped",
+  error: null,
+} as const
 
 export const AgentSpawnKindSchema = z.enum(["binary", "npx", "uvx"])
 
@@ -24,6 +53,7 @@ export const AgentSettingsSchema = z.strictObject({
   popular: z.boolean(),
   deletable: z.boolean(),
   sessionListSupported: z.boolean(),
+  state: AgentRuntimeStateSchema,
 })
 
 export const AgentSettingsCollectionSchema = z.strictObject({
@@ -62,6 +92,14 @@ export const UpdateAgentSettingsBodySchema = z.union([
   RenameAgentSettingsBodySchema,
 ])
 
+export const AgentRespawnActionBodySchema = z.strictObject({
+  type: z.literal("respawn"),
+})
+
+export const AgentActionBodySchema = z.discriminatedUnion("type", [
+  AgentRespawnActionBodySchema,
+])
+
 export const CreateCustomAgentBodySchema = z.strictObject({})
 
 export const DetectAgentPathResponseSchema = z.strictObject({
@@ -94,7 +132,9 @@ export const ImportApplyBodySchema = z.strictObject({
 
 export type AgentId = z.infer<typeof AgentIdSchema>
 export type AgentSpawnSnapshot = z.infer<typeof AgentSpawnSnapshotSchema>
+export type AgentRuntimeState = z.infer<typeof AgentRuntimeStateSchema>
 export type AgentSettings = z.infer<typeof AgentSettingsSchema>
+export type AgentActionBody = z.infer<typeof AgentActionBodySchema>
 export type AgentSettingsCollection = z.infer<typeof AgentSettingsCollectionSchema>
 export type UpdateAgentSettingsBody = z.infer<typeof UpdateAgentSettingsBodySchema>
 export type RenameAgentSettingsBody = z.infer<typeof RenameAgentSettingsBodySchema>

@@ -136,6 +136,10 @@ export const toAgentSettings = (
   popular: input.popular,
   deletable: input.deletable,
   sessionListSupported: input.sessionListSupported ?? agentSupportsSessionList(input.id),
+  state: {
+    status: "stopped",
+    error: null,
+  },
 })
 
 export const sortAgentSettingsBands = (

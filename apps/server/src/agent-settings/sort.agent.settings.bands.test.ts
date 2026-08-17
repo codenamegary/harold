@@ -11,6 +11,7 @@ const agent = (overrides: Partial<AgentSettings> & Pick<AgentSettings, "id" | "d
   popular: false,
   deletable: false,
   sessionListSupported: true,
+  state: { status: "stopped", error: null },
   ...overrides,
 })
 
@@ -24,6 +25,7 @@ describe("sortAgentSettingsBands", () => {
       popular: true,
       deletable: false,
   sessionListSupported: true,
+  state: { status: "stopped", error: null },
     })
     const claudeAcp = agent({
       id: "claude-acp",
@@ -33,6 +35,7 @@ describe("sortAgentSettingsBands", () => {
       popular: true,
       deletable: false,
   sessionListSupported: true,
+  state: { status: "stopped", error: null },
     })
     const auggie = agent({
       id: "auggie",
@@ -42,6 +45,7 @@ describe("sortAgentSettingsBands", () => {
       popular: true,
       deletable: false,
   sessionListSupported: true,
+  state: { status: "stopped", error: null },
     })
     const rest = agent({
       id: "rest-agent",
@@ -51,6 +55,7 @@ describe("sortAgentSettingsBands", () => {
       popular: false,
       deletable: false,
   sessionListSupported: true,
+  state: { status: "stopped", error: null },
     })
 
     const sorted = sortAgentSettingsBands([auggie, rest, claudeAcp, enabled])

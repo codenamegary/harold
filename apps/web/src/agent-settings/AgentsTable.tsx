@@ -4,6 +4,7 @@ import { AgentId, AgentSettings } from "contracts/http/agent-settings"
 import { AgentSettingsRow } from "./AgentSettingsRow"
 import { deleteAgentSettings } from "./delete.agent.settings"
 import { detectAgentPath } from "./detect.agent.path"
+import { respawnAgent } from "./respawn.agent"
 import { updateAgentSettings } from "./update.agent.settings"
 
 const pageSize = 10
@@ -26,6 +27,12 @@ type DeleteMutation = UseMutationResult<
   AgentId
 >
 
+type RespawnMutation = UseMutationResult<
+  Awaited<ReturnType<typeof respawnAgent>>,
+  Error,
+  AgentId
+>
+
 type AgentsTableProps = {
   agents: readonly AgentSettings[]
   searchQuery: string
@@ -34,6 +41,7 @@ type AgentsTableProps = {
   updateMutation: UpdateMutation
   detectMutation: DetectMutation
   deleteMutation: DeleteMutation
+  respawnMutation: RespawnMutation
 }
 
 export const AgentsTable: React.FC<AgentsTableProps> = ({
@@ -44,6 +52,7 @@ export const AgentsTable: React.FC<AgentsTableProps> = ({
   updateMutation,
   detectMutation,
   deleteMutation,
+  respawnMutation,
 }) => {
   const [visibleCount, setVisibleCount] = useState(pageSize)
 
@@ -66,6 +75,9 @@ export const AgentsTable: React.FC<AgentsTableProps> = ({
             <th scope="col" className="px-3 py-2 text-2xs font-medium tracking-wide text-label">
               Launch
             </th>
+            <th scope="col" className="px-3 py-2 text-2xs font-medium tracking-wide text-label">
+              Status
+            </th>
             <th
               scope="col"
               className="px-3 py-2 text-right text-2xs font-medium tracking-wide text-label"
@@ -84,11 +96,12 @@ export const AgentsTable: React.FC<AgentsTableProps> = ({
               updateMutation={updateMutation}
               detectMutation={detectMutation}
               deleteMutation={deleteMutation}
+              respawnMutation={respawnMutation}
             />
           ))}
           {hasMore ? (
             <tr className="border-t border-line-soft">
-              <td colSpan={3} className="px-3 py-2.5 text-center">
+              <td colSpan={4} className="px-3 py-2.5 text-center">
                 <button
                   type="button"
                   className="inline-flex min-h-6 items-center justify-center rounded-[7px] bg-transparent px-0 text-2xs font-semibold text-body-soft transition-opacity duration-300 ease-out hover:text-lime cursor-pointer"

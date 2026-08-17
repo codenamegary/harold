@@ -19,6 +19,11 @@ export type AcpSupervisorStatus = {
   readonly activeSessions: number
 }
 
+export type AcpAgentRuntimeState = {
+  readonly status: AcpSupervisorState
+  readonly error: string | null
+}
+
 export type AcpSessionOperationResult =
   | { ok: true; acpSessionId: string }
   | { ok: false; reason: string }
@@ -92,6 +97,7 @@ export type AcpListSessionsResult =
 
 export type AcpSupervisor = {
   getStatus: () => AcpSupervisorStatus
+  getAgentRuntimeState: (agentId: AgentId) => AcpAgentRuntimeState
   getRunningAgentId: () => AgentId | null
   getRunningAgentIds: () => ReadonlyArray<AgentId>
   getAgentCapabilities: (agentId?: AgentId) => AgentCapabilities | null
@@ -101,6 +107,7 @@ export type AcpSupervisor = {
   start: (agentId: AgentId) => Promise<void>
   stop: () => Promise<void>
   handleAgentDisabled: (agentId: AgentId) => Promise<void>
+  respawn: (agentId: AgentId) => Promise<void>
   listAcpSessions: (params?: { cwd?: string }) => Promise<AcpListSessionsResult>
   createAcpSession: (params: {
     agentId?: AgentId

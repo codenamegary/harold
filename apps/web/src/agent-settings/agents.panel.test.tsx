@@ -35,6 +35,7 @@ const comingSoonAgent: AgentSettings = {
   popular: true,
   deletable: false,
   sessionListSupported: true,
+  state: { status: "stopped", error: null },
 }
 
 const cursorAgent = (overrides: Partial<AgentSettings> = {}): AgentSettings => ({
@@ -48,6 +49,7 @@ const cursorAgent = (overrides: Partial<AgentSettings> = {}): AgentSettings => (
   popular: true,
   deletable: false,
   sessionListSupported: true,
+  state: { status: "stopped", error: null },
   ...overrides,
 })
 
@@ -659,6 +661,7 @@ describe("AgentsPanel", () => {
       popular: true,
       deletable: false,
   sessionListSupported: true,
+  state: { status: "stopped", error: null },
     })
 
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
@@ -757,6 +760,7 @@ describe("AgentsPanel", () => {
         popular: false,
         deletable: false,
   sessionListSupported: true,
+  state: { status: "stopped", error: null },
       })
     })
 
@@ -902,6 +906,7 @@ describe("AgentsPanel", () => {
           popular: false,
           deletable: true,
   sessionListSupported: true,
+  state: { status: "stopped", error: null },
         }
 
         return Promise.resolve(
@@ -983,6 +988,7 @@ describe("AgentsPanel", () => {
           popular: false,
           deletable: true,
   sessionListSupported: true,
+  state: { status: "stopped", error: null },
         })
         listState.items = [created, ...listState.items]
         return Promise.resolve(
@@ -1011,6 +1017,202 @@ describe("AgentsPanel", () => {
       expect(
         view.getByRole("row", { name: "Custom Agent launch settings" }),
       ).toBeInTheDocument()
+    })
+  }, mutationFlowTimeoutMs)
+
+  test("shows runtime status on each agent row", async () => {
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      const row = view.getByRole("row", { name: "Cursor agent" })
+      expect(within(row).getByLabelText("Cursor runtime status")).toHaveTextContent("stopped")
+    })
+  })
+
+  test("refetches agent settings from the header refresh control", async () => {
+    const getCounts = { value: 0 }
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        getCounts.value += 1
+        return Promise.resolve(
+          new Response(JSON.stringify(agentsCollection(cursorAgent())), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByLabelText("Cursor runtime status")).toBeInTheDocument()
+      expect(view.getByLabelText("Refresh agents")).not.toBeDisabled()
+    })
+
+    expect(getCounts.value).toBe(1)
+
+    await clickInAct(view.getByLabelText("Refresh agents"))
+
+    await waitFor(() => {
+      expect(getCounts.value).toBe(2)
+    })
+  })
+
+  test("respawns an enabled agent", async () => {
+    const cursorState = {
+      agent: cursorAgent({
+        enabled: true,
+        path: "/usr/local/bin/agent",
+        args: ["acp"],
+        state: { status: "ready", error: null },
+      }),
+    }
+    const respawnBodies: string[] = []
+
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(agentsCollection(cursorState.agent)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents/cursor/actions" && method === "POST") {
+        respawnBodies.push(requestBodyText(init?.body))
+        cursorState.agent = cursorAgent({
+          enabled: true,
+          path: "/usr/local/bin/agent",
+          args: ["acp"],
+          state: { status: "ready", error: null },
+        })
+        return Promise.resolve(
+          new Response(JSON.stringify(AgentSettingsSchema.parse(cursorState.agent)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByLabelText("Respawn Cursor")).toBeInTheDocument()
+    })
+
+    await clickInAct(view.getByLabelText("Respawn Cursor"))
+
+    await waitFor(() => {
+      expect(respawnBodies).toEqual([JSON.stringify({ type: "respawn" })])
+      expect(within(view.getByRole("row", { name: "Cursor agent" })).getByLabelText("Enable Cursor")).toBeChecked()
+      expect(within(view.getByRole("row", { name: "Cursor agent" })).getByLabelText("Cursor runtime status")).toHaveTextContent("ready")
+    })
+  }, mutationFlowTimeoutMs)
+
+  test("shows a failed respawn on the agent row", async () => {
+    const cursorState = {
+      agent: cursorAgent({
+        enabled: true,
+        path: "/usr/local/bin/agent",
+        args: ["acp"],
+        state: { status: "ready", error: null },
+      }),
+    }
+
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(agentsCollection(cursorState.agent)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents/cursor/actions" && method === "POST") {
+        cursorState.agent = cursorAgent({
+          enabled: true,
+          path: "/usr/local/bin/agent",
+          args: ["acp"],
+          state: {
+            status: "error",
+            error: "spawn exploded",
+          },
+        })
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              type: PROBLEM_TYPES.conflict,
+              title: "Agent cannot be respawned",
+              status: 409,
+              detail: "spawn exploded",
+            }),
+            {
+              status: 409,
+              headers: { "Content-Type": "application/problem+json" },
+            },
+          ),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByLabelText("Respawn Cursor")).toBeInTheDocument()
+    })
+
+    await clickInAct(view.getByLabelText("Respawn Cursor"))
+
+    await waitFor(() => {
+      const row = view.getByRole("row", { name: "Cursor agent" })
+      expect(within(row).getByText("spawn exploded")).toBeInTheDocument()
+      expect(within(row).getByLabelText("Enable Cursor")).toBeChecked()
     })
   }, mutationFlowTimeoutMs)
 })

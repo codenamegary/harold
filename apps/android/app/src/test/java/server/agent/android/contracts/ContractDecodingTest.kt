@@ -81,7 +81,9 @@ class ContractDecodingTest {
               "args": [],
               "present": true,
               "popular": true,
-              "deletable": false
+              "deletable": false,
+              "sessionListSupported": true,
+              "state": { "status": "stopped", "error": null }
             }
             """.trimIndent(),
         )
@@ -92,6 +94,9 @@ class ContractDecodingTest {
         assertEquals(true, settings.present)
         assertEquals(true, settings.popular)
         assertEquals(false, settings.deletable)
+        assertEquals(true, settings.sessionListSupported)
+        assertEquals(AgentRuntimeStatus.Stopped, settings.state.status)
+        assertNull(settings.state.error)
     }
 
     @Test

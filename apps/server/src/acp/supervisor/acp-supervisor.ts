@@ -14,6 +14,7 @@ import {
   AcpSupervisor,
   AcpSupervisorState,
   AcpSupervisorStatus,
+  AcpAgentRuntimeState,
   CloseWorkspaceSessionFailure,
   CloseWorkspaceSessionsResult,
   CreateAcpSupervisorParams,
@@ -32,6 +33,7 @@ import { createTurnId } from "../../session/create.turn.id"
 type SupervisorRuntime = {
   agentId: AgentId
   state: AcpSupervisorState
+  lastError: string | null
   agentCapabilities: AgentCapabilities | null
   process: SpawnedAgentProcess | null
   transport: JsonRpcTransport | null
@@ -161,6 +163,7 @@ const defaultSleep = (ms: number): Promise<void> =>
 const createEmptyRuntime = (agentId: AgentId): SupervisorRuntime => ({
   agentId,
   state: "stopped",
+  lastError: null,
   agentCapabilities: null,
   process: null,
   transport: null,
@@ -256,7 +259,7 @@ export const createAcpSupervisor = ({
     runtime.restartGeneration += 1
   }
 
-  const transitionToError = (agentId: AgentId) => {
+  const transitionToError = (agentId: AgentId, reason: string) => {
     const runtime = runtimes.get(agentId)
     if (runtime === undefined) {
       return
@@ -268,6 +271,7 @@ export const createAcpSupervisor = ({
     }
     clearRuntime(agentId, { keepEntry: true })
     runtime.state = "error"
+    runtime.lastError = reason
   }
 
   const stopRuntime = async (agentId: AgentId): Promise<void> => {
@@ -363,6 +367,7 @@ export const createAcpSupervisor = ({
     })
 
     runtime.state = "ready"
+    runtime.lastError = null
     attachExitMonitor(agentId, process)
     void Promise.resolve(onSupervisorReady())
   }
@@ -413,6 +418,7 @@ export const createAcpSupervisor = ({
       const finalRuntime = runtimes.get(agentId)
       if (finalRuntime !== undefined && generation === finalRuntime.restartGeneration) {
         finalRuntime.state = "error"
+        finalRuntime.lastError = "ACP supervisor failed to restart"
       }
     })()
   }
@@ -461,8 +467,9 @@ export const createAcpSupervisor = ({
     try {
       await spawnAndInitialize(agentId)
     } catch (error: unknown) {
-      transitionToError(agentId)
-      throw createAcpStartError(sanitizeFailureReason(error, "ACP supervisor failed to start"))
+      const reason = sanitizeFailureReason(error, "ACP supervisor failed to start")
+      transitionToError(agentId, reason)
+      throw createAcpStartError(reason)
     }
   }
 
@@ -471,6 +478,27 @@ export const createAcpSupervisor = ({
       return
     }
     await stopRuntime(agentId)
+  }
+
+  const respawn = async (agentId: AgentId): Promise<void> => {
+    await stopRuntime(agentId)
+    await start(agentId)
+  }
+
+  const getAgentRuntimeState = (agentId: AgentId): AcpAgentRuntimeState => {
+    const runtime = runtimes.get(agentId)
+    if (runtime === undefined) {
+      return { status: "stopped", error: null }
+    }
+
+    if (runtime.state !== "error") {
+      return { status: runtime.state, error: null }
+    }
+
+    return {
+      status: "error",
+      error: runtime.lastError ?? "ACP supervisor failed",
+    }
   }
 
   const getReadyRuntime = (agentId: AgentId): SupervisorRuntime | null => {
@@ -956,6 +984,7 @@ export const createAcpSupervisor = ({
   return {
     getStatus: (): AcpSupervisorStatus =>
       aggregateStatus(runtimes, sessionBindingRegistry.count()),
+    getAgentRuntimeState,
     getRunningAgentId: () => resolveReadyAgentId(),
     getRunningAgentIds: () =>
       [...runtimes.values()]
@@ -980,6 +1009,7 @@ export const createAcpSupervisor = ({
     start,
     stop,
     handleAgentDisabled,
+    respawn,
     listAcpSessions,
     createAcpSession,
     createSession,
