@@ -3,6 +3,30 @@ import { AgentIdSchema } from "./agent.id.generated"
 
 export { AgentIdSchema }
 
+export const AgentRuntimeStateSchema = z.discriminatedUnion("status", [
+  z.strictObject({
+    status: z.literal("stopped"),
+    error: z.null(),
+  }),
+  z.strictObject({
+    status: z.literal("starting"),
+    error: z.null(),
+  }),
+  z.strictObject({
+    status: z.literal("ready"),
+    error: z.null(),
+  }),
+  z.strictObject({
+    status: z.literal("error"),
+    error: z.string().min(1),
+  }),
+])
+
+export const stoppedAgentRuntimeState = {
+  status: "stopped",
+  error: null,
+} as const
+
 export const AgentSpawnKindSchema = z.enum(["binary", "npx", "uvx"])
 
 export const AgentSpawnSnapshotSchema = z.strictObject({
@@ -24,6 +48,7 @@ export const AgentSettingsSchema = z.strictObject({
   popular: z.boolean(),
   deletable: z.boolean(),
   sessionListSupported: z.boolean(),
+  state: AgentRuntimeStateSchema,
 })
 
 export const AgentSettingsCollectionSchema = z.strictObject({
@@ -62,6 +87,14 @@ export const UpdateAgentSettingsBodySchema = z.union([
   RenameAgentSettingsBodySchema,
 ])
 
+export const AgentRespawnActionBodySchema = z.strictObject({
+  type: z.literal("respawn"),
+})
+
+export const AgentActionBodySchema = z.discriminatedUnion("type", [
+  AgentRespawnActionBodySchema,
+])
+
 export const CreateCustomAgentBodySchema = z.strictObject({})
 
 export const DetectAgentPathResponseSchema = z.strictObject({
@@ -94,7 +127,9 @@ export const ImportApplyBodySchema = z.strictObject({
 
 export type AgentId = z.infer<typeof AgentIdSchema>
 export type AgentSpawnSnapshot = z.infer<typeof AgentSpawnSnapshotSchema>
+export type AgentRuntimeState = z.infer<typeof AgentRuntimeStateSchema>
 export type AgentSettings = z.infer<typeof AgentSettingsSchema>
+export type AgentActionBody = z.infer<typeof AgentActionBodySchema>
 export type AgentSettingsCollection = z.infer<typeof AgentSettingsCollectionSchema>
 export type UpdateAgentSettingsBody = z.infer<typeof UpdateAgentSettingsBodySchema>
 export type RenameAgentSettingsBody = z.infer<typeof RenameAgentSettingsBodySchema>

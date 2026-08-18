@@ -52,6 +52,7 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       popular: true,
       deletable: false,
       sessionListSupported: true,
+      state: { status: "stopped", error: null },
     },
   ],
 })

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import {
+  AgentActionBodySchema,
   AgentIdSchema,
+  AgentRuntimeStateSchema,
   AgentSettingsCollectionSchema,
   AgentSettingsSchema,
   DetectAgentPathResponseSchema,
@@ -8,6 +10,7 @@ import {
   ImportApplyBodySchema,
   ImportDetectResponseSchema,
   UpdateAgentSettingsBodySchema,
+  stoppedAgentRuntimeState,
 } from "./agent-settings"
 
 const validAgentSettings = {
@@ -21,6 +24,7 @@ const validAgentSettings = {
   popular: true,
   deletable: false,
   sessionListSupported: true,
+  state: stoppedAgentRuntimeState,
 }
 
 describe("AgentIdSchema", () => {
@@ -62,7 +66,8 @@ describe("AgentSettingsSchema", () => {
       present: true,
       popular: true,
       deletable: false,
-  sessionListSupported: true,
+      sessionListSupported: true,
+      state: stoppedAgentRuntimeState,
     }
 
     expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
@@ -79,10 +84,45 @@ describe("AgentSettingsSchema", () => {
       present: true,
       popular: false,
       deletable: true,
-  sessionListSupported: true,
+      sessionListSupported: true,
+      state: {
+        status: "ready",
+        error: null,
+      },
     }
 
     expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
+  })
+
+  test("accepts error state with a reason", () => {
+    const settings = {
+      ...validAgentSettings,
+      enabled: true,
+      state: {
+        status: "error",
+        error: "ACP supervisor failed to start",
+      },
+    }
+
+    expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
+  })
+
+  test("rejects error state without a reason", () => {
+    expect(() =>
+      AgentRuntimeStateSchema.parse({
+        status: "error",
+        error: null,
+      }),
+    ).toThrow()
+  })
+
+  test("rejects a reason when status is not error", () => {
+    expect(() =>
+      AgentRuntimeStateSchema.parse({
+        status: "ready",
+        error: "still running",
+      }),
+    ).toThrow()
   })
 
   test("rejects missing args", () => {
@@ -183,6 +223,24 @@ describe("UpdateAgentSettingsBodySchema", () => {
   })
 })
 
+describe("AgentActionBodySchema", () => {
+  test("accepts respawn", () => {
+    expect(AgentActionBodySchema.parse({ type: "respawn" })).toEqual({
+      type: "respawn",
+    })
+  })
+
+  test("rejects unknown action types", () => {
+    expect(() => AgentActionBodySchema.parse({ type: "restart" })).toThrow()
+  })
+
+  test("rejects extra fields on respawn", () => {
+    expect(() =>
+      AgentActionBodySchema.parse({ type: "respawn", force: true }),
+    ).toThrow()
+  })
+})
+
 describe("CreateCustomAgentBodySchema", () => {
   test("accepts empty body", () => {
     expect(CreateCustomAgentBodySchema.parse({})).toEqual({})
@@ -264,7 +322,8 @@ describe("AgentSettingsCollectionSchema", () => {
           present: false,
           popular: true,
           deletable: false,
-  sessionListSupported: true,
+          sessionListSupported: true,
+          state: stoppedAgentRuntimeState,
         },
       ],
     }

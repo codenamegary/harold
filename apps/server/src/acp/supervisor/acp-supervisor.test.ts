@@ -95,6 +95,10 @@ describe("createAcpSupervisor", () => {
     supervisors.push(supervisor)
 
     expect(supervisor.getStatus()).toEqual({ state: "stopped", activeSessions: 0 })
+    expect(supervisor.getAgentRuntimeState("cursor")).toEqual({
+      status: "stopped",
+      error: null,
+    })
     expect(supervisor.getRunningAgentId()).toBeNull()
     expect(supervisor.getAgentCapabilities()).toBeNull()
   })
@@ -147,6 +151,10 @@ describe("createAcpSupervisor", () => {
     await supervisor.start("cursor")
 
     expect(supervisor.getStatus()).toEqual({ state: "ready", activeSessions: 0 })
+    expect(supervisor.getAgentRuntimeState("cursor")).toEqual({
+      status: "ready",
+      error: null,
+    })
     expect(supervisor.getRunningAgentId()).toBe("cursor")
     expect(supervisor.getAgentCapabilities()).toEqual({
       loadSession: true,
@@ -214,6 +222,10 @@ describe("createAcpSupervisor", () => {
 
     await expect(supervisor.start("cursor")).rejects.toThrow("initialize failed")
     expect(supervisor.getStatus().state).toBe("error")
+    expect(supervisor.getAgentRuntimeState("cursor")).toEqual({
+      status: "error",
+      error: "initialize failed",
+    })
     expect(supervisor.getRunningAgentId()).toBeNull()
   })
 
@@ -245,6 +257,37 @@ describe("createAcpSupervisor", () => {
 
     expect(killed.value).toBe(true)
     expect(supervisor.getStatus().state).toBe("stopped")
+  })
+
+  test("respawn stops a ready agent then starts it again", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: { loadSession: true, sessionCapabilities: { close: true, list: true } },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+
+    const spawnCount = { value: 0 }
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: () => {
+        spawnCount.value += 1
+        return createMockProcess()
+      },
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    await supervisor.respawn("cursor")
+
+    expect(spawnCount.value).toBe(2)
+    expect(supervisor.getAgentRuntimeState("cursor")).toEqual({
+      status: "ready",
+      error: null,
+    })
   })
 
   test("stop and crash clearRuntime invoke onBeforeClearRuntime before bindings drop", async () => {

@@ -1,5 +1,7 @@
 import {
+  AgentActionBodySchema,
   AgentIdSchema,
+  AgentSettings,
   AgentSettingsCollectionSchema,
   AgentSettingsSchema,
   CreateCustomAgentBodySchema,
@@ -10,12 +12,16 @@ import {
 } from "contracts/http/agent-settings"
 import { FastifyInstance } from "fastify"
 import { agentSupportsSessionList } from "../acp/catalog/session.list.support"
-import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
+import {
+  AcpSupervisor,
+  isAcpStartError,
+} from "../acp/supervisor/acp-supervisor-types"
 import { AgentSettingsRepository } from "./agent-settings-repository"
 import {
   buildAgentCannotDeleteProblem,
   buildAgentCannotEnableProblem,
   buildAgentCannotRenameProblem,
+  buildAgentCannotRespawnProblem,
   buildAgentIdConflictProblem,
   buildAgentNotFoundProblem,
   buildAgentPathAutoDetectFailedProblem,
@@ -35,17 +41,27 @@ const sendProblem = (
   problem: unknown,
 ) => reply.status(status).type("application/problem+json").send(problem)
 
+const acpStartFailureReason = (error: unknown): string =>
+  isAcpStartError(error) ? error.message : "ACP supervisor failed to start"
+
 export const registerAgentSettingsRoutes = (
   app: FastifyInstance,
   repository: AgentSettingsRepository,
   acpSupervisor: AcpSupervisor,
 ) => {
-  app.get("/v1/settings/agents", async (_request, reply) => {
-    const collection = AgentSettingsCollectionSchema.parse({
-      items: repository.list(),
+  const toWireAgent = (item: AgentSettings): AgentSettings =>
+    AgentSettingsSchema.parse({
+      ...item,
+      state: acpSupervisor.getAgentRuntimeState(item.id),
     })
 
-    return reply.status(200).send(collection)
+  const toWireCollection = (items: readonly AgentSettings[]) =>
+    AgentSettingsCollectionSchema.parse({
+      items: items.map(toWireAgent),
+    })
+
+  app.get("/v1/settings/agents", async (_request, reply) => {
+    return reply.status(200).send(toWireCollection(repository.list()))
   })
 
   app.post("/v1/settings/agents", async (request, reply) => {
@@ -56,7 +72,7 @@ export const registerAgentSettingsRoutes = (
       return sendProblem(reply, 404, buildAgentNotFoundProblem())
     }
 
-    return reply.status(201).send(AgentSettingsSchema.parse(result.value))
+    return reply.status(201).send(toWireAgent(result.value))
   })
 
   app.post("/v1/settings/agents/import/detect", async (_request, reply) => {
@@ -80,11 +96,7 @@ export const registerAgentSettingsRoutes = (
       return sendProblem(reply, 404, buildAgentNotFoundProblem())
     }
 
-    return reply.status(200).send(
-      AgentSettingsCollectionSchema.parse({
-        items: result.value,
-      }),
-    )
+    return reply.status(200).send(toWireCollection(result.value))
   })
 
   app.post("/v1/settings/agents/:agentId/detect-path", async (request, reply) => {
@@ -101,6 +113,51 @@ export const registerAgentSettingsRoutes = (
     return reply.status(200).send(
       DetectAgentPathResponseSchema.parse(result.value),
     )
+  })
+
+  app.post("/v1/settings/agents/:agentId/actions", async (request, reply) => {
+    const agentId = AgentIdSchema.parse((request.params as { agentId: string }).agentId)
+    const action = AgentActionBodySchema.parse(request.body)
+    const settings = repository.list().find((item) => item.id === agentId)
+
+    if (settings === undefined) {
+      return sendProblem(reply, 404, buildAgentNotFoundProblem())
+    }
+
+    if (!settings.enabled) {
+      return sendProblem(
+        reply,
+        409,
+        buildAgentCannotRespawnProblem("Agent is not enabled"),
+      )
+    }
+
+    switch (action.type) {
+      case "respawn": {
+        try {
+          await acpSupervisor.respawn(agentId)
+        } catch (error: unknown) {
+          const reason = acpStartFailureReason(error)
+          app.log.warn({ agentId, reason }, "ACP agent respawn failed")
+          return sendProblem(reply, 409, buildAgentCannotRespawnProblem(reason))
+        }
+
+        if (!acpSupervisor.getAgentCapabilities(agentId)?.sessionCapabilities.list) {
+          app.log.warn(
+            { agentId, reason: "Agent does not support session/list" },
+            "ACP agent respawn failed",
+          )
+          return sendProblem(reply, 409, buildAgentSessionListUnsupportedProblem())
+        }
+
+        const next = repository.list().find((item) => item.id === agentId)
+        if (next === undefined) {
+          return sendProblem(reply, 404, buildAgentNotFoundProblem())
+        }
+
+        return reply.status(200).send(toWireAgent(next))
+      }
+    }
   })
 
   app.patch("/v1/settings/agents/:agentId", async (request, reply) => {
@@ -140,7 +197,9 @@ export const registerAgentSettingsRoutes = (
     if ("enabled" in body && body.enabled) {
       try {
         await acpSupervisor.start(agentId)
-      } catch {
+      } catch (error: unknown) {
+        const reason = acpStartFailureReason(error)
+        app.log.warn({ agentId, reason }, "ACP agent start failed")
         repository.update({ agentId, body: { enabled: false } })
         await acpSupervisor.handleAgentDisabled(agentId)
         return sendProblem(reply, 409, buildAgentCannotEnableProblem("ACP supervisor failed to start"))
@@ -157,7 +216,12 @@ export const registerAgentSettingsRoutes = (
       await acpSupervisor.handleAgentDisabled(agentId)
     }
 
-    return reply.status(200).send(AgentSettingsSchema.parse(result.value))
+    const next = repository.list().find((item) => item.id === result.value.id)
+    if (next === undefined) {
+      return sendProblem(reply, 404, buildAgentNotFoundProblem())
+    }
+
+    return reply.status(200).send(toWireAgent(next))
   })
 
   app.delete("/v1/settings/agents/:agentId", async (request, reply) => {

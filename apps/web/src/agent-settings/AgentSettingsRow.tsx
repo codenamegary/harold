@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { UseMutationResult } from "@tanstack/react-query"
 import { AgentId, AgentSettings } from "contracts/http/agent-settings"
-import { ChevronDown, TriangleAlert } from "lucide-react"
+import { ChevronDown, RotateCw, TriangleAlert } from "lucide-react"
 import { Controller, useForm } from "react-hook-form"
 import { Button } from "../design-system/Button"
 import { ConfirmDeleteIconButton } from "../design-system/ConfirmDeleteIconButton"
@@ -14,13 +14,19 @@ import {
 } from "./agent.launch.form.schema"
 import {
   agentPathDetectErrorMessage,
+  agentRespawnErrorMessage,
   agentSettingsUpdateErrorMessage,
 } from "./agent.settings.mutation.error.message"
+import {
+  agentRuntimeStatusChipClassName,
+  agentRuntimeStatusLabels,
+} from "./agent.runtime.status"
 import { deleteAgentSettings } from "./delete.agent.settings"
 import { detectAgentPath } from "./detect.agent.path"
 import { formatLaunchCommandPreview } from "./launch.command.preview"
 import { insertNpxYesFlag, needsNpxYesFlag } from "./npx.yes.flag"
 import { isCustomAgentId } from "./is.custom.agent.id"
+import { respawnAgent } from "./respawn.agent"
 import { updateAgentSettings } from "./update.agent.settings"
 
 const textLinkClassName =
@@ -93,6 +99,12 @@ type DeleteMutation = UseMutationResult<
   AgentId
 >
 
+type RespawnMutation = UseMutationResult<
+  Awaited<ReturnType<typeof respawnAgent>>,
+  Error,
+  AgentId
+>
+
 type AgentSettingsRowProps = {
   agent: AgentSettings
   controlsDisabled: boolean
@@ -100,6 +112,7 @@ type AgentSettingsRowProps = {
   updateMutation: UpdateMutation
   detectMutation: DetectMutation
   deleteMutation: DeleteMutation
+  respawnMutation: RespawnMutation
 }
 
 export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
@@ -109,6 +122,7 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
   updateMutation,
   detectMutation,
   deleteMutation,
+  respawnMutation,
 }) => {
   const [expanded, setExpanded] = useState(initiallyExpanded)
   const [detectSuccessVisible, setDetectSuccessVisible] = useState(false)
@@ -161,14 +175,24 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
       ? agentPathDetectErrorMessage(detectMutation.error, "")
       : ""
 
+  const respawnError =
+    respawnMutation.isError && respawnMutation.variables === agent.id
+      ? agentRespawnErrorMessage(respawnMutation.error, "")
+      : ""
+
+  const runtimeError = respawnError !== "" ? respawnError : (agent.state.error ?? "")
+
   const isDetecting =
     detectMutation.isPending && detectMutation.variables === agent.id
 
+  const isRespawning =
+    respawnMutation.isPending && respawnMutation.variables === agent.id
+
   useEffect(() => {
-    if (updateErrorForAgent !== "" || detectError !== "") {
+    if (updateErrorForAgent !== "" || detectError !== "" || runtimeError !== "") {
       setExpanded(true)
     }
-  }, [updateErrorForAgent, detectError])
+  }, [updateErrorForAgent, detectError, runtimeError])
 
   const handleToggle = () => {
     updateMutation.mutate(
@@ -182,6 +206,14 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
         },
       },
     )
+  }
+
+  const handleRespawn = () => {
+    respawnMutation.mutate(agent.id, {
+      onSuccess: () => {
+        respawnMutation.reset()
+      },
+    })
   }
 
   const onSave = (data: AgentLaunchFormValues) => {
@@ -357,6 +389,25 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
             {launchSummary}
           </span>
         </td>
+        <td className="px-3 py-2 align-middle">
+          <div className="flex min-w-0 flex-col gap-1">
+            <span
+              aria-label={`${agent.displayName} runtime status`}
+              className={`w-fit shrink-0 rounded-[4px] border px-1 py-px font-mono text-2xs ${agentRuntimeStatusChipClassName[agent.state.status]}`}
+            >
+              {agentRuntimeStatusLabels[agent.state.status]}
+            </span>
+            {runtimeError !== "" ? (
+              <p
+                className="m-0 max-w-56 truncate text-2xs text-red-400"
+                role="alert"
+                title={runtimeError}
+              >
+                {runtimeError}
+              </p>
+            ) : null}
+          </div>
+        </td>
         <td className="px-3 py-2 align-middle text-right">
           <div className="inline-flex items-center justify-end gap-2">
             {agent.deletable ? (
@@ -368,6 +419,22 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
                 pending={isDeleting}
                 onConfirm={handleDelete}
               />
+            ) : null}
+            {agent.enabled && !isComingSoon ? (
+              <button
+                type="button"
+                aria-label={`Respawn ${agent.displayName}`}
+                aria-busy={isRespawning ? "true" : undefined}
+                disabled={rowDisabled || isRespawning || updateMutation.isPending}
+                className="grid size-6 shrink-0 place-items-center rounded text-dim transition-colors hover:text-lime cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={handleRespawn}
+              >
+                <RotateCw
+                  aria-hidden
+                  className={`size-3.5 ${isRespawning ? "animate-spin" : ""}`}
+                  strokeWidth={1.75}
+                />
+              </button>
             ) : null}
             {isComingSoon ? (
               <span className="sr-only">Unavailable</span>
@@ -390,7 +457,7 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
           aria-busy={isDeleting ? "true" : undefined}
           className={`border-b border-line-soft last:border-b-0 transition-opacity duration-200 ${isComingSoon || isDeleting ? "opacity-55" : ""} ${isDeleting ? "pointer-events-none" : ""}`}
         >
-          <td colSpan={3} className="bg-[#0a0c10] px-3 py-3">
+          <td colSpan={4} className="bg-[#0a0c10] px-3 py-3">
             <div className="flex flex-col gap-4 p-4">
               <div className="min-w-0 max-w-xl">
                 <p className="m-0 mb-1.5 text-2xs font-medium tracking-wide text-label">Path</p>

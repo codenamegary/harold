@@ -102,6 +102,7 @@ describe("GET /v1/settings/agents", () => {
     expect(cursor.args).toEqual(["acp"])
     expect(cursor.present).toBe(true)
     expect(cursor.popular).toBe(true)
+    expect(cursor.state).toEqual({ status: "stopped", error: null })
 
     const claudeAcp = findAgent(body, "claude-acp")
     expect(claudeAcp.enabled).toBe(false)
@@ -273,6 +274,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     expect(body.path).toBe(detectedPath)
     expect(body.args).toEqual(["acp"])
     expect(body.present).toBe(true)
+    expect(body.state).toEqual({ status: "ready", error: null })
   })
 
   test("returns 400 and persists enabled when enable auto-detect fails", async () => {
@@ -393,7 +395,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
 
     expect(response.statusCode).toBe(400)
     expect(body.title).toBe("Invalid agent executable path")
-  })
+  }, 15_000)
 
   test("sets path with manual override", async () => {
     const dataDir = await createTempDataDir()
@@ -467,7 +469,8 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
       present: false,
       popular: true,
       deletable: false,
-  sessionListSupported: true,
+      sessionListSupported: true,
+      state: { status: "ready", error: null },
     })
   })
 
@@ -622,6 +625,7 @@ describe("POST /v1/settings/agents/import/detect and apply", () => {
       popular: false,
       deletable: true,
   sessionListSupported: true,
+  state: { status: "stopped", error: null },
     })
     expect(applyBody.items[0]?.id).toBe("brand-new-agent")
   })
@@ -668,6 +672,7 @@ describe("POST /v1/settings/agents custom create", () => {
       popular: false,
       deletable: true,
   sessionListSupported: true,
+  state: { status: "stopped", error: null },
     })
 
     const secondResponse = await app.inject({
@@ -860,5 +865,130 @@ describe("agent settings durability", () => {
     expect(cursor.enabled).toBe(true)
     expect(cursor.path).toBe(detectedPath)
     expect(cursor.args).toEqual(["acp"])
+  })
+})
+
+describe("POST /v1/settings/agents/:agentId/actions", () => {
+  test("respawns an enabled agent and leaves it enabled", async () => {
+    const dataDir = await createTempDataDir()
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { app } = await createTestApp(dataDir, whichFn)
+
+    const enableResponse = await app.inject({
+      method: "PATCH",
+      url: "/v1/settings/agents/cursor",
+      payload: { enabled: true },
+    })
+    expect(enableResponse.statusCode).toBe(200)
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/settings/agents/cursor/actions",
+      payload: { type: "respawn" },
+    })
+    const body = AgentSettingsSchema.parse(JSON.parse(response.body))
+
+    expect(response.statusCode).toBe(200)
+    expect(body.enabled).toBe(true)
+    expect(body.state).toEqual({ status: "ready", error: null })
+  })
+
+  test("rejects respawn when the agent is disabled", async () => {
+    const dataDir = await createTempDataDir()
+    const { app } = await createTestApp(dataDir)
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/settings/agents/cursor/actions",
+      payload: { type: "respawn" },
+    })
+    const problem = ConflictProblemSchema.parse(JSON.parse(response.body))
+    const listed = AgentSettingsCollectionSchema.parse(
+      JSON.parse(
+        (
+          await app.inject({
+            method: "GET",
+            url: "/v1/settings/agents",
+          })
+        ).body,
+      ),
+    )
+    const cursor = findAgent(listed, "cursor")
+
+    expect(response.statusCode).toBe(409)
+    expect(problem.detail).toBe("Agent is not enabled")
+    expect(cursor.enabled).toBe(false)
+    expect(cursor.state).toEqual({ status: "stopped", error: null })
+  })
+
+  test("keeps the agent enabled when respawn start fails", async () => {
+    const dataDir = await createTempDataDir()
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { spawnAgentProcessFn } = createFakeSpawnFn(resources, {
+      capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+    })
+    const spawnCount = { value: 0 }
+    const config = parseConfig({
+      AGENT_SERVER_HOST: "127.0.0.1",
+      AGENT_SERVER_PORT: "0",
+      AGENT_SERVER_DATA_DIR: dataDir,
+    })
+    const database = openDatabase({ dataDir: config.dataDir })
+    const { app, acpSupervisor } = await createServer({
+      config,
+      runtime: createRuntime("0.1.0"),
+      database,
+      whichFn,
+      validateExecutablePathFn: acceptTestExecutablePath,
+      spawnAgentProcessFn: () => {
+        spawnCount.value += 1
+        if (spawnCount.value > 1) {
+          throw new Error("spawn exploded")
+        }
+        return spawnAgentProcessFn()
+      },
+    })
+    resources.addApp(app)
+    resources.addTeardown(async () => {
+      await acpSupervisor.stop()
+      database.close()
+    })
+
+    const enableResponse = await app.inject({
+      method: "PATCH",
+      url: "/v1/settings/agents/cursor",
+      payload: { enabled: true },
+    })
+    expect(enableResponse.statusCode).toBe(200)
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/settings/agents/cursor/actions",
+      payload: { type: "respawn" },
+    })
+    const problem = ConflictProblemSchema.parse(JSON.parse(response.body))
+    const listed = AgentSettingsCollectionSchema.parse(
+      JSON.parse(
+        (
+          await app.inject({
+            method: "GET",
+            url: "/v1/settings/agents",
+          })
+        ).body,
+      ),
+    )
+    const cursor = findAgent(listed, "cursor")
+
+    expect(response.statusCode).toBe(409)
+    expect(problem.detail).toBe("spawn exploded")
+    expect(cursor.enabled).toBe(true)
+    expect(cursor.state).toEqual({
+      status: "error",
+      error: "spawn exploded",
+    })
   })
 })

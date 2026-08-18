@@ -1,5 +1,6 @@
 import React, { useState } from "react"
 import { ImportDetectCandidate } from "contracts/http/agent-settings"
+import { RefreshCw } from "lucide-react"
 import { useConnection } from "../connection/use.connection"
 import { Button } from "../design-system/Button"
 import { Panel } from "../design-system/Panel"
@@ -17,6 +18,7 @@ import { useCreateCustomAgentMutation } from "./use.create.custom.agent.mutation
 import { useDeleteAgentSettingsMutation } from "./use.delete.agent.settings.mutation"
 import { useDetectAgentImportMutation } from "./use.detect.agent.import.mutation"
 import { useDetectAgentPathMutation } from "./use.detect.agent.path.mutation"
+import { useRespawnAgentMutation } from "./use.respawn.agent.mutation"
 import { useUpdateAgentSettingsMutation } from "./use.update.agent.settings.mutation"
 
 export const AgentsPanel: React.FC = () => {
@@ -26,6 +28,7 @@ export const AgentsPanel: React.FC = () => {
   const detectMutation = useDetectAgentPathMutation()
   const createCustomMutation = useCreateCustomAgentMutation()
   const deleteMutation = useDeleteAgentSettingsMutation()
+  const respawnMutation = useRespawnAgentMutation()
   const detectImportMutation = useDetectAgentImportMutation()
   const applyImportMutation = useApplyAgentImportMutation()
   const agents = agentSettingsQuery.data?.items ?? []
@@ -118,6 +121,24 @@ export const AgentsPanel: React.FC = () => {
       <div className="mb-[22px] flex flex-wrap items-center justify-between gap-4">
         <h3 className="m-0 text-lg font-semibold">Agents</h3>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            aria-label="Refresh agents"
+            aria-busy={agentSettingsQuery.isFetching ? "true" : undefined}
+            disabled={
+              connection.phase === "unreachable" || agentSettingsQuery.isFetching
+            }
+            className="grid size-8 shrink-0 place-items-center rounded-[7px] border border-line-strong bg-panel-2 text-dim transition-colors hover:border-line-hover-strong hover:bg-hover-surface-strong hover:text-lime cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => {
+              void agentSettingsQuery.refetch()
+            }}
+          >
+            <RefreshCw
+              aria-hidden
+              className={`size-3.5 ${agentSettingsQuery.isFetching ? "animate-spin" : ""}`}
+              strokeWidth={1.75}
+            />
+          </button>
           <Button
             type="button"
             variant="secondary"
@@ -175,6 +196,7 @@ export const AgentsPanel: React.FC = () => {
         updateMutation={updateMutation}
         detectMutation={detectMutation}
         deleteMutation={deleteMutation}
+        respawnMutation={respawnMutation}
       />
 
       <AgentsImportDialog

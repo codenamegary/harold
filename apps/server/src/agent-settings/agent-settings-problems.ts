@@ -24,6 +24,16 @@ export const buildAgentCannotEnableProblem = (
     detail,
   })
 
+export const buildAgentCannotRespawnProblem = (
+  detail = "Agent cannot be respawned",
+) =>
+  ConflictProblemSchema.parse({
+    type: PROBLEM_TYPES.conflict,
+    title: "Agent cannot be respawned",
+    status: 409,
+    detail,
+  })
+
 export const buildAgentSessionListUnsupportedProblem = () =>
   buildAgentCannotEnableProblem(
     "Agent does not advertise sessionCapabilities.list and cannot join the session gateway",

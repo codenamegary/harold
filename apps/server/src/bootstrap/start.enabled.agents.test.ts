@@ -12,6 +12,7 @@ const agent = (overrides: Partial<AgentSettings> & Pick<AgentSettings, "id">): A
   popular: true,
   deletable: false,
   sessionListSupported: true,
+  state: { status: "stopped", error: null },
   ...overrides,
 })
 

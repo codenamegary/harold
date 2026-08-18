@@ -57,6 +57,10 @@ export const registerSessionRoutes = (
 
     const supervisorReady = await ensureSupervisorReady(acpSupervisor, body.agentId)
     if (!supervisorReady.ok) {
+      app.log.warn(
+        { agentId: body.agentId, reason: supervisorReady.reason },
+        "ACP agent start failed",
+      )
       return sendProblem(reply, 409, buildAcpUnavailableProblem(supervisorReady.reason))
     }
 
@@ -102,6 +106,13 @@ export const registerSessionRoutes = (
     )
 
     if (!listed.ok) {
+      app.log.warn(
+        {
+          reason: listed.reason,
+          agentIds: [...acpSupervisor.getRunningAgentIds()],
+        },
+        "ACP session/list failed",
+      )
       return sendProblem(reply, 409, buildAcpUnavailableProblem(listed.reason))
     }
 
