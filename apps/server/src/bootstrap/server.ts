@@ -36,6 +36,10 @@ import { createAcpSupervisor } from "../acp/supervisor/acp-supervisor"
 import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 import { SpawnAgentProcessFn } from "../acp/supervisor/spawn-agent-process"
 import { registerSessionStreamRoutes } from "../session/stream.routes"
+import { createLogBuffer } from "../logs/log.buffer"
+import { createLogSinkStream } from "../logs/log.sink.stream"
+import { createLoggedAgentSpawn } from "../logs/logged.agent.spawn"
+import { registerLogRoutes } from "../logs/routes"
 import { createAcpHubPromptSession } from "../session/hub/acp.hub.prompt"
 import {
   createSessionCwdCache,
@@ -136,9 +140,15 @@ export const createServer = async ({
   appliedRuntimeSettings,
   envBindOverrides,
 }: CreateServerOptions) => {
-  const app = Fastify({
-    logger: buildLoggerOptions({ logStream, logLevel }),
+  const logBuffer = createLogBuffer()
+  const logSink = createLogSinkStream({
+    buffer: logBuffer,
+    downstream: logStream ?? process.stdout,
   })
+  const app = Fastify({
+    logger: buildLoggerOptions({ logStream: logSink, logLevel }),
+  })
+  const spawnFn = spawnAgentProcessFn ?? createLoggedAgentSpawn(logBuffer)
 
   registerErrorHandler(app)
 
@@ -181,7 +191,7 @@ export const createServer = async ({
     createAcpSupervisor({
       agentSettingsRepository,
       serverVersion: runtime.version,
-      spawnAgentProcessFn,
+      spawnAgentProcessFn: spawnFn,
       onSessionUpdate: ({ agentId, acpSessionId, update }) => {
         sessionHubRef.current?.handleSessionUpdate({
           agentId,
@@ -237,6 +247,7 @@ export const createServer = async ({
   })
 
   registerStatusRoutes(app, runtime, config, acpSupervisor)
+  registerLogRoutes(app, logBuffer)
   const workspaceService = createWorkspaceService({
     workspaceRepository,
   })

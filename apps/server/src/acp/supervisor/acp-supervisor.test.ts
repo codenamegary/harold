@@ -909,6 +909,91 @@ describe("createAcpSupervisor", () => {
     expect(sessionNewCalls).toEqual([{ cwd: "/tmp/project", mcpServers: [] }])
   })
 
+  test("loadSession skips session/load when the session is already live from session/new", async () => {
+    const mock = createMockTransport()
+    const loadCalls: unknown[] = []
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: {
+        loadSession: true,
+        sessionCapabilities: { close: false, list: {} },
+      },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+    mock.setHandler("session/new", () => ({ sessionId: "live-sess-1" }))
+    mock.setHandler("session/load", (params) => {
+      loadCalls.push(params)
+      throw new Error('Session "[redacted]" not found')
+    })
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: () => createMockProcess(),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    const created = await supervisor.createSession({
+      agentId: "cursor",
+      cwd: "/tmp/project",
+    })
+    expect(created).toEqual({ ok: true, acpSessionId: "live-sess-1" })
+
+    const loaded = await supervisor.loadSession({
+      agentId: "cursor",
+      sessionId: "live-sess-1",
+      cwd: "/tmp/project",
+    })
+
+    expect(loaded).toEqual({ ok: true, acpSessionId: "live-sess-1" })
+    expect(loadCalls).toEqual([])
+  })
+
+  test("loadSession calls session/load for a session that is not already live", async () => {
+    const mock = createMockTransport()
+    const loadCalls: unknown[] = []
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: {
+        loadSession: true,
+        sessionCapabilities: { close: false, list: {} },
+      },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+    mock.setHandler("session/load", (params) => {
+      loadCalls.push(params)
+      return { sessionId: "disk-sess-1" }
+    })
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: () => createMockProcess(),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    const loaded = await supervisor.loadSession({
+      agentId: "cursor",
+      sessionId: "disk-sess-1",
+      cwd: "/tmp/project",
+    })
+
+    expect(loaded).toEqual({ ok: true, acpSessionId: "disk-sess-1" })
+    expect(loadCalls).toEqual([
+      {
+        sessionId: "disk-sess-1",
+        cwd: "/tmp/project",
+        mcpServers: [],
+      },
+    ])
+  })
+
   test("createAcpSession updates activeSessions count", async () => {
     const mock = createMockTransport()
     mock.setHandler("initialize", () => ({

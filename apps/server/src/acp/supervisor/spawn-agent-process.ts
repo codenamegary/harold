@@ -13,15 +13,56 @@ export type SpawnAgentProcessFn = (input: {
   args: readonly string[]
 }) => SpawnedAgentProcess
 
+export type SpawnAgentProcessParams = {
+  profile: AgentProfile
+  executablePath: string
+  args: readonly string[]
+  onStderrLine?: (line: string) => void
+}
+
 export const buildAgentSpawnCommand = (
   executablePath: string,
   args: readonly string[],
 ): readonly string[] => [executablePath, ...args]
 
-export const spawnAgentProcess: SpawnAgentProcessFn = ({
-  executablePath,
-  args,
-}) => {
+const drainAgentStderr = async (
+  stderr: ReadableStream<Uint8Array>,
+  onStderrLine?: (line: string) => void,
+) => {
+  const reader = stderr.getReader()
+  const decoder = new TextDecoder()
+  const leftover = { value: "" }
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        leftover.value += decoder.decode()
+        leftover.value.split("\n").forEach((line) => {
+          if (line.length > 0) {
+            onStderrLine?.(line)
+          }
+        })
+        leftover.value = ""
+        return
+      }
+
+      leftover.value += decoder.decode(value, { stream: true })
+      const pieces = leftover.value.split("\n")
+      leftover.value = pieces.pop() ?? ""
+      pieces.forEach((line) => {
+        if (line.length > 0) {
+          onStderrLine?.(line)
+        }
+      })
+    }
+  } catch {
+    // Process exited or the stream was cancelled.
+  }
+}
+
+export const spawnAgentProcess = (params: SpawnAgentProcessParams): SpawnedAgentProcess => {
+  const { executablePath, args, onStderrLine } = params
   const cmd = buildAgentSpawnCommand(executablePath, args)
   const subprocess = Bun.spawn({
     cmd: [...cmd],
@@ -34,20 +75,7 @@ export const spawnAgentProcess: SpawnAgentProcessFn = ({
     throw new Error("failed to spawn agent process with stdio pipes")
   }
 
-  // Drain stderr so a chatty agent cannot stall on a full pipe buffer.
-  void (async () => {
-    const reader = subprocess.stderr.getReader()
-    try {
-      while (true) {
-        const { done } = await reader.read()
-        if (done) {
-          return
-        }
-      }
-    } catch {
-      // Process exited or the stream was cancelled.
-    }
-  })()
+  void drainAgentStderr(subprocess.stderr, onStderrLine)
 
   return {
     stdin: subprocess.stdin,

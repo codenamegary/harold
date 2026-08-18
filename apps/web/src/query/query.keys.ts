@@ -1,5 +1,7 @@
 import { WorkspaceState } from "contracts/http/workspace"
 import { DeviceState } from "contracts/http/device"
+import { LogLevel } from "contracts/http/runtime-settings"
+import { LogSource } from "contracts/http/logs"
 
 export const queryKeys = {
   status: ["status"] as const,
@@ -19,4 +21,7 @@ export const queryKeys = {
   sessionsRoot: ["sessions"] as const,
   sessions: (workspaceId?: string) =>
     [...queryKeys.sessionsRoot, workspaceId ?? "all"] as const,
+  logsRoot: ["logs"] as const,
+  logs: (filters: { level?: LogLevel; source?: LogSource } = {}) =>
+    [...queryKeys.logsRoot, filters] as const,
 }

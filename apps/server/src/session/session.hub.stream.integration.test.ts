@@ -178,14 +178,7 @@ describe("session hub stream integration", () => {
       agentId: "cursor",
       sessionId: created.sessionId,
     })
-
-    const replayA = clientA.messages.filter((message) => message.type === "session_update")
-    expect(replayA.length).toBeGreaterThanOrEqual(1)
-    expect(replayA[0]).toMatchObject({
-      type: "session_update",
-      agentId: "cursor",
-      sessionId: created.sessionId,
-    })
+    expect(clientA.messages.some((message) => message.type === "error")).toBe(false)
 
     clientB.send({
       type: "subscribe",
@@ -193,9 +186,7 @@ describe("session hub stream integration", () => {
       sessionId: created.sessionId,
     })
     await clientB.waitFor((message) => message.type === "subscribed")
-    expect(
-      clientB.messages.some((message) => message.type === "session_update"),
-    ).toBe(true)
+    expect(clientB.messages.some((message) => message.type === "error")).toBe(false)
 
     const liveBeforeA = clientA.messages.filter((m) => m.type === "session_update").length
     const liveBeforeB = clientB.messages.filter((m) => m.type === "session_update").length
@@ -253,5 +244,58 @@ describe("session hub stream integration", () => {
 
     await clientA.close()
     await clientB.close()
+  })
+
+  test("subscribe after session/new succeeds even when session/load fails", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app, config } = await createTestApp(resources, dataDir, whichFn, undefined, {
+      capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+      sessionNewSessionId: "hub-stream-new-1",
+      sessionLoadFails: true,
+      emitSessionUpdatesOnPrompt: true,
+      promptCompletionDelayMs: 50,
+    })
+    await enableAgent(app, "cursor", whichFn)
+
+    const { httpBase, wsUrl } = await getListeningBase(app, config)
+
+    const createResponse = await fetch(`${httpBase}/v1/sessions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agentId: "cursor",
+        cwd: "/tmp/hub-stream-new-project",
+      }),
+    })
+    expect(createResponse.status).toBe(201)
+    const created = CreateSessionResponseSchema.parse(await createResponse.json())
+
+    const client = await openStreamClient(wsUrl)
+    client.send({
+      type: "subscribe",
+      agentId: "cursor",
+      sessionId: created.sessionId,
+    })
+
+    const subscribed = await client.waitFor(
+      (message) => message.type === "subscribed" || message.type === "error",
+    )
+    expect(subscribed).toMatchObject({
+      type: "subscribed",
+      agentId: "cursor",
+      sessionId: created.sessionId,
+    })
+
+    client.send({
+      type: "prompt",
+      agentId: "cursor",
+      sessionId: created.sessionId,
+      text: "hello new session",
+    })
+
+    await client.waitFor((message) => message.type === "prompt_complete")
+    expect(client.messages.some((message) => message.type === "error")).toBe(false)
+
+    await client.close()
   })
 })

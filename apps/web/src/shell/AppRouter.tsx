@@ -4,9 +4,10 @@ import { AppShell } from "./AppShell"
 import { ChatPage } from "./pages/ChatPage"
 import { ConnectPage } from "./pages/ConnectPage"
 import { DevicesPage } from "./pages/DevicesPage"
+import { LogsPage } from "./pages/LogsPage"
 import { OverviewPage } from "./pages/OverviewPage"
-import { SettingsPage } from "./pages/SettingsPage"
 import { SessionsPage } from "./pages/SessionsPage"
+import { SettingsPage } from "./pages/SettingsPage"
 import { WorkspacesPage } from "./pages/WorkspacesPage"
 
 export const AppRoutes: React.FC = () => (
@@ -18,6 +19,7 @@ export const AppRoutes: React.FC = () => (
       <Route path="devices" element={<DevicesPage />} />
       <Route path="chat" element={<ChatPage />} />
       <Route path="sessions" element={<SessionsPage />} />
+      <Route path="logs" element={<LogsPage />} />
       <Route path="settings" element={<SettingsPage />} />
     </Route>
   </Routes>

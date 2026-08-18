@@ -25,6 +25,7 @@ const shellRoutes = [
   { path: "/devices" },
   { path: "/chat" },
   { path: "/sessions" },
+  { path: "/logs" },
   { path: "/settings" },
 ] as const
 
@@ -183,6 +184,21 @@ describe("shell honesty", () => {
             JSON.stringify({
               items: [],
               page: { limit: 100, count: 0 },
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        )
+      }
+
+      if (url.startsWith("/v1/logs")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              items: [],
+              page: { limit: 200, count: 0 },
             }),
             {
               status: 200,

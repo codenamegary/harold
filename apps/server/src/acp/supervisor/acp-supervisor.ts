@@ -723,6 +723,11 @@ export const createAcpSupervisor = ({
       return { ok: false, reason: "ACP supervisor is not ready" }
     }
 
+    const existingBinding = sessionBindingRegistry.getBinding(acpSessionId)
+    if (existingBinding !== undefined && existingBinding.phase === "live") {
+      return { ok: true, acpSessionId }
+    }
+
     if (!runtime.agentCapabilities?.loadSession) {
       return { ok: false, reason: "Agent does not support session/load" }
     }
@@ -766,7 +771,7 @@ export const createAcpSupervisor = ({
 
       return { ok: true, acpSessionId: result.sessionId }
     } catch (error: unknown) {
-      sessionBindingRegistry.setPhase({ acpSessionId, phase: "live" })
+      sessionBindingRegistry.unbind({ acpSessionId })
       return { ok: false, reason: sanitizeFailureReason(error, "session/load failed") }
     }
   }
