@@ -1,7 +1,5 @@
 package server.agent.android.contracts
 
-import kotlinx.serialization.EncodeDefault
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -43,18 +41,4 @@ data class PermissionRequest(
     val status: PermissionStatus,
     val options: List<PermissionOption>,
     val createdAt: String,
-)
-
-typealias PermissionRequestCollection = ItemCollection<PermissionRequest>
-
-@OptIn(ExperimentalSerializationApi::class)
-@Serializable
-data class ResolvePermissionRequestBody(
-    /**
-     * Must be encoded even though it has a default. kotlinx.serialization omits
-     * defaults unless marked, and the server requires `status: "resolved"`.
-     */
-    @EncodeDefault
-    val status: String = "resolved",
-    val optionId: String,
 )

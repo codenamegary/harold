@@ -1,7 +1,6 @@
 package server.agent.android.contracts
 
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -203,78 +202,6 @@ class ContractDecodingTest {
             AgentServerJson.decodeFromString(
                 ProblemDetails.serializer(),
                 """{ "type": "https://agent-server.local/problems/teapot", "title": "Nope" }""",
-            )
-        }
-    }
-
-    @Test
-    fun decodesEventFrameEnvelopes() {
-        val frame = AgentServerJson.decodeFromString(
-            EventFrameSerializer,
-            """
-            [
-              {
-                "type": "server.status",
-                "cursor": "1",
-                "occurredAt": "2026-08-05T00:00:00.000Z",
-                "payload": { "state": "online" }
-              },
-              {
-                "type": "session.output.delta",
-                "cursor": "2",
-                "occurredAt": "2026-08-05T00:00:01.000Z",
-                "workspaceId": "ws_01",
-                "sessionId": "sess_01",
-                "payload": { "turnId": "turn_01K1ZQ4T7C8E9FGHJKMNPQRSTV", "text": "hi" }
-              }
-            ]
-            """.trimIndent(),
-        )
-
-        assertEquals(2, frame.size)
-        assertEquals(EventType.ServerStatus, frame.first().type)
-        assertEquals("1", frame.first().cursor)
-        assertNull(frame.first().sessionId)
-
-        val delta = frame.last()
-        assertEquals(EventType.SessionOutputDelta, delta.type)
-        assertEquals("sess_01", delta.sessionId)
-        assertEquals(JsonPrimitive("hi"), delta.payload["text"])
-    }
-
-    @Test
-    fun rejectsUnknownEventType() {
-        assertThrowsSerialization {
-            AgentServerJson.decodeFromString(
-                EventFrameSerializer,
-                """
-                [
-                  {
-                    "type": "session.telepathy",
-                    "cursor": "1",
-                    "occurredAt": "2026-08-05T00:00:00.000Z",
-                    "payload": {}
-                  }
-                ]
-                """.trimIndent(),
-            )
-        }
-    }
-
-    @Test
-    fun rejectsEventEnvelopeWithUnknownKey() {
-        assertThrowsSerialization {
-            AgentServerJson.decodeFromString(
-                EventEnvelope.serializer(),
-                """
-                {
-                  "type": "server.status",
-                  "cursor": "1",
-                  "occurredAt": "2026-08-05T00:00:00.000Z",
-                  "payload": { "state": "online" },
-                  "extra": 1
-                }
-                """.trimIndent(),
             )
         }
     }

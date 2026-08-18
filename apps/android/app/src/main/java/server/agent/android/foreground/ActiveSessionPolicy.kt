@@ -23,7 +23,6 @@ fun isUserVisibleActive(state: SessionState): Boolean =
         SessionState.Idle,
         SessionState.Offline,
         SessionState.Error,
-        SessionState.Archived,
         -> false
     }
 
@@ -36,7 +35,6 @@ fun notificationStateLabel(state: SessionState): String =
         SessionState.Idle -> "Idle"
         SessionState.Offline -> "Offline"
         SessionState.Error -> "Error"
-        SessionState.Archived -> "Archived"
     }
 
 /**

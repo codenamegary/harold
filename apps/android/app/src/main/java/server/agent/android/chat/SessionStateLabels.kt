@@ -11,7 +11,6 @@ fun sessionStatusLabel(state: SessionState): String =
         SessionState.Stopping -> "Stopping"
         SessionState.Offline -> "Offline"
         SessionState.Error -> "Error"
-        SessionState.Archived -> "Archived"
     }
 
 fun sessionProgressMessage(state: SessionState?): String? =

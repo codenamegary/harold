@@ -17,7 +17,6 @@ class ActiveSessionPolicyTest {
         assertFalse(isUserVisibleActive(SessionState.Idle))
         assertFalse(isUserVisibleActive(SessionState.Offline))
         assertFalse(isUserVisibleActive(SessionState.Error))
-        assertFalse(isUserVisibleActive(SessionState.Archived))
     }
 
     @Test

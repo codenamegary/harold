@@ -43,8 +43,6 @@ fun composerBlockedMessage(sessionState: SessionState?): String? =
             "Session reconnecting. Prompts unlock when it is idle again."
         SessionState.Error ->
             "Session ended with an error. Start a new session to continue."
-        SessionState.Archived ->
-            "Session archived. Select another session."
         else -> null
     }
 

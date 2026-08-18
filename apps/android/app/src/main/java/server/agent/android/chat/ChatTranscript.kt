@@ -129,24 +129,6 @@ private fun TranscriptBlockRow(
         is TranscriptToolRow -> {
             ToolCallGroup(tools = listOf(row))
         }
-
-        is TranscriptTurnStatusRow -> {
-            val label = when (row.status) {
-                TurnTerminalStatus.Completed -> "Turn completed"
-                TurnTerminalStatus.Failed -> row.failureCode?.let { code ->
-                    "Turn failed ($code)"
-                } ?: "Turn failed"
-                TurnTerminalStatus.Cancelled -> "Turn canceled"
-            }
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("transcript_turn_status"),
-            )
-        }
     }
 }
 
@@ -164,5 +146,4 @@ private fun transcriptRowKey(row: TranscriptRow, index: Int): String =
         is TranscriptAssistantRow,
         -> "${row::class.simpleName}-${row.turnId}-$index"
         is TranscriptToolRow -> "tool-${row.toolCallId}"
-        is TranscriptTurnStatusRow -> "turn-status-${row.turnId}-$index"
     }

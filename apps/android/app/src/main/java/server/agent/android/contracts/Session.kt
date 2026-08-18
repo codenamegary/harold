@@ -25,9 +25,6 @@ enum class SessionState {
 
     @SerialName("error")
     Error,
-
-    @SerialName("archived")
-    Archived,
 }
 
 @Serializable
