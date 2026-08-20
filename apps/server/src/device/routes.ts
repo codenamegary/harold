@@ -16,6 +16,7 @@ import {
 import { FastifyInstance } from "fastify"
 import { DeviceService } from "./service"
 import {
+  buildAdvertisedEndpointUnavailableProblem,
   buildDeviceNotFoundProblem,
   buildInvalidCursorProblem,
   buildPairingCodeClaimedProblem,
@@ -48,6 +49,8 @@ const problemForError = (error: DeviceError) => {
       return { status: 409, problem: buildPairingCodeExpiredProblem() }
     case "pairing_code_revoked":
       return { status: 409, problem: buildPairingCodeRevokedProblem() }
+    case "advertised_endpoint_unavailable":
+      return { status: 400, problem: buildAdvertisedEndpointUnavailableProblem() }
   }
 }
 
@@ -59,6 +62,7 @@ const isDeviceError = (error: { kind: string }): error is DeviceError => {
     case "pairing_code_race":
     case "pairing_code_expired":
     case "pairing_code_revoked":
+    case "advertised_endpoint_unavailable":
       return true
     default:
       return false
@@ -67,8 +71,8 @@ const isDeviceError = (error: { kind: string }): error is DeviceError => {
 
 export const registerDeviceRoutes = (app: FastifyInstance, service: DeviceService) => {
   app.post(PAIRING_CODES_PATH, async (request, reply) => {
-    CreatePairingCodeBodySchema.parse(request.body ?? {})
-    const result = await service.createPairingCode()
+    const body = CreatePairingCodeBodySchema.parse(request.body ?? {})
+    const result = await service.createPairingCode(body)
 
     if (!result.ok) {
       if (isDeviceError(result.error)) {

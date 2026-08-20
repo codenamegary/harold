@@ -33,6 +33,7 @@ enum class RuntimeSettingsOverrideSource {
 @Serializable
 data class RuntimeSettings(
     val advertisedUrl: String? = null,
+    val advertisedUrlEnabled: Boolean = true,
     val trustedProxies: List<String>,
     val bindHost: String,
     val bindPort: Int,

@@ -5,15 +5,11 @@ import {
   ArrowRight,
   ArrowUpRight,
   Check,
-  Cloud,
-  Home,
-  Info,
-  Radio,
   Smartphone,
 } from "lucide-react"
-import { CreatePairingCodeResponse } from "contracts/http/pairing-code"
+import { CreatePairingCodeResponse, PairingEndpointChoice } from "contracts/http/pairing-code"
 import { formatPairingQrUri } from "contracts/pairing/qr-uri"
-import { useNavigate, useSearchParams } from "react-router"
+import { useNavigate } from "react-router"
 import { Button } from "../design-system/Button"
 import { CopyButton } from "../design-system/CopyButton"
 import { FieldLabel } from "../design-system/FieldLabel"
@@ -25,6 +21,7 @@ import {
   hostFromAdvertisedUrl,
   normalizeExternalUrlHost,
 } from "../runtime-settings/advertised.url.host"
+import { isCloudProxyOn } from "../runtime-settings/is.cloud.proxy.on"
 import { useRuntimeSettingsQuery } from "../runtime-settings/use.runtime.settings.query"
 import { useUpdateRuntimeSettingsMutation } from "../runtime-settings/use.update.runtime.settings.mutation"
 import { cloudWizardSteps } from "./connect.wizard.steps"
@@ -41,18 +38,7 @@ import {
 import { HttpsAbsoluteUrlSchema } from "contracts/http/runtime-settings"
 import { useCreatePairingCodeMutation } from "./use.create.pairing.code.mutation"
 
-type AccessMode = "local" | "cloud"
-
-type WizardView =
-  | { kind: "loading" }
-  | { kind: "mode-select" }
-  | { kind: "cloud-ready" }
-  | { kind: "cloud-pair" }
-  | { kind: "local-pair" }
-  | { kind: "cloud"; step: 1 | 2 | 3 }
-
-const initialViewFromSearchParam = (step: string | null): WizardView =>
-  step === "pair" ? { kind: "local-pair" } : { kind: "loading" }
+type WizardView = { kind: "loading" } | { kind: "pair" } | { kind: "cloud"; step: 1 | 2 | 3 }
 
 type ConnectWizardStepRailProps = {
   currentStep: number
@@ -92,169 +78,6 @@ const ConnectWizardStepRail: React.FC<ConnectWizardStepRailProps> = ({
       )
     })}
   </aside>
-)
-
-type AccessModeStepProps = {
-  accessMode: AccessMode
-  onAccessModeChange: (mode: AccessMode) => void
-  onContinue: () => void
-  switchError: string | null
-}
-
-const AccessModeStep: React.FC<AccessModeStepProps> = ({
-  accessMode,
-  onAccessModeChange,
-  onContinue,
-  switchError,
-}) => (
-  <div>
-    <div className="mb-[25px] flex items-center gap-[13px]">
-      <span className="grid size-10 place-items-center rounded-[9px] border border-line bg-panel-2 text-body">
-        <Radio aria-hidden className="size-5" />
-      </span>
-      <div>
-        <h2 className="m-0 text-lg font-semibold">How will you connect?</h2>
-        <p className="m-0 mt-1.5 text-base text-muted">
-          You can change this later without losing paired devices.
-        </p>
-      </div>
-    </div>
-
-    <div className="grid gap-3.5 md:grid-cols-2">
-      <button
-        type="button"
-        aria-pressed={accessMode === "local"}
-        onClick={() => onAccessModeChange("local")}
-        className={`relative min-h-[230px] cursor-pointer rounded-[9px] border p-5 text-left max-[640px]:min-h-[200px] ${accessMode === "local" ? "border-lime/50 bg-[linear-gradient(145deg,rgba(182,243,107,0.04),#0b0e13)] shadow-[inset_0_0_0_1px_rgba(182,243,107,0.08)]" : "border-line bg-[#0b0e13] hover:border-line-hover"}`}
-      >
-        <div
-          className={`absolute top-5 right-5 grid size-4 place-items-center rounded-full border ${accessMode === "local" ? "border-lime" : "border-line"}`}
-        >
-          {accessMode === "local" ? (
-            <span className="size-[7px] rounded-full bg-lime" />
-          ) : null}
-        </div>
-        <div className="mb-3.5 text-body">
-          <Home aria-hidden className="size-10" strokeWidth={1.75} />
-        </div>
-        <h3 className="m-0 mb-2 text-base font-semibold">Local or private network</h3>
-        <p className="m-0 min-h-[43px] text-base leading-[1.55] text-muted max-[640px]:min-h-0">
-          Use the local test UI, your trusted LAN, or a private tailnet. Skip cloud configuration
-          entirely.
-        </p>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <StatusPill variant="success">
-            Simple setup
-          </StatusPill>
-          <code className="font-mono text-2xs text-pill">private access</code>
-        </div>
-      </button>
-
-      <button
-        type="button"
-        aria-pressed={accessMode === "cloud"}
-        onClick={() => onAccessModeChange("cloud")}
-        className={`relative min-h-[230px] cursor-pointer rounded-[9px] border p-5 text-left max-[640px]:min-h-[200px] ${accessMode === "cloud" ? "border-lime/50 bg-[linear-gradient(145deg,rgba(182,243,107,0.04),#0b0e13)] shadow-[inset_0_0_0_1px_rgba(182,243,107,0.08)]" : "border-line bg-[#0b0e13] hover:border-line-hover"}`}
-      >
-        <div
-          className={`absolute top-5 right-5 grid size-4 place-items-center rounded-full border ${accessMode === "cloud" ? "border-lime" : "border-line"}`}
-        >
-          {accessMode === "cloud" ? (
-            <span className="size-[7px] rounded-full bg-lime" />
-          ) : null}
-        </div>
-        <div className="mb-3.5 text-violet">
-          <Cloud aria-hidden className="size-10" strokeWidth={1.75} />
-        </div>
-        <h3 className="m-0 mb-2 text-base font-semibold">Cloud proxy</h3>
-        <p className="m-0 min-h-[43px] text-base leading-[1.55] text-muted max-[640px]:min-h-0">
-          Reach your agents securely from anywhere using your own tunnel or proxy.
-        </p>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <StatusPill variant="violet">
-            Remote access
-          </StatusPill>
-          <code className="font-mono text-2xs text-pill">HTTPS required</code>
-        </div>
-      </button>
-    </div>
-
-    <div className="mt-[22px] flex gap-3 rounded-lg border border-line-soft bg-panel-2 p-3.5 text-base text-body-soft">
-      <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-muted" strokeWidth={1.75} />
-      <p className="m-0 leading-[1.55]">
-        <strong className="text-body">Your agent stays local.</strong> Agent Server keeps the workspace
-        and Cursor CLI on this machine. Secure the proxy-to-home hop with WireGuard or another
-        encrypted tunnel.
-      </p>
-    </div>
-
-    {switchError !== null ? (
-      <p className="mt-4 text-base text-danger" role="alert">
-        {switchError}
-      </p>
-    ) : null}
-
-    <div className="mt-6 flex items-center justify-end border-t border-line-soft pt-[18px]">
-      <Button onClick={onContinue}>
-        Continue <ArrowRight aria-hidden className="size-4" />
-      </Button>
-    </div>
-  </div>
-)
-
-type CloudReadyStepProps = {
-  advertisedUrl: string
-  onPairDevice: () => void
-  onReset: () => void
-  isResetting: boolean
-  resetError: string | null
-}
-
-const CloudReadyStep: React.FC<CloudReadyStepProps> = ({
-  advertisedUrl,
-  onPairDevice,
-  onReset,
-  isResetting,
-  resetError,
-}) => (
-  <div>
-    <div className="mb-[25px] flex items-center gap-[13px]">
-      <span className="grid size-10 place-items-center rounded-[9px] border border-line bg-panel-2 text-violet">
-        <Cloud aria-hidden className="size-5" strokeWidth={1.75} />
-      </span>
-      <div>
-        <h2 className="m-0 text-lg font-semibold">Cloud proxy connected</h2>
-        <p className="m-0 mt-1.5 text-base text-muted">
-          Devices can reach this agent through your saved HTTPS endpoint.
-        </p>
-      </div>
-    </div>
-
-    <ConnectionTestPanel advertisedUrl={advertisedUrl} />
-
-    <div className="mt-[22px] flex gap-3 rounded-lg border border-line-soft bg-panel-2 p-3.5 text-base text-body-soft">
-      <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-muted" strokeWidth={1.75} />
-      <p className="m-0 leading-[1.55]">
-        <strong className="text-body">Your agent stays local.</strong> Reset clears the saved URL so
-        you can choose local access or configure a different proxy.
-      </p>
-    </div>
-
-    {resetError !== null ? (
-      <p className="mt-4 text-base text-danger" role="alert">
-        {resetError}
-      </p>
-    ) : null}
-
-    <div className="mt-6 flex items-center justify-between border-t border-line-soft pt-[18px]">
-      <Button variant="danger" disabled={isResetting} onClick={onReset}>
-        Reset
-      </Button>
-      <Button disabled={isResetting} onClick={onPairDevice}>
-        Pair another device <ArrowRight aria-hidden className="size-4" />
-      </Button>
-    </div>
-  </div>
 )
 
 type ExternalUrlStepProps = {
@@ -302,7 +125,9 @@ const ExternalUrlForm: React.FC<ExternalUrlFormProps> = ({
     }
 
     try {
-      await updateRuntimeSettingsMutation.mutateAsync({ body: { advertisedUrl } })
+      await updateRuntimeSettingsMutation.mutateAsync({
+        body: { advertisedUrl, advertisedUrlEnabled: true },
+      })
       onContinue()
     } catch {
       setSaveError("Could not save the external URL. Check the hostname and try again.")
@@ -523,8 +348,16 @@ const TestConnectionStep: React.FC<TestConnectionStepProps> = ({
 }
 
 type PairDeviceStepProps = {
-  onBack: () => void
-  endpointHint: "local" | "remote"
+  pairingEndpoint: PairingEndpointChoice
+  cloudProxyOn: boolean
+  advertisedUrl: string | null
+  onPairingEndpointChange: (endpoint: PairingEndpointChoice) => void
+  onSetupCloud: () => void
+  onEnableCloud: () => void
+  onBack?: () => void
+  onFinish: () => void
+  finishLabel: string
+  finishAlwaysEnabled: boolean
 }
 
 const qrPayload = (pairingCode: CreatePairingCodeResponse): string =>
@@ -533,11 +366,31 @@ const qrPayload = (pairingCode: CreatePairingCodeResponse): string =>
     code: pairingCode.code,
   })
 
-const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack, endpointHint }) => {
+const endpointChoiceClass = (active: boolean) =>
+  `rounded-md border px-3 py-1.5 text-sm cursor-pointer ${
+    active
+      ? "border-lime/50 bg-[rgba(182,243,107,0.06)] text-body"
+      : "border-line bg-transparent text-muted hover:border-line-hover"
+  }`
+
+const PairDeviceStep: React.FC<PairDeviceStepProps> = ({
+  pairingEndpoint,
+  cloudProxyOn,
+  advertisedUrl,
+  onPairingEndpointChange,
+  onSetupCloud,
+  onEnableCloud,
+  onBack,
+  onFinish,
+  finishLabel,
+  finishAlwaysEnabled,
+}) => {
   const createPairingCodeMutation = useCreatePairingCodeMutation()
   const { mutateAsync, isError } = createPairingCodeMutation
-  const initialPairingCodePromise = useRef<Promise<CreatePairingCodeResponse> | null>(null)
-  const navigate = useNavigate()
+  const requestRef = useRef<{
+    endpoint: PairingEndpointChoice
+    promise: Promise<CreatePairingCodeResponse>
+  } | null>(null)
   const [pairingCode, setPairingCode] = useState<CreatePairingCodeResponse | null>(null)
   const [pairedDeviceName, setPairedDeviceName] = useState<string | null>(null)
   const [isCreatingPairingCode, setIsCreatingPairingCode] = useState(true)
@@ -545,8 +398,16 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack, endpointHint })
 
   useEffect(() => {
     const active = { value: true }
-    const promise = initialPairingCodePromise.current ?? mutateAsync()
-    initialPairingCodePromise.current = promise
+    const cached = requestRef.current
+    const promise =
+      cached?.endpoint === pairingEndpoint
+        ? cached.promise
+        : mutateAsync({ endpoint: pairingEndpoint })
+    requestRef.current = { endpoint: pairingEndpoint, promise }
+
+    setIsCreatingPairingCode(true)
+    setPairingCode(null)
+    setPairedDeviceName(null)
 
     void promise.then(
       (created) => {
@@ -565,7 +426,7 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack, endpointHint })
     return () => {
       active.value = false
     }
-  }, [mutateAsync])
+  }, [mutateAsync, pairingEndpoint])
 
   useEffect(() => {
     return pollForPairedDevice({
@@ -573,13 +434,14 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack, endpointHint })
         setPairedDeviceName(device.name)
       },
     })
-  }, [pairPollEpoch])
+  }, [pairPollEpoch, pairingEndpoint])
 
   const handleRegenerate = () => {
     setPairedDeviceName(null)
     setPairPollEpoch((epoch) => epoch + 1)
     setIsCreatingPairingCode(true)
-    const promise = mutateAsync()
+    const promise = mutateAsync({ endpoint: pairingEndpoint })
+    requestRef.current = { endpoint: pairingEndpoint, promise }
     void promise.then(
       (created) => {
         setPairingCode(created)
@@ -594,26 +456,61 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack, endpointHint })
   const codeLabel = pairingCode?.code ?? "—"
   const expiresLabel =
     pairingCode === null ? "Waiting for code…" : `Expires at ${pairingCode.expiresAt}`
-  const canViewDevices = pairedDeviceName !== null
-  const listeningLabel =
-    endpointHint === "remote"
-      ? "Listening on your advertised HTTPS endpoint"
-      : "Listening on this local Agent Server endpoint"
+  const finishEnabled = finishAlwaysEnabled || pairedDeviceName !== null
+  const listeningLabel = pairingCode?.endpoint ?? "Waiting for endpoint…"
 
   return (
     <div>
-      <div className="mb-[25px] flex items-center gap-[13px]">
-        <span className="grid size-10 place-items-center rounded-[9px] border border-line bg-panel-2 text-body">
-          <Smartphone aria-hidden className="size-5" />
-        </span>
-        <div>
-          <h2 className="m-0 text-lg font-semibold">Pair a device</h2>
-          <p className="m-0 mt-1.5 text-base text-muted">
-            Enter the six-character code in a trusted client. The QR includes the same code plus
-            the endpoint for convenience.
-          </p>
+      <div className="mb-[25px] flex items-center justify-between gap-3">
+        <div className="flex items-center gap-[13px]">
+          <span className="grid size-10 place-items-center rounded-[9px] border border-line bg-panel-2 text-body">
+            <Smartphone aria-hidden className="size-5" />
+          </span>
+          <div>
+            <h2 className="m-0 text-lg font-semibold">Pair a device</h2>
+            <p className="m-0 mt-1.5 text-base text-muted">
+              Enter the code in a trusted client, or scan the QR.
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <StatusPill variant="success">Local</StatusPill>
+          {cloudProxyOn ? <StatusPill variant="violet">Cloud</StatusPill> : null}
         </div>
       </div>
+
+      {cloudProxyOn ? (
+        <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Pairing endpoint">
+          <button
+            type="button"
+            aria-pressed={pairingEndpoint === "advertised"}
+            className={endpointChoiceClass(pairingEndpoint === "advertised")}
+            onClick={() => onPairingEndpointChange("advertised")}
+          >
+            Cloud proxy
+          </button>
+          <button
+            type="button"
+            aria-pressed={pairingEndpoint === "loopback"}
+            className={endpointChoiceClass(pairingEndpoint === "loopback")}
+            onClick={() => onPairingEndpointChange("loopback")}
+          >
+            This machine
+          </button>
+        </div>
+      ) : advertisedUrl === null ? (
+        <div className="mb-4">
+          <Button variant="text" onClick={onSetupCloud}>
+            Set up cloud proxy
+          </Button>
+        </div>
+      ) : (
+        <div className="mb-4">
+          <Button variant="text" onClick={onEnableCloud}>
+            Use cloud proxy
+          </Button>
+        </div>
+      )}
 
       <div className="grid items-center gap-7 md:grid-cols-[205px_1fr] max-[640px]:justify-items-center">
         <div className="relative grid size-[205px] place-items-center rounded-[9px] bg-white p-3.5">
@@ -647,16 +544,8 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack, endpointHint })
             />
           </div>
           <p className="mt-3 text-base leading-[1.55] text-muted">
-            <strong className="text-body">{expiresLabel}</strong>. Keep this page open until
-            pairing is complete.
+            <strong className="text-body">{expiresLabel}</strong>
           </p>
-          <ol className="mt-4 space-y-2 pl-4 text-base leading-[1.55] text-body-soft">
-            <li>Open a compatible Agent Server client</li>
-            <li>
-              Select <strong className="text-body">Pair a server</strong>
-            </li>
-            <li>Enter the pairing code, or scan the QR as a shortcut</li>
-          </ol>
         </div>
       </div>
 
@@ -667,7 +556,9 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack, endpointHint })
               ? "Waiting for a device…"
               : `${pairedDeviceName} paired`}
           </strong>
-          <small className="mt-1 block text-2xs text-dim">{listeningLabel}</small>
+          <small className="mt-1 block truncate font-mono text-2xs text-dim">
+            {listeningLabel}
+          </small>
         </div>
         <Button
           variant="text"
@@ -685,11 +576,15 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack, endpointHint })
       ) : null}
 
       <div className="mt-6 flex items-center justify-between border-t border-line-soft pt-[18px]">
-        <Button variant="secondary" onClick={onBack}>
-          Back
-        </Button>
-        <Button disabled={!canViewDevices} onClick={() => void navigate("/devices")}>
-          View paired devices <ArrowRight aria-hidden className="size-4" />
+        {onBack !== undefined ? (
+          <Button variant="secondary" onClick={onBack}>
+            Back
+          </Button>
+        ) : (
+          <span />
+        )}
+        <Button disabled={!finishEnabled} onClick={onFinish}>
+          {finishLabel} <ArrowRight aria-hidden className="size-4" />
         </Button>
       </div>
     </div>
@@ -697,55 +592,19 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack, endpointHint })
 }
 
 export const ConnectWizard: React.FC = () => {
-  const [searchParams] = useSearchParams()
-  const initialView = initialViewFromSearchParam(searchParams.get("step"))
-  const [view, setView] = useState<WizardView>(initialView)
-  const [accessMode, setAccessMode] = useState<AccessMode>("local")
+  const navigate = useNavigate()
+  const [view, setView] = useState<WizardView>({ kind: "loading" })
   const [proxyProvider, setProxyProvider] = useState<ProxyProvider>("caddy")
-  const [modeSwitchError, setModeSwitchError] = useState<string | null>(null)
-  const [resetError, setResetError] = useState<string | null>(null)
-  const [localPairGate, setLocalPairGate] = useState<"pending" | "ready">(
-    initialView.kind === "local-pair" ? "pending" : "ready",
-  )
+  const [pairingEndpoint, setPairingEndpoint] =
+    useState<PairingEndpointChoice>("loopback")
   const updateRuntimeSettingsMutation = useUpdateRuntimeSettingsMutation()
   const runtimeSettingsQuery = useRuntimeSettingsQuery()
-  const hasPreparedDeepLinkLocalPair = useRef(false)
-  const hasResolvedLanding = useRef(initialView.kind === "local-pair")
+  const hasResolvedLanding = useRef(false)
 
   const cloudStep = view.kind === "cloud" ? view.step : null
-  const advertisedUrl = runtimeSettingsQuery.data?.settings.advertisedUrl ?? null
-
-  const resolveRuntimeSettingsView = async () => {
-    if (runtimeSettingsQuery.isSuccess && runtimeSettingsQuery.data !== undefined) {
-      return runtimeSettingsQuery.data
-    }
-
-    const result = await runtimeSettingsQuery.refetch()
-    if (result.data === undefined) {
-      throw new Error("runtime settings unavailable")
-    }
-
-    return result.data
-  }
-
-  const enterLocalPair = () => {
-    setModeSwitchError(null)
-    setLocalPairGate("pending")
-
-    void resolveRuntimeSettingsView()
-      .then(async (settingsView) => {
-        if (settingsView.settings.advertisedUrl !== null) {
-          await updateRuntimeSettingsMutation.mutateAsync({ body: { advertisedUrl: null } })
-        }
-
-        setView({ kind: "local-pair" })
-        setLocalPairGate("ready")
-      })
-      .catch(() => {
-        setModeSwitchError("Could not clear the saved external URL. Try again.")
-        setLocalPairGate("ready")
-      })
-  }
+  const settings = runtimeSettingsQuery.data?.settings
+  const advertisedUrl = settings?.advertisedUrl ?? null
+  const cloudProxyOn = settings === undefined ? false : isCloudProxyOn(settings)
 
   useEffect(() => {
     if (hasResolvedLanding.current) {
@@ -757,83 +616,42 @@ export const ConnectWizard: React.FC = () => {
     }
 
     hasResolvedLanding.current = true
-    const savedUrl = runtimeSettingsQuery.data.settings.advertisedUrl
-    setView(savedUrl !== null ? { kind: "cloud-ready" } : { kind: "mode-select" })
+    setView({ kind: "pair" })
+    setPairingEndpoint(
+      isCloudProxyOn(runtimeSettingsQuery.data.settings) ? "advertised" : "loopback",
+    )
   }, [runtimeSettingsQuery.data, runtimeSettingsQuery.isSuccess])
 
   useEffect(() => {
-    if (hasPreparedDeepLinkLocalPair.current) {
-      return
-    }
+    setPairingEndpoint(cloudProxyOn ? "advertised" : "loopback")
+  }, [cloudProxyOn])
 
-    if (initialView.kind !== "local-pair") {
-      return
-    }
-
-    if (!runtimeSettingsQuery.isSuccess) {
-      return
-    }
-
-    hasPreparedDeepLinkLocalPair.current = true
-
-    const savedUrl = runtimeSettingsQuery.data.settings.advertisedUrl
-    if (savedUrl === null) {
-      setLocalPairGate("ready")
-      return
-    }
-
-    setModeSwitchError(null)
-    void updateRuntimeSettingsMutation
-      .mutateAsync({ body: { advertisedUrl: null } })
-      .then(() => setLocalPairGate("ready"))
-      .catch(() => {
-        setModeSwitchError("Could not clear the saved external URL. Try again.")
-        setView({ kind: "mode-select" })
-        setLocalPairGate("ready")
-      })
-  }, [
-    initialView.kind,
-    runtimeSettingsQuery.data,
-    runtimeSettingsQuery.isSuccess,
-    updateRuntimeSettingsMutation,
-  ])
-
-  const handleModeContinue = () => {
-    if (accessMode === "local") {
-      enterLocalPair()
-      return
-    }
-
-    setModeSwitchError(null)
-    setView({ kind: "cloud", step: 1 })
-  }
-
-  const handleBackFromCloudSetup = () => {
-    if (advertisedUrl !== null) {
-      setView({ kind: "cloud-ready" })
-      return
-    }
-
-    setView({ kind: "mode-select" })
-  }
-
-  const handleLocalPairBack = () => {
-    setLocalPairGate("ready")
-    setView({ kind: "mode-select" })
-  }
-
-  const handleResetCloud = () => {
-    setResetError(null)
-    void updateRuntimeSettingsMutation
-      .mutateAsync({ body: { advertisedUrl: null } })
-      .then(() => {
-        setAccessMode("local")
-        setView({ kind: "mode-select" })
-      })
-      .catch(() => {
-        setResetError("Could not clear the saved external URL. Try again.")
-      })
-  }
+  const pairStep = (
+    <PairDeviceStep
+      pairingEndpoint={pairingEndpoint}
+      cloudProxyOn={cloudProxyOn}
+      advertisedUrl={advertisedUrl}
+      onPairingEndpointChange={setPairingEndpoint}
+      onSetupCloud={() => setView({ kind: "cloud", step: 1 })}
+      onEnableCloud={() => {
+        void updateRuntimeSettingsMutation.mutateAsync({
+          body: { advertisedUrlEnabled: true },
+        })
+      }}
+      onBack={
+        view.kind === "cloud"
+          ? () => setView({ kind: "cloud", step: 2 })
+          : undefined
+      }
+      onFinish={
+        view.kind === "cloud"
+          ? () => setView({ kind: "pair" })
+          : () => void navigate("/devices")
+      }
+      finishLabel={view.kind === "cloud" ? "Finish" : "View paired devices"}
+      finishAlwaysEnabled={view.kind === "cloud"}
+    />
+  )
 
   const showCloudRail = view.kind === "cloud"
   const cloudProgress =
@@ -842,9 +660,7 @@ export const ConnectWizard: React.FC = () => {
   return (
     <div>
       <div className="mb-[22px] flex items-start justify-between gap-4">
-        <p className="m-0 max-w-2xl text-base text-muted">
-          Choose how devices reach this local agent server.
-        </p>
+        <p className="m-0 max-w-2xl text-base text-muted">Pair a trusted device.</p>
         {cloudProgress !== null ? (
           <div
             role="status"
@@ -874,36 +690,12 @@ export const ConnectWizard: React.FC = () => {
               Loading connection settings…
             </p>
           ) : null}
-          {view.kind === "mode-select" ? (
-            <AccessModeStep
-              accessMode={accessMode}
-              onAccessModeChange={setAccessMode}
-              onContinue={handleModeContinue}
-              switchError={modeSwitchError}
-            />
-          ) : null}
-          {view.kind === "cloud-ready" && advertisedUrl !== null ? (
-            <CloudReadyStep
-              advertisedUrl={advertisedUrl}
-              onPairDevice={() => {
-                setResetError(null)
-                setView({ kind: "cloud-pair" })
-              }}
-              onReset={handleResetCloud}
-              isResetting={updateRuntimeSettingsMutation.isPending}
-              resetError={resetError}
-            />
-          ) : null}
-          {view.kind === "cloud-ready" && advertisedUrl === null ? (
-            <p className="m-0 text-base text-muted" role="status">
-              Loading connection settings…
-            </p>
-          ) : null}
+          {view.kind === "pair" ? pairStep : null}
           {view.kind === "cloud" && view.step === 1 ? (
             <ExternalUrlStep
               proxyProvider={proxyProvider}
               onProxyProviderChange={setProxyProvider}
-              onBack={handleBackFromCloudSetup}
+              onBack={() => setView({ kind: "pair" })}
               onContinue={() => setView({ kind: "cloud", step: 2 })}
             />
           ) : null}
@@ -913,24 +705,7 @@ export const ConnectWizard: React.FC = () => {
               onContinue={() => setView({ kind: "cloud", step: 3 })}
             />
           ) : null}
-          {view.kind === "cloud" && view.step === 3 ? (
-            <PairDeviceStep
-              onBack={() => setView({ kind: "cloud", step: 2 })}
-              endpointHint="remote"
-            />
-          ) : null}
-          {view.kind === "cloud-pair" ? (
-            <PairDeviceStep
-              onBack={() => setView({ kind: "cloud-ready" })}
-              endpointHint="remote"
-            />
-          ) : null}
-          {view.kind === "local-pair" && localPairGate === "ready" ? (
-            <PairDeviceStep onBack={handleLocalPairBack} endpointHint="local" />
-          ) : null}
-          {view.kind === "local-pair" && localPairGate === "pending" ? (
-            <p className="m-0 text-base text-muted">Preparing local pairing…</p>
-          ) : null}
+          {view.kind === "cloud" && view.step === 3 ? pairStep : null}
         </section>
       </div>
     </div>

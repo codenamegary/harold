@@ -1,5 +1,6 @@
 import {
   ClaimPairingCodeBody,
+  CreatePairingCodeBody,
   CreatePairingCodeResponse,
   PairingCodeValueSchema,
 } from "contracts/http/pairing-code"
@@ -35,13 +36,35 @@ const nowIso = (): string => new Date().toISOString()
 const loopbackEndpoint = (config: Config): string =>
   `http://${config.host}:${config.port}`
 
-const resolvePairingEndpoint = (context: DeviceServiceContext): string => {
-  const advertisedUrl = context.runtimeSettingsRepository.get().advertisedUrl
-  if (advertisedUrl !== null) {
-    return advertisedUrl
+const advertisedPairingAvailable = (
+  advertisedUrl: string | null,
+  advertisedUrlEnabled: boolean,
+): advertisedUrl is string => advertisedUrl !== null && advertisedUrlEnabled
+
+const resolvePairingEndpoint = (
+  context: DeviceServiceContext,
+  choice: CreatePairingCodeBody["endpoint"],
+): DeviceServiceResult<string> => {
+  const settings = context.runtimeSettingsRepository.get()
+  const loopback = loopbackEndpoint(context.config)
+
+  if (choice === "loopback") {
+    return { ok: true, value: loopback }
   }
 
-  return loopbackEndpoint(context.config)
+  if (choice === "advertised") {
+    if (!advertisedPairingAvailable(settings.advertisedUrl, settings.advertisedUrlEnabled)) {
+      return { ok: false, error: { kind: "advertised_endpoint_unavailable" } }
+    }
+
+    return { ok: true, value: settings.advertisedUrl }
+  }
+
+  if (advertisedPairingAvailable(settings.advertisedUrl, settings.advertisedUrlEnabled)) {
+    return { ok: true, value: settings.advertisedUrl }
+  }
+
+  return { ok: true, value: loopback }
 }
 
 const findMatchingPairingCode = async (params: {
@@ -59,9 +82,14 @@ const findMatchingPairingCode = async (params: {
 }
 
 export const createDeviceService = (context: DeviceServiceContext) => {
-  const createPairingCode = async (): Promise<
-    DeviceServiceResult<CreatePairingCodeResponse>
-  > => {
+  const createPairingCode = async (
+    body: CreatePairingCodeBody = {},
+  ): Promise<DeviceServiceResult<CreatePairingCodeResponse>> => {
+    const endpoint = resolvePairingEndpoint(context, body.endpoint)
+    if (!endpoint.ok) {
+      return endpoint
+    }
+
     const code = generatePairingCode()
     const codeHash = await hashPairingCode(code)
     const createdAt = nowIso()
@@ -82,7 +110,7 @@ export const createDeviceService = (context: DeviceServiceContext) => {
       value: {
         id: inserted.value.id,
         code,
-        endpoint: resolvePairingEndpoint(context),
+        endpoint: endpoint.value,
         state: "active",
         createdAt: inserted.value.createdAt,
         expiresAt: inserted.value.expiresAt,

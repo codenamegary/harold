@@ -8,6 +8,7 @@ import {
 
 const persisted = {
   advertisedUrl: null,
+  advertisedUrlEnabled: true,
   trustedProxies: [],
   bindHost: "127.0.0.1" as const,
   bindPort: 3847,

@@ -310,4 +310,70 @@ describe("pairing HTTP integration", () => {
     const localPairing = CreatePairingCodeResponseSchema.parse(await localCreate.json())
     expect(localPairing.endpoint).toBe(`http://${config.host}:${config.port}`)
   })
+
+  test("loopback pairing keeps advertised URL when requested", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app, config } = await createTestApp(resources, dataDir)
+    const httpBase = await getListeningHttpBase(app, config)
+
+    const setAdvertisedResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ advertisedUrl: "https://agents.example.com" }),
+    })
+    expect(setAdvertisedResponse.status).toBe(200)
+
+    const loopbackCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ endpoint: "loopback" }),
+    })
+    const loopbackPairing = CreatePairingCodeResponseSchema.parse(
+      await loopbackCreate.json(),
+    )
+    expect(loopbackPairing.endpoint).toBe(`http://${config.host}:${config.port}`)
+
+    const settingsResponse = await fetch(`${httpBase}/v1/settings/runtime`)
+    const settingsBody = (await settingsResponse.json()) as {
+      settings: { advertisedUrl: string | null }
+    }
+    expect(settingsBody.settings.advertisedUrl).toBe("https://agents.example.com")
+  })
+
+  test("disabled advertised URL uses loopback until re-enabled", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app, config } = await createTestApp(resources, dataDir)
+    const httpBase = await getListeningHttpBase(app, config)
+
+    const setAdvertisedResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ advertisedUrl: "https://agents.example.com" }),
+    })
+    expect(setAdvertisedResponse.status).toBe(200)
+
+    const disableResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ advertisedUrlEnabled: false }),
+    })
+    expect(disableResponse.status).toBe(200)
+
+    const disabledCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    const disabledPairing = CreatePairingCodeResponseSchema.parse(
+      await disabledCreate.json(),
+    )
+    expect(disabledPairing.endpoint).toBe(`http://${config.host}:${config.port}`)
+
+    const advertisedCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ endpoint: "advertised" }),
+    })
+    expect(advertisedCreate.status).toBe(400)
+  })
 })

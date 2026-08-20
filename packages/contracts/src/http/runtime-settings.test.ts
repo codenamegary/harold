@@ -9,6 +9,7 @@ import {
 
 const validSettings = {
   advertisedUrl: null,
+  advertisedUrlEnabled: true,
   trustedProxies: [],
   bindHost: "127.0.0.1",
   bindPort: 3847,
@@ -42,6 +43,19 @@ describe("isIpOrCidr", () => {
 describe("RuntimeSettingsSchema", () => {
   test("accepts seeded defaults", () => {
     expect(RuntimeSettingsSchema.parse(validSettings)).toEqual(validSettings)
+  })
+
+  test("defaults advertisedUrlEnabled to true when omitted", () => {
+    const withoutFlag = {
+      advertisedUrl: validSettings.advertisedUrl,
+      trustedProxies: validSettings.trustedProxies,
+      bindHost: validSettings.bindHost,
+      bindPort: validSettings.bindPort,
+      logLevel: validSettings.logLevel,
+      logPath: validSettings.logPath,
+      allowedRoots: validSettings.allowedRoots,
+    }
+    expect(RuntimeSettingsSchema.parse(withoutFlag).advertisedUrlEnabled).toBe(true)
   })
 
   test("accepts https advertised URL and proxies", () => {
@@ -99,6 +113,12 @@ describe("UpdateRuntimeSettingsBodySchema", () => {
     expect(
       UpdateRuntimeSettingsBodySchema.parse({ logLevel: "warn" }),
     ).toEqual({ logLevel: "warn" })
+  })
+
+  test("accepts advertisedUrlEnabled patch", () => {
+    expect(
+      UpdateRuntimeSettingsBodySchema.parse({ advertisedUrlEnabled: false }),
+    ).toEqual({ advertisedUrlEnabled: false })
   })
 
   test("accepts empty string to clear advertised URL", () => {

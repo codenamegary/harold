@@ -31,6 +31,7 @@ const allowedRoot = "/home/operator/code"
 const wrapRuntimeSettings = (allowedRoots: string[]) => ({
   settings: {
     advertisedUrl: null,
+    advertisedUrlEnabled: true,
     trustedProxies: [] as string[],
     bindHost: "127.0.0.1" as const,
     bindPort: 3847,

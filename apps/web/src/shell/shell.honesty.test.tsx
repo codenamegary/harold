@@ -98,6 +98,7 @@ const emptyAgentCollection = {
 describe("shell honesty", () => {
   let runtimeSettings = {
     advertisedUrl: null as string | null,
+    advertisedUrlEnabled: true,
     trustedProxies: [] as string[],
     bindHost: "127.0.0.1" as const,
     bindPort: 3847,
@@ -120,6 +121,7 @@ describe("shell honesty", () => {
   beforeEach(() => {
     runtimeSettings = {
       advertisedUrl: null,
+      advertisedUrlEnabled: true,
       trustedProxies: [],
       bindHost: "127.0.0.1",
       bindPort: 3847,
@@ -220,11 +222,16 @@ describe("shell honesty", () => {
       if (url === "/v1/settings/runtime" && method === "PATCH") {
         const body = JSON.parse(requestBodyText(init?.body)) as {
           advertisedUrl?: string | null
+          advertisedUrlEnabled?: boolean
         }
         runtimeSettings = {
           ...runtimeSettings,
           advertisedUrl:
             body.advertisedUrl === undefined ? runtimeSettings.advertisedUrl : body.advertisedUrl,
+          advertisedUrlEnabled:
+            body.advertisedUrlEnabled === undefined
+              ? runtimeSettings.advertisedUrlEnabled
+              : body.advertisedUrlEnabled,
         }
         return Promise.resolve(
           new Response(JSON.stringify(wrapRuntimeSettingsView()), {
@@ -293,10 +300,9 @@ describe("shell honesty", () => {
       await waitForShellReady(getByRole)
 
       await waitFor(() => {
-        expect(getByRole("heading", { name: /how will you connect/i })).toBeInTheDocument()
+        expect(getByRole("heading", { name: /pair a device/i })).toBeInTheDocument()
       })
-      fireEvent.click(getByRole("button", { name: /cloud proxy/i }))
-      fireEvent.click(getByRole("button", { name: /^Continue$/ }))
+      fireEvent.click(getByRole("button", { name: /set up cloud proxy/i }))
       await waitFor(() => {
         expect(getByRole("textbox", { name: /public server url/i })).toBeInTheDocument()
       })
@@ -321,7 +327,7 @@ describe("shell honesty", () => {
       await waitFor(() => {
         expect(getByRole("button", { name: /regenerate/i })).toBeEnabled()
       })
-      expect(getByRole("button", { name: /view paired devices/i })).toBeDisabled()
+      expect(getByRole("button", { name: /^Finish$/ })).toBeEnabled()
     })
   })
 

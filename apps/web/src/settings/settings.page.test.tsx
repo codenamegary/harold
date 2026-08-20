@@ -18,6 +18,7 @@ const validStatus = {
 
 const validRuntimeSettings = {
   advertisedUrl: null,
+  advertisedUrlEnabled: true,
   trustedProxies: [] as string[],
   bindHost: "127.0.0.1" as const,
   bindPort: 3847,
@@ -230,6 +231,30 @@ describe("SettingsPage", () => {
     expect(details).toHaveTextContent("http://127.0.0.1:3847")
     expect(details).toHaveTextContent("0.1.0")
     expect(details).toHaveTextContent("—")
+  })
+
+  test("links to Connect when cloud proxy URL is unset", async () => {
+    const { getByRole } = await renderSettingsPage()
+
+    expect(getByRole("link", { name: "Set up on Connect" })).toHaveAttribute("href", "/connect")
+  })
+
+  test("toggles cloud proxy without clearing the saved URL", async () => {
+    runtimeSettings = {
+      ...validRuntimeSettings,
+      advertisedUrl: "https://agents.example.com",
+      advertisedUrlEnabled: true,
+    }
+
+    const { getByRole } = await renderSettingsPage()
+
+    expect(getByRole("checkbox", { name: "Enable cloud proxy" })).toBeChecked()
+    fireEvent.click(getByRole("checkbox", { name: "Enable cloud proxy" }))
+
+    await waitFor(() => {
+      expect(patchBodies).toContainEqual({ advertisedUrlEnabled: false })
+    })
+    expect(runtimeSettings.advertisedUrl).toBe("https://agents.example.com")
   })
 
   test("shows em dashes when server is unreachable", async () => {

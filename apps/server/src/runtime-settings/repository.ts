@@ -28,6 +28,7 @@ const fallbackSeedDefaults = RuntimeSettingsSchema.parse({
   logLevel: "info",
   logPath: null,
   advertisedUrl: null,
+  advertisedUrlEnabled: true,
   trustedProxies: [],
   allowedRoots: [],
 })
@@ -121,6 +122,8 @@ export const createRuntimeSettingsRepository = (
     const next = RuntimeSettingsSchema.parse({
       advertisedUrl:
         advertisedUrl === undefined ? current.advertisedUrl : advertisedUrl,
+      advertisedUrlEnabled:
+        body.advertisedUrlEnabled ?? current.advertisedUrlEnabled,
       trustedProxies: body.trustedProxies ?? current.trustedProxies,
       bindHost: body.bindHost ?? current.bindHost,
       bindPort: body.bindPort ?? current.bindPort,
@@ -148,6 +151,7 @@ export const seedDefaultsFromConfig = (config: Config): RuntimeSettings =>
     logLevel: "info",
     logPath: null,
     advertisedUrl: null,
+    advertisedUrlEnabled: true,
     trustedProxies: [],
     allowedRoots: [],
   })

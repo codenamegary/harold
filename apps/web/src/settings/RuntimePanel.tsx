@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react"
 import { Save, Trash2 } from "lucide-react"
+import { Link } from "react-router"
 import { logLevels } from "contracts/http/runtime-settings"
 import {
   ActionField,
@@ -145,6 +146,36 @@ export const RuntimePanel: React.FC = () => {
       <p className="m-0 mb-5 text-sm text-muted">
         Server process settings. Bind and log path changes need a restart.
       </p>
+
+      <section className="border-t border-line-soft py-4 first:border-t-0 first:pt-0">
+        <FieldLabel htmlFor="runtime-cloud-proxy">Cloud proxy</FieldLabel>
+        {settings.advertisedUrl === null ? (
+          <p className="m-0 mt-2 text-sm text-muted">
+            <Link className="text-lime hover:underline" to="/connect">
+              Set up on Connect
+            </Link>
+          </p>
+        ) : (
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <code className="min-w-0 truncate font-mono text-xs text-body-soft" title={settings.advertisedUrl}>
+              {settings.advertisedUrl}
+            </code>
+            <input
+              id="runtime-cloud-proxy"
+              type="checkbox"
+              checked={settings.advertisedUrlEnabled}
+              disabled={pending}
+              aria-label="Enable cloud proxy"
+              onChange={() => {
+                void updateRuntimeSettingsMutation.mutateAsync({
+                  body: { advertisedUrlEnabled: !settings.advertisedUrlEnabled },
+                })
+              }}
+              className="relative h-[17px] w-[31px] shrink-0 cursor-pointer appearance-none rounded-[10px] bg-[#252c36] transition after:absolute after:left-[2px] after:top-[2px] after:size-[13px] after:rounded-full after:bg-[#727c89] after:transition-all after:content-[''] checked:bg-lime checked:after:left-[16px] checked:after:bg-lime-ink disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          </div>
+        )}
+      </section>
 
       {view.restartRequired ? (
         <div

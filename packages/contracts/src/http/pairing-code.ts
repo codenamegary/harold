@@ -24,7 +24,15 @@ export const PairingCodeSchema = z.strictObject({
   expiresAt: TimestampSchema,
 })
 
-export const CreatePairingCodeBodySchema = z.strictObject({})
+export const pairingEndpointChoices = ["loopback", "advertised"] as const
+
+export const PairingEndpointChoiceSchema = z.enum(pairingEndpointChoices)
+
+export type PairingEndpointChoice = z.infer<typeof PairingEndpointChoiceSchema>
+
+export const CreatePairingCodeBodySchema = z.strictObject({
+  endpoint: PairingEndpointChoiceSchema.optional(),
+})
 
 export const CreatePairingCodeResponseSchema = PairingCodeSchema
 

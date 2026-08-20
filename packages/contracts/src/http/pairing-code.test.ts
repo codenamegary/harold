@@ -99,6 +99,15 @@ describe("CreatePairingCodeBodySchema", () => {
     expect(CreatePairingCodeBodySchema.parse({})).toEqual({})
   })
 
+  test("accepts loopback and advertised endpoint choices", () => {
+    expect(CreatePairingCodeBodySchema.parse({ endpoint: "loopback" })).toEqual({
+      endpoint: "loopback",
+    })
+    expect(CreatePairingCodeBodySchema.parse({ endpoint: "advertised" })).toEqual({
+      endpoint: "advertised",
+    })
+  })
+
   test("rejects client-supplied code", () => {
     expect(() =>
       CreatePairingCodeBodySchema.parse({ code: "R7K-4MP" }),

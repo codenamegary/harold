@@ -144,6 +144,7 @@ export const HttpsAbsoluteUrlSchema = z
 
 export const RuntimeSettingsSchema = z.strictObject({
   advertisedUrl: HttpsAbsoluteUrlSchema.nullable(),
+  advertisedUrlEnabled: z.boolean().default(true),
   trustedProxies: z.array(TrustedProxySchema),
   bindHost: z.literal("127.0.0.1"),
   bindPort: z.number().int().nonnegative().max(65535),
@@ -156,6 +157,7 @@ export const UpdateRuntimeSettingsBodySchema = z.strictObject({
   advertisedUrl: z
     .union([HttpsAbsoluteUrlSchema, z.null(), z.literal("")])
     .optional(),
+  advertisedUrlEnabled: z.boolean().optional(),
   trustedProxies: z.array(TrustedProxySchema).optional(),
   bindHost: z.literal("127.0.0.1").optional(),
   bindPort: z.number().int().nonnegative().max(65535).optional(),
