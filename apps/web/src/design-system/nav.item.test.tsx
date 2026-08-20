@@ -48,6 +48,7 @@ describe("NavItem", () => {
     const iconSpan = button.querySelector("span[aria-hidden='true']")
     expect(iconSpan).not.toBeNull()
     expect(iconSpan).toHaveTextContent("⌂")
+    expect(iconSpan).toHaveClass("w-7", "text-2xl", "leading-none")
   })
 
   test("aria-disabled nav item exposes aria-disabled", () => {
