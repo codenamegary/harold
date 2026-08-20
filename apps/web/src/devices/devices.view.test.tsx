@@ -75,9 +75,6 @@ describe("DevicesView", () => {
     expect(getByText("of 2 paired")).toBeInTheDocument()
     expect(getByText("Last new pairing")).toBeInTheDocument()
     expect(getByText("3h ago")).toBeInTheDocument()
-    expect(getByText("Authentication")).toBeInTheDocument()
-    expect(getByText("Device credentials")).toBeInTheDocument()
-    expect(getByText("Bearer tokens")).toBeInTheDocument()
     expect(getByText("PLATFORM")).toBeInTheDocument()
     expect(getByText("Studio Desktop")).toBeInTheDocument()
     expect(getByText("macOS")).toBeInTheDocument()
@@ -200,25 +197,4 @@ describe("DevicesView", () => {
     expect(queryByText("Kitchen tablet")).toBeInTheDocument()
   })
 
-  test("shows static danger note help text", () => {
-    globalThis.fetch = mock(() =>
-      Promise.resolve(
-        new Response(JSON.stringify(collection([])), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-      ),
-    ) as typeof fetch
-
-    const { getByText } = renderWithProviders(<DevicesView />, {
-      initialEntries: ["/devices"],
-    })
-
-    expect(getByText("Lost a device?")).toBeInTheDocument()
-    expect(
-      getByText(
-        "Revoking access immediately invalidates its credentials. The device can be paired again later.",
-      ),
-    ).toBeInTheDocument()
-  })
 })

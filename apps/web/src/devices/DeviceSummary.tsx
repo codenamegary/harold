@@ -30,7 +30,7 @@ export const DeviceSummary: React.FC<DeviceSummaryProps> = ({ devices, isLoading
     : `${onlineCount} ${pluralizeDevice(onlineCount)} online`
 
   return (
-    <div className="mb-[13px] grid grid-cols-[1.5fr_1fr_1fr] overflow-hidden rounded-lg border border-line-soft bg-panel max-[820px]:grid-cols-1">
+    <div className="mb-[13px] grid grid-cols-[1.5fr_1fr] overflow-hidden rounded-lg border border-line-soft bg-panel max-[820px]:grid-cols-1">
       <div className="flex min-h-[65px] items-center gap-[9px] border-r border-line-soft px-[17px] text-sm max-[820px]:border-r-0 max-[820px]:border-b">
         <span
           aria-hidden
@@ -41,14 +41,9 @@ export const DeviceSummary: React.FC<DeviceSummaryProps> = ({ devices, isLoading
           of {devices.length} paired
         </small>
       </div>
-      <div className="flex min-h-[65px] flex-col items-start justify-center gap-[5px] border-r border-line-soft px-[17px] text-sm max-[820px]:border-r-0 max-[820px]:border-b">
+      <div className="flex min-h-[65px] flex-col items-start justify-center gap-[5px] px-[17px] text-sm">
         <span className="text-xs text-dim">Last new pairing</span>
         <strong>{isLoading ? "Loading…" : lastPairingLabel}</strong>
-      </div>
-      <div className="flex min-h-[65px] flex-col items-start justify-center gap-[5px] px-[17px] text-sm">
-        <span className="text-xs text-dim">Authentication</span>
-        <strong className="text-lime">Device credentials</strong>
-        <small className="text-xs text-dim">Bearer tokens</small>
       </div>
     </div>
   )

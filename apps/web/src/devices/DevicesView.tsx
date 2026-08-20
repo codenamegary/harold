@@ -2,7 +2,6 @@ import React from "react"
 import { DevicePageIntro } from "./DevicePageIntro"
 import { DeviceSummary } from "./DeviceSummary"
 import { DeviceTable } from "./DeviceTable"
-import { DevicesDangerNote } from "./DevicesDangerNote"
 import { useDevicesQuery } from "./use.devices.query"
 
 export const DevicesView: React.FC = () => {
@@ -18,7 +17,6 @@ export const DevicesView: React.FC = () => {
         isLoading={devicesQuery.isLoading}
         isError={devicesQuery.isError}
       />
-      <DevicesDangerNote />
     </>
   )
 }
