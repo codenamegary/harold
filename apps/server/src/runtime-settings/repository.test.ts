@@ -31,6 +31,7 @@ describe("createRuntimeSettingsRepository", () => {
 
     expect(repository.get()).toEqual({
       advertisedUrl: null,
+      advertisedUrlEnabled: true,
       trustedProxies: [],
       bindHost: "127.0.0.1",
       bindPort: 3847,
@@ -61,6 +62,7 @@ describe("createRuntimeSettingsRepository", () => {
       filePath,
       YAML.stringify({
         advertisedUrl: null,
+        advertisedUrlEnabled: true,
         trustedProxies: [],
         bindHost: "0.0.0.0",
         bindPort: 3847,
@@ -94,6 +96,38 @@ describe("createRuntimeSettingsRepository", () => {
 
     const reloaded = createRuntimeSettingsRepository({ dataDir })
     expect(reloaded.get().logLevel).toBe("debug")
+  })
+
+  test("defaults advertisedUrlEnabled when the file omits it", async () => {
+    const dataDir = await createTempDataDir()
+    const filePath = path.join(dataDir, settingsFileName)
+    await writeFile(
+      filePath,
+      YAML.stringify({
+        advertisedUrl: "https://agents.example.com",
+        trustedProxies: [],
+        bindHost: "127.0.0.1",
+        bindPort: 3847,
+        logLevel: "info",
+        logPath: null,
+        allowedRoots: [],
+      }),
+      "utf8",
+    )
+
+    const repository = createRuntimeSettingsRepository({ dataDir })
+    expect(repository.get().advertisedUrl).toBe("https://agents.example.com")
+    expect(repository.get().advertisedUrlEnabled).toBe(true)
+  })
+
+  test("update writes advertisedUrlEnabled without clearing advertisedUrl", async () => {
+    const dataDir = await createTempDataDir()
+    const repository = createRuntimeSettingsRepository({ dataDir })
+    repository.update({ advertisedUrl: "https://agents.example.com" })
+
+    const result = repository.update({ advertisedUrlEnabled: false })
+    expect(result.advertisedUrl).toBe("https://agents.example.com")
+    expect(result.advertisedUrlEnabled).toBe(false)
   })
 
   test("update writes settings.yml and keeps cache in sync", async () => {

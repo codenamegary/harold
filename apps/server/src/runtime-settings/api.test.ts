@@ -88,6 +88,7 @@ describe("GET /v1/settings/runtime", () => {
     expect(response.statusCode).toBe(200)
     expect(body.settings).toEqual({
       advertisedUrl: null,
+      advertisedUrlEnabled: true,
       trustedProxies: [],
       bindHost: "127.0.0.1",
       bindPort: 3847,

@@ -45,6 +45,20 @@ export const buildPairingCodeRevokedProblem = (
     detail,
   })
 
+export const buildAdvertisedEndpointUnavailableProblem = () =>
+  ValidationProblemSchema.parse({
+    type: PROBLEM_TYPES.validationError,
+    title: "Request validation failed",
+    status: 400,
+    code: "validation.request.invalid",
+    errors: [
+      {
+        pointer: "#/endpoint",
+        code: "validation.pairing.advertised_endpoint.unavailable",
+      },
+    ],
+  })
+
 export const buildInvalidCursorProblem = () =>
   ValidationProblemSchema.parse({
     type: PROBLEM_TYPES.validationError,

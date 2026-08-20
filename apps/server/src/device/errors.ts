@@ -5,3 +5,4 @@ export type DeviceError =
   | { kind: "pairing_code_revoked" }
   | { kind: "pairing_code_race" }
   | { kind: "device_not_found" }
+  | { kind: "advertised_endpoint_unavailable" }
