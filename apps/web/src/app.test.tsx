@@ -16,7 +16,6 @@ const validStatus = {
 } as const
 
 const routePages = [
-  { path: "/", heading: "Overview" },
   { path: "/connect", heading: "Connect" },
   { path: "/workspaces", heading: "Workspaces" },
   { path: "/devices", heading: "Devices" },
@@ -76,8 +75,15 @@ describe("routing", () => {
     })
   })
 
-  test("mobile menu toggles sidebar open state", async () => {
+  test("route / redirects to chat", async () => {
     const { getByRole } = await renderAppRoute("/")
+
+    expect(getByRole("heading", { level: 1, name: "Chat" })).toBeInTheDocument()
+    expect(getByRole("link", { name: "Chat" })).toHaveAttribute("aria-current", "page")
+  })
+
+  test("mobile menu toggles sidebar open state", async () => {
+    const { getByRole } = await renderAppRoute("/chat")
 
     const sidebar = getByRole("complementary", { name: "Sidebar" })
     expect(sidebar).toHaveAttribute("data-sidebar-open", "false")

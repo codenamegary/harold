@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { DeviceCollectionSchema } from "contracts/http/device"
-import { fireEvent, waitFor, within, act } from "@testing-library/react"
+import { fireEvent, waitFor, act } from "@testing-library/react"
 import { renderWithProviders } from "../query/render.with.providers"
 import { hrefOf, requestBodyText, requestUrl } from "../test/request.url"
 import { AppRoutes } from "./AppRouter"
@@ -286,25 +286,6 @@ describe("shell honesty", () => {
     })
   })
 
-  describe("overview disabled honesty", () => {
-    test("coming soon metric cards show muted copy without numeric placeholders", async () => {
-      const { getByRole } = renderShellRoute("/")
-
-      await waitFor(() => {
-        expect(getByRole("article", { name: "Server status" })).toHaveTextContent("Online")
-      })
-
-      const comingSoonCards = ["ACP runtime", "Active now", "Requests today"] as const
-
-      comingSoonCards.forEach((cardName) => {
-        const card = getByRole("article", { name: cardName })
-
-        expect(within(card).getByText("Coming soon")).toBeInTheDocument()
-        expect(within(card).queryByText(/\d/)).not.toBeInTheDocument()
-      })
-    })
-  })
-
   describe("connect wizard functional honesty", () => {
     test("test connection gates continue while pair uses real claim gating", async () => {
       const { getByRole } = renderShellRoute("/connect")
@@ -450,7 +431,7 @@ describe("shell honesty", () => {
 
   describe("shell status chrome", () => {
     test("status pill tooltip is Status, not JSON Server", async () => {
-      const { getByRole, getByTitle, queryByTitle } = renderShellRoute("/")
+      const { getByRole, getByTitle, queryByTitle } = renderShellRoute("/chat")
 
       await waitForShellReady(getByRole)
 
