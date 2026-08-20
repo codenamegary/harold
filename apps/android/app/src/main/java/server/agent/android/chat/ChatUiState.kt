@@ -89,6 +89,7 @@ data class ChatUiState(
     val permissionUiState: PermissionUiState = PermissionUiState(),
     val extensionUiState: ExtensionUiState = ExtensionUiState(),
     val notificationPermissionDenied: Boolean = false,
+    val voiceDictation: VoiceDictationUiState = VoiceDictationUiState(),
 ) {
     val activePermissionRequest: PermissionRequest?
         get() = activePermissionRequest(pendingPermissions)

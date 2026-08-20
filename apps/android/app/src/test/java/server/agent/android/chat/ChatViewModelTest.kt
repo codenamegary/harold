@@ -325,6 +325,7 @@ class ChatViewModelTest {
         connectionGateway = connection,
         operatorRepository = repository,
         navigationPreferences = navigation,
+        voiceDictationController = VoiceDictationController(FakeSpeechRecognitionClient()),
     )
 
     private companion object {
