@@ -44,11 +44,14 @@
     <string name="voice_dictation_cancel">Cancel</string>
     <string name="voice_dictation_cancel_content_description">Cancel voice input</string>
     <string name="voice_dictation_start_over">Start over</string>
+    <string name="voice_dictation_start_over_content_description">Start voice input over</string>
     <string name="voice_dictation_done">Done</string>
+    <string name="voice_dictation_done_content_description">Apply voice input to message</string>
     <string name="voice_dictation_permission_body">Microphone permission is required for voice input.</string>
     <string name="voice_dictation_permission_grant">Allow microphone</string>
     <string name="voice_dictation_permission_grant_content_description">Request microphone permission</string>
     <string name="voice_dictation_permission_settings">Open system settings</string>
+    <string name="voice_dictation_permission_settings_content_description">Open system settings for microphone permission</string>
     <string name="chat_welcome_title">Chat with an agent</string>
     <string name="chat_welcome_body">Send a prompt directly to an agent without leaving the console.</string>
     <string name="chat_welcome_select_session_body">Start a new session or pick an existing one.</string>
