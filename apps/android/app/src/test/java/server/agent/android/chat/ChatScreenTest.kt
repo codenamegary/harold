@@ -540,7 +540,7 @@ class ChatScreenTest {
                             voiceDictation = VoiceDictationUiState(
                                 visible = true,
                                 transcript = "Draft prompt",
-                                isListening = true,
+                                isListening = false,
                                 recognizerAvailable = true,
                             ),
                         )

@@ -1,0 +1,70 @@
+package server.agent.android.ui.components
+
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import server.agent.android.ui.theme.AgentServerTheme
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [30])
+class AudioPillTest {
+    @get:Rule
+    val composeTestRule = createComposeRule()
+
+    @Test
+    fun audioPillDisplaysAndHandlesClicks() {
+        var pillClicked = false
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                AudioPill(
+                    isListening = true,
+                    audioLevel = 0.5f,
+                    onClick = { pillClicked = true },
+                    contentDescription = "Mute mic",
+                    modifier = Modifier.testTag("test_audio_pill"),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("test_audio_pill")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
+
+        assertTrue(pillClicked)
+        composeTestRule.onNodeWithTag("audio_pill_icon", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithTag("audio_pill_bars", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun audioPillDisplaysPausedStateWhenNotListening() {
+        var pillClicked = false
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                AudioPill(
+                    isListening = false,
+                    audioLevel = 0f,
+                    onClick = { pillClicked = true },
+                    contentDescription = "Unmute mic",
+                    modifier = Modifier.testTag("paused_audio_pill"),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("paused_audio_pill")
+            .assertIsDisplayed()
+            .performClick()
+
+        assertTrue(pillClicked)
+    }
+}
