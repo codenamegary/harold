@@ -1,4 +1,5 @@
 import React from "react"
+import { ArrowRight } from "lucide-react"
 import { Link } from "react-router"
 import { Panel } from "../design-system/Panel"
 import { OverviewWorkspaceRow } from "./OverviewWorkspaceRow"
@@ -19,7 +20,7 @@ export const OverviewWorkspacePanel: React.FC = () => {
           <p className="m-0 mt-[5px] text-xs text-dim">Agent activity across connected projects</p>
         </div>
         <Link className={textLinkClassName} to="/workspaces">
-          Manage all <span aria-hidden>→</span>
+          Manage all <ArrowRight aria-hidden className="size-4" />
         </Link>
       </div>
       {workspacesQuery.isLoading ? (

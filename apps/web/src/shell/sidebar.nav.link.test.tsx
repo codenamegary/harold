@@ -16,6 +16,5 @@ describe("SidebarNavLink", () => {
     const link = getByRole("link", { name: "Overview" })
     const iconSpan = link.querySelector("span[aria-hidden='true']")
     expect(iconSpan).not.toBeNull()
-    expect(iconSpan).toHaveClass("w-7", "text-2xl", "leading-none")
   })
 })

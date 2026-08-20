@@ -1,4 +1,14 @@
 import React, { useState } from "react"
+import {
+  ArrowUpRight,
+  Folder,
+  LayoutDashboard,
+  Menu,
+  ScrollText,
+  Settings,
+  Smartphone,
+  SquareTerminal,
+} from "lucide-react"
 import { Outlet, useLocation } from "react-router"
 import { connectionPhaseChromeByPhase } from "../connection/connection.phase"
 import { useConnection } from "../connection/use.connection"
@@ -67,19 +77,19 @@ export const AppShell: React.FC = () => {
         </div>
 
         <nav aria-label="Main navigation" className="flex flex-col gap-1">
-          <SidebarNavLink to="/" end icon={<span>⌁</span>}>
+          <SidebarNavLink to="/" end icon={<LayoutDashboard className="size-4.5" />}>
             Overview
           </SidebarNavLink>
-          <SidebarNavLink to="/connect" icon={<span>↗</span>}>
+          <SidebarNavLink to="/connect" icon={<ArrowUpRight className="size-4.5" />}>
             Connect
           </SidebarNavLink>
-          <SidebarNavLink to="/workspaces" icon={<span>⌘</span>}>
+          <SidebarNavLink to="/workspaces" icon={<Folder className="size-4.5" />}>
             Workspaces
           </SidebarNavLink>
-          <SidebarNavLink to="/devices" icon={<span>◇</span>}>
+          <SidebarNavLink to="/devices" icon={<Smartphone className="size-4.5" />}>
             Devices
           </SidebarNavLink>
-          <SidebarNavLink to="/chat" icon={<span>›_</span>}>
+          <SidebarNavLink to="/chat" icon={<SquareTerminal className="size-4.5" />}>
             Chat
           </SidebarNavLink>
         </nav>
@@ -99,10 +109,10 @@ export const AppShell: React.FC = () => {
               </code>
             ) : null}
           </div>
-          <SidebarNavLink to="/logs" subtle icon={<span>≡</span>}>
+          <SidebarNavLink to="/logs" subtle icon={<ScrollText className="size-4.5" />}>
             Logs
           </SidebarNavLink>
-          <SidebarNavLink to="/settings" subtle icon={<span>⚙</span>}>
+          <SidebarNavLink to="/settings" subtle icon={<Settings className="size-4.5" />}>
             Settings
           </SidebarNavLink>
           <div className="flex justify-between px-[9px] pt-[13px] font-mono text-2xs text-[#414955]">
@@ -123,7 +133,7 @@ export const AppShell: React.FC = () => {
             className="mr-3 hidden max-[820px]:grid"
             onClick={toggleSidebar}
           >
-            ☰
+            <Menu aria-hidden className="size-4.5" />
           </IconButton>
           <div>
             <div className="font-mono text-2xs leading-tight tracking-[0.12em] text-[#667080]">

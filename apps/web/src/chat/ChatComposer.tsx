@@ -1,5 +1,6 @@
 import React from "react"
 import { useRef, useState } from "react"
+import { ArrowUp, Square } from "lucide-react"
 
 type ChatComposerProps = {
   disabled: boolean
@@ -75,7 +76,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
               onClick={onCancel}
               className="grid size-[27px] place-items-center rounded-md border-0 bg-[#3a1d1d] text-sm font-bold text-[#f2a8a8]"
             >
-              ■
+              <Square aria-hidden className="size-3 fill-current" />
             </button>
           ) : (
             <button
@@ -85,7 +86,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
               onClick={handleSend}
               className="grid size-[27px] place-items-center rounded-md border-0 bg-lime text-sm font-bold text-lime-ink disabled:cursor-not-allowed disabled:opacity-50"
             >
-              ↑
+              <ArrowUp aria-hidden className="size-3.5" />
             </button>
           )}
         </div>

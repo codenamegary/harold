@@ -1,4 +1,5 @@
 import React, { KeyboardEvent, useRef, useState } from "react"
+import { X } from "lucide-react"
 import { TextInput } from "./TextInput"
 
 type InlineEditableTextProps = {
@@ -109,7 +110,7 @@ export const InlineEditableText: React.FC<InlineEditableTextProps> = ({
               onMouseDown={(event) => event.preventDefault()}
               onClick={cancelEditing}
             >
-              ×
+              <X aria-hidden className="size-3.5" />
             </button>
           </div>
         </form>

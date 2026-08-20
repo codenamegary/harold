@@ -1,5 +1,6 @@
 import { Workspace } from "contracts/http/workspace"
 import { useAtomValue } from "jotai"
+import { Folder } from "lucide-react"
 import React from "react"
 import { nowAtom } from "../connection/now.atom"
 import { StatusDot } from "../design-system/StatusDot"
@@ -19,9 +20,9 @@ export const OverviewWorkspaceRow: React.FC<OverviewWorkspaceRowProps> = ({ work
       <div className="flex min-w-0 items-center gap-2.5">
         <span
           aria-hidden
-          className="grid size-[31px] shrink-0 place-items-center rounded-md border border-[#2b3340] bg-[#171c23] font-mono text-sm text-lime"
+          className="grid size-[31px] shrink-0 place-items-center rounded-md border border-[#2b3340] bg-[#171c23] text-lime"
         >
-          ⌘
+          <Folder className="size-4" />
         </span>
         <div className="min-w-0">
           <strong className="block truncate text-sm font-medium text-white">

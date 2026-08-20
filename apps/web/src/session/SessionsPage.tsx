@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from "react"
+import { Search } from "lucide-react"
 import { useNavigate } from "react-router"
 import { AgentId, AgentIdSchema } from "contracts/http/agent-settings"
 import { SessionDeleteTarget } from "contracts/http/session"
@@ -279,7 +280,7 @@ export const SessionsPage: React.FC = () => {
       <header className="flex min-h-[64px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line-soft px-5 max-[820px]:p-[13px]">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
           <label className="flex h-9 w-[280px] max-w-full items-center gap-2 rounded-[7px] border border-line bg-[#0c0f14] px-[11px] text-dim">
-            <span aria-hidden>⌕</span>
+            <Search aria-hidden className="size-4" />
             <TextInput
               aria-label="Search sessions"
               className="min-h-0 border-0 bg-transparent p-0 text-sm focus:border-transparent"

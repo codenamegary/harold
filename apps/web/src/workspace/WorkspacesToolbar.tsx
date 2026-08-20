@@ -1,4 +1,5 @@
 import { WorkspaceState } from "contracts/http/workspace"
+import { Search } from "lucide-react"
 import React from "react"
 import { useSearchParams } from "react-router"
 import { TextInput } from "../design-system/TextInput"
@@ -38,7 +39,7 @@ export const WorkspacesToolbar: React.FC = () => {
   return (
     <div className="mb-[14px] flex justify-between gap-2 max-[640px]:gap-2">
       <label className="flex h-9 w-[260px] max-[640px]:min-w-0 max-[640px]:flex-1 items-center gap-2 rounded-[7px] border border-line bg-[#0c0f14] px-[11px] text-dim">
-        <span aria-hidden>⌕</span>
+        <Search aria-hidden className="size-4" />
         <TextInput
           aria-label="Search workspaces"
           className="min-h-0 border-0 bg-transparent p-0 text-sm focus:border-transparent"

@@ -33,7 +33,7 @@ export const NavItem: React.FC<NavItemProps> = ({
     >
       <span
         aria-hidden
-        className={`grid w-7 place-items-center font-mono text-2xl leading-none ${active ? "text-lime" : "text-nav-icon"}`}
+        className={`grid place-items-center ${active ? "text-lime" : "text-nav-icon"}`}
       >
         {icon}
       </span>

@@ -1,6 +1,16 @@
 import React, { useEffect, useRef, useState } from "react"
 import { QRCodeSVG } from "qrcode.react"
-import { Cloud, Home, Info } from "lucide-react"
+import {
+  Activity,
+  ArrowRight,
+  ArrowUpRight,
+  Check,
+  Cloud,
+  Home,
+  Info,
+  Radio,
+  Smartphone,
+} from "lucide-react"
 import { CreatePairingCodeResponse } from "contracts/http/pairing-code"
 import { formatPairingQrUri } from "contracts/pairing/qr-uri"
 import { useNavigate, useSearchParams } from "react-router"
@@ -70,9 +80,9 @@ const ConnectWizardStepRail: React.FC<ConnectWizardStepRailProps> = ({
           className={`relative flex gap-[11px] border-0 bg-transparent py-[9px] text-left cursor-pointer max-[820px]:px-[5px] max-[820px]:py-0 ${isActive ? "text-body" : "text-[#657080]"}`}
         >
           <b
-            className={`text-2xs z-[1] grid size-[35px] shrink-0 place-items-center rounded-full border font-mono ${isActive ? "border-lime bg-lime text-lime-ink shadow-[0_0_0_4px_rgba(182,243,107,0.08)]" : isComplete ? "border-lime/35 text-lime text-[0px] after:text-2xs after:content-['✓']" : "border-line bg-ink"}`}
+            className={`text-2xs z-[1] grid size-[35px] shrink-0 place-items-center rounded-full border font-mono ${isActive ? "border-lime bg-lime text-lime-ink shadow-[0_0_0_4px_rgba(182,243,107,0.08)]" : isComplete ? "border-lime/35 text-lime" : "border-line bg-ink"}`}
           >
-            {isComplete ? "" : step.number}
+            {isComplete ? <Check aria-hidden className="size-3.5" /> : step.number}
           </b>
           <span className="pt-[3px] max-[820px]:hidden">
             <strong className="block text-base font-medium">{step.title}</strong>
@@ -99,8 +109,8 @@ const AccessModeStep: React.FC<AccessModeStepProps> = ({
 }) => (
   <div>
     <div className="mb-[25px] flex items-center gap-[13px]">
-      <span className="grid size-10 place-items-center rounded-[9px] border border-line bg-panel-2 text-lg">
-        ⌁
+      <span className="grid size-10 place-items-center rounded-[9px] border border-line bg-panel-2 text-body">
+        <Radio aria-hidden className="size-5" />
       </span>
       <div>
         <h2 className="m-0 text-lg font-semibold">How will you connect?</h2>
@@ -186,7 +196,7 @@ const AccessModeStep: React.FC<AccessModeStepProps> = ({
 
     <div className="mt-6 flex items-center justify-end border-t border-line-soft pt-[18px]">
       <Button onClick={onContinue}>
-        Continue <span aria-hidden>→</span>
+        Continue <ArrowRight aria-hidden className="size-4" />
       </Button>
     </div>
   </div>
@@ -241,7 +251,7 @@ const CloudReadyStep: React.FC<CloudReadyStepProps> = ({
         Reset
       </Button>
       <Button disabled={isResetting} onClick={onPairDevice}>
-        Pair another device <span aria-hidden>→</span>
+        Pair another device <ArrowRight aria-hidden className="size-4" />
       </Button>
     </div>
   </div>
@@ -302,8 +312,8 @@ const ExternalUrlForm: React.FC<ExternalUrlFormProps> = ({
   return (
     <div>
       <div className="mb-[25px] flex items-center gap-[13px]">
-        <span className="grid size-10 place-items-center rounded-[9px] border border-line bg-panel-2 text-lg">
-          ↗
+        <span className="grid size-10 place-items-center rounded-[9px] border border-line bg-panel-2 text-body">
+          <ArrowUpRight aria-hidden className="size-5" />
         </span>
         <div>
           <h2 className="m-0 text-lg font-semibold">Configure external access</h2>
@@ -386,7 +396,7 @@ const ExternalUrlForm: React.FC<ExternalUrlFormProps> = ({
           disabled={updateRuntimeSettingsMutation.isPending}
           onClick={() => void handleSave()}
         >
-          Save &amp; continue <span aria-hidden>→</span>
+          Save &amp; continue <ArrowRight aria-hidden className="size-4" />
         </Button>
       </div>
     </div>
@@ -480,8 +490,8 @@ const TestConnectionStep: React.FC<TestConnectionStepProps> = ({
   return (
     <div>
       <div className="mb-[25px] flex items-center gap-[13px]">
-        <span className="grid size-10 place-items-center rounded-[9px] border border-line bg-panel-2 text-lg">
-          ◎
+        <span className="grid size-10 place-items-center rounded-[9px] border border-line bg-panel-2 text-body">
+          <Activity aria-hidden className="size-5" />
         </span>
         <div>
           <h2 className="m-0 text-lg font-semibold">Test your connection</h2>
@@ -504,7 +514,7 @@ const TestConnectionStep: React.FC<TestConnectionStepProps> = ({
             </Button>
           ) : null}
           <Button disabled={!panelState.canContinue} onClick={onContinue}>
-            Continue <span aria-hidden>→</span>
+            Continue <ArrowRight aria-hidden className="size-4" />
           </Button>
         </div>
       </div>
@@ -593,8 +603,8 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack, endpointHint })
   return (
     <div>
       <div className="mb-[25px] flex items-center gap-[13px]">
-        <span className="grid size-10 place-items-center rounded-[9px] border border-line bg-panel-2 text-lg">
-          ◇
+        <span className="grid size-10 place-items-center rounded-[9px] border border-line bg-panel-2 text-body">
+          <Smartphone aria-hidden className="size-5" />
         </span>
         <div>
           <h2 className="m-0 text-lg font-semibold">Pair a device</h2>
@@ -679,7 +689,7 @@ const PairDeviceStep: React.FC<PairDeviceStepProps> = ({ onBack, endpointHint })
           Back
         </Button>
         <Button disabled={!canViewDevices} onClick={() => void navigate("/devices")}>
-          View paired devices <span aria-hidden>→</span>
+          View paired devices <ArrowRight aria-hidden className="size-4" />
         </Button>
       </div>
     </div>

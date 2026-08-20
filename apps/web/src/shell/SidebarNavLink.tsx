@@ -32,7 +32,7 @@ export const SidebarNavLink: React.FC<SidebarNavLinkProps> = ({
   >
     <span
       aria-hidden
-      className="grid w-7 place-items-center font-mono text-2xl leading-none text-nav-icon group-aria-[current=page]:text-lime"
+      className="grid place-items-center text-nav-icon group-aria-[current=page]:text-lime"
     >
       {icon}
     </span>

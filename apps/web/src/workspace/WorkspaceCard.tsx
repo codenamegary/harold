@@ -1,4 +1,5 @@
 import { Workspace } from "contracts/http/workspace"
+import { X } from "lucide-react"
 import React, { useState } from "react"
 import { InlineEditableText } from "../design-system/InlineEditableText"
 import { Panel } from "../design-system/Panel"
@@ -68,7 +69,7 @@ export const WorkspaceCard: React.FC<WorkspaceCardProps> = ({ workspace }) => {
               className="flex size-5 shrink-0 items-center justify-center self-center rounded text-base leading-none text-dim hover:text-red-400"
               onClick={() => setIsUnregisterModalOpen(true)}
             >
-              ×
+              <X aria-hidden className="size-3.5" />
             </button>
           ) : null}
         </div>
