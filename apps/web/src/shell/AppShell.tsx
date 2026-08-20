@@ -2,7 +2,6 @@ import React, { useState } from "react"
 import {
   ArrowUpRight,
   Folder,
-  LayoutDashboard,
   Menu,
   ScrollText,
   Settings,
@@ -23,7 +22,6 @@ type RouteMeta = {
 }
 
 const routeMetaByPath: Record<string, RouteMeta> = {
-  "/": { eyebrow: "LOCAL SERVER", title: "Overview" },
   "/connect": { eyebrow: "CONNECTION WIZARD", title: "Connect" },
   "/workspaces": { eyebrow: "PROJECTS & AGENTS", title: "Workspaces" },
   "/devices": { eyebrow: "ACCESS CONTROL", title: "Devices" },
@@ -77,8 +75,8 @@ export const AppShell: React.FC = () => {
         </div>
 
         <nav aria-label="Main navigation" className="flex flex-col gap-1">
-          <SidebarNavLink to="/" end icon={<LayoutDashboard className="size-4.5" />}>
-            Overview
+          <SidebarNavLink to="/chat" icon={<SquareTerminal className="size-4.5" />}>
+            Chat
           </SidebarNavLink>
           <SidebarNavLink to="/connect" icon={<ArrowUpRight className="size-4.5" />}>
             Connect
@@ -88,9 +86,6 @@ export const AppShell: React.FC = () => {
           </SidebarNavLink>
           <SidebarNavLink to="/devices" icon={<Smartphone className="size-4.5" />}>
             Devices
-          </SidebarNavLink>
-          <SidebarNavLink to="/chat" icon={<SquareTerminal className="size-4.5" />}>
-            Chat
           </SidebarNavLink>
         </nav>
 

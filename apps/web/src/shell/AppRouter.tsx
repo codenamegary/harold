@@ -1,11 +1,10 @@
 import React from "react"
-import { BrowserRouter, Route, Routes } from "react-router"
+import { BrowserRouter, Navigate, Route, Routes } from "react-router"
 import { AppShell } from "./AppShell"
 import { ChatPage } from "./pages/ChatPage"
 import { ConnectPage } from "./pages/ConnectPage"
 import { DevicesPage } from "./pages/DevicesPage"
 import { LogsPage } from "./pages/LogsPage"
-import { OverviewPage } from "./pages/OverviewPage"
 import { SessionsPage } from "./pages/SessionsPage"
 import { SettingsPage } from "./pages/SettingsPage"
 import { WorkspacesPage } from "./pages/WorkspacesPage"
@@ -13,7 +12,7 @@ import { WorkspacesPage } from "./pages/WorkspacesPage"
 export const AppRoutes: React.FC = () => (
   <Routes>
     <Route element={<AppShell />}>
-      <Route index element={<OverviewPage />} />
+      <Route index element={<Navigate replace to="/chat" />} />
       <Route path="connect" element={<ConnectPage />} />
       <Route path="workspaces" element={<WorkspacesPage />} />
       <Route path="devices" element={<DevicesPage />} />
