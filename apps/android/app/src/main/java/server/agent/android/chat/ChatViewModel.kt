@@ -40,6 +40,7 @@ class ChatViewModel(
     private val activeSessionTracker: ActiveSessionTracker? = null,
     private val sessionForegroundCoordinator: SessionForegroundCoordinator? = null,
     private val openSessionRequests: OpenSessionRequests? = null,
+    private val voiceDictationController: VoiceDictationController,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -252,6 +253,48 @@ class ChatViewModel(
         _uiState.update { current ->
             current.copy(composerText = text, composerError = null)
         }
+    }
+
+    fun openVoiceDictation(hasRecordAudioPermission: Boolean) {
+        if (!_uiState.value.composerEnabled) {
+            return
+        }
+
+        syncVoiceDictationState(
+            voiceDictationController.open(
+                baseline = _uiState.value.composerText,
+                hasRecordAudioPermission = hasRecordAudioPermission,
+                composerEnabled = _uiState.value.composerEnabled,
+            ),
+        )
+    }
+
+    fun onRecordAudioPermissionResult(granted: Boolean) {
+        syncVoiceDictationState(voiceDictationController.onRecordAudioPermissionResult(granted))
+    }
+
+    fun toggleVoiceDictationListening() {
+        syncVoiceDictationState(voiceDictationController.toggleListening())
+    }
+
+    fun startOverVoiceDictation() {
+        syncVoiceDictationState(voiceDictationController.startOver())
+    }
+
+    fun cancelVoiceDictation() {
+        syncVoiceDictationState(voiceDictationController.cancel())
+    }
+
+    fun confirmVoiceDictation() {
+        val (_, transcript) = voiceDictationController.finish()
+        syncVoiceDictationState(voiceDictationController.state)
+        if (transcript != null) {
+            onComposerTextChanged(transcript)
+        }
+    }
+
+    private fun syncVoiceDictationState(voiceDictation: VoiceDictationUiState) {
+        _uiState.update { current -> current.copy(voiceDictation = voiceDictation) }
     }
 
     fun submitCreateSession() {
@@ -823,6 +866,7 @@ class ChatViewModel(
         }
 
     override fun onCleared() {
+        voiceDictationController.destroy()
         connectionGateway.setTarget(null, null)
         super.onCleared()
     }
@@ -842,6 +886,7 @@ class ChatViewModelFactory(
     private val activeSessionTracker: ActiveSessionTracker,
     private val sessionForegroundCoordinator: SessionForegroundCoordinator,
     private val openSessionRequests: OpenSessionRequests,
+    private val voiceDictationController: VoiceDictationController,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -855,6 +900,7 @@ class ChatViewModelFactory(
                 activeSessionTracker = activeSessionTracker,
                 sessionForegroundCoordinator = sessionForegroundCoordinator,
                 openSessionRequests = openSessionRequests,
+                voiceDictationController = voiceDictationController,
             ) as T
         }
 

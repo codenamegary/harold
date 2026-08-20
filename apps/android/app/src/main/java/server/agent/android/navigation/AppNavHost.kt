@@ -8,6 +8,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import android.app.Application
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -21,6 +23,8 @@ import server.agent.android.chat.AddWorkspaceViewModelFactory
 import server.agent.android.chat.ChatScreen
 import server.agent.android.chat.ChatViewModel
 import server.agent.android.chat.ChatViewModelFactory
+import server.agent.android.chat.AndroidSpeechRecognitionClient
+import server.agent.android.chat.VoiceDictationController
 import server.agent.android.chat.CreateSessionScreen
 import server.agent.android.chat.SessionsScreen
 import server.agent.android.chat.WorkspacesScreen
@@ -39,6 +43,10 @@ fun AppNavHost(
     appContainer: AppContainer,
 ) {
     val navController = rememberNavController()
+    val application = LocalContext.current.applicationContext as Application
+    val voiceDictationController = remember(application) {
+        VoiceDictationController(AndroidSpeechRecognitionClient(application))
+    }
     val shellViewModel: ShellViewModel = viewModel(
         factory = ShellViewModelFactory(
             sessionGateway = appContainer.sessionGateway,
@@ -111,6 +119,7 @@ fun AppNavHost(
                     activeSessionTracker = appContainer.activeSessionTracker,
                     sessionForegroundCoordinator = appContainer.sessionForegroundCoordinator,
                     openSessionRequests = appContainer.openSessionRequests,
+                    voiceDictationController = voiceDictationController,
                 ),
             )
             val chatUiState by chatViewModel.uiState.collectAsState()
@@ -168,6 +177,7 @@ fun AppNavHost(
                     activeSessionTracker = appContainer.activeSessionTracker,
                     sessionForegroundCoordinator = appContainer.sessionForegroundCoordinator,
                     openSessionRequests = appContainer.openSessionRequests,
+                    voiceDictationController = voiceDictationController,
                 ),
             )
             val chatUiState by chatViewModel.uiState.collectAsState()
@@ -203,6 +213,7 @@ fun AppNavHost(
                     activeSessionTracker = appContainer.activeSessionTracker,
                     sessionForegroundCoordinator = appContainer.sessionForegroundCoordinator,
                     openSessionRequests = appContainer.openSessionRequests,
+                    voiceDictationController = voiceDictationController,
                 ),
             )
             val chatUiState by chatViewModel.uiState.collectAsState()
