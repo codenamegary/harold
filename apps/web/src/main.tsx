@@ -4,14 +4,12 @@ import { createRoot } from "react-dom/client"
 import { Provider } from "jotai"
 import "./index.css"
 import { App } from "./App.tsx"
-import { NowTicker } from "./connection/now.atom"
 import { queryClient } from "./query/query.client"
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <Provider>
-        <NowTicker />
         <App />
       </Provider>
     </QueryClientProvider>

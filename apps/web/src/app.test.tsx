@@ -82,6 +82,23 @@ describe("routing", () => {
     expect(getByRole("link", { name: "Chat" })).toHaveAttribute("aria-current", "page")
   })
 
+  test("sidebar lists chat first and has no overview link", async () => {
+    const { getByRole, queryByRole, getAllByRole } = await renderAppRoute("/chat")
+
+    const nav = getByRole("navigation", { name: "Main navigation" })
+    const mainNavLinks = getAllByRole("link", { name: /^(Chat|Connect|Workspaces|Devices)$/ }).filter(
+      (link) => nav.contains(link),
+    )
+
+    expect(mainNavLinks.map((link) => link.textContent)).toEqual([
+      "Chat",
+      "Connect",
+      "Workspaces",
+      "Devices",
+    ])
+    expect(queryByRole("link", { name: "Overview" })).not.toBeInTheDocument()
+  })
+
   test("mobile menu toggles sidebar open state", async () => {
     const { getByRole } = await renderAppRoute("/chat")
 
