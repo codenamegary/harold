@@ -1,24 +1,32 @@
 import React, { useEffect, useState } from "react"
 import { Save, Trash2 } from "lucide-react"
-import { Link } from "react-router"
-import { logLevels } from "contracts/http/runtime-settings"
+import { HttpsAbsoluteUrlSchema, logLevels } from "contracts/http/runtime-settings"
 import {
   ActionField,
   ActionTextInput,
   FieldActionButton,
 } from "../design-system/ActionTextInput"
+import { Button } from "../design-system/Button"
 import { FieldLabel } from "../design-system/FieldLabel"
 import { Panel } from "../design-system/Panel"
 import { TextInput } from "../design-system/TextInput"
+import {
+  advertisedUrlFromHost,
+  hostFromAdvertisedUrl,
+  normalizeExternalUrlHost,
+} from "../runtime-settings/advertised.url.host"
 import { isRuntimeSettingsUpdateError } from "../runtime-settings/update.runtime.settings"
 import { useRuntimeSettingsQuery } from "../runtime-settings/use.runtime.settings.query"
 import { useUpdateRuntimeSettingsMutation } from "../runtime-settings/use.update.runtime.settings.mutation"
+import { ConnectionTestPanel } from "../connect/ConnectionTestPanel"
 
 const logLevelLabel = (level: string) => level.charAt(0).toUpperCase() + level.slice(1)
 
 export const RuntimePanel: React.FC = () => {
   const runtimeSettingsQuery = useRuntimeSettingsQuery()
   const updateRuntimeSettingsMutation = useUpdateRuntimeSettingsMutation()
+  const [cloudProxyDraft, setCloudProxyDraft] = useState("")
+  const [cloudProxyError, setCloudProxyError] = useState<string | undefined>(undefined)
   const [proxyDraft, setProxyDraft] = useState("")
   const [proxyError, setProxyError] = useState<string | undefined>(undefined)
   const [portDraft, setPortDraft] = useState("")
@@ -38,6 +46,11 @@ export const RuntimePanel: React.FC = () => {
 
     setPortDraft(String(settings.bindPort))
     setLogPathDraft(settings.logPath ?? "")
+    setCloudProxyDraft(
+      settings.advertisedUrl !== null
+        ? hostFromAdvertisedUrl(settings.advertisedUrl)
+        : "",
+    )
   }, [settings])
 
   if (runtimeSettingsQuery.isError || view === undefined || settings === undefined) {
@@ -49,6 +62,76 @@ export const RuntimePanel: React.FC = () => {
         </p>
       </Panel>
     )
+  }
+
+  const handleSaveCloudProxy = async () => {
+    const trimmed = cloudProxyDraft.trim()
+    if (trimmed.length === 0) {
+      setCloudProxyError("Enter a public hostname for your HTTPS endpoint.")
+      return
+    }
+
+    const normalizedHost = normalizeExternalUrlHost(trimmed)
+    const nextAdvertisedUrl = advertisedUrlFromHost(normalizedHost)
+    const parsed = HttpsAbsoluteUrlSchema.safeParse(nextAdvertisedUrl)
+    if (!parsed.success) {
+      setCloudProxyError("Enter a valid HTTPS public URL or hostname.")
+      return
+    }
+
+    setCloudProxyError(undefined)
+
+    try {
+      await updateRuntimeSettingsMutation.mutateAsync({
+        body: {
+          advertisedUrl: nextAdvertisedUrl,
+          advertisedUrlEnabled: true,
+        },
+      })
+    } catch (error: unknown) {
+      setCloudProxyError(
+        isRuntimeSettingsUpdateError(error)
+          ? error.message
+          : "Could not save cloud proxy.",
+      )
+    }
+  }
+
+  const handleClearCloudProxy = async () => {
+    setCloudProxyError(undefined)
+
+    try {
+      await updateRuntimeSettingsMutation.mutateAsync({
+        body: {
+          advertisedUrl: null,
+        },
+      })
+      setCloudProxyDraft("")
+    } catch (error: unknown) {
+      setCloudProxyError(
+        isRuntimeSettingsUpdateError(error)
+          ? error.message
+          : "Could not clear cloud proxy.",
+      )
+    }
+  }
+
+  const handleToggleCloudProxy = async () => {
+    setCloudProxyError(undefined)
+
+    try {
+      await updateRuntimeSettingsMutation.mutateAsync({
+        body: {
+          advertisedUrlEnabled: !settings.advertisedUrlEnabled,
+        },
+      })
+    } catch (error: unknown) {
+      setCloudProxyError(
+        isRuntimeSettingsUpdateError(error)
+          ? error.message
+          : "Could not update cloud proxy state.",
+      )
+    }
   }
 
   const saveTrustedProxies = async (nextProxies: string[]) => {
@@ -148,33 +231,78 @@ export const RuntimePanel: React.FC = () => {
       </p>
 
       <section className="border-t border-line-soft py-4 first:border-t-0 first:pt-0">
-        <FieldLabel htmlFor="runtime-cloud-proxy">Cloud proxy</FieldLabel>
-        {settings.advertisedUrl === null ? (
-          <p className="m-0 mt-2 text-sm text-muted">
-            <Link className="text-lime hover:underline" to="/connect">
-              Set up on Connect
-            </Link>
+        <FieldLabel htmlFor="runtime-cloud-proxy-url">Cloud proxy URL</FieldLabel>
+        <p className="m-0 mb-3 text-xs text-muted">
+          Public HTTPS endpoint forwarded to this server.
+        </p>
+        <ActionTextInput
+          id="runtime-cloud-proxy-url"
+          aria-label="Cloud proxy URL"
+          value={cloudProxyDraft}
+          placeholder="agents.example.com"
+          disabled={pending}
+          onInput={(event) => {
+            setCloudProxyDraft(event.currentTarget.value)
+            setCloudProxyError(undefined)
+          }}
+          className="font-mono"
+          action={{
+            "aria-label": "Save cloud proxy",
+            disabled: pending,
+            onClick: () => {
+              void handleSaveCloudProxy()
+            },
+            children: <Save aria-hidden className="size-3.5" strokeWidth={1.75} />,
+          }}
+        />
+        {cloudProxyError ? (
+          <p className="m-0 mt-2 text-xs text-danger" role="alert">
+            {cloudProxyError}
           </p>
-        ) : (
-          <div className="mt-2 flex items-center justify-between gap-3">
-            <code className="min-w-0 truncate font-mono text-xs text-body-soft" title={settings.advertisedUrl}>
-              {settings.advertisedUrl}
-            </code>
-            <input
-              id="runtime-cloud-proxy"
-              type="checkbox"
-              checked={settings.advertisedUrlEnabled}
-              disabled={pending}
-              aria-label="Enable cloud proxy"
-              onChange={() => {
-                void updateRuntimeSettingsMutation.mutateAsync({
-                  body: { advertisedUrlEnabled: !settings.advertisedUrlEnabled },
-                })
-              }}
-              className="relative h-[17px] w-[31px] shrink-0 cursor-pointer appearance-none rounded-[10px] bg-[#252c36] transition after:absolute after:left-[2px] after:top-[2px] after:size-[13px] after:rounded-full after:bg-[#727c89] after:transition-all after:content-[''] checked:bg-lime checked:after:left-[16px] checked:after:bg-lime-ink disabled:cursor-not-allowed disabled:opacity-50"
-            />
+        ) : null}
+
+        {settings.advertisedUrl !== null ? (
+          <div className="mt-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <label
+                htmlFor="runtime-cloud-proxy"
+                className="text-xs text-body cursor-pointer"
+              >
+                Enable cloud proxy for pairing
+              </label>
+              <input
+                id="runtime-cloud-proxy"
+                type="checkbox"
+                checked={settings.advertisedUrlEnabled}
+                disabled={pending}
+                aria-label="Enable cloud proxy"
+                onChange={() => {
+                  void handleToggleCloudProxy()
+                }}
+                className="relative h-[17px] w-[31px] shrink-0 cursor-pointer appearance-none rounded-[10px] bg-[#252c36] transition after:absolute after:left-[2px] after:top-[2px] after:size-[13px] after:rounded-full after:bg-[#727c89] after:transition-all after:content-[''] checked:bg-lime checked:after:left-[16px] checked:after:bg-lime-ink disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </div>
+            <div>
+              <Button
+                variant="text"
+                size="xs"
+                disabled={pending}
+                onClick={() => {
+                  void handleClearCloudProxy()
+                }}
+                className="text-xs text-danger hover:underline px-0"
+              >
+                Clear cloud proxy
+              </Button>
+            </div>
+            <div className="mt-4 border-t border-line-soft pt-3">
+              <p className="m-0 mb-2 font-mono text-2xs tracking-[0.12em] text-dim">
+                CONNECTION TEST
+              </p>
+              <ConnectionTestPanel advertisedUrl={settings.advertisedUrl} />
+            </div>
           </div>
-        )}
+        ) : null}
       </section>
 
       {view.restartRequired ? (

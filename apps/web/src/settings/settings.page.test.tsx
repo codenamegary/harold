@@ -90,6 +90,28 @@ describe("SettingsPage", () => {
           effectiveLogPath: appliedLogPath,
         })
 
+      if (url.startsWith("/v1/connection-test") && method === "POST") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              advertisedUrl: runtimeSettings.advertisedUrl ?? "https://agents.example.com",
+              checkedAt: "2026-08-03T12:00:00.000Z",
+              checks: [
+                { id: "dns", status: "pass", message: "Resolved agents.example.com and reached port 443" },
+                { id: "tls", status: "pass", message: "TLS certificate is valid" },
+                { id: "device-auth", status: "pass", message: "Bearer authentication succeeded" },
+              ],
+              canContinue: true,
+              canContinueAnyway: false,
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        )
+      }
+
       if (url.startsWith("/v1/settings/runtime") && method === "GET") {
         return Promise.resolve(
           new Response(JSON.stringify(buildView()), {
@@ -233,20 +255,42 @@ describe("SettingsPage", () => {
     expect(details).toHaveTextContent("—")
   })
 
-  test("links to Connect when cloud proxy URL is unset", async () => {
+  test("saves and clears cloud proxy URL in runtime panel", async () => {
     const { getByRole } = await renderSettingsPage()
 
-    expect(getByRole("link", { name: "Set up on Connect" })).toHaveAttribute("href", "/connect")
+    fireEvent.input(getByRole("textbox", { name: "Cloud proxy URL" }), {
+      target: { value: "agents.example.com" },
+    })
+    fireEvent.click(getByRole("button", { name: "Save cloud proxy" }))
+
+    await waitFor(() => {
+      expect(patchBodies).toContainEqual({
+        advertisedUrl: "https://agents.example.com",
+        advertisedUrlEnabled: true,
+      })
+    })
+
+    await waitFor(() => {
+      expect(getByRole("button", { name: "Clear cloud proxy" })).toBeInTheDocument()
+    })
+
+    fireEvent.click(getByRole("button", { name: "Clear cloud proxy" }))
+
+    await waitFor(() => {
+      expect(patchBodies).toContainEqual({
+        advertisedUrl: null,
+      })
+    })
   })
 
-  test("toggles cloud proxy without clearing the saved URL", async () => {
+  test("toggles cloud proxy and shows connection test when configured", async () => {
     runtimeSettings = {
       ...validRuntimeSettings,
       advertisedUrl: "https://agents.example.com",
       advertisedUrlEnabled: true,
     }
 
-    const { getByRole } = await renderSettingsPage()
+    const { getByRole, getByText } = await renderSettingsPage()
 
     expect(getByRole("checkbox", { name: "Enable cloud proxy" })).toBeChecked()
     fireEvent.click(getByRole("checkbox", { name: "Enable cloud proxy" }))
@@ -255,6 +299,12 @@ describe("SettingsPage", () => {
       expect(patchBodies).toContainEqual({ advertisedUrlEnabled: false })
     })
     expect(runtimeSettings.advertisedUrl).toBe("https://agents.example.com")
+
+    await waitFor(() => {
+      expect(getByText("DNS & reachability")).toBeInTheDocument()
+      expect(getByText("TLS certificate")).toBeInTheDocument()
+      expect(getByText("Device authentication")).toBeInTheDocument()
+    })
   })
 
   test("shows em dashes when server is unreachable", async () => {

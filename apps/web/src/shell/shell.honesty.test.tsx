@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { DeviceCollectionSchema } from "contracts/http/device"
-import { fireEvent, waitFor, act } from "@testing-library/react"
+import { waitFor } from "@testing-library/react"
 import { renderWithProviders } from "../query/render.with.providers"
 import { hrefOf, requestBodyText, requestUrl } from "../test/request.url"
 import { AppRoutes } from "./AppRouter"
@@ -294,7 +294,7 @@ describe("shell honesty", () => {
   })
 
   describe("connect wizard functional honesty", () => {
-    test("test connection gates continue while pair uses real claim gating", async () => {
+    test("pair screen shows code and gates finish until device is paired", async () => {
       const { getByRole } = renderShellRoute("/connect")
 
       await waitForShellReady(getByRole)
@@ -302,32 +302,10 @@ describe("shell honesty", () => {
       await waitFor(() => {
         expect(getByRole("heading", { name: /pair a device/i })).toBeInTheDocument()
       })
-      fireEvent.click(getByRole("button", { name: /set up cloud proxy/i }))
-      await waitFor(() => {
-        expect(getByRole("textbox", { name: /public server url/i })).toBeInTheDocument()
-      })
-      fireEvent.input(getByRole("textbox", { name: /public server url/i }), {
-        target: { value: "agents.example.com" },
-      })
-      await act(async () => {
-        fireEvent.click(getByRole("button", { name: /save & continue/i }))
-      })
-
-      await waitFor(() => {
-        expect(getByRole("heading", { name: /test your connection/i })).toBeInTheDocument()
-      })
-      await waitFor(() => {
-        expect(getByRole("button", { name: /refresh connection test/i })).toBeInTheDocument()
-      })
-      await waitFor(() => {
-        expect(getByRole("button", { name: /^Continue$/ })).toBeEnabled()
-      }, { timeout: 5000 })
-
-      fireEvent.click(getByRole("button", { name: /^Continue$/ }))
       await waitFor(() => {
         expect(getByRole("button", { name: /regenerate/i })).toBeEnabled()
       })
-      expect(getByRole("button", { name: /^Finish$/ })).toBeEnabled()
+      expect(getByRole("button", { name: /view paired devices/i })).toBeDisabled()
     })
   })
 
