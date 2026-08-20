@@ -382,4 +382,243 @@ class ChatScreenTest {
         composeTestRule.onNodeWithTag("slash_stub_item_stub-skill").assertIsDisplayed().performClick()
         assertTrue(uiState.composerText.contains("/stub-skill"))
     }
+
+    @Test
+    fun micVisibleAndEnabledWhenSessionSelectedAndComposerEnabled() {
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        selectedSession = SessionRow(
+                            sessionId = "sess_01",
+                            name = "Alpha",
+                            cwd = "/tmp/agent-server",
+                            workspaceId = "ws_01",
+                            workspaceLabel = "agent-server",
+                            agentId = "cursor",
+                            agentLabel = "Cursor",
+                            state = SessionState.Idle,
+                            updatedAt = "2026-08-05T01:00:00.000Z",
+                        ),
+                        voiceDictation = VoiceDictationUiState(recognizerAvailable = true),
+                    ),
+                    onSessionSelectorClick = {},
+                    onDismissSessionMenu = {},
+                    onWorkspacesClick = {},
+                    onSessionClick = {},
+                    onSeeAllSessionsClick = {},
+                    onCreateClick = {},
+                    onComposerTextChanged = {},
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onPermissionOptionSelect = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("chat_voice_mic_button")
+            .assertIsDisplayed()
+            .assertIsEnabled()
+    }
+
+    @Test
+    fun micDisabledWhenComposerDisabled() {
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        selectedSession = SessionRow(
+                            sessionId = "sess_01",
+                            name = "Alpha",
+                            cwd = "/tmp/agent-server",
+                            workspaceId = "ws_01",
+                            workspaceLabel = "agent-server",
+                            agentId = "cursor",
+                            agentLabel = "Cursor",
+                            state = SessionState.Running,
+                            updatedAt = "2026-08-05T01:00:00.000Z",
+                        ),
+                        transcript = AcpTranscriptState(sessionState = SessionState.Running),
+                        voiceDictation = VoiceDictationUiState(recognizerAvailable = true),
+                    ),
+                    onSessionSelectorClick = {},
+                    onDismissSessionMenu = {},
+                    onWorkspacesClick = {},
+                    onSessionClick = {},
+                    onSeeAllSessionsClick = {},
+                    onCreateClick = {},
+                    onComposerTextChanged = {},
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onPermissionOptionSelect = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("chat_voice_mic_button")
+            .assertIsDisplayed()
+            .assertIsNotEnabled()
+    }
+
+    @Test
+    fun micDisabledWhenRecognizerUnavailable() {
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        selectedSession = SessionRow(
+                            sessionId = "sess_01",
+                            name = "Alpha",
+                            cwd = "/tmp/agent-server",
+                            workspaceId = "ws_01",
+                            workspaceLabel = "agent-server",
+                            agentId = "cursor",
+                            agentLabel = "Cursor",
+                            state = SessionState.Idle,
+                            updatedAt = "2026-08-05T01:00:00.000Z",
+                        ),
+                        voiceDictation = VoiceDictationUiState(recognizerAvailable = false),
+                    ),
+                    onSessionSelectorClick = {},
+                    onDismissSessionMenu = {},
+                    onWorkspacesClick = {},
+                    onSessionClick = {},
+                    onSeeAllSessionsClick = {},
+                    onCreateClick = {},
+                    onComposerTextChanged = {},
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onPermissionOptionSelect = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("chat_voice_mic_button")
+            .assertIsDisplayed()
+            .assertIsNotEnabled()
+    }
+
+    @Test
+    fun voiceOverlayOpensAndClosesFromComposerMic() {
+        var openCalls = 0
+        var cancelCalls = 0
+        var uiState by mutableStateOf(
+            ChatUiState(
+                selectedSession = SessionRow(
+                    sessionId = "sess_01",
+                    name = "Alpha",
+                    cwd = "/tmp/agent-server",
+                    workspaceId = "ws_01",
+                    workspaceLabel = "agent-server",
+                    agentId = "cursor",
+                    agentLabel = "Cursor",
+                    state = SessionState.Idle,
+                    updatedAt = "2026-08-05T01:00:00.000Z",
+                ),
+                composerText = "Draft prompt",
+                voiceDictation = VoiceDictationUiState(recognizerAvailable = true),
+            ),
+        )
+
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = uiState,
+                    onSessionSelectorClick = {},
+                    onDismissSessionMenu = {},
+                    onWorkspacesClick = {},
+                    onSessionClick = {},
+                    onSeeAllSessionsClick = {},
+                    onCreateClick = {},
+                    onComposerTextChanged = {},
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onPermissionOptionSelect = {},
+                    onVoiceDictationOpen = { _ ->
+                        openCalls += 1
+                        uiState = uiState.copy(
+                            voiceDictation = VoiceDictationUiState(
+                                visible = true,
+                                transcript = "Draft prompt",
+                                isListening = true,
+                                recognizerAvailable = true,
+                            ),
+                        )
+                    },
+                    onVoiceDictationCancel = {
+                        cancelCalls += 1
+                        uiState = uiState.copy(
+                            voiceDictation = VoiceDictationUiState(recognizerAvailable = true),
+                        )
+                    },
+                )
+            }
+        }
+
+        composeTestRule.onAllNodesWithTag("voice_dictation_overlay").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("chat_voice_mic_button").performClick()
+        assertTrue(openCalls == 1)
+        composeTestRule.onNodeWithTag("voice_dictation_overlay").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("voice_dictation_cancel").performClick()
+        assertTrue(cancelCalls == 1)
+        composeTestRule.onAllNodesWithTag("voice_dictation_overlay").assertCountEquals(0)
+    }
+
+    @Test
+    fun voiceOverlayDoneAppliesTranscriptViaCallback() {
+        var confirmCalls = 0
+        var uiState by mutableStateOf(
+            ChatUiState(
+                selectedSession = SessionRow(
+                    sessionId = "sess_01",
+                    name = "Alpha",
+                    cwd = "/tmp/agent-server",
+                    workspaceId = "ws_01",
+                    workspaceLabel = "agent-server",
+                    agentId = "cursor",
+                    agentLabel = "Cursor",
+                    state = SessionState.Idle,
+                    updatedAt = "2026-08-05T01:00:00.000Z",
+                ),
+                composerText = "Draft",
+                voiceDictation = VoiceDictationUiState(
+                    visible = true,
+                    transcript = "Draft hello world",
+                    isListening = false,
+                    recognizerAvailable = true,
+                ),
+            ),
+        )
+
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = uiState,
+                    onSessionSelectorClick = {},
+                    onDismissSessionMenu = {},
+                    onWorkspacesClick = {},
+                    onSessionClick = {},
+                    onSeeAllSessionsClick = {},
+                    onCreateClick = {},
+                    onComposerTextChanged = {},
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onPermissionOptionSelect = {},
+                    onVoiceDictationConfirm = {
+                        confirmCalls += 1
+                        uiState = uiState.copy(
+                            composerText = "Draft hello world",
+                            voiceDictation = VoiceDictationUiState(recognizerAvailable = true),
+                        )
+                    },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("voice_dictation_overlay").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("voice_dictation_done").performClick()
+        assertTrue(confirmCalls == 1)
+        assertTrue(uiState.composerText == "Draft hello world")
+        composeTestRule.onAllNodesWithTag("voice_dictation_overlay").assertCountEquals(0)
+    }
 }

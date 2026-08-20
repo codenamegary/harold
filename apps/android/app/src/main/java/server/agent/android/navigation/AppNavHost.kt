@@ -159,6 +159,12 @@ fun AppNavHost(
                 onExtensionSkip = chatViewModel::skipExtension,
                 onNotificationPermissionResult = chatViewModel::onNotificationPermissionResult,
                 onDismissNotificationPermissionPrompt = chatViewModel::dismissNotificationPermissionPrompt,
+                onVoiceDictationOpen = chatViewModel::openVoiceDictation,
+                onRecordAudioPermissionResult = chatViewModel::onRecordAudioPermissionResult,
+                onVoiceDictationToggleListening = chatViewModel::toggleVoiceDictationListening,
+                onVoiceDictationStartOver = chatViewModel::startOverVoiceDictation,
+                onVoiceDictationCancel = chatViewModel::cancelVoiceDictation,
+                onVoiceDictationConfirm = chatViewModel::confirmVoiceDictation,
             )
         }
 

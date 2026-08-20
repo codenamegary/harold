@@ -52,6 +52,9 @@ class ChatViewModel(
     private var catalog: List<SessionRow> = emptyList()
 
     init {
+        voiceDictationController.onStateChanged = ::syncVoiceDictationState
+        syncVoiceDictationState(voiceDictationController.state)
+
         savedStateHandle.get<String>(KEY_SELECTED_SESSION_ID)?.let { sessionKey ->
             viewModelScope.launch {
                 selectSessionLocally(sessionKey)
