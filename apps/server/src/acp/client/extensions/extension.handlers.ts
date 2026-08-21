@@ -15,9 +15,7 @@ export const extensionHandlers: Partial<Record<AgentId, ExtensionHandlersFactory
 export const resolveExtensionHandlers = (
   agentId: AgentId,
   requestExtensionRpc: RequestExtensionRpcFn,
-  profileHandlers: ExtensionHandlers,
 ): ExtensionHandlers => {
   const factory = extensionHandlers[agentId]
-  const fromRegistry = factory === undefined ? {} : factory(agentId, requestExtensionRpc)
-  return { ...fromRegistry, ...profileHandlers }
+  return factory === undefined ? {} : factory(agentId, requestExtensionRpc)
 }

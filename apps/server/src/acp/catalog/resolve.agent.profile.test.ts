@@ -20,7 +20,6 @@ describe("resolveAgentProfile", () => {
         },
         terminal: true,
       },
-      extensionHandlers: {},
     })
 
     expect(buildAgentSpawnCommand("/opt/cursor/bin/agent", ["acp"])).toEqual([
@@ -46,7 +45,6 @@ describe("resolveAgentProfile", () => {
         },
         terminal: true,
       },
-      extensionHandlers: {},
     })
 
     expect(buildAgentSpawnCommand("/usr/local/bin/opencode", ["acp"])).toEqual([

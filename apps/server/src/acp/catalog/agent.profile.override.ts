@@ -1,5 +1,4 @@
 import { WhichFn } from "../../agent-settings/resolve-agent-path"
-import { ExtensionHandlers } from "../client/extensions/types"
 
 export type AcpClientCapabilities = {
   readonly fs: {
@@ -25,7 +24,6 @@ export type AgentProfileOverride = {
   readonly command?: readonly string[]
   readonly authMethodId?: string
   readonly clientCapabilities?: AcpClientCapabilities
-  readonly extensionHandlers?: ExtensionHandlers
   readonly binaryName?: string
   readonly presenceProbe?: PresenceProbe
 }
