@@ -19,6 +19,8 @@ class VoiceDictationController(
     private var hasRecordAudioPermission = false
     private var listening = false
 
+    var onStateChanged: ((VoiceDictationUiState) -> Unit)? = null
+
     var state: VoiceDictationUiState = VoiceDictationUiState(
         recognizerAvailable = speechClient.isAvailable(),
     )
@@ -147,6 +149,7 @@ class VoiceDictationController(
     }
 
     fun destroy() {
+        onStateChanged = null
         stopRecognition()
     }
 
@@ -239,6 +242,7 @@ class VoiceDictationController(
 
     private fun publish(next: VoiceDictationUiState): VoiceDictationUiState {
         state = next
+        onStateChanged?.invoke(next)
         return next
     }
 }

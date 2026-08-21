@@ -22,6 +22,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -119,6 +120,12 @@ fun ChatScreen(
     onExtensionSkip: () -> Unit = {},
     onNotificationPermissionResult: (Boolean) -> Unit = {},
     onDismissNotificationPermissionPrompt: () -> Unit = {},
+    onVoiceDictationOpen: (hasRecordAudioPermission: Boolean) -> Unit = {},
+    onRecordAudioPermissionResult: (Boolean) -> Unit = {},
+    onVoiceDictationToggleListening: () -> Unit = {},
+    onVoiceDictationStartOver: () -> Unit = {},
+    onVoiceDictationCancel: () -> Unit = {},
+    onVoiceDictationConfirm: () -> Unit = {},
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val sessionLabel = uiState.selectedSession?.name ?: "Select session"
@@ -135,10 +142,47 @@ fun ChatScreen(
         stringResource(R.string.notification_permission_not_now_content_description)
     val sendContentDescription = stringResource(R.string.chat_send_content_description)
     val cancelContentDescription = stringResource(R.string.chat_cancel_content_description)
+    val voiceMicEnabledContentDescription =
+        stringResource(R.string.chat_voice_mic_content_description)
+    val voiceMicDisabledComposerContentDescription =
+        stringResource(R.string.chat_voice_mic_disabled_composer_content_description)
+    val voiceMicUnavailableContentDescription =
+        stringResource(R.string.chat_voice_mic_unavailable_content_description)
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted ->
         onNotificationPermissionResult(granted)
+    }
+    val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        onRecordAudioPermissionResult(granted)
+    }
+
+    fun hasRecordAudioPermission(): Boolean =
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO,
+        ) == PackageManager.PERMISSION_GRANTED
+
+    fun openAppPermissionSettings() {
+        val intent = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", context.packageName, null),
+        )
+        context.startActivity(intent)
+    }
+
+    fun requestRecordAudioPermission() {
+        recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
+    fun openVoiceDictation() {
+        val granted = hasRecordAudioPermission()
+        onVoiceDictationOpen(granted)
+        if (!granted) {
+            requestRecordAudioPermission()
+        }
     }
 
     LaunchedEffect(uiState.notificationPermissionDenied) {
@@ -195,6 +239,7 @@ fun ChatScreen(
         )
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -533,12 +578,38 @@ fun ChatScreen(
                     verticalAlignment = Alignment.Bottom,
                 ) {
                     val composerEnabled = uiState.composerEnabled
+                    val voiceMicEnabled =
+                        composerEnabled && uiState.voiceDictation.recognizerAvailable
+                    val voiceMicContentDescription = when {
+                        !uiState.voiceDictation.recognizerAvailable ->
+                            voiceMicUnavailableContentDescription
+                        !composerEnabled ->
+                            voiceMicDisabledComposerContentDescription
+                        else ->
+                            voiceMicEnabledContentDescription
+                    }
                     val composerInteractionSource = remember { MutableInteractionSource() }
                     val composerColors = OutlinedTextFieldDefaults.colors()
                     val composerTextColor = if (composerEnabled) {
                         MaterialTheme.colorScheme.onSurface
                     } else {
                         MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    }
+
+                    IconButton(
+                        onClick = { openVoiceDictation() },
+                        enabled = voiceMicEnabled,
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                            .testTag("chat_voice_mic_button")
+                            .semantics {
+                                contentDescription = voiceMicContentDescription
+                            },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Mic,
+                            contentDescription = null,
+                        )
                     }
 
                     BasicTextField(
@@ -615,5 +686,16 @@ fun ChatScreen(
                 }
             }
         }
+    }
+
+    VoiceDictationOverlay(
+        state = uiState.voiceDictation,
+        onToggleListening = onVoiceDictationToggleListening,
+        onStartOver = onVoiceDictationStartOver,
+        onCancel = onVoiceDictationCancel,
+        onConfirm = onVoiceDictationConfirm,
+        onRequestPermission = { requestRecordAudioPermission() },
+        onOpenPermissionSettings = { openAppPermissionSettings() },
+    )
     }
 }
