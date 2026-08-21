@@ -86,13 +86,25 @@ describe("extension handlers", () => {
     expect(() => handler?.({})).toThrow("unknown extension: vendor/unknown")
   })
 
-  test("resolveExtensionHandlers uses the cursor factory", async () => {
+  test("resolveExtensionHandlers wires the cursor factory to the rpc", async () => {
     expect(extensionHandlers.cursor).toBe(createCursorExtensionHandlers)
 
-    const rpc = async () => ({})
-    const resolved = resolveExtensionHandlers("cursor", rpc)
+    const calls: unknown[] = []
+    const resolved = resolveExtensionHandlers("cursor", async (input) => {
+      calls.push(input)
+      return {}
+    })
 
-    expect(resolved["cursor/ask_question"]).toBeDefined()
+    await resolved["cursor/ask_question"]({ sessionId: "sess-1" })
+
+    expect(calls).toEqual([
+      {
+        agentId: "cursor",
+        sessionId: "sess-1",
+        method: "cursor/ask_question",
+        params: { sessionId: "sess-1" },
+      },
+    ])
     expect(resolved["cursor/create_plan"]).toBeDefined()
   })
 

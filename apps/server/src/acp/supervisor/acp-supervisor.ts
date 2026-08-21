@@ -334,10 +334,7 @@ export const createAcpSupervisor = ({
       agentId,
       sessionBindingRegistry,
       requestPermission,
-      extensionHandlers: resolveExtensionHandlers(
-        agentId,
-        requestExtensionRpc,
-      ),
+      extensionHandlers: resolveExtensionHandlers(agentId, requestExtensionRpc),
     })
 
     transport.onNotification("session/update", (params) => {
