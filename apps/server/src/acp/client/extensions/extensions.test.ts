@@ -86,20 +86,17 @@ describe("extension handlers", () => {
     expect(() => handler?.({})).toThrow("unknown extension: vendor/unknown")
   })
 
-  test("resolveExtensionHandlers uses the cursor factory and lets profile handlers win", async () => {
+  test("resolveExtensionHandlers uses the cursor factory", async () => {
     expect(extensionHandlers.cursor).toBe(createCursorExtensionHandlers)
 
     const rpc = async () => ({})
-    const resolved = resolveExtensionHandlers("cursor", rpc, {
-      "cursor/ask_question": () => ({ fromProfile: true }),
-    })
+    const resolved = resolveExtensionHandlers("cursor", rpc)
 
-    expect(await resolved["cursor/ask_question"]({})).toEqual({ fromProfile: true })
+    expect(resolved["cursor/ask_question"]).toBeDefined()
     expect(resolved["cursor/create_plan"]).toBeDefined()
   })
 
-  test("resolveExtensionHandlers returns only profile handlers for agents with no factory", () => {
-    const profile = { "vendor/custom": () => ({ ok: true }) }
-    expect(resolveExtensionHandlers("opencode", async () => ({}), profile)).toEqual(profile)
+  test("resolveExtensionHandlers returns empty handlers for agents with no factory", () => {
+    expect(resolveExtensionHandlers("opencode", async () => ({}))).toEqual({})
   })
 })

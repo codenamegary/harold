@@ -5,7 +5,6 @@ import {
 } from "./catalog/agent.profile.override"
 import { catalogAgentsById } from "./catalog/generated/catalog.agents.generated"
 import { productAgentOverridesById } from "./catalog/overrides/product.overrides"
-import { ExtensionHandlers } from "./client/extensions/types"
 
 export type { AcpClientCapabilities }
 
@@ -14,10 +13,7 @@ export type AgentProfile = {
   readonly command: readonly string[]
   readonly authMethodId: string
   readonly clientCapabilities: AcpClientCapabilities
-  readonly extensionHandlers: ExtensionHandlers
 }
-
-const emptyExtensionHandlers: ExtensionHandlers = {}
 
 /**
  * Profile resolve = product override ∪ generated catalog defaults.
@@ -36,7 +32,6 @@ export const resolveAgentProfile = (
       command: override?.command ?? catalogAgent.spawn.command,
       authMethodId: override?.authMethodId ?? catalogAgent.authMethodId,
       clientCapabilities: override?.clientCapabilities ?? defaultClientCapabilities,
-      extensionHandlers: override?.extensionHandlers ?? emptyExtensionHandlers,
     }
   }
 
@@ -49,6 +44,5 @@ export const resolveAgentProfile = (
     command: override?.command ?? spawnSnapshot.command,
     authMethodId: override?.authMethodId ?? spawnSnapshot.authMethodId,
     clientCapabilities: override?.clientCapabilities ?? defaultClientCapabilities,
-    extensionHandlers: override?.extensionHandlers ?? emptyExtensionHandlers,
   }
 }

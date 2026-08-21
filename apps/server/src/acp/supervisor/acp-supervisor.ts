@@ -337,7 +337,6 @@ export const createAcpSupervisor = ({
       extensionHandlers: resolveExtensionHandlers(
         agentId,
         requestExtensionRpc,
-        resolved.profile.extensionHandlers,
       ),
     })
 

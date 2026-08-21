@@ -8,7 +8,6 @@ const cursorProfile: AgentProfile = {
   command: ["agent"],
   authMethodId: "cursor_login",
   clientCapabilities: defaultClientCapabilities,
-  extensionHandlers: {},
 }
 
 const waitForLine = async (lines: readonly string[], expected: string): Promise<void> => {
