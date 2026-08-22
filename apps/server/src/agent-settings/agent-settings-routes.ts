@@ -11,7 +11,6 @@ import {
   UpdateAgentSettingsBodySchema,
 } from "contracts/http/agent-settings"
 import { FastifyInstance } from "fastify"
-import { agentSupportsSessionList } from "../acp/catalog/session.list.support"
 import {
   AcpSupervisor,
   isAcpStartError,
@@ -167,9 +166,6 @@ export const registerAgentSettingsRoutes = (
 
     if (!result.ok) {
       if (result.error.kind === "cannot_enable") {
-        if (!agentSupportsSessionList(agentId)) {
-          return sendProblem(reply, 409, buildAgentSessionListUnsupportedProblem())
-        }
         return sendProblem(reply, 409, buildAgentCannotEnableProblem())
       }
       if (result.error.kind === "cannot_rename") {

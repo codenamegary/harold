@@ -23,7 +23,6 @@ const validAgentSettings = {
   present: false,
   popular: true,
   deletable: false,
-  sessionListSupported: true,
   state: stoppedAgentRuntimeState,
 }
 
@@ -66,7 +65,6 @@ describe("AgentSettingsSchema", () => {
       present: true,
       popular: true,
       deletable: false,
-      sessionListSupported: true,
       state: stoppedAgentRuntimeState,
     }
 
@@ -84,7 +82,6 @@ describe("AgentSettingsSchema", () => {
       present: true,
       popular: false,
       deletable: true,
-      sessionListSupported: true,
       state: {
         status: "ready",
         error: null,
@@ -128,6 +125,15 @@ describe("AgentSettingsSchema", () => {
   test("rejects missing args", () => {
     const { args: _args, ...withoutArgs } = validAgentSettings
     expect(() => AgentSettingsSchema.parse(withoutArgs)).toThrow()
+  })
+
+  test("rejects sessionListSupported", () => {
+    expect(() =>
+      AgentSettingsSchema.parse({
+        ...validAgentSettings,
+        sessionListSupported: true,
+      }),
+    ).toThrow()
   })
 })
 
@@ -322,7 +328,6 @@ describe("AgentSettingsCollectionSchema", () => {
           present: false,
           popular: true,
           deletable: false,
-          sessionListSupported: true,
           state: stoppedAgentRuntimeState,
         },
       ],

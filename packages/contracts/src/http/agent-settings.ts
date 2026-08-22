@@ -47,7 +47,6 @@ export const AgentSettingsSchema = z.strictObject({
   present: z.boolean(),
   popular: z.boolean(),
   deletable: z.boolean(),
-  sessionListSupported: z.boolean(),
   state: AgentRuntimeStateSchema,
 })
 

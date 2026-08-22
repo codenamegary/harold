@@ -76,8 +76,7 @@ const emptyAgentCollection = {
       present: true,
       popular: true,
       deletable: false,
-  sessionListSupported: true,
-  state: { status: "stopped", error: null },
+      state: { status: "stopped", error: null },
     },
     {
       id: "claude-acp",
@@ -89,8 +88,7 @@ const emptyAgentCollection = {
       present: true,
       popular: true,
       deletable: false,
-  sessionListSupported: true,
-  state: { status: "stopped", error: null },
+      state: { status: "stopped", error: null },
     },
   ],
 }
