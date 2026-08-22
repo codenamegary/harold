@@ -5,6 +5,7 @@ import { buildCapabilityInventory, CapabilityInventory } from "../agent/inventor
 import { agentMethodDeclarations } from "../agent/method.declarations"
 import { createAgentMethodTable } from "../agent/method.table"
 import { registerSessionCloseHandler } from "../agent/session.close"
+import { registerSessionListHandler } from "../agent/session.list"
 import { registerSessionLoadHandler } from "../agent/session.load"
 import { createSessionOwnership } from "../agent/session.ownership"
 import {
@@ -52,8 +53,6 @@ type SupervisorRuntime = {
   restartGeneration: number
 }
 
-const nowIso = (): string => new Date().toISOString()
-
 const sanitizeFailureReason = (error: unknown, fallback: string): string => {
   if (isAcpJsonRpcError(error)) {
     return sanitizeAcpRejection({
@@ -64,41 +63,6 @@ const sanitizeFailureReason = (error: unknown, fallback: string): string => {
 
   const message = error instanceof Error ? error.message : fallback
   return sanitizeAcpRejection({ message })
-}
-
-const parseListedSessions = (result: unknown): ReadonlyArray<{
-  sessionId: string
-  cwd: string
-  title: string
-  updatedAt: string
-}> => {
-  const value = result as {
-    sessions?: ReadonlyArray<{
-      sessionId?: string
-      cwd?: string
-      title?: string
-      updatedAt?: string
-    }>
-  }
-
-  if (!Array.isArray(value.sessions)) {
-    return []
-  }
-
-  return value.sessions.flatMap((session) => {
-    if (session.sessionId === undefined) {
-      return []
-    }
-
-    return [
-      {
-        sessionId: session.sessionId,
-        cwd: session.cwd ?? "",
-        title: session.title ?? session.sessionId,
-        updatedAt: session.updatedAt ?? nowIso(),
-      },
-    ]
-  })
 }
 
 const resolveStartConfig = (
@@ -204,6 +168,7 @@ export const createAcpSupervisor = ({
   const agentMethodTable = createAgentMethodTable()
   registerSessionCloseHandler(agentMethodTable)
   registerSessionLoadHandler(agentMethodTable)
+  registerSessionListHandler(agentMethodTable)
   const runtimes = new Map<AgentId, SupervisorRuntime>()
 
   const unbindAgentSessions = (agentId: AgentId) => {
@@ -627,34 +592,32 @@ export const createAcpSupervisor = ({
             return [] as AcpSession[]
           }
 
-          const listed = parseListedSessions(
-            await transport.request(
-              "session/list",
-              params?.cwd === undefined ? {} : { cwd: params.cwd },
-            ),
-          )
-
-          return listed.flatMap((session) => {
-            if (params?.cwd !== undefined && session.cwd !== params.cwd) {
-              return []
-            }
-
-            rememberAcpSession(runtime.agentId, session.sessionId)
-            onSessionDiscovered({
-              agentId: runtime.agentId,
-              sessionId: session.sessionId,
-              cwd: session.cwd,
-            })
-            return [
-              {
-                agentId: runtime.agentId,
-                sessionId: session.sessionId,
-                cwd: session.cwd,
-                title: session.title,
-                updatedAt: session.updatedAt,
-              },
-            ]
+          const handler = agentMethodTable.resolve({
+            agentId: runtime.agentId,
+            method: "session/list",
           })
+          if (handler === undefined) {
+            return [] as AcpSession[]
+          }
+
+          const result = await handler({
+            params: params?.cwd === undefined ? {} : { cwd: params.cwd },
+            context: {
+              agentId: runtime.agentId,
+              transport,
+              sessionBindings: sessionBindingRegistry,
+              sessionOwnership,
+              onSessionDiscovered,
+              supportsCapability: (path) =>
+                inventorySupportsRequiredCapability(runtime.capabilityInventory, path),
+            },
+          })
+
+          if (!result.ok) {
+            throw new Error(result.reason)
+          }
+
+          return result.sessions
         }),
       )
 
