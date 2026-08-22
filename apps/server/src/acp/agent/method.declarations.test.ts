@@ -4,7 +4,7 @@ import {
   createAgentMethodDeclarations,
 } from "./method.declarations"
 import { agentMethodNames, requiredCapabilityPaths } from "./method"
-import { sessionCancelRequires } from "./session.cancel"
+import { sessionCancelRequires, sessionCancelTransportKind } from "./session.cancel"
 import { sessionCloseRequires } from "./session.close"
 import { sessionListRequires } from "./session.list"
 import { sessionLoadRequires } from "./session.load"
@@ -22,6 +22,14 @@ describe("agent method declarations", () => {
     expect(sessionNewRequires).toBeNull()
     expect(sessionPromptRequires).toBeNull()
     expect(sessionCancelRequires).toBeNull()
+  })
+
+  test("session/cancel is declared as a notification transport", () => {
+    expect(sessionCancelTransportKind).toBe("notify")
+    expect(
+      agentMethodDeclarations.list().find((declaration) => declaration.method === "session/cancel")
+        ?.transportKind,
+    ).toBe("notify")
   })
 
   test("optional methods name their v1 capability path", () => {
@@ -72,8 +80,8 @@ describe("agent method declarations", () => {
 
   test("two methods requiring the same path both come back", () => {
     const declarations = createAgentMethodDeclarations([
-      { method: "session/list", requires: "sessionCapabilities.list" },
-      { method: "session/close", requires: "sessionCapabilities.list" },
+      { method: "session/list", requires: "sessionCapabilities.list", transportKind: "request" },
+      { method: "session/close", requires: "sessionCapabilities.list", transportKind: "request" },
     ])
 
     expect(declarations.methodsRequiring("sessionCapabilities.list")).toEqual([
@@ -84,12 +92,14 @@ describe("agent method declarations", () => {
 
   test("registering a method again replaces its declaration", () => {
     const declarations = createAgentMethodDeclarations([
-      { method: "session/load", requires: "loadSession" },
+      { method: "session/load", requires: "loadSession", transportKind: "request" },
     ])
 
-    declarations.register({ method: "session/load", requires: null })
+    declarations.register({ method: "session/load", requires: null, transportKind: "request" })
 
     expect(declarations.methodsRequiring("loadSession")).toEqual([])
-    expect(declarations.list()).toEqual([{ method: "session/load", requires: null }])
+    expect(declarations.list()).toEqual([
+      { method: "session/load", requires: null, transportKind: "request" },
+    ])
   })
 })

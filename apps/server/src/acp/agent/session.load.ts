@@ -16,6 +16,7 @@ export const sessionLoadRequires: RequiredCapabilityPath = "loadSession"
 export const sessionLoadDeclaration: AgentMethodDeclaration = {
   method: sessionLoadMethod,
   requires: sessionLoadRequires,
+  transportKind: "request",
 }
 
 const sanitizeLoadFailureReason = (error: unknown, fallback: string): string => {

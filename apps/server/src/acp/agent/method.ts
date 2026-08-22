@@ -37,9 +37,12 @@ export const agentMethodNames = [
 
 export type AgentMethodName = (typeof agentMethodNames)[number]
 
+export type AgentMethodTransportKind = "request" | "notify"
+
 export type AgentMethodDeclaration = {
   method: AgentMethodName
   requires: RequiredCapabilityPath | null
+  transportKind: AgentMethodTransportKind
 }
 
 export type AgentMethodHandlerContext = {
@@ -53,7 +56,12 @@ export type AgentMethodHandlerContext = {
 
 export type AgentMethodSignatures = {
   "session/new": {
-    params: { workspaceCwd: string, sessionId: string, workspaceId: string }
+    params: {
+      workspaceCwd: string
+      sessionId: string
+      workspaceId: string
+      discoverOnCreate?: boolean
+    }
     result: AcpSessionOperationResult
   }
   "session/prompt": {
