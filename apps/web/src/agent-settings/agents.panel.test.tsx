@@ -10,6 +10,8 @@ import { renderWithProviders } from "../query/render.with.providers"
 import { requestBodyText, requestUrl } from "../test/request.url"
 import {
   agentCapabilitiesForState,
+  agentMissingListCapability,
+  fakeReadyAgentCapabilities,
   nullAgentCapabilities,
 } from "../test/agent.settings.fixtures"
 import { AgentsPanel } from "./AgentsPanel"
@@ -111,7 +113,7 @@ const expandAgentRow = async (view: ReturnType<typeof renderAgentsPanel>, displa
   await clickInAct(
     within(row).getByRole("button", { name: `Expand ${displayName} launch settings` }),
   )
-  return view.getByRole("row", { name: `${displayName} launch settings` })
+  return view.getByRole("row", { name: `${displayName} agent settings` })
 }
 
 describe("AgentsPanel", () => {
@@ -251,7 +253,7 @@ describe("AgentsPanel", () => {
 
     await waitFor(() => {
       const row = view.getByRole("row", { name: "Cursor agent" })
-      const settings = view.getByRole("row", { name: "Cursor launch settings" })
+      const settings = view.getByRole("row", { name: "Cursor agent settings" })
       expect(within(settings).getByText("Could not detect agent path automatically.")).toBeInTheDocument()
       expect(within(row).getByLabelText("Enable Cursor")).toBeChecked()
       expect(within(settings).getByLabelText("Cursor executable path")).toBeInTheDocument()
@@ -816,7 +818,7 @@ describe("AgentsPanel", () => {
     })
   })
 
-  test("shows error when agent settings API is unreachable", async () => {
+  test("shows error when launch settings API is unreachable", async () => {
     globalThis.fetch = mock((input: RequestInfo | URL) => {
       const url = requestUrl(input)
 
@@ -1024,7 +1026,7 @@ describe("AgentsPanel", () => {
       const row = view.getByRole("row", { name: "Custom Agent agent" })
       expect(within(row).getByText("custom")).toBeInTheDocument()
       expect(
-        view.getByRole("row", { name: "Custom Agent launch settings" }),
+        view.getByRole("row", { name: "Custom Agent agent settings" }),
       ).toBeInTheDocument()
     })
   }, mutationFlowTimeoutMs)
@@ -1038,7 +1040,7 @@ describe("AgentsPanel", () => {
     })
   })
 
-  test("refetches agent settings from the header refresh control", async () => {
+  test("refetches launch settings from the header refresh control", async () => {
     const getCounts = { value: 0 }
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
@@ -1225,4 +1227,172 @@ describe("AgentsPanel", () => {
       expect(within(row).getByLabelText("Enable Cursor")).toBeChecked()
     })
   }, mutationFlowTimeoutMs)
+
+  test("shows capabilities panel with grouped entries when agent is ready", async () => {
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(
+              agentsCollection(
+                cursorAgent({
+                  enabled: true,
+                  path: "/usr/local/bin/agent",
+                  args: ["acp"],
+                  state: { status: "ready", error: null },
+                  capabilities: fakeReadyAgentCapabilities,
+                }),
+              ),
+            ),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByRole("row", { name: "Cursor agent" })).toBeInTheDocument()
+    })
+
+    const settings = await expandAgentRow(view, "Cursor")
+    const capabilities = within(settings).getByLabelText("Cursor capabilities")
+
+    expect(within(capabilities).getByLabelText("Cursor agent info")).toHaveTextContent(
+      "Fake ACP 0.0.0",
+    )
+    expect(within(capabilities).getByLabelText("Unsupported by agent")).toHaveTextContent("None")
+    expect(within(capabilities).getByLabelText("In use")).toHaveTextContent("loadSession")
+    expect(within(capabilities).getByLabelText("In use")).toHaveTextContent(
+      "used by session/load",
+    )
+    expect(within(capabilities).getByLabelText("Available, unused")).toHaveTextContent(
+      "promptCapabilities.image",
+    )
+    expect(within(capabilities).getByLabelText("Unknown to host")).toHaveTextContent(
+      "_meta.vendor.quirk",
+    )
+  })
+
+  test("shows status-aware empty state when agent is not ready", async () => {
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(
+              agentsCollection(
+                cursorAgent({
+                  enabled: true,
+                  path: "/usr/local/bin/agent",
+                  state: { status: "starting", error: null },
+                  capabilities: nullAgentCapabilities,
+                }),
+              ),
+            ),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByRole("row", { name: "Cursor agent" })).toBeInTheDocument()
+    })
+
+    const settings = await expandAgentRow(view, "Cursor")
+    const capabilities = within(settings).getByLabelText("Cursor capabilities")
+
+    expect(capabilities).toHaveTextContent("Capabilities appear when the agent is ready.")
+    expect(within(capabilities).queryByLabelText("In use")).not.toBeInTheDocument()
+  })
+
+  test("shows missing required capability in unsupported group", async () => {
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(
+              agentsCollection(
+                cursorAgent({
+                  enabled: true,
+                  path: "/usr/local/bin/agent",
+                  args: ["acp"],
+                  state: { status: "ready", error: null },
+                  capabilities: agentMissingListCapability,
+                }),
+              ),
+            ),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByRole("row", { name: "Cursor agent" })).toBeInTheDocument()
+    })
+
+    const settings = await expandAgentRow(view, "Cursor")
+    const capabilities = within(settings).getByLabelText("Cursor capabilities")
+    const unsupported = within(capabilities).getByLabelText("Unsupported by agent")
+
+    expect(unsupported).toHaveTextContent("sessionCapabilities.list")
+    expect(unsupported).toHaveTextContent("used by session/list")
+  })
 })

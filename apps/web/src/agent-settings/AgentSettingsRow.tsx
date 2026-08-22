@@ -26,6 +26,7 @@ import { detectAgentPath } from "./detect.agent.path"
 import { formatLaunchCommandPreview } from "./launch.command.preview"
 import { insertNpxYesFlag, needsNpxYesFlag } from "./npx.yes.flag"
 import { isCustomAgentId } from "./is.custom.agent.id"
+import { AgentCapabilitiesPanel } from "./AgentCapabilitiesPanel"
 import { respawnAgent } from "./respawn.agent"
 import { updateAgentSettings } from "./update.agent.settings"
 
@@ -453,14 +454,15 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
       </tr>
       {expanded ? (
         <tr
-          aria-label={`${agent.displayName} launch settings`}
+          aria-label={`${agent.displayName} agent settings`}
           aria-busy={isDeleting ? "true" : undefined}
           className={`border-b border-line-soft last:border-b-0 transition-opacity duration-200 ${isComingSoon || isDeleting ? "opacity-55" : ""} ${isDeleting ? "pointer-events-none" : ""}`}
         >
           <td colSpan={4} className="bg-[#0a0c10] px-3 py-3">
-            <div className="flex flex-col gap-4 p-4">
-              <div className="min-w-0 max-w-xl">
-                <p className="m-0 mb-1.5 text-2xs font-medium tracking-wide text-label">Path</p>
+            <div className="grid grid-cols-1 gap-6 p-4 md:grid-cols-2">
+              <div className="flex min-w-0 flex-col gap-4">
+                <div className="min-w-0">
+                  <p className="m-0 mb-1.5 text-2xs font-medium tracking-wide text-label">Path</p>
                 <Controller
                   name="path"
                   control={control}
@@ -521,10 +523,10 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
                     ) : null}
                   </span>
                 </div>
-              </div>
+                </div>
 
-              <div className="min-w-0 max-w-xl">
-                <p className="m-0 mb-1.5 text-2xs font-medium tracking-wide text-label">Args</p>
+                <div className="min-w-0">
+                  <p className="m-0 mb-1.5 text-2xs font-medium tracking-wide text-label">Args</p>
                 <Controller
                   name="args"
                   control={control}
@@ -583,32 +585,39 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
                     {commandPreview === "" ? "—" : commandPreview}
                   </pre>
                 </div>
+                </div>
+
+                {isDirty ? (
+                  <div className="flex items-center gap-2.5">
+                    <Button
+                      type="button"
+                      variant="submit"
+                      size="sm"
+                      disabled={saveDisabled}
+                      aria-label={`Save ${agent.displayName} launch settings`}
+                      onClick={handleSubmit(onSave)}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={formControlsDisabled}
+                      aria-label={`Reset ${agent.displayName} launch settings`}
+                      onClick={handleReset}
+                    >
+                      Reset
+                    </Button>
+                  </div>
+                ) : null}
               </div>
 
-              {isDirty ? (
-                <div className="flex items-center gap-2.5">
-                  <Button
-                    type="button"
-                    variant="submit"
-                    size="sm"
-                    disabled={saveDisabled}
-                    aria-label={`Save ${agent.displayName} launch settings`}
-                    onClick={handleSubmit(onSave)}
-                  >
-                    Save
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    disabled={formControlsDisabled}
-                    aria-label={`Reset ${agent.displayName} launch settings`}
-                    onClick={handleReset}
-                  >
-                    Reset
-                  </Button>
-                </div>
-              ) : null}
+              <AgentCapabilitiesPanel
+                agentDisplayName={agent.displayName}
+                capabilities={agent.capabilities}
+                state={agent.state}
+              />
             </div>
           </td>
         </tr>
