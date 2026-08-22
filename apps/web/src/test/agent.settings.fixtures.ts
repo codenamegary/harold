@@ -3,7 +3,7 @@ import { AgentCapabilityInventory, AgentRuntimeState } from "contracts/http/agen
 export const nullAgentCapabilities = null
 
 export const fakeReadyAgentCapabilities: AgentCapabilityInventory = {
-  agentInfo: { name: "fake-acp", version: "0.0.0" },
+  agentInfo: { name: "fake-acp", version: "0.0.0", title: "Fake ACP" },
   entries: [
     {
       path: "loadSession",
@@ -11,6 +11,46 @@ export const fakeReadyAgentCapabilities: AgentCapabilityInventory = {
       value: true,
       known: true,
       requiredBy: ["session/load"],
+    },
+    {
+      path: "sessionCapabilities.list",
+      advertised: true,
+      value: {},
+      known: true,
+      requiredBy: ["session/list"],
+    },
+    {
+      path: "promptCapabilities.image",
+      advertised: true,
+      value: true,
+      known: true,
+      requiredBy: [],
+    },
+    {
+      path: "_meta.vendor.quirk",
+      advertised: true,
+      value: 1,
+      known: false,
+      requiredBy: [],
+    },
+  ],
+}
+
+export const agentMissingListCapability: AgentCapabilityInventory = {
+  agentInfo: { name: "list-less", version: "1.0.0" },
+  entries: [
+    {
+      path: "loadSession",
+      advertised: true,
+      value: true,
+      known: true,
+      requiredBy: ["session/load"],
+    },
+    {
+      path: "sessionCapabilities.list",
+      advertised: false,
+      known: true,
+      requiredBy: ["session/list"],
     },
   ],
 }
