@@ -5,6 +5,7 @@ import { buildCapabilityInventory, CapabilityInventory } from "../agent/inventor
 import { agentMethodDeclarations } from "../agent/method.declarations"
 import { createAgentMethodTable } from "../agent/method.table"
 import { registerSessionCloseHandler } from "../agent/session.close"
+import { registerSessionLoadHandler } from "../agent/session.load"
 import { createSessionOwnership } from "../agent/session.ownership"
 import {
   AgentSettingsReader,
@@ -34,7 +35,6 @@ import { createSessionBindingRegistry } from "../client/session-binding-registry
 import { spawnAgentProcess, SpawnedAgentProcess } from "./spawn.agent.process"
 import { createTurnId } from "../../session/create.turn.id"
 import {
-  inventoryAdvertisesResumable,
   inventoryAdvertisesSessionClose,
   inventoryAdvertisesSessionList,
   inventorySupportsRequiredCapability,
@@ -203,6 +203,7 @@ export const createAcpSupervisor = ({
   const sessionOwnership = createSessionOwnership()
   const agentMethodTable = createAgentMethodTable()
   registerSessionCloseHandler(agentMethodTable)
+  registerSessionLoadHandler(agentMethodTable)
   const runtimes = new Map<AgentId, SupervisorRuntime>()
 
   const unbindAgentSessions = (agentId: AgentId) => {
@@ -700,57 +701,23 @@ export const createAcpSupervisor = ({
       return { ok: false, reason: "ACP supervisor is not ready" }
     }
 
-    const existingBinding = sessionBindingRegistry.getBinding(acpSessionId)
-    if (existingBinding !== undefined && existingBinding.phase === "live") {
-      return { ok: true, acpSessionId }
-    }
-
-    if (!inventoryAdvertisesResumable(runtime.capabilityInventory)) {
+    const handler = agentMethodTable.resolve({ agentId: runtime.agentId, method: "session/load" })
+    if (handler === undefined) {
       return { ok: false, reason: "Agent does not support session/load" }
     }
 
-    sessionBindingRegistry.unbind({ acpSessionId })
-    sessionBindingRegistry.bind({
-      acpSessionId,
-      sessionId,
-      workspaceId,
-      workspaceRoot: workspaceCwd,
-      phase: "load_replay",
+    return handler({
+      params: { acpSessionId, workspaceCwd, sessionId, workspaceId },
+      context: {
+        agentId: runtime.agentId,
+        transport: runtime.transport,
+        sessionBindings: sessionBindingRegistry,
+        sessionOwnership,
+        onSessionDiscovered,
+        supportsCapability: (path) =>
+          inventorySupportsRequiredCapability(runtime.capabilityInventory, path),
+      },
     })
-    rememberAcpSession(runtime.agentId, acpSessionId)
-
-    const operationContext: AcpOperationContext = {
-      sessionId,
-      workspaceId,
-      phase: "load_replay",
-    }
-
-    try {
-      const result = await runtime.transport.request<{ sessionId: string }>(
-        "session/load",
-        {
-          sessionId: acpSessionId,
-          cwd: workspaceCwd,
-          mcpServers: [],
-        },
-        operationContext,
-      )
-
-      sessionBindingRegistry.unbind({ acpSessionId: result.sessionId })
-      sessionBindingRegistry.bind({
-        acpSessionId: result.sessionId,
-        sessionId,
-        workspaceId,
-        workspaceRoot: workspaceCwd,
-        phase: "live",
-      })
-      rememberAcpSession(runtime.agentId, result.sessionId)
-
-      return { ok: true, acpSessionId: result.sessionId }
-    } catch (error: unknown) {
-      sessionBindingRegistry.unbind({ acpSessionId })
-      return { ok: false, reason: sanitizeFailureReason(error, "session/load failed") }
-    }
   }
 
   const closeAcpSession = async ({
