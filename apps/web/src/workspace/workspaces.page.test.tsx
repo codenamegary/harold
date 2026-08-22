@@ -50,6 +50,43 @@ const wrapRuntimeSettings = (allowedRoots: string[]) => ({
 
 const originalFetch = globalThis.fetch
 
+const comboboxIn = (dialog: HTMLElement, name: string): HTMLInputElement | null => {
+  const input = within(dialog).queryByRole("combobox", { name })
+  if (!(input instanceof HTMLInputElement)) {
+    return null
+  }
+  return input
+}
+
+const requireEnabledCombobox = (dialog: HTMLElement, name: string): HTMLInputElement => {
+  const input = comboboxIn(dialog, name)
+  if (input === null) {
+    throw new Error(`${name} combobox missing`)
+  }
+  if (input.disabled) {
+    throw new Error(`${name} combobox still disabled`)
+  }
+  return input
+}
+
+const pickComboboxOption = async (
+  dialog: HTMLElement,
+  name: string,
+  optionLabel: string,
+) => {
+  const user = userEvent.setup()
+  const input = requireEnabledCombobox(dialog, name)
+  await user.click(input)
+  await user.clear(input)
+  await user.type(input, optionLabel)
+  await user.keyboard("{ArrowDown}{Enter}")
+  await waitFor(() => {
+    if (input.value !== optionLabel) {
+      throw new Error(`${name} expected ${optionLabel}, got ${input.value}`)
+    }
+  })
+}
+
 const renderWorkspacesPage = (initialEntries = ["/workspaces"]) =>
   renderWithProviders(
     <Routes>
@@ -179,12 +216,12 @@ describe("WorkspacesPage", () => {
     })
     globalThis.fetch = fetchMock as typeof fetch
 
-    const { getByRole, queryByRole } = renderWorkspacesPage()
+    const { getByRole, queryAllByRole } = renderWorkspacesPage()
 
     fireEvent.click(getByRole("button", { name: "+ Add workspace" }))
 
     const dialog = getByRole("dialog")
-    expect(within(dialog).queryByLabelText("Path")).not.toBeInTheDocument()
+    expect(within(dialog).queryAllByLabelText("Path")).toHaveLength(0)
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -192,17 +229,9 @@ describe("WorkspacesPage", () => {
       )
     })
     await waitFor(() => {
-      expect(within(dialog).getByRole("combobox", { name: "Root" })).not.toBeDisabled()
+      requireEnabledCombobox(dialog, "Root")
     })
-
-    const user = userEvent.setup()
-    const rootInput = within(dialog).getByRole("combobox", { name: "Root" })
-    await user.click(rootInput)
-    await user.keyboard("{ArrowDown}{Enter}")
-
-    await waitFor(() => {
-      expect(rootInput).toHaveValue(allowedRoot)
-    })
+    await pickComboboxOption(dialog, "Root", allowedRoot)
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -210,26 +239,24 @@ describe("WorkspacesPage", () => {
       )
     })
     await waitFor(() => {
-      expect(within(dialog).getByRole("combobox", { name: "Folder" })).not.toBeDisabled()
+      requireEnabledCombobox(dialog, "Folder")
     })
+    await pickComboboxOption(dialog, "Folder", "new-project")
 
-    const folderInput = within(dialog).getByRole("combobox", { name: "Folder" })
-    await user.click(folderInput)
-    await user.type(folderInput, "new-project")
-    await user.keyboard("{ArrowDown}{Enter}")
-
+    const nameInput = within(dialog).queryByLabelText("Name")
+    if (!(nameInput instanceof HTMLInputElement)) {
+      throw new Error("Name input missing")
+    }
     await waitFor(() => {
-      expect(folderInput).toHaveValue("new-project")
-    })
-
-    await waitFor(() => {
-      expect(within(dialog).getByLabelText("Name")).toHaveValue("new-project")
+      if (nameInput.value !== "new-project") {
+        throw new Error(`Name expected new-project, got ${nameInput.value}`)
+      }
     })
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Add workspace" }))
 
     await waitFor(() => {
-      expect(queryByRole("dialog")).not.toBeInTheDocument()
+      expect(queryAllByRole("dialog")).toHaveLength(0)
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
