@@ -39,15 +39,15 @@ describe("spawnAgentProcess", () => {
     const lines: string[] = []
     const spawned = spawnAgentProcess({
       profile: cursorProfile,
-      executablePath: process.execPath,
-      args: ["-e", "console.error('cursor-stderr-probe')"],
+      executablePath: "/bin/sh",
+      args: ["-c", "echo cursor-stderr-probe >&2"],
       onStderrLine: (line) => {
         lines.push(line)
       },
     })
 
-    await spawned.waitForExit()
     await waitForLine(lines, "cursor-stderr-probe")
+    await spawned.waitForExit()
     expect(lines).toContain("cursor-stderr-probe")
   })
 })
