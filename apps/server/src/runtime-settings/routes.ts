@@ -5,7 +5,7 @@ import {
 } from "contracts/http/runtime-settings"
 import { FastifyInstance } from "fastify"
 import { EnvBindOverrides } from "../config/env.bind.overrides"
-import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
+import { AcpSupervisor } from "../acp/supervisor/models"
 import { deleteWorkspaceWithCascade } from "../workspace/delete.workspace.cascade"
 import { WorkspaceRepository } from "../workspace/repository"
 import { WorkspaceService } from "../workspace/service"

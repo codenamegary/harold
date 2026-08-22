@@ -11,6 +11,11 @@ import { createRuntime } from "../runtime/runtime"
 import { SpawnedAgentProcess } from "./supervisor/spawn-agent-process"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
 import { createAgentSettingsRepository } from "../agent-settings/agent-settings-repository"
+import {
+  inventoryAdvertisesResumable,
+  inventoryAdvertisesSessionClose,
+  inventoryAdvertisesSessionList,
+} from "./agent/inventory"
 
 const tempDirs: string[] = []
 const fakeProcesses: Array<{ kill: () => void }> = []
@@ -87,10 +92,10 @@ describe("ACP supervisor integration", () => {
     const status = StatusSchema.parse(JSON.parse(statusResponse.body))
 
     expect(status.acp).toEqual({ state: "ready", activeSessions: 0 })
-    expect(acpSupervisor.getAgentCapabilities()).toEqual({
-      loadSession: false,
-      sessionCapabilities: { close: false, list: true },
-    })
+    const inventory = acpSupervisor.getCapabilityInventory("cursor")
+    expect(inventoryAdvertisesResumable(inventory)).toBe(false)
+    expect(inventoryAdvertisesSessionClose(inventory)).toBe(false)
+    expect(inventoryAdvertisesSessionList(inventory)).toBe(true)
 
     await acpSupervisor.stop()
         await app.close()

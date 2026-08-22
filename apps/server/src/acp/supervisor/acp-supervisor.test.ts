@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { AgentId } from "contracts/http/agent-settings"
+import {
+  inventoryAdvertisesResumable,
+  inventoryAdvertisesSessionClose,
+  inventoryAdvertisesSessionList,
+  inventoryEntry,
+} from "../agent/inventory"
 import { createAcpSupervisor } from "./acp-supervisor"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
 import { SpawnedAgentProcess } from "./spawn-agent-process"
@@ -100,7 +106,7 @@ describe("createAcpSupervisor", () => {
       error: null,
     })
     expect(supervisor.getRunningAgentId()).toBeNull()
-    expect(supervisor.getAgentCapabilities()).toBeNull()
+    expect(supervisor.getCapabilityInventory("cursor")).toBeNull()
   })
 
   test("rejects start when the agent is disabled or missing a path", async () => {
@@ -156,10 +162,12 @@ describe("createAcpSupervisor", () => {
       error: null,
     })
     expect(supervisor.getRunningAgentId()).toBe("cursor")
-    expect(supervisor.getAgentCapabilities()).toEqual({
-      loadSession: true,
-      sessionCapabilities: { close: true, list: false },
-    })
+    const inventory = supervisor.getCapabilityInventory("cursor")
+    expect(inventory).not.toBeNull()
+    expect(inventoryAdvertisesResumable(inventory)).toBe(true)
+    expect(inventoryAdvertisesSessionClose(inventory)).toBe(true)
+    expect(inventoryAdvertisesSessionList(inventory)).toBe(false)
+    expect(inventoryEntry(inventory, "loadSession")?.value).toBe(true)
   })
 
   test("starts a non-cursor catalog agent via generic profile", async () => {
@@ -253,10 +261,12 @@ describe("createAcpSupervisor", () => {
     supervisors.push(supervisor)
 
     await supervisor.start("cursor")
+    expect(supervisor.getCapabilityInventory("cursor")).not.toBeNull()
     await supervisor.stop()
 
     expect(killed.value).toBe(true)
     expect(supervisor.getStatus().state).toBe("stopped")
+    expect(supervisor.getCapabilityInventory("cursor")).toBeNull()
   })
 
   test("respawn stops a ready agent then starts it again", async () => {
@@ -625,14 +635,14 @@ describe("createAcpSupervisor", () => {
 
     expect(supervisor.getRunningAgentIds()).toEqual(["cursor", "opencode"])
     expect(supervisor.getStatus().state).toBe("ready")
-    expect(supervisor.getAgentCapabilities("cursor")).toEqual({
-      loadSession: false,
-      sessionCapabilities: { close: false, list: true },
-    })
-    expect(supervisor.getAgentCapabilities("opencode")).toEqual({
-      loadSession: false,
-      sessionCapabilities: { close: false, list: true },
-    })
+    const cursorInventory = supervisor.getCapabilityInventory("cursor")
+    expect(inventoryAdvertisesResumable(cursorInventory)).toBe(false)
+    expect(inventoryAdvertisesSessionClose(cursorInventory)).toBe(false)
+    expect(inventoryAdvertisesSessionList(cursorInventory)).toBe(true)
+    const opencodeInventory = supervisor.getCapabilityInventory("opencode")
+    expect(inventoryAdvertisesResumable(opencodeInventory)).toBe(false)
+    expect(inventoryAdvertisesSessionClose(opencodeInventory)).toBe(false)
+    expect(inventoryAdvertisesSessionList(opencodeInventory)).toBe(true)
   })
 
   test("handleAgentDisabled stops one agent without stopping another", async () => {

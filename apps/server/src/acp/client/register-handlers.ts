@@ -1,5 +1,5 @@
 import { AgentId } from "contracts/http/agent-settings"
-import { RequestExtensionRpcFn } from "../supervisor/acp-supervisor-types"
+import { RequestExtensionRpcFn } from "../supervisor/models"
 import { createAcpFsHandlers } from "./handlers/fs"
 import { createAcpPermissionHandler } from "./handlers/permission"
 import { createAcpTerminalHandlers } from "./handlers/terminal"

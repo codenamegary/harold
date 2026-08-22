@@ -1,18 +1,11 @@
 import { AgentId, AgentSpawnSnapshot } from "contracts/http/agent-settings"
+import { CapabilityInventory } from "../agent/inventory"
 import { AgentProfile } from "../agent-profile"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
 import { SpawnedAgentProcess } from "./spawn-agent-process"
 import { SessionBindingRegistry } from "../client/session-binding-registry"
 
 export type AcpSupervisorState = "stopped" | "starting" | "ready" | "error"
-
-export type AgentCapabilities = {
-  readonly loadSession: boolean
-  readonly sessionCapabilities: {
-    readonly close: boolean
-    readonly list: boolean
-  }
-}
 
 export type AcpSupervisorStatus = {
   readonly state: AcpSupervisorState
@@ -100,7 +93,7 @@ export type AcpSupervisor = {
   getAgentRuntimeState: (agentId: AgentId) => AcpAgentRuntimeState
   getRunningAgentId: () => AgentId | null
   getRunningAgentIds: () => ReadonlyArray<AgentId>
-  getAgentCapabilities: (agentId?: AgentId) => AgentCapabilities | null
+  getCapabilityInventory: (agentId: AgentId) => CapabilityInventory | null
   getTransport: (agentId?: AgentId) => JsonRpcTransport | null
   getSessionBindingRegistry: () => SessionBindingRegistry
   listLiveByWorkspaceRoot: (workspaceRoot: string) => ReadonlyArray<LiveWorkspaceSession>

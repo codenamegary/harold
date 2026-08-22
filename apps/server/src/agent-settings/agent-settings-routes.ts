@@ -14,7 +14,8 @@ import { FastifyInstance } from "fastify"
 import {
   AcpSupervisor,
   isAcpStartError,
-} from "../acp/supervisor/acp-supervisor-types"
+} from "../acp/supervisor/models"
+import { agentAdvertisesSessionList } from "../session/session.acp.ready"
 import { AgentSettingsRepository } from "./agent-settings-repository"
 import {
   buildAgentCannotDeleteProblem,
@@ -141,7 +142,7 @@ export const registerAgentSettingsRoutes = (
           return sendProblem(reply, 409, buildAgentCannotRespawnProblem(reason))
         }
 
-        if (!acpSupervisor.getAgentCapabilities(agentId)?.sessionCapabilities.list) {
+        if (!agentAdvertisesSessionList(acpSupervisor, agentId)) {
           app.log.warn(
             { agentId, reason: "Agent does not support session/list" },
             "ACP agent respawn failed",
@@ -201,7 +202,7 @@ export const registerAgentSettingsRoutes = (
         return sendProblem(reply, 409, buildAgentCannotEnableProblem("ACP supervisor failed to start"))
       }
 
-      if (!acpSupervisor.getAgentCapabilities(agentId)?.sessionCapabilities.list) {
+      if (!agentAdvertisesSessionList(acpSupervisor, agentId)) {
         repository.update({ agentId, body: { enabled: false } })
         await acpSupervisor.handleAgentDisabled(agentId)
         return sendProblem(reply, 409, buildAgentSessionListUnsupportedProblem())

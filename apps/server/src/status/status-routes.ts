@@ -2,7 +2,7 @@ import { StatusSchema } from "contracts/http/status"
 import { FastifyInstance } from "fastify"
 import { Config } from "../config/config"
 import { Runtime } from "../runtime/runtime"
-import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
+import { AcpSupervisor } from "../acp/supervisor/models"
 
 const resolvePort = (app: FastifyInstance, config: Config): number => {
   const address = app.server.address()

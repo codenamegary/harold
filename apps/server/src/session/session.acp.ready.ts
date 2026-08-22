@@ -1,6 +1,11 @@
 import { AgentId } from "contracts/http/agent-settings"
+import {
+  inventoryAdvertisesResumable,
+  inventoryAdvertisesSessionClose,
+  inventoryAdvertisesSessionList,
+} from "../acp/agent/inventory"
+import { AcpSupervisor } from "../acp/supervisor/models"
 import { sanitizeAcpErrorMessage } from "../acp/sanitize-acp-error"
-import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
 
 export const isArchivedSession = (session: {
   archivedAt: string | null
@@ -36,6 +41,19 @@ export const ensureSupervisorReady = async (
 }
 
 export const agentAdvertisesResumable = (
-  acpSupervisor: AcpSupervisor,
-  agentId?: AgentId,
-): boolean => acpSupervisor.getAgentCapabilities(agentId)?.loadSession === true
+  acpSupervisor: Pick<AcpSupervisor, "getCapabilityInventory">,
+  agentId: AgentId,
+): boolean =>
+  inventoryAdvertisesResumable(acpSupervisor.getCapabilityInventory(agentId))
+
+export const agentAdvertisesSessionClose = (
+  acpSupervisor: Pick<AcpSupervisor, "getCapabilityInventory">,
+  agentId: AgentId,
+): boolean =>
+  inventoryAdvertisesSessionClose(acpSupervisor.getCapabilityInventory(agentId))
+
+export const agentAdvertisesSessionList = (
+  acpSupervisor: Pick<AcpSupervisor, "getCapabilityInventory">,
+  agentId: AgentId,
+): boolean =>
+  inventoryAdvertisesSessionList(acpSupervisor.getCapabilityInventory(agentId))

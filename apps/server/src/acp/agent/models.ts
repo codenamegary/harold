@@ -1,4 +1,5 @@
 import { AgentId } from "contracts/http/agent-settings"
+import { KnownCapabilityPath } from "./capabilities"
 import { SessionBindingRegistry } from "../client/session-binding-registry"
 import {
   AcpListSessionsResult,
@@ -7,7 +8,7 @@ import {
   AcpSessionOperationResult,
   AcpSessionPromptStartResult,
   SessionDiscoveredHandler,
-} from "../supervisor/acp-supervisor-types"
+} from "../supervisor/models"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
 
 export const ANY_AGENT = "*"
@@ -20,7 +21,7 @@ export const requiredCapabilityPaths = [
   "loadSession",
   "sessionCapabilities.list",
   "sessionCapabilities.close",
-] as const
+] as const satisfies ReadonlyArray<KnownCapabilityPath>
 
 export type RequiredCapabilityPath = (typeof requiredCapabilityPaths)[number]
 

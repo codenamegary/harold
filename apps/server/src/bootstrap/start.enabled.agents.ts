@@ -1,5 +1,5 @@
 import { AgentId } from "contracts/http/agent-settings"
-import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
+import { AcpSupervisor } from "../acp/supervisor/models"
 import { AgentSettingsRepository } from "../agent-settings/agent-settings-repository"
 
 export type StartEnabledAgentsLog = {

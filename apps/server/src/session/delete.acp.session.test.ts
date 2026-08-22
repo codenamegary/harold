@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { AgentIdSchema } from "contracts/http/agent-settings"
+import { buildCapabilityInventory } from "../acp/agent/inventory"
+import { agentMethodDeclarations } from "../acp/agent/method.declarations"
 import { deleteAcpSession } from "./delete.acp.session"
 
 const agentId = AgentIdSchema.parse("cursor")
@@ -35,10 +37,16 @@ describe("deleteAcpSession", () => {
       acpSupervisor: {
         getRunningAgentIds: () => [agentId],
         start: async () => undefined,
-        getAgentCapabilities: () => ({
-          loadSession: true,
-          sessionCapabilities: { close: true, list: true },
-        }),
+        getCapabilityInventory: () =>
+          buildCapabilityInventory({
+            initializeResult: {
+              agentCapabilities: {
+                loadSession: true,
+                sessionCapabilities: { close: true, list: true },
+              },
+            },
+            declarations: agentMethodDeclarations,
+          }),
         closeAcpSession: async () => {
           closeStarted.value = true
           await closeGate
