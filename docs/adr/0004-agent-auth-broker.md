@@ -55,7 +55,7 @@ capabilities. Optional HostBrowser is a host capability adapters may use later.
     Auth methods may point at that status. One browser context per auth session
     when used. No host-wide browser queue in v1.
 15. Surface auth **summary** on agent settings list responses. Full status,
-    methods, and session live on a dedicated auth resource.
+    methods, and session live on `AgentAuth` from a dedicated auth endpoint.
 
 ## Architecture
 
@@ -279,9 +279,74 @@ sequenceDiagram
 
 ## Type sketch (ideal shape)
 
-Not shipped code. Target shapes for `packages/contracts` (wire) and
-`apps/server/src/acp/auth/` (broker). Names may shift at implement time.
-No semicolons. Prefer readonly fields and discriminated unions.
+Not shipped code. Target shapes for contracts (wire) and server slices.
+Names may shift at implement time. No semicolons. Discriminated unions for
+steps and actions.
+
+### Target file structure
+
+Vertical slices as nested directories. Dot-separated filenames inside each
+slice. No `models.ts` dumping ground. No barrel `index.ts` re-exports. Types
+live and export from the module that owns them (for example `AuthAdapter` from
+`adapter.ts`, session state types from `session.ts`).
+
+```text
+packages/contracts/src/http/
+  agent-auth.ts                 # wire: AgentAuth, summary, steps, actions
+  agent-auth.test.ts
+
+apps/server/src/agent/auth/
+  routes.ts                     # GET/POST AgentAuth + session actions
+  problems.ts
+  broker.ts                     # AuthBroker + its types
+  broker.test.ts
+  session.ts                    # in-flight session state (one per agentId)
+  status.ts                     # cached probe summaries
+  registry.ts                   # resolve adapter by agentId
+  supervisor.hooks.ts           # observeInitialize, ensureReadyForPrompt glue
+  adapters/
+    adapter.ts                  # AuthAdapter interface + adapter context types
+    default.adapter.ts          # ACP best-effort mapping
+    default.adapter.test.ts
+    claude.adapter.ts           # Claude host-cred / browser flows
+    claude.adapter.test.ts
+
+apps/server/src/browser/
+  routes.ts                     # operator Host settings: status / install
+  problems.ts
+  service.ts                    # HostBrowser capability + context types
+  service.test.ts
+  stub.ts                       # v1: always missing until real install lands
+
+apps/web/src/agent/auth/
+  agent.auth.ts                 # fetch helpers for AgentAuth
+  auth.session.actions.ts
+  use.agent.auth.ts             # react-query hooks
+  AgentAuthPanel.tsx            # console Sign in / steps UI
+  AgentAuthBadge.tsx
+  auth.step.view.tsx            # render closed step vocabulary
+
+apps/web/src/browser/
+  HostBrowserSettings.tsx       # install / status in Host settings
+  use.host.browser.ts
+```
+
+Android chat later consumes the same HTTP/WS contracts. No separate auth
+protocol.
+
+Touch points outside the new slices (edit existing modules, do not invent a
+parallel stack):
+
+```text
+apps/server/src/acp/supervisor/supervisor.ts
+  # start: adapter caps + onStart; no catalog authenticate
+apps/server/src/agent-settings/
+  # embed AgentAuthSummary on list/get agent settings
+apps/server/src/session/
+  # auth_required → broker.ensureSessionFromChallenge
+packages/contracts/src/http/agent-settings.ts
+  # optional auth summary field on AgentSettings
+```
 
 ### Wire: status, methods, steps, actions
 
@@ -296,26 +361,26 @@ type AgentAuthStatus =
 
 /** Badge fields on GET /v1/settings/agents items */
 type AgentAuthSummary = {
-  readonly status: AgentAuthStatus
-  readonly error: string | null
-  readonly activeSessionId: string | null
-  readonly canLogout: boolean
+  status: AgentAuthStatus
+  error: string | null
+  activeSessionId: string | null
+  canLogout: boolean
 }
 
 type AgentAuthMethodAvailability =
-  | { readonly kind: "available" }
+  | { kind: "available" }
   | {
-      readonly kind: "disabled"
-      readonly reason: string
+      kind: "disabled"
+      reason: string
       /** e.g. open Host settings for headless browser */
-      readonly remediation: "host_browser" | "none"
+      remediation: "host_browser" | "none"
     }
 
 type AgentAuthMethod = {
-  readonly methodId: string
-  readonly title: string
-  readonly description: string
-  readonly availability: AgentAuthMethodAvailability
+  methodId: string
+  title: string
+  description: string
+  availability: AgentAuthMethodAvailability
 }
 
 type AuthSessionStatus =
@@ -326,70 +391,70 @@ type AuthSessionStatus =
 
 type AuthStep =
   | {
-      readonly type: "choose_method"
-      readonly methods: readonly AgentAuthMethod[]
+      type: "choose_method"
+      methods: AgentAuthMethod[]
     }
   | {
-      readonly type: "open_url"
-      readonly title: string
-      readonly url: string
-      readonly caption: string | null
+      type: "open_url"
+      title: string
+      url: string
+      caption: string | null
     }
   | {
-      readonly type: "paste_secret"
-      readonly stepId: string
-      readonly label: string
-      readonly placeholder: string | null
-      readonly secretKind: "api_key" | "oauth_token" | "otp" | "other"
+      type: "paste_secret"
+      stepId: string
+      label: string
+      placeholder: string | null
+      secretKind: "api_key" | "oauth_token" | "otp" | "other"
     }
   | {
-      readonly type: "confirm"
-      readonly stepId: string
-      readonly title: string
-      readonly body: string
-      readonly confirmLabel: string
+      type: "confirm"
+      stepId: string
+      title: string
+      body: string
+      confirmLabel: string
     }
   | {
-      readonly type: "show_message"
-      readonly level: "info" | "error"
-      readonly body: string
+      type: "show_message"
+      level: "info" | "error"
+      body: string
     }
-  | { readonly type: "working"; readonly label: string }
+  | { type: "working"; label: string }
   | {
-      readonly type: "done"
-      readonly outcome: "succeeded" | "failed" | "cancelled"
-      readonly message: string | null
+      type: "done"
+      outcome: "succeeded" | "failed" | "cancelled"
+      message: string | null
     }
 
 /** Secrets only appear here, never on AuthStep or WS payloads */
 type AuthSessionAction =
-  | { readonly type: "select_method"; readonly methodId: string }
+  | { type: "select_method"; methodId: string }
   | {
-      readonly type: "submit_secret"
-      readonly stepId: string
-      readonly value: string
+      type: "submit_secret"
+      stepId: string
+      value: string
     }
-  | { readonly type: "confirm"; readonly stepId: string }
-  | { readonly type: "ack_open_url"; readonly stepId?: string }
-  | { readonly type: "cancel" }
+  | { type: "confirm"; stepId: string }
+  | { type: "ack_open_url"; stepId?: string }
+  | { type: "cancel" }
 
 type AgentAuthSession = {
-  readonly sessionId: string
-  readonly agentId: AgentId
-  readonly status: AuthSessionStatus
-  readonly methodId: string | null
-  readonly steps: readonly AuthStep[]
-  readonly error: string | null
+  sessionId: string
+  agentId: AgentId
+  status: AuthSessionStatus
+  methodId: string | null
+  steps: AuthStep[]
+  error: string | null
 }
 
-/** Full auth resource: GET /v1/agents/:agentId/auth */
-type AgentAuthResource = {
-  readonly agentId: AgentId
-  readonly status: AgentAuthStatus
-  readonly error: string | null
-  readonly methods: readonly AgentAuthMethod[]
-  readonly session: AgentAuthSession | null
-  readonly hostBrowser: HostBrowserStatus
+/** GET /v1/agents/:agentId/auth (same noun style as AgentSettings, Workspace) */
+type AgentAuth = {
+  agentId: AgentId
+  status: AgentAuthStatus
+  error: string | null
+  methods: AgentAuthMethod[]
+  session: AgentAuthSession | null
+  hostBrowser: HostBrowserStatus
 }
 ```
 
@@ -397,35 +462,35 @@ type AgentAuthResource = {
 
 ```ts
 type HostBrowserStatus =
-  | { readonly state: "missing" }
-  | { readonly state: "installing" }
-  | { readonly state: "ready" }
-  | { readonly state: "error"; readonly message: string }
+  | { state: "missing" }
+  | { state: "installing" }
+  | { state: "ready" }
+  | { state: "error"; message: string }
 
 type HostBrowser = {
   status: () => HostBrowserStatus
   /** One context per auth session when an adapter needs automation */
   openContext: (input: {
-    readonly ownerSessionId: string
+    ownerSessionId: string
   }) => Promise<HostBrowserContext>
 }
 
 type HostBrowserContext = {
-  readonly ownerSessionId: string
+  ownerSessionId: string
   navigate: (url: string) => Promise<void>
   /** Adapter-defined; library TBD */
-  readNeededInputs: () => Promise<readonly BrowserNeededInput[]>
+  readNeededInputs: () => Promise<BrowserNeededInput[]>
   fill: (input: {
-    readonly fieldId: string
-    readonly value: string
+    fieldId: string
+    value: string
   }) => Promise<void>
   dispose: () => Promise<void>
 }
 
 type BrowserNeededInput = {
-  readonly fieldId: string
-  readonly label: string
-  readonly secretKind: "api_key" | "oauth_token" | "otp" | "other"
+  fieldId: string
+  label: string
+  secretKind: "api_key" | "oauth_token" | "otp" | "other"
 }
 ```
 
@@ -435,15 +500,15 @@ type BrowserNeededInput = {
 type AuthCompletionPolicy = "reconnect" | "reuse_process"
 
 type AdapterAuthContext = {
-  readonly agentId: AgentId
-  readonly hostIdentity: { readonly id: "default" }
-  readonly hostBrowser: HostBrowser
+  agentId: AgentId
+  hostIdentity: { id: "default" }
+  hostBrowser: HostBrowser
   /** Last initialize result, if the agent process is up */
-  readonly initializeResult: unknown | null
+  initializeResult: unknown | null
 }
 
 type AuthAdapter = {
-  readonly id: string
+  id: string
   /** Which catalog / custom agent ids this adapter owns */
   matches: (agentId: AgentId) => boolean
 
@@ -453,12 +518,12 @@ type AuthAdapter = {
 
   listMethods: (
     ctx: AdapterAuthContext,
-  ) => Promise<readonly AgentAuthMethod[]>
+  ) => Promise<AgentAuthMethod[]>
 
   probe: (ctx: AdapterAuthContext) => Promise<{
-    readonly status: AgentAuthStatus
-    readonly error: string | null
-    readonly canLogout: boolean
+    status: AgentAuthStatus
+    error: string | null
+    canLogout: boolean
   }>
 
   /** Optional ACP authenticate after initialize; never catalog fantasy ids */
@@ -467,35 +532,35 @@ type AuthAdapter = {
   start: (
     ctx: AdapterAuthContext,
     input: {
-      readonly sessionId: string
-      readonly methodId: string | null
-      readonly fromChallenge: boolean
+      sessionId: string
+      methodId: string | null
+      fromChallenge: boolean
     },
-  ) => Promise<{ readonly steps: readonly AuthStep[] }>
+  ) => Promise<{ steps: AuthStep[] }>
 
   continue: (
     ctx: AdapterAuthContext,
     input: {
-      readonly sessionId: string
-      readonly action: Exclude<AuthSessionAction, { type: "cancel" }>
+      sessionId: string
+      action: Exclude<AuthSessionAction, { type: "cancel" }>
     },
   ) => Promise<{
-    readonly steps: readonly AuthStep[]
-    readonly finished: null | {
-      readonly outcome: "succeeded" | "failed"
-      readonly completionPolicy: AuthCompletionPolicy
-      readonly error: string | null
+    steps: AuthStep[]
+    finished: null | {
+      outcome: "succeeded" | "failed"
+      completionPolicy: AuthCompletionPolicy
+      error: string | null
     }
   }>
 
   abort: (
     ctx: AdapterAuthContext,
-    input: { readonly sessionId: string },
+    input: { sessionId: string },
   ) => Promise<void>
 
   logout: (
     ctx: AdapterAuthContext,
-  ) => Promise<{ readonly completionPolicy: AuthCompletionPolicy }>
+  ) => Promise<{ completionPolicy: AuthCompletionPolicy }>
 }
 ```
 
@@ -504,24 +569,24 @@ type AuthAdapter = {
 ```ts
 type AuthBroker = {
   getSummary: (agentId: AgentId) => Promise<AgentAuthSummary>
-  getResource: (agentId: AgentId) => Promise<AgentAuthResource>
+  get: (agentId: AgentId) => Promise<AgentAuth>
 
   /** Supervisor calls after initialize (and after respawn) */
   observeInitialize: (input: {
-    readonly agentId: AgentId
-    readonly initializeResult: unknown
+    agentId: AgentId
+    initializeResult: unknown
   }) => Promise<void>
 
   ensureReadyForPrompt: (
     agentId: AgentId,
   ) => Promise<
-    | { readonly ok: true }
-    | { readonly ok: false; readonly status: AgentAuthStatus }
+    | { ok: true }
+    | { ok: false; status: AgentAuthStatus }
   >
 
   startSession: (input: {
-    readonly agentId: AgentId
-    readonly methodId?: string
+    agentId: AgentId
+    methodId?: string
   }) => Promise<AgentAuthSession>
 
   /** auth_required: create or return the single in-flight session */
@@ -530,9 +595,9 @@ type AuthBroker = {
   ) => Promise<AgentAuthSession>
 
   applyAction: (input: {
-    readonly agentId: AgentId
-    readonly sessionId: string
-    readonly action: AuthSessionAction
+    agentId: AgentId
+    sessionId: string
+    action: AuthSessionAction
   }) => Promise<AgentAuthSession>
 
   logout: (agentId: AgentId) => Promise<AgentAuthSummary>
@@ -540,8 +605,8 @@ type AuthBroker = {
   /** Fan-out to paired devices */
   subscribe: (
     listener: (event: {
-      readonly agentId: AgentId
-      readonly resource: AgentAuthResource
+      agentId: AgentId
+      auth: AgentAuth
     }) => void,
   ) => () => void
 }
@@ -558,9 +623,9 @@ type AuthBroker = {
 //   → never authenticate(catalog.authMethodId)
 
 type SupervisorAuthHooks = {
-  readonly resolveAdapter: (agentId: AgentId) => AuthAdapter
-  readonly authBroker: AuthBroker
-  readonly requestRespawn: (agentId: AgentId) => Promise<void>
+  resolveAdapter: (agentId: AgentId) => AuthAdapter
+  authBroker: AuthBroker
+  requestRespawn: (agentId: AgentId) => Promise<void>
 }
 ```
 
