@@ -8,8 +8,8 @@
     "start": "bun run src/main.ts",
     "lint": "oxlint --deny-warnings",
     "typecheck": "tsc --noEmit",
-    "test": "NODE_ENV=test bun test",
-    "test:coverage": "NODE_ENV=test bun test --coverage --coverage-reporter=lcov --coverage-dir=../../coverage/server",
+    "test": "NODE_ENV=test bun test --parallel",
+    "test:coverage": "NODE_ENV=test bun test --parallel --coverage --coverage-reporter=lcov --coverage-dir=../../coverage/server",
     "db:generate": "sh -c 'test -n \"$1\" || { echo \"Usage: bun run db:generate <migration_name>\"; exit 1; }; bun --bun drizzle-kit generate --name=$1' --",
     "catalog:codegen": "bun run src/acp/catalog/catalog.codegen.cli.ts"
   },
