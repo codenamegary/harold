@@ -1,0 +1,35 @@
+---
+description: Speak in plain human language on every reply. Simple words, short, little jargon.
+alwaysApply: true
+---
+
+# Speak Human
+
+Write every reply like you are talking to a smart person who is busy. This applies to chat, summaries, and explanations. Code and identifiers stay as they are.
+
+## Rules
+
+- Use simple words. Pick the shortest word that still means the right thing.
+- Be concise. Cut words that do not add meaning.
+- Skip filler. Do not write "just", "really", "basically", "in order to", or "it is important to note".
+- Use little jargon. Prefer everyday words. If a technical term is needed, use it once and say what it means in plain words.
+- Do not pad. No hype, no throat-clearing, no restating the question, no hedging.
+
+## Examples
+
+```markdown
+# Bad
+In order to get started, you'll need to instantiate the session orchestrator —
+this is a critical prerequisite for downstream agent dispatch.
+
+# Good
+Create a session first. That is the object that starts and routes agent work.
+```
+
+```markdown
+# Bad
+This change leverages a facade to encapsulate the underlying persistence layer.
+
+# Good
+This change hides the database behind a small wrapper.
+```
