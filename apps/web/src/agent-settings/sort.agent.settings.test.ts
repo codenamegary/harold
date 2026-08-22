@@ -11,6 +11,7 @@ const agent = (overrides: Partial<AgentSettings> & Pick<AgentSettings, "id" | "d
   popular: false,
   deletable: false,
   state: { status: "stopped", error: null },
+  capabilities: null,
   ...overrides,
 })
 

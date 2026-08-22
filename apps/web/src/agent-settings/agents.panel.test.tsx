@@ -8,6 +8,10 @@ import {
 import { PROBLEM_TYPES } from "contracts/http/error"
 import { renderWithProviders } from "../query/render.with.providers"
 import { requestBodyText, requestUrl } from "../test/request.url"
+import {
+  agentCapabilitiesForState,
+  nullAgentCapabilities,
+} from "../test/agent.settings.fixtures"
 import { AgentsPanel } from "./AgentsPanel"
 
 const validStatus = {
@@ -35,21 +39,27 @@ const comingSoonAgent: AgentSettings = {
   popular: true,
   deletable: false,
   state: { status: "stopped", error: null },
+  capabilities: nullAgentCapabilities,
 }
 
-const cursorAgent = (overrides: Partial<AgentSettings> = {}): AgentSettings => ({
-  id: "cursor",
-  displayName: "Cursor",
-  available: true,
-  enabled: false,
-  path: null,
-  args: [],
-  present: true,
-  popular: true,
-  deletable: false,
-  state: { status: "stopped", error: null },
-  ...overrides,
-})
+const cursorAgent = (overrides: Partial<AgentSettings> = {}): AgentSettings => {
+  const state = overrides.state ?? { status: "stopped", error: null }
+  const capabilities = agentCapabilitiesForState(state, overrides.capabilities)
+  return {
+    id: "cursor",
+    displayName: "Cursor",
+    available: true,
+    enabled: false,
+    path: null,
+    args: [],
+    present: true,
+    popular: true,
+    deletable: false,
+    ...overrides,
+    state,
+    capabilities,
+  }
+}
 
 const agentsCollection = (cursor: AgentSettings) =>
   AgentSettingsCollectionSchema.parse({
@@ -659,6 +669,7 @@ describe("AgentsPanel", () => {
       popular: true,
       deletable: false,
       state: { status: "stopped", error: null },
+      capabilities: nullAgentCapabilities,
     })
 
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
@@ -757,6 +768,7 @@ describe("AgentsPanel", () => {
         popular: false,
         deletable: false,
         state: { status: "stopped", error: null },
+        capabilities: nullAgentCapabilities,
       })
     })
 
@@ -903,6 +915,7 @@ describe("AgentsPanel", () => {
           popular: false,
           deletable: true,
           state: { status: "stopped", error: null },
+          capabilities: nullAgentCapabilities,
         }
 
         return Promise.resolve(
@@ -984,6 +997,7 @@ describe("AgentsPanel", () => {
           popular: false,
           deletable: true,
           state: { status: "stopped", error: null },
+          capabilities: nullAgentCapabilities,
         })
         listState.items = [created, ...listState.items]
         return Promise.resolve(

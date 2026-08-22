@@ -13,6 +13,7 @@ const cursor: AgentSettings = {
   popular: true,
   deletable: false,
   state: { status: "stopped", error: null },
+  capabilities: null,
 }
 
 const claude: AgentSettings = {
@@ -26,6 +27,7 @@ const claude: AgentSettings = {
   popular: true,
   deletable: false,
   state: { status: "stopped", error: null },
+  capabilities: null,
 }
 
 describe("filterAgentSettings", () => {

@@ -37,6 +37,25 @@ export const AgentSpawnSnapshotSchema = z.strictObject({
   authMethodId: z.string().min(1),
 })
 
+export const AgentCapabilityAgentInfoSchema = z.strictObject({
+  name: z.string().min(1),
+  version: z.string().min(1),
+  title: z.string().min(1).optional(),
+})
+
+export const AgentCapabilityInventoryEntrySchema = z.strictObject({
+  path: z.string().min(1),
+  advertised: z.boolean(),
+  value: z.unknown().optional(),
+  known: z.boolean(),
+  requiredBy: z.array(z.string().min(1)),
+})
+
+export const AgentCapabilityInventorySchema = z.strictObject({
+  agentInfo: AgentCapabilityAgentInfoSchema.nullable(),
+  entries: z.array(AgentCapabilityInventoryEntrySchema),
+})
+
 export const AgentSettingsSchema = z.strictObject({
   id: AgentIdSchema,
   displayName: z.string().min(1),
@@ -48,6 +67,7 @@ export const AgentSettingsSchema = z.strictObject({
   popular: z.boolean(),
   deletable: z.boolean(),
   state: AgentRuntimeStateSchema,
+  capabilities: AgentCapabilityInventorySchema.nullable(),
 })
 
 export const AgentSettingsCollectionSchema = z.strictObject({
@@ -127,6 +147,8 @@ export const ImportApplyBodySchema = z.strictObject({
 export type AgentId = z.infer<typeof AgentIdSchema>
 export type AgentSpawnSnapshot = z.infer<typeof AgentSpawnSnapshotSchema>
 export type AgentRuntimeState = z.infer<typeof AgentRuntimeStateSchema>
+export type AgentCapabilityInventory = z.infer<typeof AgentCapabilityInventorySchema>
+export type AgentCapabilityInventoryEntry = z.infer<typeof AgentCapabilityInventoryEntrySchema>
 export type AgentSettings = z.infer<typeof AgentSettingsSchema>
 export type AgentActionBody = z.infer<typeof AgentActionBodySchema>
 export type AgentSettingsCollection = z.infer<typeof AgentSettingsCollectionSchema>

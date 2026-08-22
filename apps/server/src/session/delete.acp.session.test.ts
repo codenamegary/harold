@@ -31,6 +31,7 @@ describe("deleteAcpSession", () => {
             popular: true,
             deletable: false,
             state: { status: "stopped", error: null },
+            capabilities: null,
           },
         ],
       },

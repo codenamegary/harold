@@ -38,6 +38,7 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       popular: true,
       deletable: false,
       state: { status: "stopped", error: null },
+      capabilities: null,
     },
     {
       id: "claude-acp",
@@ -50,6 +51,7 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       popular: true,
       deletable: false,
       state: { status: "stopped", error: null },
+      capabilities: null,
     },
   ],
 })

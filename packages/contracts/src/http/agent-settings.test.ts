@@ -24,6 +24,7 @@ const validAgentSettings = {
   popular: true,
   deletable: false,
   state: stoppedAgentRuntimeState,
+  capabilities: null,
 }
 
 describe("AgentIdSchema", () => {
@@ -66,6 +67,7 @@ describe("AgentSettingsSchema", () => {
       popular: true,
       deletable: false,
       state: stoppedAgentRuntimeState,
+      capabilities: null,
     }
 
     expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
@@ -85,6 +87,10 @@ describe("AgentSettingsSchema", () => {
       state: {
         status: "ready",
         error: null,
+      },
+      capabilities: {
+        agentInfo: { name: "fake-acp", version: "0.0.0" },
+        entries: [],
       },
     }
 
@@ -134,6 +140,36 @@ describe("AgentSettingsSchema", () => {
         sessionListSupported: true,
       }),
     ).toThrow()
+  })
+
+  test("accepts nullable capabilities inventory", () => {
+    expect(AgentSettingsSchema.parse(validAgentSettings)).toEqual(validAgentSettings)
+
+    const ready = {
+      ...validAgentSettings,
+      enabled: true,
+      state: { status: "ready", error: null },
+      capabilities: {
+        agentInfo: { name: "fake-acp", version: "0.0.0" },
+        entries: [
+          {
+            path: "loadSession",
+            advertised: true,
+            value: true,
+            known: true,
+            requiredBy: ["session/load"],
+          },
+          {
+            path: "sessionCapabilities.close",
+            advertised: false,
+            known: true,
+            requiredBy: ["session/close"],
+          },
+        ],
+      },
+    }
+
+    expect(AgentSettingsSchema.parse(ready)).toEqual(ready)
   })
 })
 
@@ -329,6 +365,7 @@ describe("AgentSettingsCollectionSchema", () => {
           popular: true,
           deletable: false,
           state: stoppedAgentRuntimeState,
+          capabilities: null,
         },
       ],
     }
