@@ -79,7 +79,7 @@ describe("fake ACP protocol", () => {
         protocolVersion: 1,
         agentCapabilities: {
           loadSession: true,
-          sessionCapabilities: { close: true, list: {} },
+          sessionCapabilities: { close: {}, list: {} },
         },
         agentInfo: { name: "fake-acp", version: "0.0.0" },
         authMethods: [],
