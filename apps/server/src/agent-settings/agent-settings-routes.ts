@@ -17,6 +17,7 @@ import {
 } from "../acp/supervisor/models"
 import { agentAdvertisesSessionList } from "../session/session.acp.ready"
 import { AgentSettingsRepository } from "./agent-settings-repository"
+import { wireAgentCapabilities } from "./capabilities.wire"
 import {
   buildAgentCannotDeleteProblem,
   buildAgentCannotEnableProblem,
@@ -49,11 +50,17 @@ export const registerAgentSettingsRoutes = (
   repository: AgentSettingsRepository,
   acpSupervisor: AcpSupervisor,
 ) => {
-  const toWireAgent = (item: AgentSettings): AgentSettings =>
-    AgentSettingsSchema.parse({
+  const toWireAgent = (item: AgentSettings): AgentSettings => {
+    const state = acpSupervisor.getAgentRuntimeState(item.id)
+    return AgentSettingsSchema.parse({
       ...item,
-      state: acpSupervisor.getAgentRuntimeState(item.id),
+      state,
+      capabilities: wireAgentCapabilities(
+        state,
+        acpSupervisor.getCapabilityInventory(item.id),
+      ),
     })
+  }
 
   const toWireCollection = (items: readonly AgentSettings[]) =>
     AgentSettingsCollectionSchema.parse({

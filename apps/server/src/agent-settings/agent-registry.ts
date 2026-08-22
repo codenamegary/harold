@@ -137,6 +137,7 @@ export const toAgentSettings = (
     status: "stopped",
     error: null,
   },
+  capabilities: null,
 })
 
 export const sortAgentSettingsBands = (

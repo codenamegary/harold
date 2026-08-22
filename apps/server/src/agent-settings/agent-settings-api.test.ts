@@ -89,6 +89,111 @@ const findAgent = (
   return agent
 }
 
+describe("GET /v1/settings/agents capabilities", () => {
+  test("returns null capabilities for stopped agents", async () => {
+    const dataDir = await createTempDataDir()
+    const { app } = await createTestApp(dataDir)
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/settings/agents",
+    })
+    const body = AgentSettingsCollectionSchema.parse(JSON.parse(response.body))
+    const cursor = findAgent(body, "cursor")
+
+    expect(response.statusCode).toBe(200)
+    expect(cursor.capabilities).toBeNull()
+  })
+
+  test("returns live inventory when an agent is ready", async () => {
+    const dataDir = await createTempDataDir()
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? "/usr/local/bin/agent" : undefined
+    const { app } = await createTestApp(dataDir, { whichFn })
+
+    await app.inject({
+      method: "PATCH",
+      url: "/v1/settings/agents/cursor",
+      payload: { enabled: true },
+    })
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/settings/agents",
+    })
+    const body = AgentSettingsCollectionSchema.parse(JSON.parse(response.body))
+    const cursor = findAgent(body, "cursor")
+
+    expect(cursor.state).toEqual({ status: "ready", error: null })
+    expect(cursor.capabilities?.agentInfo).toEqual({ name: "fake-acp", version: "0.0.0" })
+    const loadSession = cursor.capabilities?.entries.find((entry) => entry.path === "loadSession")
+    expect(loadSession).toMatchObject({
+      advertised: true,
+      value: true,
+      known: true,
+      requiredBy: ["session/load"],
+    })
+  })
+
+  test("returns null capabilities when respawn leaves the agent in error", async () => {
+    const dataDir = await createTempDataDir()
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const { spawnAgentProcessFn } = createFakeSpawnFn(resources, defaultFakeAcpOptions)
+    const spawnCount = { value: 0 }
+    const config = parseConfig({
+      AGENT_SERVER_HOST: "127.0.0.1",
+      AGENT_SERVER_PORT: "0",
+      AGENT_SERVER_DATA_DIR: dataDir,
+    })
+    const database = openDatabase({ dataDir: config.dataDir })
+    const { app, acpSupervisor } = await createServer({
+      config,
+      runtime: createRuntime("0.1.0"),
+      database,
+      whichFn,
+      validateExecutablePathFn: acceptTestExecutablePath,
+      spawnAgentProcessFn: () => {
+        spawnCount.value += 1
+        if (spawnCount.value > 1) {
+          throw new Error("spawn exploded")
+        }
+        return spawnAgentProcessFn()
+      },
+    })
+    resources.addApp(app)
+    resources.addTeardown(async () => {
+      await acpSupervisor.stop()
+      database.close()
+    })
+
+    await app.inject({
+      method: "PATCH",
+      url: "/v1/settings/agents/cursor",
+      payload: { enabled: true },
+    })
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/settings/agents/cursor/actions",
+      payload: { type: "respawn" },
+    })
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/settings/agents",
+    })
+    const cursor = findAgent(
+      AgentSettingsCollectionSchema.parse(JSON.parse(response.body)),
+      "cursor",
+    )
+
+    expect(cursor.state).toEqual({ status: "error", error: "spawn exploded" })
+    expect(cursor.capabilities).toBeNull()
+  })
+})
+
 describe("GET /v1/settings/agents", () => {
   test("returns all catalog agents disabled by default with presence and popular", async () => {
     const dataDir = await createTempDataDir()
@@ -492,7 +597,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const body = AgentSettingsSchema.parse(JSON.parse(response.body))
 
     expect(response.statusCode).toBe(200)
-    expect(body).toEqual({
+    expect(body).toMatchObject({
       id: "claude-acp",
       displayName: "Claude Agent",
       available: true,
@@ -504,6 +609,8 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
       deletable: false,
       state: { status: "ready", error: null },
     })
+    expect(body.capabilities?.agentInfo).toEqual({ name: "fake-acp", version: "0.0.0" })
+    expect(body.capabilities?.entries.length).toBeGreaterThan(0)
   })
 
   test("returns 404 for unknown agent id without a settings row", async () => {
@@ -657,6 +764,7 @@ describe("POST /v1/settings/agents/import/detect and apply", () => {
       popular: false,
       deletable: true,
       state: { status: "stopped", error: null },
+      capabilities: null,
     })
     expect(applyBody.items[0]?.id).toBe("brand-new-agent")
   })
@@ -703,6 +811,7 @@ describe("POST /v1/settings/agents custom create", () => {
       popular: false,
       deletable: true,
       state: { status: "stopped", error: null },
+      capabilities: null,
     })
 
     const secondResponse = await app.inject({

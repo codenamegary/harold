@@ -77,6 +77,7 @@ const emptyAgentCollection = {
       popular: true,
       deletable: false,
       state: { status: "stopped", error: null },
+      capabilities: null,
     },
     {
       id: "claude-acp",
@@ -89,6 +90,7 @@ const emptyAgentCollection = {
       popular: true,
       deletable: false,
       state: { status: "stopped", error: null },
+      capabilities: null,
     },
   ],
 }
