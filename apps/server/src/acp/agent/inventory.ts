@@ -1,6 +1,6 @@
 import { knownCapabilityPaths } from "./capabilities"
 import { AgentMethodDeclarationReader } from "./method.declarations"
-import { AgentMethodName, CapabilityPath } from "./models"
+import { AgentMethodName, CapabilityPath, RequiredCapabilityPath } from "./models"
 
 export type CapabilityAgentInfo = {
   name: string
@@ -182,3 +182,17 @@ export const inventoryAdvertisesSessionList = (
   inventory: CapabilityInventory | null | undefined,
 ): boolean =>
   inventoryEntry(inventory, "sessionCapabilities.list")?.advertised === true
+
+export const inventorySupportsRequiredCapability = (
+  inventory: CapabilityInventory | null | undefined,
+  path: RequiredCapabilityPath,
+): boolean => {
+  switch (path) {
+    case "loadSession":
+      return inventoryAdvertisesResumable(inventory)
+    case "sessionCapabilities.close":
+      return inventoryAdvertisesSessionClose(inventory)
+    case "sessionCapabilities.list":
+      return inventoryAdvertisesSessionList(inventory)
+  }
+}
