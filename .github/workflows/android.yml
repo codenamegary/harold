@@ -7,6 +7,7 @@ on:
     paths:
       - apps/android/**
       - .github/workflows/android.yml
+      - .github/scripts/upload-to-fs.sh
   pull_request:
     branches:
       - main
@@ -14,6 +15,8 @@ on:
     paths:
       - apps/android/**
       - .github/workflows/android.yml
+      - .github/scripts/upload-to-fs.sh
+  workflow_dispatch:
 
 jobs:
   build:
