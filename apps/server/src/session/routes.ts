@@ -6,12 +6,12 @@ import {
   SessionCollectionSchema,
 } from "contracts/http/session"
 import { FastifyInstance } from "fastify"
-import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
+import { AcpSupervisor } from "../acp/supervisor/models"
 import { AgentSettingsRepository } from "../agent-settings/agent-settings-repository"
 import { SessionCwdCache } from "./hub/session.hub"
 import { ArchivedAcpSessionsStore } from "./archived.acp.sessions.store"
 import { deleteAcpSession } from "./delete.acp.session"
-import { ensureSupervisorReady } from "./session.acp.ready"
+import { ensureSupervisorReady, agentAdvertisesSessionList } from "./session.acp.ready"
 import {
   buildAcpUnavailableProblem,
   buildAgentDisabledProblem,
@@ -64,7 +64,7 @@ export const registerSessionRoutes = (
       return sendProblem(reply, 409, buildAcpUnavailableProblem(supervisorReady.reason))
     }
 
-    if (!acpSupervisor.getAgentCapabilities(body.agentId)?.sessionCapabilities.list) {
+    if (!agentAdvertisesSessionList(acpSupervisor, body.agentId)) {
       return sendProblem(
         reply,
         409,

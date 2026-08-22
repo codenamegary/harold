@@ -1,8 +1,8 @@
 import { AgentId } from "contracts/http/agent-settings"
-import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
+import { AcpSupervisor } from "../acp/supervisor/models"
 import { AgentSettingsRepository } from "../agent-settings/agent-settings-repository"
 import { ArchivedAcpSessionsStore } from "./archived.acp.sessions.store"
-import { ensureSupervisorReady } from "./session.acp.ready"
+import { ensureSupervisorReady, agentAdvertisesSessionClose } from "./session.acp.ready"
 import {
   buildAgentDisabledProblem,
   buildAgentNotFoundProblem,
@@ -56,8 +56,7 @@ export const deleteAcpSession = async (params: {
   )
   if (
     supervisorReady.ok &&
-    params.acpSupervisor.getAgentCapabilities(params.agentId)?.sessionCapabilities
-      .close
+    agentAdvertisesSessionClose(params.acpSupervisor, params.agentId)
   ) {
     // Catalog hide is the delete contract; close is best-effort and must not
     // hold the HTTP response behind agent RPC latency.

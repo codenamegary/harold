@@ -11,7 +11,7 @@ import { AgentId } from "contracts/http/agent-settings"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
 import { SpawnedAgentProcess } from "../acp/supervisor/spawn-agent-process"
-import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
+import { AcpSupervisor } from "../acp/supervisor/models"
 import { Config } from "../config/config"
 import { ensureSupervisorReady } from "../session/session.acp.ready"
 

@@ -1,8 +1,9 @@
 import { AgentId } from "contracts/http/agent-settings"
 import { resolveAgentProfile } from "../agent-profile"
 import { sanitizeAcpRejection } from "../sanitize-acp-error"
+import { buildCapabilityInventory, CapabilityInventory } from "../agent/inventory"
+import { agentMethodDeclarations } from "../agent/method.declarations"
 import {
-  AgentCapabilities,
   AgentSettingsReader,
   AcpSession,
   AcpListSessionsResult,
@@ -21,7 +22,7 @@ import {
   createAcpStartError,
   DEFAULT_ACP_RESTART_BACKOFF_MS,
   LiveWorkspaceSession,
-} from "./acp-supervisor-types"
+} from "./models"
 import { isAcpJsonRpcError } from "../transport/json-rpc-error"
 import { AcpOperationContext, createJsonRpcTransport, JsonRpcTransport } from "../transport/json-rpc-transport"
 import { registerAcpClientHandlers, createUnavailableRequestExtensionRpc, createUnavailableRequestPermission } from "../client/register-handlers"
@@ -29,12 +30,17 @@ import { resolveExtensionHandlers } from "../client/extensions/extension.handler
 import { createSessionBindingRegistry } from "../client/session-binding-registry"
 import { spawnAgentProcess, SpawnedAgentProcess } from "./spawn-agent-process"
 import { createTurnId } from "../../session/create.turn.id"
+import {
+  inventoryAdvertisesResumable,
+  inventoryAdvertisesSessionClose,
+  inventoryAdvertisesSessionList,
+} from "../agent/inventory"
 
 type SupervisorRuntime = {
   agentId: AgentId
   state: AcpSupervisorState
   lastError: string | null
-  agentCapabilities: AgentCapabilities | null
+  capabilityInventory: CapabilityInventory | null
   process: SpawnedAgentProcess | null
   transport: JsonRpcTransport | null
   exitMonitor: Promise<void> | null
@@ -54,28 +60,6 @@ const sanitizeFailureReason = (error: unknown, fallback: string): string => {
 
   const message = error instanceof Error ? error.message : fallback
   return sanitizeAcpRejection({ message })
-}
-
-const parseAgentCapabilities = (result: unknown): AgentCapabilities => {
-  const value = result as {
-    agentCapabilities?: {
-      loadSession?: boolean
-      sessionCapabilities?: {
-        close?: unknown
-        list?: unknown
-      }
-    }
-  }
-
-  const closeCapability = value.agentCapabilities?.sessionCapabilities?.close
-
-  return {
-    loadSession: value.agentCapabilities?.loadSession ?? false,
-    sessionCapabilities: {
-      close: closeCapability !== undefined && closeCapability !== false,
-      list: value.agentCapabilities?.sessionCapabilities?.list !== undefined,
-    },
-  }
 }
 
 const parseListedSessions = (result: unknown): ReadonlyArray<{
@@ -164,7 +148,7 @@ const createEmptyRuntime = (agentId: AgentId): SupervisorRuntime => ({
   agentId,
   state: "stopped",
   lastError: null,
-  agentCapabilities: null,
+  capabilityInventory: null,
   process: null,
   transport: null,
   exitMonitor: null,
@@ -241,7 +225,7 @@ export const createAcpSupervisor = ({
     runtime.transport = null
     runtime.process = null
     runtime.exitMonitor = null
-    runtime.agentCapabilities = null
+    runtime.capabilityInventory = null
     unbindAgentSessions(agentId)
     transport?.close()
     process?.kill()
@@ -356,7 +340,10 @@ export const createAcpSupervisor = ({
       clientInfo: { name: "agent-server", version: serverVersion },
     })
 
-    runtime.agentCapabilities = parseAgentCapabilities(initResult)
+    runtime.capabilityInventory = buildCapabilityInventory({
+      initializeResult: initResult,
+      declarations: agentMethodDeclarations,
+    })
 
     await transport.request("authenticate", {
       methodId: resolved.profile.authMethodId,
@@ -634,7 +621,7 @@ export const createAcpSupervisor = ({
       (runtime) =>
         runtime.state === "ready" &&
         runtime.transport !== null &&
-        runtime.agentCapabilities?.sessionCapabilities.list === true,
+        inventoryAdvertisesSessionList(runtime.capabilityInventory),
     )
 
     try {
@@ -724,7 +711,7 @@ export const createAcpSupervisor = ({
       return { ok: true, acpSessionId }
     }
 
-    if (!runtime.agentCapabilities?.loadSession) {
+    if (!inventoryAdvertisesResumable(runtime.capabilityInventory)) {
       return { ok: false, reason: "Agent does not support session/load" }
     }
 
@@ -784,7 +771,7 @@ export const createAcpSupervisor = ({
       return { ok: false, reason: "ACP supervisor is not ready" }
     }
 
-    if (!runtime.agentCapabilities?.sessionCapabilities.close) {
+    if (!inventoryAdvertisesSessionClose(runtime.capabilityInventory)) {
       return { ok: false, reason: "Agent does not support session/close" }
     }
 
@@ -942,7 +929,7 @@ export const createAcpSupervisor = ({
       }
 
       const runtime = getReadyRuntime(session.agentId)
-      const closeSupported = runtime?.agentCapabilities?.sessionCapabilities.close === true
+      const closeSupported = inventoryAdvertisesSessionClose(runtime?.capabilityInventory)
       if (!closeSupported) {
         sessionBindingRegistry.unbind({ acpSessionId: session.acpSessionId })
         acpSessionAgentIds.delete(session.acpSessionId)
@@ -996,13 +983,8 @@ export const createAcpSupervisor = ({
       [...runtimes.values()]
         .filter((runtime) => runtime.state === "ready")
         .map((runtime) => runtime.agentId),
-    getAgentCapabilities: (agentId) => {
-      const resolvedAgentId = resolveReadyAgentId(agentId)
-      if (resolvedAgentId === null) {
-        return null
-      }
-      return getReadyRuntime(resolvedAgentId)?.agentCapabilities ?? null
-    },
+    getCapabilityInventory: (agentId) =>
+      getReadyRuntime(agentId)?.capabilityInventory ?? null,
     getTransport: (agentId) => {
       const resolvedAgentId = resolveReadyAgentId(agentId)
       if (resolvedAgentId === null) {

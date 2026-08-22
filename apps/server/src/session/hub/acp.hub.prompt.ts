@@ -1,4 +1,4 @@
-import { AcpSessionPromptStartResult } from "../../acp/supervisor/acp-supervisor-types"
+import { AcpSessionPromptStartResult } from "../../acp/supervisor/models"
 import { SessionHubPromptSession } from "./session.hub"
 
 export type CreateAcpHubPromptSessionParams = {

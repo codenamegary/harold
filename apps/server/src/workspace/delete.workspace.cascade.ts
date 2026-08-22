@@ -1,4 +1,4 @@
-import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
+import { AcpSupervisor } from "../acp/supervisor/models"
 import { WorkspaceRepository } from "./repository"
 import { WorkspaceService } from "./service"
 

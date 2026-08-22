@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { AgentId } from "contracts/http/agent-settings"
-import { AcpSupervisor } from "../acp/supervisor/acp-supervisor-types"
+import { AcpSupervisor } from "../acp/supervisor/models"
 import { ensureSupervisorReady } from "./session.acp.ready"
 
 const createSupervisorStub = (params: {
