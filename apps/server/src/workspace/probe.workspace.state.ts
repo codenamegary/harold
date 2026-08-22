@@ -1,6 +1,6 @@
 import { accessSync, constants, statSync } from "node:fs"
 import { WorkspaceState } from "contracts/http/workspace"
-import { isMissingFilesystemError, isPermissionFilesystemError } from "./filesystem-errors"
+import { isMissingFilesystemError, isPermissionFilesystemError } from "./filesystem.errors"
 
 export const probeWorkspaceState = (canonicalPath: string): WorkspaceState => {
   try {

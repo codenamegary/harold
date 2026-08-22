@@ -5,7 +5,7 @@ import {
 } from "contracts/http/error"
 import { FastifyInstance } from "fastify"
 import { ZodError } from "zod"
-import { zodIssueToCode, zodPathToPointer } from "./zod-problem"
+import { zodIssueToCode, zodPathToPointer } from "./zod.problem"
 
 const buildValidationProblem = (error: ZodError) =>
   ValidationProblemSchema.parse({

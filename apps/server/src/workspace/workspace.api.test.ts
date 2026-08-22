@@ -15,7 +15,7 @@ import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
-import { encodeWorkspacePageCursor } from "./workspace-page-cursor"
+import { encodeWorkspacePageCursor } from "./workspace.page.cursor"
 
 const tempDirs: string[] = []
 const apps: Awaited<ReturnType<typeof createServer>>["app"][] = []

@@ -3,7 +3,7 @@ import { accessSync } from "node:fs"
 import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { probeWorkspaceState } from "./probe-workspace-state"
+import { probeWorkspaceState } from "./probe.workspace.state"
 
 const tempDirs: string[] = []
 

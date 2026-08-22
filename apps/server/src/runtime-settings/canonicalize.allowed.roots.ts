@@ -1,5 +1,5 @@
-import { canonicalizeWorkspacePath } from "../workspace/canonicalize-workspace-path"
-import { WorkspacePathError } from "../workspace/workspace-errors"
+import { canonicalizeWorkspacePath } from "../workspace/canonicalize.workspace.path"
+import { WorkspacePathError } from "../workspace/workspace.errors"
 
 export type CanonicalizeAllowedRootsResult =
   | { ok: true; canonicalRoots: string[] }

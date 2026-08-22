@@ -1,8 +1,8 @@
 import { accessSync, constants, realpathSync, statSync } from "node:fs"
 import path from "node:path"
 import { expandHomePath } from "../config/expand-home-path"
-import { isMissingFilesystemError, isPermissionFilesystemError } from "./filesystem-errors"
-import { WorkspacePathError } from "./workspace-errors"
+import { isMissingFilesystemError, isPermissionFilesystemError } from "./filesystem.errors"
+import { WorkspacePathError } from "./workspace.errors"
 
 export type CanonicalizeWorkspacePathResult =
   | { ok: true; canonicalPath: string }

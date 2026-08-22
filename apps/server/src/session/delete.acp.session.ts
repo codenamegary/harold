@@ -7,7 +7,7 @@ import {
   buildAgentDisabledProblem,
   buildAgentNotFoundProblem,
   buildAgentUnavailableProblem,
-} from "./session-problems"
+} from "./session.problems"
 
 export type DeleteAcpSessionResult =
   | { ok: true }

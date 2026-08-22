@@ -3,7 +3,7 @@ import {
   PROBLEM_TYPES,
   ValidationProblemSchema,
 } from "contracts/http/error"
-import { WorkspacePathError } from "../workspace/workspace-errors"
+import { WorkspacePathError } from "../workspace/workspace.errors"
 
 const pathErrorCodes: Record<WorkspacePathError["kind"], string> = {
   missing: "validation.field.allowedRoots.missing",

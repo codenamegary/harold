@@ -6,7 +6,7 @@ import {
   WorkspaceActiveSessionsProblemSchema,
 } from "contracts/http/error"
 import { sanitizeAcpErrorMessage } from "../acp/sanitize.error"
-import { WorkspacePathError } from "./workspace-errors"
+import { WorkspacePathError } from "./workspace.errors"
 
 const pathErrorCodes: Record<WorkspacePathError["kind"], string> = {
   missing: "validation.field.path.missing",

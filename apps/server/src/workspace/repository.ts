@@ -7,16 +7,16 @@ import {
 } from "contracts/http/workspace"
 import { AgentDatabase, DbExecutor } from "../persistence/database"
 import { workspaces } from "../persistence/schema/workspaces"
-import { canonicalizeWorkspacePath } from "./canonicalize-workspace-path"
-import { createWorkspaceId } from "./create-workspace-id"
+import { canonicalizeWorkspacePath } from "./canonicalize.workspace.path"
+import { createWorkspaceId } from "./create.workspace.id"
 import { isPathUnderAllowedRoot } from "./is.path.under.allowed.root"
-import { probeWorkspaceState } from "./probe-workspace-state"
-import { WorkspaceRepositoryError } from "./workspace-errors"
+import { probeWorkspaceState } from "./probe.workspace.state"
+import { WorkspaceRepositoryError } from "./workspace.errors"
 import {
   decodeWorkspacePageCursor,
   encodeWorkspacePageCursor,
   WorkspacePageCursorPayload,
-} from "./workspace-page-cursor"
+} from "./workspace.page.cursor"
 
 export type WorkspaceRepositoryResult<T> =
   | { ok: true; value: T }

@@ -17,7 +17,7 @@ import {
   buildAgentDisabledProblem,
   buildAgentNotFoundProblem,
   buildAgentUnavailableProblem,
-} from "./session-problems"
+} from "./session.problems"
 
 const sendProblem = (
   reply: {

@@ -1,6 +1,6 @@
 import { CreateWorkspaceBody, Workspace } from "contracts/http/workspace"
 import { WorkspaceRepository, UpdateWorkspaceNameInput } from "./repository"
-import { WorkspaceRepositoryError } from "./workspace-errors"
+import { WorkspaceRepositoryError } from "./workspace.errors"
 
 export type WorkspaceServiceResult<T> =
   | { ok: true; value: T }

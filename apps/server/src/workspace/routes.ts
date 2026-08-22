@@ -17,7 +17,7 @@ import {
   buildOutsideAllowedRootProblem,
   buildPathValidationProblem,
   buildWorkspaceActiveSessionsProblem,
-} from "./workspace-problems"
+} from "./workspace.problems"
 import { deleteWorkspaceWithCascade } from "./delete.workspace.cascade"
 
 const sendProblem = (

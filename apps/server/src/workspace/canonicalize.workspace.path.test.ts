@@ -3,7 +3,7 @@ import { accessSync } from "node:fs"
 import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { canonicalizeWorkspacePath } from "./canonicalize-workspace-path"
+import { canonicalizeWorkspacePath } from "./canonicalize.workspace.path"
 
 const tempDirs: string[] = []
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { ZodError } from "zod"
-import { zodIssueToCode, zodPathToPointer } from "./zod-problem"
+import { zodIssueToCode, zodPathToPointer } from "./zod.problem"
 
 describe("zodPathToPointer", () => {
   test("maps field paths to JSON pointers", () => {
