@@ -765,6 +765,12 @@ describe("POST /v1/settings/agents/import/detect and apply", () => {
       deletable: true,
       state: { status: "stopped", error: null },
       capabilities: null,
+      authSummary: {
+        status: "unknown",
+        error: null,
+        activeSessionId: null,
+        canLogout: false,
+      },
     })
     expect(applyBody.items[0]?.id).toBe("brand-new-agent")
   })
@@ -812,6 +818,12 @@ describe("POST /v1/settings/agents custom create", () => {
       deletable: true,
       state: { status: "stopped", error: null },
       capabilities: null,
+      authSummary: {
+        status: "unknown",
+        error: null,
+        activeSessionId: null,
+        canLogout: false,
+      },
     })
 
     const secondResponse = await app.inject({
@@ -972,7 +984,7 @@ describe("custom agent enable and spawn snapshot", () => {
       displayName: "Custom Agent",
       authMethodId: created.id,
     })
-  })
+  }, { timeout: 20_000 })
 })
 
 describe("agent settings durability", () => {

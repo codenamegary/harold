@@ -1,5 +1,7 @@
 import { AgentId } from "contracts/http/agent-settings"
+import os from "node:os"
 import { resolveAgentProfile } from "../agent-profile"
+import { AdapterAuthContext } from "../../agent/auth/adapters/adapter"
 import { sanitizeAcpRejection } from "../sanitize.error"
 import { buildCapabilityInventory, CapabilityInventory } from "../agent/inventory"
 import { agentMethodDeclarations } from "../agent/method.declarations"
@@ -54,6 +56,16 @@ type SupervisorRuntime = {
   acceptUnexpectedExit: boolean
   restartGeneration: number
 }
+
+const buildAdapterAuthContext = (
+  agentId: AgentId,
+  initializeResult?: unknown,
+): AdapterAuthContext => ({
+  agentId,
+  hostIdentity: { id: "default" },
+  hostMachineName: os.hostname(),
+  initializeResult,
+})
 
 const sanitizeFailureReason = (error: unknown, fallback: string): string => {
   if (isAcpJsonRpcError(error)) {
@@ -164,6 +176,7 @@ export const createAcpSupervisor = ({
       stdin: process.stdin,
       stdout: process.stdout,
     }),
+  authHooks,
 }: CreateAcpSupervisorParams): AcpSupervisor => {
   const sessionBindingRegistry = createSessionBindingRegistry()
   const sessionOwnership = createSessionOwnership()
@@ -304,9 +317,14 @@ export const createAcpSupervisor = ({
       })
     })
 
+    const authAdapter = authHooks?.resolveAdapter(agentId)
+    const authContext = buildAdapterAuthContext(agentId)
+
     const initResult = await transport.request("initialize", {
       protocolVersion: 1,
-      clientCapabilities: resolved.profile.clientCapabilities,
+      clientCapabilities: authAdapter
+        ? authAdapter.clientAuthCapabilities(authContext)
+        : resolved.profile.clientCapabilities,
       clientInfo: { name: "agent-server", version: serverVersion },
     })
 
@@ -315,9 +333,15 @@ export const createAcpSupervisor = ({
       declarations: agentMethodDeclarations,
     })
 
-    await transport.request("authenticate", {
-      methodId: resolved.profile.authMethodId,
-    })
+    if (authHooks && authAdapter) {
+      const ctx = buildAdapterAuthContext(agentId, initResult)
+      await authAdapter.onStart(ctx)
+      await authHooks.authBroker.observeInitialize({ agentId, initializeResult: initResult })
+    } else if (!authHooks) {
+      await transport.request("authenticate", {
+        methodId: resolved.profile.authMethodId,
+      })
+    }
 
     runtime.state = "ready"
     runtime.lastError = null

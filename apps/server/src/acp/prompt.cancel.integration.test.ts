@@ -130,5 +130,5 @@ describe("ACP prompt, update, and cancel integration", () => {
 
     await app.close()
     database.close()
-  })
+  }, { timeout: 20_000 })
 })

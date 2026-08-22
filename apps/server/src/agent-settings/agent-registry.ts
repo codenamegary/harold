@@ -138,6 +138,12 @@ export const toAgentSettings = (
     error: null,
   },
   capabilities: null,
+  authSummary: {
+    status: "unknown",
+    error: null,
+    activeSessionId: null,
+    canLogout: false,
+  },
 })
 
 export const sortAgentSettingsBands = (

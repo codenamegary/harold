@@ -1,4 +1,5 @@
 import { AgentId, AgentSpawnSnapshot } from "contracts/http/agent-settings"
+import { SupervisorAuthHooks } from "../../agent/auth/supervisor.hooks"
 import { CapabilityInventory } from "../agent/inventory"
 import { AgentProfile } from "../agent-profile"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
@@ -173,6 +174,7 @@ export type CreateAcpSupervisorParams = {
     args: readonly string[]
   }) => SpawnedAgentProcess
   createTransportFn?: (process: SpawnedAgentProcess) => JsonRpcTransport
+  authHooks?: SupervisorAuthHooks
 }
 
 export type AcpStartError = Error & { readonly name: "AcpStartError" }

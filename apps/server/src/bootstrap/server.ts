@@ -32,6 +32,9 @@ import { registerConnectionTestRoutes } from "../connection-test/routes"
 import { createRuntimeStatusService } from "../runtime/status.service"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
+import { createAuthBroker } from "../agent/auth/broker"
+import { registerAgentAuthRoutes } from "../agent/auth/routes"
+import { createSupervisorAuthHooks } from "../agent/auth/supervisor.hooks"
 import { createAcpSupervisor } from "../acp/supervisor/supervisor"
 import { AcpSupervisor } from "../acp/supervisor/models"
 import { SpawnAgentProcessFn } from "../acp/supervisor/spawn.agent.process"
@@ -186,12 +189,26 @@ export const createServer = async ({
   const sessionHubRef: { current: SessionHub | null } = { current: null }
   const cwdCache = createSessionCwdCache()
 
-  const acpSupervisor =
+  const agentExists = (agentId: string) =>
+    agentSettingsRepository.list().some((agent) => agent.id === agentId)
+
+  const acpSupervisorRef: { current: AcpSupervisor } = { current: null! }
+
+  const authBroker = createAuthBroker({
+    agentExists,
+    requestRespawn: async (agentId) => acpSupervisorRef.current.respawn(agentId),
+  })
+
+  acpSupervisorRef.current =
     providedAcpSupervisor ??
     createAcpSupervisor({
       agentSettingsRepository,
       serverVersion: runtime.version,
       spawnAgentProcessFn: spawnFn,
+      authHooks: createSupervisorAuthHooks({
+        authBroker,
+        requestRespawn: async (agentId) => acpSupervisorRef.current.respawn(agentId),
+      }),
       onSessionUpdate: ({ agentId, acpSessionId, update }) => {
         sessionHubRef.current?.handleSessionUpdate({
           agentId,
@@ -217,6 +234,8 @@ export const createServer = async ({
         return hub.requestExtensionRpc(input)
       },
     })
+
+  const acpSupervisor = acpSupervisorRef.current
 
   const sessionHub = createSessionHub({
     cwdCache,
@@ -258,7 +277,8 @@ export const createServer = async ({
 
   registerWorkspaceRoutes(app, workspaceRepository, workspaceService, acpSupervisor)
   registerFilesystemBrowseRoutes(app, () => runtimeSettingsRepository.get().allowedRoots)
-  registerAgentSettingsRoutes(app, agentSettingsRepository, acpSupervisor)
+  registerAgentSettingsRoutes(app, agentSettingsRepository, acpSupervisor, authBroker)
+  registerAgentAuthRoutes(app, authBroker, agentExists)
   registerRuntimeSettingsRoutes(app, runtimeSettingsRepository, {
     onLogLevelChanged: (nextLevel) => {
       app.log.level = nextLevel

@@ -1,3 +1,4 @@
+import { FastifyInstance } from "fastify"
 import {
   AgentActionBodySchema,
   AgentIdSchema,
@@ -10,7 +11,7 @@ import {
   ImportDetectResponseSchema,
   UpdateAgentSettingsBodySchema,
 } from "contracts/http/agent-settings"
-import { FastifyInstance } from "fastify"
+import { AuthBroker } from "../agent/auth/broker"
 import {
   AcpSupervisor,
   isAcpStartError,
@@ -49,9 +50,11 @@ export const registerAgentSettingsRoutes = (
   app: FastifyInstance,
   repository: AgentSettingsRepository,
   acpSupervisor: AcpSupervisor,
+  authBroker: AuthBroker,
 ) => {
-  const toWireAgent = (item: AgentSettings): AgentSettings => {
+  const toWireAgent = async (item: AgentSettings): Promise<AgentSettings> => {
     const state = acpSupervisor.getAgentRuntimeState(item.id)
+    const authSummary = await authBroker.getSummary(item.id)
     return AgentSettingsSchema.parse({
       ...item,
       state,
@@ -59,16 +62,17 @@ export const registerAgentSettingsRoutes = (
         state,
         acpSupervisor.getCapabilityInventory(item.id),
       ),
+      authSummary,
     })
   }
 
-  const toWireCollection = (items: readonly AgentSettings[]) =>
+  const toWireCollection = async (items: readonly AgentSettings[]) =>
     AgentSettingsCollectionSchema.parse({
-      items: items.map(toWireAgent),
+      items: await Promise.all(items.map(toWireAgent)),
     })
 
   app.get("/v1/settings/agents", async (_request, reply) => {
-    return reply.status(200).send(toWireCollection(repository.list()))
+    return reply.status(200).send(await toWireCollection(repository.list()))
   })
 
   app.post("/v1/settings/agents", async (request, reply) => {
@@ -79,7 +83,7 @@ export const registerAgentSettingsRoutes = (
       return sendProblem(reply, 404, buildAgentNotFoundProblem())
     }
 
-    return reply.status(201).send(toWireAgent(result.value))
+    return reply.status(201).send(await toWireAgent(result.value))
   })
 
   app.post("/v1/settings/agents/import/detect", async (_request, reply) => {
@@ -103,7 +107,7 @@ export const registerAgentSettingsRoutes = (
       return sendProblem(reply, 404, buildAgentNotFoundProblem())
     }
 
-    return reply.status(200).send(toWireCollection(result.value))
+    return reply.status(200).send(await toWireCollection(result.value))
   })
 
   app.post("/v1/settings/agents/:agentId/detect-path", async (request, reply) => {
@@ -162,7 +166,7 @@ export const registerAgentSettingsRoutes = (
           return sendProblem(reply, 404, buildAgentNotFoundProblem())
         }
 
-        return reply.status(200).send(toWireAgent(next))
+        return reply.status(200).send(await toWireAgent(next))
       }
     }
   })
@@ -225,7 +229,7 @@ export const registerAgentSettingsRoutes = (
       return sendProblem(reply, 404, buildAgentNotFoundProblem())
     }
 
-    return reply.status(200).send(toWireAgent(next))
+    return reply.status(200).send(await toWireAgent(next))
   })
 
   app.delete("/v1/settings/agents/:agentId", async (request, reply) => {

@@ -12,6 +12,12 @@ const agent = (overrides: Partial<AgentSettings> & Pick<AgentSettings, "id" | "d
   deletable: false,
   state: { status: "stopped", error: null },
   capabilities: null,
+  authSummary: {
+    status: "unknown",
+    error: null,
+    activeSessionId: null,
+    canLogout: false,
+  },
   ...overrides,
 })
 

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { defaultAuthSummary } from "../test/agent.settings.fixtures"
 import { AgentSettings } from "contracts/http/agent-settings"
 import { sortAgentSettings } from "./sort.agent.settings"
 
@@ -12,6 +13,7 @@ const agent = (overrides: Partial<AgentSettings> & Pick<AgentSettings, "id" | "d
   deletable: false,
   state: { status: "stopped", error: null },
   capabilities: null,
+      authSummary: defaultAuthSummary,
   ...overrides,
 })
 

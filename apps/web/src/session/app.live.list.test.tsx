@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { defaultAuthSummary } from "../test/agent.settings.fixtures"
 import { waitFor } from "@testing-library/react"
 import { AgentSettingsCollectionSchema } from "contracts/http/agent-settings"
 import { SessionCollectionSchema } from "contracts/http/session"
@@ -53,6 +54,7 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       deletable: false,
       state: { status: "stopped", error: null },
       capabilities: null,
+      authSummary: defaultAuthSummary,
     },
   ],
 })

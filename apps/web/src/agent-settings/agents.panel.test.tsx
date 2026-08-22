@@ -13,6 +13,7 @@ import {
   agentMissingListCapability,
   fakeReadyAgentCapabilities,
   nullAgentCapabilities,
+  defaultAuthSummary,
 } from "../test/agent.settings.fixtures"
 import { AgentsPanel } from "./AgentsPanel"
 
@@ -42,6 +43,7 @@ const comingSoonAgent: AgentSettings = {
   deletable: false,
   state: { status: "stopped", error: null },
   capabilities: nullAgentCapabilities,
+  authSummary: defaultAuthSummary,
 }
 
 const cursorAgent = (overrides: Partial<AgentSettings> = {}): AgentSettings => {
@@ -60,6 +62,7 @@ const cursorAgent = (overrides: Partial<AgentSettings> = {}): AgentSettings => {
     ...overrides,
     state,
     capabilities,
+    authSummary: overrides.authSummary ?? defaultAuthSummary,
   }
 }
 
@@ -732,6 +735,7 @@ describe("AgentsPanel", () => {
       deletable: false,
       state: { status: "stopped", error: null },
       capabilities: nullAgentCapabilities,
+      authSummary: defaultAuthSummary,
     })
 
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
@@ -831,6 +835,7 @@ describe("AgentsPanel", () => {
         deletable: false,
         state: { status: "stopped", error: null },
         capabilities: nullAgentCapabilities,
+        authSummary: defaultAuthSummary,
       })
     })
 
@@ -978,6 +983,7 @@ describe("AgentsPanel", () => {
           deletable: true,
           state: { status: "stopped", error: null },
           capabilities: nullAgentCapabilities,
+          authSummary: defaultAuthSummary,
         }
 
         return Promise.resolve(
@@ -1060,6 +1066,7 @@ describe("AgentsPanel", () => {
           deletable: true,
           state: { status: "stopped", error: null },
           capabilities: nullAgentCapabilities,
+          authSummary: defaultAuthSummary,
         })
         listState.items = [created, ...listState.items]
         return Promise.resolve(
