@@ -2,7 +2,7 @@ import { AgentId, AgentSpawnSnapshot } from "contracts/http/agent-settings"
 import { CapabilityInventory } from "../agent/inventory"
 import { AgentProfile } from "../agent-profile"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
-import { SpawnedAgentProcess } from "./spawn-agent-process"
+import { SpawnedAgentProcess } from "./spawn.agent.process"
 import { SessionBindingRegistry } from "../client/session-binding-registry"
 
 export type AcpSupervisorState = "stopped" | "starting" | "ready" | "error"

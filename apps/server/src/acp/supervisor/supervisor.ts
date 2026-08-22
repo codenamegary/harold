@@ -3,6 +3,9 @@ import { resolveAgentProfile } from "../agent-profile"
 import { sanitizeAcpRejection } from "../sanitize-acp-error"
 import { buildCapabilityInventory, CapabilityInventory } from "../agent/inventory"
 import { agentMethodDeclarations } from "../agent/method.declarations"
+import { createAgentMethodTable } from "../agent/method.table"
+import { registerSessionCloseHandler } from "../agent/session.close"
+import { createSessionOwnership } from "../agent/session.ownership"
 import {
   AgentSettingsReader,
   AcpSession,
@@ -28,12 +31,13 @@ import { AcpOperationContext, createJsonRpcTransport, JsonRpcTransport } from ".
 import { registerAcpClientHandlers, createUnavailableRequestExtensionRpc, createUnavailableRequestPermission } from "../client/register-handlers"
 import { resolveExtensionHandlers } from "../client/extensions/extension.handlers"
 import { createSessionBindingRegistry } from "../client/session-binding-registry"
-import { spawnAgentProcess, SpawnedAgentProcess } from "./spawn-agent-process"
+import { spawnAgentProcess, SpawnedAgentProcess } from "./spawn.agent.process"
 import { createTurnId } from "../../session/create.turn.id"
 import {
   inventoryAdvertisesResumable,
   inventoryAdvertisesSessionClose,
   inventoryAdvertisesSessionList,
+  inventorySupportsRequiredCapability,
 } from "../agent/inventory"
 
 type SupervisorRuntime = {
@@ -196,20 +200,15 @@ export const createAcpSupervisor = ({
     }),
 }: CreateAcpSupervisorParams): AcpSupervisor => {
   const sessionBindingRegistry = createSessionBindingRegistry()
+  const sessionOwnership = createSessionOwnership()
+  const agentMethodTable = createAgentMethodTable()
+  registerSessionCloseHandler(agentMethodTable)
   const runtimes = new Map<AgentId, SupervisorRuntime>()
-  const acpSessionAgentIds = new Map<string, AgentId>()
 
   const unbindAgentSessions = (agentId: AgentId) => {
-    const acpSessionIdsToDelete: string[] = []
-    for (const [acpSessionId, ownerAgentId] of acpSessionAgentIds.entries()) {
-      if (ownerAgentId !== agentId) {
-        continue
-      }
+    for (const acpSessionId of sessionOwnership.sessionsOwnedBy(agentId)) {
       sessionBindingRegistry.unbind({ acpSessionId })
-      acpSessionIdsToDelete.push(acpSessionId)
-    }
-    for (const acpSessionId of acpSessionIdsToDelete) {
-      acpSessionAgentIds.delete(acpSessionId)
+      sessionOwnership.forget({ acpSessionId })
     }
   }
 
@@ -509,20 +508,15 @@ export const createAcpSupervisor = ({
   }
 
   const resolveRuntimeForAcpSession = (acpSessionId: string): SupervisorRuntime | null => {
-    const ownerAgentId = acpSessionAgentIds.get(acpSessionId)
-    if (ownerAgentId !== undefined) {
-      return getReadyRuntime(ownerAgentId)
-    }
-
-    const fallbackAgentId = resolveReadyAgentId()
-    if (fallbackAgentId === null) {
+    const ownerAgentId = sessionOwnership.ownerOf(acpSessionId)
+    if (ownerAgentId === undefined) {
       return null
     }
-    return getReadyRuntime(fallbackAgentId)
+    return getReadyRuntime(ownerAgentId)
   }
 
   const rememberAcpSession = (agentId: AgentId, acpSessionId: string) => {
-    acpSessionAgentIds.set(acpSessionId, agentId)
+    sessionOwnership.remember({ agentId, acpSessionId })
   }
 
   const createAcpSession = async ({
@@ -771,29 +765,23 @@ export const createAcpSupervisor = ({
       return { ok: false, reason: "ACP supervisor is not ready" }
     }
 
-    if (!inventoryAdvertisesSessionClose(runtime.capabilityInventory)) {
+    const handler = agentMethodTable.resolve({ agentId, method: "session/close" })
+    if (handler === undefined) {
       return { ok: false, reason: "Agent does not support session/close" }
     }
 
-    rememberAcpSession(agentId, sessionId)
-    const binding = sessionBindingRegistry.getBinding(sessionId)
-    const operationContext: AcpOperationContext | undefined =
-      binding === undefined
-        ? undefined
-        : {
-            sessionId: binding.sessionId,
-            workspaceId: binding.workspaceId,
-            phase: binding.phase,
-          }
-
-    try {
-      await runtime.transport.request("session/close", { sessionId }, operationContext)
-      sessionBindingRegistry.unbind({ acpSessionId: sessionId })
-      acpSessionAgentIds.delete(sessionId)
-      return { ok: true }
-    } catch (error: unknown) {
-      return { ok: false, reason: sanitizeFailureReason(error, "session/close failed") }
-    }
+    return handler({
+      params: { acpSessionId: sessionId },
+      context: {
+        agentId,
+        transport: runtime.transport,
+        sessionBindings: sessionBindingRegistry,
+        sessionOwnership,
+        onSessionDiscovered,
+        supportsCapability: (path) =>
+          inventorySupportsRequiredCapability(runtime.capabilityInventory, path),
+      },
+    })
   }
 
   const requireBoundSession = (
@@ -932,7 +920,7 @@ export const createAcpSupervisor = ({
       const closeSupported = inventoryAdvertisesSessionClose(runtime?.capabilityInventory)
       if (!closeSupported) {
         sessionBindingRegistry.unbind({ acpSessionId: session.acpSessionId })
-        acpSessionAgentIds.delete(session.acpSessionId)
+        sessionOwnership.forget({ acpSessionId: session.acpSessionId })
         continue
       }
 
@@ -959,7 +947,7 @@ export const createAcpSupervisor = ({
   }): void => {
     sessions.forEach((session) => {
       sessionBindingRegistry.unbind({ acpSessionId: session.acpSessionId })
-      acpSessionAgentIds.delete(session.acpSessionId)
+      sessionOwnership.forget({ acpSessionId: session.acpSessionId })
     })
   }
 
@@ -967,7 +955,7 @@ export const createAcpSupervisor = ({
     workspaceRoot: string,
   ): ReadonlyArray<LiveWorkspaceSession> =>
     sessionBindingRegistry.listByWorkspaceRoot(workspaceRoot).flatMap((binding) => {
-      const agentId = acpSessionAgentIds.get(binding.acpSessionId)
+      const agentId = sessionOwnership.ownerOf(binding.acpSessionId)
       if (agentId === undefined) {
         return []
       }

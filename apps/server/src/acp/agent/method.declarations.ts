@@ -1,4 +1,4 @@
-import { AgentMethodDeclaration, AgentMethodName, CapabilityPath } from "./models"
+import { AgentMethodDeclaration, AgentMethodName, CapabilityPath } from "./method"
 import { sessionCancelDeclaration } from "./session.cancel"
 import { sessionCloseDeclaration } from "./session.close"
 import { sessionListDeclaration } from "./session.list"

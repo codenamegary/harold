@@ -5,7 +5,7 @@ import {
   AgentMethodHandler,
   AgentMethodName,
   AgentMethodRegistration,
-} from "./models"
+} from "./method"
 
 type HandlersByMethod = {
   [M in AgentMethodName]: Map<AgentFilter, AgentMethodHandler<M>>

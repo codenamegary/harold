@@ -1,4 +1,4 @@
-import { AgentMethodDeclaration, RequiredCapabilityPath } from "./models"
+import { AgentMethodDeclaration, RequiredCapabilityPath } from "./method"
 
 export const sessionListMethod = "session/list"
 

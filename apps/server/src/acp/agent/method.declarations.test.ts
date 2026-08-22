@@ -3,7 +3,7 @@ import {
   agentMethodDeclarations,
   createAgentMethodDeclarations,
 } from "./method.declarations"
-import { agentMethodNames, requiredCapabilityPaths } from "./models"
+import { agentMethodNames, requiredCapabilityPaths } from "./method"
 import { sessionCancelRequires } from "./session.cancel"
 import { sessionCloseRequires } from "./session.close"
 import { sessionListRequires } from "./session.list"

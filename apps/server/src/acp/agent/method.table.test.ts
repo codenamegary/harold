@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { createAgentMethodTable } from "./method.table"
-import { ANY_AGENT, AgentMethodHandler } from "./models"
+import { ANY_AGENT, AgentMethodHandler } from "./method"
 
 const closeHandler = (reason: string): AgentMethodHandler<"session/close"> => {
   return async () => ({ ok: false, reason })

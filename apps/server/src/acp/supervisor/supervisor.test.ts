@@ -6,9 +6,9 @@ import {
   inventoryAdvertisesSessionList,
   inventoryEntry,
 } from "../agent/inventory"
-import { createAcpSupervisor } from "./acp-supervisor"
+import { createAcpSupervisor } from "./supervisor"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
-import { SpawnedAgentProcess } from "./spawn-agent-process"
+import { SpawnedAgentProcess } from "./spawn.agent.process"
 
 const createMockTransport = () => {
   const handlers = new Map<string, (params: unknown) => unknown>()
@@ -645,6 +645,81 @@ describe("createAcpSupervisor", () => {
     expect(inventoryAdvertisesSessionList(opencodeInventory)).toBe(true)
   })
 
+  test("does not route an unknown session owner to another ready agent", async () => {
+    const cursorMock = createMockTransport()
+    cursorMock.setHandler("initialize", () => ({
+      agentCapabilities: {
+        loadSession: true,
+        sessionCapabilities: { close: false, list: {} },
+      },
+    }))
+    cursorMock.setHandler("authenticate", () => ({}))
+    cursorMock.setHandler("session/new", () => ({ sessionId: "owned-sess" }))
+    cursorMock.setHandler("session/load", () => ({ sessionId: "owned-sess" }))
+
+    const opencodeMock = createMockTransport()
+    opencodeMock.setHandler("initialize", () => ({
+      agentCapabilities: {
+        loadSession: true,
+        sessionCapabilities: { close: false, list: {} },
+      },
+    }))
+    opencodeMock.setHandler("authenticate", () => ({}))
+    let opencodeLoadCalls = 0
+    opencodeMock.setHandler("session/load", () => {
+      opencodeLoadCalls += 1
+      return { sessionId: "wrong-agent-sess" }
+    })
+
+    const transportsByPath = new Map<string, JsonRpcTransport>([
+      ["/bin/cursor", cursorMock.transport],
+      ["/bin/opencode", opencodeMock.transport],
+    ])
+    const spawnedPaths: string[] = []
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/cursor" },
+        { id: "opencode", enabled: true, path: "/bin/opencode" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: ({ executablePath }) => {
+        spawnedPaths.push(executablePath)
+        return createMockProcess()
+      },
+      createTransportFn: () => {
+        const path = spawnedPaths.at(-1)
+        const transport = path === undefined ? undefined : transportsByPath.get(path)
+        if (transport === undefined) {
+          throw new Error(`missing transport for ${path}`)
+        }
+        return transport
+      },
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    await supervisor.start("opencode")
+
+    const owned = await supervisor.createAcpSession({
+      agentId: "cursor",
+      workspaceCwd: "/tmp/ws",
+      sessionId: "sess_owned",
+      workspaceId: "ws_owned",
+    })
+    expect(owned.ok).toBe(true)
+
+    const unownedLoad = await supervisor.loadAcpSession({
+      acpSessionId: "orphan-sess",
+      workspaceCwd: "/tmp/ws",
+      sessionId: "sess_orphan",
+      workspaceId: "ws_orphan",
+    })
+
+    expect(unownedLoad).toEqual({ ok: false, reason: "ACP supervisor is not ready" })
+    expect(opencodeLoadCalls).toBe(0)
+  })
+
   test("handleAgentDisabled stops one agent without stopping another", async () => {
     const cursorMock = createMockTransport()
     cursorMock.setHandler("initialize", () => ({
@@ -1098,6 +1173,45 @@ describe("createAcpSupervisor", () => {
       prompt: [{ type: "text", text: "hello" }],
     })
 
+    expect(result).toEqual({ ok: false, reason: "ACP supervisor is not ready" })
+  })
+
+  test("promptAcpSession rejects unbound sessions with a known owner", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+    mock.setHandler("session/new", () => ({ sessionId: "acp-session-unbound" }))
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: () => createMockProcess(),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    const created = await supervisor.createAcpSession({
+      workspaceCwd: "/tmp/ws",
+      sessionId: "sess_test",
+      workspaceId: "ws_test",
+    })
+    expect(created.ok).toBe(true)
+    if (!created.ok) {
+      return
+    }
+
+    supervisor.getSessionBindingRegistry().unbind({ acpSessionId: created.acpSessionId })
+
+    const result = await supervisor.promptAcpSession({
+      acpSessionId: created.acpSessionId,
+      prompt: [{ type: "text", text: "hello" }],
+    })
+
     expect(result).toEqual({ ok: false, reason: "Session is not bound" })
   })
 
@@ -1196,6 +1310,42 @@ describe("createAcpSupervisor", () => {
     await supervisor.start("cursor")
 
     const result = await supervisor.cancelAcpSession({ acpSessionId: "missing-session" })
+
+    expect(result).toEqual({ ok: false, reason: "ACP supervisor is not ready" })
+  })
+
+  test("cancelAcpSession rejects unbound sessions with a known owner", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+    mock.setHandler("session/new", () => ({ sessionId: "acp-session-unbound-cancel" }))
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: () => createMockProcess(),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    const created = await supervisor.createAcpSession({
+      workspaceCwd: "/tmp/ws",
+      sessionId: "sess_test",
+      workspaceId: "ws_test",
+    })
+    expect(created.ok).toBe(true)
+    if (!created.ok) {
+      return
+    }
+
+    supervisor.getSessionBindingRegistry().unbind({ acpSessionId: created.acpSessionId })
+
+    const result = await supervisor.cancelAcpSession({ acpSessionId: created.acpSessionId })
 
     expect(result).toEqual({ ok: false, reason: "Session is not bound" })
   })
