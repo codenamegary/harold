@@ -81,7 +81,7 @@ prune_remote() {
 
   local encoded_dir
   encoded_dir="$(encode_path "$REMOTE_PATH")"
-  local list_url="${FS_URL}/${encoded_dir}/?ls=t"
+  local list_url="${FS_URL}/${encoded_dir}/?ls"
   local delete_paths
   delete_paths="$(
     curl -fsS \
@@ -99,11 +99,11 @@ keep = int(os.environ["FS_KEEP_RECENT"])
 remote_path = os.environ["REMOTE_PATH"].strip("/")
 group_re = re.compile(r"^(\d{8}-\d{6})")
 
+listing = json.load(sys.stdin)
+names = [entry["href"] for entry in listing.get("files", []) if entry.get("href")]
+
 groups: dict[str, list[str]] = {}
-for raw in sys.stdin:
-    name = raw.strip()
-    if not name:
-        continue
+for name in names:
     match = group_re.match(name)
     key = match.group(1) if match else name
     groups.setdefault(key, []).append(name)
