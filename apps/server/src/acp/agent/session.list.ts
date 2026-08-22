@@ -16,6 +16,7 @@ export const sessionListRequires: RequiredCapabilityPath = "sessionCapabilities.
 export const sessionListDeclaration: AgentMethodDeclaration = {
   method: sessionListMethod,
   requires: sessionListRequires,
+  transportKind: "request",
 }
 
 const nowIso = (): string => new Date().toISOString()

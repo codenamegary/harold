@@ -16,6 +16,7 @@ export const sessionCloseRequires: RequiredCapabilityPath = "sessionCapabilities
 export const sessionCloseDeclaration: AgentMethodDeclaration = {
   method: sessionCloseMethod,
   requires: sessionCloseRequires,
+  transportKind: "request",
 }
 
 const sanitizeCloseFailureReason = (error: unknown, fallback: string): string => {

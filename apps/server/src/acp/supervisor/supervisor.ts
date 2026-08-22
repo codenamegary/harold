@@ -4,9 +4,12 @@ import { sanitizeAcpRejection } from "../sanitize-acp-error"
 import { buildCapabilityInventory, CapabilityInventory } from "../agent/inventory"
 import { agentMethodDeclarations } from "../agent/method.declarations"
 import { createAgentMethodTable } from "../agent/method.table"
+import { registerSessionCancelHandler } from "../agent/session.cancel"
 import { registerSessionCloseHandler } from "../agent/session.close"
 import { registerSessionListHandler } from "../agent/session.list"
 import { registerSessionLoadHandler } from "../agent/session.load"
+import { registerSessionNewHandler } from "../agent/session.new"
+import { registerSessionPromptHandler } from "../agent/session.prompt"
 import { createSessionOwnership } from "../agent/session.ownership"
 import {
   AgentSettingsReader,
@@ -29,12 +32,11 @@ import {
   LiveWorkspaceSession,
 } from "./models"
 import { isAcpJsonRpcError } from "../transport/json-rpc-error"
-import { AcpOperationContext, createJsonRpcTransport, JsonRpcTransport } from "../transport/json-rpc-transport"
+import { createJsonRpcTransport, JsonRpcTransport } from "../transport/json-rpc-transport"
 import { registerAcpClientHandlers, createUnavailableRequestExtensionRpc, createUnavailableRequestPermission } from "../client/register-handlers"
 import { resolveExtensionHandlers } from "../client/extensions/extension.handlers"
 import { createSessionBindingRegistry } from "../client/session-binding-registry"
 import { spawnAgentProcess, SpawnedAgentProcess } from "./spawn.agent.process"
-import { createTurnId } from "../../session/create.turn.id"
 import {
   inventoryAdvertisesSessionClose,
   inventoryAdvertisesSessionList,
@@ -169,6 +171,9 @@ export const createAcpSupervisor = ({
   registerSessionCloseHandler(agentMethodTable)
   registerSessionLoadHandler(agentMethodTable)
   registerSessionListHandler(agentMethodTable)
+  registerSessionNewHandler(agentMethodTable)
+  registerSessionPromptHandler(agentMethodTable)
+  registerSessionCancelHandler(agentMethodTable)
   const runtimes = new Map<AgentId, SupervisorRuntime>()
 
   const unbindAgentSessions = (agentId: AgentId) => {
@@ -506,35 +511,23 @@ export const createAcpSupervisor = ({
       return { ok: false, reason: "ACP supervisor is not ready" }
     }
 
-    const operationContext: AcpOperationContext = {
-      sessionId,
-      workspaceId,
-      phase: "live",
+    const handler = agentMethodTable.resolve({ agentId: resolvedAgentId, method: "session/new" })
+    if (handler === undefined) {
+      return { ok: false, reason: "Agent does not support session/new" }
     }
 
-    try {
-      const result = await runtime.transport.request<{ sessionId: string }>(
-        "session/new",
-        {
-          cwd: workspaceCwd,
-          mcpServers: [],
-        },
-        operationContext,
-      )
-
-      rememberAcpSession(resolvedAgentId, result.sessionId)
-      sessionBindingRegistry.bind({
-        acpSessionId: result.sessionId,
-        sessionId,
-        workspaceId,
-        workspaceRoot: workspaceCwd,
-        phase: "live",
-      })
-
-      return { ok: true, acpSessionId: result.sessionId }
-    } catch (error: unknown) {
-      return { ok: false, reason: sanitizeFailureReason(error, "session/new failed") }
-    }
+    return handler({
+      params: { workspaceCwd, sessionId, workspaceId },
+      context: {
+        agentId: resolvedAgentId,
+        transport: runtime.transport,
+        sessionBindings: sessionBindingRegistry,
+        sessionOwnership,
+        onSessionDiscovered,
+        supportsCapability: (path) =>
+          inventorySupportsRequiredCapability(runtime.capabilityInventory, path),
+      },
+    })
   }
 
   const createSession = async ({
@@ -549,29 +542,28 @@ export const createAcpSupervisor = ({
       return { ok: false, reason: "ACP supervisor is not ready" }
     }
 
-    try {
-      const result = await runtime.transport.request<{ sessionId: string }>("session/new", {
-        cwd,
-        mcpServers: [],
-      })
-
-      rememberAcpSession(agentId, result.sessionId)
-      sessionBindingRegistry.bind({
-        acpSessionId: result.sessionId,
-        sessionId: result.sessionId,
-        workspaceId: result.sessionId,
-        workspaceRoot: cwd,
-        phase: "live",
-      })
-      onSessionDiscovered({
-        agentId,
-        sessionId: result.sessionId,
-        cwd,
-      })
-      return { ok: true, acpSessionId: result.sessionId }
-    } catch (error: unknown) {
-      return { ok: false, reason: sanitizeFailureReason(error, "session/new failed") }
+    const handler = agentMethodTable.resolve({ agentId, method: "session/new" })
+    if (handler === undefined) {
+      return { ok: false, reason: "Agent does not support session/new" }
     }
+
+    return handler({
+      params: {
+        workspaceCwd: cwd,
+        sessionId: "",
+        workspaceId: "",
+        discoverOnCreate: true,
+      },
+      context: {
+        agentId,
+        transport: runtime.transport,
+        sessionBindings: sessionBindingRegistry,
+        sessionOwnership,
+        onSessionDiscovered,
+        supportsCapability: (path) =>
+          inventorySupportsRequiredCapability(runtime.capabilityInventory, path),
+      },
+    })
   }
 
   const listAcpSessions = async (params?: {
@@ -714,17 +706,6 @@ export const createAcpSupervisor = ({
     })
   }
 
-  const requireBoundSession = (
-    acpSessionId: string,
-  ): { ok: true; binding: NonNullable<ReturnType<typeof sessionBindingRegistry.getBinding>> } | { ok: false; reason: string } => {
-    const binding = sessionBindingRegistry.getBinding(acpSessionId)
-    if (binding === undefined) {
-      return { ok: false as const, reason: "Session is not bound" }
-    }
-
-    return { ok: true as const, binding }
-  }
-
   const startPromptAcpSession = async ({
     acpSessionId,
     prompt,
@@ -737,45 +718,23 @@ export const createAcpSupervisor = ({
       return { ok: false, reason: "ACP supervisor is not ready" }
     }
 
-    const bound = requireBoundSession(acpSessionId)
-    if (!bound.ok) {
-      return bound
+    const handler = agentMethodTable.resolve({ agentId: runtime.agentId, method: "session/prompt" })
+    if (handler === undefined) {
+      return { ok: false, reason: "Agent does not support session/prompt" }
     }
 
-    const turnId = createTurnId()
-    const promptRequestId = runtime.transport.allocateRequestId()
-    const operationContext: AcpOperationContext = {
-      sessionId: bound.binding.sessionId,
-      workspaceId: bound.binding.workspaceId,
-      turnId,
-      phase: bound.binding.phase,
-    }
-
-    sessionBindingRegistry.setActiveTurnId({ acpSessionId, turnId })
-
-    const transport = runtime.transport
-    const completion = (async (): Promise<AcpSessionPromptResult> => {
-      try {
-        const result = await transport.request(
-          "session/prompt",
-          {
-            sessionId: acpSessionId,
-            prompt,
-          },
-          operationContext,
-          { requestId: promptRequestId },
-        )
-
-        sessionBindingRegistry.setActiveTurnId({ acpSessionId, turnId: undefined })
-        return { ok: true, result }
-      } catch (error: unknown) {
-        const reason = sanitizeFailureReason(error, "session/prompt failed")
-        sessionBindingRegistry.setActiveTurnId({ acpSessionId, turnId: undefined })
-        return { ok: false, reason }
-      }
-    })()
-
-    return { ok: true, turnId, completion }
+    return handler({
+      params: { acpSessionId, prompt },
+      context: {
+        agentId: runtime.agentId,
+        transport: runtime.transport,
+        sessionBindings: sessionBindingRegistry,
+        sessionOwnership,
+        onSessionDiscovered,
+        supportsCapability: (path) =>
+          inventorySupportsRequiredCapability(runtime.capabilityInventory, path),
+      },
+    })
   }
 
   const promptAcpSession = async ({
@@ -803,17 +762,23 @@ export const createAcpSupervisor = ({
       return { ok: false, reason: "ACP supervisor is not ready" }
     }
 
-    const bound = requireBoundSession(acpSessionId)
-    if (!bound.ok) {
-      return bound
+    const handler = agentMethodTable.resolve({ agentId: runtime.agentId, method: "session/cancel" })
+    if (handler === undefined) {
+      return { ok: false, reason: "Agent does not support session/cancel" }
     }
 
-    try {
-      runtime.transport.notify("session/cancel", { sessionId: acpSessionId })
-      return { ok: true }
-    } catch (error: unknown) {
-      return { ok: false, reason: sanitizeFailureReason(error, "session/cancel failed") }
-    }
+    return handler({
+      params: { acpSessionId },
+      context: {
+        agentId: runtime.agentId,
+        transport: runtime.transport,
+        sessionBindings: sessionBindingRegistry,
+        sessionOwnership,
+        onSessionDiscovered,
+        supportsCapability: (path) =>
+          inventorySupportsRequiredCapability(runtime.capabilityInventory, path),
+      },
+    })
   }
 
   const ensureSupervisorReadyForAgent = async (agentId: AgentId): Promise<boolean> => {
