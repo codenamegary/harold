@@ -8,6 +8,9 @@
 #   LOCAL_PATH   File or directory to upload
 #   REMOTE_PATH  Destination path under the server root (no leading slash)
 #                Directory uploads preserve relative paths under REMOTE_PATH.
+#   FS_KEEP_RECENT  Optional. After upload, delete older remote files so only
+#                   this many build groups remain. Groups files by timestamp
+#                   prefix (YYYYMMDD-HHMMSS) when filenames match that pattern.
 
 set -euo pipefail
 
@@ -70,10 +73,76 @@ fi
 
 echo "Uploaded to ${FS_URL}/${REMOTE_PATH}/"
 
+prune_remote() {
+  local keep="${FS_KEEP_RECENT:-}"
+  if [[ -z "$keep" || ! "$keep" =~ ^[0-9]+$ ]]; then
+    return 0
+  fi
+
+  local encoded_dir
+  encoded_dir="$(encode_path "$REMOTE_PATH")"
+  local list_url="${FS_URL}/${encoded_dir}/?ls=t"
+  local delete_paths
+  delete_paths="$(
+    curl -fsS \
+      --retry 3 \
+      --retry-all-errors \
+      -u "${FS_USER}:${FS_PASSWORD}" \
+      "$list_url" \
+      | FS_KEEP_RECENT="$keep" REMOTE_PATH="$REMOTE_PATH" python3 -c '
+import json
+import os
+import re
+import sys
+
+keep = int(os.environ["FS_KEEP_RECENT"])
+remote_path = os.environ["REMOTE_PATH"].strip("/")
+group_re = re.compile(r"^(\d{8}-\d{6})")
+
+groups: dict[str, list[str]] = {}
+for raw in sys.stdin:
+    name = raw.strip()
+    if not name:
+        continue
+    match = group_re.match(name)
+    key = match.group(1) if match else name
+    groups.setdefault(key, []).append(name)
+
+stale: list[str] = []
+for key in sorted(groups.keys(), reverse=True)[keep:]:
+    for name in groups[key]:
+        stale.append(f"/{remote_path}/{name}")
+
+print(json.dumps(stale))
+'
+  )"
+
+  if [[ "$delete_paths" == "[]" ]]; then
+    echo "No remote files to prune (keeping ${keep} most recent build groups)"
+    return 0
+  fi
+
+  echo "Pruning older remote files (keeping ${keep} most recent build groups)"
+  curl -fsS \
+    --retry 3 \
+    --retry-all-errors \
+    -u "${FS_USER}:${FS_PASSWORD}" \
+    -X POST \
+    -H "Content-Type: application/json" \
+    -d "$delete_paths" \
+    "${FS_URL}/?delete" >/dev/null
+}
+
+prune_remote
+
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "## Uploaded to fs"
     echo ""
     echo "Remote: [\`${REMOTE_PATH}\`](${FS_URL}/${REMOTE_PATH}/)"
+    if [[ -n "${FS_KEEP_RECENT:-}" ]]; then
+      echo ""
+      echo "Retention: ${FS_KEEP_RECENT} most recent build groups"
+    fi
   } >>"$GITHUB_STEP_SUMMARY"
 fi

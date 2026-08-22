@@ -19,7 +19,7 @@ sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 Run from this directory (`apps/android`):
 
 ```sh
-./gradlew --no-daemon --stacktrace --warning-mode=all lintRelease testDebugUnitTest assembleDebug assembleRelease
+./gradlew --no-daemon --stacktrace --warning-mode=all lintRelease testDebugUnitTest assembleRelease
 ```
 
 Install a debug build on a connected device or emulator:

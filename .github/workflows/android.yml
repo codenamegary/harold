@@ -37,21 +37,27 @@ jobs:
       - name: Install SDK packages
         run: sdkmanager "platform-tools" "platforms;android-36" "platforms;android-37.0" "build-tools;36.0.0"
 
-      - name: Android checks
-        run: ./gradlew --no-daemon --stacktrace --warning-mode=all lintRelease testDebugUnitTest assembleDebug assembleRelease
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: Upload APKs to fs
+      - name: Android checks
+        run: ./gradlew --no-daemon --stacktrace lintRelease testDebugUnitTest
+
+      - name: Build release APK
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: ./gradlew --no-daemon --stacktrace assembleRelease
+
+      - name: Upload release APK to fs
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: .
         env:
           FS_URL: ${{ secrets.FS_URL }}
           FS_USER: ${{ secrets.FS_USER }}
           FS_PASSWORD: ${{ secrets.FS_PASSWORD }}
+          FS_KEEP_RECENT: "10"
         run: |
           stamp=$(date -u +%Y%m%d-%H%M%S)
           mkdir -p staged
-          cp apps/android/app/build/outputs/apk/debug/app-debug.apk \
-            "staged/${stamp}-debug-app.apk"
           cp apps/android/app/build/outputs/apk/release/app-release-unsigned.apk \
             "staged/${stamp}-release-app.apk"
           export LOCAL_PATH=staged
