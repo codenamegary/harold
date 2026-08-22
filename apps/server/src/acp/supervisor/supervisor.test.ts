@@ -6,9 +6,9 @@ import {
   inventoryAdvertisesSessionList,
   inventoryEntry,
 } from "../agent/inventory"
-import { createAcpSupervisor } from "./acp-supervisor"
+import { createAcpSupervisor } from "./supervisor"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
-import { SpawnedAgentProcess } from "./spawn-agent-process"
+import { SpawnedAgentProcess } from "./spawn.agent.process"
 
 const createMockTransport = () => {
   const handlers = new Map<string, (params: unknown) => unknown>()

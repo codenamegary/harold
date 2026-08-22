@@ -1,5 +1,11 @@
 import { AgentId } from "contracts/http/agent-settings"
-import { SessionOwnership } from "./models"
+
+export type SessionOwnership = {
+  remember: (params: { agentId: AgentId; acpSessionId: string }) => void
+  forget: (params: { acpSessionId: string }) => void
+  ownerOf: (acpSessionId: string) => AgentId | undefined
+  sessionsOwnedBy: (agentId: AgentId) => ReadonlyArray<string>
+}
 
 export const createSessionOwnership = (): SessionOwnership => {
   const ownersByAcpSessionId = new Map<string, AgentId>()

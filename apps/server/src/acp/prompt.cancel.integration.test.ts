@@ -8,8 +8,8 @@ import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
-import { createAcpSupervisor } from "./supervisor/acp-supervisor"
-import { SpawnedAgentProcess } from "./supervisor/spawn-agent-process"
+import { createAcpSupervisor } from "./supervisor/supervisor"
+import { SpawnedAgentProcess } from "./supervisor/spawn.agent.process"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
 
 const tempDirs: string[] = []

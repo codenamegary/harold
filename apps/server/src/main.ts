@@ -33,7 +33,7 @@ const main = async () => {
   })
   const logStream =
     applied.logPath === null
-      ? undefined
+      ? process.stdout
       : createWriteStream(applied.logPath, { flags: "a" })
   const runtime = createRuntime(packageJson.version)
   const { app, acpSupervisor, runtimeStatusService } = await createServer({

@@ -10,6 +10,7 @@ import {
   SessionDiscoveredHandler,
 } from "../supervisor/models"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
+import { SessionOwnership } from "./session.ownership"
 
 export const ANY_AGENT = "*"
 
@@ -41,13 +42,6 @@ export type AgentMethodDeclaration = {
   requires: RequiredCapabilityPath | null
 }
 
-export type SessionOwnership = {
-  remember: (params: { agentId: AgentId; acpSessionId: string }) => void
-  forget: (params: { acpSessionId: string }) => void
-  ownerOf: (acpSessionId: string) => AgentId | undefined
-  sessionsOwnedBy: (agentId: AgentId) => ReadonlyArray<string>
-}
-
 export type AgentMethodHandlerContext = {
   agentId: AgentId
   transport: JsonRpcTransport
@@ -59,11 +53,11 @@ export type AgentMethodHandlerContext = {
 
 export type AgentMethodSignatures = {
   "session/new": {
-    params: { workspaceCwd: string; sessionId: string; workspaceId: string }
+    params: { workspaceCwd: string, sessionId: string, workspaceId: string }
     result: AcpSessionOperationResult
   }
   "session/prompt": {
-    params: { acpSessionId: string; prompt: unknown }
+    params: { acpSessionId: string, prompt: unknown }
     result: AcpSessionPromptStartResult
   }
   "session/cancel": {

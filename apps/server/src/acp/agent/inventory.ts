@@ -1,6 +1,6 @@
 import { knownCapabilityPaths } from "./capabilities"
 import { AgentMethodDeclarationReader } from "./method.declarations"
-import { AgentMethodName, CapabilityPath, RequiredCapabilityPath } from "./models"
+import { AgentMethodName, CapabilityPath, RequiredCapabilityPath } from "./method"
 
 export type CapabilityAgentInfo = {
   name: string

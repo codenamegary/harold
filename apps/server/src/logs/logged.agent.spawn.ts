@@ -2,7 +2,7 @@ import { LogBuffer } from "./log.buffer"
 import {
   spawnAgentProcess,
   SpawnAgentProcessFn,
-} from "../acp/supervisor/spawn-agent-process"
+} from "../acp/supervisor/spawn.agent.process"
 
 export const createLoggedAgentSpawn = (logBuffer: LogBuffer): SpawnAgentProcessFn =>
   (input) =>

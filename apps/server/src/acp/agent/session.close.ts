@@ -7,7 +7,7 @@ import {
   AgentMethodDeclaration,
   AgentMethodHandler,
   RequiredCapabilityPath,
-} from "./models"
+} from "./method"
 
 export const sessionCloseMethod = "session/close"
 

@@ -31,7 +31,7 @@ import { AcpOperationContext, createJsonRpcTransport, JsonRpcTransport } from ".
 import { registerAcpClientHandlers, createUnavailableRequestExtensionRpc, createUnavailableRequestPermission } from "../client/register-handlers"
 import { resolveExtensionHandlers } from "../client/extensions/extension.handlers"
 import { createSessionBindingRegistry } from "../client/session-binding-registry"
-import { spawnAgentProcess, SpawnedAgentProcess } from "./spawn-agent-process"
+import { spawnAgentProcess, SpawnedAgentProcess } from "./spawn.agent.process"
 import { createTurnId } from "../../session/create.turn.id"
 import {
   inventoryAdvertisesResumable,

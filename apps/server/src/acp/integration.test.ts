@@ -8,7 +8,7 @@ import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
-import { SpawnedAgentProcess } from "./supervisor/spawn-agent-process"
+import { SpawnedAgentProcess } from "./supervisor/spawn.agent.process"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
 import { createAgentSettingsRepository } from "../agent-settings/agent-settings-repository"
 import {

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { defaultClientCapabilities } from "../catalog/agent.profile.override"
 import { AgentProfile } from "../agent-profile"
-import { buildAgentSpawnCommand, spawnAgentProcess } from "./spawn-agent-process"
+import { buildAgentSpawnCommand, spawnAgentProcess } from "./spawn.agent.process"
 
 const cursorProfile: AgentProfile = {
   id: "cursor",

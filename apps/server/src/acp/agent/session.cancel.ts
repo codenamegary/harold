@@ -1,4 +1,4 @@
-import { AgentMethodDeclaration } from "./models"
+import { AgentMethodDeclaration } from "./method"
 
 export const sessionCancelMethod = "session/cancel"
 

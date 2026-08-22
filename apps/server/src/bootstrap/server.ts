@@ -32,9 +32,9 @@ import { registerConnectionTestRoutes } from "../connection-test/routes"
 import { createRuntimeStatusService } from "../runtime/status.service"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
-import { createAcpSupervisor } from "../acp/supervisor/acp-supervisor"
+import { createAcpSupervisor } from "../acp/supervisor/supervisor"
 import { AcpSupervisor } from "../acp/supervisor/models"
-import { SpawnAgentProcessFn } from "../acp/supervisor/spawn-agent-process"
+import { SpawnAgentProcessFn } from "../acp/supervisor/spawn.agent.process"
 import { registerSessionStreamRoutes } from "../session/stream.routes"
 import { createLogBuffer } from "../logs/log.buffer"
 import { createLogSinkStream } from "../logs/log.sink.stream"
@@ -143,7 +143,7 @@ export const createServer = async ({
   const logBuffer = createLogBuffer()
   const logSink = createLogSinkStream({
     buffer: logBuffer,
-    downstream: logStream ?? process.stdout,
+    downstream: logStream,
   })
   const app = Fastify({
     logger: buildLoggerOptions({ logStream: logSink, logLevel }),
