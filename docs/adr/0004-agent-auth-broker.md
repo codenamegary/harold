@@ -277,6 +277,293 @@ sequenceDiagram
   Broker-->>Device: cancelled or failed
 ```
 
+## Type sketch (ideal shape)
+
+Not shipped code. Target shapes for `packages/contracts` (wire) and
+`apps/server/src/acp/auth/` (broker). Names may shift at implement time.
+No semicolons. Prefer readonly fields and discriminated unions.
+
+### Wire: status, methods, steps, actions
+
+```ts
+type AgentId = string
+
+type AgentAuthStatus =
+  | "unknown"
+  | "needs_auth"
+  | "authenticated"
+  | "error"
+
+/** Badge fields on GET /v1/settings/agents items */
+type AgentAuthSummary = {
+  readonly status: AgentAuthStatus
+  readonly error: string | null
+  readonly activeSessionId: string | null
+  readonly canLogout: boolean
+}
+
+type AgentAuthMethodAvailability =
+  | { readonly kind: "available" }
+  | {
+      readonly kind: "disabled"
+      readonly reason: string
+      /** e.g. open Host settings for headless browser */
+      readonly remediation: "host_browser" | "none"
+    }
+
+type AgentAuthMethod = {
+  readonly methodId: string
+  readonly title: string
+  readonly description: string
+  readonly availability: AgentAuthMethodAvailability
+}
+
+type AuthSessionStatus =
+  | "in_progress"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+
+type AuthStep =
+  | {
+      readonly type: "choose_method"
+      readonly methods: readonly AgentAuthMethod[]
+    }
+  | {
+      readonly type: "open_url"
+      readonly title: string
+      readonly url: string
+      readonly caption: string | null
+    }
+  | {
+      readonly type: "paste_secret"
+      readonly stepId: string
+      readonly label: string
+      readonly placeholder: string | null
+      readonly secretKind: "api_key" | "oauth_token" | "otp" | "other"
+    }
+  | {
+      readonly type: "confirm"
+      readonly stepId: string
+      readonly title: string
+      readonly body: string
+      readonly confirmLabel: string
+    }
+  | {
+      readonly type: "show_message"
+      readonly level: "info" | "error"
+      readonly body: string
+    }
+  | { readonly type: "working"; readonly label: string }
+  | {
+      readonly type: "done"
+      readonly outcome: "succeeded" | "failed" | "cancelled"
+      readonly message: string | null
+    }
+
+/** Secrets only appear here, never on AuthStep or WS payloads */
+type AuthSessionAction =
+  | { readonly type: "select_method"; readonly methodId: string }
+  | {
+      readonly type: "submit_secret"
+      readonly stepId: string
+      readonly value: string
+    }
+  | { readonly type: "confirm"; readonly stepId: string }
+  | { readonly type: "ack_open_url"; readonly stepId?: string }
+  | { readonly type: "cancel" }
+
+type AgentAuthSession = {
+  readonly sessionId: string
+  readonly agentId: AgentId
+  readonly status: AuthSessionStatus
+  readonly methodId: string | null
+  readonly steps: readonly AuthStep[]
+  readonly error: string | null
+}
+
+/** Full auth resource: GET /v1/agents/:agentId/auth */
+type AgentAuthResource = {
+  readonly agentId: AgentId
+  readonly status: AgentAuthStatus
+  readonly error: string | null
+  readonly methods: readonly AgentAuthMethod[]
+  readonly session: AgentAuthSession | null
+  readonly hostBrowser: HostBrowserStatus
+}
+```
+
+### HostBrowser capability
+
+```ts
+type HostBrowserStatus =
+  | { readonly state: "missing" }
+  | { readonly state: "installing" }
+  | { readonly state: "ready" }
+  | { readonly state: "error"; readonly message: string }
+
+type HostBrowser = {
+  status: () => HostBrowserStatus
+  /** One context per auth session when an adapter needs automation */
+  openContext: (input: {
+    readonly ownerSessionId: string
+  }) => Promise<HostBrowserContext>
+}
+
+type HostBrowserContext = {
+  readonly ownerSessionId: string
+  navigate: (url: string) => Promise<void>
+  /** Adapter-defined; library TBD */
+  readNeededInputs: () => Promise<readonly BrowserNeededInput[]>
+  fill: (input: {
+    readonly fieldId: string
+    readonly value: string
+  }) => Promise<void>
+  dispose: () => Promise<void>
+}
+
+type BrowserNeededInput = {
+  readonly fieldId: string
+  readonly label: string
+  readonly secretKind: "api_key" | "oauth_token" | "otp" | "other"
+}
+```
+
+### Adapter contract
+
+```ts
+type AuthCompletionPolicy = "reconnect" | "reuse_process"
+
+type AdapterAuthContext = {
+  readonly agentId: AgentId
+  readonly hostIdentity: { readonly id: "default" }
+  readonly hostBrowser: HostBrowser
+  /** Last initialize result, if the agent process is up */
+  readonly initializeResult: unknown | null
+}
+
+type AuthAdapter = {
+  readonly id: string
+  /** Which catalog / custom agent ids this adapter owns */
+  matches: (agentId: AgentId) => boolean
+
+  clientAuthCapabilities: (
+    ctx: AdapterAuthContext,
+  ) => Record<string, unknown>
+
+  listMethods: (
+    ctx: AdapterAuthContext,
+  ) => Promise<readonly AgentAuthMethod[]>
+
+  probe: (ctx: AdapterAuthContext) => Promise<{
+    readonly status: AgentAuthStatus
+    readonly error: string | null
+    readonly canLogout: boolean
+  }>
+
+  /** Optional ACP authenticate after initialize; never catalog fantasy ids */
+  onStart: (ctx: AdapterAuthContext) => Promise<void>
+
+  start: (
+    ctx: AdapterAuthContext,
+    input: {
+      readonly sessionId: string
+      readonly methodId: string | null
+      readonly fromChallenge: boolean
+    },
+  ) => Promise<{ readonly steps: readonly AuthStep[] }>
+
+  continue: (
+    ctx: AdapterAuthContext,
+    input: {
+      readonly sessionId: string
+      readonly action: Exclude<AuthSessionAction, { type: "cancel" }>
+    },
+  ) => Promise<{
+    readonly steps: readonly AuthStep[]
+    readonly finished: null | {
+      readonly outcome: "succeeded" | "failed"
+      readonly completionPolicy: AuthCompletionPolicy
+      readonly error: string | null
+    }
+  }>
+
+  abort: (
+    ctx: AdapterAuthContext,
+    input: { readonly sessionId: string },
+  ) => Promise<void>
+
+  logout: (
+    ctx: AdapterAuthContext,
+  ) => Promise<{ readonly completionPolicy: AuthCompletionPolicy }>
+}
+```
+
+### Broker surface
+
+```ts
+type AuthBroker = {
+  getSummary: (agentId: AgentId) => Promise<AgentAuthSummary>
+  getResource: (agentId: AgentId) => Promise<AgentAuthResource>
+
+  /** Supervisor calls after initialize (and after respawn) */
+  observeInitialize: (input: {
+    readonly agentId: AgentId
+    readonly initializeResult: unknown
+  }) => Promise<void>
+
+  ensureReadyForPrompt: (
+    agentId: AgentId,
+  ) => Promise<
+    | { readonly ok: true }
+    | { readonly ok: false; readonly status: AgentAuthStatus }
+  >
+
+  startSession: (input: {
+    readonly agentId: AgentId
+    readonly methodId?: string
+  }) => Promise<AgentAuthSession>
+
+  /** auth_required: create or return the single in-flight session */
+  ensureSessionFromChallenge: (
+    agentId: AgentId,
+  ) => Promise<AgentAuthSession>
+
+  applyAction: (input: {
+    readonly agentId: AgentId
+    readonly sessionId: string
+    readonly action: AuthSessionAction
+  }) => Promise<AgentAuthSession>
+
+  logout: (agentId: AgentId) => Promise<AgentAuthSummary>
+
+  /** Fan-out to paired devices */
+  subscribe: (
+    listener: (event: {
+      readonly agentId: AgentId
+      readonly resource: AgentAuthResource
+    }) => void,
+  ) => () => void
+}
+```
+
+### Supervisor seam
+
+```ts
+// start(agentId):
+//   spawn → initialize(adapter.clientAuthCapabilities)
+//   → adapter.onStart (optional real authenticate)
+//   → broker.observeInitialize → adapter.probe
+//   → mark ACP runtime ready even when auth summary is needs_auth
+//   → never authenticate(catalog.authMethodId)
+
+type SupervisorAuthHooks = {
+  readonly resolveAdapter: (agentId: AgentId) => AuthAdapter
+  readonly authBroker: AuthBroker
+  readonly requestRespawn: (agentId: AgentId) => Promise<void>
+}
+```
+
 ## Considered options
 
 ### Architecture shape
