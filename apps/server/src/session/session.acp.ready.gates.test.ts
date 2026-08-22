@@ -17,7 +17,7 @@ describe("capability gate helpers", () => {
   test("resumable requires loadSession value true", () => {
     const supervisor = {
       getCapabilityInventory: () =>
-        inventoryFrom({ loadSession: true, sessionCapabilities: { list: true } }),
+        inventoryFrom({ loadSession: true, sessionCapabilities: { list: {} } }),
     }
 
     expect(agentAdvertisesResumable(supervisor, "cursor")).toBe(true)
@@ -31,7 +31,7 @@ describe("capability gate helpers", () => {
     ).toBe(false)
   })
 
-  test("session close allows empty object and rejects false", () => {
+  test("session close treats empty object as supported and null as unsupported", () => {
     expect(
       agentAdvertisesSessionClose(
         {
@@ -45,14 +45,32 @@ describe("capability gate helpers", () => {
       agentAdvertisesSessionClose(
         {
           getCapabilityInventory: () =>
-            inventoryFrom({ sessionCapabilities: { close: false } }),
+            inventoryFrom({ sessionCapabilities: { close: null } }),
         },
         "cursor",
       ),
     ).toBe(false)
   })
 
-  test("session list treats any advertised value as supported including false", () => {
+  test("session list treats empty object as supported, null as unsupported, and false as supported", () => {
+    expect(
+      agentAdvertisesSessionList(
+        {
+          getCapabilityInventory: () =>
+            inventoryFrom({ sessionCapabilities: { list: {} } }),
+        },
+        "cursor",
+      ),
+    ).toBe(true)
+    expect(
+      agentAdvertisesSessionList(
+        {
+          getCapabilityInventory: () =>
+            inventoryFrom({ sessionCapabilities: { list: null } }),
+        },
+        "cursor",
+      ),
+    ).toBe(false)
     expect(
       agentAdvertisesSessionList(
         {

@@ -220,7 +220,7 @@ const handleInitialize = (request: JsonRpcRequest, config: FakeAcpConfig): Handl
     agentCapabilities: {
       loadSession: config.loadSession,
       sessionCapabilities: {
-        close: config.sessionClose,
+        ...(config.sessionClose ? { close: {} } : {}),
         ...(config.sessionList ? { list: {} } : {}),
       },
     },

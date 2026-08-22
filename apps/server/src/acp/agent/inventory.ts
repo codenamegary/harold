@@ -171,17 +171,21 @@ export const inventoryAdvertisesResumable = (
   inventory: CapabilityInventory | null | undefined,
 ): boolean => inventoryEntry(inventory, "loadSession")?.value === true
 
+const inventoryAdvertisesObjectCapability = (
+  inventory: CapabilityInventory | null | undefined,
+  path: string,
+): boolean => {
+  const found = inventoryEntry(inventory, path)
+  return found?.advertised === true && found.value !== null
+}
+
 export const inventoryAdvertisesSessionClose = (
   inventory: CapabilityInventory | null | undefined,
-): boolean => {
-  const found = inventoryEntry(inventory, "sessionCapabilities.close")
-  return found?.advertised === true && found.value !== false
-}
+): boolean => inventoryAdvertisesObjectCapability(inventory, "sessionCapabilities.close")
 
 export const inventoryAdvertisesSessionList = (
   inventory: CapabilityInventory | null | undefined,
-): boolean =>
-  inventoryEntry(inventory, "sessionCapabilities.list")?.advertised === true
+): boolean => inventoryAdvertisesObjectCapability(inventory, "sessionCapabilities.list")
 
 export const inventorySupportsRequiredCapability = (
   inventory: CapabilityInventory | null | undefined,

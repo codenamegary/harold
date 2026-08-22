@@ -181,7 +181,7 @@ describe("createAcpSupervisor", () => {
       protocolVersion: 1,
       agentCapabilities: {
         loadSession: false,
-        sessionCapabilities: { close: false },
+        sessionCapabilities: {},
       },
     }))
     mock.setHandler("authenticate", () => ({}))
@@ -240,7 +240,7 @@ describe("createAcpSupervisor", () => {
   test("stop clears the child and returns to stopped", async () => {
     const mock = createMockTransport()
     mock.setHandler("initialize", () => ({
-      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+      agentCapabilities: { loadSession: false, sessionCapabilities: {} },
     }))
     mock.setHandler("authenticate", () => ({}))
 
@@ -303,7 +303,7 @@ describe("createAcpSupervisor", () => {
   test("stop and crash clearRuntime invoke onBeforeClearRuntime before bindings drop", async () => {
     const mock = createMockTransport()
     mock.setHandler("initialize", () => ({
-      agentCapabilities: { loadSession: true, sessionCapabilities: { close: false } },
+      agentCapabilities: { loadSession: true, sessionCapabilities: {} },
     }))
     mock.setHandler("authenticate", () => ({}))
     mock.setHandler("session/new", () => ({ sessionId: "acp-bound-1" }))
@@ -373,7 +373,7 @@ describe("createAcpSupervisor", () => {
   test("unexpected exit retries spawn with bounded backoff then reaches ready", async () => {
     const mock = createMockTransport()
     mock.setHandler("initialize", () => ({
-      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+      agentCapabilities: { loadSession: false, sessionCapabilities: {} },
     }))
     mock.setHandler("authenticate", () => ({}))
 
@@ -426,7 +426,7 @@ describe("createAcpSupervisor", () => {
   test("exhausted restart backoff leaves supervisor in error until later start", async () => {
     const mock = createMockTransport()
     mock.setHandler("initialize", () => ({
-      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+      agentCapabilities: { loadSession: false, sessionCapabilities: {} },
     }))
     mock.setHandler("authenticate", () => ({}))
 
@@ -480,7 +480,7 @@ describe("createAcpSupervisor", () => {
   test("restart sets starting during backoff attempts", async () => {
     const mock = createMockTransport()
     mock.setHandler("initialize", () => ({
-      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+      agentCapabilities: { loadSession: false, sessionCapabilities: {} },
     }))
     mock.setHandler("authenticate", () => ({}))
 
@@ -525,7 +525,7 @@ describe("createAcpSupervisor", () => {
   test("dead-process exit with null code clears and restarts", async () => {
     const mock = createMockTransport()
     mock.setHandler("initialize", () => ({
-      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+      agentCapabilities: { loadSession: false, sessionCapabilities: {} },
     }))
     mock.setHandler("authenticate", () => ({}))
 
@@ -564,7 +564,7 @@ describe("createAcpSupervisor", () => {
   test("handleAgentDisabled stops a running matching agent", async () => {
     const mock = createMockTransport()
     mock.setHandler("initialize", () => ({
-      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+      agentCapabilities: { loadSession: false, sessionCapabilities: {} },
     }))
     mock.setHandler("authenticate", () => ({}))
 
@@ -589,7 +589,7 @@ describe("createAcpSupervisor", () => {
     cursorMock.setHandler("initialize", () => ({
       agentCapabilities: {
         loadSession: false,
-        sessionCapabilities: { close: false, list: {} },
+        sessionCapabilities: { list: {} },
       },
     }))
     cursorMock.setHandler("authenticate", () => ({}))
@@ -598,7 +598,7 @@ describe("createAcpSupervisor", () => {
     opencodeMock.setHandler("initialize", () => ({
       agentCapabilities: {
         loadSession: false,
-        sessionCapabilities: { close: false, list: {} },
+        sessionCapabilities: { list: {} },
       },
     }))
     opencodeMock.setHandler("authenticate", () => ({}))
@@ -650,7 +650,7 @@ describe("createAcpSupervisor", () => {
     cursorMock.setHandler("initialize", () => ({
       agentCapabilities: {
         loadSession: true,
-        sessionCapabilities: { close: false, list: {} },
+        sessionCapabilities: { list: {} },
       },
     }))
     cursorMock.setHandler("authenticate", () => ({}))
@@ -661,7 +661,7 @@ describe("createAcpSupervisor", () => {
     opencodeMock.setHandler("initialize", () => ({
       agentCapabilities: {
         loadSession: true,
-        sessionCapabilities: { close: false, list: {} },
+        sessionCapabilities: { list: {} },
       },
     }))
     opencodeMock.setHandler("authenticate", () => ({}))
@@ -725,7 +725,7 @@ describe("createAcpSupervisor", () => {
     cursorMock.setHandler("initialize", () => ({
       agentCapabilities: {
         loadSession: false,
-        sessionCapabilities: { close: false, list: {} },
+        sessionCapabilities: { list: {} },
       },
     }))
     cursorMock.setHandler("authenticate", () => ({}))
@@ -734,7 +734,7 @@ describe("createAcpSupervisor", () => {
     opencodeMock.setHandler("initialize", () => ({
       agentCapabilities: {
         loadSession: false,
-        sessionCapabilities: { close: false, list: {} },
+        sessionCapabilities: { list: {} },
       },
     }))
     opencodeMock.setHandler("authenticate", () => ({}))
@@ -787,7 +787,7 @@ describe("createAcpSupervisor", () => {
     cursorMock.setHandler("initialize", () => ({
       agentCapabilities: {
         loadSession: false,
-        sessionCapabilities: { close: false, list: {} },
+        sessionCapabilities: { list: {} },
       },
     }))
     cursorMock.setHandler("authenticate", () => ({}))
@@ -806,7 +806,7 @@ describe("createAcpSupervisor", () => {
     opencodeMock.setHandler("initialize", () => ({
       agentCapabilities: {
         loadSession: false,
-        sessionCapabilities: { close: false, list: {} },
+        sessionCapabilities: { list: {} },
       },
     }))
     opencodeMock.setHandler("authenticate", () => ({}))
@@ -965,7 +965,7 @@ describe("createAcpSupervisor", () => {
     mock.setHandler("initialize", () => ({
       agentCapabilities: {
         loadSession: false,
-        sessionCapabilities: { close: false, list: {} },
+        sessionCapabilities: { list: {} },
       },
     }))
     mock.setHandler("authenticate", () => ({}))
@@ -1000,7 +1000,7 @@ describe("createAcpSupervisor", () => {
     mock.setHandler("initialize", () => ({
       agentCapabilities: {
         loadSession: true,
-        sessionCapabilities: { close: false, list: {} },
+        sessionCapabilities: { list: {} },
       },
     }))
     mock.setHandler("authenticate", () => ({}))
@@ -1043,7 +1043,7 @@ describe("createAcpSupervisor", () => {
     mock.setHandler("initialize", () => ({
       agentCapabilities: {
         loadSession: true,
-        sessionCapabilities: { close: false, list: {} },
+        sessionCapabilities: { list: {} },
       },
     }))
     mock.setHandler("authenticate", () => ({}))
@@ -1122,7 +1122,7 @@ describe("createAcpSupervisor", () => {
   test("stop clears activeSessions to zero", async () => {
     const mock = createMockTransport()
     mock.setHandler("initialize", () => ({
-      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+      agentCapabilities: { loadSession: false, sessionCapabilities: {} },
     }))
     mock.setHandler("authenticate", () => ({}))
     mock.setHandler("session/new", () => ({ sessionId: "acp-session-2" }))
@@ -1152,7 +1152,7 @@ describe("createAcpSupervisor", () => {
   test("promptAcpSession rejects unknown sessions", async () => {
     const mock = createMockTransport()
     mock.setHandler("initialize", () => ({
-      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+      agentCapabilities: { loadSession: false, sessionCapabilities: {} },
     }))
     mock.setHandler("authenticate", () => ({}))
 
@@ -1179,7 +1179,7 @@ describe("createAcpSupervisor", () => {
   test("promptAcpSession rejects unbound sessions with a known owner", async () => {
     const mock = createMockTransport()
     mock.setHandler("initialize", () => ({
-      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+      agentCapabilities: { loadSession: false, sessionCapabilities: {} },
     }))
     mock.setHandler("authenticate", () => ({}))
     mock.setHandler("session/new", () => ({ sessionId: "acp-session-unbound" }))
@@ -1219,7 +1219,7 @@ describe("createAcpSupervisor", () => {
     const mock = createMockTransport()
     const promptCalls: unknown[] = []
     mock.setHandler("initialize", () => ({
-      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+      agentCapabilities: { loadSession: false, sessionCapabilities: {} },
     }))
     mock.setHandler("authenticate", () => ({}))
     mock.setHandler("session/new", () => ({ sessionId: "acp-session-prompt" }))
@@ -1260,7 +1260,7 @@ describe("createAcpSupervisor", () => {
   test("cancelAcpSession sends session/cancel as a notification", async () => {
     const mock = createMockTransport()
     mock.setHandler("initialize", () => ({
-      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+      agentCapabilities: { loadSession: false, sessionCapabilities: {} },
     }))
     mock.setHandler("authenticate", () => ({}))
     mock.setHandler("session/new", () => ({ sessionId: "acp-session-cancel" }))
@@ -1293,7 +1293,7 @@ describe("createAcpSupervisor", () => {
   test("cancelAcpSession rejects unknown sessions", async () => {
     const mock = createMockTransport()
     mock.setHandler("initialize", () => ({
-      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+      agentCapabilities: { loadSession: false, sessionCapabilities: {} },
     }))
     mock.setHandler("authenticate", () => ({}))
 
@@ -1317,7 +1317,7 @@ describe("createAcpSupervisor", () => {
   test("cancelAcpSession rejects unbound sessions with a known owner", async () => {
     const mock = createMockTransport()
     mock.setHandler("initialize", () => ({
-      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+      agentCapabilities: { loadSession: false, sessionCapabilities: {} },
     }))
     mock.setHandler("authenticate", () => ({}))
     mock.setHandler("session/new", () => ({ sessionId: "acp-session-unbound-cancel" }))
@@ -1354,7 +1354,7 @@ describe("createAcpSupervisor", () => {
     const mock = createMockTransport()
     const updates: Array<{ agentId: string; acpSessionId: string; update: unknown }> = []
     mock.setHandler("initialize", () => ({
-      agentCapabilities: { loadSession: false, sessionCapabilities: { close: false } },
+      agentCapabilities: { loadSession: false, sessionCapabilities: {} },
     }))
     mock.setHandler("authenticate", () => ({}))
 
