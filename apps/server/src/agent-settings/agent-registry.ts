@@ -8,7 +8,6 @@ import {
 import { catalogAgentList, catalogAgentsById } from "../acp/catalog/generated/catalog.agents.generated"
 import { productAgentOverridesById } from "../acp/catalog/overrides/product.overrides"
 import { popularAgentAllowlist } from "../acp/catalog/popular.allowlist"
-import { agentSupportsSessionList } from "../acp/catalog/session.list.support"
 
 export type AgentDefinition = {
   id: AgentId
@@ -123,7 +122,6 @@ export const toAgentSettings = (
     present: boolean
     popular: boolean
     deletable: boolean
-    sessionListSupported?: boolean
   },
 ): AgentSettings => ({
   id: input.id,
@@ -135,7 +133,6 @@ export const toAgentSettings = (
   present: input.present,
   popular: input.popular,
   deletable: input.deletable,
-  sessionListSupported: input.sessionListSupported ?? agentSupportsSessionList(input.id),
   state: {
     status: "stopped",
     error: null,

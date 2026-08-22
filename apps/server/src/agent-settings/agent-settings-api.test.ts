@@ -19,6 +19,7 @@ import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
+import { SpawnFakeAcpOptions } from "test-support/spawn"
 import {
   acceptTestExecutablePath,
   cleanupTestAppResources,
@@ -31,12 +32,24 @@ const resources = createTestAppResources()
 
 const createTempDataDir = () => createTempDataDirWithResources(resources)
 
-const createTestApp = async (
-  dataDir: string,
-  whichFn?: WhichFn,
-  validateExecutablePathFn: ValidateExecutablePathFn = acceptTestExecutablePath,
-  fetchRegistryFn?: FetchRegistryFn,
-) => {
+const defaultFakeAcpOptions: SpawnFakeAcpOptions = {
+  capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+}
+
+type CreateTestAppParams = {
+  whichFn?: WhichFn
+  validateExecutablePathFn?: ValidateExecutablePathFn
+  fetchRegistryFn?: FetchRegistryFn
+  fakeAcpOptions?: SpawnFakeAcpOptions
+}
+
+const createTestApp = async (dataDir: string, params: CreateTestAppParams = {}) => {
+  const {
+    whichFn,
+    validateExecutablePathFn = acceptTestExecutablePath,
+    fetchRegistryFn,
+    fakeAcpOptions = defaultFakeAcpOptions,
+  } = params
   const config = parseConfig({
     AGENT_SERVER_HOST: "127.0.0.1",
     AGENT_SERVER_PORT: "0",
@@ -44,9 +57,7 @@ const createTestApp = async (
   })
   const database = openDatabase({ dataDir: config.dataDir })
   const runtime = createRuntime("0.1.0")
-  const { spawnAgentProcessFn } = createFakeSpawnFn(resources, {
-    capabilities: { loadSession: true, sessionClose: true, sessionList: true },
-  })
+  const { spawnAgentProcessFn } = createFakeSpawnFn(resources, fakeAcpOptions)
   const { app, acpSupervisor } = await createServer({
     config,
     runtime,
@@ -83,7 +94,7 @@ describe("GET /v1/settings/agents", () => {
     const dataDir = await createTempDataDir()
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? "/usr/local/bin/agent" : undefined
-    const { app } = await createTestApp(dataDir, whichFn)
+    const { app } = await createTestApp(dataDir, { whichFn })
 
     const response = await app.inject({
       method: "GET",
@@ -123,7 +134,7 @@ describe("GET /v1/settings/agents", () => {
       }
       return undefined
     }
-    const { app } = await createTestApp(dataDir, whichFn)
+    const { app } = await createTestApp(dataDir, { whichFn })
 
     await app.inject({
       method: "PATCH",
@@ -192,7 +203,7 @@ describe("POST /v1/settings/agents/:agentId/detect-path", () => {
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app } = await createTestApp(dataDir, whichFn)
+    const { app } = await createTestApp(dataDir, { whichFn })
 
     const response = await app.inject({
       method: "POST",
@@ -215,7 +226,7 @@ describe("POST /v1/settings/agents/:agentId/detect-path", () => {
   test("returns 404 when detect fails", async () => {
     const dataDir = await createTempDataDir()
     const whichFn: WhichFn = () => undefined
-    const { app } = await createTestApp(dataDir, whichFn)
+    const { app } = await createTestApp(dataDir, { whichFn })
 
     const response = await app.inject({
       method: "POST",
@@ -230,10 +241,15 @@ describe("POST /v1/settings/agents/:agentId/detect-path", () => {
 })
 
 describe("PATCH /v1/settings/agents/:agentId", () => {
-  test("rejects enable for agents without session/list", async () => {
+  test("rejects enable after spawn when the agent omits session/list", async () => {
     const dataDir = await createTempDataDir()
     const whichFn: WhichFn = () => undefined
-    const { app } = await createTestApp(dataDir, whichFn)
+    const { app } = await createTestApp(dataDir, {
+      whichFn,
+      fakeAcpOptions: {
+        capabilities: { loadSession: true, sessionClose: true, sessionList: false },
+      },
+    })
 
     const response = await app.inject({
       method: "PATCH",
@@ -251,7 +267,24 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
       "gemini",
     )
     expect(gemini.enabled).toBe(false)
-    expect(gemini.sessionListSupported).toBe(false)
+  })
+
+  test("enables gemini when the agent advertises session/list", async () => {
+    const dataDir = await createTempDataDir()
+    const whichFn: WhichFn = () => undefined
+    const { app } = await createTestApp(dataDir, { whichFn })
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/settings/agents/gemini",
+      payload: { enabled: true, path: "/usr/local/bin/gemini" },
+    })
+
+    const body = AgentSettingsSchema.parse(JSON.parse(response.body))
+
+    expect(response.statusCode).toBe(200)
+    expect(body.enabled).toBe(true)
+    expect(body.id).toBe("gemini")
   })
 
   test("enables cursor and auto-detects executable path", async () => {
@@ -259,7 +292,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app } = await createTestApp(dataDir, whichFn)
+    const { app } = await createTestApp(dataDir, { whichFn })
 
     const response = await app.inject({
       method: "PATCH",
@@ -280,7 +313,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
   test("returns 400 and persists enabled when enable auto-detect fails", async () => {
     const dataDir = await createTempDataDir()
     const whichFn: WhichFn = () => undefined
-    const { app } = await createTestApp(dataDir, whichFn)
+    const { app } = await createTestApp(dataDir, { whichFn })
 
     const response = await app.inject({
       method: "PATCH",
@@ -312,7 +345,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app } = await createTestApp(dataDir, whichFn)
+    const { app } = await createTestApp(dataDir, { whichFn })
 
     await app.inject({
       method: "PATCH",
@@ -337,7 +370,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const dataDir = await createTempDataDir()
     const storedPath = "/opt/custom/agent"
     const whichFn: WhichFn = () => "/usr/local/bin/agent"
-    const { app } = await createTestApp(dataDir, whichFn)
+    const { app } = await createTestApp(dataDir, { whichFn })
 
     await app.inject({
       method: "PATCH",
@@ -383,7 +416,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
 
     await setupApp.close()
 
-    const { app } = await createTestApp(dataDir, undefined, validateExecutablePath)
+    const { app } = await createTestApp(dataDir, { validateExecutablePathFn: validateExecutablePath })
 
     const response = await app.inject({
       method: "PATCH",
@@ -416,7 +449,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
 
   test("returns 400 for invalid executable path", async () => {
     const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir, undefined, validateExecutablePath)
+    const { app } = await createTestApp(dataDir, { validateExecutablePathFn: validateExecutablePath })
 
     const response = await app.inject({
       method: "PATCH",
@@ -448,7 +481,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const detectedPath = "/usr/bin/npx"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "npx" ? detectedPath : undefined
-    const { app } = await createTestApp(dataDir, whichFn)
+    const { app } = await createTestApp(dataDir, { whichFn })
 
     const response = await app.inject({
       method: "PATCH",
@@ -469,7 +502,6 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
       present: false,
       popular: true,
       deletable: false,
-      sessionListSupported: true,
       state: { status: "ready", error: null },
     })
   })
@@ -549,7 +581,7 @@ describe("POST /v1/settings/agents/import/detect and apply", () => {
       ],
     })
 
-    const { app } = await createTestApp(dataDir, whichFn, acceptTestExecutablePath, fetchRegistryFn)
+    const { app } = await createTestApp(dataDir, { whichFn, fetchRegistryFn })
 
     const detectResponse = await app.inject({
       method: "POST",
@@ -624,8 +656,7 @@ describe("POST /v1/settings/agents/import/detect and apply", () => {
       present: true,
       popular: false,
       deletable: true,
-  sessionListSupported: true,
-  state: { status: "stopped", error: null },
+      state: { status: "stopped", error: null },
     })
     expect(applyBody.items[0]?.id).toBe("brand-new-agent")
   })
@@ -635,7 +666,7 @@ describe("POST /v1/settings/agents/import/detect and apply", () => {
     const fetchRegistryFn: FetchRegistryFn = async () => {
       throw new Error("network down")
     }
-    const { app } = await createTestApp(dataDir, undefined, acceptTestExecutablePath, fetchRegistryFn)
+    const { app } = await createTestApp(dataDir, { fetchRegistryFn })
 
     const response = await app.inject({
       method: "POST",
@@ -671,8 +702,7 @@ describe("POST /v1/settings/agents custom create", () => {
       present: false,
       popular: false,
       deletable: true,
-  sessionListSupported: true,
-  state: { status: "stopped", error: null },
+      state: { status: "stopped", error: null },
     })
 
     const secondResponse = await app.inject({
@@ -843,7 +873,7 @@ describe("agent settings durability", () => {
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
 
-    const first = await createTestApp(dataDir, whichFn)
+    const first = await createTestApp(dataDir, { whichFn })
     const enableResponse = await first.app.inject({
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
@@ -854,7 +884,7 @@ describe("agent settings durability", () => {
     await first.app.close()
     first.database.close()
 
-    const second = await createTestApp(dataDir, whichFn)
+    const second = await createTestApp(dataDir, { whichFn })
     const response = await second.app.inject({
       method: "GET",
       url: "/v1/settings/agents",
@@ -874,7 +904,7 @@ describe("POST /v1/settings/agents/:agentId/actions", () => {
     const detectedPath = "/usr/local/bin/agent"
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? detectedPath : undefined
-    const { app } = await createTestApp(dataDir, whichFn)
+    const { app } = await createTestApp(dataDir, { whichFn })
 
     const enableResponse = await app.inject({
       method: "PATCH",

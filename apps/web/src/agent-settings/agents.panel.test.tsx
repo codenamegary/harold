@@ -34,7 +34,6 @@ const comingSoonAgent: AgentSettings = {
   present: true,
   popular: true,
   deletable: false,
-  sessionListSupported: true,
   state: { status: "stopped", error: null },
 }
 
@@ -48,7 +47,6 @@ const cursorAgent = (overrides: Partial<AgentSettings> = {}): AgentSettings => (
   present: true,
   popular: true,
   deletable: false,
-  sessionListSupported: true,
   state: { status: "stopped", error: null },
   ...overrides,
 })
@@ -660,8 +658,7 @@ describe("AgentsPanel", () => {
       present: true,
       popular: true,
       deletable: false,
-  sessionListSupported: true,
-  state: { status: "stopped", error: null },
+      state: { status: "stopped", error: null },
     })
 
     globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
@@ -759,8 +756,7 @@ describe("AgentsPanel", () => {
         present: false,
         popular: false,
         deletable: false,
-  sessionListSupported: true,
-  state: { status: "stopped", error: null },
+        state: { status: "stopped", error: null },
       })
     })
 
@@ -906,8 +902,7 @@ describe("AgentsPanel", () => {
           present: true,
           popular: false,
           deletable: true,
-  sessionListSupported: true,
-  state: { status: "stopped", error: null },
+          state: { status: "stopped", error: null },
         }
 
         return Promise.resolve(
@@ -988,8 +983,7 @@ describe("AgentsPanel", () => {
           present: false,
           popular: false,
           deletable: true,
-  sessionListSupported: true,
-  state: { status: "stopped", error: null },
+          state: { status: "stopped", error: null },
         })
         listState.items = [created, ...listState.items]
         return Promise.resolve(

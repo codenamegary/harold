@@ -37,7 +37,6 @@ data class AgentSettings(
     val present: Boolean = false,
     val popular: Boolean = false,
     val deletable: Boolean = false,
-    val sessionListSupported: Boolean = false,
     val state: AgentRuntimeState = AgentRuntimeState(AgentRuntimeStatus.Stopped),
 )
 
