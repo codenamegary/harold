@@ -1,61 +1,81 @@
-# Agent auth: host broker, adapters, optional headless browser
+# Agent auth: host broker and host-login flow
 
 Status: Accepted  
 Related: [ADR-0001 Device authentication](0001-device-authentication.md), [ADR-0002 Device authorization](0002-device-authorization.md)
 
 Agent auth (provider login for Claude, Cursor, and other ACP agents) is not
-device auth. Agent-server is the ACP client and the host. Paired devices only
-drive structured auth steps over our HTTP/WS API. We do not show a terminal UI.
-We do not call ACP `authenticate` with a catalog fantasy method id on every
-start. An Auth broker orchestrates. Per-agent adapters decide methods and ACP
-capabilities. Optional HostBrowser is a host capability adapters may use later.
+device auth. Agent-server is the ACP client and the host. Paired devices never
+run provider login themselves. They drive a single **host-login** flow over our
+HTTP/WS API: tell the operator what to run on the host, wait for confirmation,
+reconnect, and verify on the next real prompt.
+
+We do not call ACP `authenticate` with a catalog fantasy method id on start.
+We do not collect API keys or other secrets in the broker. Credentials live in
+each agent's normal host tooling (CLI files, env, keychain). The broker
+orchestrates UX and probes when an adapter can.
 
 ## Decision
 
 1. Treat **agent auth** as host-owned. Credentials live on the single host OS
-   identity that runs agent processes. Devices trigger login/logout. They do not
-   hold provider secrets as the source of truth.
-2. Put orchestration in an **Auth broker**. Put agent quirks in **auth adapters**.
-   Put optional automation browser in a **HostBrowser** host capability.
-3. Expose a device API of **auth sessions** and a **closed step vocabulary**
-   (`choose_method`, `open_url`, `paste_secret`, `confirm`, `show_message`,
-   `working`, `done`). Design steps so a richer form schema can arrive later
-   without rewriting the broker.
-4. Allow **one in-flight auth session per agent id**. Any paired device may view
-   live steps and cancel. Secrets travel only in submit actions. Never echo
-   secrets in steps or event payloads.
-5. Keep **enable separate from auth**. An agent may be enabled and still
-   `needs_auth`. Sessions and prompts that need provider auth stay gated until
-   the adapter probe says authenticated (or an `auth_required` challenge starts
-   or attaches the single-flight session).
-6. Build the Sign-in method list from **`adapter.listMethods(ctx)`**. ACP
-   `initialize.authMethods` are adapter input, not the UI list. Browser-dependent
-   methods stay visible but disabled when HostBrowser is missing.
-7. Let each adapter choose ACP **client auth capabilities** on `initialize`.
-   Do not globally advertise `auth.terminal` only because a browser exists.
-   HostBrowser filling pages is not the same contract as ACP terminal login.
-8. Remove blind catalog `authMethodId` authenticate from the supervisor start
-   path. An adapter **`onStart`** may call ACP `authenticate` when the agent
-   truly needs a protocol-driven agent-type method.
-9. After auth success, honor the adapter **completion policy** (`reconnect` or
-   `reuse_process`). On cancel or failure, abort the adapter work, dispose any
-   browser context for that session, clear in-memory secrets, and do not run a
-   host-cred snapshot rollback. Write host credentials only at the success
-   boundary.
-10. Probe auth status through the adapter (for example `claude auth status`).
-    Cache. Refresh after login, logout, and on demand.
-11. **Logout** is `broker.logout(agentId)`. Any paired device may call it.
-    Blocked while an auth session for that agent is in flight.
-12. On mid-turn **`auth_required`**, create a single-flight auth session or
-    attach clients to the existing one.
-13. Ship a **default adapter** that maps ACP agent-type methods best-effort,
-    leaves terminal methods disabled until a translator exists, and probes as
-    `unknown` when it cannot know. Custom adapters (Claude first) override.
-14. Put HostBrowser **install/status** in Host settings, not under Agents auth.
-    Auth methods may point at that status. One browser context per auth session
-    when used. No host-wide browser queue in v1.
-15. Surface auth **summary** on agent settings list responses. Full status,
-    methods, and session live on `AgentAuth` from a dedicated auth endpoint.
+   identity that runs agent processes. Devices may start Sign in, confirm host
+   login, cancel, or Sign out. They do not hold provider secrets as the source
+   of truth.
+2. Put orchestration in an **Auth broker**. Put agent-specific copy and probe
+   logic in **auth adapters**.
+3. Ship **one Sign-in flow for every agent** in v1. No method picker. No secret
+   paste. No in-app browser automation in v1.
+   - `show_message` — adapter-specific instructions (always names the **host
+     machine**; remote paired devices use the same copy).
+   - `confirm` — **I have logged in** (operator finished on the host).
+   - `working` — probe (if available) and reconnect per completion policy.
+   - `done` — session finished for this attempt.
+   - **Cancel** — end the auth session; agent stays unauthenticated until the
+     next Sign in or gated prompt.
+4. Use a **closed step vocabulary** on the wire (`show_message`, `confirm`,
+   `working`, `done`, plus reserved types for later). v1 clients render only
+   the host-login subset. Richer steps (`choose_method`, `paste_secret`,
+   `open_url`) stay out of product UX until a later ADR.
+5. Allow **one in-flight auth session per agent id**. Any paired device may view
+   live steps, confirm, or cancel. Never echo secrets in steps or event payloads
+   because v1 has no secret steps.
+6. Keep **enable separate from auth**. An agent may be enabled and still
+   `needs_auth`. Spawn and probe run on enable. Chat prompts stay gated until
+   auth is good enough to proceed (see decision 9).
+7. Do **not** advertise ACP `auth.terminal` globally. v1 does not proxy a
+   provider terminal to devices. Adapters may still set other client auth caps
+   on `initialize` when needed.
+8. Remove blind catalog `authMethodId` **authenticate** from the supervisor
+   start path. An adapter **`onStart`** may call ACP `authenticate` only for a
+   real protocol method id the agent advertised — never the catalog default id.
+9. **Verify auth pragmatically** after host login:
+   - On **I have logged in**: adapter probe (if implemented), then honor
+     **completion policy** (`reconnect` or `reuse_process`).
+   - End the auth session after reconnect. Do not block the operator on probe
+     `unknown`.
+   - Allow prompts when summary is `authenticated` or `unknown`.
+   - **Operational success** = the next gated prompt completes without
+     `auth_required`. If a turn still returns `auth_required`, open a new auth
+     session with retry copy ("That didn't work — sign in on the host and try
+     again").
+   - Probe `needs_auth` after confirm updates the summary but does not replace
+     the reconnect + prompt check as the source of truth.
+10. Probe through the adapter when possible (for example `claude auth status
+    --json`). Cache summary. Refresh after enable, logout, confirm, and on
+    demand.
+11. **Logout** is `broker.logout(agentId)`. Any paired device may call it when
+    the adapter supports it. Blocked while an auth session for that agent is in
+    flight. Adapter clears host creds via the agent's normal CLI; broker stores
+    nothing.
+12. Start the same host-login session from **Agents Sign in** in settings and
+    from mid-chat **`auth_required`** (create or attach the single in-flight
+    session).
+13. Ship a **default adapter** with generic host-login copy and probe
+    `unknown`. Named adapters (Claude first, then Cursor, etc.) override
+    instructions and probe/logout only.
+14. Surface auth **summary** on agent settings list responses. Full status and
+    session live on `AgentAuth` from a dedicated auth endpoint.
+15. **Defer** for a later ADR: HostBrowser / headless automation, API-key paste,
+    method pickers, ACP terminal login in clients.
 
 ## Architecture
 
@@ -67,7 +87,7 @@ flowchart TB
   subgraph devices [Paired devices]
     Console[Web operator console]
     WebChat[Web chat]
-    Android[Android chat]
+    Android[Android chat later]
   end
 
   subgraph host [Agent-server host]
@@ -76,8 +96,7 @@ flowchart TB
     Adapters[Auth adapters]
     Default[Default adapter]
     Claude[Claude adapter]
-    HB[HostBrowser optional]
-    Creds[Host cred store]
+    HostCreds[Agent CLI cred store on host]
     Super[ACP supervisor]
     AgentProc[Agent process]
   end
@@ -89,44 +108,34 @@ flowchart TB
   Broker --> Adapters
   Adapters --> Default
   Adapters --> Claude
-  Claude -.-> HB
-  Adapters --> Creds
+  Adapters -.-> HostCreds
   Broker --> Super
   Super --> AgentProc
-  Adapters -.-> AgentProc
 ```
 
 ```mermaid
 flowchart LR
   subgraph brokerBox [Auth broker]
     Sessions[Auth sessions]
-    Steps[Closed step vocabulary]
+    Steps[Host-login steps]
     Status[Auth status cache]
   end
 
   subgraph adapterBox [Adapter contract]
-    ListMethods[listMethods]
-    OnStart[onStart]
+    Instructions[hostLoginInstructions]
     Probe[probe]
-    StartContinue[start / continue / abort]
+    Continue[continue / abort]
     Logout[logout]
     Caps[clientAuthCapabilities]
     Complete[completionPolicy]
   end
 
-  subgraph hostBox [Host capabilities]
-    HB2[HostBrowser status / context]
-    HostId[Single host identity]
-  end
-
-  Sessions --> StartContinue
-  Steps --> StartContinue
+  Sessions --> Continue
+  Steps --> Continue
   Status --> Probe
-  ListMethods --> HB2
-  StartContinue --> HB2
-  StartContinue --> HostId
+  Instructions --> Steps
+  Continue --> HostId[Single host identity]
   Logout --> HostId
-  OnStart --> Caps
   Complete --> Super2[Supervisor respawn?]
 ```
 
@@ -134,8 +143,8 @@ flowchart LR
 
 ### Enable agent (auth separate)
 
-No catalog `authenticate` on start. Adapter may run a real ACP `authenticate`
-only when `onStart` says so. Probe sets auth summary.
+No catalog `authenticate` on start. Probe sets auth summary. Agent may be
+`ready` in the supervisor while summary is `needs_auth`.
 
 ```mermaid
 sequenceDiagram
@@ -150,21 +159,18 @@ sequenceDiagram
   API->>Super: start(agentId)
   Super->>Agent: spawn
   Super->>Agent: initialize (adapter caps)
-  Agent-->>Super: authMethods + capabilities
-  Super->>Adapter: onStart(initializeResult)
-  opt adapter needs ACP agent-type auth
-    Adapter->>Agent: authenticate(real methodId)
-  end
-  Super->>Broker: noteInitialize / probe
+  Agent-->>Super: capabilities
+  Super->>Adapter: onStart (optional real ACP authenticate)
+  Super->>Broker: observeInitialize / probe
   Broker->>Adapter: probe()
   Adapter-->>Broker: authenticated | needs_auth | unknown
   Broker-->>API: auth summary
   API-->>Device: enabled + auth summary
 ```
 
-### Sign in (structured steps, optional HostBrowser)
+### Sign in (host-login flow)
 
-One session per agent. Secrets only in actions. Browser stays on the host.
+Same flow from settings **Sign in** or mid-chat **`auth_required`**.
 
 ```mermaid
 sequenceDiagram
@@ -173,36 +179,29 @@ sequenceDiagram
   participant API
   participant Broker as Auth broker
   participant Adapter
-  participant HB as HostBrowser
-  participant Host as Host cred store
   participant Super as Supervisor
 
-  D1->>API: POST auth session (methodId)
+  D1->>API: POST start auth session
   API->>Broker: startSession
-  Broker->>Adapter: start(methodId)
-  alt method needs browser and HostBrowser ready
-    Adapter->>HB: open context for session
-    HB-->>Adapter: page needs fields
-  end
-  Adapter-->>Broker: steps (paste_secret / confirm / …)
+  Broker->>Adapter: start()
+  Adapter-->>Broker: show_message + confirm
   Broker-->>D1: session + steps
-  Broker-->>D2: auth_session_updated (same session)
-
-  D1->>API: action submit_secret
-  Note over API,Broker: secret in action only, not in steps
-  API->>Broker: continue(action)
-  Broker->>Adapter: continue(secret)
-  Adapter->>HB: fill field / advance
-  HB-->>Adapter: done or next field
-  Adapter->>Host: write creds at success only
-  Adapter-->>Broker: done + completionPolicy
-  Broker->>HB: dispose context
-  opt reconnect
-    Broker->>Super: respawn(agentId)
-  end
-  Broker->>Adapter: probe()
-  Broker-->>D1: succeeded
   Broker-->>D2: auth_session_updated
+
+  alt Operator cancels
+    D1->>API: action cancel
+    API->>Broker: cancel
+    Broker-->>D1: done(cancelled)
+  else Operator confirms host login
+    D1->>API: action confirm
+    API->>Broker: continue(confirm)
+    Broker->>Adapter: probe (if available)
+    Broker->>Super: reconnect per completionPolicy
+    Broker-->>D1: done(succeeded)
+    Broker-->>D2: auth_session_updated
+  end
+
+  Note over D1,Super: Next prompt is the real check.<br/>auth_required again → new session with retry copy.
 ```
 
 ### Mid-chat `auth_required` (create or attach)
@@ -213,21 +212,19 @@ sequenceDiagram
   participant Other as Other device
   participant Gateway as Session gateway
   participant Broker as Auth broker
-  participant Adapter
 
   Chat->>Gateway: prompt
   Gateway->>Gateway: agent returns auth_required
-  Gateway->>Broker: ensureAuthSession(agentId)
+  Gateway->>Broker: ensureSessionFromChallenge(agentId)
 
   alt no in-flight session
-    Broker->>Adapter: start from challenge
-    Broker-->>Chat: new auth session + steps
+    Broker-->>Chat: new auth session + host-login steps
   else session already in flight
     Broker-->>Chat: attach existing session + steps
   end
 
   Broker-->>Other: auth_session_updated
-  Note over Chat,Other: Any paired device may continue or cancel
+  Note over Chat,Other: Any paired device may confirm or cancel
 ```
 
 ### Logout
@@ -238,7 +235,6 @@ sequenceDiagram
   participant API
   participant Broker as Auth broker
   participant Adapter
-  participant Host as Host cred store
   participant Super as Supervisor
 
   Device->>API: POST logout agent
@@ -247,10 +243,6 @@ sequenceDiagram
     Broker-->>API: conflict (finish or cancel auth first)
   else idle
     Broker->>Adapter: logout()
-    Adapter->>Host: clear host creds
-    opt ACP logout advertised
-      Adapter->>Adapter: ACP logout RPC
-    end
     Adapter-->>Broker: completionPolicy
     opt reconnect
       Broker->>Super: respawn(agentId)
@@ -260,21 +252,19 @@ sequenceDiagram
   end
 ```
 
-### Cancel or fail mid-auth
+### Cancel mid-auth
 
 ```mermaid
 sequenceDiagram
   participant Device
   participant Broker as Auth broker
   participant Adapter
-  participant HB as HostBrowser
 
-  Device->>Broker: cancel (or adapter fails)
+  Device->>Broker: cancel
   Broker->>Adapter: abort(session)
-  Adapter->>HB: dispose context
-  Note over Adapter: drop in-memory secrets<br/>do not write host creds
   Broker->>Adapter: probe()
-  Broker-->>Device: cancelled or failed
+  Broker-->>Device: done(cancelled)
+  Note over Device: Next Sign in or auth_required starts fresh
 ```
 
 ## Type sketch (ideal shape)
@@ -284,11 +274,6 @@ Names may shift at implement time. No semicolons. Discriminated unions for
 steps and actions.
 
 ### Target file structure
-
-Vertical slices as nested directories. Dot-separated filenames inside each
-slice. No `models.ts` dumping ground. No barrel `index.ts` re-exports. Types
-live and export from the module that owns them (for example `AuthAdapter` from
-`adapter.ts`, session state types from `session.ts`).
 
 ```text
 packages/contracts/src/http/
@@ -306,33 +291,21 @@ apps/server/src/agent/auth/
   supervisor.hooks.ts           # observeInitialize, ensureReadyForPrompt glue
   adapters/
     adapter.ts                  # AuthAdapter interface + adapter context types
-    default.adapter.ts          # ACP best-effort mapping
+    default.adapter.ts
     default.adapter.test.ts
-    claude.adapter.ts           # Claude host-cred / browser flows
+    claude.adapter.ts           # Claude instructions + claude auth status probe
     claude.adapter.test.ts
-
-apps/server/src/browser/
-  routes.ts                     # operator Host settings: status / install
-  problems.ts
-  service.ts                    # HostBrowser capability + context types
-  service.test.ts
-  stub.ts                       # v1: always missing until real install lands
 
 apps/web/src/agent/auth/
   agent.auth.ts                 # fetch helpers for AgentAuth
   auth.session.actions.ts
   use.agent.auth.ts             # react-query hooks
-  AgentAuthPanel.tsx            # console Sign in / steps UI
+  AgentAuthPanel.tsx            # Sign in / host-login steps / cancel
   AgentAuthBadge.tsx
-  auth.step.view.tsx            # render closed step vocabulary
+  auth.step.view.tsx            # render v1 step subset
 
-apps/web/src/browser/
-  HostBrowserSettings.tsx       # install / status in Host settings
-  use.host.browser.ts
+apps/android/                   # later: same HTTP/WS contracts
 ```
-
-Android chat later consumes the same HTTP/WS contracts. No separate auth
-protocol.
 
 Touch points outside the new slices (edit existing modules, do not invent a
 parallel stack):
@@ -348,7 +321,7 @@ packages/contracts/src/http/agent-settings.ts
   # optional auth summary field on AgentSettings
 ```
 
-### Wire: status, methods, steps, actions
+### Wire: status, steps, actions
 
 ```ts
 type AgentId = string
@@ -367,45 +340,18 @@ type AgentAuthSummary = {
   canLogout: boolean
 }
 
-type AgentAuthMethodAvailability =
-  | { kind: "available" }
-  | {
-      kind: "disabled"
-      reason: string
-      /** e.g. open Host settings for headless browser */
-      remediation: "host_browser" | "none"
-    }
-
-type AgentAuthMethod = {
-  methodId: string
-  title: string
-  description: string
-  availability: AgentAuthMethodAvailability
-}
-
 type AuthSessionStatus =
   | "in_progress"
   | "succeeded"
   | "failed"
   | "cancelled"
 
-type AuthStep =
+/** v1 product UX uses this subset only */
+type AuthStepV1 =
   | {
-      type: "choose_method"
-      methods: AgentAuthMethod[]
-    }
-  | {
-      type: "open_url"
-      title: string
-      url: string
-      caption: string | null
-    }
-  | {
-      type: "paste_secret"
-      stepId: string
-      label: string
-      placeholder: string | null
-      secretKind: "api_key" | "oauth_token" | "otp" | "other"
+      type: "show_message"
+      level: "info" | "error"
+      body: string
     }
   | {
       type: "confirm"
@@ -414,11 +360,6 @@ type AuthStep =
       body: string
       confirmLabel: string
     }
-  | {
-      type: "show_message"
-      level: "info" | "error"
-      body: string
-    }
   | { type: "working"; label: string }
   | {
       type: "done"
@@ -426,71 +367,39 @@ type AuthStep =
       message: string | null
     }
 
-/** Secrets only appear here, never on AuthStep or WS payloads */
-type AuthSessionAction =
-  | { type: "select_method"; methodId: string }
+/** Reserved for later ADRs; not used in v1 UX */
+type AuthStepReserved =
+  | { type: "choose_method"; methods: unknown[] }
+  | { type: "open_url"; title: string; url: string; caption: string | null }
   | {
-      type: "submit_secret"
+      type: "paste_secret"
       stepId: string
-      value: string
+      label: string
+      placeholder: string | null
+      secretKind: "api_key" | "oauth_token" | "otp" | "other"
     }
+
+type AuthStep = AuthStepV1 | AuthStepReserved
+
+/** v1 actions */
+type AuthSessionAction =
   | { type: "confirm"; stepId: string }
-  | { type: "ack_open_url"; stepId?: string }
   | { type: "cancel" }
 
 type AgentAuthSession = {
   sessionId: string
   agentId: AgentId
   status: AuthSessionStatus
-  methodId: string | null
   steps: AuthStep[]
   error: string | null
 }
 
-/** GET /v1/agents/:agentId/auth (same noun style as AgentSettings, Workspace) */
+/** GET /v1/agents/:agentId/auth */
 type AgentAuth = {
   agentId: AgentId
   status: AgentAuthStatus
   error: string | null
-  methods: AgentAuthMethod[]
   session: AgentAuthSession | null
-  hostBrowser: HostBrowserStatus
-}
-```
-
-### HostBrowser capability
-
-```ts
-type HostBrowserStatus =
-  | { state: "missing" }
-  | { state: "installing" }
-  | { state: "ready" }
-  | { state: "error"; message: string }
-
-type HostBrowser = {
-  status: () => HostBrowserStatus
-  /** One context per auth session when an adapter needs automation */
-  openContext: (input: {
-    ownerSessionId: string
-  }) => Promise<HostBrowserContext>
-}
-
-type HostBrowserContext = {
-  ownerSessionId: string
-  navigate: (url: string) => Promise<void>
-  /** Adapter-defined; library TBD */
-  readNeededInputs: () => Promise<BrowserNeededInput[]>
-  fill: (input: {
-    fieldId: string
-    value: string
-  }) => Promise<void>
-  dispose: () => Promise<void>
-}
-
-type BrowserNeededInput = {
-  fieldId: string
-  label: string
-  secretKind: "api_key" | "oauth_token" | "otp" | "other"
 }
 ```
 
@@ -502,23 +411,20 @@ type AuthCompletionPolicy = "reconnect" | "reuse_process"
 type AdapterAuthContext = {
   agentId: AgentId
   hostIdentity: { id: "default" }
-  hostBrowser: HostBrowser
   /** Last initialize result, if the agent process is up */
   initializeResult: unknown | null
 }
 
 type AuthAdapter = {
   id: string
-  /** Which catalog / custom agent ids this adapter owns */
   matches: (agentId: AgentId) => boolean
 
   clientAuthCapabilities: (
     ctx: AdapterAuthContext,
   ) => Record<string, unknown>
 
-  listMethods: (
-    ctx: AdapterAuthContext,
-  ) => Promise<AgentAuthMethod[]>
+  /** Shown in show_message; must name the host machine for remote devices */
+  hostLoginInstructions: (ctx: AdapterAuthContext) => string
 
   probe: (ctx: AdapterAuthContext) => Promise<{
     status: AgentAuthStatus
@@ -529,40 +435,44 @@ type AuthAdapter = {
   /** Optional ACP authenticate after initialize; never catalog fantasy ids */
   onStart: (ctx: AdapterAuthContext) => Promise<void>
 
+  completionPolicy: AuthCompletionPolicy
+
+  /** Build initial host-login steps (message + confirm) */
   start: (
     ctx: AdapterAuthContext,
-    input: {
-      sessionId: string
-      methodId: string | null
-      fromChallenge: boolean
-    },
-  ) => Promise<{ steps: AuthStep[] }>
+    input: { sessionId: string; retry: boolean },
+  ) => Promise<{ steps: AuthStepV1[] }>
 
+  /** Handle confirm: optional probe side effects; broker owns reconnect */
   continue: (
     ctx: AdapterAuthContext,
     input: {
       sessionId: string
-      action: Exclude<AuthSessionAction, { type: "cancel" }>
+      action: { type: "confirm"; stepId: string }
     },
-  ) => Promise<{
-    steps: AuthStep[]
-    finished: null | {
-      outcome: "succeeded" | "failed"
-      completionPolicy: AuthCompletionPolicy
-      error: string | null
-    }
-  }>
+  ) => Promise<{ steps: AuthStepV1[] }>
 
   abort: (
     ctx: AdapterAuthContext,
     input: { sessionId: string },
   ) => Promise<void>
 
-  logout: (
-    ctx: AdapterAuthContext,
-  ) => Promise<{ completionPolicy: AuthCompletionPolicy }>
+  logout: (ctx: AdapterAuthContext) => Promise<void>
 }
 ```
+
+Example Claude instructions (adapter-owned, not wire):
+
+```text
+Claude is not signed in on this host.
+
+On the machine running Agent Server, open a terminal and run:
+  claude auth login
+
+When finished, tap I have logged in.
+```
+
+Retry sessions prepend: `That didn't work. Sign in on the host and try again.`
 
 ### Broker surface
 
@@ -571,25 +481,21 @@ type AuthBroker = {
   getSummary: (agentId: AgentId) => Promise<AgentAuthSummary>
   get: (agentId: AgentId) => Promise<AgentAuth>
 
-  /** Supervisor calls after initialize (and after respawn) */
   observeInitialize: (input: {
     agentId: AgentId
     initializeResult: unknown
   }) => Promise<void>
 
+  /** Block prompts only when probe says needs_auth; allow unknown */
   ensureReadyForPrompt: (
     agentId: AgentId,
   ) => Promise<
     | { ok: true }
-    | { ok: false; status: AgentAuthStatus }
+    | { ok: false; status: AgentAuthStatus; session: AgentAuthSession | null }
   >
 
-  startSession: (input: {
-    agentId: AgentId
-    methodId?: string
-  }) => Promise<AgentAuthSession>
+  startSession: (input: { agentId: AgentId }) => Promise<AgentAuthSession>
 
-  /** auth_required: create or return the single in-flight session */
   ensureSessionFromChallenge: (
     agentId: AgentId,
   ) => Promise<AgentAuthSession>
@@ -602,7 +508,6 @@ type AuthBroker = {
 
   logout: (agentId: AgentId) => Promise<AgentAuthSummary>
 
-  /** Fan-out to paired devices */
   subscribe: (
     listener: (event: {
       agentId: AgentId
@@ -631,21 +536,14 @@ type SupervisorAuthHooks = {
 
 ## Considered options
 
-### Architecture shape
+### Sign-in UX (v1)
 
 | Option | Verdict | Why |
 |--------|---------|-----|
-| Host capability + broker + adapters | **Selected** | Browser reusable. Broker stays UX/session. Adapters own agent differences. |
-| Browser only inside Claude adapter | Rejected | Locks a host facility into one agent. Harder status/install UX. |
-| Broker owns browser sessions directly | Rejected | Mixes orchestration with automation. Harder to stub and reuse. |
-
-### Device UX for login
-
-| Option | Verdict | Why |
-|--------|---------|-----|
-| Closed step vocabulary (v1) | **Selected** | One UX for web console, web chat, Android. |
-| Raw PTY / terminal view in clients | Rejected | Bad remote UX. Wrong for phones. Host should translate. |
-| Adapter-defined freeform UI schema now | Deferred | Future target. Keep step model extensible. |
+| Single host-login flow for all agents | **Selected** | Matches how CLIs store creds. One client UX. Remote devices only orchestrate. |
+| Per-agent method picker + secret paste | Rejected for v1 | Broker becomes a password manager. Duplicates provider UIs. |
+| HostBrowser automation in v1 | Deferred | High cost; host CLI login is enough for local operator installs. |
+| ACP terminal auth in clients | Rejected | Bad on phones. Wrong abstraction for our device API. |
 
 ### Auth vs enable
 
@@ -653,56 +551,53 @@ type SupervisorAuthHooks = {
 |--------|---------|-----|
 | Enable and auth separate | **Selected** | Host may already be logged in. Devices can Sign in later from chat. |
 | Enable requires auth first | Rejected | Blocks spawn/probe. Couples settings to provider login. |
-| Enable always opens auth | Rejected | Noisy when host creds already work. |
+| Blind catalog `authMethodId` on start | Rejected | Broke Claude (`Method not implemented`). |
 
-### Method list source
+### Verify after host login
 
 | Option | Verdict | Why |
 |--------|---------|-----|
-| Adapter-declared methods | **Selected** | Claude often returns empty ACP `authMethods` unless we advertise terminal. Product still needs Sign in. |
-| Raw ACP `authMethods` only | Rejected | Empty list hides real host login paths. |
-| Blind catalog `authMethodId` on start | Rejected | Broke Claude (`Method not implemented`). |
+| Reconnect + next prompt is the truth; retry on `auth_required` | **Selected** | Probe may be `unknown`. Operators still get a clear loop. |
+| Block until probe is `authenticated` | Rejected | Many agents lack a probe CLI. False negatives strand users. |
+| Optimistic `authenticated` on confirm only | Rejected | Hides failures until unrelated errors surface. |
 
 ### Concurrency
 
 | Option | Verdict | Why |
 |--------|---------|-----|
 | One auth session per agent id | **Selected** | Host creds and login flows collide otherwise. |
-| One auth session per device | Rejected | Two phones fighting one Claude login. |
-| Host-wide browser lock/queue | Rejected for v1 | Extra complexity. Common case is one device. Browser context follows the auth session. |
+| One auth session per device | Rejected | Two phones fighting one host login. |
 
 ### Credentials
 
 | Option | Verdict | Why |
 |--------|---------|-----|
 | Single host OS identity | **Selected for v1** | Matches one operator install. |
-| Per-agent isolated cred namespaces | Deferred | Pass a host-identity handle into adapters so this can land later. |
-| Store long-lived provider tokens in app DB as source of truth | Rejected | Host is the vault. Broker is not a password manager. |
+| Broker / SQLite as provider secret store | Rejected | Host CLI is the vault. |
+| API key paste in broker | Rejected for v1 | Defer to host env / CLI. |
 
 ## Consequences
 
-- Supervisor start must stop calling `authenticate` with catalog ids. Slice 0
-  can stub the broker and still fix Claude spawn failure mode.
-- Agent settings wire grows an auth summary. Clients need Sign in / Sign out
-  entry points on console and later chat.
-- Host settings gains headless browser status/install even if the first browser
-  implementation is a `missing` stub.
-- Claude support likely uses HostBrowser and/or host token install inside a
-  Claude adapter, not a client terminal and not a fake `claude-acp` method id.
-- Default adapter gives unknown ACP agents a minimal Sign in path when they
-  expose agent-type methods. Terminal-only agents need a dedicated adapter or
-  stay disabled-with-reason until one exists.
+- Supervisor start must stop calling `authenticate` with catalog ids. A stub
+  broker can land first and still fix Claude enable failures.
+- Agent settings and chat need Sign in, cancel, and Sign out entry points on
+  web first; Android reuses the same contracts later.
+- Auth adapters are mostly **copy + probe + logout**, not login wizards.
+- Claude adapter v1: `claude auth login` instructions and `claude auth status`
+  probe; creds stay in Claude's host store.
+- Default adapter: generic instructions, probe `unknown`, logout no-op.
 - Paired devices are full operators for agent auth ([ADR-0002](0002-device-authorization.md)).
   Revisit if least-privilege device roles appear later.
+- HostBrowser, method pickers, and secret steps need a new ADR before build.
 
 ## Sources
 
 - [ACP v1 Authentication][acp-auth]
-- [ACP Terminal Authentication RFD][acp-terminal-auth]
 - [Claude Code authentication][claude-auth]
-- Grill session decisions (2026-08-22): host broker Option E, closed steps,
-  HostBrowser as optional host capability, enable ≠ auth
+- Grill session (2026-08-22): host broker, enable ≠ auth, single host-login
+  flow, defer browser and secret collection, pragmatic verify on next prompt
+- Define session (2026-08-22): trim scope; agent-specific messaging only;
+  Settings + mid-chat entry; cancel ends session
 
 [acp-auth]: https://agentclientprotocol.com/protocol/v1/authentication
-[acp-terminal-auth]: https://agentclientprotocol.com/rfds/auth-methods
 [claude-auth]: https://code.claude.com/docs/en/authentication
