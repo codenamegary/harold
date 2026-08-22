@@ -1,8 +1,8 @@
-import { AgentMethodDeclaration, CapabilityPath } from "./models"
+import { AgentMethodDeclaration, RequiredCapabilityPath } from "./models"
 
 export const sessionCloseMethod = "session/close"
 
-export const sessionCloseRequires: CapabilityPath = "sessionCapabilities.close"
+export const sessionCloseRequires: RequiredCapabilityPath = "sessionCapabilities.close"
 
 export const sessionCloseDeclaration: AgentMethodDeclaration = {
   method: sessionCloseMethod,

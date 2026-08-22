@@ -1,8 +1,8 @@
-import { AgentMethodDeclaration, CapabilityPath } from "./models"
+import { AgentMethodDeclaration, RequiredCapabilityPath } from "./models"
 
 export const sessionLoadMethod = "session/load"
 
-export const sessionLoadRequires: CapabilityPath = "loadSession"
+export const sessionLoadRequires: RequiredCapabilityPath = "loadSession"
 
 export const sessionLoadDeclaration: AgentMethodDeclaration = {
   method: sessionLoadMethod,

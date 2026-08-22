@@ -6,14 +6,17 @@ import { sessionLoadDeclaration } from "./session.load"
 import { sessionNewDeclaration } from "./session.new"
 import { sessionPromptDeclaration } from "./session.prompt"
 
-export type AgentMethodDeclarations = {
-  register: (declaration: AgentMethodDeclaration) => void
+export type AgentMethodDeclarationReader = {
   list: () => ReadonlyArray<AgentMethodDeclaration>
   methodsRequiring: (path: CapabilityPath) => ReadonlyArray<AgentMethodName>
 }
 
+export type AgentMethodDeclarations = AgentMethodDeclarationReader & {
+  register: (declaration: AgentMethodDeclaration) => void
+}
+
 export const createAgentMethodDeclarations = (
-  initial: ReadonlyArray<AgentMethodDeclaration> = [],
+  initial: ReadonlyArray<AgentMethodDeclaration>,
 ): AgentMethodDeclarations => {
   const declarations = new Map<AgentMethodName, AgentMethodDeclaration>(
     initial.map((declaration) => [declaration.method, declaration]),
@@ -31,7 +34,7 @@ export const createAgentMethodDeclarations = (
   }
 }
 
-export const agentMethodDeclarations = createAgentMethodDeclarations([
+export const agentMethodDeclarations: AgentMethodDeclarationReader = createAgentMethodDeclarations([
   sessionNewDeclaration,
   sessionPromptDeclaration,
   sessionCancelDeclaration,

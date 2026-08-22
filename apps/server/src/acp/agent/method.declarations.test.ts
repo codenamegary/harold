@@ -3,7 +3,7 @@ import {
   agentMethodDeclarations,
   createAgentMethodDeclarations,
 } from "./method.declarations"
-import { agentMethodNames } from "./models"
+import { agentMethodNames, requiredCapabilityPaths } from "./models"
 import { sessionCancelRequires } from "./session.cancel"
 import { sessionCloseRequires } from "./session.close"
 import { sessionListRequires } from "./session.list"
@@ -31,11 +31,9 @@ describe("agent method declarations", () => {
   })
 
   test("reverse lookup answers which methods require a capability path", () => {
-    expect(agentMethodDeclarations.methodsRequiring("loadSession")).toEqual(["session/load"])
-    expect(agentMethodDeclarations.methodsRequiring("sessionCapabilities.list")).toEqual([
-      "session/list",
-    ])
-    expect(agentMethodDeclarations.methodsRequiring("sessionCapabilities.close")).toEqual([
+    expect(agentMethodDeclarations.methodsRequiring(sessionLoadRequires)).toEqual(["session/load"])
+    expect(agentMethodDeclarations.methodsRequiring(sessionListRequires)).toEqual(["session/list"])
+    expect(agentMethodDeclarations.methodsRequiring(sessionCloseRequires)).toEqual([
       "session/close",
     ])
   })
@@ -52,6 +50,18 @@ describe("agent method declarations", () => {
     expect(required.length).toBe(3)
     required.forEach(({ method, requires }) => {
       expect(agentMethodDeclarations.methodsRequiring(requires)).toContain(method)
+    })
+  })
+
+  test("baseline methods never come back from a reverse lookup", () => {
+    const baselineMethods = ["session/new", "session/prompt", "session/cancel"]
+
+    requiredCapabilityPaths.forEach((path) => {
+      const methods = agentMethodDeclarations.methodsRequiring(path)
+
+      baselineMethods.forEach((baselineMethod) => {
+        expect(methods).not.toContain(baselineMethod)
+      })
     })
   })
 

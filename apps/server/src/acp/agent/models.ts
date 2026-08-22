@@ -16,6 +16,14 @@ export type AgentFilter = AgentId
 
 export type CapabilityPath = string
 
+export const requiredCapabilityPaths = [
+  "loadSession",
+  "sessionCapabilities.list",
+  "sessionCapabilities.close",
+] as const
+
+export type RequiredCapabilityPath = (typeof requiredCapabilityPaths)[number]
+
 export const agentMethodNames = [
   "session/new",
   "session/prompt",
@@ -29,7 +37,7 @@ export type AgentMethodName = (typeof agentMethodNames)[number]
 
 export type AgentMethodDeclaration = {
   method: AgentMethodName
-  requires: CapabilityPath | null
+  requires: RequiredCapabilityPath | null
 }
 
 export type SessionOwnership = {
@@ -45,7 +53,7 @@ export type AgentMethodHandlerContext = {
   sessionBindings: SessionBindingRegistry
   sessionOwnership: SessionOwnership
   onSessionDiscovered: SessionDiscoveredHandler
-  supportsCapability: (path: CapabilityPath) => boolean
+  supportsCapability: (path: RequiredCapabilityPath) => boolean
 }
 
 export type AgentMethodSignatures = {
@@ -75,7 +83,7 @@ export type AgentMethodSignatures = {
     result: AcpListSessionsResult
   }
   "session/close": {
-    params: { sessionId: string }
+    params: { acpSessionId: string }
     result: AcpSessionCloseResult
   }
 }

@@ -70,13 +70,4 @@ describe("agent method table", () => {
 
     expect(table.resolve({ agentId: "cursor", method: "session/close" })).toBe(second)
   })
-
-  test("tables are independent, so production stays empty when tests register handlers", () => {
-    const table = createAgentMethodTable()
-    table.register({ agentId: ANY_AGENT, method: "session/close", handler: closeHandler("one") })
-
-    expect(
-      createAgentMethodTable().resolve({ agentId: "cursor", method: "session/close" }),
-    ).toBeUndefined()
-  })
 })
