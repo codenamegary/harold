@@ -206,7 +206,7 @@ export const registerAgentSettingsRoutes = (
         app.log.warn({ agentId, reason }, "ACP agent start failed")
         repository.update({ agentId, body: { enabled: false } })
         await acpSupervisor.handleAgentDisabled(agentId)
-        return sendProblem(reply, 409, buildAgentCannotEnableProblem("ACP supervisor failed to start"))
+        return sendProblem(reply, 409, buildAgentCannotEnableProblem(reason))
       }
 
       if (!agentAdvertisesSessionList(acpSupervisor, agentId)) {

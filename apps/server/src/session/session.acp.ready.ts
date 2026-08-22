@@ -5,7 +5,7 @@ import {
   inventoryAdvertisesSessionList,
 } from "../acp/agent/inventory"
 import { AcpSupervisor } from "../acp/supervisor/models"
-import { sanitizeAcpErrorMessage } from "../acp/sanitize-acp-error"
+import { sanitizeAcpErrorMessage } from "../acp/sanitize.error"
 
 export const isArchivedSession = (session: {
   archivedAt: string | null

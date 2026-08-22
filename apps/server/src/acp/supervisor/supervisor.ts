@@ -1,6 +1,6 @@
 import { AgentId } from "contracts/http/agent-settings"
 import { resolveAgentProfile } from "../agent-profile"
-import { sanitizeAcpRejection } from "../sanitize-acp-error"
+import { sanitizeAcpRejection } from "../sanitize.error"
 import { buildCapabilityInventory, CapabilityInventory } from "../agent/inventory"
 import { agentMethodDeclarations } from "../agent/method.declarations"
 import { createAgentMethodTable } from "../agent/method.table"

@@ -1,4 +1,4 @@
-import { sanitizeAcpRejection } from "../sanitize-acp-error"
+import { sanitizeAcpRejection } from "../sanitize.error"
 import { isAcpJsonRpcError } from "../transport/json-rpc-error"
 import { AcpOperationContext } from "../transport/json-rpc-transport"
 import { AgentMethodTable } from "./method.table"

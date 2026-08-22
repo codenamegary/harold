@@ -4,7 +4,7 @@ import {
   PROBLEM_TYPES,
   ValidationProblemSchema,
 } from "contracts/http/error"
-import { sanitizeAcpErrorMessage } from "../acp/sanitize-acp-error"
+import { sanitizeAcpErrorMessage } from "../acp/sanitize.error"
 
 export const buildWorkspaceNotFoundProblem = (detail = "Unknown workspace id") =>
   NotFoundProblemSchema.parse({

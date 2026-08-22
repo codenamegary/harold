@@ -261,6 +261,66 @@ describe("AgentsPanel", () => {
     })
   }, mutationFlowTimeoutMs)
 
+  test("shows the real ACP start reason when enable fails", async () => {
+    const cursorState = { agent: cursorAgent() }
+
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/status") {
+        return Promise.resolve(
+          new Response(JSON.stringify(validStatus), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents" && method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify(agentsCollection(cursorState.agent)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
+
+      if (url === "/v1/settings/agents/cursor" && method === "PATCH") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              type: PROBLEM_TYPES.conflict,
+              title: "Agent cannot be enabled",
+              status: 409,
+              detail: "Method not implemented.",
+            }),
+            {
+              status: 409,
+              headers: { "Content-Type": "application/problem+json" },
+            },
+          ),
+        )
+      }
+
+      return Promise.resolve(new Response("not found", { status: 404 }))
+    }) as typeof fetch
+
+    const view = renderAgentsPanel()
+
+    await waitFor(() => {
+      expect(view.getByLabelText("Enable Cursor")).toBeInTheDocument()
+    })
+
+    await clickInAct(view.getByLabelText("Enable Cursor"))
+
+    await waitFor(() => {
+      const settings = view.getByRole("row", { name: "Cursor agent settings" })
+      expect(within(settings).getByText("Method not implemented.")).toBeInTheDocument()
+      expect(within(settings).queryByText("ACP supervisor failed to start")).toBeNull()
+    })
+  }, mutationFlowTimeoutMs)
+
   test("shows Save when dirty and PATCHes path with args", async () => {
     const manualPath = "/opt/custom/agent"
     const cursorState = {

@@ -39,6 +39,19 @@ const isUnhelpfulRejectionSignal = (text: string): boolean => {
   )
 }
 
+const readNonEmptyStringField = (
+  data: Record<string, unknown>,
+  key: string,
+): string | undefined => {
+  const value = data[key]
+  if (typeof value !== "string") {
+    return undefined
+  }
+
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
 const readDataMessage = (data: unknown): string | undefined => {
   if (typeof data === "string") {
     const trimmed = data.trim()
@@ -49,12 +62,11 @@ const readDataMessage = (data: unknown): string | undefined => {
     return undefined
   }
 
-  if (!("message" in data) || typeof data.message !== "string") {
-    return undefined
-  }
-
-  const trimmed = data.message.trim()
-  return trimmed.length > 0 ? trimmed : undefined
+  const record = data as Record<string, unknown>
+  return (
+    readNonEmptyStringField(record, "message")
+    ?? readNonEmptyStringField(record, "details")
+  )
 }
 
 export type SanitizeAcpRejectionParams = {

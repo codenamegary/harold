@@ -1,5 +1,5 @@
 import { createTurnId } from "../../session/create.turn.id"
-import { sanitizeAcpRejection } from "../sanitize-acp-error"
+import { sanitizeAcpRejection } from "../sanitize.error"
 import { AcpSessionPromptResult } from "../supervisor/models"
 import { isAcpJsonRpcError } from "../transport/json-rpc-error"
 import { AcpOperationContext } from "../transport/json-rpc-transport"

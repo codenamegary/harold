@@ -1,4 +1,4 @@
-import { sanitizeAcpRejection } from "../sanitize-acp-error"
+import { sanitizeAcpRejection } from "../sanitize.error"
 import { isAcpJsonRpcError } from "../transport/json-rpc-error"
 import { AgentMethodTable } from "./method.table"
 import { requireBoundSession } from "./session.binding.guards"

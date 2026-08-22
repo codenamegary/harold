@@ -1007,6 +1007,59 @@ describe("agent settings durability", () => {
   })
 })
 
+describe("PATCH /v1/settings/agents/:agentId enable failures", () => {
+  test("returns the real ACP start reason when enable start fails", async () => {
+    const dataDir = await createTempDataDir()
+    const detectedPath = "/usr/local/bin/agent"
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? detectedPath : undefined
+    const config = parseConfig({
+      AGENT_SERVER_HOST: "127.0.0.1",
+      AGENT_SERVER_PORT: "0",
+      AGENT_SERVER_DATA_DIR: dataDir,
+    })
+    const database = openDatabase({ dataDir: config.dataDir })
+    const { app, acpSupervisor } = await createServer({
+      config,
+      runtime: createRuntime("0.1.0"),
+      database,
+      whichFn,
+      validateExecutablePathFn: acceptTestExecutablePath,
+      spawnAgentProcessFn: () => {
+        throw new Error("spawn exploded")
+      },
+    })
+    resources.addApp(app)
+    resources.addTeardown(async () => {
+      await acpSupervisor.stop()
+      database.close()
+    })
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/settings/agents/cursor",
+      payload: { enabled: true },
+    })
+    const problem = ConflictProblemSchema.parse(JSON.parse(response.body))
+    const listed = AgentSettingsCollectionSchema.parse(
+      JSON.parse(
+        (
+          await app.inject({
+            method: "GET",
+            url: "/v1/settings/agents",
+          })
+        ).body,
+      ),
+    )
+    const cursor = findAgent(listed, "cursor")
+
+    expect(response.statusCode).toBe(409)
+    expect(problem.detail).toBe("spawn exploded")
+    expect(problem.detail).not.toBe("ACP supervisor failed to start")
+    expect(cursor.enabled).toBe(false)
+  })
+})
+
 describe("POST /v1/settings/agents/:agentId/actions", () => {
   test("respawns an enabled agent and leaves it enabled", async () => {
     const dataDir = await createTempDataDir()

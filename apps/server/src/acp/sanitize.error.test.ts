@@ -3,7 +3,7 @@ import {
   ACTIONABLE_SESSION_LOAD_DETAIL,
   sanitizeAcpErrorMessage,
   sanitizeAcpRejection,
-} from "./sanitize-acp-error"
+} from "./sanitize.error"
 
 describe("sanitizeAcpErrorMessage", () => {
   test("redacts bearer tokens and long key-like blobs", () => {
@@ -46,6 +46,27 @@ describe("sanitizeAcpRejection", () => {
     expect(detail).toContain("Bearer [redacted]")
     expect(detail).not.toContain(secret)
     expect(detail).not.toBe("Invalid params")
+  })
+
+  test("uses error.data.details when message is absent", () => {
+    expect(
+      sanitizeAcpRejection({
+        message: "Internal error",
+        data: { details: "Method not implemented." },
+      }),
+    ).toBe("Method not implemented.")
+  })
+
+  test("prefers error.data.message over error.data.details", () => {
+    expect(
+      sanitizeAcpRejection({
+        message: "Internal error",
+        data: {
+          message: "useful message",
+          details: "secondary details",
+        },
+      }),
+    ).toBe("useful message")
   })
 
   test("maps Invalid params without useful data to actionable load detail", () => {
