@@ -17,12 +17,11 @@ export const AgentSettingsAuthSection: React.FC<AgentSettingsAuthSectionProps> =
   summary,
   enabled,
 }) => {
-  const sessionActive = summary.activeSessionId !== null
-  const authQuery = useAgentAuthQuery(enabled && sessionActive ? agentId : null, {
+  const authQuery = useAgentAuthQuery(enabled ? agentId : null, {
     pollWhileSessionActive: true,
   })
 
-  const auth = sessionActive ? (authQuery.data ?? null) : null
+  const auth = authQuery.data ?? null
   const liveSummary: AgentAuthSummary =
     auth === null
       ? summary

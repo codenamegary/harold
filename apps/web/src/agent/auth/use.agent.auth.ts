@@ -39,14 +39,13 @@ export const useAgentAuthQuery = (
   })
 }
 
-const invalidateAuthAndAgents = async (
+const invalidateAuthAndAgents = (
   queryClient: ReturnType<typeof useQueryClient>,
   agentId: AgentId,
 ) => {
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: queryKeys.agentAuth(agentId) }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.agentSettingsRoot }),
-  ])
+  void queryClient.invalidateQueries({ queryKey: queryKeys.agentAuth(agentId) })
+  // Agents list probes every adapter; do not block mutation pending on it.
+  void queryClient.invalidateQueries({ queryKey: queryKeys.agentSettingsRoot })
 }
 
 export const useStartAgentAuthSessionMutation = () => {
@@ -54,8 +53,14 @@ export const useStartAgentAuthSessionMutation = () => {
 
   return useMutation({
     mutationFn: (agentId: AgentId) => startAgentAuthSession(agentId),
-    onSettled: async (_data, _error, agentId) => {
-      await invalidateAuthAndAgents(queryClient, agentId)
+    onSuccess: (session, agentId) => {
+      queryClient.setQueryData(queryKeys.agentAuth(agentId), {
+        agentId,
+        status: "needs_auth" as const,
+        error: null,
+        session,
+      })
+      invalidateAuthAndAgents(queryClient, agentId)
     },
   })
 }
@@ -69,8 +74,14 @@ export const useAgentAuthSessionActionMutation = () => {
       sessionId: string
       action: AuthSessionAction
     }) => applyAgentAuthSessionAction(input),
-    onSettled: async (_data, _error, input) => {
-      await invalidateAuthAndAgents(queryClient, input.agentId)
+    onSuccess: (session, input) => {
+      queryClient.setQueryData(queryKeys.agentAuth(input.agentId), {
+        agentId: input.agentId,
+        status: session.status === "succeeded" ? ("unknown" as const) : ("needs_auth" as const),
+        error: session.error,
+        session: session.status === "in_progress" ? session : null,
+      })
+      invalidateAuthAndAgents(queryClient, input.agentId)
     },
   })
 }
@@ -80,8 +91,8 @@ export const useLogoutAgentAuthMutation = () => {
 
   return useMutation({
     mutationFn: (agentId: AgentId) => logoutAgentAuth(agentId),
-    onSettled: async (_data, _error, agentId) => {
-      await invalidateAuthAndAgents(queryClient, agentId)
+    onSuccess: (_summary, agentId) => {
+      invalidateAuthAndAgents(queryClient, agentId)
     },
   })
 }
