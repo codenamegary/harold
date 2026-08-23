@@ -726,7 +726,10 @@ class ChatViewModel(
         }
     }
 
-    private suspend fun hydrateAgentAuth(agentId: AgentId) {
+    private suspend fun hydrateAgentAuth(
+        agentId: AgentId,
+        attachHostLoginIfNeeded: Boolean = false,
+    ) {
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
         val generation = ++authHydrateGeneration
         operatorRepository.getAgentAuth(
@@ -743,14 +746,23 @@ class ChatViewModel(
                 val canLogout = agentAuthSummaries[agentId]?.canLogout ?: false
                 val summary = auth.toSummary(canLogout = canLogout)
                 agentAuthSummaries = agentAuthSummaries + (agentId to summary)
+                val sessionInFlight = auth.session?.status == AuthSessionStatus.InProgress
                 _uiState.update { current ->
                     current.copy(
                         agentAuth = auth,
                         agentAuthSummary = summary,
                         authPanelOpen = current.authPanelOpen ||
-                            auth.session?.status == AuthSessionStatus.InProgress,
+                            sessionInFlight ||
+                            attachHostLoginIfNeeded,
                         authError = null,
                     )
+                }
+                if (
+                    attachHostLoginIfNeeded &&
+                    !sessionInFlight &&
+                    auth.status == AgentAuthStatus.NeedsAuth
+                ) {
+                    startAuthSession(agentId)
                 }
             },
             onFailure = { error ->
@@ -902,7 +914,10 @@ class ChatViewModel(
                 syncSelectedState(SessionState.Error)
                 if (isAuthRequiredError(message.message) && selected != null) {
                     viewModelScope.launch {
-                        hydrateAgentAuth(selected.agentId)
+                        hydrateAgentAuth(
+                            agentId = selected.agentId,
+                            attachHostLoginIfNeeded = true,
+                        )
                     }
                 }
             }

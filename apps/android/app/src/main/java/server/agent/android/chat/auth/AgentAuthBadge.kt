@@ -9,7 +9,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -41,7 +40,7 @@ fun AgentAuthBadge(
         style = MaterialTheme.typography.labelSmall,
         color = colors.content,
         modifier = modifier
-            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+            .defaultMinSize(minWidth = MIN_TOUCH_TARGET, minHeight = MIN_TOUCH_TARGET)
             .border(width = 1.dp, color = colors.border, shape = RoundedCornerShape(4.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -65,8 +64,8 @@ private fun authStatusColors(status: AgentAuthStatus): AuthStatusColors = when (
         content = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     AgentAuthStatus.NeedsAuth -> AuthStatusColors(
-        border = Color(0xFFD97706).copy(alpha = 0.4f),
-        content = Color(0xFFFDE68A),
+        border = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.4f),
+        content = MaterialTheme.colorScheme.tertiary,
     )
     AgentAuthStatus.Authenticated -> AuthStatusColors(
         border = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
@@ -79,6 +78,6 @@ private fun authStatusColors(status: AgentAuthStatus): AuthStatusColors = when (
 }
 
 private data class AuthStatusColors(
-    val border: Color,
-    val content: Color,
+    val border: androidx.compose.ui.graphics.Color,
+    val content: androidx.compose.ui.graphics.Color,
 )

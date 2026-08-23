@@ -2,8 +2,6 @@ package server.agent.android.chat.auth
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -29,7 +27,6 @@ import server.agent.android.ui.components.AgentButtonVariant
 
 private val MIN_TOUCH_TARGET = 48.dp
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AgentAuthPanel(
     agentName: String,
@@ -94,28 +91,28 @@ fun AgentAuthPanel(
                 ) {
                     Text(text = stringResource(R.string.agent_auth_cancel))
                 }
-            } else {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+            }
+
+            if (summary.canLogout || session != null) {
+                AgentButton(
+                    onClick = onLogout,
+                    enabled = summary.canLogout &&
+                        session == null &&
+                        !actionBusy &&
+                        !submitting,
+                    variant = AgentButtonVariant.Ghost,
+                    size = AgentButtonSize.Small,
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                        .testTag("agent_auth_logout"),
                 ) {
-                    AgentButton(
-                        onClick = onLogout,
-                        enabled = summary.canLogout && !actionBusy && !submitting,
-                        variant = AgentButtonVariant.Ghost,
-                        size = AgentButtonSize.Small,
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                            .testTag("agent_auth_logout"),
-                    ) {
-                        Text(
-                            text = if (actionBusy) {
-                                stringResource(R.string.agent_auth_signing_out)
-                            } else {
-                                stringResource(R.string.agent_auth_sign_out)
-                            },
-                        )
-                    }
+                    Text(
+                        text = if (actionBusy && session == null) {
+                            stringResource(R.string.agent_auth_signing_out)
+                        } else {
+                            stringResource(R.string.agent_auth_sign_out)
+                        },
+                    )
                 }
             }
 

@@ -2,6 +2,7 @@ package server.agent.android.chat.auth
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -203,7 +204,7 @@ class AgentAuthUiTest {
         }
 
         composeTestRule.onNodeWithTag("agent_auth_cancel").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("agent_auth_logout").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("agent_auth_logout").assertIsDisplayed().assertIsNotEnabled()
     }
 
     private fun summary(
