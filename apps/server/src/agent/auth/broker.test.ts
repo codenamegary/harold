@@ -40,6 +40,50 @@ describe("createAuthBroker", () => {
     expect(respawns).toEqual(["cursor"])
   })
 
+  test("confirm while needs_auth reopens host-login with retry copy", async () => {
+    const broker = createAuthBroker({
+      agentExists: () => true,
+      requestRespawn: async () => undefined,
+      resolveAdapter: () =>
+        createTestAdapter({
+          probe: async () => ({
+            status: "needs_auth",
+            error: null,
+            canLogout: false,
+          }),
+        }),
+    })
+
+    const started = await broker.startSession({ agentId: "cursor" })
+    if (!started.ok) {
+      throw new Error("expected start to succeed")
+    }
+
+    const confirmed = await broker.applyAction({
+      agentId: "cursor",
+      sessionId: started.value.sessionId,
+      action: { type: "confirm", stepId: HOST_LOGIN_CONFIRM_STEP_ID },
+    })
+
+    expect(confirmed.ok).toBe(true)
+    if (!confirmed.ok) {
+      throw new Error("expected confirm to keep session")
+    }
+    expect(confirmed.value.status).toBe("in_progress")
+    expect(confirmed.value.sessionId).toBe(started.value.sessionId)
+    expect(
+      confirmed.value.steps.some(
+        (step) =>
+          step.type === "show_message" &&
+          step.body.startsWith("That didn't work."),
+      ),
+    ).toBe(true)
+
+    const auth = await broker.get("cursor")
+    expect(auth.session?.status).toBe("in_progress")
+    expect(auth.status).toBe("needs_auth")
+  })
+
   test("cancel ends the session", async () => {
     const broker = createAuthBroker({
       agentExists: () => true,
