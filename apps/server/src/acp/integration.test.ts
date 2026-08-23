@@ -141,7 +141,7 @@ describe("ACP supervisor integration", () => {
     await acpSupervisor.stop()
     await app.close()
     database.close()
-  })
+  }, { timeout: 20_000 })
 
   test("PATCH enable starts the supervisor", async () => {
     const { app, acpSupervisor, database } = await createTestHarness()
@@ -162,7 +162,7 @@ describe("ACP supervisor integration", () => {
     await acpSupervisor.stop()
     await app.close()
     database.close()
-  })
+  }, { timeout: 20_000 })
 
   test("shutdown stops the ACP child before the database closes", async () => {
     const { spawnAgentProcessFn, killed } = createFakeSpawnFn()

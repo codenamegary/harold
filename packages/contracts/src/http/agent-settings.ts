@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { AgentAuthSummarySchema } from "./agent-auth"
 import { AgentIdSchema } from "./agent.id.generated"
 
 export { AgentIdSchema }
@@ -68,6 +69,7 @@ export const AgentSettingsSchema = z.strictObject({
   deletable: z.boolean(),
   state: AgentRuntimeStateSchema,
   capabilities: AgentCapabilityInventorySchema.nullable(),
+  authSummary: AgentAuthSummarySchema,
 })
 
 export const AgentSettingsCollectionSchema = z.strictObject({

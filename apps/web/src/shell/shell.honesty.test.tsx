@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { defaultAuthSummary } from "../test/agent.settings.fixtures"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { DeviceCollectionSchema } from "contracts/http/device"
 import { waitFor } from "@testing-library/react"
@@ -78,6 +79,7 @@ const emptyAgentCollection = {
       deletable: false,
       state: { status: "stopped", error: null },
       capabilities: null,
+      authSummary: defaultAuthSummary,
     },
     {
       id: "claude-acp",
@@ -91,6 +93,7 @@ const emptyAgentCollection = {
       deletable: false,
       state: { status: "stopped", error: null },
       capabilities: null,
+      authSummary: defaultAuthSummary,
     },
   ],
 }

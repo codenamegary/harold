@@ -6,6 +6,8 @@ import {
   inventoryAdvertisesSessionList,
   inventoryEntry,
 } from "../agent/inventory"
+import { createAuthBroker } from "../../agent/auth/broker"
+import { createSupervisorAuthHooks } from "../../agent/auth/supervisor.hooks"
 import { createAcpSupervisor } from "./supervisor"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
 import { SpawnedAgentProcess } from "./spawn.agent.process"
@@ -131,6 +133,47 @@ describe("createAcpSupervisor", () => {
 
     await expect(missingPath.start("cursor")).rejects.toThrow("Agent executable path is not configured")
     expect(missingPath.getStatus().state).toBe("stopped")
+  })
+
+  test("with auth hooks skips catalog authenticate and caches auth summary", async () => {
+    const mock = createMockTransport()
+    let authenticateCalled = false
+    mock.setHandler("initialize", () => ({
+      protocolVersion: 1,
+      agentCapabilities: {
+        loadSession: true,
+        sessionCapabilities: { close: true },
+      },
+    }))
+    mock.setHandler("authenticate", () => {
+      authenticateCalled = true
+      return {}
+    })
+
+    const authBroker = createAuthBroker({
+      agentExists: () => true,
+      requestRespawn: async () => undefined,
+    })
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: () => createMockProcess(),
+      createTransportFn: () => mock.transport,
+      authHooks: createSupervisorAuthHooks({
+        authBroker,
+        requestRespawn: async () => undefined,
+      }),
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+
+    expect(authenticateCalled).toBe(false)
+    expect(supervisor.getAgentRuntimeState("cursor").status).toBe("ready")
+    expect(await authBroker.getSummary("cursor")).toMatchObject({ status: "unknown" })
   })
 
   test("runs initialize and authenticate then caches capabilities", async () => {

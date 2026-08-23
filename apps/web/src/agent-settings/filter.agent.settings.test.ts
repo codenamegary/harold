@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { defaultAuthSummary } from "../test/agent.settings.fixtures"
 import { AgentSettings } from "contracts/http/agent-settings"
 import { filterAgentSettings } from "./filter.agent.settings"
 
@@ -14,6 +15,7 @@ const cursor: AgentSettings = {
   deletable: false,
   state: { status: "stopped", error: null },
   capabilities: null,
+      authSummary: defaultAuthSummary,
 }
 
 const claude: AgentSettings = {
@@ -28,6 +30,7 @@ const claude: AgentSettings = {
   deletable: false,
   state: { status: "stopped", error: null },
   capabilities: null,
+      authSummary: defaultAuthSummary,
 }
 
 describe("filterAgentSettings", () => {

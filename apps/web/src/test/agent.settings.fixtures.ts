@@ -1,4 +1,12 @@
+import { AgentAuthSummary } from "contracts/http/agent-auth"
 import { AgentCapabilityInventory, AgentRuntimeState } from "contracts/http/agent-settings"
+
+export const defaultAuthSummary: AgentAuthSummary = {
+  status: "unknown",
+  error: null,
+  activeSessionId: null,
+  canLogout: false,
+}
 
 export const nullAgentCapabilities = null
 

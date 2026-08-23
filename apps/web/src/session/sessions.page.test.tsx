@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { defaultAuthSummary } from "../test/agent.settings.fixtures"
 import { waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router"
@@ -43,6 +44,7 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
       deletable: false,
       state: { status: "stopped", error: null },
       capabilities: null,
+      authSummary: defaultAuthSummary,
     },
   ],
 })

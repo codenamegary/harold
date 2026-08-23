@@ -13,6 +13,7 @@
     "./http/permission": "./src/http/permission.ts",
     "./http/device": "./src/http/device.ts",
     "./http/pairing-code": "./src/http/pairing-code.ts",
+    "./http/agent-auth": "./src/http/agent-auth.ts",
     "./http/agent-settings": "./src/http/agent-settings.ts",
     "./http/runtime-settings": "./src/http/runtime-settings.ts",
     "./http/logs": "./src/http/logs.ts",

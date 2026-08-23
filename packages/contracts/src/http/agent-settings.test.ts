@@ -13,6 +13,13 @@ import {
   stoppedAgentRuntimeState,
 } from "./agent-settings"
 
+const defaultAuthSummary = {
+  status: "unknown",
+  error: null,
+  activeSessionId: null,
+  canLogout: false,
+} as const
+
 const validAgentSettings = {
   id: "cursor",
   displayName: "Cursor",
@@ -25,6 +32,7 @@ const validAgentSettings = {
   deletable: false,
   state: stoppedAgentRuntimeState,
   capabilities: null,
+  authSummary: defaultAuthSummary,
 }
 
 describe("AgentIdSchema", () => {
@@ -68,6 +76,7 @@ describe("AgentSettingsSchema", () => {
       deletable: false,
       state: stoppedAgentRuntimeState,
       capabilities: null,
+      authSummary: defaultAuthSummary,
     }
 
     expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
@@ -92,6 +101,7 @@ describe("AgentSettingsSchema", () => {
         agentInfo: { name: "fake-acp", version: "0.0.0" },
         entries: [],
       },
+      authSummary: defaultAuthSummary,
     }
 
     expect(AgentSettingsSchema.parse(settings)).toEqual(settings)
@@ -366,6 +376,7 @@ describe("AgentSettingsCollectionSchema", () => {
           deletable: false,
           state: stoppedAgentRuntimeState,
           capabilities: null,
+          authSummary: defaultAuthSummary,
         },
       ],
     }
