@@ -1,5 +1,7 @@
+import { AgentAuth } from "contracts/http/agent-auth"
 import { AgentId } from "contracts/http/agent-settings"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
+import { AUTH_GATED_PROMPT_MESSAGE } from "../../acp/auth.required"
 
 export type SessionKey = `${AgentId}:${string}`
 
@@ -26,7 +28,9 @@ export type SessionHubPromptSession = (params: {
   agentId: AgentId
   sessionId: string
   text: string
-}) => Promise<{ ok: true } | { ok: false; reason: string }>
+}) => Promise<
+  { ok: true } | { ok: false; reason: string; authRequired?: boolean }
+>
 
 export type SessionHubCancelSession = (params: {
   agentId: AgentId
@@ -36,6 +40,13 @@ export type SessionHubCancelSession = (params: {
 export type SessionCwdCache = {
   remember: (params: { agentId: AgentId; sessionId: string; cwd: string }) => void
   get: (params: { agentId: AgentId; sessionId: string }) => string | undefined
+}
+
+export type SessionHubAuthHooks = {
+  ensureReadyForPrompt: (
+    agentId: AgentId,
+  ) => Promise<{ ok: true } | { ok: false }>
+  ensureSessionFromChallenge: (agentId: AgentId) => Promise<void>
 }
 
 export type PendingClientRpc = {
@@ -55,6 +66,7 @@ export type CreateSessionHubParams = {
   promptSession: SessionHubPromptSession
   cancelSession: SessionHubCancelSession
   createRequestId?: () => string
+  authHooks?: SessionHubAuthHooks
 }
 
 export type SessionHub = {
@@ -85,6 +97,10 @@ export type SessionHub = {
     agentId: AgentId
     sessionId: string
     update: unknown
+  }) => void
+  broadcastAuthSessionUpdated: (params: {
+    agentId: AgentId
+    auth: AgentAuth
   }) => void
   requestPermission: (params: {
     agentId: AgentId
@@ -124,6 +140,7 @@ export const createSessionHub = ({
   promptSession,
   cancelSession,
   createRequestId = () => crypto.randomUUID(),
+  authHooks,
 }: CreateSessionHubParams): SessionHub => {
   const subscribers = new Map<string, SessionHubSubscriber>()
   const subscribersBySession = new Map<SessionKey, Set<string>>()
@@ -198,6 +215,15 @@ export const createSessionHub = ({
 
     for (const id of ids) {
       subscribers.get(id)?.sink.send(message)
+    }
+  }
+
+  const fanOutToAgent = (agentId: AgentId, message: SessionStreamServerMessage) => {
+    const prefix = `${agentId}:`
+    for (const subscriber of subscribers.values()) {
+      if (subscriber.sessionKey !== null && subscriber.sessionKey.startsWith(prefix)) {
+        subscriber.sink.send(message)
+      }
     }
   }
 
@@ -388,12 +414,32 @@ export const createSessionHub = ({
         return
       }
 
+      if (authHooks !== undefined) {
+        const ready = await authHooks.ensureReadyForPrompt(params.agentId)
+        if (!ready.ok) {
+          sendError(subscriber, AUTH_GATED_PROMPT_MESSAGE, {
+            agentId: params.agentId,
+            sessionId: params.sessionId,
+          })
+          return
+        }
+      }
+
       const result = await promptSession({
         agentId: params.agentId,
         sessionId: params.sessionId,
         text: params.text,
       })
       if (!result.ok) {
+        if (result.authRequired === true && authHooks !== undefined) {
+          await authHooks.ensureSessionFromChallenge(params.agentId)
+          sendError(subscriber, AUTH_GATED_PROMPT_MESSAGE, {
+            agentId: params.agentId,
+            sessionId: params.sessionId,
+          })
+          return
+        }
+
         sendError(subscriber, result.reason, {
           agentId: params.agentId,
           sessionId: params.sessionId,
@@ -437,6 +483,13 @@ export const createSessionHub = ({
         agentId,
         sessionId,
         update,
+      })
+    },
+    broadcastAuthSessionUpdated: ({ agentId, auth }) => {
+      fanOutToAgent(agentId, {
+        type: "auth_session_updated",
+        agentId,
+        auth,
       })
     },
     requestPermission: ({ agentId, sessionId, params }) =>

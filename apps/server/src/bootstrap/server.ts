@@ -254,8 +254,21 @@ export const createServer = async ({
         ? { ok: true }
         : { ok: false, reason: cancelled.reason }
     },
+    authHooks: {
+      ensureReadyForPrompt: async (agentId) => {
+        const ready = await authBroker.ensureReadyForPrompt(agentId)
+        return ready.ok ? { ok: true } : { ok: false }
+      },
+      ensureSessionFromChallenge: async (agentId) => {
+        await authBroker.ensureSessionFromChallenge(agentId)
+      },
+    },
   })
   sessionHubRef.current = sessionHub
+
+  authBroker.subscribe(({ agentId, auth }) => {
+    sessionHub.broadcastAuthSessionUpdated({ agentId, auth })
+  })
 
   registerSessionStreamRoutes(app, {
     deviceRepository,
@@ -295,6 +308,7 @@ export const createServer = async ({
     acpSupervisor,
     cwdCache,
     archivedAcpSessions,
+    authBroker,
   )
 
   const deviceService = createDeviceService({

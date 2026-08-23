@@ -79,6 +79,16 @@ export const buildAcpUnavailableProblem = (detail = "ACP agent is unavailable") 
     detail: sanitizeAcpErrorMessage(detail),
   })
 
+export const buildAuthRequiredProblem = (
+  detail = "Agent authentication required. Sign in on the host machine to continue.",
+) =>
+  ConflictProblemSchema.parse({
+    type: PROBLEM_TYPES.conflict,
+    title: "Agent authentication required",
+    status: 409,
+    detail,
+  })
+
 export const buildTurnInProgressProblem = (
   detail = "A turn is already running for this session",
 ) =>

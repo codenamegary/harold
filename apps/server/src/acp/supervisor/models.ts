@@ -20,7 +20,7 @@ export type AcpAgentRuntimeState = {
 
 export type AcpSessionOperationResult =
   | { ok: true; acpSessionId: string }
-  | { ok: false; reason: string }
+  | { ok: false; reason: string; authRequired?: boolean }
 
 export type AcpSessionCloseResult =
   | { ok: true }
@@ -28,11 +28,11 @@ export type AcpSessionCloseResult =
 
 export type AcpSessionPromptResult =
   | { ok: true; result: unknown }
-  | { ok: false; reason: string }
+  | { ok: false; reason: string; authRequired?: boolean }
 
 export type AcpSessionPromptStartResult =
   | { ok: true; turnId: string; completion: Promise<AcpSessionPromptResult> }
-  | { ok: false; reason: string }
+  | { ok: false; reason: string; authRequired?: boolean }
 
 export type AcpSessionCancelResult =
   | { ok: true }

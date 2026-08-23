@@ -17,12 +17,20 @@ export const createAcpHubPromptSession = (
       prompt: [{ type: "text", text }],
     })
     if (!started.ok) {
-      return started
+      return {
+        ok: false,
+        reason: started.reason,
+        ...(started.authRequired === true ? { authRequired: true } : {}),
+      }
     }
 
     const completion = await started.completion
     if (!completion.ok) {
-      return completion
+      return {
+        ok: false,
+        reason: completion.reason,
+        ...(completion.authRequired === true ? { authRequired: true } : {}),
+      }
     }
 
     return { ok: true }

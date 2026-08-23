@@ -18,6 +18,8 @@ export type SpawnFakeAcpOptions = {
   emitPermissionRequestOnPrompt?: boolean
   emitSessionUpdatesOnPrompt?: boolean
   promptCompletionDelayMs?: number
+  sessionNewFailsWithAuthRequired?: boolean
+  promptFailsWithAuthRequired?: boolean
   fsReadPath?: string
   fsWritePath?: string
   fsWriteContent?: string

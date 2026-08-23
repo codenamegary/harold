@@ -182,4 +182,111 @@ describe("session hub", () => {
     expect(a.messages.some((m) => m.type === "cancelled")).toBe(true)
     expect(b.messages.some((m) => m.type === "cancelled")).toBe(true)
   })
+
+  test("auth gate blocks prompt and fans auth_session_updated to agent subscribers", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+    cwdCache.remember({ agentId: "cursor", sessionId: "s2", cwd: "/tmp/b" })
+
+    let challenges = 0
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      promptSession: async () => ({ ok: true }),
+      cancelSession: async () => ({ ok: true }),
+      authHooks: {
+        ensureReadyForPrompt: async () => ({ ok: false }),
+        ensureSessionFromChallenge: async () => {
+          challenges += 1
+        },
+      },
+    })
+
+    const a = collectSink()
+    const b = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    hub.addSubscriber({ id: "b", sink: b.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+    await hub.subscribe({ subscriberId: "b", agentId: "cursor", sessionId: "s2" })
+
+    await hub.prompt({
+      subscriberId: "a",
+      agentId: "cursor",
+      sessionId: "s1",
+      text: "hello",
+    })
+
+    expect(a.messages.some((m) => m.type === "prompt_complete")).toBe(false)
+    expect(
+      a.messages.some(
+        (m) =>
+          m.type === "error"
+          && m.message.includes("Agent authentication required"),
+      ),
+    ).toBe(true)
+    expect(challenges).toBe(0)
+
+    hub.broadcastAuthSessionUpdated({
+      agentId: "cursor",
+      auth: {
+        agentId: "cursor",
+        status: "needs_auth",
+        error: null,
+        session: {
+          sessionId: "auth-1",
+          agentId: "cursor",
+          status: "in_progress",
+          steps: [],
+          error: null,
+        },
+      },
+    })
+
+    expect(a.messages.some((m) => m.type === "auth_session_updated")).toBe(true)
+    expect(b.messages.some((m) => m.type === "auth_session_updated")).toBe(true)
+  })
+
+  test("prompt authRequired opens challenge and errors without prompt_complete", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+
+    let challenges = 0
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      promptSession: async () => ({
+        ok: false,
+        reason: "Authentication required",
+        authRequired: true,
+      }),
+      cancelSession: async () => ({ ok: true }),
+      authHooks: {
+        ensureReadyForPrompt: async () => ({ ok: true }),
+        ensureSessionFromChallenge: async () => {
+          challenges += 1
+        },
+      },
+    })
+
+    const a = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    await hub.prompt({
+      subscriberId: "a",
+      agentId: "cursor",
+      sessionId: "s1",
+      text: "hello",
+    })
+
+    expect(challenges).toBe(1)
+    expect(a.messages.some((m) => m.type === "prompt_complete")).toBe(false)
+    expect(
+      a.messages.some(
+        (m) =>
+          m.type === "error"
+          && m.message.includes("Agent authentication required"),
+      ),
+    ).toBe(true)
+  })
 })

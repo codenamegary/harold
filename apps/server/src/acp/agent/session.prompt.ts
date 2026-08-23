@@ -1,4 +1,5 @@
 import { createTurnId } from "../../session/create.turn.id"
+import { isAcpAuthRequiredError } from "../auth.required"
 import { sanitizeAcpRejection } from "../sanitize.error"
 import { AcpSessionPromptResult } from "../supervisor/models"
 import { isAcpJsonRpcError } from "../transport/json-rpc-error"
@@ -74,7 +75,11 @@ export const createSessionPromptHandler = (): AgentMethodHandler<"session/prompt
       } catch (error: unknown) {
         const reason = sanitizePromptFailureReason(error, "session/prompt failed")
         context.sessionBindings.setActiveTurnId({ acpSessionId, turnId: undefined })
-        return { ok: false, reason }
+        return {
+          ok: false,
+          reason,
+          ...(isAcpAuthRequiredError(error) ? { authRequired: true } : {}),
+        }
       }
     })()
 

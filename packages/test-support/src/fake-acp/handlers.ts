@@ -245,6 +245,13 @@ const handleSessionNew = (
   config: FakeAcpConfig,
   promptState: FakeAcpPromptState,
 ): HandlerResult => {
+  if (config.sessionNewFailsWithAuthRequired) {
+    return {
+      response: jsonRpcError(request.id, -32000, "Authentication required"),
+      ...emptyHandlerExtras(),
+    }
+  }
+
   const sessionId = config.sessionNewSessionId ?? promptState.allocateSessionId()
   promptState.recordSession({ sessionId, cwd: readCwd(request.params) })
   return {
@@ -337,6 +344,13 @@ const handleSessionPrompt = (
   if (sessionId === undefined) {
     return {
       response: jsonRpcError(request.id, -32602, "sessionId is required"),
+      ...emptyHandlerExtras(),
+    }
+  }
+
+  if (config.promptFailsWithAuthRequired) {
+    return {
+      response: jsonRpcError(request.id, -32000, "Authentication required"),
       ...emptyHandlerExtras(),
     }
   }

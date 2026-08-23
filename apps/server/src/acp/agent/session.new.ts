@@ -1,4 +1,5 @@
 import { sanitizeAcpRejection } from "../sanitize.error"
+import { isAcpAuthRequiredError } from "../auth.required"
 import { isAcpJsonRpcError } from "../transport/json-rpc-error"
 import { AcpOperationContext } from "../transport/json-rpc-transport"
 import { AgentMethodTable } from "./method.table"
@@ -85,6 +86,7 @@ export const createSessionNewHandler = (): AgentMethodHandler<"session/new"> => 
       return {
         ok: false,
         reason: sanitizeNewFailureReason(error, "session/new failed"),
+        ...(isAcpAuthRequiredError(error) ? { authRequired: true } : {}),
       }
     }
   }

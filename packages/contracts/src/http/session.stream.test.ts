@@ -94,4 +94,38 @@ describe("session stream contracts", () => {
       sessionId: "acp-1",
     })
   })
+
+  test("parses auth_session_updated frames", () => {
+    expect(
+      SessionStreamServerMessageSchema.parse({
+        type: "auth_session_updated",
+        agentId: "claude",
+        auth: {
+          agentId: "claude",
+          status: "needs_auth",
+          error: null,
+          session: {
+            sessionId: "auth-1",
+            agentId: "claude",
+            status: "in_progress",
+            steps: [
+              {
+                type: "show_message",
+                level: "info",
+                body: "Sign in on the host",
+              },
+            ],
+            error: null,
+          },
+        },
+      }),
+    ).toMatchObject({
+      type: "auth_session_updated",
+      agentId: "claude",
+      auth: {
+        agentId: "claude",
+        status: "needs_auth",
+      },
+    })
+  })
 })
