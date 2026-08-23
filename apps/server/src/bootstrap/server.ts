@@ -189,8 +189,7 @@ export const createServer = async ({
   const sessionHubRef: { current: SessionHub | null } = { current: null }
   const cwdCache = createSessionCwdCache()
 
-  const agentExists = (agentId: string) =>
-    agentSettingsRepository.list().some((agent) => agent.id === agentId)
+  const agentExists = (agentId: string) => agentSettingsRepository.hasAgentId(agentId)
 
   const acpSupervisorRef: { current: AcpSupervisor } = { current: null! }
 
