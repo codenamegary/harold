@@ -52,6 +52,32 @@ describe("createClaudeAuthAdapter", () => {
     expect(probe.canLogout).toBe(true)
   })
 
+  test("probe maps loggedIn false when claude exits non-zero with json stdout", async () => {
+    const adapter = createClaudeAuthAdapter({
+      execFile: async () => {
+        const error = new Error("Command failed: claude auth status --json") as Error & {
+          code: number
+          stdout: string
+          stderr: string
+        }
+        error.code = 1
+        error.stdout = '{"loggedIn":false,"authMethod":"none"}'
+        error.stderr = ""
+        throw error
+      },
+    })
+    const probe = await adapter.probe({
+      agentId: "claude-acp",
+      hostIdentity: { id: "default" },
+      hostMachineName: "dev-box",
+      initializeResult: null,
+    })
+
+    expect(probe.status).toBe("needs_auth")
+    expect(probe.canLogout).toBe(false)
+    expect(probe.error).toBeNull()
+  })
+
   test("parseClaudeAuthStatusJson accepts stdout", () => {
     expect(parseClaudeAuthStatusJson('{"loggedIn":true}')).toEqual({ loggedIn: true })
   })
