@@ -1,6 +1,11 @@
 package server.agent.android.network
 
+import server.agent.android.contracts.AgentAuth
+import server.agent.android.contracts.AgentAuthSession
+import server.agent.android.contracts.AgentAuthSummary
+import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.AgentSettingsCollection
+import server.agent.android.contracts.AuthSessionAction
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateSessionResponse
 import server.agent.android.contracts.CreateWorkspaceBody
@@ -67,7 +72,29 @@ interface AgentApi {
 
     suspend fun deleteSession(
         serverOrigin: String,
-        agentId: server.agent.android.contracts.AgentId,
+        agentId: AgentId,
         sessionId: String,
     ): Result<Unit>
+
+    suspend fun getAgentAuth(
+        serverOrigin: String,
+        agentId: AgentId,
+    ): Result<AgentAuth>
+
+    suspend fun startAgentAuthSession(
+        serverOrigin: String,
+        agentId: AgentId,
+    ): Result<AgentAuthSession>
+
+    suspend fun applyAgentAuthSessionAction(
+        serverOrigin: String,
+        agentId: AgentId,
+        sessionId: String,
+        action: AuthSessionAction,
+    ): Result<AgentAuthSession>
+
+    suspend fun logoutAgentAuth(
+        serverOrigin: String,
+        agentId: AgentId,
+    ): Result<AgentAuthSummary>
 }

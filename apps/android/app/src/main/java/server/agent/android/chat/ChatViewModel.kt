@@ -11,7 +11,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import server.agent.android.connection.ConnectionGateway
+import server.agent.android.contracts.AgentAuth
+import server.agent.android.contracts.AgentAuthStatus
+import server.agent.android.contracts.AgentAuthSummary
 import server.agent.android.contracts.AgentId
+import server.agent.android.contracts.AuthSessionAction
+import server.agent.android.contracts.AuthSessionStatus
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionState
@@ -19,6 +24,7 @@ import server.agent.android.contracts.SessionStreamClientMessage
 import server.agent.android.contracts.SessionStreamServerMessage
 import server.agent.android.contracts.WorkspaceState
 import server.agent.android.contracts.catalogSessionKey
+import server.agent.android.contracts.toSummary
 import server.agent.android.events.ConnectionStatus
 import server.agent.android.foreground.ActiveSessionSnapshot
 import server.agent.android.foreground.ActiveSessionTracker
@@ -47,9 +53,11 @@ class ChatViewModel(
 
     private var workspaceByPath: Map<String, WorkspaceRow> = emptyMap()
     private var agentLabels: Map<AgentId, String> = emptyMap()
+    private var agentAuthSummaries: Map<AgentId, AgentAuthSummary> = emptyMap()
     private var pendingPrompt: String? = null
     private var turnSerial: Int = 0
     private var catalog: List<SessionRow> = emptyList()
+    private var authHydrateGeneration: Int = 0
 
     init {
         voiceDictationController.onStateChanged = ::syncVoiceDictationState
@@ -523,9 +531,246 @@ class ChatViewModel(
         }
     }
 
+    fun onAuthBadgeClick() {
+        val session = _uiState.value.selectedSession ?: return
+        val summary = _uiState.value.authBadgeSummary
+        _uiState.update { current ->
+            current.copy(authPanelOpen = true, authError = null)
+        }
+        if (summary?.status == AgentAuthStatus.NeedsAuth) {
+            startAuthSession(session.agentId)
+        }
+    }
+
+    fun onAuthConfirm(stepId: String) {
+        val selected = _uiState.value.selectedSession ?: return
+        val authSession = _uiState.value.agentAuth?.session ?: return
+        if (_uiState.value.authActionBusy || _uiState.value.authPanelSubmitting) {
+            return
+        }
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+
+        _uiState.update { current ->
+            current.copy(authActionBusy = true, authError = null)
+        }
+        viewModelScope.launch {
+            operatorRepository.applyAgentAuthSessionAction(
+                serverOrigin = paired.serverOrigin,
+                agentId = selected.agentId,
+                sessionId = authSession.sessionId,
+                action = AuthSessionAction.Confirm(stepId = stepId),
+            ).fold(
+                onSuccess = { updatedSession ->
+                    applyAuthSessionResult(selected.agentId, updatedSession)
+                },
+                onFailure = { error ->
+                    _uiState.update { current ->
+                        current.copy(
+                            authActionBusy = false,
+                            authError = errorMessage(error),
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun onAuthCancel() {
+        val selected = _uiState.value.selectedSession ?: return
+        val authSession = _uiState.value.agentAuth?.session ?: return
+        if (_uiState.value.authActionBusy || _uiState.value.authPanelSubmitting) {
+            return
+        }
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+
+        _uiState.update { current ->
+            current.copy(authActionBusy = true, authError = null)
+        }
+        viewModelScope.launch {
+            operatorRepository.applyAgentAuthSessionAction(
+                serverOrigin = paired.serverOrigin,
+                agentId = selected.agentId,
+                sessionId = authSession.sessionId,
+                action = AuthSessionAction.Cancel,
+            ).fold(
+                onSuccess = { updatedSession ->
+                    applyAuthSessionResult(selected.agentId, updatedSession)
+                    _uiState.update { current ->
+                        current.copy(authPanelOpen = false)
+                    }
+                    hydrateAgentAuth(selected.agentId)
+                },
+                onFailure = { error ->
+                    _uiState.update { current ->
+                        current.copy(
+                            authActionBusy = false,
+                            authError = errorMessage(error),
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun onAuthLogout() {
+        val selected = _uiState.value.selectedSession ?: return
+        val summary = _uiState.value.authBadgeSummary
+        if (summary?.canLogout != true) {
+            return
+        }
+        if (_uiState.value.authActionBusy ||
+            _uiState.value.authPanelSubmitting ||
+            _uiState.value.agentAuth?.session?.status == AuthSessionStatus.InProgress
+        ) {
+            return
+        }
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+
+        _uiState.update { current ->
+            current.copy(authActionBusy = true, authError = null)
+        }
+        viewModelScope.launch {
+            operatorRepository.logoutAgentAuth(
+                serverOrigin = paired.serverOrigin,
+                agentId = selected.agentId,
+            ).fold(
+                onSuccess = { logoutSummary ->
+                    agentAuthSummaries = agentAuthSummaries + (selected.agentId to logoutSummary)
+                    _uiState.update { current ->
+                        current.copy(
+                            agentAuth = AgentAuth(
+                                agentId = selected.agentId,
+                                status = logoutSummary.status,
+                                error = logoutSummary.error,
+                                session = null,
+                            ),
+                            agentAuthSummary = logoutSummary,
+                            authActionBusy = false,
+                            authPanelOpen = false,
+                            authError = null,
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update { current ->
+                        current.copy(
+                            authActionBusy = false,
+                            authError = errorMessage(error),
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    private fun startAuthSession(agentId: AgentId) {
+        if (_uiState.value.authPanelSubmitting || _uiState.value.authActionBusy) {
+            return
+        }
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+
+        _uiState.update { current ->
+            current.copy(authPanelSubmitting = true, authError = null)
+        }
+        viewModelScope.launch {
+            operatorRepository.startAgentAuthSession(
+                serverOrigin = paired.serverOrigin,
+                agentId = agentId,
+            ).fold(
+                onSuccess = { session ->
+                    applyAuthSessionResult(agentId, session)
+                },
+                onFailure = { error ->
+                    _uiState.update { current ->
+                        current.copy(
+                            authPanelSubmitting = false,
+                            authError = errorMessage(error),
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    private fun applyAuthSessionResult(
+        agentId: AgentId,
+        session: server.agent.android.contracts.AgentAuthSession,
+    ) {
+        val canLogout = agentAuthSummaries[agentId]?.canLogout ?: false
+        val auth = AgentAuth(
+            agentId = agentId,
+            status = when (session.status) {
+                AuthSessionStatus.Succeeded -> AgentAuthStatus.Authenticated
+                AuthSessionStatus.Failed -> AgentAuthStatus.Error
+                AuthSessionStatus.Cancelled,
+                AuthSessionStatus.InProgress,
+                -> AgentAuthStatus.NeedsAuth
+            },
+            error = session.error,
+            session = session,
+        )
+        val summary = auth.toSummary(canLogout = canLogout)
+        agentAuthSummaries = agentAuthSummaries + (agentId to summary)
+        _uiState.update { current ->
+            if (current.selectedSession?.agentId != agentId) {
+                return@update current
+            }
+            current.copy(
+                agentAuth = auth,
+                agentAuthSummary = summary,
+                authPanelSubmitting = false,
+                authActionBusy = false,
+                authPanelOpen = session.status == AuthSessionStatus.InProgress || current.authPanelOpen,
+                authError = null,
+            )
+        }
+    }
+
+    private suspend fun hydrateAgentAuth(agentId: AgentId) {
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val generation = ++authHydrateGeneration
+        operatorRepository.getAgentAuth(
+            serverOrigin = paired.serverOrigin,
+            agentId = agentId,
+        ).fold(
+            onSuccess = { auth ->
+                if (generation != authHydrateGeneration) {
+                    return
+                }
+                if (_uiState.value.selectedSession?.agentId != agentId) {
+                    return
+                }
+                val canLogout = agentAuthSummaries[agentId]?.canLogout ?: false
+                val summary = auth.toSummary(canLogout = canLogout)
+                agentAuthSummaries = agentAuthSummaries + (agentId to summary)
+                _uiState.update { current ->
+                    current.copy(
+                        agentAuth = auth,
+                        agentAuthSummary = summary,
+                        authPanelOpen = current.authPanelOpen ||
+                            auth.session?.status == AuthSessionStatus.InProgress,
+                        authError = null,
+                    )
+                }
+            },
+            onFailure = { error ->
+                if (generation != authHydrateGeneration) {
+                    return
+                }
+                if (_uiState.value.selectedSession?.agentId != agentId) {
+                    return
+                }
+                _uiState.update { current ->
+                    current.copy(authError = errorMessage(error))
+                }
+            },
+        )
+    }
+
     private suspend fun activateSession(row: SessionRow) {
         navigationPreferences.saveLastSessionId(row.id)
         persistSelectedSession(row.id)
+        val summaryFromCatalog = agentAuthSummaries[row.agentId]
         _uiState.update { current ->
             current.copy(
                 selectedSession = row,
@@ -537,10 +782,17 @@ class ChatViewModel(
                 permissionUiState = PermissionUiState(),
                 extensionUiState = ExtensionUiState(),
                 streamReconnecting = false,
+                agentAuth = null,
+                agentAuthSummary = summaryFromCatalog,
+                authPanelOpen = false,
+                authPanelSubmitting = false,
+                authActionBusy = false,
+                authError = null,
             )
         }
         connectionGateway.setTarget(row.agentId, row.sessionId)
         syncActiveSessionsFromUiState()
+        hydrateAgentAuth(row.agentId)
     }
 
     private fun applyStreamMessage(message: SessionStreamServerMessage) {
@@ -648,8 +900,36 @@ class ChatViewModel(
                     current.copy(transcript = applyStreamError(current.transcript))
                 }
                 syncSelectedState(SessionState.Error)
+                if (isAuthRequiredError(message.message) && selected != null) {
+                    viewModelScope.launch {
+                        hydrateAgentAuth(selected.agentId)
+                    }
+                }
+            }
+            is SessionStreamServerMessage.AuthSessionUpdated -> {
+                if (selected == null || selected.agentId != message.agentId) {
+                    return
+                }
+                val canLogout = agentAuthSummaries[message.agentId]?.canLogout ?: false
+                val summary = message.auth.toSummary(canLogout = canLogout)
+                agentAuthSummaries = agentAuthSummaries + (message.agentId to summary)
+                _uiState.update { current ->
+                    current.copy(
+                        agentAuth = message.auth,
+                        agentAuthSummary = summary,
+                        authPanelOpen = current.authPanelOpen ||
+                            message.auth.session?.status == AuthSessionStatus.InProgress,
+                        authError = null,
+                    )
+                }
             }
         }
+    }
+
+    private fun isAuthRequiredError(message: String): Boolean {
+        val lower = message.lowercase()
+        return lower.contains("agent authentication required") ||
+            lower.contains("auth_required")
     }
 
     private fun belongsToSelection(
@@ -689,6 +969,8 @@ class ChatViewModel(
         workspaceByPath = workspaces.associateBy { workspace -> workspace.path }
         agentLabels = agentsResult.getOrNull()?.items.orEmpty()
             .associate { agent -> agent.id to agent.displayName }
+        agentAuthSummaries = agentsResult.getOrNull()?.items.orEmpty()
+            .associate { agent -> agent.id to agent.authSummary }
 
         sessionsResult.fold(
             onSuccess = { collection ->
@@ -805,6 +1087,12 @@ class ChatViewModel(
                 pendingPermissions = if (selectedWasDeleted) emptyList() else current.pendingPermissions,
                 permissionUiState = if (selectedWasDeleted) PermissionUiState() else current.permissionUiState,
                 extensionUiState = if (selectedWasDeleted) ExtensionUiState() else current.extensionUiState,
+                agentAuth = if (selectedWasDeleted) null else current.agentAuth,
+                agentAuthSummary = if (selectedWasDeleted) null else current.agentAuthSummary,
+                authPanelOpen = if (selectedWasDeleted) false else current.authPanelOpen,
+                authPanelSubmitting = if (selectedWasDeleted) false else current.authPanelSubmitting,
+                authActionBusy = if (selectedWasDeleted) false else current.authActionBusy,
+                authError = if (selectedWasDeleted) null else current.authError,
                 pickerVisible = false,
             )
         }

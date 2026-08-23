@@ -71,6 +71,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
 import server.agent.android.R
+import server.agent.android.chat.auth.AgentAuthBadge
+import server.agent.android.chat.auth.AgentAuthPanel
 
 private val MIN_TOUCH_TARGET = 48.dp
 private val SessionMenuItemPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
@@ -126,6 +128,10 @@ fun ChatScreen(
     onVoiceDictationStartOver: () -> Unit = {},
     onVoiceDictationCancel: () -> Unit = {},
     onVoiceDictationConfirm: () -> Unit = {},
+    onAuthBadgeClick: () -> Unit = {},
+    onAuthConfirm: (String) -> Unit = {},
+    onAuthCancel: () -> Unit = {},
+    onAuthLogout: () -> Unit = {},
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val sessionLabel = uiState.selectedSession?.name ?: "Select session"
@@ -337,6 +343,16 @@ fun ChatScreen(
                     }
                 },
                 actions = {
+                    val authSummary = uiState.authBadgeSummary
+                    if (hasSelectedSession && authSummary != null) {
+                        val selected = uiState.selectedSession
+                        AgentAuthBadge(
+                            agentName = selected.agentLabel.ifBlank { selected.agentId },
+                            summary = authSummary,
+                            onClick = onAuthBadgeClick,
+                            modifier = Modifier.padding(end = 4.dp),
+                        )
+                    }
                     IconButton(
                         onClick = { menuExpanded = true },
                         modifier = Modifier
@@ -481,6 +497,25 @@ fun ChatScreen(
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.testTag("composer_blocked_message"),
                     )
+                }
+
+                if (uiState.showAuthPanel) {
+                    val summary = uiState.authBadgeSummary
+                    val selected = uiState.selectedSession
+                    if (summary != null && selected != null) {
+                        AgentAuthPanel(
+                            agentName = selected.agentLabel.ifBlank { selected.agentId },
+                            summary = summary,
+                            auth = uiState.agentAuth,
+                            submitting = uiState.authPanelSubmitting,
+                            actionBusy = uiState.authActionBusy,
+                            error = uiState.authError,
+                            onConfirm = onAuthConfirm,
+                            onCancel = onAuthCancel,
+                            onLogout = onAuthLogout,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                    }
                 }
 
                 uiState.activePermissionRequest?.let { request ->

@@ -9,9 +9,13 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import server.agent.android.contracts.AgentAuth
+import server.agent.android.contracts.AgentAuthSession
+import server.agent.android.contracts.AgentAuthSummary
+import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.AgentServerJson
-import server.agent.android.contracts.AgentSettings
 import server.agent.android.contracts.AgentSettingsCollection
+import server.agent.android.contracts.AuthSessionAction
 import server.agent.android.contracts.ConflictProblem
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateSessionResponse
@@ -111,9 +115,55 @@ class DefaultAgentApi(
         json.decodeFromString(Session.serializer(), responseBody)
     }
 
+    override suspend fun getAgentAuth(
+        serverOrigin: String,
+        agentId: AgentId,
+    ): Result<AgentAuth> = get(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/agents/$agentId/auth",
+        query = emptyMap(),
+    ) { body ->
+        json.decodeFromString(AgentAuth.serializer(), body)
+    }
+
+    override suspend fun startAgentAuthSession(
+        serverOrigin: String,
+        agentId: AgentId,
+    ): Result<AgentAuthSession> = post(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/agents/$agentId/auth/sessions",
+        body = "{}",
+    ) { responseBody ->
+        json.decodeFromString(AgentAuthSession.serializer(), responseBody)
+    }
+
+    override suspend fun applyAgentAuthSessionAction(
+        serverOrigin: String,
+        agentId: AgentId,
+        sessionId: String,
+        action: AuthSessionAction,
+    ): Result<AgentAuthSession> = post(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/agents/$agentId/auth/sessions/$sessionId/actions",
+        body = json.encodeToString(AuthSessionAction.serializer(), action),
+    ) { responseBody ->
+        json.decodeFromString(AgentAuthSession.serializer(), responseBody)
+    }
+
+    override suspend fun logoutAgentAuth(
+        serverOrigin: String,
+        agentId: AgentId,
+    ): Result<AgentAuthSummary> = post(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/agents/$agentId/auth/logout",
+        body = "{}",
+    ) { responseBody ->
+        json.decodeFromString(AgentAuthSummary.serializer(), responseBody)
+    }
+
     override suspend fun deleteSession(
         serverOrigin: String,
-        agentId: server.agent.android.contracts.AgentId,
+        agentId: AgentId,
         sessionId: String,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val url = buildSessionUrl(serverOrigin, sessionId, mapOf("agentId" to agentId))

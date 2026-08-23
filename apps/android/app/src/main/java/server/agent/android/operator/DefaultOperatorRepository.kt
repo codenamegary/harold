@@ -1,6 +1,7 @@
 package server.agent.android.operator
 
 import server.agent.android.contracts.AgentId
+import server.agent.android.contracts.AuthSessionAction
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateWorkspaceBody
 import server.agent.android.network.AgentApi
@@ -43,4 +44,26 @@ class DefaultOperatorRepository(
         agentId: AgentId,
         sessionId: String,
     ) = agentApi.deleteSession(serverOrigin, agentId, sessionId)
+
+    override suspend fun getAgentAuth(
+        serverOrigin: String,
+        agentId: AgentId,
+    ) = agentApi.getAgentAuth(serverOrigin, agentId)
+
+    override suspend fun startAgentAuthSession(
+        serverOrigin: String,
+        agentId: AgentId,
+    ) = agentApi.startAgentAuthSession(serverOrigin, agentId)
+
+    override suspend fun applyAgentAuthSessionAction(
+        serverOrigin: String,
+        agentId: AgentId,
+        sessionId: String,
+        action: AuthSessionAction,
+    ) = agentApi.applyAgentAuthSessionAction(serverOrigin, agentId, sessionId, action)
+
+    override suspend fun logoutAgentAuth(
+        serverOrigin: String,
+        agentId: AgentId,
+    ) = agentApi.logoutAgentAuth(serverOrigin, agentId)
 }
