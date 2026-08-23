@@ -46,11 +46,11 @@ jobs:
       - name: Android checks
         run: ./gradlew --no-daemon --stacktrace lintRelease testDebugUnitTest
 
-      - name: Build release APK
+      - name: Build debug APK
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: ./gradlew --no-daemon --stacktrace assembleRelease
+        run: ./gradlew --no-daemon --stacktrace assembleDebug
 
-      - name: Upload release APK to fs
+      - name: Upload debug APK to fs
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: .
         env:
@@ -61,8 +61,8 @@ jobs:
         run: |
           stamp=$(date -u +%Y%m%d-%H%M%S)
           mkdir -p staged
-          cp apps/android/app/build/outputs/apk/release/app-release-unsigned.apk \
-            "staged/${stamp}-release-app.apk"
+          cp apps/android/app/build/outputs/apk/debug/app-debug.apk \
+            "staged/${stamp}-debug-app.apk"
           export LOCAL_PATH=staged
           export REMOTE_PATH=agent-server/apk
           bash .github/scripts/upload-to-fs.sh
