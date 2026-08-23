@@ -21,6 +21,8 @@ import {
   agentRuntimeStatusChipClassName,
   agentRuntimeStatusLabels,
 } from "./agent.runtime.status"
+import { AgentAuthBadge } from "../agent/auth/AgentAuthBadge"
+import { AgentSettingsAuthSection } from "../agent/auth/AgentSettingsAuthSection"
 import { deleteAgentSettings } from "./delete.agent.settings"
 import { detectAgentPath } from "./detect.agent.path"
 import { formatLaunchCommandPreview } from "./launch.command.preview"
@@ -398,6 +400,7 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
             >
               {agentRuntimeStatusLabels[agent.state.status]}
             </span>
+            <AgentAuthBadge agentName={agent.displayName} summary={agent.authSummary} />
             {runtimeError !== "" ? (
               <p
                 className="m-0 max-w-56 truncate text-2xs text-red-400"
@@ -459,6 +462,14 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
           className={`border-b border-line-soft last:border-b-0 transition-opacity duration-200 ${isComingSoon || isDeleting ? "opacity-55" : ""} ${isDeleting ? "pointer-events-none" : ""}`}
         >
           <td colSpan={4} className="bg-[#0a0c10] px-3 py-3">
+            <div className="mb-4">
+              <AgentSettingsAuthSection
+                agentId={agent.id}
+                agentName={agent.displayName}
+                summary={agent.authSummary}
+                enabled={!isComingSoon && !isDeleting}
+              />
+            </div>
             <div className="grid grid-cols-1 gap-6 p-4 md:grid-cols-2">
               <div className="flex min-w-0 flex-col gap-4">
                 <div className="min-w-0">

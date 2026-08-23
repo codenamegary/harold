@@ -65,7 +65,7 @@ describe("AuthStepV1Schema", () => {
     })
   })
 
-  test("rejects reserved step types in v1 subset", () => {
+  test("rejects non host-login step types", () => {
     expect(() =>
       AuthStepV1Schema.parse({
         type: "paste_secret",
@@ -79,8 +79,8 @@ describe("AuthStepV1Schema", () => {
 })
 
 describe("AuthStepSchema", () => {
-  test("accepts reserved step types on the full wire union", () => {
-    expect(
+  test("rejects non host-login step types on the wire", () => {
+    expect(() =>
       AuthStepSchema.parse({
         type: "paste_secret",
         stepId: "secret",
@@ -88,7 +88,7 @@ describe("AuthStepSchema", () => {
         placeholder: null,
         secretKind: "api_key",
       }),
-    ).toMatchObject({ type: "paste_secret" })
+    ).toThrow()
   })
 })
 

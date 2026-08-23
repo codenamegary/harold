@@ -13,6 +13,8 @@ export const queryKeys = {
     [...queryKeys.devicesRoot, filters] as const,
   agentSettingsRoot: ["agentSettings"] as const,
   agentSettings: () => [...queryKeys.agentSettingsRoot] as const,
+  agentAuthRoot: ["agentAuth"] as const,
+  agentAuth: (agentId: string) => [...queryKeys.agentAuthRoot, agentId] as const,
   runtimeSettingsRoot: ["runtimeSettings"] as const,
   runtimeSettings: () => [...queryKeys.runtimeSettingsRoot] as const,
   filesystemDirectoriesRoot: ["filesystemDirectories"] as const,

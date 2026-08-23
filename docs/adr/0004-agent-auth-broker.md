@@ -31,10 +31,10 @@ orchestrates UX and probes when an adapter can.
    - `done` — session finished for this attempt.
    - **Cancel** — end the auth session; agent stays unauthenticated until the
      next Sign in or gated prompt.
-4. Use a **closed step vocabulary** on the wire (`show_message`, `confirm`,
-   `working`, `done`, plus reserved types for later). v1 clients render only
-   the host-login subset. Richer steps (`choose_method`, `paste_secret`,
-   `open_url`) stay out of product UX until a later ADR.
+4. Use a **closed step vocabulary** on the wire: `show_message`, `confirm`,
+   `working`, `done` only. Do not reserve future step types on the wire.
+   Richer flows (method pickers, secret paste, URL open) need a later ADR
+   before they appear in contracts.
 5. Allow **one in-flight auth session per agent id**. Any paired device may view
    live steps, confirm, or cancel. Never echo secrets in steps or event payloads
    because v1 has no secret steps.
@@ -367,19 +367,7 @@ type AuthStepV1 =
       message: string | null
     }
 
-/** Reserved for later ADRs; not used in v1 UX */
-type AuthStepReserved =
-  | { type: "choose_method"; methods: unknown[] }
-  | { type: "open_url"; title: string; url: string; caption: string | null }
-  | {
-      type: "paste_secret"
-      stepId: string
-      label: string
-      placeholder: string | null
-      secretKind: "api_key" | "oauth_token" | "otp" | "other"
-    }
-
-type AuthStep = AuthStepV1 | AuthStepReserved
+type AuthStep = AuthStepV1
 
 /** v1 actions */
 type AuthSessionAction =
@@ -581,7 +569,7 @@ type SupervisorAuthHooks = {
 - Supervisor start must stop calling `authenticate` with catalog ids. A stub
   broker can land first and still fix Claude enable failures.
 - Agent settings and chat need Sign in, cancel, and Sign out entry points on
-  web first; Android reuses the same contracts later.
+  web and Android (AGE-74) reuse the same host-login contracts.
 - Auth adapters are mostly **copy + probe + logout**, not login wizards.
 - Claude adapter v1: `claude auth login` instructions and `claude auth status`
   probe; creds stay in Claude's host store.
