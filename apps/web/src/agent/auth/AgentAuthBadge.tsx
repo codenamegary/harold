@@ -1,8 +1,8 @@
 import React from "react"
 import { AgentAuthSummary } from "contracts/http/agent-auth"
 import {
-  agentAuthStatusChipClassName,
   agentAuthStatusLabels,
+  agentAuthStatusTextClassName,
 } from "./agent.auth.status"
 
 type AgentAuthBadgeProps = {
@@ -16,7 +16,7 @@ export const AgentAuthBadge: React.FC<AgentAuthBadgeProps> = ({
 }) => (
   <span
     aria-label={`${agentName} auth status`}
-    className={`w-fit shrink-0 rounded-[4px] border px-1 py-px font-mono text-2xs ${agentAuthStatusChipClassName[summary.status]}`}
+    className={`w-fit shrink-0 font-mono text-2xs ${agentAuthStatusTextClassName[summary.status]}`}
   >
     {agentAuthStatusLabels[summary.status]}
   </span>

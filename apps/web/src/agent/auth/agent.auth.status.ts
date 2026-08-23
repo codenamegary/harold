@@ -7,9 +7,9 @@ export const agentAuthStatusLabels: Record<AgentAuthStatus, string> = {
   error: "auth error",
 }
 
-export const agentAuthStatusChipClassName: Record<AgentAuthStatus, string> = {
-  unknown: "border-line-soft text-dim",
-  needs_auth: "border-amber-400/40 text-amber-200",
-  authenticated: "border-lime/40 text-lime",
-  error: "border-red-400/40 text-red-400",
+export const agentAuthStatusTextClassName: Record<AgentAuthStatus, string> = {
+  unknown: "text-dim",
+  needs_auth: "text-amber-200",
+  authenticated: "text-lime",
+  error: "text-red-400",
 }

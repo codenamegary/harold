@@ -7,6 +7,7 @@ import {
   inventoryEntry,
 } from "../agent/inventory"
 import { createAuthBroker } from "../../agent/auth/broker"
+import { createDefaultAuthAdapter } from "../../agent/auth/adapters/default.adapter"
 import { createSupervisorAuthHooks } from "../../agent/auth/supervisor.hooks"
 import { createAcpSupervisor } from "./supervisor"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
@@ -153,6 +154,7 @@ describe("createAcpSupervisor", () => {
     const authBroker = createAuthBroker({
       agentExists: () => true,
       requestRespawn: async () => undefined,
+      resolveAdapter: () => createDefaultAuthAdapter(),
     })
 
     const supervisor = createAcpSupervisor({
@@ -165,6 +167,7 @@ describe("createAcpSupervisor", () => {
       authHooks: createSupervisorAuthHooks({
         authBroker,
         requestRespawn: async () => undefined,
+        resolveAdapter: () => createDefaultAuthAdapter(),
       }),
     })
     supervisors.push(supervisor)

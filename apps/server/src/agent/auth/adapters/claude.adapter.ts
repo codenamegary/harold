@@ -37,6 +37,30 @@ const defaultProbeDeps: ClaudeProbeDeps = {
   execFile: execFileAsync,
 }
 
+const readExecFileStdout = (error: unknown): string | null => {
+  if (typeof error !== "object" || error === null) {
+    return null
+  }
+  if (!("stdout" in error)) {
+    return null
+  }
+  const stdout = error.stdout
+  if (typeof stdout !== "string") {
+    return null
+  }
+  const trimmed = stdout.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+const mapProbeFromStdout = (stdout: string) => {
+  const mapped = mapClaudeAuthStatus(parseClaudeAuthStatusJson(stdout))
+  return {
+    status: mapped.status,
+    error: mapped.error,
+    canLogout: mapped.status === "authenticated",
+  } as const
+}
+
 export const createClaudeAuthAdapter = (
   deps: ClaudeProbeDeps = defaultProbeDeps,
 ): AuthAdapter => {
@@ -53,13 +77,17 @@ export const createClaudeAuthAdapter = (
         const { stdout } = await deps.execFile("claude", ["auth", "status", "--json"], {
           timeout: 10_000,
         })
-        const mapped = mapClaudeAuthStatus(parseClaudeAuthStatusJson(stdout.trim()))
-        return {
-          status: mapped.status,
-          error: mapped.error,
-          canLogout: mapped.status === "authenticated",
-        }
+        return mapProbeFromStdout(stdout.trim())
       } catch (error: unknown) {
+        // `claude auth status --json` exits 1 when logged out but still prints JSON.
+        const stdout = readExecFileStdout(error)
+        if (stdout !== null) {
+          try {
+            return mapProbeFromStdout(stdout)
+          } catch {
+            // fall through to unknown
+          }
+        }
         const message = error instanceof Error ? error.message : "Claude auth probe failed"
         return {
           status: "unknown",

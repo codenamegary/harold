@@ -178,4 +178,61 @@ describe("createAuthBroker", () => {
     expect(events[0]).toEqual({ agentId: "cursor", status: "unknown" })
     unsubscribe()
   })
+
+  test("probeEnabledAgents updates summaries for listed agents", async () => {
+    let probeCount = 0
+    const broker = createAuthBroker({
+      agentExists: (agentId) => agentId === "cursor",
+      requestRespawn: async () => undefined,
+      listProbeTtlMs: 60_000,
+      now: () => 1_000,
+      resolveAdapter: () =>
+        createTestAdapter({
+          probe: async () => {
+            probeCount += 1
+            return {
+              status: "authenticated",
+              error: null,
+              canLogout: true,
+            }
+          },
+        }),
+    })
+
+    await broker.probeEnabledAgents(["cursor"])
+    const summary = await broker.getSummary("cursor")
+    expect(summary.status).toBe("authenticated")
+    expect(summary.canLogout).toBe(true)
+    expect(probeCount).toBe(1)
+
+    await broker.probeEnabledAgents(["cursor"])
+    expect(probeCount).toBe(1)
+  })
+
+  test("probeEnabledAgents re-probes after TTL expires", async () => {
+    let probeCount = 0
+    let clock = 0
+    const broker = createAuthBroker({
+      agentExists: () => true,
+      requestRespawn: async () => undefined,
+      listProbeTtlMs: 100,
+      now: () => clock,
+      resolveAdapter: () =>
+        createTestAdapter({
+          probe: async () => {
+            probeCount += 1
+            return {
+              status: "needs_auth",
+              error: null,
+              canLogout: false,
+            }
+          },
+        }),
+    })
+
+    await broker.probeEnabledAgents(["cursor"])
+    clock = 200
+    await broker.probeEnabledAgents(["cursor"])
+    expect(probeCount).toBe(2)
+  })
 })

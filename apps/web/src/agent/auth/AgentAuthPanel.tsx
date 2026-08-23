@@ -4,7 +4,6 @@ import { AgentId } from "contracts/http/agent-settings"
 import { AuthStepView } from "./AuthStepView"
 import {
   useAgentAuthSessionActionMutation,
-  useLogoutAgentAuthMutation,
   useStartAgentAuthSessionMutation,
 } from "./use.agent.auth"
 import { isAgentAuthRequestError } from "./agent.auth"
@@ -26,7 +25,6 @@ export const AgentAuthPanel: React.FC<AgentAuthPanelProps> = ({
 }) => {
   const startMutation = useStartAgentAuthSessionMutation()
   const actionMutation = useAgentAuthSessionActionMutation()
-  const logoutMutation = useLogoutAgentAuthMutation()
 
   const session =
     auth !== null
@@ -41,11 +39,9 @@ export const AgentAuthPanel: React.FC<AgentAuthPanelProps> = ({
     ? startMutation.error.detail
     : isAgentAuthRequestError(actionMutation.error)
       ? actionMutation.error.detail
-      : isAgentAuthRequestError(logoutMutation.error)
-        ? logoutMutation.error.detail
-        : startMutation.isError || actionMutation.isError || logoutMutation.isError
-          ? "Auth request failed"
-          : null
+      : startMutation.isError || actionMutation.isError
+        ? "Auth request failed"
+        : null
 
   const handleConfirm = (stepId: string) => {
     if (session === null) {
@@ -67,6 +63,10 @@ export const AgentAuthPanel: React.FC<AgentAuthPanelProps> = ({
       sessionId: session.sessionId,
       action: { type: "cancel" },
     })
+  }
+
+  if (summary.status === "authenticated" && !sessionInFlight) {
+    return null
   }
 
   const shellClassName = compact
@@ -116,14 +116,6 @@ export const AgentAuthPanel: React.FC<AgentAuthPanelProps> = ({
             onClick={() => startMutation.mutate(agentId)}
           >
             {startMutation.isPending ? "Starting…" : "Sign in"}
-          </button>
-          <button
-            type="button"
-            disabled={!summary.canLogout || sessionInFlight || logoutMutation.isPending}
-            className="rounded-md border border-line-soft bg-transparent px-3 py-1.5 text-sm text-body-soft hover:text-lime disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={() => logoutMutation.mutate(agentId)}
-          >
-            {logoutMutation.isPending ? "Signing out…" : "Sign out"}
           </button>
         </div>
       )}

@@ -66,11 +66,13 @@ export const registerAgentSettingsRoutes = (
     })
   }
 
-  const toWireCollection = async (items: readonly AgentSettings[]) =>
-    AgentSettingsCollectionSchema.parse({
+  const toWireCollection = async (items: readonly AgentSettings[]) => {
+    const enabledIds = items.filter((item) => item.enabled).map((item) => item.id)
+    await authBroker.probeEnabledAgents(enabledIds)
+    return AgentSettingsCollectionSchema.parse({
       items: await Promise.all(items.map(toWireAgent)),
     })
-
+  }
   app.get("/v1/settings/agents", async (_request, reply) => {
     return reply.status(200).send(await toWireCollection(repository.list()))
   })
