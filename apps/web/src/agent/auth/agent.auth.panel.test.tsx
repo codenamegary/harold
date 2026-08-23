@@ -78,7 +78,7 @@ describe("AgentAuthPanel", () => {
     expect(getByRole("button", { name: "Cancel" })).toBeTruthy()
   })
 
-  test("Cancel posts cancel action", async () => {
+  test("Cancel posts cancel action and idle UI ignores stale start data", async () => {
     const calls: Array<{ url: string; method: string; body: string }> = []
     globalThis.fetch = async (input, init) => {
       const url = requestUrl(input)
@@ -103,7 +103,7 @@ describe("AgentAuthPanel", () => {
       )
     }
 
-    const { getByRole } = renderWithProviders(
+    const { getByRole, queryByRole, rerender } = renderWithProviders(
       <AgentAuthPanel
         agentId="claude-acp"
         agentName="Claude"
@@ -124,5 +124,27 @@ describe("AgentAuthPanel", () => {
         true,
       )
     })
+
+    rerender(
+      <AgentAuthPanel
+        agentId="claude-acp"
+        agentName="Claude"
+        summary={{
+          status: "needs_auth",
+          error: null,
+          activeSessionId: null,
+          canLogout: true,
+        }}
+        auth={{
+          agentId: "claude-acp",
+          status: "needs_auth",
+          error: null,
+          session: null,
+        }}
+      />,
+    )
+
+    expect(getByRole("button", { name: "Sign in" })).toBeTruthy()
+    expect(queryByRole("button", { name: "I have logged in" })).toBeNull()
   })
 })

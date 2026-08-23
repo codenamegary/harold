@@ -5,6 +5,7 @@ import { AgentAuth } from "contracts/http/agent-auth"
 import { AgentId, AgentIdSchema } from "contracts/http/agent-settings"
 import { SessionStreamClientMessage } from "contracts/http/session.stream"
 import { AgentAuthPanel } from "../agent/auth/AgentAuthPanel"
+import { useAgentAuthQuery } from "../agent/auth/use.agent.auth"
 import { useAgentSettingsQuery } from "../agent-settings/use.agent.settings.query"
 import { useWorkspacesInfiniteQuery } from "../workspace/use.workspaces.infinite.query"
 import { queryKeys } from "../query/query.keys"
@@ -50,7 +51,7 @@ export const ChatShell: React.FC = () => {
   const [transcript, setTranscript] = useState<AcpTranscriptState>(emptyAcpTranscript)
   const [pendingPermission, setPendingPermission] = useState<StreamPermission | null>(null)
   const [pendingExtension, setPendingExtension] = useState<StreamExtension | null>(null)
-  const [agentAuth, setAgentAuth] = useState<AgentAuth | null>(null)
+  const [streamAgentAuth, setStreamAgentAuth] = useState<AgentAuth | null>(null)
   const [submittingOptionId, setSubmittingOptionId] = useState<string | null>(null)
   const [submittingExtension, setSubmittingExtension] = useState(false)
   const hasAttemptedResume = useRef(false)
@@ -69,6 +70,15 @@ export const ChatShell: React.FC = () => {
     workspacesQuery.data?.pages.flatMap((page) => page.items) ?? []
   const agents = agentsQuery.data?.items ?? []
   const sessions = sessionsQuery.data?.items ?? []
+  const parsedAgentId = AgentIdSchema.safeParse(agentId)
+  const selectedAgent = agents.find((agent) => agent.id === agentId)
+  const hydrateAuthQuery = useAgentAuthQuery(
+    parsedAgentId.success && selectedAgent?.authSummary.activeSessionId !== null
+      ? parsedAgentId.data
+      : null,
+    { pollWhileSessionActive: true },
+  )
+  const agentAuth = streamAgentAuth ?? hydrateAuthQuery.data ?? null
 
   const workspaceIdForCwd = (cwd: string) =>
     workspaces.find((workspace) => workspace.path === cwd)?.id ?? ""
@@ -85,7 +95,7 @@ export const ChatShell: React.FC = () => {
     setTranscript(nextTranscript)
     setPendingPermission(null)
     setPendingExtension(null)
-    setAgentAuth(null)
+    setStreamAgentAuth(null)
     setSubmittingOptionId(null)
     setSubmittingExtension(false)
   }
@@ -187,7 +197,7 @@ export const ChatShell: React.FC = () => {
           if (message.agentId !== agentId) {
             return
           }
-          setAgentAuth(message.auth)
+          setStreamAgentAuth(message.auth)
           void queryClient.invalidateQueries({ queryKey: queryKeys.agentSettingsRoot })
           void queryClient.invalidateQueries({
             queryKey: queryKeys.agentAuth(message.agentId),

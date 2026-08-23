@@ -22,7 +22,7 @@ export const AgentSettingsAuthSection: React.FC<AgentSettingsAuthSectionProps> =
     pollWhileSessionActive: true,
   })
 
-  const auth = authQuery.data ?? null
+  const auth = sessionActive ? (authQuery.data ?? null) : null
   const liveSummary: AgentAuthSummary =
     auth === null
       ? summary

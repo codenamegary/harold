@@ -29,9 +29,13 @@ export const AgentAuthPanel: React.FC<AgentAuthPanelProps> = ({
   const logoutMutation = useLogoutAgentAuthMutation()
 
   const session =
-    auth?.session ??
-    (startMutation.data?.status === "in_progress" ? startMutation.data : null) ??
-    (actionMutation.data?.status === "in_progress" ? actionMutation.data : null)
+    auth !== null
+      ? auth.session
+      : startMutation.data?.status === "in_progress"
+        ? startMutation.data
+        : actionMutation.data?.status === "in_progress"
+          ? actionMutation.data
+          : null
   const sessionInFlight = session?.status === "in_progress"
   const errorMessage = isAgentAuthRequestError(startMutation.error)
     ? startMutation.error.detail
