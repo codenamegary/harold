@@ -41,6 +41,8 @@ type InFlightSession = {
 export type AuthBroker = {
   getSummary: (agentId: AgentId) => Promise<AgentAuthSummary>
   get: (agentId: AgentId) => Promise<AgentAuth>
+  /** On-demand probe for enabled agents (Agents list). Skips ids within TTL. */
+  probeEnabledAgents: (agentIds: readonly AgentId[]) => Promise<void>
   observeInitialize: (input: {
     agentId: AgentId
     initializeResult: unknown
@@ -71,7 +73,12 @@ export type CreateAuthBrokerParams = {
   requestRespawn: (agentId: AgentId) => Promise<void>
   resolveAdapter?: (agentId: AgentId) => AuthAdapter
   hostMachineName?: string
+  /** Skip re-probe within this window for list on-demand refreshes. Default 30s. */
+  listProbeTtlMs?: number
+  now?: () => number
 }
+
+export const DEFAULT_LIST_PROBE_TTL_MS = 30_000
 
 const defaultHostMachineName = () => os.hostname()
 
@@ -109,8 +116,11 @@ const toWireSession = (session: InFlightSession): AgentAuthSession => ({
 
 export const createAuthBroker = (params: CreateAuthBrokerParams): AuthBroker => {
   const hostMachineName = params.hostMachineName ?? defaultHostMachineName()
+  const listProbeTtlMs = params.listProbeTtlMs ?? DEFAULT_LIST_PROBE_TTL_MS
+  const now = params.now ?? (() => Date.now())
   const initializeResults = new Map<AgentId, unknown>()
   const statusCache = new Map<AgentId, CachedAuthStatus>()
+  const lastListProbeAt = new Map<AgentId, number>()
   const sessions = new Map<AgentId, InFlightSession>()
   const lastFinishedOutcome = new Map<
     AgentId,
@@ -130,6 +140,18 @@ export const createAuthBroker = (params: CreateAuthBrokerParams): AuthBroker => 
 
   const setCachedStatus = (agentId: AgentId, next: CachedAuthStatus) => {
     statusCache.set(agentId, next)
+  }
+
+  const markListProbed = (agentId: AgentId) => {
+    lastListProbeAt.set(agentId, now())
+  }
+
+  const isListProbeFresh = (agentId: AgentId) => {
+    const last = lastListProbeAt.get(agentId)
+    if (last === undefined) {
+      return false
+    }
+    return now() - last < listProbeTtlMs
   }
 
   const buildAuth = async (agentId: AgentId): Promise<AgentAuth | null> => {
@@ -168,6 +190,7 @@ export const createAuthBroker = (params: CreateAuthBrokerParams): AuthBroker => 
       error: probe.error,
       canLogout: probe.canLogout,
     })
+    markListProbed(agentId)
     await emit(agentId)
   }
 
@@ -252,6 +275,13 @@ export const createAuthBroker = (params: CreateAuthBrokerParams): AuthBroker => 
         }
       }
       return auth
+    },
+
+    probeEnabledAgents: async (agentIds) => {
+      const stale = agentIds.filter(
+        (agentId) => params.agentExists(agentId) && !isListProbeFresh(agentId),
+      )
+      await Promise.all(stale.map((agentId) => probeAndCache(agentId)))
     },
 
     observeInitialize: async ({ agentId, initializeResult }) => {

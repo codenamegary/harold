@@ -28,10 +28,12 @@ describe("agent auth HTTP routes", () => {
   test("runs full session lifecycle and blocks logout while in flight", async () => {
     const dataDir = await createTempDataDir(resources)
     const { app } = await createTestApp(resources, dataDir)
+    // Use a default-adapter agent so logout does not call a host CLI.
+    const agentId = "gemini"
 
     const startResponse = await app.inject({
       method: "POST",
-      url: agentAuthSessionsPath("cursor"),
+      url: agentAuthSessionsPath(agentId),
       payload: {},
     })
     if (startResponse.statusCode !== 201) {
@@ -42,17 +44,17 @@ describe("agent auth HTTP routes", () => {
 
     const logoutBlocked = await app.inject({
       method: "POST",
-      url: agentAuthLogoutPath("cursor"),
+      url: agentAuthLogoutPath(agentId),
     })
     const blockedBody = ConflictProblemSchema.parse(JSON.parse(logoutBlocked.body))
     expect(logoutBlocked.statusCode).toBe(409)
     expect(blockedBody.title).toBe("Auth session in progress")
 
-    await enableAgent(app, "cursor")
+    await enableAgent(app, agentId)
 
     const confirmResponse = await app.inject({
       method: "POST",
-      url: agentAuthSessionActionsPath("cursor", started.sessionId),
+      url: agentAuthSessionActionsPath(agentId, started.sessionId),
       payload: { type: "confirm", stepId: HOST_LOGIN_CONFIRM_STEP_ID },
     })
     if (confirmResponse.statusCode !== 200) {
@@ -63,7 +65,7 @@ describe("agent auth HTTP routes", () => {
 
     const authResponse = await app.inject({
       method: "GET",
-      url: agentAuthPath("cursor"),
+      url: agentAuthPath(agentId),
     })
     const auth = AgentAuthSchema.parse(JSON.parse(authResponse.body))
     expect(authResponse.statusCode).toBe(200)
@@ -71,7 +73,7 @@ describe("agent auth HTTP routes", () => {
 
     const logoutResponse = await app.inject({
       method: "POST",
-      url: agentAuthLogoutPath("cursor"),
+      url: agentAuthLogoutPath(agentId),
     })
     const summary = AgentAuthSummarySchema.parse(JSON.parse(logoutResponse.body))
     expect(logoutResponse.statusCode).toBe(200)

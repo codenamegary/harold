@@ -60,8 +60,9 @@ orchestrates UX and probes when an adapter can.
    - Probe `needs_auth` after confirm updates the summary but does not replace
      the reconnect + prompt check as the source of truth.
 10. Probe through the adapter when possible (for example `claude auth status
-    --json`). Cache summary. Refresh after enable, logout, confirm, and on
-    demand.
+    --json`, or Cursor `cursor-agent status --format json`). Cache summary.
+    Refresh after enable, logout, confirm, and on demand (Agents list loads
+    probe **enabled** agents, with a short TTL).
 11. **Logout** is `broker.logout(agentId)`. Any paired device may call it when
     the adapter supports it. Blocked while an auth session for that agent is in
     flight. Adapter clears host creds via the agent's normal CLI; broker stores
@@ -70,8 +71,9 @@ orchestrates UX and probes when an adapter can.
     from mid-chat **`auth_required`** (create or attach the single in-flight
     session).
 13. Ship a **default adapter** with generic host-login copy and probe
-    `unknown`. Named adapters (Claude first, then Cursor, etc.) override
-    instructions and probe/logout only.
+    `unknown`. Named adapters (Claude, Cursor, etc.) override instructions and
+    probe/logout only. ACP `initialize` advertises auth methods for Cursor but
+    does **not** report current login state. Host CLI status is the probe.
 14. Surface auth **summary** on agent settings list responses. Full status and
     session live on `AgentAuth` from a dedicated auth endpoint.
 15. **Defer** for a later ADR: HostBrowser / headless automation, API-key paste,
@@ -96,6 +98,7 @@ flowchart TB
     Adapters[Auth adapters]
     Default[Default adapter]
     Claude[Claude adapter]
+    Cursor[Cursor adapter]
     HostCreds[Agent CLI cred store on host]
     Super[ACP supervisor]
     AgentProc[Agent process]
@@ -108,6 +111,7 @@ flowchart TB
   Broker --> Adapters
   Adapters --> Default
   Adapters --> Claude
+  Adapters --> Cursor
   Adapters -.-> HostCreds
   Broker --> Super
   Super --> AgentProc
@@ -295,6 +299,8 @@ apps/server/src/agent/auth/
     default.adapter.test.ts
     claude.adapter.ts           # Claude instructions + claude auth status probe
     claude.adapter.test.ts
+    cursor.adapter.ts           # Cursor instructions + cursor-agent status probe
+    cursor.adapter.test.ts
 
 apps/web/src/agent/auth/
   agent.auth.ts                 # fetch helpers for AgentAuth
