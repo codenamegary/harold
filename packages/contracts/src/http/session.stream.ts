@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { AgentAuthSchema } from "./agent-auth"
 import { AgentIdSchema } from "./agent-settings"
 
 export const SessionStreamSubscribeSchema = z.strictObject({
@@ -96,6 +97,12 @@ export const SessionStreamCancelledSchema = z.strictObject({
   sessionId: z.string().min(1),
 })
 
+export const SessionStreamAuthSessionUpdatedSchema = z.strictObject({
+  type: z.literal("auth_session_updated"),
+  agentId: AgentIdSchema,
+  auth: AgentAuthSchema,
+})
+
 export const SessionStreamServerMessageSchema = z.discriminatedUnion("type", [
   SessionStreamSessionUpdateSchema,
   SessionStreamSubscribedSchema,
@@ -104,6 +111,7 @@ export const SessionStreamServerMessageSchema = z.discriminatedUnion("type", [
   SessionStreamErrorSchema,
   SessionStreamPromptCompleteSchema,
   SessionStreamCancelledSchema,
+  SessionStreamAuthSessionUpdatedSchema,
 ])
 
 export type SessionStreamClientMessage = z.infer<typeof SessionStreamClientMessageSchema>

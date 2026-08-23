@@ -45,6 +45,17 @@ export type AuthBroker = {
     agentId: AgentId
     initializeResult: unknown
   }) => Promise<void>
+  ensureReadyForPrompt: (
+    agentId: AgentId,
+  ) => Promise<
+    | { ok: true }
+    | {
+        ok: false
+        status: AgentAuthStatus
+        session: AgentAuthSession | null
+      }
+  >
+  ensureSessionFromChallenge: (agentId: AgentId) => Promise<AgentAuthSession>
   startSession: (input: { agentId: AgentId }) => Promise<AuthBrokerResult<AgentAuthSession>>
   applyAction: (input: {
     agentId: AgentId
@@ -101,6 +112,10 @@ export const createAuthBroker = (params: CreateAuthBrokerParams): AuthBroker => 
   const initializeResults = new Map<AgentId, unknown>()
   const statusCache = new Map<AgentId, CachedAuthStatus>()
   const sessions = new Map<AgentId, InFlightSession>()
+  const lastFinishedOutcome = new Map<
+    AgentId,
+    "succeeded" | "failed" | "cancelled"
+  >()
   const listeners = new Set<(event: { agentId: AgentId; auth: AgentAuth }) => void>()
 
   const resolveAdapter = (agentId: AgentId) =>
@@ -173,8 +188,43 @@ export const createAuthBroker = (params: CreateAuthBrokerParams): AuthBroker => 
         message,
       },
     ]
+    lastFinishedOutcome.set(agentId, outcome)
     sessions.delete(agentId)
     await emit(agentId)
+  }
+
+  const beginSession = async (
+    agentId: AgentId,
+    retry: boolean,
+  ): Promise<AuthBrokerResult<AgentAuthSession>> => {
+    if (!params.agentExists(agentId)) {
+      return { ok: false, error: { kind: "agent_not_found" } }
+    }
+
+    const existing = sessions.get(agentId)
+    if (existing !== undefined && existing.status === "in_progress") {
+      return { ok: true, value: toWireSession(existing) }
+    }
+
+    const adapter = resolveAdapter(agentId)
+    const ctx = buildContext(
+      agentId,
+      hostMachineName,
+      initializeResults.get(agentId),
+    )
+    const sessionId = randomUUID()
+    const started = await adapter.start(ctx, { sessionId, retry })
+    const session: InFlightSession = {
+      sessionId,
+      agentId,
+      status: "in_progress",
+      steps: started.steps,
+      error: null,
+      retry,
+    }
+    sessions.set(agentId, session)
+    await emit(agentId)
+    return { ok: true, value: toWireSession(session) }
   }
 
   return {
@@ -209,37 +259,37 @@ export const createAuthBroker = (params: CreateAuthBrokerParams): AuthBroker => 
       await probeAndCache(agentId)
     },
 
-    startSession: async ({ agentId }) => {
+    ensureReadyForPrompt: async (agentId) => {
       if (!params.agentExists(agentId)) {
-        return { ok: false, error: { kind: "agent_not_found" } }
+        return { ok: true }
       }
 
-      const existing = sessions.get(agentId)
-      if (existing !== undefined && existing.status === "in_progress") {
-        return { ok: true, value: toWireSession(existing) }
+      const status = getCachedStatus(agentId).status
+      if (status !== "needs_auth") {
+        return { ok: true }
       }
 
-      const adapter = resolveAdapter(agentId)
-      const ctx = buildContext(
+      const sessionResult = await beginSession(
         agentId,
-        hostMachineName,
-        initializeResults.get(agentId),
+        lastFinishedOutcome.get(agentId) === "succeeded",
       )
-      const sessionId = randomUUID()
-      const retry = existing !== undefined
-      const started = await adapter.start(ctx, { sessionId, retry })
-      const session: InFlightSession = {
-        sessionId,
-        agentId,
-        status: "in_progress",
-        steps: started.steps,
-        error: null,
-        retry,
-      }
-      sessions.set(agentId, session)
-      await emit(agentId)
-      return { ok: true, value: toWireSession(session) }
+      const session = sessionResult.ok ? sessionResult.value : null
+      return { ok: false, status, session }
     },
+
+    ensureSessionFromChallenge: async (agentId) => {
+      const result = await beginSession(
+        agentId,
+        lastFinishedOutcome.get(agentId) === "succeeded",
+      )
+      if (!result.ok) {
+        throw new Error(`auth challenge failed: ${result.error.kind}`)
+      }
+      return result.value
+    },
+
+    startSession: async ({ agentId }) =>
+      beginSession(agentId, lastFinishedOutcome.get(agentId) === "succeeded"),
 
     applyAction: async ({ agentId, sessionId, action }) => {
       if (!params.agentExists(agentId)) {

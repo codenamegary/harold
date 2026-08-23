@@ -7,6 +7,7 @@ import {
 } from "contracts/http/session"
 import { FastifyInstance } from "fastify"
 import { AcpSupervisor } from "../acp/supervisor/models"
+import { AuthBroker } from "../agent/auth/broker"
 import { AgentSettingsRepository } from "../agent-settings/agent-settings-repository"
 import { SessionCwdCache } from "./hub/session.hub"
 import { ArchivedAcpSessionsStore } from "./archived.acp.sessions.store"
@@ -17,6 +18,7 @@ import {
   buildAgentDisabledProblem,
   buildAgentNotFoundProblem,
   buildAgentUnavailableProblem,
+  buildAuthRequiredProblem,
 } from "./session.problems"
 
 const sendProblem = (
@@ -35,6 +37,7 @@ export const registerSessionRoutes = (
   acpSupervisor: AcpSupervisor,
   cwdCache: SessionCwdCache,
   archivedAcpSessions: ArchivedAcpSessionsStore,
+  authBroker?: AuthBroker,
 ) => {
   app.post("/v1/sessions", async (request, reply) => {
     const body = CreateSessionBodySchema.parse(request.body)
@@ -78,6 +81,10 @@ export const registerSessionRoutes = (
     })
 
     if (!acpResult.ok) {
+      if (acpResult.authRequired === true && authBroker !== undefined) {
+        await authBroker.ensureSessionFromChallenge(body.agentId)
+        return sendProblem(reply, 409, buildAuthRequiredProblem())
+      }
       return sendProblem(reply, 409, buildAcpUnavailableProblem(acpResult.reason))
     }
 

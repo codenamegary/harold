@@ -9,6 +9,8 @@ export type FakeAcpConfig = FakeAcpCapabilities & {
   sessionLoadSessionId: string
   sessionCloseFails: boolean
   sessionLoadFails: boolean
+  sessionNewFailsWithAuthRequired: boolean
+  promptFailsWithAuthRequired: boolean
   emitPermissionRequest: boolean
   emitPermissionRequestNoAllow: boolean
   emitPermissionRequestOnPrompt: boolean
@@ -67,6 +69,14 @@ export const readFakeAcpConfig = (
   sessionLoadSessionId: readEnvString(env, "FAKE_ACP_SESSION_LOAD_SESSION_ID", "fake-session-load"),
   sessionCloseFails: parseBooleanEnv(env.FAKE_ACP_SESSION_CLOSE_FAILS, false),
   sessionLoadFails: parseBooleanEnv(env.FAKE_ACP_SESSION_LOAD_FAILS, false),
+  sessionNewFailsWithAuthRequired: parseBooleanEnv(
+    env.FAKE_ACP_SESSION_NEW_FAILS_WITH_AUTH_REQUIRED,
+    false,
+  ),
+  promptFailsWithAuthRequired: parseBooleanEnv(
+    env.FAKE_ACP_PROMPT_FAILS_WITH_AUTH_REQUIRED,
+    false,
+  ),
   emitPermissionRequest: parseBooleanEnv(env.FAKE_ACP_EMIT_PERMISSION_REQUEST, false),
   emitPermissionRequestNoAllow: parseBooleanEnv(env.FAKE_ACP_EMIT_PERMISSION_REQUEST_NO_ALLOW, false),
   emitPermissionRequestOnPrompt: parseBooleanEnv(env.FAKE_ACP_EMIT_PERMISSION_REQUEST_ON_PROMPT, false),
@@ -92,6 +102,8 @@ export type FakeAcpEnvOptions = {
   sessionLoadSessionId?: string
   sessionCloseFails?: boolean
   sessionLoadFails?: boolean
+  sessionNewFailsWithAuthRequired?: boolean
+  promptFailsWithAuthRequired?: boolean
   emitPermissionRequest?: boolean
   emitPermissionRequestNoAllow?: boolean
   emitPermissionRequestOnPrompt?: boolean
@@ -131,6 +143,14 @@ export const fakeAcpEnvFromCapabilities = (options: FakeAcpEnvOptions): Record<s
   ...stringEnv("FAKE_ACP_SESSION_LOAD_SESSION_ID", options.sessionLoadSessionId),
   ...optionalBooleanEnv("FAKE_ACP_SESSION_CLOSE_FAILS", options.sessionCloseFails),
   ...optionalBooleanEnv("FAKE_ACP_SESSION_LOAD_FAILS", options.sessionLoadFails),
+  ...optionalBooleanEnv(
+    "FAKE_ACP_SESSION_NEW_FAILS_WITH_AUTH_REQUIRED",
+    options.sessionNewFailsWithAuthRequired,
+  ),
+  ...optionalBooleanEnv(
+    "FAKE_ACP_PROMPT_FAILS_WITH_AUTH_REQUIRED",
+    options.promptFailsWithAuthRequired,
+  ),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_PERMISSION_REQUEST", options.emitPermissionRequest),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_PERMISSION_REQUEST_NO_ALLOW", options.emitPermissionRequestNoAllow),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_PERMISSION_REQUEST_ON_PROMPT", options.emitPermissionRequestOnPrompt),

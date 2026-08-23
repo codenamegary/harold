@@ -96,4 +96,86 @@ describe("createAuthBroker", () => {
     }
     expect(logout.error.kind).toBe("logout_blocked")
   })
+
+  test("ensureReadyForPrompt blocks needs_auth and allows unknown and authenticated", async () => {
+    let probeStatus: "needs_auth" | "unknown" | "authenticated" = "needs_auth"
+    const broker = createAuthBroker({
+      agentExists: () => true,
+      requestRespawn: async () => undefined,
+      resolveAdapter: () =>
+        createTestAdapter({
+          probe: async () => ({
+            status: probeStatus,
+            error: null,
+            canLogout: probeStatus === "authenticated",
+          }),
+        }),
+    })
+
+    await broker.observeInitialize({ agentId: "cursor", initializeResult: {} })
+
+    const blocked = await broker.ensureReadyForPrompt("cursor")
+    expect(blocked.ok).toBe(false)
+    if (blocked.ok) {
+      throw new Error("expected block")
+    }
+    expect(blocked.status).toBe("needs_auth")
+    expect(blocked.session?.status).toBe("in_progress")
+
+    probeStatus = "unknown"
+    await broker.observeInitialize({ agentId: "cursor", initializeResult: {} })
+    const allowedUnknown = await broker.ensureReadyForPrompt("cursor")
+    expect(allowedUnknown.ok).toBe(true)
+
+    probeStatus = "authenticated"
+    await broker.observeInitialize({ agentId: "cursor", initializeResult: {} })
+    const allowedAuth = await broker.ensureReadyForPrompt("cursor")
+    expect(allowedAuth.ok).toBe(true)
+  })
+
+  test("ensureSessionFromChallenge attaches in-flight session and retries after success", async () => {
+    const broker = createAuthBroker({
+      agentExists: () => true,
+      requestRespawn: async () => undefined,
+    })
+
+    const first = await broker.ensureSessionFromChallenge("cursor")
+    expect(first.status).toBe("in_progress")
+    expect(first.steps[0]).toMatchObject({ type: "show_message", level: "info" })
+
+    const attached = await broker.ensureSessionFromChallenge("cursor")
+    expect(attached.sessionId).toBe(first.sessionId)
+
+    await broker.applyAction({
+      agentId: "cursor",
+      sessionId: first.sessionId,
+      action: { type: "confirm", stepId: HOST_LOGIN_CONFIRM_STEP_ID },
+    })
+
+    const retry = await broker.ensureSessionFromChallenge("cursor")
+    expect(retry.sessionId).not.toBe(first.sessionId)
+    expect(retry.steps[0]).toMatchObject({ type: "show_message", level: "error" })
+    expect(
+      retry.steps[0] !== undefined
+        && retry.steps[0].type === "show_message"
+        && retry.steps[0].body.startsWith("That didn't work."),
+    ).toBe(true)
+  })
+
+  test("subscribe receives auth snapshots when session starts", async () => {
+    const broker = createAuthBroker({
+      agentExists: () => true,
+      requestRespawn: async () => undefined,
+    })
+
+    const events: Array<{ agentId: string; status: string }> = []
+    const unsubscribe = broker.subscribe(({ agentId, auth }) => {
+      events.push({ agentId, status: auth.status })
+    })
+
+    await broker.startSession({ agentId: "cursor" })
+    expect(events.length).toBeGreaterThan(0)
+    expect(events[0]).toEqual({ agentId: "cursor", status: "unknown" })
+    unsubscribe()
+  })
 })
