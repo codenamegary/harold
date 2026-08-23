@@ -315,6 +315,265 @@ class ChatViewModelTest {
         assertEquals(listOf("Alpha"), viewModel.uiState.value.sessionsList.map { it.name })
     }
 
+    @Test
+    fun hydratesAgentAuthWhenSelectingSession() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository(
+            agentAuth = server.agent.android.contracts.AgentAuth(
+                agentId = "cursor",
+                status = server.agent.android.contracts.AgentAuthStatus.NeedsAuth,
+                error = null,
+                session = null,
+            ),
+        )
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+        )
+
+        advanceUntilIdle()
+
+        assertEquals(
+            server.agent.android.contracts.AgentAuthStatus.NeedsAuth,
+            viewModel.uiState.value.agentAuth?.status,
+        )
+        assertEquals(listOf("cursor"), repository.authGetCalls)
+    }
+
+    @Test
+    fun appliesAuthSessionUpdatedForMatchingAgent() = runTest(dispatcher) {
+        val connection = ChatFakeConnectionGateway()
+        val viewModel = createViewModel(
+            repository = ChatFakeOperatorRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            connection = connection,
+        )
+        advanceUntilIdle()
+
+        connection.emit(
+            SessionStreamServerMessage.AuthSessionUpdated(
+                agentId = "cursor",
+                auth = server.agent.android.contracts.AgentAuth(
+                    agentId = "cursor",
+                    status = server.agent.android.contracts.AgentAuthStatus.NeedsAuth,
+                    error = null,
+                    session = server.agent.android.contracts.AgentAuthSession(
+                        sessionId = "auth-1",
+                        agentId = "cursor",
+                        status = server.agent.android.contracts.AuthSessionStatus.InProgress,
+                        steps = listOf(
+                            server.agent.android.contracts.AuthStep.ShowMessage(
+                                level = server.agent.android.contracts.AuthShowMessageLevel.Info,
+                                body = "Sign in on the host",
+                            ),
+                        ),
+                        error = null,
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.showAuthPanel)
+        assertEquals("auth-1", viewModel.uiState.value.agentAuth?.session?.sessionId)
+    }
+
+    @Test
+    fun ignoresAuthSessionUpdatedForOtherAgent() = runTest(dispatcher) {
+        val connection = ChatFakeConnectionGateway()
+        val viewModel = createViewModel(
+            repository = ChatFakeOperatorRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            connection = connection,
+        )
+        advanceUntilIdle()
+        val before = viewModel.uiState.value.agentAuth
+
+        connection.emit(
+            SessionStreamServerMessage.AuthSessionUpdated(
+                agentId = "other",
+                auth = server.agent.android.contracts.AgentAuth(
+                    agentId = "other",
+                    status = server.agent.android.contracts.AgentAuthStatus.NeedsAuth,
+                    error = null,
+                    session = null,
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(before, viewModel.uiState.value.agentAuth)
+    }
+
+    @Test
+    fun authBadgeClickStartsSessionWhenNeedsAuth() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository(
+            agentAuth = server.agent.android.contracts.AgentAuth(
+                agentId = "cursor",
+                status = server.agent.android.contracts.AgentAuthStatus.NeedsAuth,
+                error = null,
+                session = null,
+            ),
+            startSession = server.agent.android.contracts.AgentAuthSession(
+                sessionId = "auth-1",
+                agentId = "cursor",
+                status = server.agent.android.contracts.AuthSessionStatus.InProgress,
+                steps = listOf(
+                    server.agent.android.contracts.AuthStep.Confirm(
+                        stepId = "confirm-1",
+                        title = "Ready?",
+                        body = "Finish login",
+                        confirmLabel = "I have logged in",
+                    ),
+                ),
+                error = null,
+            ),
+        )
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+        )
+        advanceUntilIdle()
+
+        viewModel.onAuthBadgeClick()
+        advanceUntilIdle()
+
+        assertEquals(1, repository.authStartCalls.size)
+        assertEquals("auth-1", viewModel.uiState.value.agentAuth?.session?.sessionId)
+        assertTrue(viewModel.uiState.value.showAuthPanel)
+    }
+
+    @Test
+    fun authConfirmAndCancelCallRepository() = runTest(dispatcher) {
+        val inProgress = server.agent.android.contracts.AgentAuthSession(
+            sessionId = "auth-1",
+            agentId = "cursor",
+            status = server.agent.android.contracts.AuthSessionStatus.InProgress,
+            steps = listOf(
+                server.agent.android.contracts.AuthStep.Confirm(
+                    stepId = "confirm-1",
+                    title = "Ready?",
+                    body = "Finish login",
+                    confirmLabel = "I have logged in",
+                ),
+            ),
+            error = null,
+        )
+        val repository = ChatFakeOperatorRepository(
+            agentAuth = server.agent.android.contracts.AgentAuth(
+                agentId = "cursor",
+                status = server.agent.android.contracts.AgentAuthStatus.NeedsAuth,
+                error = null,
+                session = inProgress,
+            ),
+            actionSession = inProgress.copy(
+                steps = listOf(
+                    server.agent.android.contracts.AuthStep.Working(label = "Checking…"),
+                ),
+            ),
+        )
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+        )
+        advanceUntilIdle()
+
+        viewModel.onAuthConfirm("confirm-1")
+        advanceUntilIdle()
+        assertEquals(1, repository.authActionCalls.size)
+        assertEquals(
+            server.agent.android.contracts.AuthSessionAction.Confirm("confirm-1"),
+            repository.authActionCalls.single().third,
+        )
+
+        viewModel.onAuthCancel()
+        advanceUntilIdle()
+        assertEquals(2, repository.authActionCalls.size)
+        assertEquals(
+            server.agent.android.contracts.AuthSessionAction.Cancel,
+            repository.authActionCalls.last().third,
+        )
+    }
+
+    @Test
+    fun authLogoutWhenCanLogout() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository(
+            agentAuth = server.agent.android.contracts.AgentAuth(
+                agentId = "cursor",
+                status = server.agent.android.contracts.AgentAuthStatus.Authenticated,
+                error = null,
+                session = null,
+            ),
+            canLogout = true,
+        )
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+        )
+        advanceUntilIdle()
+
+        viewModel.onAuthBadgeClick()
+        advanceUntilIdle()
+        viewModel.onAuthLogout()
+        advanceUntilIdle()
+
+        assertEquals(listOf("cursor"), repository.authLogoutCalls)
+        assertEquals(
+            server.agent.android.contracts.AgentAuthStatus.NeedsAuth,
+            viewModel.uiState.value.agentAuthSummary?.status,
+        )
+    }
+
+    @Test
+    fun authRequiredStreamErrorHydratesAuth() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository(
+            agentAuth = server.agent.android.contracts.AgentAuth(
+                agentId = "cursor",
+                status = server.agent.android.contracts.AgentAuthStatus.Unknown,
+                error = null,
+                session = null,
+            ),
+        )
+        val connection = ChatFakeConnectionGateway()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            connection = connection,
+        )
+        advanceUntilIdle()
+        val getsBefore = repository.authGetCalls.size
+
+        repository.agentAuthOverride = server.agent.android.contracts.AgentAuth(
+            agentId = "cursor",
+            status = server.agent.android.contracts.AgentAuthStatus.NeedsAuth,
+            error = null,
+            session = server.agent.android.contracts.AgentAuthSession(
+                sessionId = "auth-req",
+                agentId = "cursor",
+                status = server.agent.android.contracts.AuthSessionStatus.InProgress,
+                steps = listOf(
+                    server.agent.android.contracts.AuthStep.ShowMessage(
+                        level = server.agent.android.contracts.AuthShowMessageLevel.Info,
+                        body = "Host login required",
+                    ),
+                ),
+                error = null,
+            ),
+        )
+
+        connection.emit(
+            SessionStreamServerMessage.Error(
+                message = "Agent authentication required",
+                agentId = "cursor",
+                sessionId = "sess_02",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertTrue(repository.authGetCalls.size > getsBefore)
+        assertEquals("auth-req", viewModel.uiState.value.agentAuth?.session?.sessionId)
+        assertTrue(viewModel.uiState.value.showAuthPanel)
+    }
+
     private fun createViewModel(
         repository: ChatFakeOperatorRepository,
         navigation: ChatFakeNavigationPreferences,
@@ -405,9 +664,23 @@ private class ChatFakeNavigationPreferences(
 private class ChatFakeOperatorRepository(
     private val deleteConflict: Boolean = false,
     extraSessions: List<Session> = emptyList(),
+    agentAuth: server.agent.android.contracts.AgentAuth = server.agent.android.contracts.AgentAuth(
+        agentId = "cursor",
+        status = server.agent.android.contracts.AgentAuthStatus.Unknown,
+        error = null,
+        session = null,
+    ),
+    private val startSession: server.agent.android.contracts.AgentAuthSession? = null,
+    private val actionSession: server.agent.android.contracts.AgentAuthSession? = null,
+    var canLogout: Boolean = false,
 ) : OperatorRepository {
     val createCalls = mutableListOf<CreateSessionBody>()
     val deleteCalls = mutableListOf<Pair<String, String>>()
+    val authGetCalls = mutableListOf<String>()
+    val authStartCalls = mutableListOf<String>()
+    val authActionCalls = mutableListOf<Triple<String, String, server.agent.android.contracts.AuthSessionAction>>()
+    val authLogoutCalls = mutableListOf<String>()
+    var agentAuthOverride: server.agent.android.contracts.AgentAuth = agentAuth
     private val createdSessions = mutableListOf<Session>()
     private val seed = extraSessions.ifEmpty {
         listOf(
@@ -466,6 +739,16 @@ private class ChatFakeOperatorRepository(
                     available = true,
                     enabled = true,
                     path = "/usr/local/bin/agent",
+                    authSummary = server.agent.android.contracts.AgentAuthSummary(
+                        status = agentAuthOverride.status,
+                        error = agentAuthOverride.error,
+                        activeSessionId = agentAuthOverride.session
+                            ?.takeIf {
+                                it.status == server.agent.android.contracts.AuthSessionStatus.InProgress
+                            }
+                            ?.sessionId,
+                        canLogout = canLogout,
+                    ),
                 ),
             ),
         ),
@@ -499,6 +782,73 @@ private class ChatFakeOperatorRepository(
             )
         }
         return Result.success(Unit)
+    }
+
+    override suspend fun getAgentAuth(
+        serverOrigin: String,
+        agentId: String,
+    ): Result<server.agent.android.contracts.AgentAuth> {
+        authGetCalls += agentId
+        return Result.success(agentAuthOverride.copy(agentId = agentId))
+    }
+
+    override suspend fun startAgentAuthSession(
+        serverOrigin: String,
+        agentId: String,
+    ): Result<server.agent.android.contracts.AgentAuthSession> {
+        authStartCalls += agentId
+        val session = startSession ?: return Result.failure(UnsupportedOperationException())
+        agentAuthOverride = agentAuthOverride.copy(
+            status = server.agent.android.contracts.AgentAuthStatus.NeedsAuth,
+            session = session,
+        )
+        return Result.success(session)
+    }
+
+    override suspend fun applyAgentAuthSessionAction(
+        serverOrigin: String,
+        agentId: String,
+        sessionId: String,
+        action: server.agent.android.contracts.AuthSessionAction,
+    ): Result<server.agent.android.contracts.AgentAuthSession> {
+        authActionCalls += Triple(agentId, sessionId, action)
+        val session = when (action) {
+            is server.agent.android.contracts.AuthSessionAction.Cancel -> {
+                (actionSession ?: agentAuthOverride.session)?.copy(
+                    status = server.agent.android.contracts.AuthSessionStatus.Cancelled,
+                    steps = listOf(
+                        server.agent.android.contracts.AuthStep.Done(
+                            outcome = server.agent.android.contracts.AuthDoneOutcome.Cancelled,
+                            message = null,
+                        ),
+                    ),
+                )
+            }
+            else -> actionSession
+        } ?: return Result.failure(UnsupportedOperationException())
+        agentAuthOverride = agentAuthOverride.copy(session = session)
+        return Result.success(session)
+    }
+
+    override suspend fun logoutAgentAuth(
+        serverOrigin: String,
+        agentId: String,
+    ): Result<server.agent.android.contracts.AgentAuthSummary> {
+        authLogoutCalls += agentId
+        val summary = server.agent.android.contracts.AgentAuthSummary(
+            status = server.agent.android.contracts.AgentAuthStatus.NeedsAuth,
+            error = null,
+            activeSessionId = null,
+            canLogout = false,
+        )
+        agentAuthOverride = server.agent.android.contracts.AgentAuth(
+            agentId = agentId,
+            status = summary.status,
+            error = null,
+            session = null,
+        )
+        canLogout = false
+        return Result.success(summary)
     }
 }
 

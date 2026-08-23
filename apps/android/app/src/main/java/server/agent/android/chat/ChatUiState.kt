@@ -1,7 +1,10 @@
 package server.agent.android.chat
 
 import kotlinx.serialization.json.JsonElement
+import server.agent.android.contracts.AgentAuth
+import server.agent.android.contracts.AgentAuthSummary
 import server.agent.android.contracts.AgentId
+import server.agent.android.contracts.AuthSessionStatus
 import server.agent.android.contracts.PermissionRequest
 import server.agent.android.contracts.SessionState
 import server.agent.android.contracts.WorkspaceState
@@ -90,9 +93,34 @@ data class ChatUiState(
     val extensionUiState: ExtensionUiState = ExtensionUiState(),
     val notificationPermissionDenied: Boolean = false,
     val voiceDictation: VoiceDictationUiState = VoiceDictationUiState(),
+    val agentAuth: AgentAuth? = null,
+    val agentAuthSummary: AgentAuthSummary? = null,
+    val authPanelOpen: Boolean = false,
+    val authPanelSubmitting: Boolean = false,
+    val authActionBusy: Boolean = false,
+    val authError: String? = null,
 ) {
     val activePermissionRequest: PermissionRequest?
         get() = activePermissionRequest(pendingPermissions)
+
+    val showAuthPanel: Boolean
+        get() {
+            val sessionInFlight = agentAuth?.session?.status == AuthSessionStatus.InProgress
+            return authPanelOpen || sessionInFlight
+        }
+
+    val authBadgeSummary: AgentAuthSummary?
+        get() = agentAuthSummary
+            ?: agentAuth?.let { auth ->
+                AgentAuthSummary(
+                    status = auth.status,
+                    error = auth.error,
+                    activeSessionId = auth.session
+                        ?.takeIf { it.status == AuthSessionStatus.InProgress }
+                        ?.sessionId,
+                    canLogout = false,
+                )
+            }
 
     val effectiveSessionState: SessionState?
         get() = resolveEffectiveSessionState(

@@ -81,7 +81,14 @@ class ContractDecodingTest {
               "present": true,
               "popular": true,
               "deletable": false,
-              "state": { "status": "stopped", "error": null }
+              "state": { "status": "stopped", "error": null },
+              "capabilities": null,
+              "authSummary": {
+                "status": "needs_auth",
+                "error": null,
+                "activeSessionId": null,
+                "canLogout": false
+              }
             }
             """.trimIndent(),
         )
@@ -94,6 +101,107 @@ class ContractDecodingTest {
         assertEquals(false, settings.deletable)
         assertEquals(AgentRuntimeStatus.Stopped, settings.state.status)
         assertNull(settings.state.error)
+        assertNull(settings.capabilities)
+        assertEquals(AgentAuthStatus.NeedsAuth, settings.authSummary.status)
+        assertEquals(false, settings.authSummary.canLogout)
+    }
+
+    @Test
+    fun decodesAgentAuthWithV1Steps() {
+        val auth = AgentServerJson.decodeFromString(
+            AgentAuth.serializer(),
+            """
+            {
+              "agentId": "claude",
+              "status": "needs_auth",
+              "error": null,
+              "session": {
+                "sessionId": "auth-1",
+                "agentId": "claude",
+                "status": "in_progress",
+                "steps": [
+                  { "type": "show_message", "level": "info", "body": "Sign in on the host" },
+                  {
+                    "type": "confirm",
+                    "stepId": "confirm-1",
+                    "title": "Ready?",
+                    "body": "Finish login on the host",
+                    "confirmLabel": "I have logged in"
+                  },
+                  { "type": "working", "label": "Checking…" },
+                  { "type": "done", "outcome": "succeeded", "message": null }
+                ],
+                "error": null
+              }
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals("claude", auth.agentId)
+        assertEquals(AgentAuthStatus.NeedsAuth, auth.status)
+        val session = auth.session!!
+        assertEquals(AuthSessionStatus.InProgress, session.status)
+        assertEquals(4, session.steps.size)
+        assertTrue(session.steps[0] is AuthStep.ShowMessage)
+        assertTrue(session.steps[1] is AuthStep.Confirm)
+        assertEquals("I have logged in", (session.steps[1] as AuthStep.Confirm).confirmLabel)
+        assertTrue(session.steps[2] is AuthStep.Working)
+        assertTrue(session.steps[3] is AuthStep.Done)
+    }
+
+    @Test
+    fun decodesAgentAuthSummary() {
+        val summary = AgentServerJson.decodeFromString(
+            AgentAuthSummary.serializer(),
+            """
+            {
+              "status": "authenticated",
+              "error": null,
+              "activeSessionId": null,
+              "canLogout": true
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals(AgentAuthStatus.Authenticated, summary.status)
+        assertEquals(true, summary.canLogout)
+        assertNull(summary.activeSessionId)
+    }
+
+    @Test
+    fun decodesAuthSessionUpdatedStreamMessage() {
+        val message = AgentServerJson.decodeFromString(
+            SessionStreamServerMessage.serializer(),
+            """
+            {
+              "type": "auth_session_updated",
+              "agentId": "claude",
+              "auth": {
+                "agentId": "claude",
+                "status": "needs_auth",
+                "error": null,
+                "session": {
+                  "sessionId": "auth-1",
+                  "agentId": "claude",
+                  "status": "in_progress",
+                  "steps": [
+                    {
+                      "type": "show_message",
+                      "level": "info",
+                      "body": "Sign in on the host"
+                    }
+                  ],
+                  "error": null
+                }
+              }
+            }
+            """.trimIndent(),
+        )
+
+        val updated = message as SessionStreamServerMessage.AuthSessionUpdated
+        assertEquals("claude", updated.agentId)
+        assertEquals(AgentAuthStatus.NeedsAuth, updated.auth.status)
+        assertEquals("auth-1", updated.auth.session?.sessionId)
     }
 
     @Test

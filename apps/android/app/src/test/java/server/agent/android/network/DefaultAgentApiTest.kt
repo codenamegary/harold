@@ -12,6 +12,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import server.agent.android.contracts.AgentAuthStatus
+import server.agent.android.contracts.AuthSessionAction
+import server.agent.android.contracts.AuthSessionStatus
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateWorkspaceBody
 import server.agent.android.contracts.WorkspaceState
@@ -377,6 +380,127 @@ class DefaultAgentApiTest {
         assertEquals("/v1/workspaces", recorded.path)
         assertTrue(recorded.body.readUtf8().contains("\"path\":\"/home/ops/code/agent-server\""))
         assertEquals("ws_01", workspace.id)
+    }
+
+    @Test
+    fun getAgentAuthDecodesPayload() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(
+                    """
+                    {
+                      "agentId": "claude",
+                      "status": "needs_auth",
+                      "error": null,
+                      "session": null
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val auth = agentApi.getAgentAuth(serverOrigin = origin(), agentId = "claude").getOrThrow()
+
+        val recorded = server.takeRequest()
+        assertEquals("GET", recorded.method)
+        assertEquals("/v1/agents/claude/auth", recorded.path)
+        assertEquals("claude", auth.agentId)
+        assertEquals(AgentAuthStatus.NeedsAuth, auth.status)
+    }
+
+    @Test
+    fun startAgentAuthSessionPostsEmptyBody() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(
+                    """
+                    {
+                      "sessionId": "auth-1",
+                      "agentId": "claude",
+                      "status": "in_progress",
+                      "steps": [
+                        { "type": "show_message", "level": "info", "body": "Sign in on the host" }
+                      ],
+                      "error": null
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val session = agentApi.startAgentAuthSession(
+            serverOrigin = origin(),
+            agentId = "claude",
+        ).getOrThrow()
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/v1/agents/claude/auth/sessions", recorded.path)
+        assertEquals("{}", recorded.body.readUtf8())
+        assertEquals("auth-1", session.sessionId)
+    }
+
+    @Test
+    fun applyAgentAuthSessionActionPostsConfirm() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(
+                    """
+                    {
+                      "sessionId": "auth-1",
+                      "agentId": "claude",
+                      "status": "in_progress",
+                      "steps": [
+                        { "type": "working", "label": "Checking…" }
+                      ],
+                      "error": null
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val session = agentApi.applyAgentAuthSessionAction(
+            serverOrigin = origin(),
+            agentId = "claude",
+            sessionId = "auth-1",
+            action = AuthSessionAction.Confirm(stepId = "confirm-1"),
+        ).getOrThrow()
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/v1/agents/claude/auth/sessions/auth-1/actions", recorded.path)
+        assertTrue(recorded.body.readUtf8().contains("\"type\":\"confirm\""))
+        assertEquals(AuthSessionStatus.InProgress, session.status)
+    }
+
+    @Test
+    fun logoutAgentAuthPostsEmptyBody() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(
+                    """
+                    {
+                      "status": "needs_auth",
+                      "error": null,
+                      "activeSessionId": null,
+                      "canLogout": false
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val summary = agentApi.logoutAgentAuth(
+            serverOrigin = origin(),
+            agentId = "claude",
+        ).getOrThrow()
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/v1/agents/claude/auth/logout", recorded.path)
+        assertEquals("{}", recorded.body.readUtf8())
+        assertEquals(AgentAuthStatus.NeedsAuth, summary.status)
     }
 
     private fun origin(): String = server.url("/").toString().trimEnd('/')

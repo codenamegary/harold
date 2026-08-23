@@ -290,4 +290,30 @@ private class FakeAgentApi(
         sessionId: String,
     ): Result<Unit> = Result.failure(UnsupportedOperationException())
 
+    override suspend fun getAgentAuth(
+        serverOrigin: String,
+        agentId: server.agent.android.contracts.AgentId,
+    ): Result<server.agent.android.contracts.AgentAuth> =
+        Result.failure(UnsupportedOperationException())
+
+    override suspend fun startAgentAuthSession(
+        serverOrigin: String,
+        agentId: server.agent.android.contracts.AgentId,
+    ): Result<server.agent.android.contracts.AgentAuthSession> =
+        Result.failure(UnsupportedOperationException())
+
+    override suspend fun applyAgentAuthSessionAction(
+        serverOrigin: String,
+        agentId: server.agent.android.contracts.AgentId,
+        sessionId: String,
+        action: server.agent.android.contracts.AuthSessionAction,
+    ): Result<server.agent.android.contracts.AgentAuthSession> =
+        Result.failure(UnsupportedOperationException())
+
+    override suspend fun logoutAgentAuth(
+        serverOrigin: String,
+        agentId: server.agent.android.contracts.AgentId,
+    ): Result<server.agent.android.contracts.AgentAuthSummary> =
+        Result.failure(UnsupportedOperationException())
+
 }
