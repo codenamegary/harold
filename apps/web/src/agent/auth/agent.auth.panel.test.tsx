@@ -39,8 +39,8 @@ afterEach(() => {
 })
 
 describe("AgentAuthPanel", () => {
-  test("shows Sign in and Sign out when idle", () => {
-    const { getByRole } = renderWithProviders(
+  test("shows Sign in when idle and needs auth", () => {
+    const { getByRole, queryByRole } = renderWithProviders(
       <AgentAuthPanel
         agentId="claude-acp"
         agentName="Claude"
@@ -55,10 +55,29 @@ describe("AgentAuthPanel", () => {
     )
 
     expect(getByRole("button", { name: "Sign in" })).toBeTruthy()
-    expect(getByRole("button", { name: "Sign out" })).toBeTruthy()
+    expect(queryByRole("button", { name: "Sign out" })).toBeNull()
   })
 
-  test("disables Sign out while session in flight", () => {
+  test("hides host login UI when authenticated", () => {
+    const { queryByLabelText, queryByRole } = renderWithProviders(
+      <AgentAuthPanel
+        agentId="cursor"
+        agentName="Cursor"
+        summary={{
+          status: "authenticated",
+          error: null,
+          activeSessionId: null,
+          canLogout: true,
+        }}
+        auth={null}
+      />,
+    )
+
+    expect(queryByLabelText("Cursor auth")).toBeNull()
+    expect(queryByRole("button", { name: "Sign in" })).toBeNull()
+  })
+
+  test("shows in-flight host login steps", () => {
     const { getByRole, getByText } = renderWithProviders(
       <AgentAuthPanel
         agentId="claude-acp"

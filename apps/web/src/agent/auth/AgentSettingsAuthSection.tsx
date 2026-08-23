@@ -17,7 +17,9 @@ export const AgentSettingsAuthSection: React.FC<AgentSettingsAuthSectionProps> =
   summary,
   enabled,
 }) => {
-  const authQuery = useAgentAuthQuery(enabled ? agentId : null, {
+  const needsAuthUi =
+    summary.status !== "authenticated" || summary.activeSessionId !== null
+  const authQuery = useAgentAuthQuery(enabled && needsAuthUi ? agentId : null, {
     pollWhileSessionActive: true,
   })
 
@@ -32,12 +34,18 @@ export const AgentSettingsAuthSection: React.FC<AgentSettingsAuthSectionProps> =
           canLogout: summary.canLogout,
         }
 
+  if (!needsAuthUi && liveSummary.status === "authenticated") {
+    return null
+  }
+
   return (
-    <AgentAuthPanel
-      agentId={agentId}
-      agentName={agentName}
-      summary={liveSummary}
-      auth={auth}
-    />
+    <div className="mb-4">
+      <AgentAuthPanel
+        agentId={agentId}
+        agentName={agentName}
+        summary={liveSummary}
+        auth={auth}
+      />
+    </div>
   )
 }
