@@ -27,12 +27,12 @@ export const AgentAuthPanel: React.FC<AgentAuthPanelProps> = ({
   const actionMutation = useAgentAuthSessionActionMutation()
 
   const session =
-    auth !== null
-      ? auth.session
-      : startMutation.data?.status === "in_progress"
-        ? startMutation.data
-        : actionMutation.data?.status === "in_progress"
-          ? actionMutation.data
+    actionMutation.data?.status === "in_progress"
+      ? actionMutation.data
+      : auth !== null
+        ? auth.session
+        : startMutation.data?.status === "in_progress"
+          ? startMutation.data
           : null
   const sessionInFlight = session?.status === "in_progress"
   const errorMessage = isAgentAuthRequestError(startMutation.error)
@@ -70,7 +70,7 @@ export const AgentAuthPanel: React.FC<AgentAuthPanelProps> = ({
   }
 
   const shellClassName = compact
-    ? "mb-3 rounded-[9px] border border-[#3a3220] bg-[#17130d] px-4 py-3"
+    ? "rounded-[9px] border border-[#3a3220] bg-[#17130d] px-4 py-3"
     : "rounded-[9px] border border-line-soft bg-panel-elevated px-3 py-3"
 
   return (

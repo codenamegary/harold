@@ -362,6 +362,17 @@ export const createAuthBroker = (params: CreateAuthBrokerParams): AuthBroker => 
           if (adapter.completionPolicy === "reconnect") {
             await params.requestRespawn(agentId)
           }
+          if (getCachedStatus(agentId).status === "needs_auth") {
+            const retryStarted = await adapter.start(ctx, {
+              sessionId,
+              retry: true,
+            })
+            session.steps = retryStarted.steps
+            session.retry = true
+            session.error = null
+            await emit(agentId)
+            return { ok: true, value: toWireSession(session) }
+          }
           await finishSession(agentId, "succeeded", null)
           return {
             ok: true,

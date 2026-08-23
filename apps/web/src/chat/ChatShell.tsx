@@ -486,22 +486,24 @@ export const ChatShell: React.FC = () => {
         agentAuth.session !== null &&
         agentAuth.session.status === "in_progress" &&
         AgentIdSchema.safeParse(agentId).success ? (
-          <AgentAuthPanel
-            agentId={AgentIdSchema.parse(agentId)}
-            agentName={
-              agents.find((agent) => agent.id === agentId)?.displayName ?? agentId
-            }
-            summary={{
-              status: agentAuth.status,
-              error: agentAuth.error,
-              activeSessionId: agentAuth.session.sessionId,
-              canLogout:
-                agents.find((agent) => agent.id === agentId)?.authSummary.canLogout ??
-                false,
-            }}
-            auth={agentAuth}
-            compact
-          />
+          <div className="relative mx-auto mb-3 w-[min(840px,calc(100%-40px))] max-[820px]:w-[calc(100%-20px)]">
+            <AgentAuthPanel
+              agentId={AgentIdSchema.parse(agentId)}
+              agentName={
+                agents.find((agent) => agent.id === agentId)?.displayName ?? agentId
+              }
+              summary={{
+                status: agentAuth.status,
+                error: agentAuth.error,
+                activeSessionId: agentAuth.session.sessionId,
+                canLogout:
+                  agents.find((agent) => agent.id === agentId)?.authSummary.canLogout ??
+                  false,
+              }}
+              auth={agentAuth}
+              compact
+            />
+          </div>
         ) : null}
         {pendingPermission !== null ? (
           <PermissionPanel
