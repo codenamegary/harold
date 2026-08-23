@@ -89,6 +89,8 @@ export const defaultAcpRegistryUrl =
 
 export type AgentSettingsRepository = {
   list: () => AgentSettings[]
+  /** Catalog id or settings row. Does not run presence probes. */
+  hasAgentId: (agentId: string) => boolean
   getSpawnSnapshot: (agentId: AgentId) => AgentSpawnSnapshot | null
   detectPath: (agentId: AgentId) => AgentSettingsRepositoryResult<{ path: string }>
   createCustom: () => AgentSettingsRepositoryResult<AgentSettings>
@@ -236,6 +238,20 @@ export const createAgentSettingsRepository = (
   const presenceCtx = () => createPresenceCtx(whichFn, env)
 
   ensureCatalogAgentSettingsRows(database)
+
+  const hasAgentId = (agentId: string): boolean => {
+    if (Object.prototype.hasOwnProperty.call(catalogAgentsById, agentId)) {
+      return true
+    }
+
+    const row = database.db
+      .select({ agentId: agentSettings.agentId })
+      .from(agentSettings)
+      .where(eq(agentSettings.agentId, agentId))
+      .get()
+
+    return row !== undefined
+  }
 
   const list = (): AgentSettings[] => {
     const rows = database.db.select().from(agentSettings).all()
@@ -640,6 +656,7 @@ export const createAgentSettingsRepository = (
 
   return {
     list,
+    hasAgentId,
     getSpawnSnapshot,
     detectPath,
     createCustom,

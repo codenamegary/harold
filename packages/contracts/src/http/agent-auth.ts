@@ -66,33 +66,8 @@ export const AuthStepV1Schema = z.discriminatedUnion("type", [
   AuthDoneStepSchema,
 ])
 
-export const AuthChooseMethodStepSchema = z.strictObject({
-  type: z.literal("choose_method"),
-  methods: z.array(z.unknown()),
-})
-
-export const AuthOpenUrlStepSchema = z.strictObject({
-  type: z.literal("open_url"),
-  title: z.string(),
-  url: z.string(),
-  caption: z.string().nullable(),
-})
-
-export const AuthPasteSecretStepSchema = z.strictObject({
-  type: z.literal("paste_secret"),
-  stepId: z.string().min(1),
-  label: z.string(),
-  placeholder: z.string().nullable(),
-  secretKind: z.enum(["api_key", "oauth_token", "otp", "other"]),
-})
-
-export const AuthStepReservedSchema = z.discriminatedUnion("type", [
-  AuthChooseMethodStepSchema,
-  AuthOpenUrlStepSchema,
-  AuthPasteSecretStepSchema,
-])
-
-export const AuthStepSchema = z.union([AuthStepV1Schema, AuthStepReservedSchema])
+/** Closed host-login vocabulary. No reserved future steps on the wire. */
+export const AuthStepSchema = AuthStepV1Schema
 
 export const AuthConfirmActionSchema = z.strictObject({
   type: z.literal("confirm"),
@@ -131,7 +106,7 @@ export type AgentAuthStatus = z.infer<typeof AgentAuthStatusSchema>
 export type AgentAuthSummary = z.infer<typeof AgentAuthSummarySchema>
 export type AuthSessionStatus = z.infer<typeof AuthSessionStatusSchema>
 export type AuthStepV1 = z.infer<typeof AuthStepV1Schema>
-export type AuthStep = z.infer<typeof AuthStepSchema>
+export type AuthStep = AuthStepV1
 export type AuthSessionAction = z.infer<typeof AuthSessionActionSchema>
 export type AgentAuthSession = z.infer<typeof AgentAuthSessionSchema>
 export type AgentAuth = z.infer<typeof AgentAuthSchema>

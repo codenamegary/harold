@@ -1,9 +1,14 @@
 import React from "react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
+import { AgentAuth } from "contracts/http/agent-auth"
 import { AgentId, AgentIdSchema } from "contracts/http/agent-settings"
 import { SessionStreamClientMessage } from "contracts/http/session.stream"
+import { AgentAuthPanel } from "../agent/auth/AgentAuthPanel"
+import { useAgentAuthQuery } from "../agent/auth/use.agent.auth"
 import { useAgentSettingsQuery } from "../agent-settings/use.agent.settings.query"
 import { useWorkspacesInfiniteQuery } from "../workspace/use.workspaces.infinite.query"
+import { queryKeys } from "../query/query.keys"
 import { useSessionsQuery } from "../session/use.sessions.query"
 import { useCreateSessionMutation } from "../session/use.create.session.mutation"
 import { useSessionStream } from "../session/use.session.stream"
@@ -46,12 +51,14 @@ export const ChatShell: React.FC = () => {
   const [transcript, setTranscript] = useState<AcpTranscriptState>(emptyAcpTranscript)
   const [pendingPermission, setPendingPermission] = useState<StreamPermission | null>(null)
   const [pendingExtension, setPendingExtension] = useState<StreamExtension | null>(null)
+  const [streamAgentAuth, setStreamAgentAuth] = useState<AgentAuth | null>(null)
   const [submittingOptionId, setSubmittingOptionId] = useState<string | null>(null)
   const [submittingExtension, setSubmittingExtension] = useState(false)
   const hasAttemptedResume = useRef(false)
   const pendingPromptRef = useRef<string | null>(null)
   const transcriptScrollRef = useRef<HTMLDivElement>(null)
   const transcriptBottomRef = useRef<HTMLDivElement>(null)
+  const queryClient = useQueryClient()
 
   const workspacesQuery = useWorkspacesInfiniteQuery({})
   const agentsQuery = useAgentSettingsQuery()
@@ -63,6 +70,15 @@ export const ChatShell: React.FC = () => {
     workspacesQuery.data?.pages.flatMap((page) => page.items) ?? []
   const agents = agentsQuery.data?.items ?? []
   const sessions = sessionsQuery.data?.items ?? []
+  const parsedAgentId = AgentIdSchema.safeParse(agentId)
+  const selectedAgent = agents.find((agent) => agent.id === agentId)
+  const hydrateAuthQuery = useAgentAuthQuery(
+    parsedAgentId.success && selectedAgent?.authSummary.activeSessionId !== null
+      ? parsedAgentId.data
+      : null,
+    { pollWhileSessionActive: true },
+  )
+  const agentAuth = streamAgentAuth ?? hydrateAuthQuery.data ?? null
 
   const workspaceIdForCwd = (cwd: string) =>
     workspaces.find((workspace) => workspace.path === cwd)?.id ?? ""
@@ -79,6 +95,7 @@ export const ChatShell: React.FC = () => {
     setTranscript(nextTranscript)
     setPendingPermission(null)
     setPendingExtension(null)
+    setStreamAgentAuth(null)
     setSubmittingOptionId(null)
     setSubmittingExtension(false)
   }
@@ -174,6 +191,18 @@ export const ChatShell: React.FC = () => {
             return
           }
           setTranscript((current) => applyStreamError(current))
+          return
+        }
+        case "auth_session_updated": {
+          if (message.agentId !== agentId) {
+            return
+          }
+          setStreamAgentAuth(message.auth)
+          void queryClient.invalidateQueries({ queryKey: queryKeys.agentSettingsRoot })
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.agentAuth(message.agentId),
+          })
+          return
         }
       }
     },
@@ -453,6 +482,27 @@ export const ChatShell: React.FC = () => {
         )}
       </div>
       <div className="shrink-0 px-5 pb-5 max-[820px]:px-2.5 max-[820px]:pb-2.5">
+        {agentAuth !== null &&
+        agentAuth.session !== null &&
+        agentAuth.session.status === "in_progress" &&
+        AgentIdSchema.safeParse(agentId).success ? (
+          <AgentAuthPanel
+            agentId={AgentIdSchema.parse(agentId)}
+            agentName={
+              agents.find((agent) => agent.id === agentId)?.displayName ?? agentId
+            }
+            summary={{
+              status: agentAuth.status,
+              error: agentAuth.error,
+              activeSessionId: agentAuth.session.sessionId,
+              canLogout:
+                agents.find((agent) => agent.id === agentId)?.authSummary.canLogout ??
+                false,
+            }}
+            auth={agentAuth}
+            compact
+          />
+        ) : null}
         {pendingPermission !== null ? (
           <PermissionPanel
             request={pendingPermission}
