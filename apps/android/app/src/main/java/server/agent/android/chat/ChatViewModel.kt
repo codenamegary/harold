@@ -249,17 +249,6 @@ class ChatViewModel(
         }
     }
 
-    fun onCreatePromptChanged(prompt: String) {
-        _uiState.update { current ->
-            current.copy(
-                createState = current.createState.copy(
-                    prompt = prompt,
-                    error = null,
-                ),
-            )
-        }
-    }
-
     fun onComposerTextChanged(text: String) {
         _uiState.update { current ->
             current.copy(composerText = text, composerError = null)
@@ -308,12 +297,10 @@ class ChatViewModel(
         _uiState.update { current -> current.copy(voiceDictation = voiceDictation) }
     }
 
-    fun submitCreateSession() {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+    fun confirmNewSession() {
         val createState = _uiState.value.createState
         val workspaceId = createState.selectedWorkspaceId
         val agentId = createState.selectedAgentId
-        val prompt = createState.prompt.trim()
         val workspace = createState.workspaces.firstOrNull { row -> row.id == workspaceId }
 
         if (workspaceId.isEmpty() || workspace == null) {
@@ -330,44 +317,35 @@ class ChatViewModel(
             return
         }
 
-        if (prompt.isEmpty()) {
-            _uiState.update { current ->
-                current.copy(createState = current.createState.copy(error = "Enter an initial prompt"))
-            }
-            return
-        }
-
-        _uiState.update { current ->
-            current.copy(createState = current.createState.copy(submitting = true, error = null))
-        }
-
+        pendingPrompt = null
+        val draftSession = draftNewSessionRow(workspace = workspace, agentId = agentId)
+        hideCreateDialog()
         viewModelScope.launch {
-            val result = operatorRepository.createSession(
-                serverOrigin = paired.serverOrigin,
-                body = CreateSessionBody(
-                    agentId = agentId,
-                    cwd = workspace.path,
-                ),
+            clearPersistedSession()
+        }
+        _uiState.update { current ->
+            current.copy(
+                selectedSession = draftSession,
+                pickerVisible = false,
+                transcript = emptyAcpTranscript,
+                composerText = "",
+                composerError = null,
+                composerSubmitting = false,
+                pendingPermissions = emptyList(),
+                permissionUiState = PermissionUiState(),
+                extensionUiState = ExtensionUiState(),
+                streamReconnecting = false,
+                agentAuth = null,
+                agentAuthSummary = agentAuthSummaries[agentId],
+                authPanelSubmitting = false,
+                authActionBusy = false,
+                authError = null,
             )
-
-            result.fold(
-                onSuccess = { created ->
-                    pendingPrompt = prompt
-                    hideCreateDialog()
-                    refreshCatalog()
-                    activateSession(created.toSessionRow())
-                },
-                onFailure = { error ->
-                    _uiState.update { current ->
-                        current.copy(
-                            createState = current.createState.copy(
-                                submitting = false,
-                                error = errorMessage(error),
-                            ),
-                        )
-                    }
-                },
-            )
+        }
+        connectionGateway.setTarget(agentId, null)
+        syncActiveSessionsFromUiState()
+        viewModelScope.launch {
+            hydrateAgentAuth(agentId)
         }
     }
 
@@ -376,6 +354,11 @@ class ChatViewModel(
         val prompt = _uiState.value.composerText.trim()
 
         if (prompt.isEmpty() || !_uiState.value.composerEnabled) {
+            return
+        }
+
+        if (session.sessionId.isEmpty()) {
+            createSessionFromComposer(session = session, prompt = prompt)
             return
         }
 
@@ -1035,6 +1018,10 @@ class ChatViewModel(
     }
 
     private suspend fun restoreLastSession() {
+        if (_uiState.value.isDraftNewSession) {
+            return
+        }
+
         val savedId = savedStateHandle.get<String>(KEY_SELECTED_SESSION_ID)
             ?: navigationPreferences.loadLastSessionId()
             ?: return
@@ -1143,6 +1130,82 @@ class ChatViewModel(
         sessionForegroundCoordinator?.onSessionsChanged()
     }
 
+    private fun draftNewSessionRow(workspace: WorkspaceRow, agentId: AgentId): SessionRow =
+        SessionRow(
+            sessionId = "",
+            name = NEW_SESSION_NAME,
+            cwd = workspace.path,
+            workspaceId = workspace.id,
+            workspaceLabel = workspace.name,
+            agentId = agentId,
+            agentLabel = agentLabels[agentId] ?: agentId,
+            state = SessionState.Idle,
+            updatedAt = "",
+        )
+
+    private fun createSessionFromComposer(session: SessionRow, prompt: String) {
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+
+        pendingPrompt = prompt
+        _uiState.update { current ->
+            current.copy(
+                composerText = "",
+                composerSubmitting = true,
+                composerError = null,
+            )
+        }
+
+        viewModelScope.launch {
+            val result = operatorRepository.createSession(
+                serverOrigin = paired.serverOrigin,
+                body = CreateSessionBody(
+                    agentId = session.agentId,
+                    cwd = session.cwd,
+                ),
+            )
+
+            result.fold(
+                onSuccess = { created ->
+                    val row = created.toSessionRow()
+                    val turnId = nextTurnId()
+                    navigationPreferences.saveLastSessionId(row.id)
+                    persistSelectedSession(row.id)
+                    _uiState.update { current ->
+                        current.copy(
+                            selectedSession = row,
+                            composerSubmitting = false,
+                            transcript = beginUserTurn(emptyAcpTranscript, turnId, prompt),
+                            pendingPermissions = emptyList(),
+                            permissionUiState = PermissionUiState(),
+                            extensionUiState = ExtensionUiState(),
+                            streamReconnecting = false,
+                            agentAuth = null,
+                            agentAuthSummary = agentAuthSummaries[row.agentId],
+                            authPanelSubmitting = false,
+                            authActionBusy = false,
+                            authError = null,
+                        )
+                    }
+                    connectionGateway.setTarget(row.agentId, row.sessionId)
+                    syncSelectedState(SessionState.Running)
+                    syncActiveSessionsFromUiState()
+                    hydrateAgentAuth(row.agentId)
+                    refreshCatalog()
+                },
+                onFailure = { error ->
+                    pendingPrompt = null
+                    _uiState.update { current ->
+                        current.copy(
+                            composerSubmitting = false,
+                            composerError = errorMessage(error),
+                            transcript = emptyAcpTranscript,
+                        )
+                    }
+                },
+            )
+        }
+    }
+
     private fun Session.toSessionRow(): SessionRow {
         val workspace = workspaceByPath[cwd]
         return SessionRow(
@@ -1181,6 +1244,7 @@ class ChatViewModel(
     companion object {
         const val KEY_SELECTED_SESSION_ID = "selected_session_id"
         const val RECENT_SESSIONS_LIMIT = 5
+        const val NEW_SESSION_NAME = "New session"
     }
 }
 

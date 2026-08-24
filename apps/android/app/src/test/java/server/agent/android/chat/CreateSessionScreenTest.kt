@@ -18,7 +18,7 @@ class CreateSessionScreenTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun showsFullScreenFormWithIconBack() {
+    fun showsWorkspaceAgentAndContinueWithoutInitialPrompt() {
         composeTestRule.setContent {
             AgentServerTheme(dynamicColor = false) {
                 CreateSessionScreen(
@@ -36,12 +36,10 @@ class CreateSessionScreenTest {
                             AgentOption(id = "cursor", displayName = "Cursor"),
                         ),
                         selectedAgentId = "cursor",
-                        prompt = "Ship it",
                     ),
                     onBack = {},
                     onWorkspaceChanged = {},
                     onAgentChanged = {},
-                    onPromptChanged = {},
                     onSubmit = {},
                 )
             }
@@ -50,6 +48,10 @@ class CreateSessionScreenTest {
         composeTestRule.onNodeWithTag("create_session_screen").assertIsDisplayed()
         composeTestRule.onNodeWithTag("create_session_back").assertIsDisplayed()
         composeTestRule.onNodeWithTag("create_session_submit").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("create_session_workspace").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("create_session_agent").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("create_session_helper").assertIsDisplayed()
         composeTestRule.onNodeWithText("New session").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Continue").assertIsDisplayed()
     }
 }

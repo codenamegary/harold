@@ -27,7 +27,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import server.agent.android.R
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -38,14 +40,13 @@ fun CreateSessionScreen(
     onBack: () -> Unit,
     onWorkspaceChanged: (String) -> Unit,
     onAgentChanged: (server.agent.android.contracts.AgentId) -> Unit,
-    onPromptChanged: (String) -> Unit,
     onSubmit: () -> Unit,
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text(text = "New session") },
+                title = { Text(text = stringResource(R.string.chat_new_session)) },
                 navigationIcon = {
                     IconButton(
                         onClick = onBack,
@@ -70,6 +71,13 @@ fun CreateSessionScreen(
                 .testTag("create_session_screen"),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            Text(
+                text = stringResource(R.string.create_session_helper),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag("create_session_helper"),
+            )
+
             WorkspaceDropdown(
                 workspaces = createState.workspaces,
                 selectedWorkspaceId = createState.selectedWorkspaceId,
@@ -80,16 +88,6 @@ fun CreateSessionScreen(
                 agents = createState.agents,
                 selectedAgentId = createState.selectedAgentId,
                 onAgentChanged = onAgentChanged,
-            )
-
-            OutlinedTextField(
-                value = createState.prompt,
-                onValueChange = onPromptChanged,
-                label = { Text(text = "Initial prompt") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("create_session_prompt"),
-                minLines = 3,
             )
 
             if (createState.error != null) {
@@ -107,7 +105,13 @@ fun CreateSessionScreen(
                     .fillMaxWidth()
                     .testTag("create_session_submit"),
             ) {
-                Text(text = if (createState.submitting) "Creating…" else "Create")
+                Text(
+                    text = if (createState.submitting) {
+                        stringResource(R.string.create_session_continuing)
+                    } else {
+                        stringResource(R.string.create_session_continue)
+                    },
+                )
             }
         }
     }

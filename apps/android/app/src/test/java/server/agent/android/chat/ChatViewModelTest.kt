@@ -78,22 +78,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun createSessionValidatesPrompt() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository()
-        val viewModel = createViewModel(repository, ChatFakeNavigationPreferences())
-
-        advanceUntilIdle()
-        viewModel.showCreateDialog()
-        advanceUntilIdle()
-        viewModel.submitCreateSession()
-        advanceUntilIdle()
-
-        assertEquals("Enter an initial prompt", viewModel.uiState.value.createState.error)
-        assertTrue(repository.createCalls.isEmpty())
-    }
-
-    @Test
-    fun createSessionSubmitsWhenValidThenPromptsAfterSubscribe() = runTest(dispatcher) {
+    fun confirmNewSessionEnablesComposerWithoutCreateCall() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository()
         val connection = ChatFakeConnectionGateway()
         val viewModel = createViewModel(
@@ -107,14 +92,43 @@ class ChatViewModelTest {
         advanceUntilIdle()
         viewModel.onCreateWorkspaceChanged("ws_01")
         viewModel.onCreateAgentChanged("cursor")
-        viewModel.onCreatePromptChanged("Ship it")
-        viewModel.submitCreateSession()
+        viewModel.confirmNewSession()
         advanceUntilIdle()
 
         assertFalse(viewModel.uiState.value.createDialogVisible)
+        assertTrue(repository.createCalls.isEmpty())
+        assertEquals("New session", viewModel.uiState.value.selectedSession?.name)
+        assertEquals("", viewModel.uiState.value.selectedSession?.sessionId)
+        assertTrue(viewModel.uiState.value.composerEnabled)
+        assertNull(connection.target)
+    }
+
+    @Test
+    fun firstComposerSendCreatesSessionThenPromptsAfterSubscribe() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository()
+        val connection = ChatFakeConnectionGateway()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            connection = connection,
+        )
+
+        advanceUntilIdle()
+        viewModel.showCreateDialog()
+        advanceUntilIdle()
+        viewModel.onCreateWorkspaceChanged("ws_01")
+        viewModel.onCreateAgentChanged("cursor")
+        viewModel.confirmNewSession()
+        advanceUntilIdle()
+
+        viewModel.onComposerTextChanged("Ship it")
+        viewModel.submitComposerPrompt()
+        advanceUntilIdle()
+
         assertEquals(1, repository.createCalls.size)
         assertEquals("/tmp/agent-server", repository.createCalls.first().cwd)
         assertEquals("sess_new", viewModel.uiState.value.selectedSession?.sessionId)
+        assertEquals("cursor" to "sess_new", connection.target)
 
         connection.emit(
             SessionStreamServerMessage.Subscribed(agentId = "cursor", sessionId = "sess_new"),

@@ -43,7 +43,6 @@ data class CreateSessionUiState(
     val agents: List<AgentOption> = emptyList(),
     val selectedWorkspaceId: String = "",
     val selectedAgentId: AgentId? = null,
-    val prompt: String = "",
     val submitting: Boolean = false,
     val error: String? = null,
 )
@@ -150,6 +149,9 @@ data class ChatUiState(
                 sessionState = effectiveSessionState,
             ) && !composerSubmitting && !streamReconnecting
         }
+
+    val isDraftNewSession: Boolean
+        get() = selectedSession?.sessionId?.isEmpty() == true
 
     val composerBlockedMessage: String?
         get() = composerBlockedMessage(effectiveSessionState)

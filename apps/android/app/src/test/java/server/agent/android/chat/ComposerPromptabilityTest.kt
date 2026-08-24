@@ -10,6 +10,18 @@ import server.agent.android.contracts.SessionState
 
 class ComposerPromptabilityTest {
     @Test
+    fun enablesComposerForDraftNewSession() {
+        assertTrue(
+            isComposerPromptable(
+                workspaceId = "ws_01",
+                agentId = "cursor",
+                sessionId = "",
+                sessionState = null,
+            ),
+        )
+    }
+
+    @Test
     fun enablesComposerWhenSessionIdle() {
         assertTrue(
             isComposerPromptable(
