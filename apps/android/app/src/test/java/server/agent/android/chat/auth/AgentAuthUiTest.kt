@@ -2,7 +2,6 @@ package server.agent.android.chat.auth
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -31,21 +30,60 @@ class AgentAuthUiTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun badgeShowsNeedsAuthLabelAndInvokesClick() {
-        var clicked = false
+    fun panelIdleShowsSignInAndInvokesClick() {
+        var signedIn = false
         composeTestRule.setContent {
             AgentServerTheme(dynamicColor = false) {
-                AgentAuthBadge(
+                AgentAuthPanel(
                     agentName = "Claude",
                     summary = summary(status = AgentAuthStatus.NeedsAuth),
-                    onClick = { clicked = true },
+                    auth = AgentAuth(
+                        agentId = "claude",
+                        status = AgentAuthStatus.NeedsAuth,
+                        error = null,
+                        session = null,
+                    ),
+                    submitting = false,
+                    actionBusy = false,
+                    error = null,
+                    onSignIn = { signedIn = true },
+                    onConfirm = {},
+                    onCancel = {},
                 )
             }
         }
 
-        composeTestRule.onNodeWithText("needs auth").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("agent_auth_badge").performClick()
-        assertTrue(clicked)
+        composeTestRule.onNodeWithText("Host login").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("agent_auth_sign_in")
+            .assertIsEnabled()
+            .performClick()
+        assertTrue(signedIn)
+    }
+
+    @Test
+    fun panelIdleShowsStartingWhenSubmitting() {
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                AgentAuthPanel(
+                    agentName = "Claude",
+                    summary = summary(status = AgentAuthStatus.NeedsAuth),
+                    auth = AgentAuth(
+                        agentId = "claude",
+                        status = AgentAuthStatus.NeedsAuth,
+                        error = null,
+                        session = null,
+                    ),
+                    submitting = true,
+                    actionBusy = false,
+                    error = null,
+                    onSignIn = {},
+                    onConfirm = {},
+                    onCancel = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Starting…").assertIsDisplayed()
     }
 
     @Test
@@ -121,9 +159,9 @@ class AgentAuthUiTest {
                     submitting = false,
                     actionBusy = false,
                     error = null,
+                    onSignIn = {},
                     onConfirm = {},
                     onCancel = { cancelled = true },
-                    onLogout = {},
                 )
             }
         }
@@ -133,78 +171,6 @@ class AgentAuthUiTest {
         composeTestRule.onNodeWithText("Sign in on the host").assertIsDisplayed()
         composeTestRule.onNodeWithTag("agent_auth_cancel").performClick()
         assertTrue(cancelled)
-    }
-
-    @Test
-    fun panelIdleShowsSignOutWhenCanLogout() {
-        var loggedOut = false
-        composeTestRule.setContent {
-            AgentServerTheme(dynamicColor = false) {
-                AgentAuthPanel(
-                    agentName = "Claude",
-                    summary = summary(
-                        status = AgentAuthStatus.Authenticated,
-                        canLogout = true,
-                    ),
-                    auth = AgentAuth(
-                        agentId = "claude",
-                        status = AgentAuthStatus.Authenticated,
-                        error = null,
-                        session = null,
-                    ),
-                    submitting = false,
-                    actionBusy = false,
-                    error = null,
-                    onConfirm = {},
-                    onCancel = {},
-                    onLogout = { loggedOut = true },
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithTag("agent_auth_logout")
-            .assertIsEnabled()
-            .performClick()
-        assertTrue(loggedOut)
-    }
-
-    @Test
-    fun panelDisablesSignOutWhileSessionInFlight() {
-        composeTestRule.setContent {
-            AgentServerTheme(dynamicColor = false) {
-                AgentAuthPanel(
-                    agentName = "Claude",
-                    summary = summary(
-                        status = AgentAuthStatus.NeedsAuth,
-                        activeSessionId = "auth-1",
-                        canLogout = true,
-                    ),
-                    auth = AgentAuth(
-                        agentId = "claude",
-                        status = AgentAuthStatus.NeedsAuth,
-                        error = null,
-                        session = AgentAuthSession(
-                            sessionId = "auth-1",
-                            agentId = "claude",
-                            status = AuthSessionStatus.InProgress,
-                            steps = listOf(
-                                AuthStep.Working(label = "Working"),
-                            ),
-                            error = null,
-                        ),
-                    ),
-                    submitting = false,
-                    actionBusy = false,
-                    error = null,
-                    onConfirm = {},
-                    onCancel = {},
-                    onLogout = {},
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithTag("agent_auth_cancel").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("agent_auth_logout").assertIsDisplayed().assertIsNotEnabled()
     }
 
     private fun summary(

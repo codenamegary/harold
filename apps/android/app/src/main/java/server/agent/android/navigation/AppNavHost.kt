@@ -165,10 +165,11 @@ fun AppNavHost(
                 onVoiceDictationStartOver = chatViewModel::startOverVoiceDictation,
                 onVoiceDictationCancel = chatViewModel::cancelVoiceDictation,
                 onVoiceDictationConfirm = chatViewModel::confirmVoiceDictation,
-                onAuthBadgeClick = chatViewModel::onAuthBadgeClick,
+                onAuthSignIn = chatViewModel::onAuthSignIn,
                 onAuthConfirm = chatViewModel::onAuthConfirm,
                 onAuthCancel = chatViewModel::onAuthCancel,
                 onAuthLogout = chatViewModel::onAuthLogout,
+                onDisconnectFromServer = chatViewModel::disconnectFromServer,
             )
         }
 

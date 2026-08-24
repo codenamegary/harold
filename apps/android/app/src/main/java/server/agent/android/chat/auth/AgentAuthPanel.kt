@@ -35,9 +35,9 @@ fun AgentAuthPanel(
     submitting: Boolean,
     actionBusy: Boolean,
     error: String?,
+    onSignIn: () -> Unit,
     onConfirm: (String) -> Unit,
     onCancel: () -> Unit,
-    onLogout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val session = auth?.session?.takeIf { it.status == AuthSessionStatus.InProgress }
@@ -91,26 +91,21 @@ fun AgentAuthPanel(
                 ) {
                     Text(text = stringResource(R.string.agent_auth_cancel))
                 }
-            }
-
-            if (summary.canLogout || session != null) {
+            } else {
                 AgentButton(
-                    onClick = onLogout,
-                    enabled = summary.canLogout &&
-                        session == null &&
-                        !actionBusy &&
-                        !submitting,
-                    variant = AgentButtonVariant.Ghost,
+                    onClick = onSignIn,
+                    enabled = !submitting && !actionBusy,
+                    variant = AgentButtonVariant.Secondary,
                     size = AgentButtonSize.Small,
                     modifier = Modifier
                         .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                        .testTag("agent_auth_logout"),
+                        .testTag("agent_auth_sign_in"),
                 ) {
                     Text(
-                        text = if (actionBusy && session == null) {
-                            stringResource(R.string.agent_auth_signing_out)
+                        text = if (submitting) {
+                            stringResource(R.string.agent_auth_starting)
                         } else {
-                            stringResource(R.string.agent_auth_sign_out)
+                            stringResource(R.string.agent_auth_sign_in)
                         },
                     )
                 }

@@ -68,13 +68,10 @@
     <string name="shell_pair_hint">Scan a pairing QR from your Agent Server host, or enter the endpoint and code manually.</string>
     <string name="shell_repair_hint">Re-pair if this device lost access, or you want to connect to a different host.</string>
     <string name="permission_option_content_description">Permission option: %1$s</string>
-    <string name="agent_auth_status_unknown">auth unknown</string>
-    <string name="agent_auth_status_needs_auth">needs auth</string>
-    <string name="agent_auth_status_authenticated">signed in</string>
-    <string name="agent_auth_status_error">auth error</string>
-    <string name="agent_auth_badge_content_description">%1$s auth status: %2$s</string>
     <string name="agent_auth_host_login">Host login</string>
     <string name="agent_auth_panel_content_description">%1$s auth</string>
+    <string name="agent_auth_sign_in">Sign in</string>
+    <string name="agent_auth_starting">Starting…</string>
     <string name="agent_auth_cancel">Cancel</string>
     <string name="agent_auth_sign_out">Sign out</string>
     <string name="agent_auth_signing_out">Signing out…</string>
@@ -100,4 +97,9 @@
     <string name="add_workspace_folders_empty">No folders in this root</string>
     <string name="add_workspace_submit">Add workspace</string>
     <string name="add_workspace_submitting">Adding…</string>
+    <string name="chat_disconnect_from_server">Disconnect from server</string>
+    <string name="chat_disconnect_confirm_title">Disconnect from server?</string>
+    <string name="chat_disconnect_confirm_body">This device will be unpaired. You will need to scan a pairing QR or enter a code again to reconnect.</string>
+    <string name="chat_disconnect_confirm">Disconnect</string>
+    <string name="chat_disconnect_cancel">Cancel</string>
 </resources>

@@ -72,4 +72,9 @@ interface OperatorRepository {
         serverOrigin: String,
         agentId: AgentId,
     ): Result<AgentAuthSummary>
+
+    suspend fun revokeDevice(
+        serverOrigin: String,
+        deviceId: String,
+    ): Result<Unit>
 }

@@ -190,4 +190,9 @@ private class WorkspacesFakeOperatorRepository(
         agentId: server.agent.android.contracts.AgentId,
     ): Result<server.agent.android.contracts.AgentAuthSummary> =
         Result.failure(UnsupportedOperationException())
+
+    override suspend fun revokeDevice(
+        serverOrigin: String,
+        deviceId: String,
+    ): Result<Unit> = Result.success(Unit)
 }

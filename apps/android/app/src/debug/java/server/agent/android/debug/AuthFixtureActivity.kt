@@ -13,7 +13,6 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import server.agent.android.chat.auth.AgentAuthBadge
 import server.agent.android.chat.auth.AgentAuthPanel
 import server.agent.android.contracts.AgentAuth
 import server.agent.android.contracts.AgentAuthSession
@@ -25,14 +24,14 @@ import server.agent.android.contracts.AuthStep
 import server.agent.android.ui.theme.AgentServerTheme
 
 /**
- * Debug-only fixture host for AGE-74 emulator screenshots.
+ * Debug-only fixture host for emulator screenshots.
  * Launch: adb shell am start -n server.agent.android/.debug.AuthFixtureActivity \
- *   --es scene badges|panel
+ *   --es scene idle|panel
  */
 class AuthFixtureActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val scene = intent.getStringExtra(EXTRA_SCENE) ?: SCENE_BADGES
+        val scene = intent.getStringExtra(EXTRA_SCENE) ?: SCENE_IDLE
         setContent {
             AgentServerTheme(dynamicColor = false) {
                 Column(
@@ -55,7 +54,7 @@ class AuthFixtureActivity : ComponentActivity() {
                                 status = AgentAuthStatus.NeedsAuth,
                                 error = null,
                                 activeSessionId = "auth-1",
-                                canLogout = true,
+                                canLogout = false,
                             ),
                             auth = AgentAuth(
                                 agentId = "claude",
@@ -83,52 +82,31 @@ class AuthFixtureActivity : ComponentActivity() {
                             submitting = false,
                             actionBusy = false,
                             error = null,
+                            onSignIn = {},
                             onConfirm = {},
                             onCancel = {},
-                            onLogout = {},
                         )
-                        else -> {
-                            AgentAuthBadge(
-                                agentName = "Claude",
-                                summary = AgentAuthSummary(
-                                    status = AgentAuthStatus.NeedsAuth,
-                                    error = null,
-                                    activeSessionId = null,
-                                    canLogout = false,
-                                ),
-                                onClick = {},
-                            )
-                            AgentAuthBadge(
-                                agentName = "Claude",
-                                summary = AgentAuthSummary(
-                                    status = AgentAuthStatus.Authenticated,
-                                    error = null,
-                                    activeSessionId = null,
-                                    canLogout = true,
-                                ),
-                                onClick = {},
-                            )
-                            AgentAuthBadge(
-                                agentName = "Cursor",
-                                summary = AgentAuthSummary(
-                                    status = AgentAuthStatus.Unknown,
-                                    error = null,
-                                    activeSessionId = null,
-                                    canLogout = false,
-                                ),
-                                onClick = {},
-                            )
-                            AgentAuthBadge(
-                                agentName = "Gemini",
-                                summary = AgentAuthSummary(
-                                    status = AgentAuthStatus.Error,
-                                    error = "Probe failed",
-                                    activeSessionId = null,
-                                    canLogout = false,
-                                ),
-                                onClick = {},
-                            )
-                        }
+                        else -> AgentAuthPanel(
+                            agentName = "Claude",
+                            summary = AgentAuthSummary(
+                                status = AgentAuthStatus.NeedsAuth,
+                                error = null,
+                                activeSessionId = null,
+                                canLogout = false,
+                            ),
+                            auth = AgentAuth(
+                                agentId = "claude",
+                                status = AgentAuthStatus.NeedsAuth,
+                                error = null,
+                                session = null,
+                            ),
+                            submitting = false,
+                            actionBusy = false,
+                            error = null,
+                            onSignIn = {},
+                            onConfirm = {},
+                            onCancel = {},
+                        )
                     }
                 }
             }
@@ -137,7 +115,7 @@ class AuthFixtureActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_SCENE = "scene"
-        const val SCENE_BADGES = "badges"
+        const val SCENE_IDLE = "idle"
         const val SCENE_PANEL = "panel"
     }
 }

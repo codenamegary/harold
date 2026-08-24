@@ -192,6 +192,36 @@ class DefaultAgentApi(
         }
     }
 
+    override suspend fun revokeDevice(
+        serverOrigin: String,
+        deviceId: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val url = buildUrl(serverOrigin, "v1/devices/$deviceId", emptyMap())
+            ?: return@withContext failure(
+                AgentApiError.Transport(IllegalArgumentException("Invalid server origin")),
+            )
+
+        val request = Request.Builder()
+            .url(url)
+            .delete()
+            .build()
+
+        try {
+            client.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string().orEmpty()
+                if (response.code == HTTP_NO_CONTENT) {
+                    return@withContext Result.success(Unit)
+                }
+                if (!response.isSuccessful) {
+                    return@withContext failure(errorFor(response.code, responseBody))
+                }
+                Result.success(Unit)
+            }
+        } catch (error: Throwable) {
+            failure(AgentApiError.Transport(error))
+        }
+    }
+
     private suspend fun <T> get(
         serverOrigin: String,
         pathSegments: String,

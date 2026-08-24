@@ -66,4 +66,9 @@ class DefaultOperatorRepository(
         serverOrigin: String,
         agentId: AgentId,
     ) = agentApi.logoutAgentAuth(serverOrigin, agentId)
+
+    override suspend fun revokeDevice(
+        serverOrigin: String,
+        deviceId: String,
+    ) = agentApi.revokeDevice(serverOrigin, deviceId)
 }

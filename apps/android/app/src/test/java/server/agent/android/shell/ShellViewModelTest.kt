@@ -316,4 +316,8 @@ private class FakeAgentApi(
     ): Result<server.agent.android.contracts.AgentAuthSummary> =
         Result.failure(UnsupportedOperationException())
 
+    override suspend fun revokeDevice(
+        serverOrigin: String,
+        deviceId: String,
+    ): Result<Unit> = Result.success(Unit)
 }

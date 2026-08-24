@@ -19,6 +19,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -405,7 +406,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun authBadgeClickStartsSessionWhenNeedsAuth() = runTest(dispatcher) {
+    fun authSignInStartsSession() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository(
             agentAuth = server.agent.android.contracts.AgentAuth(
                 agentId = "cursor",
@@ -434,7 +435,8 @@ class ChatViewModelTest {
         )
         advanceUntilIdle()
 
-        viewModel.onAuthBadgeClick()
+        assertTrue(viewModel.uiState.value.showAuthPanel)
+        viewModel.onAuthSignIn()
         advanceUntilIdle()
 
         assertEquals(1, repository.authStartCalls.size)
@@ -511,8 +513,7 @@ class ChatViewModelTest {
         )
         advanceUntilIdle()
 
-        viewModel.onAuthBadgeClick()
-        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.authSummary?.canLogout == true)
         viewModel.onAuthLogout()
         advanceUntilIdle()
 
@@ -521,6 +522,32 @@ class ChatViewModelTest {
             server.agent.android.contracts.AgentAuthStatus.NeedsAuth,
             viewModel.uiState.value.agentAuthSummary?.status,
         )
+        assertTrue(viewModel.uiState.value.showAuthPanel)
+    }
+
+    @Test
+    fun disconnectFromServerRevokesDeviceAndClearsLocalAccess() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository()
+        val sessionGateway = ChatFakeSessionGateway(
+            PairedState.Paired(ORIGIN, "device_01", "Pixel"),
+        )
+        val connection = ChatFakeConnectionGateway()
+        val navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02")
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = navigation,
+            connection = connection,
+            sessionGateway = sessionGateway,
+        )
+        advanceUntilIdle()
+
+        viewModel.disconnectFromServer()
+        advanceUntilIdle()
+
+        assertEquals(listOf("device_01"), repository.revokeDeviceCalls)
+        assertEquals(PairedState.NotPaired, sessionGateway.pairedState.value)
+        assertTrue(navigation.lastSessionCleared)
+        assertNull(connection.target)
     }
 
     @Test
@@ -578,9 +605,12 @@ class ChatViewModelTest {
         repository: ChatFakeOperatorRepository,
         navigation: ChatFakeNavigationPreferences,
         connection: ChatFakeConnectionGateway = ChatFakeConnectionGateway(),
+        sessionGateway: ChatFakeSessionGateway = ChatFakeSessionGateway(
+            PairedState.Paired(ORIGIN, "device_01", "Pixel"),
+        ),
     ): ChatViewModel = ChatViewModel(
         savedStateHandle = SavedStateHandle(),
-        sessionGateway = ChatFakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
+        sessionGateway = sessionGateway,
         connectionGateway = connection,
         operatorRepository = repository,
         navigationPreferences = navigation,
@@ -649,15 +679,19 @@ private class ChatFakeNavigationPreferences(
 ) : NavigationPreferences {
     var savedSessionId: String? = null
         private set
+    var lastSessionCleared: Boolean = false
+        private set
 
     override suspend fun loadLastSessionId(): String? = lastSessionId
 
     override suspend fun saveLastSessionId(sessionId: String) {
         savedSessionId = sessionId
+        lastSessionCleared = false
     }
 
     override suspend fun clearLastSessionId() {
         savedSessionId = null
+        lastSessionCleared = true
     }
 }
 
@@ -680,6 +714,7 @@ private class ChatFakeOperatorRepository(
     val authStartCalls = mutableListOf<String>()
     val authActionCalls = mutableListOf<Triple<String, String, server.agent.android.contracts.AuthSessionAction>>()
     val authLogoutCalls = mutableListOf<String>()
+    val revokeDeviceCalls = mutableListOf<String>()
     var agentAuthOverride: server.agent.android.contracts.AgentAuth = agentAuth
     private val createdSessions = mutableListOf<Session>()
     private val seed = extraSessions.ifEmpty {
@@ -849,6 +884,14 @@ private class ChatFakeOperatorRepository(
         )
         canLogout = false
         return Result.success(summary)
+    }
+
+    override suspend fun revokeDevice(
+        serverOrigin: String,
+        deviceId: String,
+    ): Result<Unit> {
+        revokeDeviceCalls += deviceId
+        return Result.success(Unit)
     }
 }
 

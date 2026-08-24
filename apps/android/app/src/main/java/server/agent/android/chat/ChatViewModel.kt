@@ -531,15 +531,9 @@ class ChatViewModel(
         }
     }
 
-    fun onAuthBadgeClick() {
+    fun onAuthSignIn() {
         val session = _uiState.value.selectedSession ?: return
-        val summary = _uiState.value.authBadgeSummary
-        _uiState.update { current ->
-            current.copy(authPanelOpen = true, authError = null)
-        }
-        if (summary?.status == AgentAuthStatus.NeedsAuth) {
-            startAuthSession(session.agentId)
-        }
+        startAuthSession(session.agentId)
     }
 
     fun onAuthConfirm(stepId: String) {
@@ -595,9 +589,6 @@ class ChatViewModel(
             ).fold(
                 onSuccess = { updatedSession ->
                     applyAuthSessionResult(selected.agentId, updatedSession)
-                    _uiState.update { current ->
-                        current.copy(authPanelOpen = false)
-                    }
                     hydrateAgentAuth(selected.agentId)
                 },
                 onFailure = { error ->
@@ -614,7 +605,7 @@ class ChatViewModel(
 
     fun onAuthLogout() {
         val selected = _uiState.value.selectedSession ?: return
-        val summary = _uiState.value.authBadgeSummary
+        val summary = _uiState.value.authSummary
         if (summary?.canLogout != true) {
             return
         }
@@ -646,7 +637,6 @@ class ChatViewModel(
                             ),
                             agentAuthSummary = logoutSummary,
                             authActionBusy = false,
-                            authPanelOpen = false,
                             authError = null,
                         )
                     }
@@ -660,6 +650,25 @@ class ChatViewModel(
                     }
                 },
             )
+        }
+    }
+
+    fun disconnectFromServer() {
+        viewModelScope.launch {
+            val paired = sessionGateway.pairedState.value as? PairedState.Paired
+            if (paired != null) {
+                operatorRepository.revokeDevice(
+                    serverOrigin = paired.serverOrigin,
+                    deviceId = paired.deviceId,
+                )
+            }
+            connectionGateway.setTarget(null, null)
+            connectionGateway.disconnect()
+            clearPersistedSession()
+            activeSessionTracker?.replaceAll(emptyList())
+            sessionForegroundCoordinator?.onSessionsChanged()
+            sessionForegroundCoordinator?.setServerOrigin(null)
+            sessionGateway.clearLocalAccess()
         }
     }
 
@@ -720,7 +729,6 @@ class ChatViewModel(
                 agentAuthSummary = summary,
                 authPanelSubmitting = false,
                 authActionBusy = false,
-                authPanelOpen = session.status == AuthSessionStatus.InProgress || current.authPanelOpen,
                 authError = null,
             )
         }
@@ -751,9 +759,6 @@ class ChatViewModel(
                     current.copy(
                         agentAuth = auth,
                         agentAuthSummary = summary,
-                        authPanelOpen = current.authPanelOpen ||
-                            sessionInFlight ||
-                            attachHostLoginIfNeeded,
                         authError = null,
                     )
                 }
@@ -796,7 +801,6 @@ class ChatViewModel(
                 streamReconnecting = false,
                 agentAuth = null,
                 agentAuthSummary = summaryFromCatalog,
-                authPanelOpen = false,
                 authPanelSubmitting = false,
                 authActionBusy = false,
                 authError = null,
@@ -932,8 +936,6 @@ class ChatViewModel(
                     current.copy(
                         agentAuth = message.auth,
                         agentAuthSummary = summary,
-                        authPanelOpen = current.authPanelOpen ||
-                            message.auth.session?.status == AuthSessionStatus.InProgress,
                         authError = null,
                     )
                 }
@@ -1104,7 +1106,6 @@ class ChatViewModel(
                 extensionUiState = if (selectedWasDeleted) ExtensionUiState() else current.extensionUiState,
                 agentAuth = if (selectedWasDeleted) null else current.agentAuth,
                 agentAuthSummary = if (selectedWasDeleted) null else current.agentAuthSummary,
-                authPanelOpen = if (selectedWasDeleted) false else current.authPanelOpen,
                 authPanelSubmitting = if (selectedWasDeleted) false else current.authPanelSubmitting,
                 authActionBusy = if (selectedWasDeleted) false else current.authActionBusy,
                 authError = if (selectedWasDeleted) null else current.authError,

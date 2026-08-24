@@ -71,8 +71,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
 import server.agent.android.R
-import server.agent.android.chat.auth.AgentAuthBadge
 import server.agent.android.chat.auth.AgentAuthPanel
+import server.agent.android.contracts.AuthSessionStatus
 
 private val MIN_TOUCH_TARGET = 48.dp
 private val SessionMenuItemPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
@@ -128,12 +128,14 @@ fun ChatScreen(
     onVoiceDictationStartOver: () -> Unit = {},
     onVoiceDictationCancel: () -> Unit = {},
     onVoiceDictationConfirm: () -> Unit = {},
-    onAuthBadgeClick: () -> Unit = {},
+    onAuthSignIn: () -> Unit = {},
     onAuthConfirm: (String) -> Unit = {},
     onAuthCancel: () -> Unit = {},
     onAuthLogout: () -> Unit = {},
+    onDisconnectFromServer: () -> Unit = {},
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    var disconnectConfirmVisible by remember { mutableStateOf(false) }
     val sessionLabel = uiState.selectedSession?.name ?: "Select session"
     val hasSelectedSession = uiState.selectedSession != null
     val context = LocalContext.current
@@ -245,6 +247,38 @@ fun ChatScreen(
         )
     }
 
+    if (disconnectConfirmVisible) {
+        AlertDialog(
+            onDismissRequest = { disconnectConfirmVisible = false },
+            title = { Text(text = stringResource(R.string.chat_disconnect_confirm_title)) },
+            text = { Text(text = stringResource(R.string.chat_disconnect_confirm_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        disconnectConfirmVisible = false
+                        onDisconnectFromServer()
+                    },
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                        .testTag("disconnect_confirm"),
+                ) {
+                    Text(text = stringResource(R.string.chat_disconnect_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { disconnectConfirmVisible = false },
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                        .testTag("disconnect_cancel"),
+                ) {
+                    Text(text = stringResource(R.string.chat_disconnect_cancel))
+                }
+            },
+            modifier = Modifier.testTag("disconnect_confirm_dialog"),
+        )
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
@@ -343,16 +377,6 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    val authSummary = uiState.authBadgeSummary
-                    if (hasSelectedSession && authSummary != null) {
-                        val selected = uiState.selectedSession
-                        AgentAuthBadge(
-                            agentName = selected.agentLabel.ifBlank { selected.agentId },
-                            summary = authSummary,
-                            onClick = onAuthBadgeClick,
-                            modifier = Modifier.padding(end = 4.dp),
-                        )
-                    }
                     IconButton(
                         onClick = { menuExpanded = true },
                         modifier = Modifier
@@ -379,6 +403,37 @@ fun ChatScreen(
                                 onWorkspacesClick()
                             },
                             modifier = Modifier.testTag("workspaces_menu_item"),
+                        )
+                        if (uiState.authSummary?.canLogout == true) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = if (uiState.authActionBusy) {
+                                            stringResource(R.string.agent_auth_signing_out)
+                                        } else {
+                                            stringResource(R.string.agent_auth_sign_out)
+                                        },
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onAuthLogout()
+                                },
+                                enabled = !uiState.authActionBusy &&
+                                    !uiState.authPanelSubmitting &&
+                                    uiState.agentAuth?.session?.status != AuthSessionStatus.InProgress,
+                                modifier = Modifier.testTag("auth_sign_out_menu_item"),
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = {
+                                Text(text = stringResource(R.string.chat_disconnect_from_server))
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                disconnectConfirmVisible = true
+                            },
+                            modifier = Modifier.testTag("disconnect_menu_item"),
                         )
                     }
                 },
@@ -416,6 +471,24 @@ fun ChatScreen(
                             liveRegion = LiveRegionMode.Polite
                         },
                 )
+            }
+
+            if (hasSelectedSession && uiState.showAuthPanel) {
+                val summary = uiState.authSummary
+                val selected = uiState.selectedSession
+                if (summary != null && selected != null) {
+                    AgentAuthPanel(
+                        agentName = selected.agentLabel.ifBlank { selected.agentId },
+                        summary = summary,
+                        auth = uiState.agentAuth,
+                        submitting = uiState.authPanelSubmitting,
+                        actionBusy = uiState.authActionBusy,
+                        error = uiState.authError,
+                        onSignIn = onAuthSignIn,
+                        onConfirm = onAuthConfirm,
+                        onCancel = onAuthCancel,
+                    )
+                }
             }
 
             uiState.cancelError?.let { message ->
@@ -471,6 +544,19 @@ fun ChatScreen(
                                         ) {
                                             Text(text = stringResource(R.string.chat_select_session))
                                         }
+                                        TextButton(
+                                            onClick = { disconnectConfirmVisible = true },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                                                .testTag("disconnect_cta"),
+                                        ) {
+                                            Text(
+                                                text = stringResource(
+                                                    R.string.chat_disconnect_from_server,
+                                                ),
+                                            )
+                                        }
                                     }
                                 },
                             )
@@ -497,25 +583,6 @@ fun ChatScreen(
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.testTag("composer_blocked_message"),
                     )
-                }
-
-                if (uiState.showAuthPanel) {
-                    val summary = uiState.authBadgeSummary
-                    val selected = uiState.selectedSession
-                    if (summary != null && selected != null) {
-                        AgentAuthPanel(
-                            agentName = selected.agentLabel.ifBlank { selected.agentId },
-                            summary = summary,
-                            auth = uiState.agentAuth,
-                            submitting = uiState.authPanelSubmitting,
-                            actionBusy = uiState.authActionBusy,
-                            error = uiState.authError,
-                            onConfirm = onAuthConfirm,
-                            onCancel = onAuthCancel,
-                            onLogout = onAuthLogout,
-                            modifier = Modifier.padding(bottom = 8.dp),
-                        )
-                    }
                 }
 
                 uiState.activePermissionRequest?.let { request ->

@@ -2,6 +2,7 @@ package server.agent.android.chat
 
 import kotlinx.serialization.json.JsonElement
 import server.agent.android.contracts.AgentAuth
+import server.agent.android.contracts.AgentAuthStatus
 import server.agent.android.contracts.AgentAuthSummary
 import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.AuthSessionStatus
@@ -95,7 +96,6 @@ data class ChatUiState(
     val voiceDictation: VoiceDictationUiState = VoiceDictationUiState(),
     val agentAuth: AgentAuth? = null,
     val agentAuthSummary: AgentAuthSummary? = null,
-    val authPanelOpen: Boolean = false,
     val authPanelSubmitting: Boolean = false,
     val authActionBusy: Boolean = false,
     val authError: String? = null,
@@ -103,13 +103,7 @@ data class ChatUiState(
     val activePermissionRequest: PermissionRequest?
         get() = activePermissionRequest(pendingPermissions)
 
-    val showAuthPanel: Boolean
-        get() {
-            val sessionInFlight = agentAuth?.session?.status == AuthSessionStatus.InProgress
-            return authPanelOpen || sessionInFlight
-        }
-
-    val authBadgeSummary: AgentAuthSummary?
+    val authSummary: AgentAuthSummary?
         get() = agentAuthSummary
             ?: agentAuth?.let { auth ->
                 AgentAuthSummary(
@@ -121,6 +115,23 @@ data class ChatUiState(
                     canLogout = false,
                 )
             }
+
+    val showAuthPanel: Boolean
+        get() {
+            val sessionInFlight = agentAuth?.session?.status == AuthSessionStatus.InProgress
+            if (sessionInFlight) {
+                return true
+            }
+            return when (authSummary?.status) {
+                AgentAuthStatus.NeedsAuth,
+                AgentAuthStatus.Error,
+                AgentAuthStatus.Unknown,
+                -> true
+                AgentAuthStatus.Authenticated,
+                null,
+                -> false
+            }
+        }
 
     val effectiveSessionState: SessionState?
         get() = resolveEffectiveSessionState(
