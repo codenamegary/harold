@@ -246,8 +246,7 @@ fun AppNavHost(
                 },
                 onWorkspaceChanged = chatViewModel::onCreateWorkspaceChanged,
                 onAgentChanged = chatViewModel::onCreateAgentChanged,
-                onPromptChanged = chatViewModel::onCreatePromptChanged,
-                onSubmit = chatViewModel::submitCreateSession,
+                onSubmit = chatViewModel::confirmNewSession,
             )
         }
 
