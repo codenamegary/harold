@@ -36,9 +36,8 @@ export const createSessionLoadHandler = (): AgentMethodHandler<"session/load"> =
     const { acpSessionId, workspaceCwd, sessionId, workspaceId } = params
 
     const existingBinding = context.sessionBindings.getBinding(acpSessionId)
-    if (existingBinding !== undefined && existingBinding.phase === "live") {
-      return { ok: true, acpSessionId }
-    }
+    const wasLive =
+      existingBinding !== undefined && existingBinding.phase === "live"
 
     if (!context.supportsCapability(sessionLoadRequires)) {
       return { ok: false, reason: "Agent does not support session/load" }
@@ -90,6 +89,16 @@ export const createSessionLoadHandler = (): AgentMethodHandler<"session/load"> =
       return { ok: true, acpSessionId: result.sessionId }
     } catch (error: unknown) {
       context.sessionBindings.unbind({ acpSessionId })
+      if (wasLive) {
+        context.sessionBindings.bind({
+          acpSessionId,
+          sessionId,
+          workspaceId,
+          workspaceRoot: workspaceCwd,
+          phase: "live",
+        })
+        return { ok: true, acpSessionId }
+      }
       return {
         ok: false,
         reason: sanitizeLoadFailureReason(error, "session/load failed"),

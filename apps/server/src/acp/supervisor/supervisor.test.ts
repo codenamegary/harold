@@ -1040,7 +1040,7 @@ describe("createAcpSupervisor", () => {
     expect(sessionNewCalls).toEqual([{ cwd: "/tmp/project", mcpServers: [] }])
   })
 
-  test("loadSession skips session/load when the session is already live from session/new", async () => {
+  test("loadSession falls back when session/load fails on an already-live session", async () => {
     const mock = createMockTransport()
     const loadCalls: unknown[] = []
     mock.setHandler("initialize", () => ({
@@ -1080,7 +1080,62 @@ describe("createAcpSupervisor", () => {
     })
 
     expect(loaded).toEqual({ ok: true, acpSessionId: "live-sess-1" })
-    expect(loadCalls).toEqual([])
+    expect(loadCalls).toEqual([
+      {
+        sessionId: "live-sess-1",
+        cwd: "/tmp/project",
+        mcpServers: [],
+      },
+    ])
+  })
+
+  test("loadSession replays history when the session is already live from session/new", async () => {
+    const mock = createMockTransport()
+    const loadCalls: unknown[] = []
+    mock.setHandler("initialize", () => ({
+      agentCapabilities: {
+        loadSession: true,
+        sessionCapabilities: { list: {} },
+      },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+    mock.setHandler("session/new", () => ({ sessionId: "live-sess-2" }))
+    mock.setHandler("session/load", (params) => {
+      loadCalls.push(params)
+      return { sessionId: "live-sess-2" }
+    })
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: () => createMockProcess(),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+    const created = await supervisor.createSession({
+      agentId: "cursor",
+      cwd: "/tmp/project",
+    })
+    expect(created).toEqual({ ok: true, acpSessionId: "live-sess-2" })
+
+    const loaded = await supervisor.loadSession({
+      agentId: "cursor",
+      sessionId: "live-sess-2",
+      cwd: "/tmp/project",
+    })
+
+    expect(loaded).toEqual({ ok: true, acpSessionId: "live-sess-2" })
+    expect(loadCalls).toEqual([
+      {
+        sessionId: "live-sess-2",
+        cwd: "/tmp/project",
+        mcpServers: [],
+      },
+    ])
   })
 
   test("loadSession calls session/load for a session that is not already live", async () => {

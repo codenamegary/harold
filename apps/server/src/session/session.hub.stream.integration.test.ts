@@ -299,6 +299,70 @@ describe("session hub stream integration", () => {
     await client.close()
   })
 
+  test("re-subscribe to a live session replays history", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app, config } = await createTestApp(resources, dataDir, whichFn, undefined, {
+      capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+      sessionNewSessionId: "hub-resub-1",
+      sessionLoadSessionId: "hub-resub-1",
+      emitLoadReplayUpdates: true,
+    })
+    await enableAgent(app, "cursor", whichFn)
+
+    const { httpBase, wsUrl } = await getListeningBase(app, config)
+
+    const createResponse = await fetch(`${httpBase}/v1/sessions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agentId: "cursor",
+        cwd: "/tmp/hub-resub-project",
+      }),
+    })
+    expect(createResponse.status).toBe(201)
+    const created = CreateSessionResponseSchema.parse(await createResponse.json())
+
+    const firstClient = await openStreamClient(wsUrl)
+    firstClient.send({
+      type: "subscribe",
+      agentId: "cursor",
+      sessionId: created.sessionId,
+    })
+    await firstClient.waitFor((message) => message.type === "subscribed")
+    await firstClient.close()
+
+    const secondClient = await openStreamClient(wsUrl)
+    secondClient.send({
+      type: "subscribe",
+      agentId: "cursor",
+      sessionId: created.sessionId,
+    })
+
+    const replayUpdate = await secondClient.waitFor(
+      (message) =>
+        message.type === "session_update" &&
+        JSON.stringify(message.update).includes("Replayed"),
+    )
+    expect(replayUpdate.type).toBe("session_update")
+
+    const subscribed = await secondClient.waitFor((message) => message.type === "subscribed")
+    expect(subscribed).toMatchObject({
+      type: "subscribed",
+      agentId: "cursor",
+      sessionId: created.sessionId,
+    })
+
+    const subscribedIndex = secondClient.messages.findIndex(
+      (message) => message.type === "subscribed",
+    )
+    const replayIndex = secondClient.messages.findIndex(
+      (message) => message === replayUpdate,
+    )
+    expect(replayIndex).toBeLessThan(subscribedIndex)
+
+    await secondClient.close()
+  })
+
   test("two clients receive auth_session_updated when one starts host-login", async () => {
     const dataDir = await createTempDataDir(resources)
     const { app, config } = await createTestApp(resources, dataDir, whichFn, undefined, {
