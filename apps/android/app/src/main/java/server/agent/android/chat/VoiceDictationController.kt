@@ -14,10 +14,14 @@ data class VoiceDictationUiState(
 
 class VoiceDictationController(
     private val speechClient: SpeechRecognitionClient,
+    private val restartScheduler: VoiceDictationRestartScheduler =
+        ImmediateVoiceDictationRestartScheduler(),
 ) {
     private var transcript = VoiceDictationTranscript("")
     private var hasRecordAudioPermission = false
     private var listening = false
+    private var sessionGeneration = 0
+    private var busyRestartAttempts = 0
 
     var onStateChanged: ((VoiceDictationUiState) -> Unit)? = null
 
@@ -49,7 +53,7 @@ class VoiceDictationController(
 
         this.hasRecordAudioPermission = hasRecordAudioPermission
         transcript = VoiceDictationTranscript(baseline)
-        listening = false
+        invalidateSession()
 
         return publish(
             VoiceDictationUiState(
@@ -75,9 +79,7 @@ class VoiceDictationController(
         }
 
         if (!granted) {
-            listening = false
-            speechClient.stopListening()
-            speechClient.destroy()
+            invalidateSession()
             return publish(
                 state.copy(
                     isListening = false,
@@ -116,11 +118,7 @@ class VoiceDictationController(
         }
 
         transcript = transcript.resetSpeech()
-        if (listening) {
-            speechClient.stopListening()
-            speechClient.destroy()
-            listening = false
-        }
+        invalidateSession()
 
         return publish(
             state.copy(
@@ -133,7 +131,7 @@ class VoiceDictationController(
     }
 
     fun cancel(): VoiceDictationUiState {
-        stopRecognition()
+        invalidateSession()
         transcript = VoiceDictationTranscript("")
         return publish(VoiceDictationUiState(recognizerAvailable = speechClient.isAvailable()))
     }
@@ -150,22 +148,36 @@ class VoiceDictationController(
 
     fun destroy() {
         onStateChanged = null
-        stopRecognition()
+        invalidateSession()
     }
 
-    private fun startListening(): VoiceDictationUiState {
+    private fun startListening(fromBusyRetry: Boolean = false): VoiceDictationUiState {
         if (!state.visible || !hasRecordAudioPermission) {
             return state
         }
 
+        restartScheduler.cancel()
+        speechClient.destroy()
+
+        val generation = ++sessionGeneration
         listening = true
+        if (!fromBusyRetry) {
+            busyRestartAttempts = 0
+        }
+
         speechClient.startListening(
             object : SpeechRecognitionCallbacks {
+                private fun isCurrent(): Boolean =
+                    generation == sessionGeneration && state.visible
+
                 override fun onReadyForSpeech() = Unit
 
                 override fun onBeginningOfSpeech() = Unit
 
                 override fun onRmsChanged(rmsDb: Float) {
+                    if (!isCurrent() || !listening) {
+                        return
+                    }
                     publish(
                         state.copy(
                             audioLevel = normalizeRms(rmsDb),
@@ -174,6 +186,9 @@ class VoiceDictationController(
                 }
 
                 override fun onPartialResult(text: String) {
+                    if (!isCurrent() || !listening) {
+                        return
+                    }
                     transcript = transcript.withPartial(text)
                     publish(
                         state.copy(
@@ -184,32 +199,36 @@ class VoiceDictationController(
                 }
 
                 override fun onFinalResult(text: String) {
+                    if (!isCurrent()) {
+                        return
+                    }
                     transcript = transcript.withFinalSegment(text)
-                    publish(
-                        state.copy(
-                            transcript = transcript.displayText,
-                            isListening = false,
-                            audioLevel = 0f,
-                        ),
-                    )
-                    listening = false
+                    endListening(error = null)
                 }
 
                 override fun onError(errorCode: Int) {
+                    if (!isCurrent()) {
+                        return
+                    }
+
+                    if (errorCode == SpeechRecognizer.ERROR_RECOGNIZER_BUSY && listening) {
+                        scheduleBusyRestart(generation)
+                        return
+                    }
+
                     val ignorable = errorCode == SpeechRecognizer.ERROR_NO_MATCH ||
                         errorCode == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
 
-                    listening = false
-                    publish(
-                        state.copy(
-                            isListening = false,
-                            audioLevel = 0f,
-                            error = if (ignorable) null else speechRecognitionErrorMessage(errorCode),
-                        ),
+                    endListening(
+                        error = if (ignorable) null else speechRecognitionErrorMessage(errorCode),
                     )
                 }
             },
         )
+
+        if (!listening || generation != sessionGeneration) {
+            return state
+        }
 
         return publish(
             state.copy(
@@ -224,19 +243,52 @@ class VoiceDictationController(
             return state
         }
 
-        speechClient.stopListening()
+        transcript = transcript.commitPartialAsFinal()
+        endListening(error = null)
+        return state
+    }
+
+    private fun scheduleBusyRestart(generation: Int) {
+        if (generation != sessionGeneration || !listening) {
+            return
+        }
+
+        speechClient.destroy()
+
+        if (busyRestartAttempts >= MAX_BUSY_RESTART_ATTEMPTS) {
+            endListening(error = speechRecognitionErrorMessage(SpeechRecognizer.ERROR_RECOGNIZER_BUSY))
+            return
+        }
+
+        busyRestartAttempts += 1
+        restartScheduler.schedule(BUSY_RESTART_DELAY_MS) {
+            if (generation != sessionGeneration || !state.visible || !listening) {
+                return@schedule
+            }
+            startListening(fromBusyRetry = true)
+        }
+    }
+
+    private fun endListening(error: String?) {
+        restartScheduler.cancel()
         listening = false
-        return publish(
+        sessionGeneration += 1
+        speechClient.destroy()
+        publish(
             state.copy(
+                transcript = transcript.displayText,
                 isListening = false,
                 audioLevel = 0f,
+                error = error,
             ),
         )
     }
 
-    private fun stopRecognition() {
+    private fun invalidateSession() {
+        restartScheduler.cancel()
         listening = false
-        speechClient.stopListening()
+        busyRestartAttempts = 0
+        sessionGeneration += 1
         speechClient.destroy()
     }
 
@@ -244,6 +296,11 @@ class VoiceDictationController(
         state = next
         onStateChanged?.invoke(next)
         return next
+    }
+
+    private companion object {
+        const val BUSY_RESTART_DELAY_MS = 150L
+        const val MAX_BUSY_RESTART_ATTEMPTS = 3
     }
 }
 

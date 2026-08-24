@@ -35,18 +35,18 @@ class AndroidSpeechRecognitionClient(
     private val application: Application,
 ) : SpeechRecognitionClient {
     private var recognizer: SpeechRecognizer? = null
-    private var callbacks: SpeechRecognitionCallbacks? = null
+    private var sessionGeneration = 0
 
     override fun isAvailable(): Boolean =
         SpeechRecognizer.isRecognitionAvailable(application)
 
     override fun startListening(callbacks: SpeechRecognitionCallbacks) {
         destroy()
-        this.callbacks = callbacks
+        val generation = sessionGeneration
 
         val speechRecognizer = SpeechRecognizer.createSpeechRecognizer(application)
         recognizer = speechRecognizer
-        speechRecognizer.setRecognitionListener(createListener())
+        speechRecognizer.setRecognitionListener(createListener(generation, callbacks))
 
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(
@@ -63,23 +63,32 @@ class AndroidSpeechRecognitionClient(
     }
 
     override fun destroy() {
+        sessionGeneration += 1
         recognizer?.destroy()
         recognizer = null
-        callbacks = null
     }
 
-    private fun createListener(): RecognitionListener =
+    private fun createListener(
+        generation: Int,
+        sessionCallbacks: SpeechRecognitionCallbacks,
+    ): RecognitionListener =
         object : RecognitionListener {
+            private fun dispatch(block: SpeechRecognitionCallbacks.() -> Unit) {
+                if (generation == sessionGeneration) {
+                    sessionCallbacks.block()
+                }
+            }
+
             override fun onReadyForSpeech(params: Bundle?) {
-                callbacks?.onReadyForSpeech()
+                dispatch { onReadyForSpeech() }
             }
 
             override fun onBeginningOfSpeech() {
-                callbacks?.onBeginningOfSpeech()
+                dispatch { onBeginningOfSpeech() }
             }
 
             override fun onRmsChanged(rmsDb: Float) {
-                callbacks?.onRmsChanged(rmsDb)
+                dispatch { onRmsChanged(rmsDb) }
             }
 
             override fun onBufferReceived(buffer: ByteArray?) = Unit
@@ -87,7 +96,7 @@ class AndroidSpeechRecognitionClient(
             override fun onEndOfSpeech() = Unit
 
             override fun onError(error: Int) {
-                callbacks?.onError(error)
+                dispatch { onError(error) }
             }
 
             override fun onResults(results: Bundle?) {
@@ -95,7 +104,7 @@ class AndroidSpeechRecognitionClient(
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     ?.firstOrNull()
                     .orEmpty()
-                callbacks?.onFinalResult(text)
+                dispatch { onFinalResult(text) }
             }
 
             override fun onPartialResults(partialResults: Bundle?) {
@@ -103,7 +112,7 @@ class AndroidSpeechRecognitionClient(
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     ?.firstOrNull()
                     .orEmpty()
-                callbacks?.onPartialResult(text)
+                dispatch { onPartialResult(text) }
             }
 
             override fun onEvent(eventType: Int, params: Bundle?) = Unit

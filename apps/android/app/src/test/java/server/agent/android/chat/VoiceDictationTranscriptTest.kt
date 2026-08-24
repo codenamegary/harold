@@ -22,6 +22,18 @@ class VoiceDictationTranscriptTest {
     }
 
     @Test
+    fun commitPartialAsFinalLocksInCurrentPartial() {
+        val transcript = VoiceDictationTranscript(baseline = "Can you fix")
+            .withPartial("the login")
+            .commitPartialAsFinal()
+
+        assertEquals("Can you fix the login", transcript.displayText)
+
+        val afterNewPartial = transcript.withPartial("on Android")
+        assertEquals("Can you fix the login on Android", afterNewPartial.displayText)
+    }
+
+    @Test
     fun startOverRestoresOpenTimeSnapshot() {
         var transcript = VoiceDictationTranscript(baseline = "Can you fix")
             .withFinalSegment("the login bug")

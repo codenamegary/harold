@@ -24,6 +24,7 @@ import server.agent.android.chat.ChatScreen
 import server.agent.android.chat.ChatViewModel
 import server.agent.android.chat.ChatViewModelFactory
 import server.agent.android.chat.AndroidSpeechRecognitionClient
+import server.agent.android.chat.HandlerVoiceDictationRestartScheduler
 import server.agent.android.chat.VoiceDictationController
 import server.agent.android.chat.CreateSessionScreen
 import server.agent.android.chat.SessionsScreen
@@ -45,7 +46,10 @@ fun AppNavHost(
     val navController = rememberNavController()
     val application = LocalContext.current.applicationContext as Application
     val voiceDictationController = remember(application) {
-        VoiceDictationController(AndroidSpeechRecognitionClient(application))
+        VoiceDictationController(
+            speechClient = AndroidSpeechRecognitionClient(application),
+            restartScheduler = HandlerVoiceDictationRestartScheduler(),
+        )
     }
     val shellViewModel: ShellViewModel = viewModel(
         factory = ShellViewModelFactory(

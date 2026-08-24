@@ -29,6 +29,14 @@ data class VoiceDictationTranscript(
         )
     }
 
+    /** Commits the current partial into committed speech without waiting on the recognizer. */
+    fun commitPartialAsFinal(): VoiceDictationTranscript {
+        if (partialSpeech.isEmpty()) {
+            return this
+        }
+        return withFinalSegment(partialSpeech)
+    }
+
     fun resetSpeech(): VoiceDictationTranscript =
         copy(
             committedSpeech = "",
