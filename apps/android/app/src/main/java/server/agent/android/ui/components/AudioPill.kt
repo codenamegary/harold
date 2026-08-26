@@ -49,11 +49,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import server.agent.android.chat.VoiceDictationController
 
 private val MIN_TOUCH_TARGET = 48.dp
 private val WAVEFORM_BAR_COUNT = 7
 private val COUNTDOWN_STROKE = 3.dp
+private const val DEFAULT_SILENCE_COUNTDOWN_MS = 5_000
 
 /**
  * A compact interactive audio pill displaying a reactive sound-wave equalizer during active
@@ -68,7 +68,7 @@ fun AudioPill(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     silenceCountdownActive: Boolean = false,
-    silenceCountdownDurationMs: Int = VoiceDictationController.SILENCE_COUNTDOWN_MS.toInt(),
+    silenceCountdownDurationMs: Int = DEFAULT_SILENCE_COUNTDOWN_MS,
     contentDescription: String? = null,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
 ) {
