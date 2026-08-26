@@ -125,6 +125,10 @@ class VoskSpeechRecognitionClient(
 
         deliveredFinalForSession = true
         val text = VoskHypothesisParser.finalText(hypothesis)
+        if (text.isBlank()) {
+            deliveredFinalForSession = false
+            return
+        }
         callbacks.onFinalResult(text)
         destroyServiceOnly()
     }

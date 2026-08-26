@@ -8,6 +8,10 @@
             android:name=".debug.AuthFixtureActivity"
             android:exported="true"
             android:theme="@style/Theme.AgentServer" />
+        <activity
+            android:name=".debug.VoiceFixtureActivity"
+            android:exported="true"
+            android:theme="@style/Theme.AgentServer" />
     </application>
 
 </manifest>
