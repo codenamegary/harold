@@ -1,7 +1,5 @@
 package server.agent.android.chat
 
-import android.speech.SpeechRecognizer
-
 data class VoiceDictationUiState(
     val visible: Boolean = false,
     val transcript: String = "",
@@ -43,7 +41,7 @@ class VoiceDictationController(
                 state.copy(
                     visible = false,
                     error = if (!speechClient.isAvailable()) {
-                        "Speech recognition is not available on this device."
+                        speechRecognitionErrorMessage(SpeechRecognitionErrors.MODEL_UNAVAILABLE)
                     } else {
                         null
                     },
@@ -211,13 +209,13 @@ class VoiceDictationController(
                         return
                     }
 
-                    if (errorCode == SpeechRecognizer.ERROR_RECOGNIZER_BUSY && listening) {
+                    if (errorCode == SpeechRecognitionErrors.BUSY && listening) {
                         scheduleBusyRestart(generation)
                         return
                     }
 
-                    val ignorable = errorCode == SpeechRecognizer.ERROR_NO_MATCH ||
-                        errorCode == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+                    val ignorable = errorCode == SpeechRecognitionErrors.NO_MATCH ||
+                        errorCode == SpeechRecognitionErrors.SPEECH_TIMEOUT
 
                     endListening(
                         error = if (ignorable) null else speechRecognitionErrorMessage(errorCode),
@@ -256,7 +254,7 @@ class VoiceDictationController(
         speechClient.destroy()
 
         if (busyRestartAttempts >= MAX_BUSY_RESTART_ATTEMPTS) {
-            endListening(error = speechRecognitionErrorMessage(SpeechRecognizer.ERROR_RECOGNIZER_BUSY))
+            endListening(error = speechRecognitionErrorMessage(SpeechRecognitionErrors.BUSY))
             return
         }
 
