@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -153,7 +152,7 @@ fun AudioPill(
             val progress = countdownProgress.value
             Canvas(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .matchParentSize()
                     .testTag("audio_pill_silence_ring"),
             ) {
                 val stroke = COUNTDOWN_STROKE.toPx()
