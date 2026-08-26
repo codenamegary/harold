@@ -16,7 +16,6 @@ class VoskSpeechRecognitionClient(
 ) : SpeechRecognitionClient {
     private var speechService: SpeechService? = null
     private var sessionGeneration = 0
-    private var deliveredFinalForSession = false
 
     init {
         modelStore.ensureLoaded { }
@@ -28,7 +27,6 @@ class VoskSpeechRecognitionClient(
     override fun startListening(callbacks: SpeechRecognitionCallbacks) {
         destroyServiceOnly()
         val generation = sessionGeneration
-        deliveredFinalForSession = false
 
         modelStore.ensureLoaded { result ->
             mainHandler.post {
@@ -54,7 +52,6 @@ class VoskSpeechRecognitionClient(
 
     override fun destroy() {
         sessionGeneration += 1
-        deliveredFinalForSession = false
         destroyServiceOnly()
     }
 
@@ -75,7 +72,7 @@ class VoskSpeechRecognitionClient(
             service.startListening(
                 object : RecognitionListener {
                     override fun onPartialResult(hypothesis: String?) {
-                        if (generation != sessionGeneration || deliveredFinalForSession) {
+                        if (generation != sessionGeneration) {
                             return
                         }
                         val text = VoskHypothesisParser.partialText(hypothesis.orEmpty())
@@ -85,22 +82,33 @@ class VoskSpeechRecognitionClient(
                     }
 
                     override fun onResult(hypothesis: String?) {
-                        deliverFinal(generation, hypothesis.orEmpty(), callbacks)
+                        if (generation != sessionGeneration) {
+                            return
+                        }
+                        // Utterance endpoint. Keep SpeechService running for continuous listen.
+                        callbacks.onFinalResult(VoskHypothesisParser.finalText(hypothesis.orEmpty()))
                     }
 
                     override fun onFinalResult(hypothesis: String?) {
-                        deliverFinal(generation, hypothesis.orEmpty(), callbacks)
+                        if (generation != sessionGeneration) {
+                            return
+                        }
+                        val text = VoskHypothesisParser.finalText(hypothesis.orEmpty())
+                        if (text.isNotBlank()) {
+                            callbacks.onFinalResult(text)
+                        }
+                        destroyServiceOnly()
                     }
 
                     override fun onError(exception: Exception?) {
-                        if (generation != sessionGeneration || deliveredFinalForSession) {
+                        if (generation != sessionGeneration) {
                             return
                         }
                         callbacks.onError(mapException(exception))
                     }
 
                     override fun onTimeout() {
-                        if (generation != sessionGeneration || deliveredFinalForSession) {
+                        if (generation != sessionGeneration) {
                             return
                         }
                         callbacks.onError(SpeechRecognitionErrors.SPEECH_TIMEOUT)
@@ -112,25 +120,6 @@ class VoskSpeechRecognitionClient(
         } catch (error: RuntimeException) {
             callbacks.onError(SpeechRecognitionErrors.CLIENT)
         }
-    }
-
-    private fun deliverFinal(
-        generation: Int,
-        hypothesis: String,
-        callbacks: SpeechRecognitionCallbacks,
-    ) {
-        if (generation != sessionGeneration || deliveredFinalForSession) {
-            return
-        }
-
-        deliveredFinalForSession = true
-        val text = VoskHypothesisParser.finalText(hypothesis)
-        if (text.isBlank()) {
-            deliveredFinalForSession = false
-            return
-        }
-        callbacks.onFinalResult(text)
-        destroyServiceOnly()
     }
 
     private fun destroyServiceOnly() {
