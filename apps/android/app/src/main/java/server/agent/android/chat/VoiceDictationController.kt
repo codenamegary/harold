@@ -17,8 +17,7 @@ data class VoiceDictationUiState(
 class VoiceDictationController(
     private val speechClient: SpeechRecognitionClient,
     private val silenceScheduler: VoiceDictationRestartScheduler,
-    private val restartScheduler: VoiceDictationRestartScheduler =
-        ImmediateVoiceDictationRestartScheduler(),
+    private val restartScheduler: VoiceDictationRestartScheduler,
 ) {
     private var transcript = VoiceDictationTranscript("")
     private var hasRecordAudioPermission = false

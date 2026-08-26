@@ -13,6 +13,7 @@ class VoiceDictationControllerTest {
         val controller = VoiceDictationController(
             speechClient = speechClient,
             silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+            restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         )
 
         val state = controller.open(
@@ -33,6 +34,7 @@ class VoiceDictationControllerTest {
         val controller = VoiceDictationController(
             speechClient = speechClient,
             silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+            restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         )
 
         controller.open(
@@ -51,6 +53,7 @@ class VoiceDictationControllerTest {
         val controller = VoiceDictationController(
             speechClient = speechClient,
             silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+            restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         )
         controller.open(
             baseline = "Can you fix",
@@ -78,6 +81,7 @@ class VoiceDictationControllerTest {
         val controller = VoiceDictationController(
             speechClient = speechClient,
             silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+            restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         )
         controller.open(
             baseline = "Can you fix",
@@ -98,6 +102,7 @@ class VoiceDictationControllerTest {
         val controller = VoiceDictationController(
             speechClient = speechClient,
             silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+            restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         )
         controller.open(
             baseline = "Hello",
@@ -118,6 +123,7 @@ class VoiceDictationControllerTest {
         val controller = VoiceDictationController(
             speechClient = speechClient,
             silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+            restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         )
 
         val state = controller.open(
@@ -136,6 +142,7 @@ class VoiceDictationControllerTest {
         val controller = VoiceDictationController(
             speechClient = speechClient,
             silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+            restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         )
         controller.open(
             baseline = "",
@@ -165,6 +172,7 @@ class VoiceDictationControllerTest {
         val controller = VoiceDictationController(
             speechClient = speechClient,
             silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+            restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         )
         controller.open(
             baseline = "",
@@ -256,6 +264,7 @@ class VoiceDictationControllerTest {
         val controller = VoiceDictationController(
             speechClient = speechClient,
             silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+            restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         )
 
         controller.open(
@@ -278,6 +287,7 @@ class VoiceDictationControllerTest {
         val controller = VoiceDictationController(
             speechClient = speechClient,
             silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+            restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         )
 
         val state = controller.open(
@@ -301,6 +311,7 @@ class VoiceDictationControllerTest {
         val controller = VoiceDictationController(
             speechClient = speechClient,
             silenceScheduler = silence,
+            restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         )
 
         controller.open(
@@ -321,6 +332,7 @@ class VoiceDictationControllerTest {
         val controller = VoiceDictationController(
             speechClient = speechClient,
             silenceScheduler = silence,
+            restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         )
         controller.open(
             baseline = "",
@@ -357,6 +369,7 @@ class VoiceDictationControllerTest {
         val controller = VoiceDictationController(
             speechClient = speechClient,
             silenceScheduler = silence,
+            restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         )
         controller.open(
             baseline = "",
@@ -383,6 +396,7 @@ class VoiceDictationControllerTest {
         val controller = VoiceDictationController(
             speechClient = speechClient,
             silenceScheduler = silence,
+            restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         )
         controller.open(
             baseline = "",
@@ -407,6 +421,7 @@ class VoiceDictationControllerTest {
         val controller = VoiceDictationController(
             speechClient = speechClient,
             silenceScheduler = silence,
+            restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         )
         controller.open(
             baseline = "",

@@ -631,6 +631,7 @@ class ChatViewModelTest {
         voiceDictationController = VoiceDictationController(
             speechClient = FakeSpeechRecognitionClient(),
             silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+            restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         ),
     )
 
