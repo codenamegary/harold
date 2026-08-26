@@ -4,8 +4,8 @@ import android.os.Handler
 import android.os.Looper
 
 /**
- * Schedules a single delayed restart after recognizer-busy failures.
- * [schedule] replaces any previously pending restart.
+ * Schedules a single delayed action. [schedule] replaces any previously pending one.
+ * Used for recognizer-busy restarts and for the silence mute countdown.
  */
 interface VoiceDictationRestartScheduler {
     fun schedule(delayMs: Long, action: () -> Unit)
@@ -13,7 +13,7 @@ interface VoiceDictationRestartScheduler {
     fun cancel()
 }
 
-/** Runs [action] immediately. Useful in unit tests. */
+/** Runs [action] immediately and never waits. Test-only. Collapses any delay to zero. */
 class ImmediateVoiceDictationRestartScheduler : VoiceDictationRestartScheduler {
     override fun schedule(delayMs: Long, action: () -> Unit) {
         action()

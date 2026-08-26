@@ -29,7 +29,7 @@ import server.agent.android.ui.theme.AgentServerTheme
 /**
  * Debug-only fixture host for emulator screenshots of Vosk voice input.
  * Launch: adb shell am start -n server.agent.android/.debug.VoiceFixtureActivity
- * Force progress ring: add --ez force_silence_countdown true
+ * Scripted voice, no microphone needed: add --ez scripted_voice true
  */
 class VoiceFixtureActivity : ComponentActivity() {
     private lateinit var controller: VoiceDictationController
@@ -43,36 +43,29 @@ class VoiceFixtureActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val application = applicationContext as Application
+        val scriptedVoice = intent.getBooleanExtra(EXTRA_SCRIPTED_VOICE, false)
+
         controller = VoiceDictationController(
-            speechClient = VoskSpeechRecognitionClient(application),
-            restartScheduler = HandlerVoiceDictationRestartScheduler(),
+            speechClient = if (scriptedVoice) {
+                ScriptedSpeechRecognitionClient(SILENCE_LOOP_SCRIPT)
+            } else {
+                VoskSpeechRecognitionClient(application)
+            },
             silenceScheduler = HandlerVoiceDictationRestartScheduler(),
+            restartScheduler = HandlerVoiceDictationRestartScheduler(),
         )
+        controller.onStateChanged = { next -> uiState = next }
 
-        val forceSilenceCountdown = intent.getBooleanExtra(EXTRA_FORCE_SILENCE_COUNTDOWN, false)
-        if (forceSilenceCountdown) {
-            uiState = VoiceDictationUiState(
-                visible = true,
-                transcript = "hello from silence countdown",
-                isListening = true,
-                silenceCountdownActive = true,
-                permissionRequired = false,
-                error = null,
-            )
-        } else {
-            controller.onStateChanged = { next -> uiState = next }
+        val hasPermission = scriptedVoice || ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.RECORD_AUDIO,
+        ) == PackageManager.PERMISSION_GRANTED
 
-            val hasPermission = ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.RECORD_AUDIO,
-            ) == PackageManager.PERMISSION_GRANTED
-
-            uiState = controller.open(
-                baseline = "",
-                hasRecordAudioPermission = hasPermission,
-                composerEnabled = true,
-            )
-        }
+        uiState = controller.open(
+            baseline = "",
+            hasRecordAudioPermission = hasPermission,
+            composerEnabled = true,
+        )
 
         setContent {
             AgentServerTheme(dynamicColor = false) {
@@ -115,6 +108,20 @@ class VoiceFixtureActivity : ComponentActivity() {
     }
 
     private companion object {
-        const val EXTRA_FORCE_SILENCE_COUNTDOWN = "force_silence_countdown"
+        const val EXTRA_SCRIPTED_VOICE = "scripted_voice"
+
+        /**
+         * Speak, fall silent, let the ring appear, speak again to cancel it, then fall silent for
+         * good and let the countdown mute the mic. Timings assume a 3 s grace and a 5 s ring, so
+         * the ring first shows at ~4.9 s, gets cancelled at ~6.9 s, and mutes at ~15.6 s.
+         */
+        val SILENCE_LOOP_SCRIPT = listOf(
+            ScriptedSpeech.Partial(atMs = 500, text = "hello"),
+            ScriptedSpeech.Partial(atMs = 900, text = "hello from"),
+            ScriptedSpeech.Partial(atMs = 1_400, text = "hello from the scripted mic"),
+            ScriptedSpeech.Final(atMs = 1_900, text = "hello from the scripted mic"),
+            ScriptedSpeech.Partial(atMs = 6_900, text = "still here"),
+            ScriptedSpeech.Final(atMs = 7_600, text = "still here"),
+        )
     }
 }

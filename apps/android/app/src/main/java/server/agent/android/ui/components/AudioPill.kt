@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.progressSemantics
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -38,10 +39,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -49,16 +52,17 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import kotlin.math.min
 
 private val MIN_TOUCH_TARGET = 48.dp
 private val WAVEFORM_BAR_COUNT = 7
 private val COUNTDOWN_STROKE = 3.dp
-private const val DEFAULT_SILENCE_COUNTDOWN_MS = 5_000
 
 /**
  * A compact interactive audio pill displaying a reactive sound-wave equalizer during active
- * dictation, or a paused/standby state when muted. When [silenceCountdownActive] is true, a
- * depleting clockwise primary arc shows mute-countdown progress.
+ * dictation, or a paused/standby state when muted. Pass [silenceCountdownDurationMs] to run a
+ * mute countdown: a primary-coloured line traces the pill outline and drains clockwise from the
+ * top over that long. Null means no countdown.
  */
 @Composable
 fun AudioPill(
@@ -67,8 +71,7 @@ fun AudioPill(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    silenceCountdownActive: Boolean = false,
-    silenceCountdownDurationMs: Int = DEFAULT_SILENCE_COUNTDOWN_MS,
+    silenceCountdownDurationMs: Long? = null,
     contentDescription: String? = null,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
 ) {
@@ -92,18 +95,16 @@ fun AudioPill(
     )
 
     val countdownProgress = remember { Animatable(1f) }
-    LaunchedEffect(silenceCountdownActive, silenceCountdownDurationMs) {
-        if (silenceCountdownActive) {
-            countdownProgress.snapTo(1f)
+    LaunchedEffect(silenceCountdownDurationMs) {
+        countdownProgress.snapTo(1f)
+        if (silenceCountdownDurationMs != null) {
             countdownProgress.animateTo(
                 targetValue = 0f,
                 animationSpec = tween(
-                    durationMillis = silenceCountdownDurationMs,
+                    durationMillis = silenceCountdownDurationMs.toInt(),
                     easing = LinearEasing,
                 ),
             )
-        } else {
-            countdownProgress.snapTo(1f)
         }
     }
 
@@ -123,15 +124,9 @@ fun AudioPill(
             .defaultMinSize(minWidth = MIN_TOUCH_TARGET, minHeight = MIN_TOUCH_TARGET)
             .clip(CircleShape)
             .background(pillBackground)
-            .then(
-                if (silenceCountdownActive) {
-                    Modifier
-                } else {
-                    Modifier.border(
-                        border = BorderStroke(1.dp, pillBorderColor),
-                        shape = CircleShape,
-                    )
-                },
+            .border(
+                border = BorderStroke(1.dp, pillBorderColor),
+                shape = CircleShape,
             )
             .clickable(
                 enabled = enabled,
@@ -148,33 +143,35 @@ fun AudioPill(
             },
         contentAlignment = Alignment.Center,
     ) {
-        if (silenceCountdownActive) {
+        if (silenceCountdownDurationMs != null) {
             val progress = countdownProgress.value
+            val outline = remember { Path() }
+            val drained = remember { Path() }
+            val outlineMeasure = remember { PathMeasure() }
             Canvas(
                 modifier = Modifier
                     .matchParentSize()
+                    .progressSemantics(progress)
                     .testTag("audio_pill_silence_ring"),
             ) {
                 val stroke = COUNTDOWN_STROKE.toPx()
-                val inset = stroke / 2f
-                val arcSize = Size(size.width - stroke, size.height - stroke)
-                val topLeft = Offset(inset, inset)
-                drawArc(
+                buildPillOutline(outline, stroke)
+                drawPath(
+                    path = outline,
                     color = trackColor,
-                    startAngle = -90f,
-                    sweepAngle = 360f,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round),
+                    style = Stroke(width = stroke),
                 )
-                drawArc(
+                outlineMeasure.setPath(outline, false)
+                drained.reset()
+                outlineMeasure.getSegment(
+                    startDistance = 0f,
+                    stopDistance = outlineMeasure.length * progress,
+                    destination = drained,
+                    startWithMoveTo = true,
+                )
+                drawPath(
+                    path = drained,
                     color = primaryColor,
-                    startAngle = -90f,
-                    sweepAngle = 360f * progress,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
                     style = Stroke(width = stroke, cap = StrokeCap.Round),
                 )
             }
@@ -235,4 +232,37 @@ fun AudioPill(
             }
         }
     }
+}
+
+/**
+ * Traces the pill's own stadium outline into [path], inset by half of [strokeWidth] so the line
+ * sits inside the bounds. Starts at top centre and runs clockwise, so a path segment taken from
+ * zero drains the same way a clock hand sweeps.
+ */
+private fun DrawScope.buildPillOutline(path: Path, strokeWidth: Float) {
+    val inset = strokeWidth / 2f
+    val left = inset
+    val top = inset
+    val right = size.width - inset
+    val bottom = size.height - inset
+    val midX = size.width / 2f
+    val radius = (min(size.width, size.height) - strokeWidth) / 2f
+
+    path.reset()
+    path.moveTo(midX, top)
+    path.lineTo(right - radius, top)
+    path.arcTo(
+        rect = Rect(right - radius * 2f, top, right, bottom),
+        startAngleDegrees = -90f,
+        sweepAngleDegrees = 180f,
+        forceMoveTo = false,
+    )
+    path.lineTo(left + radius, bottom)
+    path.arcTo(
+        rect = Rect(left, top, left + radius * 2f, bottom),
+        startAngleDegrees = 90f,
+        sweepAngleDegrees = 180f,
+        forceMoveTo = false,
+    )
+    path.lineTo(midX, top)
 }

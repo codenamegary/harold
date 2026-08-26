@@ -8,15 +8,16 @@ data class VoiceDictationUiState(
     val permissionRequired: Boolean = false,
     val error: String? = null,
     val recognizerAvailable: Boolean = true,
-    /** True during the visible 5 s mute countdown (progress ring). False during grace. */
+    /** True while the mute countdown ring shows. False during the silent grace period. */
     val silenceCountdownActive: Boolean = false,
+    /** How long the ring takes to drain. Always the same timer the controller mutes on. */
+    val silenceCountdownDurationMs: Long = VoiceDictationController.SILENCE_COUNTDOWN_MS,
 )
 
 class VoiceDictationController(
     private val speechClient: SpeechRecognitionClient,
+    private val silenceScheduler: VoiceDictationRestartScheduler,
     private val restartScheduler: VoiceDictationRestartScheduler =
-        ImmediateVoiceDictationRestartScheduler(),
-    private val silenceScheduler: VoiceDictationRestartScheduler =
         ImmediateVoiceDictationRestartScheduler(),
 ) {
     private var transcript = VoiceDictationTranscript("")
@@ -163,7 +164,7 @@ class VoiceDictationController(
         }
 
         restartScheduler.cancel()
-        clearSilenceTimers()
+        silenceScheduler.cancel()
         speechClient.destroy()
 
         val generation = ++sessionGeneration
@@ -198,7 +199,7 @@ class VoiceDictationController(
                         return
                     }
                     heardSpeechInSession = true
-                    cancelSilenceArming()
+                    silenceScheduler.cancel()
                     transcript = transcript.withPartial(text)
                     publish(
                         state.copy(
@@ -277,13 +278,18 @@ class VoiceDictationController(
     }
 
     private fun armSilenceGrace() {
-        clearSilenceTimers()
+        silenceScheduler.cancel()
         publish(state.copy(silenceCountdownActive = false))
         silenceScheduler.schedule(SILENCE_GRACE_MS) {
             if (!listening || !state.visible) {
                 return@schedule
             }
-            publish(state.copy(silenceCountdownActive = true))
+            publish(
+                state.copy(
+                    silenceCountdownActive = true,
+                    silenceCountdownDurationMs = SILENCE_COUNTDOWN_MS,
+                ),
+            )
             silenceScheduler.schedule(SILENCE_COUNTDOWN_MS) {
                 if (!listening || !state.visible) {
                     return@schedule
@@ -291,14 +297,6 @@ class VoiceDictationController(
                 muteListening()
             }
         }
-    }
-
-    private fun cancelSilenceArming() {
-        clearSilenceTimers()
-    }
-
-    private fun clearSilenceTimers() {
-        silenceScheduler.cancel()
     }
 
     private fun scheduleBusyRestart(generation: Int) {
@@ -324,7 +322,7 @@ class VoiceDictationController(
 
     private fun endListening(error: String?) {
         restartScheduler.cancel()
-        clearSilenceTimers()
+        silenceScheduler.cancel()
         listening = false
         heardSpeechInSession = false
         sessionGeneration += 1
@@ -342,7 +340,7 @@ class VoiceDictationController(
 
     private fun invalidateSession() {
         restartScheduler.cancel()
-        clearSilenceTimers()
+        silenceScheduler.cancel()
         listening = false
         heardSpeechInSession = false
         busyRestartAttempts = 0

@@ -10,7 +10,10 @@ class VoiceDictationControllerTest {
     @Test
     fun permissionDeniedBlocksRecognition() {
         val speechClient = FakeSpeechRecognitionClient()
-        val controller = VoiceDictationController(speechClient)
+        val controller = VoiceDictationController(
+            speechClient = speechClient,
+            silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+        )
 
         val state = controller.open(
             baseline = "Draft",
@@ -27,7 +30,10 @@ class VoiceDictationControllerTest {
     @Test
     fun grantedPermissionStartsListening() {
         val speechClient = FakeSpeechRecognitionClient()
-        val controller = VoiceDictationController(speechClient)
+        val controller = VoiceDictationController(
+            speechClient = speechClient,
+            silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+        )
 
         controller.open(
             baseline = "",
@@ -42,7 +48,10 @@ class VoiceDictationControllerTest {
     @Test
     fun muteUnmuteCyclesAppendTranscript() {
         val speechClient = FakeSpeechRecognitionClient()
-        val controller = VoiceDictationController(speechClient)
+        val controller = VoiceDictationController(
+            speechClient = speechClient,
+            silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+        )
         controller.open(
             baseline = "Can you fix",
             hasRecordAudioPermission = true,
@@ -66,7 +75,10 @@ class VoiceDictationControllerTest {
     @Test
     fun startOverRestoresBaselineSnapshot() {
         val speechClient = FakeSpeechRecognitionClient()
-        val controller = VoiceDictationController(speechClient)
+        val controller = VoiceDictationController(
+            speechClient = speechClient,
+            silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+        )
         controller.open(
             baseline = "Can you fix",
             hasRecordAudioPermission = true,
@@ -83,7 +95,10 @@ class VoiceDictationControllerTest {
     @Test
     fun finishReturnsTranscriptAndClosesOverlay() {
         val speechClient = FakeSpeechRecognitionClient()
-        val controller = VoiceDictationController(speechClient)
+        val controller = VoiceDictationController(
+            speechClient = speechClient,
+            silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+        )
         controller.open(
             baseline = "Hello",
             hasRecordAudioPermission = true,
@@ -100,7 +115,10 @@ class VoiceDictationControllerTest {
     @Test
     fun doesNotOpenWhenComposerDisabled() {
         val speechClient = FakeSpeechRecognitionClient()
-        val controller = VoiceDictationController(speechClient)
+        val controller = VoiceDictationController(
+            speechClient = speechClient,
+            silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+        )
 
         val state = controller.open(
             baseline = "Draft",
@@ -115,7 +133,10 @@ class VoiceDictationControllerTest {
     @Test
     fun lateErrorFromEndedSessionDoesNotMuteRestartedListening() {
         val speechClient = FakeSpeechRecognitionClient()
-        val controller = VoiceDictationController(speechClient)
+        val controller = VoiceDictationController(
+            speechClient = speechClient,
+            silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+        )
         controller.open(
             baseline = "",
             hasRecordAudioPermission = true,
@@ -141,7 +162,10 @@ class VoiceDictationControllerTest {
     @Test
     fun lateFinalFromEndedSessionDoesNotDuplicateAfterUnmute() {
         val speechClient = FakeSpeechRecognitionClient()
-        val controller = VoiceDictationController(speechClient)
+        val controller = VoiceDictationController(
+            speechClient = speechClient,
+            silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+        )
         controller.open(
             baseline = "",
             hasRecordAudioPermission = true,
@@ -163,7 +187,11 @@ class VoiceDictationControllerTest {
     fun recognizerBusyOnUnmuteRetriesAndRecovers() {
         val scheduler = ManualVoiceDictationRestartScheduler()
         val speechClient = FakeSpeechRecognitionClient()
-        val controller = VoiceDictationController(speechClient, scheduler)
+        val controller = VoiceDictationController(
+            speechClient = speechClient,
+            silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+            restartScheduler = scheduler,
+        )
         controller.open(
             baseline = "",
             hasRecordAudioPermission = true,
@@ -193,7 +221,11 @@ class VoiceDictationControllerTest {
     fun recognizerBusyExhaustsRetriesAndSurfacesError() {
         val scheduler = ManualVoiceDictationRestartScheduler()
         val speechClient = FakeSpeechRecognitionClient()
-        val controller = VoiceDictationController(speechClient, scheduler)
+        val controller = VoiceDictationController(
+            speechClient = speechClient,
+            silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+            restartScheduler = scheduler,
+        )
         controller.open(
             baseline = "",
             hasRecordAudioPermission = true,
@@ -221,7 +253,10 @@ class VoiceDictationControllerTest {
     fun modelUnavailableSurfacesClearOverlayError() {
         val speechClient = FakeSpeechRecognitionClient()
         speechClient.errorOnStart = SpeechRecognitionErrors.MODEL_UNAVAILABLE
-        val controller = VoiceDictationController(speechClient)
+        val controller = VoiceDictationController(
+            speechClient = speechClient,
+            silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+        )
 
         controller.open(
             baseline = "",
@@ -240,7 +275,10 @@ class VoiceDictationControllerTest {
     fun unavailableClientBlocksOpenWithModelError() {
         val speechClient = FakeSpeechRecognitionClient()
         speechClient.setAvailable(false)
-        val controller = VoiceDictationController(speechClient)
+        val controller = VoiceDictationController(
+            speechClient = speechClient,
+            silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
+        )
 
         val state = controller.open(
             baseline = "",
@@ -295,13 +333,14 @@ class VoiceDictationControllerTest {
 
         assertTrue(controller.state.isListening)
         assertFalse(controller.state.silenceCountdownActive)
-        assertEquals(VoiceDictationController.SILENCE_GRACE_MS, silence.lastDelayMs)
+        assertEquals(3_000L, silence.lastDelayMs)
 
         silence.runPending()
 
         assertTrue(controller.state.isListening)
         assertTrue(controller.state.silenceCountdownActive)
-        assertEquals(VoiceDictationController.SILENCE_COUNTDOWN_MS, silence.lastDelayMs)
+        assertEquals(5_000L, silence.lastDelayMs)
+        assertEquals(silence.lastDelayMs, controller.state.silenceCountdownDurationMs)
 
         silence.runPending()
 
@@ -352,7 +391,7 @@ class VoiceDictationControllerTest {
         )
 
         speechClient.emitFinal("hello")
-        assertEquals(VoiceDictationController.SILENCE_GRACE_MS, silence.lastDelayMs)
+        assertEquals(3_000L, silence.lastDelayMs)
 
         speechClient.emitPartial("again")
 
@@ -379,7 +418,7 @@ class VoiceDictationControllerTest {
         speechClient.emitFinal("")
 
         assertTrue(controller.state.isListening)
-        assertEquals(VoiceDictationController.SILENCE_GRACE_MS, silence.lastDelayMs)
+        assertEquals(3_000L, silence.lastDelayMs)
         assertEquals("hello", controller.state.transcript)
     }
 }
