@@ -255,6 +255,133 @@ class VoiceDictationControllerTest {
         )
         assertEquals(0, speechClient.startCount)
     }
+
+    @Test
+    fun openSilentDoesNotArmSilenceTimer() {
+        val silence = ManualVoiceDictationRestartScheduler()
+        val speechClient = FakeSpeechRecognitionClient()
+        val controller = VoiceDictationController(
+            speechClient = speechClient,
+            silenceScheduler = silence,
+        )
+
+        controller.open(
+            baseline = "",
+            hasRecordAudioPermission = true,
+            composerEnabled = true,
+        )
+
+        assertTrue(controller.state.isListening)
+        assertFalse(silence.hasPending())
+        assertFalse(controller.state.silenceCountdownActive)
+    }
+
+    @Test
+    fun silenceGraceThenCountdownThenMute() {
+        val silence = ManualVoiceDictationRestartScheduler()
+        val speechClient = FakeSpeechRecognitionClient()
+        val controller = VoiceDictationController(
+            speechClient = speechClient,
+            silenceScheduler = silence,
+        )
+        controller.open(
+            baseline = "",
+            hasRecordAudioPermission = true,
+            composerEnabled = true,
+        )
+
+        speechClient.emitPartial("hello")
+        speechClient.emitFinal("hello")
+
+        assertTrue(controller.state.isListening)
+        assertFalse(controller.state.silenceCountdownActive)
+        assertEquals(VoiceDictationController.SILENCE_GRACE_MS, silence.lastDelayMs)
+
+        silence.runPending()
+
+        assertTrue(controller.state.isListening)
+        assertTrue(controller.state.silenceCountdownActive)
+        assertEquals(VoiceDictationController.SILENCE_COUNTDOWN_MS, silence.lastDelayMs)
+
+        silence.runPending()
+
+        assertFalse(controller.state.isListening)
+        assertFalse(controller.state.silenceCountdownActive)
+        assertFalse(silence.hasPending())
+        assertEquals("hello", controller.state.transcript)
+    }
+
+    @Test
+    fun speechDuringCountdownCancelsAndKeepsListening() {
+        val silence = ManualVoiceDictationRestartScheduler()
+        val speechClient = FakeSpeechRecognitionClient()
+        val controller = VoiceDictationController(
+            speechClient = speechClient,
+            silenceScheduler = silence,
+        )
+        controller.open(
+            baseline = "",
+            hasRecordAudioPermission = true,
+            composerEnabled = true,
+        )
+
+        speechClient.emitFinal("hello")
+        silence.runPending()
+        assertTrue(controller.state.silenceCountdownActive)
+
+        speechClient.emitPartial("again")
+
+        assertTrue(controller.state.isListening)
+        assertFalse(controller.state.silenceCountdownActive)
+        assertFalse(silence.hasPending())
+        assertEquals("hello again", controller.state.transcript)
+    }
+
+    @Test
+    fun speechDuringGraceCancelsBeforeCountdown() {
+        val silence = ManualVoiceDictationRestartScheduler()
+        val speechClient = FakeSpeechRecognitionClient()
+        val controller = VoiceDictationController(
+            speechClient = speechClient,
+            silenceScheduler = silence,
+        )
+        controller.open(
+            baseline = "",
+            hasRecordAudioPermission = true,
+            composerEnabled = true,
+        )
+
+        speechClient.emitFinal("hello")
+        assertEquals(VoiceDictationController.SILENCE_GRACE_MS, silence.lastDelayMs)
+
+        speechClient.emitPartial("again")
+
+        assertTrue(controller.state.isListening)
+        assertFalse(controller.state.silenceCountdownActive)
+        assertFalse(silence.hasPending())
+    }
+
+    @Test
+    fun emptyFinalAfterSpeechStillArmsGrace() {
+        val silence = ManualVoiceDictationRestartScheduler()
+        val speechClient = FakeSpeechRecognitionClient()
+        val controller = VoiceDictationController(
+            speechClient = speechClient,
+            silenceScheduler = silence,
+        )
+        controller.open(
+            baseline = "",
+            hasRecordAudioPermission = true,
+            composerEnabled = true,
+        )
+
+        speechClient.emitPartial("hello")
+        speechClient.emitFinal("")
+
+        assertTrue(controller.state.isListening)
+        assertEquals(VoiceDictationController.SILENCE_GRACE_MS, silence.lastDelayMs)
+        assertEquals("hello", controller.state.transcript)
+    }
 }
 
 class FakeSpeechRecognitionClient : SpeechRecognitionClient {

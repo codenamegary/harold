@@ -49,6 +49,7 @@ fun AppNavHost(
         VoiceDictationController(
             speechClient = VoskSpeechRecognitionClient(application),
             restartScheduler = HandlerVoiceDictationRestartScheduler(),
+            silenceScheduler = HandlerVoiceDictationRestartScheduler(),
         )
     }
     val shellViewModel: ShellViewModel = viewModel(

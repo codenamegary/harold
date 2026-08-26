@@ -29,6 +29,7 @@ import server.agent.android.ui.theme.AgentServerTheme
 /**
  * Debug-only fixture host for emulator screenshots of Vosk voice input.
  * Launch: adb shell am start -n server.agent.android/.debug.VoiceFixtureActivity
+ * Force progress ring: add --ez force_silence_countdown true
  */
 class VoiceFixtureActivity : ComponentActivity() {
     private lateinit var controller: VoiceDictationController
@@ -45,19 +46,33 @@ class VoiceFixtureActivity : ComponentActivity() {
         controller = VoiceDictationController(
             speechClient = VoskSpeechRecognitionClient(application),
             restartScheduler = HandlerVoiceDictationRestartScheduler(),
+            silenceScheduler = HandlerVoiceDictationRestartScheduler(),
         )
-        controller.onStateChanged = { next -> uiState = next }
 
-        val hasPermission = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.RECORD_AUDIO,
-        ) == PackageManager.PERMISSION_GRANTED
+        val forceSilenceCountdown = intent.getBooleanExtra(EXTRA_FORCE_SILENCE_COUNTDOWN, false)
+        if (forceSilenceCountdown) {
+            uiState = VoiceDictationUiState(
+                visible = true,
+                transcript = "hello from silence countdown",
+                isListening = true,
+                silenceCountdownActive = true,
+                permissionRequired = false,
+                error = null,
+            )
+        } else {
+            controller.onStateChanged = { next -> uiState = next }
 
-        uiState = controller.open(
-            baseline = "",
-            hasRecordAudioPermission = hasPermission,
-            composerEnabled = true,
-        )
+            val hasPermission = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.RECORD_AUDIO,
+            ) == PackageManager.PERMISSION_GRANTED
+
+            uiState = controller.open(
+                baseline = "",
+                hasRecordAudioPermission = hasPermission,
+                composerEnabled = true,
+            )
+        }
 
         setContent {
             AgentServerTheme(dynamicColor = false) {
@@ -97,5 +112,9 @@ class VoiceFixtureActivity : ComponentActivity() {
     override fun onDestroy() {
         controller.destroy()
         super.onDestroy()
+    }
+
+    private companion object {
+        const val EXTRA_FORCE_SILENCE_COUNTDOWN = "force_silence_countdown"
     }
 }

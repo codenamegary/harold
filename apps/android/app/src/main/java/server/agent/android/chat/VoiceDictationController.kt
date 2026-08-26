@@ -8,11 +8,15 @@ data class VoiceDictationUiState(
     val permissionRequired: Boolean = false,
     val error: String? = null,
     val recognizerAvailable: Boolean = true,
+    /** True during the visible 5 s mute countdown (progress ring). False during grace. */
+    val silenceCountdownActive: Boolean = false,
 )
 
 class VoiceDictationController(
     private val speechClient: SpeechRecognitionClient,
     private val restartScheduler: VoiceDictationRestartScheduler =
+        ImmediateVoiceDictationRestartScheduler(),
+    private val silenceScheduler: VoiceDictationRestartScheduler =
         ImmediateVoiceDictationRestartScheduler(),
 ) {
     private var transcript = VoiceDictationTranscript("")
@@ -20,6 +24,7 @@ class VoiceDictationController(
     private var listening = false
     private var sessionGeneration = 0
     private var busyRestartAttempts = 0
+    private var heardSpeechInSession = false
 
     var onStateChanged: ((VoiceDictationUiState) -> Unit)? = null
 
@@ -62,6 +67,7 @@ class VoiceDictationController(
                 permissionRequired = !hasRecordAudioPermission,
                 error = null,
                 recognizerAvailable = speechClient.isAvailable(),
+                silenceCountdownActive = false,
             ),
         ).also {
             if (hasRecordAudioPermission) {
@@ -83,6 +89,7 @@ class VoiceDictationController(
                     isListening = false,
                     audioLevel = 0f,
                     permissionRequired = true,
+                    silenceCountdownActive = false,
                     error = "Microphone permission is required for voice input.",
                 ),
             )
@@ -123,6 +130,7 @@ class VoiceDictationController(
                 transcript = transcript.displayText,
                 isListening = false,
                 audioLevel = 0f,
+                silenceCountdownActive = false,
                 error = null,
             ),
         )
@@ -155,10 +163,12 @@ class VoiceDictationController(
         }
 
         restartScheduler.cancel()
+        clearSilenceTimers()
         speechClient.destroy()
 
         val generation = ++sessionGeneration
         listening = true
+        heardSpeechInSession = false
         if (!fromBusyRetry) {
             busyRestartAttempts = 0
         }
@@ -187,21 +197,40 @@ class VoiceDictationController(
                     if (!isCurrent() || !listening) {
                         return
                     }
+                    heardSpeechInSession = true
+                    cancelSilenceArming()
                     transcript = transcript.withPartial(text)
                     publish(
                         state.copy(
                             transcript = transcript.displayText,
+                            silenceCountdownActive = false,
                             error = null,
                         ),
                     )
                 }
 
                 override fun onFinalResult(text: String) {
-                    if (!isCurrent()) {
+                    if (!isCurrent() || !listening) {
                         return
                     }
-                    transcript = transcript.withFinalSegment(text)
-                    endListening(error = null)
+
+                    if (text.isNotBlank()) {
+                        heardSpeechInSession = true
+                        transcript = transcript.withFinalSegment(text)
+                    } else if (heardSpeechInSession) {
+                        transcript = transcript.commitPartialAsFinal()
+                    }
+
+                    publish(
+                        state.copy(
+                            transcript = transcript.displayText,
+                            error = null,
+                        ),
+                    )
+
+                    if (heardSpeechInSession) {
+                        armSilenceGrace()
+                    }
                 }
 
                 override fun onError(errorCode: Int) {
@@ -231,6 +260,7 @@ class VoiceDictationController(
         return publish(
             state.copy(
                 isListening = true,
+                silenceCountdownActive = false,
                 error = null,
             ),
         )
@@ -244,6 +274,31 @@ class VoiceDictationController(
         transcript = transcript.commitPartialAsFinal()
         endListening(error = null)
         return state
+    }
+
+    private fun armSilenceGrace() {
+        clearSilenceTimers()
+        publish(state.copy(silenceCountdownActive = false))
+        silenceScheduler.schedule(SILENCE_GRACE_MS) {
+            if (!listening || !state.visible) {
+                return@schedule
+            }
+            publish(state.copy(silenceCountdownActive = true))
+            silenceScheduler.schedule(SILENCE_COUNTDOWN_MS) {
+                if (!listening || !state.visible) {
+                    return@schedule
+                }
+                muteListening()
+            }
+        }
+    }
+
+    private fun cancelSilenceArming() {
+        clearSilenceTimers()
+    }
+
+    private fun clearSilenceTimers() {
+        silenceScheduler.cancel()
     }
 
     private fun scheduleBusyRestart(generation: Int) {
@@ -269,7 +324,9 @@ class VoiceDictationController(
 
     private fun endListening(error: String?) {
         restartScheduler.cancel()
+        clearSilenceTimers()
         listening = false
+        heardSpeechInSession = false
         sessionGeneration += 1
         speechClient.destroy()
         publish(
@@ -277,6 +334,7 @@ class VoiceDictationController(
                 transcript = transcript.displayText,
                 isListening = false,
                 audioLevel = 0f,
+                silenceCountdownActive = false,
                 error = error,
             ),
         )
@@ -284,7 +342,9 @@ class VoiceDictationController(
 
     private fun invalidateSession() {
         restartScheduler.cancel()
+        clearSilenceTimers()
         listening = false
+        heardSpeechInSession = false
         busyRestartAttempts = 0
         sessionGeneration += 1
         speechClient.destroy()
@@ -296,7 +356,9 @@ class VoiceDictationController(
         return next
     }
 
-    private companion object {
+    companion object {
+        const val SILENCE_GRACE_MS = 3000L
+        const val SILENCE_COUNTDOWN_MS = 5000L
         const val BUSY_RESTART_DELAY_MS = 150L
         const val MAX_BUSY_RESTART_ATTEMPTS = 3
     }

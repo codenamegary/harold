@@ -294,6 +294,7 @@ fun VoiceDictationOverlay(
                             AudioPill(
                                 isListening = state.isListening,
                                 audioLevel = state.audioLevel,
+                                silenceCountdownActive = state.silenceCountdownActive,
                                 onClick = onToggleListening,
                                 contentDescription = micContentDescription,
                                 modifier = Modifier

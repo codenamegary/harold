@@ -67,4 +67,26 @@ class AudioPillTest {
 
         assertTrue(pillClicked)
     }
+
+    @Test
+    fun audioPillShowsSilenceCountdownRingWhenActive() {
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                AudioPill(
+                    isListening = true,
+                    audioLevel = 0.2f,
+                    silenceCountdownActive = true,
+                    silenceCountdownDurationMs = 5_000,
+                    onClick = {},
+                    contentDescription = "Mute mic",
+                    modifier = Modifier.testTag("countdown_audio_pill"),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("countdown_audio_pill").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithTag("audio_pill_silence_ring", useUnmergedTree = true)
+            .assertIsDisplayed()
+    }
 }
