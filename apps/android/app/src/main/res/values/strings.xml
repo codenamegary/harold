@@ -34,7 +34,7 @@
     <string name="chat_cancel_content_description">Cancel run</string>
     <string name="chat_voice_mic_content_description">Dictate with voice</string>
     <string name="chat_voice_mic_disabled_composer_content_description">Voice dictation unavailable while the composer is disabled</string>
-    <string name="chat_voice_mic_unavailable_content_description">Speech recognition is not available on this device</string>
+    <string name="chat_voice_mic_unavailable_content_description">Speech model failed to load. Voice input is unavailable.</string>
     <string name="voice_dictation_title">Voice input</string>
     <string name="voice_dictation_listening">Listening</string>
     <string name="voice_dictation_muted">Muted — tap mic to resume</string>

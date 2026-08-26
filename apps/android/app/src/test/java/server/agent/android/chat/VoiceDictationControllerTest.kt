@@ -1,6 +1,5 @@
 package server.agent.android.chat
 
-import android.speech.SpeechRecognizer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -132,7 +131,7 @@ class VoiceDictationControllerTest {
         assertTrue(controller.state.isListening)
         assertEquals(2, speechClient.startCount)
 
-        endedSession.onError(SpeechRecognizer.ERROR_CLIENT)
+        endedSession.onError(SpeechRecognitionErrors.CLIENT)
 
         assertTrue(controller.state.isListening)
         assertNull(controller.state.error)
@@ -212,10 +211,49 @@ class VoiceDictationControllerTest {
 
         assertFalse(controller.state.isListening)
         assertEquals(
-            speechRecognitionErrorMessage(SpeechRecognizer.ERROR_RECOGNIZER_BUSY),
+            speechRecognitionErrorMessage(SpeechRecognitionErrors.BUSY),
             controller.state.error,
         )
         assertFalse(scheduler.hasPending())
+    }
+
+    @Test
+    fun modelUnavailableSurfacesClearOverlayError() {
+        val speechClient = FakeSpeechRecognitionClient()
+        speechClient.errorOnStart = SpeechRecognitionErrors.MODEL_UNAVAILABLE
+        val controller = VoiceDictationController(speechClient)
+
+        controller.open(
+            baseline = "",
+            hasRecordAudioPermission = true,
+            composerEnabled = true,
+        )
+
+        assertFalse(controller.state.isListening)
+        assertEquals(
+            speechRecognitionErrorMessage(SpeechRecognitionErrors.MODEL_UNAVAILABLE),
+            controller.state.error,
+        )
+    }
+
+    @Test
+    fun unavailableClientBlocksOpenWithModelError() {
+        val speechClient = FakeSpeechRecognitionClient()
+        speechClient.setAvailable(false)
+        val controller = VoiceDictationController(speechClient)
+
+        val state = controller.open(
+            baseline = "",
+            hasRecordAudioPermission = true,
+            composerEnabled = true,
+        )
+
+        assertFalse(state.visible)
+        assertEquals(
+            speechRecognitionErrorMessage(SpeechRecognitionErrors.MODEL_UNAVAILABLE),
+            state.error,
+        )
+        assertEquals(0, speechClient.startCount)
     }
 }
 
@@ -224,6 +262,7 @@ class FakeSpeechRecognitionClient : SpeechRecognitionClient {
         private set
 
     var busyOnStart: Boolean = false
+    var errorOnStart: Int? = null
 
     private var callbacks: SpeechRecognitionCallbacks? = null
     private var available = true
@@ -243,8 +282,9 @@ class FakeSpeechRecognitionClient : SpeechRecognitionClient {
         this.callbacks = callbacks
         pendingPartial = ""
         callbacks.onReadyForSpeech()
-        if (busyOnStart) {
-            callbacks.onError(SpeechRecognizer.ERROR_RECOGNIZER_BUSY)
+        when {
+            busyOnStart -> callbacks.onError(SpeechRecognitionErrors.BUSY)
+            errorOnStart != null -> callbacks.onError(checkNotNull(errorOnStart))
         }
     }
 
