@@ -5,7 +5,7 @@ import {
   PluginRenderProps,
   scanTokens,
   Token,
-} from "../design-system/prompt.input.model"
+} from "../../design-system/prompt.input.model"
 import {
   chatTokenKind,
   followedByWhitespace,

@@ -1,77 +1,47 @@
-import React from "react"
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { useQueryClient } from "@tanstack/react-query"
-import { AgentAuth } from "contracts/http/agent-auth"
-import { AgentId, AgentIdSchema } from "contracts/http/agent-settings"
-import { SessionStreamClientMessage } from "contracts/http/session.stream"
+import React, { useRef } from "react"
+import { useAtomValue } from "jotai"
+import { AgentIdSchema } from "contracts/http/agent-settings"
 import { AgentAuthPanel } from "../agent/auth/AgentAuthPanel"
 import { useAgentAuthQuery } from "../agent/auth/use.agent.auth"
 import { useAgentSettingsQuery } from "../agent-settings/use.agent.settings.query"
-import { useWorkspacesInfiniteQuery } from "../workspace/use.workspaces.infinite.query"
-import { queryKeys } from "../query/query.keys"
-import { useSessionsQuery } from "../session/use.sessions.query"
-import { useCreateSessionMutation } from "../session/use.create.session.mutation"
-import { useSessionStream } from "../session/use.session.stream"
-import { ChatHeader } from "./ChatHeader"
-import { WelcomeMessage } from "./WelcomeMessage"
-import { ChatComposer } from "./ChatComposer"
-import { ChatTranscript } from "./ChatTranscript"
-import { PermissionPanel } from "./PermissionPanel"
-import { ExtensionPanel, StreamExtension } from "./ExtensionPanel"
-import { parseAcpUpdate } from "./acp.update"
-import {
-  applyCancelled,
-  applyPermissionRequested,
-  applyPermissionResolved,
-  applyPromptComplete,
-  applyReconnect,
-  applyStreamError,
-  applySubscribed,
-  beginUserTurn,
-  emptyAcpTranscript,
-  foldAcpUpdate,
-  AcpTranscriptState,
-} from "./acp.transcript.reducer"
-import {
-  composerBlockedMessage,
-  isComposerPromptable,
-  resolveEffectiveSessionState,
-} from "./chat.promptability"
-import {
-  clearChatSelection,
-  readChatSelection,
-  writeChatSelection,
-} from "./chat.selection.storage"
-import { parseStreamPermission, StreamPermission } from "../permission/parse.stream.permission"
+import { ChatComposer } from "./composer/ChatComposer"
+import { ChatHeader } from "./header/ChatHeader"
+import { streamAuthAtom, transcriptAtom } from "./live/atoms"
+import { ExtensionPanel } from "./live/ExtensionPanel"
+import { PermissionPanel } from "./live/PermissionPanel"
+import { useTranscriptAutoscroll } from "./live/use.autoscroll"
+import { useChatPrompt } from "./live/use.prompt"
+import { useLiveReplies } from "./live/use.replies"
+import { useChatStream } from "./live/use.stream"
+import { useChatResume } from "./selection/use.resume"
+import { selectionAtom } from "./selection/atoms"
+import { ChatTranscript } from "./transcript/ChatTranscript"
+import { WelcomeMessage } from "./transcript/WelcomeMessage"
 
 export const ChatShell: React.FC = () => {
-  const [workspaceId, setWorkspaceId] = useState("")
-  const [agentId, setAgentId] = useState("")
-  const [sessionId, setSessionId] = useState("")
-  const [transcript, setTranscript] = useState<AcpTranscriptState>(emptyAcpTranscript)
-  const [pendingPermission, setPendingPermission] = useState<StreamPermission | null>(null)
-  const [pendingExtension, setPendingExtension] = useState<StreamExtension | null>(null)
-  const [streamAgentAuth, setStreamAgentAuth] = useState<AgentAuth | null>(null)
-  const [submittingOptionId, setSubmittingOptionId] = useState<string | null>(null)
-  const [submittingExtension, setSubmittingExtension] = useState(false)
-  const hasAttemptedResume = useRef(false)
-  const pendingPromptRef = useRef<string | null>(null)
+  const selection = useAtomValue(selectionAtom)
+  const transcript = useAtomValue(transcriptAtom)
+  const streamAgentAuth = useAtomValue(streamAuthAtom)
   const transcriptScrollRef = useRef<HTMLDivElement>(null)
   const transcriptBottomRef = useRef<HTMLDivElement>(null)
-  const queryClient = useQueryClient()
 
-  const workspacesQuery = useWorkspacesInfiniteQuery({})
+  useChatResume()
+  const stream = useChatStream()
+  const { send, cancel, running, composerEnabled, blockedMessage } =
+    useChatPrompt(stream)
+  const {
+    permission,
+    extension,
+    submittingOptionId,
+    submittingExtension,
+    handlePermissionOption,
+    handleExtensionReply,
+  } = useLiveReplies({ send: stream.send })
+
   const agentsQuery = useAgentSettingsQuery()
-  const sessionsQuery = useSessionsQuery()
-
-  const createSessionMutation = useCreateSessionMutation()
-
-  const workspaces =
-    workspacesQuery.data?.pages.flatMap((page) => page.items) ?? []
   const agents = agentsQuery.data?.items ?? []
-  const sessions = sessionsQuery.data?.items ?? []
-  const parsedAgentId = AgentIdSchema.safeParse(agentId)
-  const selectedAgent = agents.find((agent) => agent.id === agentId)
+  const parsedAgentId = AgentIdSchema.safeParse(selection.agentId)
+  const selectedAgent = agents.find((agent) => agent.id === selection.agentId)
   const hydrateAuthQuery = useAgentAuthQuery(
     parsedAgentId.success && selectedAgent?.authSummary.activeSessionId !== null
       ? parsedAgentId.data
@@ -80,389 +50,18 @@ export const ChatShell: React.FC = () => {
   )
   const agentAuth = streamAgentAuth ?? hydrateAuthQuery.data ?? null
 
-  const workspaceIdForCwd = (cwd: string) =>
-    workspaces.find((workspace) => workspace.path === cwd)?.id ?? ""
-
-  const persistSelection = (next: {
-    workspaceId: string
-    agentId: string
-    sessionId: string
-  }) => {
-    writeChatSelection(next)
-  }
-
-  const clearLiveState = (nextTranscript: AcpTranscriptState = emptyAcpTranscript) => {
-    setTranscript(nextTranscript)
-    setPendingPermission(null)
-    setPendingExtension(null)
-    setStreamAgentAuth(null)
-    setSubmittingOptionId(null)
-    setSubmittingExtension(false)
-  }
-
-  const stream = useSessionStream({
-    agentId: agentId === "" ? null : agentId,
-    sessionId: sessionId === "" ? null : sessionId,
-    enabled: true,
-    onReconnect: () => {
-      clearLiveState(applyReconnect())
-    },
-    onMessage: (message) => {
-      const belongsToSelection = (frame: { agentId: string; sessionId: string }) =>
-        frame.sessionId === sessionId && frame.agentId === agentId
-
-      switch (message.type) {
-        case "session_update": {
-          if (!belongsToSelection(message)) {
-            return
-          }
-          setTranscript((current) =>
-            foldAcpUpdate(current, parseAcpUpdate(message.update)),
-          )
-          return
-        }
-        case "subscribed": {
-          if (!belongsToSelection(message)) {
-            return
-          }
-          setTranscript((current) => applySubscribed(current))
-          const queued = pendingPromptRef.current
-          if (queued === null) {
-            return
-          }
-          pendingPromptRef.current = null
-          const parsedAgent = AgentIdSchema.safeParse(message.agentId)
-          if (!parsedAgent.success) {
-            return
-          }
-          stream.send({
-            type: "prompt",
-            agentId: parsedAgent.data,
-            sessionId: message.sessionId,
-            text: queued,
-          })
-          return
-        }
-        case "prompt_complete": {
-          if (!belongsToSelection(message)) {
-            return
-          }
-          setTranscript((current) => applyPromptComplete(current))
-          return
-        }
-        case "cancelled": {
-          if (!belongsToSelection(message)) {
-            return
-          }
-          setTranscript((current) => applyCancelled(current))
-          return
-        }
-        case "permission_request": {
-          if (!belongsToSelection(message)) {
-            return
-          }
-          const parsed = parseStreamPermission({
-            requestId: message.requestId,
-            params: message.params,
-          })
-          if (parsed === null) {
-            return
-          }
-          setPendingPermission(parsed)
-          setTranscript((current) => applyPermissionRequested(current))
-          return
-        }
-        case "extension_request": {
-          if (!belongsToSelection(message)) {
-            return
-          }
-          setPendingExtension({
-            requestId: message.requestId,
-            method: message.method,
-            params: message.params,
-          })
-          return
-        }
-        case "error": {
-          if (
-            message.sessionId !== undefined &&
-            message.sessionId !== sessionId
-          ) {
-            return
-          }
-          setTranscript((current) => applyStreamError(current))
-          return
-        }
-        case "auth_session_updated": {
-          if (message.agentId !== agentId) {
-            return
-          }
-          setStreamAgentAuth(message.auth)
-          void queryClient.invalidateQueries({ queryKey: queryKeys.agentSettingsRoot })
-          void queryClient.invalidateQueries({
-            queryKey: queryKeys.agentAuth(message.agentId),
-          })
-          return
-        }
-      }
-    },
+  const showWelcome = selection.sessionId === "" && transcript.rows.length === 0
+  useTranscriptAutoscroll({
+    showWelcome,
+    running,
+    scrollRef: transcriptScrollRef,
+    bottomRef: transcriptBottomRef,
   })
-
-  useEffect(() => {
-    if (hasAttemptedResume.current) {
-      return
-    }
-    if (sessionsQuery.isLoading || sessionsQuery.isError) {
-      return
-    }
-
-    hasAttemptedResume.current = true
-    const saved = readChatSelection()
-    if (saved === null || saved.sessionId === "") {
-      return
-    }
-
-    const sessionItems = sessionsQuery.data?.items ?? []
-    const matched = sessionItems.find(
-      (session) =>
-        session.sessionId === saved.sessionId && session.agentId === saved.agentId,
-    )
-    if (matched === undefined) {
-      clearChatSelection()
-      return
-    }
-
-    const workspaceItems =
-      workspacesQuery.data?.pages.flatMap((page) => page.items) ?? []
-    const resolvedWorkspaceId =
-      workspaceItems.find((workspace) => workspace.path === matched.cwd)?.id ?? ""
-    setWorkspaceId(resolvedWorkspaceId)
-    setAgentId(matched.agentId)
-    setSessionId(matched.sessionId)
-    writeChatSelection({
-      workspaceId: resolvedWorkspaceId,
-      agentId: matched.agentId,
-      sessionId: matched.sessionId,
-    })
-  }, [
-    sessionsQuery.data?.items,
-    sessionsQuery.isError,
-    sessionsQuery.isLoading,
-    workspacesQuery.data?.pages,
-  ])
-
-  useEffect(() => {
-    const refetchCatalog = () => {
-      void sessionsQuery.refetch()
-    }
-
-    window.addEventListener("focus", refetchCatalog)
-    return () => {
-      window.removeEventListener("focus", refetchCatalog)
-    }
-  }, [sessionsQuery])
-
-  const selectedSession = sessions.find(
-    (session) => session.sessionId === sessionId && session.agentId === agentId,
-  )
-
-  const effectiveSessionState = resolveEffectiveSessionState({
-    sessionId,
-    transcriptSessionState: transcript.sessionState,
-    listSessionState: undefined,
-  })
-  const runningFromSession =
-    effectiveSessionState === "running" ||
-    effectiveSessionState === "awaiting-permission"
-  const running = runningFromSession || createSessionMutation.isPending
-
-  const sendStream = (message: SessionStreamClientMessage) => {
-    stream.send(message)
-  }
-
-  const handlePermissionOption = (optionId: string) => {
-    if (pendingPermission === null) {
-      return
-    }
-
-    setSubmittingOptionId(optionId)
-    sendStream({
-      type: "permission_reply",
-      requestId: pendingPermission.requestId,
-      optionId,
-    })
-    setPendingPermission(null)
-    setSubmittingOptionId(null)
-    setTranscript((current) => applyPermissionResolved(current))
-  }
-
-  const handleExtensionReply = (result: unknown) => {
-    if (pendingExtension === null) {
-      return
-    }
-
-    setSubmittingExtension(true)
-    sendStream({
-      type: "extension_reply",
-      requestId: pendingExtension.requestId,
-      result,
-    })
-    setPendingExtension(null)
-    setSubmittingExtension(false)
-  }
-
-  const composerEnabled = isComposerPromptable({
-    workspaceId,
-    agentId,
-    sessionId,
-    sessionState: effectiveSessionState,
-  })
-  const blockedMessage = composerBlockedMessage(effectiveSessionState)
-
-  const handleJoinSession = (next: { agentId: string; sessionId: string }) => {
-    const nextSession = sessions.find(
-      (session) =>
-        session.sessionId === next.sessionId && session.agentId === next.agentId,
-    )
-    if (nextSession === undefined) {
-      return
-    }
-
-    const nextWorkspaceId = workspaceIdForCwd(nextSession.cwd)
-    setWorkspaceId(nextWorkspaceId)
-    setAgentId(nextSession.agentId)
-    setSessionId(nextSession.sessionId)
-    pendingPromptRef.current = null
-    clearLiveState()
-    persistSelection({
-      workspaceId: nextWorkspaceId,
-      agentId: nextSession.agentId,
-      sessionId: nextSession.sessionId,
-    })
-  }
-
-  const handleStartNewSession = (selection: {
-    workspaceId: string
-    agentId: AgentId
-  }) => {
-    setWorkspaceId(selection.workspaceId)
-    setAgentId(selection.agentId)
-    setSessionId("")
-    pendingPromptRef.current = null
-    clearLiveState()
-    persistSelection({
-      workspaceId: selection.workspaceId,
-      agentId: selection.agentId,
-      sessionId: "",
-    })
-  }
-
-  const handleSend = (text: string) => {
-    if (text.length === 0 || workspaceId === "" || agentId === "") {
-      return
-    }
-
-    const parsedAgent = AgentIdSchema.safeParse(agentId)
-    if (!parsedAgent.success) {
-      return
-    }
-
-    if (sessionId === "") {
-      const workspace = workspaces.find((item) => item.id === workspaceId)
-      if (workspace === undefined) {
-        return
-      }
-
-      pendingPromptRef.current = text
-      createSessionMutation.mutate(
-        {
-          agentId: parsedAgent.data,
-          cwd: workspace.path,
-        },
-        {
-          onSuccess: (created) => {
-            setSessionId(created.sessionId)
-            setAgentId(created.agentId)
-            setTranscript(
-              beginUserTurn(emptyAcpTranscript, {
-                turnId: crypto.randomUUID(),
-                text,
-              }),
-            )
-            persistSelection({
-              workspaceId,
-              agentId: created.agentId,
-              sessionId: created.sessionId,
-            })
-          },
-        },
-      )
-      return
-    }
-
-    setTranscript((current) =>
-      beginUserTurn(current, {
-        turnId: crypto.randomUUID(),
-        text,
-      }),
-    )
-    sendStream({
-      type: "prompt",
-      agentId: parsedAgent.data,
-      sessionId,
-      text,
-    })
-  }
-
-  const handleCancel = () => {
-    if (sessionId === "") {
-      return
-    }
-    const parsedAgent = AgentIdSchema.safeParse(agentId)
-    if (!parsedAgent.success) {
-      return
-    }
-    sendStream({
-      type: "cancel",
-      agentId: parsedAgent.data,
-      sessionId,
-    })
-  }
-
-  const showWelcome = sessionId === "" && transcript.rows.length === 0
-
-  useLayoutEffect(() => {
-    if (showWelcome) {
-      return
-    }
-
-    const container = transcriptScrollRef.current
-    if (container !== null) {
-      container.scrollTop = container.scrollHeight
-      return
-    }
-
-    transcriptBottomRef.current?.scrollIntoView({ block: "end" })
-  }, [showWelcome, transcript.rows, running, pendingPermission, pendingExtension])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-panel">
       <div className="shrink-0">
-        <ChatHeader
-          workspaces={workspaces}
-          agents={agents}
-          sessions={sessions}
-          workspaceId={workspaceId}
-          agentId={agentId}
-          sessionId={sessionId}
-          selectedSession={selectedSession}
-          selectedSessionState={effectiveSessionState}
-          onJoinSession={handleJoinSession}
-          onStartNewSession={handleStartNewSession}
-          onSessionMenuOpen={() => {
-            void sessionsQuery.refetch()
-          }}
-        />
+        <ChatHeader />
       </div>
       <div
         ref={transcriptScrollRef}
@@ -475,7 +74,7 @@ export const ChatShell: React.FC = () => {
             <ChatTranscript
               rows={transcript.rows}
               isRunning={running}
-              hasPendingPermission={pendingPermission !== null}
+              hasPendingPermission={permission !== null}
             />
             <div ref={transcriptBottomRef} aria-hidden className="h-px w-full" />
           </>
@@ -485,36 +84,37 @@ export const ChatShell: React.FC = () => {
         {agentAuth !== null &&
         agentAuth.session !== null &&
         agentAuth.session.status === "in_progress" &&
-        AgentIdSchema.safeParse(agentId).success ? (
+        AgentIdSchema.safeParse(selection.agentId).success ? (
           <div className="relative mx-auto mb-3 w-[min(840px,calc(100%-40px))] max-[820px]:w-[calc(100%-20px)]">
             <AgentAuthPanel
-              agentId={AgentIdSchema.parse(agentId)}
+              agentId={AgentIdSchema.parse(selection.agentId)}
               agentName={
-                agents.find((agent) => agent.id === agentId)?.displayName ?? agentId
+                agents.find((agent) => agent.id === selection.agentId)?.displayName ??
+                selection.agentId
               }
               summary={{
                 status: agentAuth.status,
                 error: agentAuth.error,
                 activeSessionId: agentAuth.session.sessionId,
                 canLogout:
-                  agents.find((agent) => agent.id === agentId)?.authSummary.canLogout ??
-                  false,
+                  agents.find((agent) => agent.id === selection.agentId)?.authSummary
+                    .canLogout ?? false,
               }}
               auth={agentAuth}
               compact
             />
           </div>
         ) : null}
-        {pendingPermission !== null ? (
+        {permission !== null ? (
           <PermissionPanel
-            request={pendingPermission}
+            request={permission}
             submittingOptionId={submittingOptionId}
             onSelectOption={handlePermissionOption}
           />
         ) : null}
-        {pendingExtension !== null ? (
+        {extension !== null ? (
           <ExtensionPanel
-            request={pendingExtension}
+            request={extension}
             submitting={submittingExtension}
             onReply={handleExtensionReply}
             onSkip={() => {
@@ -526,8 +126,8 @@ export const ChatShell: React.FC = () => {
           disabled={!composerEnabled}
           running={running}
           blockedMessage={blockedMessage}
-          onSend={handleSend}
-          onCancel={handleCancel}
+          onSend={send}
+          onCancel={cancel}
         />
       </div>
     </div>

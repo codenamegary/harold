@@ -1,4 +1,4 @@
-import { Matcher, Token } from "../design-system/prompt.input.model"
+import { Matcher, Token } from "../../design-system/prompt.input.model"
 
 export const chatTokenKind = {
   text: "text",

@@ -1,5 +1,5 @@
 import React from "react"
-import { StreamPermission } from "../permission/parse.stream.permission"
+import { StreamPermission } from "./parse.permission"
 
 type PermissionPanelProps = {
   request: StreamPermission

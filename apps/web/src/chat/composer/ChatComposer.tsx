@@ -1,6 +1,6 @@
 import React, { useState } from "react"
 import { ArrowUp, Square } from "lucide-react"
-import { PromptInput } from "../design-system/PromptInput"
+import { PromptInput } from "../../design-system/PromptInput"
 import { chatPlugins } from "./ChatPlugins"
 
 type ChatComposerProps = {

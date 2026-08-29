@@ -4,7 +4,7 @@ import {
   Plugin,
   rangeTouches,
   Token,
-} from "../design-system/prompt.input.model"
+} from "../../design-system/prompt.input.model"
 import {
   chatTokenKind,
   looksComplete,

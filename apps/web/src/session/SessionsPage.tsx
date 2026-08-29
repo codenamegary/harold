@@ -6,11 +6,11 @@ import { SessionDeleteTarget } from "contracts/http/session"
 import { Button } from "../design-system/Button"
 import { ConfirmDeleteIconButton } from "../design-system/ConfirmDeleteIconButton"
 import { TextInput } from "../design-system/TextInput"
-import { NewSessionModal } from "../chat/NewSessionModal"
+import { NewSessionModal } from "../chat/header/NewSessionModal"
 import {
   readChatSelection,
   writeChatSelection,
-} from "../chat/chat.selection.storage"
+} from "../chat/selection/persist"
 import { useAgentSettingsQuery } from "../agent-settings/use.agent.settings.query"
 import { useWorkspacesInfiniteQuery } from "../workspace/use.workspaces.infinite.query"
 import { catalogSessionKey } from "./catalog.session.key"

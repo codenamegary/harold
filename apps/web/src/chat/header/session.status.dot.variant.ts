@@ -1,5 +1,5 @@
 import { SessionState } from "contracts/http/session"
-import { StatusDotVariant } from "../design-system/StatusDot"
+import { StatusDotVariant } from "../../design-system/StatusDot"
 
 const statusDotVariantBySessionState: Partial<Record<SessionState, StatusDotVariant>> = {
   idle: "online",

@@ -14,7 +14,7 @@ import {
   clearChatTestSelection,
   openSessionOptions,
 } from "../chat/select.combobox.option"
-import { readChatSelection } from "../chat/chat.selection.storage"
+import { readChatSelection } from "../chat/selection/persist"
 
 const workspaceCollection = WorkspaceCollectionSchema.parse({
   items: [

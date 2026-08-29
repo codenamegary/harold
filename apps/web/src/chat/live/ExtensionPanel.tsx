@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { Button } from "../design-system/Button"
+import { Button } from "../../design-system/Button"
 
 export type StreamExtension = {
   requestId: string
