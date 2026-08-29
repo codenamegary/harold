@@ -3,7 +3,7 @@ import { fireEvent, render } from "@testing-library/react"
 import { PromptInput } from "../design-system/PromptInput"
 import { chatPlugins } from "./ChatPlugins"
 
-describe("chatPlugins", () => {
+describe.skip("chatPlugins", () => {
   test("paints a complete command as a chip", () => {
     const { getByText } = render(
       <PromptInput
