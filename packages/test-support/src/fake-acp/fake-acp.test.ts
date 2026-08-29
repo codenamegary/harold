@@ -197,6 +197,44 @@ describe("fake ACP protocol", () => {
     })
   })
 
+  test("session/new emits available_commands_update when enabled", () => {
+    const config = readFakeAcpConfig({
+      FAKE_ACP_SESSION_NEW_SESSION_ID: "session-cmds-1",
+      FAKE_ACP_EMIT_AVAILABLE_COMMANDS_ON_NEW: "true",
+    })
+
+    const { notifications } = handleJsonRpcRequest(
+      {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "session/new",
+        params: { cwd: "/tmp", mcpServers: [] },
+      },
+      config,
+      createPromptState(),
+    )
+
+    expect(notifications).toEqual([
+      {
+        jsonrpc: "2.0",
+        method: "session/update",
+        params: {
+          sessionId: "session-cmds-1",
+          update: {
+            sessionUpdate: "available_commands_update",
+            availableCommands: [
+              {
+                name: "web",
+                description: "Search the web",
+                input: { hint: "query" },
+              },
+            ],
+          },
+        },
+      },
+    ])
+  })
+
   test("session/load is rejected when loadSession is disabled", () => {
     const config = readFakeAcpConfig({ FAKE_ACP_LOAD_SESSION: "false" })
 

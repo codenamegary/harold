@@ -2,6 +2,7 @@ import { AgentId } from "contracts/http/agent-settings"
 import { AcpSupervisor } from "../acp/supervisor/models"
 import { AgentSettingsRepository } from "../agent-settings/agent-settings-repository"
 import { ArchivedAcpSessionsStore } from "./archived.acp.sessions.store"
+import { CommandsCache } from "./hub/commands.cache"
 import { ensureSupervisorReady, agentAdvertisesSessionClose } from "./session.acp.ready"
 import {
   buildAgentDisabledProblem,
@@ -19,6 +20,7 @@ export const deleteAcpSession = async (params: {
   agentSettingsRepository: AgentSettingsRepository
   acpSupervisor: AcpSupervisor
   archivedAcpSessions: ArchivedAcpSessionsStore
+  commandsCache: CommandsCache
 }): Promise<DeleteAcpSessionResult> => {
   const agentSettings = params.agentSettingsRepository
     .list()
@@ -46,6 +48,10 @@ export const deleteAcpSession = async (params: {
   }
 
   params.archivedAcpSessions.archive({
+    agentId: params.agentId,
+    sessionId: params.sessionId,
+  })
+  params.commandsCache.forget({
     agentId: params.agentId,
     sessionId: params.sessionId,
   })

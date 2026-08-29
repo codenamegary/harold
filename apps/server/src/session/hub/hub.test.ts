@@ -3,7 +3,8 @@ import {
   createSessionCwdCache,
   createSessionHub,
   SessionStreamSink,
-} from "./session.hub"
+} from "./hub"
+import { createCommandsCache } from "./commands.cache"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
 
 const collectSink = (): {
@@ -288,5 +289,166 @@ describe("session hub", () => {
           && m.message.includes("Agent authentication required"),
       ),
     ).toBe(true)
+  })
+
+  test("caches commands with no subscriber and snapshots them to the joiner before subscribed", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/proj" })
+    const commandsCache = createCommandsCache()
+    const commandsUpdate = {
+      sessionUpdate: "available_commands_update",
+      availableCommands: [{ name: "web", description: "Search the web" }],
+    }
+
+    const hub = createSessionHub({
+      cwdCache,
+      commandsCache,
+      loadSession: async () => ({ ok: true }),
+      promptSession: async () => ({ ok: true }),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    hub.handleSessionUpdate({
+      agentId: "cursor",
+      sessionId: "s1",
+      update: commandsUpdate,
+    })
+
+    const a = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    const updates = a.messages.filter((m) => m.type === "session_update")
+    expect(updates).toHaveLength(1)
+    expect(updates[0]).toMatchObject({
+      type: "session_update",
+      sessionId: "s1",
+      update: commandsUpdate,
+    })
+    const subscribedIndex = a.messages.findIndex((m) => m.type === "subscribed")
+    const snapshotIndex = a.messages.findIndex((m) => m === updates[0])
+    expect(snapshotIndex).toBeGreaterThanOrEqual(0)
+    expect(snapshotIndex).toBeLessThan(subscribedIndex)
+  })
+
+  test("live command updates replace the cache and fan out to every subscriber", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/proj" })
+    const first = {
+      sessionUpdate: "available_commands_update",
+      availableCommands: [{ name: "web", description: "Search" }],
+    }
+    const second = {
+      sessionUpdate: "available_commands_update",
+      availableCommands: [{ name: "test", description: "Run tests" }],
+    }
+
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      promptSession: async () => ({ ok: true }),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const a = collectSink()
+    const b = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    hub.addSubscriber({ id: "b", sink: b.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+    await hub.subscribe({ subscriberId: "b", agentId: "cursor", sessionId: "s1" })
+
+    hub.handleSessionUpdate({
+      agentId: "cursor",
+      sessionId: "s1",
+      update: first,
+    })
+    hub.handleSessionUpdate({
+      agentId: "cursor",
+      sessionId: "s1",
+      update: second,
+    })
+
+    const commandUpdates = (messages: SessionStreamServerMessage[]) =>
+      messages.filter(
+        (m) =>
+          m.type === "session_update" &&
+          (m.update as { sessionUpdate?: string }).sessionUpdate ===
+            "available_commands_update",
+      )
+
+    expect(commandUpdates(a.messages).map((m) => m.update)).toEqual([first, second])
+    expect(commandUpdates(b.messages).map((m) => m.update)).toEqual([first, second])
+  })
+
+  test("command snapshot on subscribe goes only to the joining client", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/proj" })
+    const commandsUpdate = {
+      sessionUpdate: "available_commands_update",
+      availableCommands: [{ name: "web", description: "Search the web" }],
+    }
+
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      promptSession: async () => ({ ok: true }),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const a = collectSink()
+    const b = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    hub.addSubscriber({ id: "b", sink: b.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    hub.handleSessionUpdate({
+      agentId: "cursor",
+      sessionId: "s1",
+      update: commandsUpdate,
+    })
+
+    const aBeforeB = a.messages.filter((m) => m.type === "session_update").length
+    await hub.subscribe({ subscriberId: "b", agentId: "cursor", sessionId: "s1" })
+
+    expect(a.messages.filter((m) => m.type === "session_update")).toHaveLength(aBeforeB)
+    expect(
+      b.messages.some(
+        (m) =>
+          m.type === "session_update" &&
+          (m.update as { sessionUpdate?: string }).sessionUpdate ===
+            "available_commands_update",
+      ),
+    ).toBe(true)
+  })
+
+  test("forgotten commands are not snapshotted on subscribe", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/proj" })
+    const commandsCache = createCommandsCache()
+    const commandsUpdate = {
+      sessionUpdate: "available_commands_update",
+      availableCommands: [{ name: "web", description: "Search the web" }],
+    }
+
+    const hub = createSessionHub({
+      cwdCache,
+      commandsCache,
+      loadSession: async () => ({ ok: true }),
+      promptSession: async () => ({ ok: true }),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    hub.handleSessionUpdate({
+      agentId: "cursor",
+      sessionId: "s1",
+      update: commandsUpdate,
+    })
+    commandsCache.forget({ agentId: "cursor", sessionId: "s1" })
+
+    const a = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    expect(a.messages.some((m) => m.type === "session_update")).toBe(false)
   })
 })

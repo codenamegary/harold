@@ -2,6 +2,8 @@ import { AgentAuth } from "contracts/http/agent-auth"
 import { AgentId } from "contracts/http/agent-settings"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
 import { AUTH_GATED_PROMPT_MESSAGE } from "../../acp/auth.required"
+import { parseAvailableCommandsUpdate } from "./commands.available"
+import { CommandsCache, createCommandsCache } from "./commands.cache"
 
 export type SessionKey = `${AgentId}:${string}`
 
@@ -62,6 +64,7 @@ export type PendingClientRpc = {
 
 export type CreateSessionHubParams = {
   cwdCache: SessionCwdCache
+  commandsCache?: CommandsCache
   loadSession: SessionHubLoadSession
   promptSession: SessionHubPromptSession
   cancelSession: SessionHubCancelSession
@@ -136,6 +139,7 @@ export const createSessionCwdCache = (): SessionCwdCache => {
 
 export const createSessionHub = ({
   cwdCache,
+  commandsCache = createCommandsCache(),
   loadSession,
   promptSession,
   cancelSession,
@@ -313,6 +317,19 @@ export const createSessionHub = ({
       return
     }
 
+    const cachedCommands = commandsCache.get({
+      agentId: params.agentId,
+      sessionId: params.sessionId,
+    })
+    if (cachedCommands !== undefined) {
+      subscriber.sink.send({
+        type: "session_update",
+        agentId: params.agentId,
+        sessionId: params.sessionId,
+        update: cachedCommands,
+      })
+    }
+
     subscriber.sink.send({
       type: "subscribed",
       agentId: params.agentId,
@@ -478,6 +495,11 @@ export const createSessionHub = ({
       })
     },
     handleSessionUpdate: ({ agentId, sessionId, update }) => {
+      const commandsUpdate = parseAvailableCommandsUpdate(update)
+      if (commandsUpdate !== null) {
+        commandsCache.remember({ agentId, sessionId, update: commandsUpdate })
+      }
+
       fanOut(sessionKey(agentId, sessionId), {
         type: "session_update",
         agentId,

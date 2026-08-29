@@ -23,6 +23,7 @@ export type FakeAcpConfig = FakeAcpCapabilities & {
   emitSessionUpdatesOnPrompt: boolean
   emitToolUpdatesOnPrompt: boolean
   emitLoadReplayUpdates: boolean
+  emitAvailableCommandsOnNew: boolean
   promptCompletionDelayMs: number | undefined
   fsReadPath: string
   fsWritePath: string
@@ -89,6 +90,10 @@ export const readFakeAcpConfig = (
   emitSessionUpdatesOnPrompt: parseBooleanEnv(env.FAKE_ACP_EMIT_SESSION_UPDATES_ON_PROMPT, false),
   emitToolUpdatesOnPrompt: parseBooleanEnv(env.FAKE_ACP_EMIT_TOOL_UPDATES_ON_PROMPT, false),
   emitLoadReplayUpdates: parseBooleanEnv(env.FAKE_ACP_EMIT_LOAD_REPLAY_UPDATES, false),
+  emitAvailableCommandsOnNew: parseBooleanEnv(
+    env.FAKE_ACP_EMIT_AVAILABLE_COMMANDS_ON_NEW,
+    false,
+  ),
   promptCompletionDelayMs: parseOptionalNonNegativeIntEnv(env.FAKE_ACP_PROMPT_COMPLETION_DELAY_MS),
   fsReadPath: readEnvString(env, "FAKE_ACP_FS_READ_PATH", "readme.txt"),
   fsWritePath: readEnvString(env, "FAKE_ACP_FS_WRITE_PATH", "output.txt"),
@@ -116,6 +121,7 @@ export type FakeAcpEnvOptions = {
   emitSessionUpdatesOnPrompt?: boolean
   emitToolUpdatesOnPrompt?: boolean
   emitLoadReplayUpdates?: boolean
+  emitAvailableCommandsOnNew?: boolean
   promptCompletionDelayMs?: number
   fsReadPath?: string
   fsWritePath?: string
@@ -163,6 +169,10 @@ export const fakeAcpEnvFromCapabilities = (options: FakeAcpEnvOptions): Record<s
   ...optionalBooleanEnv("FAKE_ACP_EMIT_SESSION_UPDATES_ON_PROMPT", options.emitSessionUpdatesOnPrompt),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_TOOL_UPDATES_ON_PROMPT", options.emitToolUpdatesOnPrompt),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_LOAD_REPLAY_UPDATES", options.emitLoadReplayUpdates),
+  ...optionalBooleanEnv(
+    "FAKE_ACP_EMIT_AVAILABLE_COMMANDS_ON_NEW",
+    options.emitAvailableCommandsOnNew,
+  ),
   ...optionalNumberEnv("FAKE_ACP_PROMPT_COMPLETION_DELAY_MS", options.promptCompletionDelayMs),
   ...stringEnv("FAKE_ACP_FS_READ_PATH", options.fsReadPath),
   ...stringEnv("FAKE_ACP_FS_WRITE_PATH", options.fsWritePath),

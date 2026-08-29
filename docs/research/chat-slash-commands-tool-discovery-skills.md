@@ -123,7 +123,7 @@ lines 3–13).
 4. Agent `session/update` notifications are forwarded unchanged to subscribers
    ([`acp-supervisor.ts`](../../apps/server/src/acp/supervisor/acp-supervisor.ts)
    lines 344–354;
-   [`session.hub.ts`](../../apps/server/src/session/hub/session.hub.ts)
+   [`hub.ts`](../../apps/server/src/session/hub/hub.ts)
    lines 434–440).
 
 So if an agent emits `available_commands_update`, the **bytes reach** web and
@@ -301,7 +301,7 @@ Project: [ACP session gateway](https://linear.app/agent-server/project/acp-sessi
 
 - `packages/contracts/src/http/session.stream.ts`
 - `apps/server/src/session/hub/acp.hub.prompt.ts`
-- `apps/server/src/session/hub/session.hub.ts`
+- `apps/server/src/session/hub/hub.ts`
 - `apps/server/src/acp/supervisor/acp-supervisor.ts`
 - `apps/web/src/chat/ChatComposer.tsx`, `acp.update.ts`, `chat.page.test.tsx`
 - `apps/android/.../SlashStubCatalog.kt`, `ChatScreen.kt`, `AcpUpdate.kt`

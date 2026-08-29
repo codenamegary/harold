@@ -15,6 +15,8 @@ export type SpawnFakeAcpOptions = {
   emitCursorAskQuestion?: boolean
   emitCursorCreatePlan?: boolean
   emitUnknownExtension?: boolean
+  emitLoadReplayUpdates?: boolean
+  emitAvailableCommandsOnNew?: boolean
   emitPermissionRequestOnPrompt?: boolean
   emitSessionUpdatesOnPrompt?: boolean
   promptCompletionDelayMs?: number
