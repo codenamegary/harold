@@ -29,14 +29,8 @@ export const ChatShell: React.FC = () => {
   const stream = useChatStream()
   const { send, cancel, running, composerEnabled, blockedMessage } =
     useChatPrompt(stream)
-  const {
-    permission,
-    extension,
-    submittingOptionId,
-    submittingExtension,
-    handlePermissionOption,
-    handleExtensionReply,
-  } = useLiveReplies({ send: stream.send })
+  const { permission, extension, replyToPermission, replyToExtension } =
+    useLiveReplies(stream)
 
   const agentsQuery = useAgentSettingsQuery()
   const agents = agentsQuery.data?.items ?? []
@@ -106,19 +100,14 @@ export const ChatShell: React.FC = () => {
           </div>
         ) : null}
         {permission !== null ? (
-          <PermissionPanel
-            request={permission}
-            submittingOptionId={submittingOptionId}
-            onSelectOption={handlePermissionOption}
-          />
+          <PermissionPanel request={permission} onSelectOption={replyToPermission} />
         ) : null}
         {extension !== null ? (
           <ExtensionPanel
             request={extension}
-            submitting={submittingExtension}
-            onReply={handleExtensionReply}
+            onReply={replyToExtension}
             onSkip={() => {
-              handleExtensionReply({ outcome: { outcome: "skipped" } })
+              replyToExtension({ outcome: { outcome: "skipped" } })
             }}
           />
         ) : null}

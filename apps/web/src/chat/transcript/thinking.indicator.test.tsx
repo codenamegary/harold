@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test"
 import { render } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { ChatTranscript } from "./ChatTranscript"
-import { groupTranscriptRows } from "./group.transcript.rows"
+import { groupTranscriptRows } from "./group.rows"
 import { ThinkingIndicator } from "./ThinkingIndicator"
-import { TranscriptRow } from "./transcript.reducer"
+import { TranscriptRow } from "./rows"
 
 describe("ThinkingIndicator", () => {
   test("renders the shimmer label", () => {

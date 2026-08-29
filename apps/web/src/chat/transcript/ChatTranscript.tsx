@@ -1,11 +1,11 @@
 import React from "react"
 import { ActivityStatusLine } from "./ActivityStatusLine"
 import { deriveActivityStatus } from "./derive.activity.status"
-import { groupTranscriptRows } from "./group.transcript.rows"
+import { groupTranscriptRows } from "./group.rows"
 import { MarkdownMessage } from "./MarkdownMessage"
 import { ThinkingSection } from "./ThinkingSection"
 import { ToolCallGroup } from "./ToolCallGroup"
-import { TranscriptRow } from "./transcript.reducer"
+import { TranscriptRow } from "./rows"
 
 type ChatTranscriptProps = {
   rows: ReadonlyArray<TranscriptRow>

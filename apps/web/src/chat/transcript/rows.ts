@@ -1,4 +1,3 @@
-import { SessionState } from "contracts/http/session"
 import { ToolCallStatus, ToolKind } from "contracts/events/primitives"
 
 export type TranscriptUserRow = {
@@ -34,15 +33,3 @@ export type TranscriptRow =
   | TranscriptThinkingRow
   | TranscriptAssistantRow
   | TranscriptToolRow
-
-export type TranscriptState = {
-  rows: ReadonlyArray<TranscriptRow>
-  cursor: number
-  sessionState: SessionState | null
-}
-
-export const emptyTranscript: TranscriptState = {
-  rows: [],
-  cursor: 0,
-  sessionState: null,
-}

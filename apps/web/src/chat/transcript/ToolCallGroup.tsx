@@ -1,6 +1,6 @@
 import React from "react"
 import { shortToolLabel } from "./short.tool.label"
-import { TranscriptToolRow } from "./transcript.reducer"
+import { TranscriptToolRow } from "./rows"
 
 type ToolCallGroupProps = {
   tools: ReadonlyArray<TranscriptToolRow>

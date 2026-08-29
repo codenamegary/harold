@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { deriveActivityStatus } from "./derive.activity.status"
-import { TranscriptRow } from "./transcript.reducer"
+import { TranscriptRow } from "./rows"
 
 const user = (turnId = "turn_1"): TranscriptRow => ({
   kind: "user",

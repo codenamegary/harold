@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router"
-import { useAtomValue, useStore } from "jotai"
+import { useAtomValue, useSetAtom } from "jotai"
 import { AcpSession } from "contracts/http/session"
 import { AgentId } from "contracts/http/agent-settings"
 import { Button } from "../../design-system/Button"
@@ -11,8 +11,8 @@ import { recentSessions, RECENT_SESSIONS_LIMIT } from "../../session/session.lis
 import { useAgentSettingsQuery } from "../../agent-settings/use.agent.settings.query"
 import { useSessionsQuery } from "../../session/use.sessions.query"
 import { useWorkspacesInfiniteQuery } from "../../workspace/use.workspaces.infinite.query"
-import { transcriptAtom } from "../live/atoms"
-import { replaceSelectionAtom } from "../selection/actions"
+import { sessionStateAtom } from "../live/atoms"
+import { selectSessionAtom } from "../selection/actions"
 import { selectionAtom } from "../selection/atoms"
 import { resolveEffectiveSessionState } from "../selection/promptability"
 import { NewSessionModal } from "./NewSessionModal"
@@ -22,9 +22,9 @@ const emptySessions: ReadonlyArray<AcpSession> = []
 
 export const ChatHeader: React.FC = () => {
   const navigate = useNavigate()
-  const store = useStore()
   const selection = useAtomValue(selectionAtom)
-  const transcript = useAtomValue(transcriptAtom)
+  const transcriptSessionState = useAtomValue(sessionStateAtom)
+  const selectSession = useSetAtom(selectSessionAtom)
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false)
 
   const workspacesQuery = useWorkspacesInfiniteQuery({})
@@ -41,20 +41,21 @@ export const ChatHeader: React.FC = () => {
   )
   const selectedSessionState = resolveEffectiveSessionState({
     sessionId: selection.sessionId,
-    transcriptSessionState: transcript.sessionState,
+    transcriptSessionState,
     listSessionState: undefined,
   })
 
+  const refetchSessions = sessionsQuery.refetch
   useEffect(() => {
     const refetchCatalog = () => {
-      void sessionsQuery.refetch()
+      void refetchSessions()
     }
 
     window.addEventListener("focus", refetchCatalog)
     return () => {
       window.removeEventListener("focus", refetchCatalog)
     }
-  }, [sessionsQuery])
+  }, [refetchSessions])
 
   const selectedKey =
     selection.sessionId === "" || selection.agentId === ""
@@ -140,7 +141,7 @@ export const ChatHeader: React.FC = () => {
 
     const nextWorkspaceId =
       workspaces.find((workspace) => workspace.path === nextSession.cwd)?.id ?? ""
-    store.set(replaceSelectionAtom, {
+    selectSession({
       workspaceId: nextWorkspaceId,
       agentId: nextSession.agentId,
       sessionId: nextSession.sessionId,
@@ -151,7 +152,7 @@ export const ChatHeader: React.FC = () => {
     workspaceId: string
     agentId: AgentId
   }) => {
-    store.set(replaceSelectionAtom, {
+    selectSession({
       workspaceId: next.workspaceId,
       agentId: next.agentId,
       sessionId: "",

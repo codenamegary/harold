@@ -1,17 +1,16 @@
-import { useAtomValue, useStore } from "jotai"
+import { useAtomValue, useSetAtom } from "jotai"
 import { AgentIdSchema } from "contracts/http/agent-settings"
-import { SessionStreamClientMessage } from "contracts/http/session.stream"
 import { useCreateSessionMutation } from "../../session/use.create.session.mutation"
 import { useWorkspacesInfiniteQuery } from "../../workspace/use.workspaces.infinite.query"
+import { adoptSessionAtom } from "../selection/actions"
 import { selectionAtom } from "../selection/atoms"
-import { commitSelectionAtom } from "../selection/actions"
 import {
   composerBlockedMessage,
   isComposerPromptable,
   resolveEffectiveSessionState,
 } from "../selection/promptability"
-import { pendingPromptAtom, transcriptAtom } from "./atoms"
-import { beginUserTurn, emptyAcpTranscript } from "./acp.transcript.reducer"
+import { beginFirstUserTurnAtom, beginUserTurnAtom } from "./actions"
+import { pendingPromptAtom, sessionStateAtom } from "./atoms"
 import { ChatStream } from "./use.stream"
 
 type UseChatPromptResult = {
@@ -23,9 +22,12 @@ type UseChatPromptResult = {
 }
 
 export const useChatPrompt = (stream: ChatStream): UseChatPromptResult => {
-  const store = useStore()
   const selection = useAtomValue(selectionAtom)
-  const transcript = useAtomValue(transcriptAtom)
+  const transcriptSessionState = useAtomValue(sessionStateAtom)
+  const setPendingPrompt = useSetAtom(pendingPromptAtom)
+  const adoptSession = useSetAtom(adoptSessionAtom)
+  const beginUserTurn = useSetAtom(beginUserTurnAtom)
+  const beginFirstUserTurn = useSetAtom(beginFirstUserTurnAtom)
   const workspacesQuery = useWorkspacesInfiniteQuery({})
   const createSessionMutation = useCreateSessionMutation()
   const workspaces =
@@ -33,7 +35,7 @@ export const useChatPrompt = (stream: ChatStream): UseChatPromptResult => {
 
   const effectiveSessionState = resolveEffectiveSessionState({
     sessionId: selection.sessionId,
-    transcriptSessionState: transcript.sessionState,
+    transcriptSessionState,
     listSessionState: undefined,
   })
   const runningFromSession =
@@ -47,10 +49,6 @@ export const useChatPrompt = (stream: ChatStream): UseChatPromptResult => {
     sessionState: effectiveSessionState,
   })
   const blockedMessage = composerBlockedMessage(effectiveSessionState)
-
-  const sendStream = (message: SessionStreamClientMessage) => {
-    stream.send(message)
-  }
 
   const send = (text: string) => {
     if (text.length === 0 || selection.workspaceId === "" || selection.agentId === "") {
@@ -68,7 +66,8 @@ export const useChatPrompt = (stream: ChatStream): UseChatPromptResult => {
         return
       }
 
-      store.set(pendingPromptAtom, text)
+      // Held until the stream subscribes to the session we are about to create.
+      setPendingPrompt(text)
       createSessionMutation.mutate(
         {
           agentId: parsedAgent.data,
@@ -76,32 +75,20 @@ export const useChatPrompt = (stream: ChatStream): UseChatPromptResult => {
         },
         {
           onSuccess: (created) => {
-            store.set(commitSelectionAtom, {
+            adoptSession({
               workspaceId: selection.workspaceId,
               agentId: created.agentId,
               sessionId: created.sessionId,
             })
-            store.set(
-              transcriptAtom,
-              beginUserTurn(emptyAcpTranscript, {
-                turnId: crypto.randomUUID(),
-                text,
-              }),
-            )
+            beginFirstUserTurn(text)
           },
         },
       )
       return
     }
 
-    store.set(
-      transcriptAtom,
-      beginUserTurn(store.get(transcriptAtom), {
-        turnId: crypto.randomUUID(),
-        text,
-      }),
-    )
-    sendStream({
+    beginUserTurn(text)
+    stream.send({
       type: "prompt",
       agentId: parsedAgent.data,
       sessionId: selection.sessionId,
@@ -117,7 +104,7 @@ export const useChatPrompt = (stream: ChatStream): UseChatPromptResult => {
     if (!parsedAgent.success) {
       return
     }
-    sendStream({
+    stream.send({
       type: "cancel",
       agentId: parsedAgent.data,
       sessionId: selection.sessionId,

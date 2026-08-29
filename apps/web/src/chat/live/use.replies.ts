@@ -1,79 +1,53 @@
-import { useAtomValue, useStore } from "jotai"
-import { SessionStreamClientMessage } from "contracts/http/session.stream"
-import { applyPermissionResolved } from "./acp.transcript.reducer"
-import {
-  extensionAtom,
-  permissionAtom,
-  submittingExtensionAtom,
-  submittingOptionIdAtom,
-  transcriptAtom,
-} from "./atoms"
+import { useAtomValue, useSetAtom } from "jotai"
+import { extensionAtom, permissionAtom } from "./atoms"
+import { resolvePermissionAtom } from "./actions"
 import { StreamExtension } from "./ExtensionPanel"
 import { StreamPermission } from "./parse.permission"
-
-type UseLiveRepliesParams = {
-  send: (message: SessionStreamClientMessage) => void
-}
+import { ChatStream } from "./use.stream"
 
 type UseLiveRepliesResult = {
   permission: StreamPermission | null
   extension: StreamExtension | null
-  submittingOptionId: string | null
-  submittingExtension: boolean
-  handlePermissionOption: (optionId: string) => void
-  handleExtensionReply: (result: unknown) => void
+  replyToPermission: (optionId: string) => void
+  replyToExtension: (result: unknown) => void
 }
 
-export const useLiveReplies = (params: UseLiveRepliesParams): UseLiveRepliesResult => {
-  const { send } = params
-  const store = useStore()
+export const useLiveReplies = (stream: ChatStream): UseLiveRepliesResult => {
   const permission = useAtomValue(permissionAtom)
   const extension = useAtomValue(extensionAtom)
-  const submittingOptionId = useAtomValue(submittingOptionIdAtom)
-  const submittingExtension = useAtomValue(submittingExtensionAtom)
+  const resolvePermission = useSetAtom(resolvePermissionAtom)
+  const setExtension = useSetAtom(extensionAtom)
 
-  const handlePermissionOption = (optionId: string) => {
-    const current = store.get(permissionAtom)
-    if (current === null) {
+  const replyToPermission = (optionId: string) => {
+    if (permission === null) {
       return
     }
 
-    store.set(submittingOptionIdAtom, optionId)
-    send({
+    stream.send({
       type: "permission_reply",
-      requestId: current.requestId,
+      requestId: permission.requestId,
       optionId,
     })
-    store.set(permissionAtom, null)
-    store.set(submittingOptionIdAtom, null)
-    store.set(
-      transcriptAtom,
-      applyPermissionResolved(store.get(transcriptAtom)),
-    )
+    resolvePermission()
   }
 
-  const handleExtensionReply = (result: unknown) => {
-    const current = store.get(extensionAtom)
-    if (current === null) {
+  const replyToExtension = (result: unknown) => {
+    if (extension === null) {
       return
     }
 
-    store.set(submittingExtensionAtom, true)
-    send({
+    stream.send({
       type: "extension_reply",
-      requestId: current.requestId,
+      requestId: extension.requestId,
       result,
     })
-    store.set(extensionAtom, null)
-    store.set(submittingExtensionAtom, false)
+    setExtension(null)
   }
 
   return {
     permission,
     extension,
-    submittingOptionId,
-    submittingExtension,
-    handlePermissionOption,
-    handleExtensionReply,
+    replyToPermission,
+    replyToExtension,
   }
 }

@@ -1,4 +1,5 @@
 import { atom } from "jotai"
+import { AgentId } from "contracts/http/agent-settings"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
 import { ChatSelection } from "../selection/persist"
 import { selectionAtom } from "../selection/atoms"
@@ -9,9 +10,7 @@ import {
   applyPromptComplete,
   applyStreamError,
   applySubscribed,
-  emptyAcpTranscript,
   foldAcpUpdate,
-  AcpTranscriptState,
 } from "./acp.transcript.reducer"
 import { parseStreamPermission } from "./parse.permission"
 import {
@@ -19,10 +18,19 @@ import {
   pendingPromptAtom,
   permissionAtom,
   streamAuthAtom,
-  submittingExtensionAtom,
-  submittingOptionIdAtom,
   transcriptAtom,
 } from "./atoms"
+
+/**
+ * Work the caller must perform after state has been applied. Keeping it out of
+ * the atom leaves the socket and the query cache to the hook that owns them.
+ */
+export type StreamEffect =
+  | { kind: "none" }
+  | { kind: "send-prompt"; agentId: AgentId; sessionId: string; text: string }
+  | { kind: "refresh-auth"; agentId: AgentId }
+
+const noEffect: StreamEffect = { kind: "none" }
 
 const belongsToSelection = (
   selection: ChatSelection,
@@ -30,107 +38,97 @@ const belongsToSelection = (
 ): boolean =>
   frame.sessionId === selection.sessionId && frame.agentId === selection.agentId
 
-export const clearLiveAtom = atom(
-  null,
-  (_get, set, nextTranscript: AcpTranscriptState = emptyAcpTranscript) => {
-    set(transcriptAtom, nextTranscript)
-    set(permissionAtom, null)
-    set(extensionAtom, null)
-    set(streamAuthAtom, null)
-    set(submittingOptionIdAtom, null)
-    set(submittingExtensionAtom, false)
-  },
-)
-
 export const applyStreamMessageAtom = atom(
   null,
-  (get, set, message: SessionStreamServerMessage) => {
+  (get, set, message: SessionStreamServerMessage): StreamEffect => {
     const selection = get(selectionAtom)
 
     switch (message.type) {
       case "session_update": {
         if (!belongsToSelection(selection, message)) {
-          return
+          return noEffect
         }
         set(
           transcriptAtom,
           foldAcpUpdate(get(transcriptAtom), parseAcpUpdate(message.update)),
         )
-        return
+        return noEffect
       }
       case "subscribed": {
         if (!belongsToSelection(selection, message)) {
-          return
+          return noEffect
         }
         set(transcriptAtom, applySubscribed(get(transcriptAtom)))
-        return
+
+        const queued = get(pendingPromptAtom)
+        if (queued === null) {
+          return noEffect
+        }
+        set(pendingPromptAtom, null)
+        return {
+          kind: "send-prompt",
+          agentId: message.agentId,
+          sessionId: message.sessionId,
+          text: queued,
+        }
       }
       case "prompt_complete": {
         if (!belongsToSelection(selection, message)) {
-          return
+          return noEffect
         }
         set(transcriptAtom, applyPromptComplete(get(transcriptAtom)))
-        return
+        return noEffect
       }
       case "cancelled": {
         if (!belongsToSelection(selection, message)) {
-          return
+          return noEffect
         }
         set(transcriptAtom, applyCancelled(get(transcriptAtom)))
-        return
+        return noEffect
       }
       case "permission_request": {
         if (!belongsToSelection(selection, message)) {
-          return
+          return noEffect
         }
         const parsed = parseStreamPermission({
           requestId: message.requestId,
           params: message.params,
         })
         if (parsed === null) {
-          return
+          return noEffect
         }
         set(permissionAtom, parsed)
         set(transcriptAtom, applyPermissionRequested(get(transcriptAtom)))
-        return
+        return noEffect
       }
       case "extension_request": {
         if (!belongsToSelection(selection, message)) {
-          return
+          return noEffect
         }
         set(extensionAtom, {
           requestId: message.requestId,
           method: message.method,
           params: message.params,
         })
-        return
+        return noEffect
       }
       case "error": {
         if (
           message.sessionId !== undefined &&
           message.sessionId !== selection.sessionId
         ) {
-          return
+          return noEffect
         }
         set(transcriptAtom, applyStreamError(get(transcriptAtom)))
-        return
+        return noEffect
       }
       case "auth_session_updated": {
         if (message.agentId !== selection.agentId) {
-          return
+          return noEffect
         }
         set(streamAuthAtom, message.auth)
-        return
+        return { kind: "refresh-auth", agentId: message.agentId }
       }
     }
-  },
-)
-
-export const switchSelectionAtom = atom(
-  null,
-  (_get, set, next: ChatSelection) => {
-    set(pendingPromptAtom, null)
-    set(clearLiveAtom, emptyAcpTranscript)
-    set(selectionAtom, next)
   },
 )

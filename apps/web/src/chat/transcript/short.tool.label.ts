@@ -1,4 +1,4 @@
-import { TranscriptToolRow } from "./transcript.reducer"
+import { TranscriptToolRow } from "./rows"
 
 const truncateLabel = (value: string, maxChars: number): string =>
   value.length <= maxChars ? value : `${value.slice(0, maxChars - 1)}…`

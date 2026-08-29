@@ -1,5 +1,5 @@
 import { shortToolLabel } from "./short.tool.label"
-import { TranscriptRow, TranscriptToolRow } from "./transcript.reducer"
+import { TranscriptRow, TranscriptToolRow } from "./rows"
 
 export type ActivityPhase =
   | "waiting-for-permission"

@@ -3,13 +3,11 @@ import { StreamPermission } from "./parse.permission"
 
 type PermissionPanelProps = {
   request: StreamPermission
-  submittingOptionId: string | null
   onSelectOption: (optionId: string) => void
 }
 
 export const PermissionPanel: React.FC<PermissionPanelProps> = ({
   request,
-  submittingOptionId,
   onSelectOption,
 }) => (
   <div className="mb-3 rounded-[9px] border border-[#3a3220] bg-[#17130d] px-4 py-3">
@@ -21,11 +19,10 @@ export const PermissionPanel: React.FC<PermissionPanelProps> = ({
         <button
           key={option.optionId}
           type="button"
-          disabled={submittingOptionId !== null}
           onClick={() => onSelectOption(option.optionId)}
           className="rounded-md border border-[#4a4030] bg-[#221c14] px-3 py-1.5 text-sm text-body hover:bg-[#2b2419] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {submittingOptionId === option.optionId ? "Submitting…" : option.name}
+          {option.name}
         </button>
       ))}
     </div>

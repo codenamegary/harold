@@ -1,12 +1,12 @@
 import { useEffect, useRef } from "react"
-import { useStore } from "jotai"
+import { useSetAtom } from "jotai"
 import { useSessionsQuery } from "../../session/use.sessions.query"
 import { useWorkspacesInfiniteQuery } from "../../workspace/use.workspaces.infinite.query"
-import { commitSelectionAtom } from "./actions"
+import { adoptSessionAtom } from "./actions"
 import { clearChatSelection, readChatSelection } from "./persist"
 
 export const useChatResume = (): void => {
-  const store = useStore()
+  const adoptSession = useSetAtom(adoptSessionAtom)
   const sessionsQuery = useSessionsQuery()
   const workspacesQuery = useWorkspacesInfiniteQuery({})
   const hasAttemptedResume = useRef(false)
@@ -39,16 +39,16 @@ export const useChatResume = (): void => {
       workspacesQuery.data?.pages.flatMap((page) => page.items) ?? []
     const resolvedWorkspaceId =
       workspaceItems.find((workspace) => workspace.path === matched.cwd)?.id ?? ""
-    store.set(commitSelectionAtom, {
+    adoptSession({
       workspaceId: resolvedWorkspaceId,
       agentId: matched.agentId,
       sessionId: matched.sessionId,
     })
   }, [
+    adoptSession,
     sessionsQuery.data?.items,
     sessionsQuery.isError,
     sessionsQuery.isLoading,
-    store,
     workspacesQuery.data?.pages,
   ])
 }

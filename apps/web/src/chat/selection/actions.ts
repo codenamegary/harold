@@ -1,20 +1,23 @@
 import { atom } from "jotai"
-import { ChatSelection, writeChatSelection } from "./persist"
+import { resetLiveAtom } from "../live/actions"
 import { selectionAtom } from "./atoms"
-import { switchSelectionAtom } from "../live/stream.actions"
+import { ChatSelection, writeChatSelection } from "./persist"
 
-export const commitSelectionAtom = atom(
-  null,
-  (_get, set, next: ChatSelection) => {
-    set(selectionAtom, next)
-    writeChatSelection(next)
-  },
-)
+/**
+ * The operator moved to a different session. Anything the old subscription
+ * produced, including a queued prompt, no longer applies.
+ */
+export const selectSessionAtom = atom(null, (_get, set, next: ChatSelection) => {
+  set(resetLiveAtom)
+  set(selectionAtom, next)
+  writeChatSelection(next)
+})
 
-export const replaceSelectionAtom = atom(
-  null,
-  (_get, set, next: ChatSelection) => {
-    set(switchSelectionAtom, next)
-    writeChatSelection(next)
-  },
-)
+/**
+ * We learned the ids for work already in flight (resume from storage, or a
+ * session that was just created for a prompt). Live state stays.
+ */
+export const adoptSessionAtom = atom(null, (_get, set, next: ChatSelection) => {
+  set(selectionAtom, next)
+  writeChatSelection(next)
+})
