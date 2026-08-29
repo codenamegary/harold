@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   assertTokensMatchValue,
   Plugin,
+  PluginRenderProps,
   scanTokens,
   Token,
 } from "../design-system/prompt.input.model"
@@ -13,7 +14,7 @@ import {
   matchMention,
 } from "./token.match"
 
-const paint = ({ token }: { token: Token }) => token.value
+const paint = ({ chars }: PluginRenderProps) => chars
 
 const textPlugin: Plugin = {
   kind: chatTokenKind.text,

@@ -8,6 +8,7 @@ import {
   insertText,
   Matcher,
   Plugin,
+  PluginRenderProps,
   rangeTouches,
   scanTokens,
   Token,
@@ -15,7 +16,7 @@ import {
   wordRight,
 } from "./prompt.input.model"
 
-const paint = ({ token }: { token: Token }) => token.value
+const paint = ({ chars }: PluginRenderProps) => chars
 
 const textPlugin: Plugin = {
   kind: "text",

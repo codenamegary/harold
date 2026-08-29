@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react"
 import { promptKeyHandlers } from "./prompt.input.keyboard"
 import {
   assertTokensMatchValue,
+  CaretRange,
   clampCaret,
   clampRange,
   collapse,
@@ -9,12 +10,13 @@ import {
   EditorState,
   insertText,
   offsetIsSelected,
-  pluginMap,
   Plugin,
+  pluginMap,
   requirePlugin,
   scanTokens,
   selectedText,
   selectionIsCollapsed,
+  Token,
 } from "./prompt.input.model"
 import { offsetFromElement, offsetFromPoint } from "./prompt.input.mouse"
 import { useKeyboardInput } from "./use.keyboard.input"
@@ -161,47 +163,66 @@ export const PromptInput: React.FC<PromptInputProps> = (props) => {
       ) : (
         tokens.map((token) => {
           const plugin = requirePlugin(pluginsByKind, token.kind)
-          const painted = plugin.render({
-            token,
-            caret,
-            selection: range,
-            raw: value,
-          })
-          if (typeof painted === "string") {
-            return (
-              <span key={token.start}>
-                {Array.from(token.value).map((ch, index) => {
-                  const offset = token.start + index
-                  const atEnd = offset === value.length - 1
-                  const selected = offsetIsSelected(range, offset)
-                  return (
-                    <span key={offset} className="relative">
-                      {focused && caret === offset ? <Caret /> : null}
-                      <span
-                        data-offset={offset}
-                        className={selected ? "prompt-input-selected" : undefined}
-                      >
-                        {ch}
-                      </span>
-                      {focused && atEnd && caret === value.length ? (
-                        <Caret after />
-                      ) : null}
-                    </span>
-                  )
-                })}
-              </span>
-            )
-          }
           return (
-            <span key={token.start} data-token-start={token.start}>
-              {painted}
-            </span>
+            <React.Fragment key={token.start}>
+              {plugin.render({
+                token,
+                caret,
+                selection: range,
+                raw: value,
+                chars: (
+                  <TokenChars
+                    token={token}
+                    value={value}
+                    caret={caret}
+                    range={range}
+                    focused={focused}
+                  />
+                ),
+              })}
+            </React.Fragment>
           )
         })
       )}
     </div>
   )
 }
+
+type TokenCharsProps = {
+  token: Token
+  value: string
+  caret: number
+  range: CaretRange
+  focused: boolean
+}
+
+const TokenChars: React.FC<TokenCharsProps> = ({
+  token,
+  value,
+  caret,
+  range,
+  focused,
+}) => (
+  <>
+    {Array.from(token.value).map((ch, index) => {
+      const offset = token.start + index
+      const atEnd = offset === value.length - 1
+      const selected = offsetIsSelected(range, offset)
+      return (
+        <span key={offset} className="relative">
+          {focused && caret === offset ? <Caret /> : null}
+          <span
+            data-offset={offset}
+            className={selected ? "prompt-input-selected" : undefined}
+          >
+            {ch}
+          </span>
+          {focused && atEnd && caret === value.length ? <Caret after /> : null}
+        </span>
+      )
+    })}
+  </>
+)
 
 const Caret: React.FC<{ after?: boolean }> = ({ after = false }) => (
   <span

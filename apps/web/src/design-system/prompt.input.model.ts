@@ -1,4 +1,4 @@
-import { ReactNode } from "react"
+import React from "react"
 
 export type Token = {
   kind: string
@@ -23,12 +23,13 @@ export type PluginRenderProps = {
   caret: number
   selection: CaretRange
   raw: string
+  chars: React.ReactNode
 }
 
 export type Plugin = {
   kind: string
   match?: Matcher
-  render: (props: PluginRenderProps) => ReactNode
+  render: (props: PluginRenderProps) => React.ReactNode
 }
 
 export const clampCaret = (caret: number, length: number): number =>

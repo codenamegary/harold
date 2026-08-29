@@ -7,7 +7,7 @@ import { Plugin, rangeTouches } from "./prompt.input.model"
 
 const textPlugin: Plugin = {
   kind: "text",
-  render: ({ token }) => token.value,
+  render: ({ chars }) => chars,
 }
 
 const commandPlugin: Plugin = {
@@ -27,12 +27,12 @@ const commandPlugin: Plugin = {
       end: offset + value.length,
     }
   },
-  render: ({ token, selection, raw }) => {
+  render: ({ token, selection, raw, chars }) => {
     const complete = raw[token.end] === " "
     if (!complete || rangeTouches(token, selection)) {
-      return token.value
+      return chars
     }
-    return <span data-testid="chip">{token.value}</span>
+    return <span data-token-start={token.start}>{token.value}</span>
   },
 }
 
@@ -50,7 +50,7 @@ const Harness: React.FC<{ initial: string }> = ({ initial }) => {
 
 describe("PromptInput", () => {
   test("renders matched tokens through plugins", () => {
-    const { getByRole, getByTestId } = render(
+    const { getByRole } = render(
       <PromptInput
         aria-label="Prompt"
         value="hello /cmd "
@@ -61,7 +61,7 @@ describe("PromptInput", () => {
 
     const field = getByRole("textbox", { name: "Prompt" })
     expect(field).toHaveTextContent("hello /cmd")
-    expect(getByTestId("chip")).toHaveTextContent("/cmd")
+    expect(field.querySelector("[data-token-start]")).toHaveTextContent("/cmd")
   })
 
   test("throws when no text plugin is registered", () => {
@@ -122,12 +122,14 @@ describe("PromptInput", () => {
   })
 
   test("clicking a chip expands it", () => {
-    const { getByTestId, queryByTestId } = render(
-      <Harness initial="hello /cmd " />,
-    )
-    expect(getByTestId("chip")).toBeTruthy()
-    fireEvent.mouseDown(getByTestId("chip"))
-    expect(queryByTestId("chip")).toBeNull()
+    const { getByRole } = render(<Harness initial="hello /cmd " />)
+    const field = getByRole("textbox", { name: "Prompt" })
+    const chip = field.querySelector("[data-token-start]")
+    if (chip === null) {
+      throw new Error("expected a chip")
+    }
+    fireEvent.mouseDown(chip)
+    expect(field.querySelector("[data-token-start]")).toBeNull()
   })
 
   test("disabled exposes aria-disabled for the textbox", () => {

@@ -18,7 +18,7 @@ describe("chatPlugins", () => {
     expect(getByText("/cmd")).toHaveClass("text-lime")
   })
 
-  test("paints a trailing command as plain text while the caret is on it", () => {
+  test("paints a trailing command with chip styling while the caret is on it", () => {
     const { getByRole } = render(
       <PromptInput
         aria-label="Prompt"
@@ -28,10 +28,10 @@ describe("chatPlugins", () => {
       />,
     )
 
-    expect(getByRole("textbox", { name: "Prompt" })).toHaveTextContent(
-      "hello /cmd",
-    )
-    expect(getByRole("textbox", { name: "Prompt" }).querySelector(".text-lime")).toBeNull()
+    const field = getByRole("textbox", { name: "Prompt" })
+    expect(field).toHaveTextContent("hello /cmd")
+    expect(field.querySelector(".text-lime")).not.toBeNull()
+    expect(field.querySelector("[data-token-start]")).toBeNull()
   })
 
   test("paints a trailing command as a chip when the caret is elsewhere", () => {
@@ -92,10 +92,10 @@ describe("chatPlugins", () => {
     fireEvent.keyDown(getByRole("textbox", { name: "Prompt" }), {
       key: "ArrowLeft",
     })
+    const field = getByRole("textbox", { name: "Prompt" })
     expect(queryByText("@notes-f…")).toBeNull()
-    expect(getByRole("textbox", { name: "Prompt" })).toHaveTextContent(
-      "see @notes-from-meeting",
-    )
+    expect(field).toHaveTextContent("see @notes-from-meeting")
+    expect(field.querySelector(".text-violet")).not.toBeNull()
   })
 
   test("expands a command chip when it is clicked", () => {
@@ -109,6 +109,8 @@ describe("chatPlugins", () => {
     )
 
     fireEvent.mouseDown(getByText("/cmd"))
-    expect(getByRole("textbox", { name: "Prompt" }).querySelector(".text-lime")).toBeNull()
+    const field = getByRole("textbox", { name: "Prompt" })
+    expect(field.querySelector(".text-lime")).not.toBeNull()
+    expect(field.querySelector("[data-token-start]")).toBeNull()
   })
 })
