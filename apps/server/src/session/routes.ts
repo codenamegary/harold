@@ -9,7 +9,8 @@ import { FastifyInstance } from "fastify"
 import { AcpSupervisor } from "../acp/supervisor/models"
 import { AuthBroker } from "../agent/auth/broker"
 import { AgentSettingsRepository } from "../agent-settings/agent-settings-repository"
-import { SessionCwdCache } from "./hub/session.hub"
+import { CommandsCache } from "./hub/commands.cache"
+import { SessionCwdCache } from "./hub/hub"
 import { ArchivedAcpSessionsStore } from "./archived.acp.sessions.store"
 import { deleteAcpSession } from "./delete.acp.session"
 import { ensureSupervisorReady, agentAdvertisesSessionList } from "./session.acp.ready"
@@ -36,6 +37,7 @@ export const registerSessionRoutes = (
   agentSettingsRepository: AgentSettingsRepository,
   acpSupervisor: AcpSupervisor,
   cwdCache: SessionCwdCache,
+  commandsCache: CommandsCache,
   archivedAcpSessions: ArchivedAcpSessionsStore,
   authBroker?: AuthBroker,
 ) => {
@@ -156,6 +158,7 @@ export const registerSessionRoutes = (
       agentSettingsRepository,
       acpSupervisor,
       archivedAcpSessions,
+      commandsCache,
     })
 
     if (!result.ok) {

@@ -15,6 +15,8 @@ describe("deleteAcpSession", () => {
       releaseClose.resolve = resolve
     })
 
+    const forgotten: Array<{ agentId: typeof agentId; sessionId: string }> = []
+
     const resultPromise = deleteAcpSession({
       agentId,
       sessionId: "sess-1",
@@ -59,10 +61,18 @@ describe("deleteAcpSession", () => {
         isArchived: () => false,
         archive: () => undefined,
       },
+      commandsCache: {
+        remember: () => undefined,
+        get: () => undefined,
+        forget: (params) => {
+          forgotten.push(params)
+        },
+      },
     })
 
     const result = await resultPromise
     expect(result).toEqual({ ok: true })
+    expect(forgotten).toEqual([{ agentId, sessionId: "sess-1" }])
     expect(closeStarted.value).toBe(true)
     expect(closeFinished.value).toBe(false)
 

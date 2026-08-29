@@ -43,6 +43,24 @@ const jsonRpcResult = (id: JsonRpcRequest["id"], result: unknown): JsonRpcRespon
   result,
 })
 
+const availableCommandsUpdate = (sessionId: string): JsonRpcNotification => ({
+  jsonrpc: "2.0",
+  method: "session/update",
+  params: {
+    sessionId,
+    update: {
+      sessionUpdate: "available_commands_update",
+      availableCommands: [
+        {
+          name: "web",
+          description: "Search the web",
+          input: { hint: "query" },
+        },
+      ],
+    },
+  },
+})
+
 const agentMessageChunk = (sessionId: string, text: string): JsonRpcNotification => ({
   jsonrpc: "2.0",
   method: "session/update",
@@ -257,7 +275,9 @@ const handleSessionNew = (
   return {
     response: jsonRpcResult(request.id, { sessionId }),
     outbound: outboundAfterSessionNew(sessionId, config),
-    notifications: [],
+    notifications: config.emitAvailableCommandsOnNew
+      ? [availableCommandsUpdate(sessionId)]
+      : [],
     deferredNotifications: [],
   }
 }

@@ -16,7 +16,7 @@ import { websocketRawDataText } from "../auth/websocket.raw.data.text"
 import { touchDeviceLastSeen } from "../device/connection.lifecycle"
 import { DeviceRepository } from "../device/repository"
 import { registerDevicePresence } from "../device/presence"
-import { SessionHub } from "./hub/session.hub"
+import { SessionHub } from "./hub/hub"
 
 export const SESSIONS_STREAM_PATH = "/v1/sessions/stream"
 

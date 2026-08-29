@@ -4,7 +4,7 @@ import {
   createSessionCwdCache,
   createSessionHub,
   SessionStreamSink,
-} from "./session.hub"
+} from "./hub"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
 
 const collectSink = (): {

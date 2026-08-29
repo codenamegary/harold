@@ -48,7 +48,8 @@ import {
   createSessionCwdCache,
   createSessionHub,
   SessionHub,
-} from "../session/hub/session.hub"
+} from "../session/hub/hub"
+import { createCommandsCache } from "../session/hub/commands.cache"
 import { registerAuthMiddleware } from "../auth/middleware"
 import { redactPairingCodeInUrl } from "../device/redact.pairing.code.in.url"
 import { FetchRegistryFn } from "../agent-settings/agent-settings-repository"
@@ -188,6 +189,7 @@ export const createServer = async ({
 
   const sessionHubRef: { current: SessionHub | null } = { current: null }
   const cwdCache = createSessionCwdCache()
+  const commandsCache = createCommandsCache()
 
   const agentExists = (agentId: string) => agentSettingsRepository.hasAgentId(agentId)
 
@@ -238,6 +240,7 @@ export const createServer = async ({
 
   const sessionHub = createSessionHub({
     cwdCache,
+    commandsCache,
     loadSession: async ({ agentId, sessionId, cwd }) => {
       const loaded = await acpSupervisor.loadSession({ agentId, sessionId, cwd })
       return loaded.ok ? { ok: true } : { ok: false, reason: loaded.reason }
@@ -306,6 +309,7 @@ export const createServer = async ({
     agentSettingsRepository,
     acpSupervisor,
     cwdCache,
+    commandsCache,
     archivedAcpSessions,
     authBroker,
   )

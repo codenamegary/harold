@@ -512,4 +512,71 @@ describe("session hub stream integration", () => {
     }
     expect(auth.session?.status).toBe("in_progress")
   }, { timeout: 30_000 })
+
+  test("subscribe after session/new receives cached available commands", async () => {
+    const dataDir = await createTempDataDir(resources)
+    const { app, config } = await createTestApp(resources, dataDir, whichFn, undefined, {
+      capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+      sessionNewSessionId: "hub-cmds-1",
+      sessionLoadSessionId: "hub-cmds-1",
+      emitAvailableCommandsOnNew: true,
+    })
+    await enableAgent(app, "cursor", whichFn)
+
+    const { httpBase, wsUrl } = await getListeningBase(app, config)
+
+    const createResponse = await fetch(`${httpBase}/v1/sessions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agentId: "cursor",
+        cwd: "/tmp/hub-cmds-project",
+      }),
+    })
+    expect(createResponse.status).toBe(201)
+    const created = CreateSessionResponseSchema.parse(await createResponse.json())
+
+    const client = await openStreamClient(wsUrl)
+    client.send({
+      type: "subscribe",
+      agentId: "cursor",
+      sessionId: created.sessionId,
+    })
+
+    const commandsUpdate = await client.waitFor(
+      (message) =>
+        message.type === "session_update" &&
+        JSON.stringify(message.update).includes("available_commands_update"),
+    )
+    expect(commandsUpdate).toMatchObject({
+      type: "session_update",
+      agentId: "cursor",
+      sessionId: created.sessionId,
+      update: {
+        sessionUpdate: "available_commands_update",
+        availableCommands: [
+          {
+            name: "web",
+            description: "Search the web",
+            input: { hint: "query" },
+          },
+        ],
+      },
+    })
+
+    const subscribed = await client.waitFor((message) => message.type === "subscribed")
+    expect(subscribed).toMatchObject({
+      type: "subscribed",
+      agentId: "cursor",
+      sessionId: created.sessionId,
+    })
+
+    const subscribedIndex = client.messages.findIndex(
+      (message) => message.type === "subscribed",
+    )
+    const commandsIndex = client.messages.findIndex((message) => message === commandsUpdate)
+    expect(commandsIndex).toBeLessThan(subscribedIndex)
+
+    await client.close()
+  })
 })
