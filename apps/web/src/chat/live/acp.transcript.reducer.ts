@@ -6,7 +6,7 @@ import {
   TranscriptThinkingRow,
   TranscriptToolRow,
   TranscriptUserRow,
-} from "./transcript.reducer"
+} from "../transcript/rows"
 
 export type AcpTranscriptState = {
   rows: ReadonlyArray<TranscriptRow>

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { fireEvent, render } from "@testing-library/react"
-import { PromptInput } from "../design-system/PromptInput"
+import { PromptInput } from "../../design-system/PromptInput"
 import { chatPlugins } from "./ChatPlugins"
 
 describe.skip("chatPlugins", () => {

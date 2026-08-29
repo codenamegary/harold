@@ -1,53 +1,74 @@
-import React, { useMemo, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router"
-import { AcpSession, SessionState } from "contracts/http/session"
+import { useAtomValue, useSetAtom } from "jotai"
+import { AcpSession } from "contracts/http/session"
 import { AgentId } from "contracts/http/agent-settings"
-import { Workspace } from "contracts/http/workspace"
-import { Button } from "../design-system/Button"
-import { Combobox, ComboboxOptionItem } from "../design-system/Combobox"
-import { StatusDot } from "../design-system/StatusDot"
-import { catalogSessionKey, parseCatalogSessionKey } from "../session/catalog.session.key"
-import { recentSessions, RECENT_SESSIONS_LIMIT } from "../session/session.list.helpers"
+import { Button } from "../../design-system/Button"
+import { Combobox, ComboboxOptionItem } from "../../design-system/Combobox"
+import { StatusDot } from "../../design-system/StatusDot"
+import { catalogSessionKey, parseCatalogSessionKey } from "../../session/catalog.session.key"
+import { recentSessions, RECENT_SESSIONS_LIMIT } from "../../session/session.list.helpers"
+import { useAgentSettingsQuery } from "../../agent-settings/use.agent.settings.query"
+import { useSessionsQuery } from "../../session/use.sessions.query"
+import { useWorkspacesInfiniteQuery } from "../../workspace/use.workspaces.infinite.query"
+import { sessionStateAtom } from "../live/atoms"
+import { selectSessionAtom } from "../selection/actions"
+import { selectionAtom } from "../selection/atoms"
+import { resolveEffectiveSessionState } from "../selection/promptability"
 import { NewSessionModal } from "./NewSessionModal"
 import { sessionStatusDotVariant } from "./session.status.dot.variant"
 
-type ChatHeaderProps = {
-  workspaces: ReadonlyArray<Workspace>
-  agents: ReadonlyArray<{ id: AgentId; displayName: string; enabled: boolean }>
-  sessions: ReadonlyArray<AcpSession>
-  workspaceId: string
-  agentId: string
-  sessionId: string
-  selectedSession: AcpSession | undefined
-  selectedSessionState: SessionState | null
-  onJoinSession: (params: { agentId: string; sessionId: string }) => void
-  onStartNewSession: (selection: { workspaceId: string; agentId: AgentId }) => void
-  onSessionMenuOpen: () => void
-}
+const emptySessions: ReadonlyArray<AcpSession> = []
 
-export const ChatHeader: React.FC<ChatHeaderProps> = ({
-  workspaces,
-  agents,
-  sessions,
-  workspaceId,
-  agentId,
-  sessionId,
-  selectedSession,
-  selectedSessionState,
-  onJoinSession,
-  onStartNewSession,
-  onSessionMenuOpen,
-}) => {
+export const ChatHeader: React.FC = () => {
   const navigate = useNavigate()
+  const selection = useAtomValue(selectionAtom)
+  const transcriptSessionState = useAtomValue(sessionStateAtom)
+  const selectSession = useSetAtom(selectSessionAtom)
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false)
 
+  const workspacesQuery = useWorkspacesInfiniteQuery({})
+  const agentsQuery = useAgentSettingsQuery()
+  const sessionsQuery = useSessionsQuery()
+
+  const workspaces = workspacesQuery.data?.pages.flatMap((page) => page.items) ?? []
+  const agents = agentsQuery.data?.items ?? []
+  const sessions = sessionsQuery.data?.items ?? emptySessions
+
+  const selectedSession = sessions.find(
+    (session) =>
+      session.sessionId === selection.sessionId && session.agentId === selection.agentId,
+  )
+  const selectedSessionState = resolveEffectiveSessionState({
+    sessionId: selection.sessionId,
+    transcriptSessionState,
+    listSessionState: undefined,
+  })
+
+  const refetchSessions = sessionsQuery.refetch
+  useEffect(() => {
+    const refetchCatalog = () => {
+      void refetchSessions()
+    }
+
+    window.addEventListener("focus", refetchCatalog)
+    return () => {
+      window.removeEventListener("focus", refetchCatalog)
+    }
+  }, [refetchSessions])
+
   const selectedKey =
-    sessionId === "" || agentId === ""
+    selection.sessionId === "" || selection.agentId === ""
       ? ""
-      : catalogSessionKey({ agentId, sessionId })
+      : catalogSessionKey({
+          agentId: selection.agentId,
+          sessionId: selection.sessionId,
+        })
 
   const readyForNewSession =
-    sessionId === "" && workspaceId !== "" && agentId !== ""
+    selection.sessionId === "" &&
+    selection.workspaceId !== "" &&
+    selection.agentId !== ""
 
   const sessionOptions = useMemo((): ComboboxOptionItem[] => {
     const recent = recentSessions(sessions)
@@ -95,11 +116,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   }, [sessions, selectedSession, selectedSessionState, selectedKey])
 
   const workspaceName =
-    workspaces.find((workspace) => workspace.id === workspaceId)?.name ??
-    (workspaceId === "" ? null : "Workspace")
+    workspaces.find((workspace) => workspace.id === selection.workspaceId)?.name ??
+    (selection.workspaceId === "" ? null : "Workspace")
   const agentName =
-    agents.find((agent) => agent.id === agentId)?.displayName ??
-    (agentId === "" ? null : agentId)
+    agents.find((agent) => agent.id === selection.agentId)?.displayName ??
+    (selection.agentId === "" ? null : selection.agentId)
 
   const contextSubtitle =
     workspaceName !== null && agentName !== null
@@ -109,13 +130,42 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const selectedStatusDotVariant =
     selectedSessionState === null ? null : sessionStatusDotVariant(selectedSessionState)
 
+  const handleJoinSession = (next: { agentId: string; sessionId: string }) => {
+    const nextSession = sessions.find(
+      (session) =>
+        session.sessionId === next.sessionId && session.agentId === next.agentId,
+    )
+    if (nextSession === undefined) {
+      return
+    }
+
+    const nextWorkspaceId =
+      workspaces.find((workspace) => workspace.path === nextSession.cwd)?.id ?? ""
+    selectSession({
+      workspaceId: nextWorkspaceId,
+      agentId: nextSession.agentId,
+      sessionId: nextSession.sessionId,
+    })
+  }
+
+  const handleStartNewSession = (next: {
+    workspaceId: string
+    agentId: AgentId
+  }) => {
+    selectSession({
+      workspaceId: next.workspaceId,
+      agentId: next.agentId,
+      sessionId: "",
+    })
+  }
+
   const handleSessionPickerChange = (nextValue: string) => {
     const parsed = parseCatalogSessionKey(nextValue)
     if (parsed === null) {
       return
     }
 
-    onJoinSession(parsed)
+    handleJoinSession(parsed)
   }
 
   return (
@@ -131,7 +181,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               aria-label="Session"
               value={selectedKey}
               onChange={handleSessionPickerChange}
-              onOpen={onSessionMenuOpen}
+              onOpen={() => {
+                void sessionsQuery.refetch()
+              }}
               options={sessionOptions}
               placeholder={readyForNewSession ? "New session" : "Select a session"}
               emptyMessage="No sessions"
@@ -163,9 +215,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         open={isNewSessionModalOpen}
         agents={agents}
         onClose={() => setIsNewSessionModalOpen(false)}
-        onConfirm={(selection) => {
+        onConfirm={(next) => {
           setIsNewSessionModalOpen(false)
-          onStartNewSession(selection)
+          handleStartNewSession(next)
         }}
       />
     </>

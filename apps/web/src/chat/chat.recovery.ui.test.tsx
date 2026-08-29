@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { defaultAuthSummary } from "../test/agent.settings.fixtures"
 import { act, fireEvent, waitFor } from "@testing-library/react"
+import { createStore } from "jotai"
 import { MemoryRouter } from "react-router"
 import { AgentSettingsCollectionSchema } from "contracts/http/agent-settings"
 import { SessionCollectionSchema } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
+import { createTestQueryClient } from "../query/create.test.query.client"
 import { renderWithProviders } from "../query/render.with.providers"
 import { requestUrl } from "../test/request.url"
 import { FakeSocket, installFakeWebSocket, sentStreamMessages } from "../test/fake.websocket"
@@ -128,7 +130,7 @@ describe("Chat recovery UI", () => {
     )
 
   const gatewaySocket = () =>
-    sockets.find((socket) => socket.url.includes("/v1/sessions/stream"))
+    sockets.findLast((socket) => socket.url.includes("/v1/sessions/stream"))
 
   const subscribe = (session: { agentId: string; sessionId: string }) => {
     act(() => {
@@ -274,6 +276,56 @@ describe("Chat recovery UI", () => {
     const { getByRole, queryByRole } = renderChat()
     await joinSessionByName({ getByRole }, idleSession.title)
     expect(queryByRole("button", { name: /resume/i })).not.toBeInTheDocument()
+  })
+
+  test("leaving and reopening the console does not stack replayed history", async () => {
+    const jotaiStore = createStore()
+    const queryClient = createTestQueryClient()
+    const renderShared = () =>
+      renderWithProviders(
+        <MemoryRouter>
+          <ChatPage />
+        </MemoryRouter>,
+        { jotaiStore, queryClient },
+      )
+    const replayAgentLine = () => {
+      act(() => {
+        gatewaySocket()?.dispatch(
+          "message",
+          JSON.stringify({
+            type: "session_update",
+            agentId: idleSession.agentId,
+            sessionId: idleSession.sessionId,
+            update: {
+              sessionUpdate: "agent_message_chunk",
+              content: { type: "text", text: "First line" },
+            },
+          }),
+        )
+      })
+    }
+
+    const first = renderShared()
+    await joinSessionByName({ getByRole: first.getByRole }, idleSession.title)
+    subscribe(idleSession)
+    replayAgentLine()
+    await waitFor(() => {
+      expect(first.getByText("First line")).toBeInTheDocument()
+    })
+
+    first.unmount()
+
+    const second = renderShared()
+    await waitFor(() => {
+      expect(gatewaySocket()?.url).toContain("/v1/sessions/stream")
+    })
+    subscribe(idleSession)
+    replayAgentLine()
+
+    await waitFor(() => {
+      expect(second.getByText("First line")).toBeInTheDocument()
+    })
+    expect(second.queryByText("First lineFirst line")).toBeNull()
   })
 
   test("switching sessions does not send cancel", async () => {

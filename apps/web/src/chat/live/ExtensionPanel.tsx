@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { Button } from "../design-system/Button"
+import { Button } from "../../design-system/Button"
 
 export type StreamExtension = {
   requestId: string
@@ -9,7 +9,6 @@ export type StreamExtension = {
 
 type ExtensionPanelProps = {
   request: StreamExtension
-  submitting: boolean
   onReply: (result: unknown) => void
   onSkip: () => void
 }
@@ -24,7 +23,6 @@ const encodeParams = (params: unknown): string => {
 
 export const ExtensionPanel: React.FC<ExtensionPanelProps> = ({
   request,
-  submitting,
   onReply,
   onSkip,
 }) => {
@@ -54,7 +52,6 @@ export const ExtensionPanel: React.FC<ExtensionPanelProps> = ({
         <textarea
           aria-label="Extension reply JSON"
           value={resultText}
-          disabled={submitting}
           onChange={(event) => {
             setResultText(event.target.value)
             setParseError(null)
@@ -67,14 +64,10 @@ export const ExtensionPanel: React.FC<ExtensionPanelProps> = ({
         <p className="mb-2 text-xs text-danger">{parseError}</p>
       ) : null}
       <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          disabled={submitting}
-          onClick={handleReply}
-        >
-          {submitting ? "Sending…" : "Send reply"}
+        <Button type="button" onClick={handleReply}>
+          Send reply
         </Button>
-        <Button type="button" disabled={submitting} onClick={onSkip}>
+        <Button type="button" onClick={onSkip}>
           Skip
         </Button>
       </div>

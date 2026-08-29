@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from "react"
 import { AgentId } from "contracts/http/agent-settings"
 import { Workspace } from "contracts/http/workspace"
-import { Button } from "../design-system/Button"
-import { Combobox, ComboboxOptionItem } from "../design-system/Combobox"
-import { Modal } from "../design-system/Modal"
-import { useDebouncedValue } from "../lib/use.debounced.value"
-import { useWorkspacesInfiniteQuery } from "../workspace/use.workspaces.infinite.query"
+import { Button } from "../../design-system/Button"
+import { Combobox, ComboboxOptionItem } from "../../design-system/Combobox"
+import { Modal } from "../../design-system/Modal"
+import { useDebouncedValue } from "../../lib/use.debounced.value"
+import { useWorkspacesInfiniteQuery } from "../../workspace/use.workspaces.infinite.query"
 
 const WORKSPACE_SEARCH_DEBOUNCE_MS = 250
 

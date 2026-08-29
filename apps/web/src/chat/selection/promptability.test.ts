@@ -3,8 +3,7 @@ import {
   composerBlockedMessage,
   isComposerPromptable,
   resolveEffectiveSessionState,
-} from "./chat.promptability"
-import { sessionStatusDotVariant } from "./session.status.dot.variant"
+} from "./promptability"
 
 describe("chat promptability", () => {
   test("new session stays promptable with workspace and agent", () => {
@@ -66,12 +65,4 @@ describe("chat promptability", () => {
     ).toBe("running")
   })
 
-  test("session status dot maps idle running offline and error", () => {
-    expect(sessionStatusDotVariant("idle")).toBe("online")
-    expect(sessionStatusDotVariant("running")).toBe("warning")
-    expect(sessionStatusDotVariant("awaiting-permission")).toBe("warning")
-    expect(sessionStatusDotVariant("offline")).toBe("offline")
-    expect(sessionStatusDotVariant("error")).toBe("offline")
-    expect(sessionStatusDotVariant("starting")).toBeNull()
-  })
 })

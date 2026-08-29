@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { parseStreamPermission } from "./parse.stream.permission"
+import { parseStreamPermission } from "./parse.permission"
 
 describe("parseStreamPermission", () => {
   test("reads ACP permission options and tool name", () => {

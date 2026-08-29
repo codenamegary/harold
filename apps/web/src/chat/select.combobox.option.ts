@@ -1,7 +1,7 @@
 import { waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { AgentId } from "contracts/http/agent-settings"
-import { clearChatSelection } from "./chat.selection.storage"
+import { clearChatSelection } from "./selection/persist"
 
 type RoleQueries = {
   getByRole: (
