@@ -91,5 +91,10 @@ const mentionPlugin: Plugin = {
     }),
 }
 
-//export const chatPlugins: Plugin[] = [textPlugin, commandPlugin, mentionPlugin]
-export const chatPlugins: Plugin[] = [textPlugin]
+const chatPluginCatalog = {
+  text: textPlugin,
+  command: commandPlugin,
+  mention: mentionPlugin,
+}
+
+export const chatPlugins: Plugin[] = [chatPluginCatalog.text]
