@@ -407,7 +407,10 @@ describe("shell honesty", () => {
       await waitForShellReady(getByRole)
 
       expect(getByRole("button", { name: "Session" })).not.toBeDisabled()
-      expect(getByRole("textbox", { name: "Chat message" })).toBeDisabled()
+      expect(getByRole("textbox", { name: "Chat message" })).toHaveAttribute(
+        "aria-disabled",
+        "true",
+      )
       expect(getByRole("button", { name: "Send message" })).toBeDisabled()
       expect(queryByRole("menu", { name: "Slash commands" })).not.toBeInTheDocument()
       expect(queryByRole("button", { name: "Add attachment" })).not.toBeInTheDocument()

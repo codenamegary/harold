@@ -169,7 +169,9 @@ describe("ChatPage", () => {
     )
 
     await waitFor(() => {
-      expect(getByRole("textbox", { name: "Chat message" })).not.toBeDisabled()
+      expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute(
+      "aria-disabled",
+    )
     })
     expect(getByRole("button", { name: "Send message" })).toBeDisabled()
     expect(getByRole("button", { name: "Session" })).toHaveTextContent("New session")
@@ -189,7 +191,7 @@ describe("ChatPage", () => {
     expect(queryByRole("button", { name: "Clear chat" })).not.toBeInTheDocument()
     expect(queryByText("ACP v0.8")).not.toBeInTheDocument()
     expect(getByRole("textbox", { name: "Chat message" })).toHaveAttribute(
-      "placeholder",
+      "aria-placeholder",
       "Ask the agent…",
     )
   })

@@ -147,7 +147,9 @@ describe("Chat recovery UI", () => {
     const { getByRole } = renderChat()
     await startNewSession({ getByRole })
     await waitFor(() => {
-      expect(getByRole("textbox", { name: "Chat message" })).not.toBeDisabled()
+      expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute(
+        "aria-disabled",
+      )
     })
   })
 
@@ -157,7 +159,9 @@ describe("Chat recovery UI", () => {
     subscribe(idleSession)
 
     await waitFor(() => {
-      expect(getByRole("textbox", { name: "Chat message" })).not.toBeDisabled()
+      expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute(
+        "aria-disabled",
+      )
     })
     expect(getByLabelText("online status")).toBeInTheDocument()
   })
@@ -168,7 +172,9 @@ describe("Chat recovery UI", () => {
     subscribe(idleSession)
 
     await waitFor(() => {
-      expect(getByRole("textbox", { name: "Chat message" })).not.toBeDisabled()
+      expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute(
+        "aria-disabled",
+      )
     })
 
     act(() => {
@@ -186,7 +192,10 @@ describe("Chat recovery UI", () => {
     await waitFor(() => {
       expect(getByRole("button", { name: "Cancel turn" })).toBeInTheDocument()
     })
-    expect(getByRole("textbox", { name: "Chat message" })).toBeDisabled()
+    expect(getByRole("textbox", { name: "Chat message" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    )
   })
 
   test("running session disables composer and shows cancel without blocked copy", async () => {
@@ -195,13 +204,14 @@ describe("Chat recovery UI", () => {
     subscribe(runningSession)
 
     await waitFor(() => {
-      expect(getByRole("textbox", { name: "Chat message" })).not.toBeDisabled()
+      expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute(
+        "aria-disabled",
+      )
     })
 
-    const textarea = getByRole("textbox", { name: "Chat message" }) as HTMLTextAreaElement
-    await act(async () => {
-      textarea.value = "go"
-      textarea.dispatchEvent(new Event("input", { bubbles: true }))
+    const field = getByRole("textbox", { name: "Chat message" })
+    fireEvent.paste(field, {
+      clipboardData: { getData: () => "go" },
     })
     fireEvent.click(getByRole("button", { name: "Send message" }))
 
@@ -226,7 +236,10 @@ describe("Chat recovery UI", () => {
         getByText("Session reconnecting. Prompts unlock when it is idle again."),
       ).toBeInTheDocument()
     })
-    expect(getByRole("textbox", { name: "Chat message" })).toBeDisabled()
+    expect(getByRole("textbox", { name: "Chat message" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    )
   })
 
   test("error session disables composer with terminal copy", async () => {
@@ -251,7 +264,10 @@ describe("Chat recovery UI", () => {
         getByText("Session ended with an error. Start a new session to continue."),
       ).toBeInTheDocument()
     })
-    expect(getByRole("textbox", { name: "Chat message" })).toBeDisabled()
+    expect(getByRole("textbox", { name: "Chat message" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    )
   })
 
   test("console has no resume control", async () => {

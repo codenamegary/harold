@@ -139,14 +139,13 @@ describe("Chat session flow", () => {
     getByRole: ReturnType<typeof renderChat>["getByRole"],
     text: string,
   ) => {
-    const textarea = getByRole("textbox", { name: "Chat message" }) as HTMLTextAreaElement
+    const field = getByRole("textbox", { name: "Chat message" })
     await waitFor(() => {
-      expect(textarea).not.toBeDisabled()
+      expect(field).not.toHaveAttribute("aria-disabled")
     })
 
-    await act(async () => {
-      textarea.value = text
-      textarea.dispatchEvent(new Event("input", { bubbles: true }))
+    fireEvent.paste(field, {
+      clipboardData: { getData: () => text },
     })
 
     await waitFor(() => {

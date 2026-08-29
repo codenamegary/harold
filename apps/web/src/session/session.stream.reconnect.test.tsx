@@ -132,13 +132,12 @@ describe("Session stream reconnect rebuild", () => {
     getByRole: ReturnType<typeof renderChat>["getByRole"],
     text: string,
   ) => {
-    const textarea = getByRole("textbox", { name: "Chat message" }) as HTMLTextAreaElement
+    const field = getByRole("textbox", { name: "Chat message" })
     await waitFor(() => {
-      expect(textarea).not.toBeDisabled()
+      expect(field).not.toHaveAttribute("aria-disabled")
     })
-    await act(async () => {
-      textarea.value = text
-      textarea.dispatchEvent(new Event("input", { bubbles: true }))
+    fireEvent.paste(field, {
+      clipboardData: { getData: () => text },
     })
     fireEvent.click(getByRole("button", { name: "Send message" }))
   }
@@ -224,7 +223,9 @@ describe("Session stream reconnect rebuild", () => {
       expect(getByRole("region", { name: "Chat transcript" })).toHaveTextContent("Auth uses JWT")
     })
     expect(queryByText("stale")).not.toBeInTheDocument()
-    expect(getByRole("textbox", { name: "Chat message" })).not.toBeDisabled()
+    expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute(
+      "aria-disabled",
+    )
   })
 
   test("error reopens the gateway stream", async () => {
