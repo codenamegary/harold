@@ -1,5 +1,7 @@
 package server.agent.android.chat
 
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -21,6 +23,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import server.agent.android.chat.composer.completeSlashCommand
+import server.agent.android.ui.promptinput.applyEdit
 import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.AvailableCommand
 import server.agent.android.contracts.PermissionOption
@@ -39,7 +42,8 @@ class ChatScreenTest {
     @Test
     fun showsTranscriptAndSubmitsFollowUpPrompt() {
         var submitted = false
-        var uiState by mutableStateOf(
+        val composerState = TextFieldState()
+        val uiState by mutableStateOf(
             ChatUiState(
                 selectedSession = SessionRow(
                     sessionId = "sess_01",
@@ -72,15 +76,13 @@ class ChatScreenTest {
             AgentServerTheme(dynamicColor = false) {
                 ChatScreen(
                     uiState = uiState,
+                    composerState = composerState,
                     onSessionSelectorClick = {},
                     onDismissSessionMenu = {},
                     onWorkspacesClick = {},
                     onSessionClick = {},
                     onSeeAllSessionsClick = {},
                     onCreateClick = {},
-                    onComposerTextChanged = { text ->
-                        uiState = uiState.copy(composerText = text)
-                    },
                     onComposerSubmit = { submitted = true },
                     onComposerCancel = {},
                     onPermissionOptionSelect = {},
@@ -96,7 +98,7 @@ class ChatScreenTest {
         composeTestRule.onNodeWithTag("chat_send_button").performClick()
 
         assertTrue(submitted)
-        assertTrue(uiState.composerText == "Follow up")
+        assertTrue(composerState.text.toString() == "Follow up")
     }
 
     @Test
@@ -341,7 +343,8 @@ class ChatScreenTest {
 
     @Test
     fun sendIsIconButtonAndSlashOpensCommandList() {
-        var uiState by mutableStateOf(
+        val composerState = TextFieldState()
+        val uiState by mutableStateOf(
             ChatUiState(
                 selectedSession = SessionRow(
                     sessionId = "sess_01",
@@ -365,21 +368,23 @@ class ChatScreenTest {
             AgentServerTheme(dynamicColor = false) {
                 ChatScreen(
                     uiState = uiState,
+                    composerState = composerState,
                     onSessionSelectorClick = {},
                     onDismissSessionMenu = {},
                     onWorkspacesClick = {},
                     onSessionClick = {},
                     onSeeAllSessionsClick = {},
                     onCreateClick = {},
-                    onComposerTextChanged = { text ->
-                        uiState = uiState.copy(composerText = text)
-                    },
                     onComposerSubmit = {},
                     onComposerCancel = {},
                     onPermissionOptionSelect = {},
                     onComposerCommandPick = { name ->
-                        uiState = uiState.copy(
-                            composerText = completeSlashCommand(uiState.composerText, name),
+                        composerState.applyEdit(
+                            completeSlashCommand(
+                                composerText = composerState.text.toString(),
+                                selection = composerState.selection,
+                                commandName = name,
+                            ),
                         )
                     },
                 )
@@ -391,13 +396,14 @@ class ChatScreenTest {
         composeTestRule.onNodeWithTag("chat_composer").performTextInput("/")
         composeTestRule.onNodeWithTag("command_list_panel").assertIsDisplayed()
         composeTestRule.onNodeWithTag("command_list_item_plan").assertIsDisplayed().performClick()
-        assertTrue(uiState.composerText.contains("/plan"))
+        assertTrue(composerState.text.toString() == "/plan ")
         composeTestRule.onAllNodesWithTag("command_list_panel").assertCountEquals(0)
     }
 
     @Test
     fun slashRailButtonInsertsShortcutAndFilteringNarrowsList() {
-        var uiState by mutableStateOf(
+        val composerState = TextFieldState()
+        val uiState by mutableStateOf(
             ChatUiState(
                 selectedSession = SessionRow(
                     sessionId = "sess_01",
@@ -421,6 +427,7 @@ class ChatScreenTest {
             AgentServerTheme(dynamicColor = false) {
                 ChatScreen(
                     uiState = uiState,
+                    composerState = composerState,
                     onSessionSelectorClick = {},
                     onDismissSessionMenu = {},
                     onWorkspacesClick = {},
@@ -428,7 +435,7 @@ class ChatScreenTest {
                     onSeeAllSessionsClick = {},
                     onCreateClick = {},
                     onComposerTextChanged = { text ->
-                        uiState = uiState.copy(composerText = text)
+                        composerState.setTextAndPlaceCursorAtEnd(text)
                     },
                     onComposerSubmit = {},
                     onComposerCancel = {},
@@ -438,16 +445,16 @@ class ChatScreenTest {
         }
 
         composeTestRule.onNodeWithTag("chat_command_button").assertIsDisplayed().performClick()
-        assertTrue(uiState.composerText == "/")
+        assertTrue(composerState.text.toString() == "/")
         composeTestRule.onNodeWithTag("command_list_panel").assertIsDisplayed()
 
         // A typed query narrows the list.
-        uiState = uiState.copy(composerText = "/rev")
+        composerState.setTextAndPlaceCursorAtEnd("/rev")
         composeTestRule.onNodeWithTag("command_list_item_review").assertIsDisplayed()
         composeTestRule.onAllNodesWithTag("command_list_item_plan").assertCountEquals(0)
 
         // Deleting the slash closes the panel.
-        uiState = uiState.copy(composerText = "")
+        composerState.setTextAndPlaceCursorAtEnd("")
         composeTestRule.onAllNodesWithTag("command_list_panel").assertCountEquals(0)
     }
 

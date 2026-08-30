@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Keyboard
@@ -23,9 +23,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.buildAnnotatedString
@@ -38,6 +38,7 @@ import server.agent.android.chat.VoiceDictationUiState
 import server.agent.android.ui.components.AgentButtonVariant
 import server.agent.android.ui.components.AgentIconButton
 import server.agent.android.ui.components.AudioPill
+import server.agent.android.ui.promptinput.PromptInput
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -48,7 +49,7 @@ private val MIN_TOUCH_TARGET = 48.dp
  */
 @Composable
 fun PromptComposer(
-    composerText: String,
+    composerState: TextFieldState,
     composerEnabled: Boolean,
     showCancel: Boolean,
     cancelSubmitting: Boolean,
@@ -58,7 +59,6 @@ fun PromptComposer(
     voiceMessage: String,
     voiceCommandPrefix: String,
     voiceCommandListVisible: Boolean,
-    onTextChanged: (String) -> Unit,
     onSubmit: () -> Unit,
     onCancel: () -> Unit,
     onMicClick: () -> Unit,
@@ -109,13 +109,12 @@ fun PromptComposer(
                 )
             } else {
                 TextSlot(
-                    composerText = composerText,
+                    composerState = composerState,
                     composerEnabled = composerEnabled,
-                    onTextChanged = onTextChanged,
                 )
                 TextActionRail(
                     composerEnabled = composerEnabled,
-                    sendEnabled = composerEnabled && composerText.isNotBlank(),
+                    sendEnabled = composerEnabled && composerState.text.isNotBlank(),
                     showCancel = showCancel,
                     cancelSubmitting = cancelSubmitting,
                     voiceMicEnabled = voiceMicEnabled,
@@ -132,15 +131,11 @@ fun PromptComposer(
 
 @Composable
 private fun TextSlot(
-    composerText: String,
+    composerState: TextFieldState,
     composerEnabled: Boolean,
-    onTextChanged: (String) -> Unit,
 ) {
-    val textColor = if (composerEnabled) {
-        MaterialTheme.colorScheme.onSurface
-    } else {
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-    }
+    val commandStyle = commandSpanStyle(MaterialTheme.colorScheme.primary)
+    val plugins = remember(commandStyle) { chatPromptPlugins(commandStyle) }
 
     Box(
         modifier = Modifier
@@ -149,24 +144,12 @@ private fun TextSlot(
             .padding(horizontal = 4.dp, vertical = 8.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
-        if (composerText.isEmpty()) {
-            Text(
-                text = stringResource(R.string.composer_placeholder),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        BasicTextField(
-            value = composerText,
-            onValueChange = onTextChanged,
+        PromptInput(
+            state = composerState,
+            plugins = plugins,
             enabled = composerEnabled,
-            textStyle = MaterialTheme.typography.bodyLarge.copy(color = textColor),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            minLines = 1,
-            maxLines = 5,
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("chat_composer"),
+            placeholder = stringResource(R.string.composer_placeholder),
+            modifier = Modifier.testTag("chat_composer"),
         )
     }
 }

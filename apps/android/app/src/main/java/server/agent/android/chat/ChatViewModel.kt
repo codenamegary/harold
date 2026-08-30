@@ -1,5 +1,8 @@
 package server.agent.android.chat
 
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -40,6 +43,8 @@ import server.agent.android.network.AgentApiException
 import server.agent.android.operator.OperatorRepository
 import server.agent.android.session.PairedState
 import server.agent.android.session.SessionGateway
+import server.agent.android.ui.promptinput.PromptEdit
+import server.agent.android.ui.promptinput.applyEdit
 
 class ChatViewModel(
     private val savedStateHandle: SavedStateHandle,
@@ -55,6 +60,13 @@ class ChatViewModel(
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
+    /**
+     * The composer's text and caret. The prompt input paints its tokens from
+     * these, so they are the source of truth; [ChatUiState.composerText]
+     * mirrors the text for everything that reads state instead of the field.
+     */
+    val composerState = TextFieldState()
+
     private var workspaceByPath: Map<String, WorkspaceRow> = emptyMap()
     private var agentLabels: Map<AgentId, String> = emptyMap()
     private var agentAuthSummaries: Map<AgentId, AgentAuthSummary> = emptyMap()
@@ -67,6 +79,20 @@ class ChatViewModel(
     init {
         voiceDictationController.onStateChanged = ::syncVoiceDictationState
         syncVoiceDictationState(voiceDictationController.state)
+
+        viewModelScope.launch {
+            snapshotFlow { composerState.text.toString() }.collect { text ->
+                _uiState.update { current ->
+                    current.copy(
+                        composerText = text,
+                        // Typing dismisses a stale error. Clearing the field
+                        // after a send must not, because the failure that sets
+                        // the error can land after the field is empty.
+                        composerError = if (text.isEmpty()) current.composerError else null,
+                    )
+                }
+            }
+        }
 
         savedStateHandle.get<String>(KEY_SELECTED_SESSION_ID)?.let { sessionKey ->
             viewModelScope.launch {
@@ -259,9 +285,22 @@ class ChatViewModel(
     }
 
     fun onComposerTextChanged(text: String) {
+        composerState.setTextAndPlaceCursorAtEnd(text)
         _uiState.update { current ->
             current.copy(composerText = text, composerError = null)
         }
+    }
+
+    /** Applies a token-aware edit, keeping the caret the edit asked for. */
+    fun onComposerEdit(edit: PromptEdit) {
+        composerState.applyEdit(edit)
+        _uiState.update { current ->
+            current.copy(composerText = edit.text, composerError = null)
+        }
+    }
+
+    private fun clearComposer() {
+        composerState.setTextAndPlaceCursorAtEnd("")
     }
 
     fun openVoiceDictation(hasRecordAudioPermission: Boolean) {
@@ -274,7 +313,7 @@ class ChatViewModel(
         }
         syncVoiceDictationState(
             voiceDictationController.open(
-                baseline = _uiState.value.composerText,
+                baseline = composerState.text.toString(),
                 hasRecordAudioPermission = hasRecordAudioPermission,
                 composerEnabled = _uiState.value.composerEnabled,
             ),
@@ -352,8 +391,12 @@ class ChatViewModel(
     }
 
     fun pickComposerCommand(commandName: String) {
-        onComposerTextChanged(
-            completeSlashCommand(_uiState.value.composerText, commandName),
+        onComposerEdit(
+            completeSlashCommand(
+                composerText = composerState.text.toString(),
+                selection = composerState.selection,
+                commandName = commandName,
+            ),
         )
     }
 
@@ -384,6 +427,7 @@ class ChatViewModel(
         pendingPrompt = null
         val draftSession = draftNewSessionRow(workspace = workspace, agentId = agentId)
         hideCreateDialog()
+        clearComposer()
         viewModelScope.launch {
             clearPersistedSession()
         }
@@ -418,7 +462,7 @@ class ChatViewModel(
 
     fun submitComposerPrompt() {
         val session = _uiState.value.selectedSession ?: return
-        val prompt = _uiState.value.composerText.trim()
+        val prompt = composerState.text.toString().trim()
 
         if (prompt.isEmpty() || !_uiState.value.composerEnabled) {
             return
@@ -430,6 +474,7 @@ class ChatViewModel(
         }
 
         val turnId = nextTurnId()
+        clearComposer()
         _uiState.update { current ->
             current.copy(
                 composerText = "",
@@ -844,6 +889,7 @@ class ChatViewModel(
         }
         navigationPreferences.saveLastSessionId(row.id)
         persistSelectedSession(row.id)
+        clearComposer()
         val summaryFromCatalog = agentAuthSummaries[row.agentId]
         _uiState.update { current ->
             current.copy(
@@ -1172,6 +1218,7 @@ class ChatViewModel(
         val selectedWasDeleted = _uiState.value.selectedSession?.id == row.id
         if (selectedWasDeleted) {
             connectionGateway.setTarget(null, null)
+            clearComposer()
             viewModelScope.launch { clearPersistedSession() }
         }
         _uiState.update { current ->
@@ -1242,6 +1289,7 @@ class ChatViewModel(
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
 
         pendingPrompt = prompt
+        clearComposer()
         _uiState.update { current ->
             current.copy(
                 composerText = "",
