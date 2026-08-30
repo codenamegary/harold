@@ -61,11 +61,13 @@ class VoiceFixtureActivity : ComponentActivity() {
             Manifest.permission.RECORD_AUDIO,
         ) == PackageManager.PERMISSION_GRANTED
 
-        uiState = controller.open(
+        controller.open(
             baseline = "",
             hasRecordAudioPermission = hasPermission,
             composerEnabled = true,
         )
+        // The fixture screenshots the full-screen presentation.
+        uiState = controller.expand()
 
         setContent {
             AgentServerTheme(dynamicColor = false) {
@@ -82,16 +84,30 @@ class VoiceFixtureActivity : ComponentActivity() {
                     )
                     VoiceDictationOverlay(
                         state = uiState,
+                        commandPrefix = "",
+                        commands = emptyList(),
+                        commandListVisible = false,
                         onToggleListening = { uiState = controller.toggleListening() },
                         onStartOver = { uiState = controller.startOver() },
                         onCancel = {
                             uiState = controller.cancel()
                             finish()
                         },
-                        onConfirm = {
+                        onCollapse = {
+                            uiState = controller.cancel()
+                            finish()
+                        },
+                        onKeyboard = {
                             controller.finish()
                             finish()
                         },
+                        onSend = {
+                            controller.finish()
+                            finish()
+                        },
+                        onCommandToggle = {},
+                        onCommandPick = {},
+                        onCommandDismiss = {},
                         onRequestPermission = {
                             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         },

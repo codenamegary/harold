@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
+import server.agent.android.chat.composer.completeSlashCommand
 import server.agent.android.connection.ConnectionGateway
 import server.agent.android.contracts.AgentAuth
 import server.agent.android.contracts.AgentAuthStatus
@@ -18,6 +19,7 @@ import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.AuthSessionAction
 import server.agent.android.contracts.AuthSessionStatus
 import server.agent.android.contracts.CreateSessionBody
+import server.agent.android.contracts.parseAvailableCommands
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionState
 import server.agent.android.contracts.SessionStreamClientMessage
@@ -260,6 +262,9 @@ class ChatViewModel(
             return
         }
 
+        _uiState.update { current ->
+            current.copy(voiceCommandPrefix = "", voiceCommandListVisible = false)
+        }
         syncVoiceDictationState(
             voiceDictationController.open(
                 baseline = _uiState.value.composerText,
@@ -282,15 +287,67 @@ class ChatViewModel(
     }
 
     fun cancelVoiceDictation() {
+        _uiState.update { current ->
+            current.copy(voiceCommandPrefix = "", voiceCommandListVisible = false)
+        }
         syncVoiceDictationState(voiceDictationController.cancel())
     }
 
+    fun expandVoiceDictation() {
+        syncVoiceDictationState(voiceDictationController.expand())
+    }
+
+    fun collapseVoiceDictation() {
+        syncVoiceDictationState(voiceDictationController.collapse())
+    }
+
+    /** Ends dictation and drops the message (prefix plus transcript) into the text composer. */
     fun confirmVoiceDictation() {
+        val prefix = _uiState.value.voiceCommandPrefix
         val (_, transcript) = voiceDictationController.finish()
         syncVoiceDictationState(voiceDictationController.state)
-        if (transcript != null) {
-            onComposerTextChanged(transcript)
+        _uiState.update { current ->
+            current.copy(voiceCommandPrefix = "", voiceCommandListVisible = false)
         }
+        if (transcript != null) {
+            onComposerTextChanged(prefix + transcript)
+        }
+    }
+
+    /** Ends dictation and sends the message (prefix plus transcript) as a prompt. */
+    fun submitVoicePrompt() {
+        if (_uiState.value.voiceMessage.isBlank()) {
+            return
+        }
+        confirmVoiceDictation()
+        submitComposerPrompt()
+    }
+
+    fun toggleVoiceCommandList() {
+        _uiState.update { current ->
+            current.copy(voiceCommandListVisible = !current.voiceCommandListVisible)
+        }
+    }
+
+    fun dismissVoiceCommandList() {
+        _uiState.update { current ->
+            current.copy(voiceCommandListVisible = false)
+        }
+    }
+
+    fun pickVoiceCommand(commandName: String) {
+        _uiState.update { current ->
+            current.copy(
+                voiceCommandPrefix = "/$commandName ",
+                voiceCommandListVisible = false,
+            )
+        }
+    }
+
+    fun pickComposerCommand(commandName: String) {
+        onComposerTextChanged(
+            completeSlashCommand(_uiState.value.composerText, commandName),
+        )
     }
 
     private fun syncVoiceDictationState(voiceDictation: VoiceDictationUiState) {
@@ -331,6 +388,9 @@ class ChatViewModel(
                 composerText = "",
                 composerError = null,
                 composerSubmitting = false,
+                availableCommands = emptyList(),
+                voiceCommandPrefix = "",
+                voiceCommandListVisible = false,
                 pendingPermissions = emptyList(),
                 permissionUiState = PermissionUiState(),
                 extensionUiState = ExtensionUiState(),
@@ -768,6 +828,9 @@ class ChatViewModel(
     }
 
     private suspend fun activateSession(row: SessionRow) {
+        if (voiceDictationController.state.visible) {
+            syncVoiceDictationState(voiceDictationController.cancel())
+        }
         navigationPreferences.saveLastSessionId(row.id)
         persistSelectedSession(row.id)
         val summaryFromCatalog = agentAuthSummaries[row.agentId]
@@ -778,6 +841,9 @@ class ChatViewModel(
                 transcript = emptyAcpTranscript,
                 composerText = "",
                 composerError = null,
+                availableCommands = emptyList(),
+                voiceCommandPrefix = "",
+                voiceCommandListVisible = false,
                 pendingPermissions = emptyList(),
                 permissionUiState = PermissionUiState(),
                 extensionUiState = ExtensionUiState(),
@@ -800,6 +866,16 @@ class ChatViewModel(
         when (message) {
             is SessionStreamServerMessage.SessionUpdate -> {
                 if (!belongsToSelection(message.agentId, message.sessionId, selected)) {
+                    return
+                }
+                val commands = parseAvailableCommands(message.update)
+                if (commands != null) {
+                    _uiState.update { current ->
+                        current.copy(
+                            availableCommands = commands,
+                            streamReconnecting = false,
+                        )
+                    }
                     return
                 }
                 _uiState.update { current ->
@@ -1088,6 +1164,9 @@ class ChatViewModel(
                 selectedSession = if (selectedWasDeleted) null else current.selectedSession,
                 transcript = if (selectedWasDeleted) emptyAcpTranscript else current.transcript,
                 composerText = if (selectedWasDeleted) "" else current.composerText,
+                availableCommands = if (selectedWasDeleted) emptyList() else current.availableCommands,
+                voiceCommandPrefix = if (selectedWasDeleted) "" else current.voiceCommandPrefix,
+                voiceCommandListVisible = if (selectedWasDeleted) false else current.voiceCommandListVisible,
                 pendingPermissions = if (selectedWasDeleted) emptyList() else current.pendingPermissions,
                 permissionUiState = if (selectedWasDeleted) PermissionUiState() else current.permissionUiState,
                 extensionUiState = if (selectedWasDeleted) ExtensionUiState() else current.extensionUiState,

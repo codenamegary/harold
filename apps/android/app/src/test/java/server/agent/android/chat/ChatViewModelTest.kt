@@ -615,6 +615,76 @@ class ChatViewModelTest {
         assertTrue(viewModel.uiState.value.showAuthPanel)
     }
 
+    @Test
+    fun commandsUpdatePopulatesStateWithoutTouchingTranscriptAndClearsOnSwitch() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository()
+        val connection = ChatFakeConnectionGateway()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            connection = connection,
+        )
+        advanceUntilIdle()
+
+        val rowsBefore = viewModel.uiState.value.transcript.rows
+
+        connection.emit(
+            SessionStreamServerMessage.SessionUpdate(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                update = kotlinx.serialization.json.Json.parseToJsonElement(
+                    """
+                    {
+                      "sessionUpdate": "available_commands_update",
+                      "availableCommands": [
+                        {"name": "plan", "description": "Draft a plan"}
+                      ]
+                    }
+                    """.trimIndent(),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("plan"),
+            viewModel.uiState.value.availableCommands.map { command -> command.name },
+        )
+        assertEquals(rowsBefore, viewModel.uiState.value.transcript.rows)
+
+        val other = viewModel.uiState.value.sessions.first { row -> row.sessionId == "sess_01" }
+        viewModel.selectSession(other)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.availableCommands.isEmpty())
+    }
+
+    @Test
+    fun voiceCommandPickPrefixesSubmittedPrompt() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository()
+        val connection = ChatFakeConnectionGateway()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            connection = connection,
+        )
+        advanceUntilIdle()
+
+        viewModel.openVoiceDictation(hasRecordAudioPermission = true)
+        viewModel.pickVoiceCommand("plan")
+        assertEquals("/plan ", viewModel.uiState.value.voiceCommandPrefix)
+
+        // No speech in the fake client, so the transcript stays empty and a
+        // bare command prefix is still a sendable message.
+        viewModel.submitVoicePrompt()
+        advanceUntilIdle()
+
+        val prompt = connection.sent.filterIsInstance<SessionStreamClientMessage.Prompt>().single()
+        assertEquals("/plan", prompt.text)
+        assertFalse(viewModel.uiState.value.voiceDictation.visible)
+        assertEquals("", viewModel.uiState.value.voiceCommandPrefix)
+    }
+
     private fun createViewModel(
         repository: ChatFakeOperatorRepository,
         navigation: ChatFakeNavigationPreferences,

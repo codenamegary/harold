@@ -7,74 +7,88 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloseFullscreen
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import server.agent.android.R
+import server.agent.android.chat.composer.CommandListPanel
+import server.agent.android.chat.composer.SlashButton
+import server.agent.android.contracts.AvailableCommand
 import server.agent.android.ui.components.AgentButton
 import server.agent.android.ui.components.AgentButtonSize
 import server.agent.android.ui.components.AgentButtonVariant
-import server.agent.android.ui.components.AgentChip
+import server.agent.android.ui.components.AgentIconButton
 import server.agent.android.ui.components.AudioPill
 import server.agent.android.ui.components.fadingEdge
 
-private val MIN_TOUCH_TARGET = 48.dp
-
 /**
- * Full-screen modern voice dictation modal with live auto-scrolling transcript,
- * top gradient fade mask, reactive audio pill visualizer, and adaptive secondary controls.
+ * The expanded presentation of a voice dictation session: a full-screen
+ * transcript with icon-only controls. Renders only while a session is open
+ * and expanded; the inline presentation lives in the composer.
  */
 @Composable
 fun VoiceDictationOverlay(
     state: VoiceDictationUiState,
+    commandPrefix: String,
+    commands: List<AvailableCommand>,
+    commandListVisible: Boolean,
     onToggleListening: () -> Unit,
     onStartOver: () -> Unit,
     onCancel: () -> Unit,
-    onConfirm: () -> Unit,
+    onCollapse: () -> Unit,
+    onKeyboard: () -> Unit,
+    onSend: () -> Unit,
+    onCommandToggle: () -> Unit,
+    onCommandPick: (String) -> Unit,
+    onCommandDismiss: () -> Unit,
     onRequestPermission: () -> Unit,
     onOpenPermissionSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (!state.visible) {
+    if (!state.visible || state.presentation != VoiceDictationPresentation.Expanded) {
         return
     }
 
-    BackHandler(onBack = onCancel)
+    // Back keeps the session alive by collapsing to the inline slot, unless
+    // the permission explainer is up, where there is nothing to collapse to.
+    val onBack = if (state.permissionRequired) onCancel else onCollapse
+
+    BackHandler(onBack = onBack)
 
     val micContentDescription = if (state.isListening) {
         stringResource(R.string.voice_dictation_mute_content_description)
@@ -83,10 +97,10 @@ fun VoiceDictationOverlay(
     }
     val cancelDescription = stringResource(R.string.voice_dictation_cancel_content_description)
     val startOverDescription = stringResource(R.string.voice_dictation_start_over_content_description)
-    val doneDescription = stringResource(R.string.voice_dictation_done_content_description)
     val settingsDescription = stringResource(R.string.voice_dictation_permission_settings_content_description)
     val grantDescription = stringResource(R.string.voice_dictation_permission_grant_content_description)
 
+    val displayText = commandPrefix + state.transcript
     val scrollState = rememberScrollState()
 
     // Auto-scroll to the newest dictated words
@@ -97,7 +111,7 @@ fun VoiceDictationOverlay(
     }
 
     Dialog(
-        onDismissRequest = onCancel,
+        onDismissRequest = onBack,
         properties = DialogProperties(
             dismissOnBackPress = true,
             dismissOnClickOutside = false,
@@ -110,43 +124,106 @@ fun VoiceDictationOverlay(
                 .background(MaterialTheme.colorScheme.surface)
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 20.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
                 .testTag("voice_dictation_overlay"),
         ) {
             Column(
                 modifier = Modifier.fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // Main Transcript Area
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AgentIconButton(
+                        onClick = onCollapse,
+                        contentDescription = stringResource(
+                            R.string.voice_collapse_content_description,
+                        ),
+                        modifier = Modifier.testTag("voice_dictation_collapse"),
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Filled.CloseFullscreen,
+                                contentDescription = null,
+                            )
+                        },
+                    )
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    AgentIconButton(
+                        onClick = onKeyboard,
+                        contentDescription = stringResource(
+                            R.string.voice_keyboard_content_description,
+                        ),
+                        modifier = Modifier.testTag("voice_dictation_keyboard"),
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Filled.Keyboard,
+                                contentDescription = null,
+                            )
+                        },
+                    )
+                }
+
+                // Main transcript area, or the command picker taking it over
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxWidth()
-                        .fadingEdge(top = 48.dp, bottom = 16.dp),
-                    contentAlignment = Alignment.Center,
+                        .fillMaxWidth(),
                 ) {
-                    if (state.transcript.isBlank()) {
-                        Text(
-                            text = stringResource(R.string.voice_dictation_transcript_placeholder),
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .padding(horizontal = 16.dp)
-                                .testTag("voice_dictation_placeholder"),
+                    if (commandListVisible) {
+                        CommandListPanel(
+                            commands = commands,
+                            onPick = onCommandPick,
+                            onClose = onCommandDismiss,
                         )
                     } else {
-                        Text(
-                            text = state.transcript,
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Start,
+                        Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .verticalScroll(scrollState)
-                                .padding(top = 32.dp, bottom = 24.dp)
-                                .testTag("voice_dictation_transcript"),
-                        )
+                                .fadingEdge(top = 48.dp, bottom = 16.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (displayText.isBlank()) {
+                                Text(
+                                    text = stringResource(
+                                        R.string.voice_dictation_transcript_placeholder,
+                                    ),
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        .copy(alpha = 0.6f),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .padding(horizontal = 16.dp)
+                                        .testTag("voice_dictation_placeholder"),
+                                )
+                            } else {
+                                Text(
+                                    text = buildAnnotatedString {
+                                        if (commandPrefix.isNotEmpty()) {
+                                            withStyle(
+                                                SpanStyle(
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                ),
+                                            ) {
+                                                append(commandPrefix)
+                                            }
+                                        }
+                                        append(state.transcript)
+                                    },
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    textAlign = TextAlign.Start,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .verticalScroll(scrollState)
+                                        .padding(top = 32.dp, bottom = 24.dp)
+                                        .testTag("voice_dictation_transcript"),
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -165,9 +242,9 @@ fun VoiceDictationOverlay(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Bottom Controls Section
                 if (state.permissionRequired) {
-                    // Microphone permission required flow
+                    // Microphone permission required flow. These keep prose
+                    // labels: permission asks need to be unambiguous.
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -228,13 +305,13 @@ fun VoiceDictationOverlay(
                         }
                     }
                 } else {
-                    // Standard dictation controls
+                    // Standard dictation controls, icon-only
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        // Paused secondary actions (Start over & Cancel), hidden while actively listening
+                        // Paused secondary actions, hidden while actively listening
                         AnimatedVisibility(
                             visible = !state.isListening,
                             enter = fadeIn() + slideInVertically { it / 2 },
@@ -245,52 +322,47 @@ fun VoiceDictationOverlay(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.padding(bottom = 4.dp),
                             ) {
-                                AgentChip(
+                                AgentIconButton(
                                     onClick = onStartOver,
-                                    label = stringResource(R.string.voice_dictation_start_over),
                                     variant = AgentButtonVariant.Frosted,
-                                    size = AgentButtonSize.Small,
-                                    leadingIcon = {
+                                    contentDescription = startOverDescription,
+                                    modifier = Modifier.testTag("voice_dictation_start_over"),
+                                    icon = {
                                         Icon(
                                             imageVector = Icons.Filled.Refresh,
                                             contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
                                         )
                                     },
-                                    modifier = Modifier
-                                        .testTag("voice_dictation_start_over")
-                                        .semantics {
-                                            contentDescription = startOverDescription
-                                        },
                                 )
 
-                                AgentChip(
+                                AgentIconButton(
                                     onClick = onCancel,
-                                    label = stringResource(R.string.voice_dictation_cancel),
                                     variant = AgentButtonVariant.Frosted,
-                                    size = AgentButtonSize.Small,
-                                    leadingIcon = {
+                                    contentDescription = cancelDescription,
+                                    modifier = Modifier.testTag("voice_dictation_cancel"),
+                                    icon = {
                                         Icon(
                                             imageVector = Icons.Filled.Close,
                                             contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
                                         )
                                     },
-                                    modifier = Modifier
-                                        .testTag("voice_dictation_cancel")
-                                        .semantics {
-                                            contentDescription = cancelDescription
-                                        },
                                 )
                             }
                         }
 
-                        // Bottom Action Bar: AudioPill & Done Button
+                        // Bottom action bar: commands, AudioPill, send
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            SlashButton(
+                                enabled = true,
+                                onClick = onCommandToggle,
+                                testTag = "voice_dictation_command_button",
+                                active = commandListVisible,
+                            )
+
                             AudioPill(
                                 isListening = state.isListening,
                                 audioLevel = state.audioLevel,
@@ -303,25 +375,21 @@ fun VoiceDictationOverlay(
                                     .testTag("voice_dictation_mic_toggle"),
                             )
 
-                            AgentButton(
-                                onClick = onConfirm,
+                            AgentIconButton(
+                                onClick = onSend,
+                                enabled = displayText.isNotBlank(),
                                 variant = AgentButtonVariant.Primary,
-                                size = AgentButtonSize.Medium,
-                                leadingIcon = {
+                                contentDescription = stringResource(
+                                    R.string.chat_send_content_description,
+                                ),
+                                modifier = Modifier.testTag("voice_dictation_send"),
+                                icon = {
                                     Icon(
-                                        imageVector = Icons.Filled.Check,
+                                        imageVector = Icons.AutoMirrored.Filled.Send,
                                         contentDescription = null,
-                                        modifier = Modifier.size(18.dp),
                                     )
                                 },
-                                modifier = Modifier
-                                    .testTag("voice_dictation_done")
-                                    .semantics {
-                                        contentDescription = doneDescription
-                                    },
-                            ) {
-                                Text(text = stringResource(R.string.voice_dictation_done))
-                            }
+                            )
                         }
                     }
                 }
