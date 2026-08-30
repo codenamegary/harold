@@ -2,32 +2,29 @@ package server.agent.android.shell
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.serialization.json.JsonElement
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import server.agent.android.connection.ConnectionGateway
 import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.ItemCollection
 import server.agent.android.contracts.PageInfo
 import server.agent.android.contracts.Workspace
-import server.agent.android.contracts.SessionStreamClientMessage
-import server.agent.android.contracts.SessionStreamServerMessage
 import server.agent.android.contracts.WorkspaceCollection
 import server.agent.android.contracts.WorkspaceState
 import server.agent.android.events.ConnectionState
 import server.agent.android.events.ConnectionStatus
+import server.agent.android.live.SessionOwner
+import server.agent.android.live.SessionSnapshot
 import server.agent.android.network.AgentApi
 import server.agent.android.network.AgentApiError
 import server.agent.android.network.AgentApiException
@@ -48,7 +45,7 @@ class ShellViewModelTest {
 
     @Test
     fun connectsTheStreamAndProbesWorkspacesOncePaired() = runTest {
-        val connection = FakeConnectionGateway()
+        val connection = FakeSessionOwner()
         val api = FakeAgentApi(Result.success(collectionOf(count = 3)))
         val viewModel = viewModel(paired(), connection, api)
 
@@ -60,7 +57,7 @@ class ShellViewModelTest {
     @Test
     fun reportsAnEmptyServer() = runTest {
         val api = FakeAgentApi(Result.success(collectionOf(count = 0)))
-        val viewModel = viewModel(paired(), FakeConnectionGateway(), api)
+        val viewModel = viewModel(paired(), FakeSessionOwner(), api)
 
         assertEquals("No workspaces", viewModel.uiState.value.workspacesSummary)
     }
@@ -70,7 +67,7 @@ class ShellViewModelTest {
         val api = FakeAgentApi(
             Result.failure(AgentApiException(AgentApiError.Transport(RuntimeException("boom")))),
         )
-        val viewModel = viewModel(paired(), FakeConnectionGateway(), api)
+        val viewModel = viewModel(paired(), FakeSessionOwner(), api)
 
         assertEquals(
             "Workspaces unavailable. Could not reach Agent Server",
@@ -84,7 +81,7 @@ class ShellViewModelTest {
         val api = FakeAgentApi(
             Result.failure(AgentApiException(AgentApiError.Unauthorized("Authentication required"))),
         )
-        val viewModel = viewModel(session, FakeConnectionGateway(), api)
+        val viewModel = viewModel(session, FakeSessionOwner(), api)
 
         assertEquals(1, session.clearLocalAccessCount)
         assertEquals(PairedState.NotPaired, session.pairedState.value)
@@ -93,7 +90,7 @@ class ShellViewModelTest {
 
     @Test
     fun mirrorsTheStreamConnectionStatus() = runTest {
-        val connection = FakeConnectionGateway()
+        val connection = FakeSessionOwner()
         val viewModel = viewModel(paired(), connection, FakeAgentApi(Result.success(collectionOf(1))))
 
         connection.emit(ConnectionStatus.Live)
@@ -110,7 +107,7 @@ class ShellViewModelTest {
     @Test
     fun clearsLocalAccessWhenTheStreamRejectsTheCredential() = runTest {
         val session = paired()
-        val connection = FakeConnectionGateway()
+        val connection = FakeSessionOwner()
         val viewModel = viewModel(session, connection, FakeAgentApi(Result.success(collectionOf(1))))
 
         connection.emit(ConnectionStatus.AuthFailed(detail = "Device revoked"))
@@ -123,7 +120,7 @@ class ShellViewModelTest {
 
     @Test
     fun retryReconnectsAndReprobes() = runTest {
-        val connection = FakeConnectionGateway()
+        val connection = FakeSessionOwner()
         val api = FakeAgentApi(Result.success(collectionOf(count = 1)))
         val viewModel = viewModel(paired(), connection, api)
 
@@ -136,7 +133,7 @@ class ShellViewModelTest {
 
     @Test
     fun stopsTheStreamWhenTheDeviceIsNotPaired() = runTest {
-        val connection = FakeConnectionGateway()
+        val connection = FakeSessionOwner()
         val viewModel = viewModel(
             FakeSessionGateway(PairedState.NotPaired),
             connection,
@@ -150,11 +147,11 @@ class ShellViewModelTest {
 
     private fun viewModel(
         session: SessionGateway,
-        connection: ConnectionGateway,
+        connection: SessionOwner,
         api: AgentApi,
     ): ShellViewModel = ShellViewModel(
         sessionGateway = session,
-        connectionGateway = connection,
+        sessionOwner = connection,
         agentApi = api,
     )
 
@@ -202,15 +199,12 @@ private class FakeSessionGateway(
     }
 }
 
-private class FakeConnectionGateway : ConnectionGateway {
-    private val _state = MutableStateFlow(ConnectionState())
-    override val state: StateFlow<ConnectionState> = _state.asStateFlow()
+private class FakeSessionOwner : SessionOwner {
+    private val _connectionState = MutableStateFlow(ConnectionState())
+    override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
-    private val _messages = MutableSharedFlow<SessionStreamServerMessage>(extraBufferCapacity = 1)
-    override val messages: SharedFlow<SessionStreamServerMessage> = _messages.asSharedFlow()
-
-    private val _streamResets = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    override val streamResets: SharedFlow<Unit> = _streamResets.asSharedFlow()
+    private val _snapshot = MutableStateFlow(SessionSnapshot())
+    override val snapshot: StateFlow<SessionSnapshot> = _snapshot.asStateFlow()
 
     val connects = mutableListOf<String>()
     var retries = 0
@@ -219,7 +213,7 @@ private class FakeConnectionGateway : ConnectionGateway {
         private set
 
     fun emit(status: ConnectionStatus) {
-        _state.value = _state.value.copy(status = status)
+        _connectionState.value = _connectionState.value.copy(status = status)
     }
 
     override fun connect(serverOrigin: String) {
@@ -234,9 +228,17 @@ private class FakeConnectionGateway : ConnectionGateway {
         disconnects += 1
     }
 
-    override fun send(message: SessionStreamClientMessage) = Unit
+    override fun watch(agentId: AgentId?, sessionId: String?) = Unit
 
-    override fun setTarget(agentId: AgentId?, sessionId: String?) = Unit
+    override fun prompt(text: String) = Unit
+
+    override fun cancel() = Unit
+
+    override fun replyPermission(requestId: String, optionId: String) = Unit
+
+    override fun replyExtension(requestId: String, result: JsonElement) = Unit
+
+    override fun forget(agentId: AgentId, sessionId: String) = Unit
 }
 
 private class FakeAgentApi(

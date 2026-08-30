@@ -55,7 +55,7 @@ fun AppNavHost(
     val shellViewModel: ShellViewModel = viewModel(
         factory = ShellViewModelFactory(
             sessionGateway = appContainer.sessionGateway,
-            connectionGateway = appContainer.connectionGateway,
+            sessionOwner = appContainer.sessionOwner,
             agentApi = appContainer.agentApi,
         ),
     )
@@ -118,7 +118,7 @@ fun AppNavHost(
                 factory = ChatViewModelFactory(
                     savedStateHandle = backStackEntry.savedStateHandle,
                     sessionGateway = appContainer.sessionGateway,
-                    connectionGateway = appContainer.connectionGateway,
+                    sessionOwner = appContainer.sessionOwner,
                     operatorRepository = appContainer.operatorRepository,
                     navigationPreferences = appContainer.navigationPreferences,
                     activeSessionTracker = appContainer.activeSessionTracker,
@@ -196,7 +196,7 @@ fun AppNavHost(
                 factory = ChatViewModelFactory(
                     savedStateHandle = chatEntry.savedStateHandle,
                     sessionGateway = appContainer.sessionGateway,
-                    connectionGateway = appContainer.connectionGateway,
+                    sessionOwner = appContainer.sessionOwner,
                     operatorRepository = appContainer.operatorRepository,
                     navigationPreferences = appContainer.navigationPreferences,
                     activeSessionTracker = appContainer.activeSessionTracker,
@@ -232,7 +232,7 @@ fun AppNavHost(
                 factory = ChatViewModelFactory(
                     savedStateHandle = chatEntry.savedStateHandle,
                     sessionGateway = appContainer.sessionGateway,
-                    connectionGateway = appContainer.connectionGateway,
+                    sessionOwner = appContainer.sessionOwner,
                     operatorRepository = appContainer.operatorRepository,
                     navigationPreferences = appContainer.navigationPreferences,
                     activeSessionTracker = appContainer.activeSessionTracker,

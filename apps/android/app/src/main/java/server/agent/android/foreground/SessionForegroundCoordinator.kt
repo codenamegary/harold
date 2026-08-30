@@ -28,7 +28,7 @@ data class ForegroundCoordinatorState(
 /**
  * Starts the foreground service only when active sessions exist and notification
  * permission is granted. Otherwise surfaces permission-denied UX.
- * Keep-alive chat traffic stays on [server.agent.android.connection.ConnectionGateway].
+ * Keep-alive chat traffic stays on [server.agent.android.live.SessionOwner].
  */
 class SessionForegroundCoordinator(
     private val tracker: ActiveSessionTracker,

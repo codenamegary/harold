@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import server.agent.android.connection.ConnectionGateway
+import server.agent.android.live.SessionOwner
 import server.agent.android.events.ConnectionStatus
 import server.agent.android.network.AgentApi
 import server.agent.android.network.AgentApiError
@@ -23,7 +23,7 @@ private const val WORKSPACE_PROBE_LIMIT = 1
 
 class ShellViewModel(
     private val sessionGateway: SessionGateway,
-    private val connectionGateway: ConnectionGateway,
+    private val sessionOwner: SessionOwner,
     private val agentApi: AgentApi,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ShellUiState())
@@ -32,7 +32,7 @@ class ShellViewModel(
     val showShell: StateFlow<Boolean> = combine(
         sessionGateway.pairedState,
         _uiState,
-        connectionGateway.state,
+        sessionOwner.connectionState,
     ) { pairedState, shellState, connectionState ->
         when {
             pairedState is PairedState.NotPaired -> true
@@ -52,14 +52,14 @@ class ShellViewModel(
                 _uiState.update { current -> current.fromPairedState(pairedState) }
 
                 when (pairedState) {
-                    PairedState.NotPaired -> connectionGateway.disconnect()
+                    PairedState.NotPaired -> sessionOwner.disconnect()
                     is PairedState.Paired -> open(pairedState.serverOrigin)
                 }
             }
         }
 
         viewModelScope.launch {
-            connectionGateway.state.collect { state ->
+            sessionOwner.connectionState.collect { state ->
                 _uiState.update { current -> current.fromConnectionState(state) }
 
                 if (state.status is ConnectionStatus.AuthFailed) {
@@ -76,12 +76,12 @@ class ShellViewModel(
     fun onRetryClick() {
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
 
-        connectionGateway.retry()
+        sessionOwner.retry()
         probeWorkspaces(paired.serverOrigin)
     }
 
     private fun open(serverOrigin: String) {
-        connectionGateway.connect(serverOrigin)
+        sessionOwner.connect(serverOrigin)
         probeWorkspaces(serverOrigin)
     }
 
@@ -122,7 +122,7 @@ class ShellViewModel(
 
 class ShellViewModelFactory(
     private val sessionGateway: SessionGateway,
-    private val connectionGateway: ConnectionGateway,
+    private val sessionOwner: SessionOwner,
     private val agentApi: AgentApi,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -130,7 +130,7 @@ class ShellViewModelFactory(
         if (modelClass.isAssignableFrom(ShellViewModel::class.java)) {
             return ShellViewModel(
                 sessionGateway = sessionGateway,
-                connectionGateway = connectionGateway,
+                sessionOwner = sessionOwner,
                 agentApi = agentApi,
             ) as T
         }
