@@ -2,6 +2,7 @@ package server.agent.android.chat
 
 import kotlinx.serialization.json.JsonElement
 import server.agent.android.contracts.AgentAuth
+import server.agent.android.contracts.AvailableCommand
 import server.agent.android.contracts.AgentAuthStatus
 import server.agent.android.contracts.AgentAuthSummary
 import server.agent.android.contracts.AgentId
@@ -93,6 +94,11 @@ data class ChatUiState(
     val extensionUiState: ExtensionUiState = ExtensionUiState(),
     val notificationPermissionDenied: Boolean = false,
     val voiceDictation: VoiceDictationUiState = VoiceDictationUiState(),
+    val availableCommands: List<AvailableCommand> = emptyList(),
+    /** A completed slash command chosen from the picker in voice mode, e.g. "/plan ". */
+    val voiceCommandPrefix: String = "",
+    /** Voice mode toggles the command list from a button instead of a typed slash. */
+    val voiceCommandListVisible: Boolean = false,
     val agentAuth: AgentAuth? = null,
     val agentAuthSummary: AgentAuthSummary? = null,
     val authPanelSubmitting: Boolean = false,
@@ -170,4 +176,12 @@ data class ChatUiState(
 
     val showSelectSessionCta: Boolean
         get() = selectedSession == null && !sessionsLoading
+
+    /** Voice replaces the text slot whenever a dictation session is open. */
+    val composerInVoiceMode: Boolean
+        get() = voiceDictation.visible
+
+    /** The full voice message: the picked command prefix plus the live transcript. */
+    val voiceMessage: String
+        get() = voiceCommandPrefix + voiceDictation.transcript
 }

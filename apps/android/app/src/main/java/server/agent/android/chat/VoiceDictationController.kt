@@ -1,7 +1,17 @@
 package server.agent.android.chat
 
+/** How the active dictation session is presented in the chat UI. */
+enum class VoiceDictationPresentation {
+    /** Replaces the composer's text slot; the conversation stays visible. */
+    Inline,
+
+    /** Full-screen overlay with the large transcript view. */
+    Expanded,
+}
+
 data class VoiceDictationUiState(
     val visible: Boolean = false,
+    val presentation: VoiceDictationPresentation = VoiceDictationPresentation.Inline,
     val transcript: String = "",
     val isListening: Boolean = false,
     val audioLevel: Float = 0f,
@@ -61,6 +71,13 @@ class VoiceDictationController(
         return publish(
             VoiceDictationUiState(
                 visible = true,
+                // Without mic permission the permission explainer needs the
+                // full-screen surface, so the session opens expanded.
+                presentation = if (hasRecordAudioPermission) {
+                    VoiceDictationPresentation.Inline
+                } else {
+                    VoiceDictationPresentation.Expanded
+                },
                 transcript = transcript.displayText,
                 isListening = false,
                 audioLevel = 0f,
@@ -134,6 +151,20 @@ class VoiceDictationController(
                 error = null,
             ),
         )
+    }
+
+    fun expand(): VoiceDictationUiState {
+        if (!state.visible) {
+            return state
+        }
+        return publish(state.copy(presentation = VoiceDictationPresentation.Expanded))
+    }
+
+    fun collapse(): VoiceDictationUiState {
+        if (!state.visible) {
+            return state
+        }
+        return publish(state.copy(presentation = VoiceDictationPresentation.Inline))
     }
 
     fun cancel(): VoiceDictationUiState {

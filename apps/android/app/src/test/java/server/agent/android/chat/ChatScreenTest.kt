@@ -20,7 +20,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import server.agent.android.chat.composer.completeSlashCommand
 import server.agent.android.contracts.AgentId
+import server.agent.android.contracts.AvailableCommand
 import server.agent.android.contracts.PermissionOption
 import server.agent.android.contracts.PermissionOptionKind
 import server.agent.android.contracts.PermissionRequest
@@ -338,7 +340,7 @@ class ChatScreenTest {
     }
 
     @Test
-    fun sendIsIconButtonAndSlashOpensStubMenu() {
+    fun sendIsIconButtonAndSlashOpensCommandList() {
         var uiState by mutableStateOf(
             ChatUiState(
                 selectedSession = SessionRow(
@@ -351,6 +353,66 @@ class ChatScreenTest {
                     agentLabel = "Cursor",
                     state = SessionState.Idle,
                     updatedAt = "2026-08-05T01:00:00.000Z",
+                ),
+                availableCommands = listOf(
+                    AvailableCommand(name = "plan", description = "Draft a plan"),
+                    AvailableCommand(name = "review", description = "Review changes"),
+                ),
+            ),
+        )
+
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = uiState,
+                    onSessionSelectorClick = {},
+                    onDismissSessionMenu = {},
+                    onWorkspacesClick = {},
+                    onSessionClick = {},
+                    onSeeAllSessionsClick = {},
+                    onCreateClick = {},
+                    onComposerTextChanged = { text ->
+                        uiState = uiState.copy(composerText = text)
+                    },
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onPermissionOptionSelect = {},
+                    onComposerCommandPick = { name ->
+                        uiState = uiState.copy(
+                            composerText = completeSlashCommand(uiState.composerText, name),
+                        )
+                    },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("chat_send_button").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Send").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("chat_composer").performTextInput("/")
+        composeTestRule.onNodeWithTag("command_list_panel").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("command_list_item_plan").assertIsDisplayed().performClick()
+        assertTrue(uiState.composerText.contains("/plan"))
+        composeTestRule.onAllNodesWithTag("command_list_panel").assertCountEquals(0)
+    }
+
+    @Test
+    fun slashRailButtonInsertsShortcutAndFilteringNarrowsList() {
+        var uiState by mutableStateOf(
+            ChatUiState(
+                selectedSession = SessionRow(
+                    sessionId = "sess_01",
+                    name = "Alpha",
+                    cwd = "/tmp/agent-server",
+                    workspaceId = "ws_01",
+                    workspaceLabel = "agent-server",
+                    agentId = "cursor",
+                    agentLabel = "Cursor",
+                    state = SessionState.Idle,
+                    updatedAt = "2026-08-05T01:00:00.000Z",
+                ),
+                availableCommands = listOf(
+                    AvailableCommand(name = "plan", description = "Draft a plan"),
+                    AvailableCommand(name = "review", description = "Review changes"),
                 ),
             ),
         )
@@ -375,12 +437,18 @@ class ChatScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithTag("chat_send_button").assertIsDisplayed()
-        composeTestRule.onAllNodesWithText("Send").assertCountEquals(0)
-        composeTestRule.onNodeWithTag("chat_composer").performTextInput("/")
-        composeTestRule.onNodeWithTag("slash_stub_menu").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("slash_stub_item_stub-skill").assertIsDisplayed().performClick()
-        assertTrue(uiState.composerText.contains("/stub-skill"))
+        composeTestRule.onNodeWithTag("chat_command_button").assertIsDisplayed().performClick()
+        assertTrue(uiState.composerText == "/")
+        composeTestRule.onNodeWithTag("command_list_panel").assertIsDisplayed()
+
+        // A typed query narrows the list.
+        uiState = uiState.copy(composerText = "/rev")
+        composeTestRule.onNodeWithTag("command_list_item_review").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag("command_list_item_plan").assertCountEquals(0)
+
+        // Deleting the slash closes the panel.
+        uiState = uiState.copy(composerText = "")
+        composeTestRule.onAllNodesWithTag("command_list_panel").assertCountEquals(0)
     }
 
     @Test
@@ -499,9 +567,9 @@ class ChatScreenTest {
     }
 
     @Test
-    fun voiceOverlayOpensAndClosesFromComposerMic() {
+    fun micOpensInlineVoiceModeAndExpandShowsOverlay() {
         var openCalls = 0
-        var cancelCalls = 0
+        var expandCalls = 0
         var uiState by mutableStateOf(
             ChatUiState(
                 selectedSession = SessionRow(
@@ -545,27 +613,33 @@ class ChatScreenTest {
                             ),
                         )
                     },
-                    onVoiceDictationCancel = {
-                        cancelCalls += 1
+                    onVoiceDictationExpand = {
+                        expandCalls += 1
                         uiState = uiState.copy(
-                            voiceDictation = VoiceDictationUiState(recognizerAvailable = true),
+                            voiceDictation = uiState.voiceDictation.copy(
+                                presentation = VoiceDictationPresentation.Expanded,
+                            ),
                         )
                     },
                 )
             }
         }
 
-        composeTestRule.onAllNodesWithTag("voice_dictation_overlay").assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag("voice_inline_slot").assertCountEquals(0)
         composeTestRule.onNodeWithTag("chat_voice_mic_button").performClick()
         assertTrue(openCalls == 1)
-        composeTestRule.onNodeWithTag("voice_dictation_overlay").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("voice_dictation_cancel").performClick()
-        assertTrue(cancelCalls == 1)
+
+        composeTestRule.onNodeWithTag("voice_inline_slot").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("voice_inline_transcript").assertIsDisplayed()
         composeTestRule.onAllNodesWithTag("voice_dictation_overlay").assertCountEquals(0)
+
+        composeTestRule.onNodeWithTag("voice_expand_button").performClick()
+        assertTrue(expandCalls == 1)
+        composeTestRule.onNodeWithTag("voice_dictation_overlay").assertIsDisplayed()
     }
 
     @Test
-    fun voiceOverlayDoneAppliesTranscriptViaCallback() {
+    fun voiceKeyboardButtonAppliesTranscriptViaCallback() {
         var confirmCalls = 0
         var uiState by mutableStateOf(
             ChatUiState(
@@ -615,10 +689,78 @@ class ChatScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithTag("voice_dictation_overlay").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("voice_dictation_done").performClick()
+        composeTestRule.onNodeWithTag("voice_inline_slot").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("voice_keyboard_button").performClick()
         assertTrue(confirmCalls == 1)
         assertTrue(uiState.composerText == "Draft hello world")
-        composeTestRule.onAllNodesWithTag("voice_dictation_overlay").assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag("voice_inline_slot").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("chat_composer").assertIsDisplayed()
+    }
+
+    @Test
+    fun voiceCommandButtonOpensListAndPickSetsPrefix() {
+        var picked: String? = null
+        var uiState by mutableStateOf(
+            ChatUiState(
+                selectedSession = SessionRow(
+                    sessionId = "sess_01",
+                    name = "Alpha",
+                    cwd = "/tmp/agent-server",
+                    workspaceId = "ws_01",
+                    workspaceLabel = "agent-server",
+                    agentId = "cursor",
+                    agentLabel = "Cursor",
+                    state = SessionState.Idle,
+                    updatedAt = "2026-08-05T01:00:00.000Z",
+                ),
+                availableCommands = listOf(
+                    AvailableCommand(name = "plan", description = "Draft a plan"),
+                ),
+                voiceDictation = VoiceDictationUiState(
+                    visible = true,
+                    transcript = "make it fast",
+                    isListening = false,
+                    recognizerAvailable = true,
+                ),
+            ),
+        )
+
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = uiState,
+                    onSessionSelectorClick = {},
+                    onDismissSessionMenu = {},
+                    onWorkspacesClick = {},
+                    onSessionClick = {},
+                    onSeeAllSessionsClick = {},
+                    onCreateClick = {},
+                    onComposerTextChanged = {},
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onPermissionOptionSelect = {},
+                    onVoiceCommandToggle = {
+                        uiState = uiState.copy(
+                            voiceCommandListVisible = !uiState.voiceCommandListVisible,
+                        )
+                    },
+                    onVoiceCommandPick = { name ->
+                        picked = name
+                        uiState = uiState.copy(
+                            voiceCommandPrefix = "/$name ",
+                            voiceCommandListVisible = false,
+                        )
+                    },
+                )
+            }
+        }
+
+        composeTestRule.onAllNodesWithTag("command_list_panel").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("voice_command_button").performClick()
+        composeTestRule.onNodeWithTag("command_list_panel").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("command_list_item_plan").performClick()
+        assertTrue(picked == "plan")
+        composeTestRule.onAllNodesWithTag("command_list_panel").assertCountEquals(0)
+        composeTestRule.onNodeWithText("/plan make it fast").assertIsDisplayed()
     }
 }
