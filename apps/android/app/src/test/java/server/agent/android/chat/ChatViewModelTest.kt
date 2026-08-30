@@ -555,6 +555,28 @@ class ChatViewModelTest {
         )
         advanceUntilIdle()
 
+        connection.emit(
+            SessionStreamServerMessage.SessionUpdate(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                update = kotlinx.serialization.json.Json.parseToJsonElement(
+                    """
+                    {
+                      "sessionUpdate": "available_commands_update",
+                      "availableCommands": [
+                        {"name": "plan", "description": "Draft a plan"}
+                      ]
+                    }
+                    """.trimIndent(),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+        assertEquals(
+            listOf("plan"),
+            viewModel.uiState.value.availableCommands.map { command -> command.name },
+        )
+
         viewModel.disconnectFromServer()
         advanceUntilIdle()
 
@@ -562,6 +584,7 @@ class ChatViewModelTest {
         assertEquals(PairedState.NotPaired, sessionGateway.pairedState.value)
         assertTrue(navigation.lastSessionCleared)
         assertNull(connection.target)
+        assertTrue(viewModel.uiState.value.availableCommands.isEmpty())
     }
 
     @Test
@@ -616,7 +639,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun commandsUpdatePopulatesStateWithoutTouchingTranscriptAndClearsOnSwitch() = runTest(dispatcher) {
+    fun commandsUpdatePopulatesStateWithoutTouchingTranscriptAndRestoresOnSwitchBack() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository()
         val connection = ChatFakeConnectionGateway()
         val viewModel = createViewModel(
@@ -657,6 +680,15 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.availableCommands.isEmpty())
+
+        val remembered = viewModel.uiState.value.sessions.first { row -> row.sessionId == "sess_02" }
+        viewModel.selectSession(remembered)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("plan"),
+            viewModel.uiState.value.availableCommands.map { command -> command.name },
+        )
     }
 
     @Test

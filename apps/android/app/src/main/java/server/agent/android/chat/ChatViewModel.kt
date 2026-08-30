@@ -10,12 +10,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
+import server.agent.android.chat.composer.AvailableCommandsCatalog
 import server.agent.android.chat.composer.completeSlashCommand
 import server.agent.android.connection.ConnectionGateway
 import server.agent.android.contracts.AgentAuth
 import server.agent.android.contracts.AgentAuthStatus
 import server.agent.android.contracts.AgentAuthSummary
 import server.agent.android.contracts.AgentId
+import server.agent.android.contracts.AvailableCommand
 import server.agent.android.contracts.AuthSessionAction
 import server.agent.android.contracts.AuthSessionStatus
 import server.agent.android.contracts.CreateSessionBody
@@ -60,6 +62,7 @@ class ChatViewModel(
     private var turnSerial: Int = 0
     private var catalog: List<SessionRow> = emptyList()
     private var authHydrateGeneration: Int = 0
+    private val commandsCatalog = AvailableCommandsCatalog()
 
     init {
         voiceDictationController.onStateChanged = ::syncVoiceDictationState
@@ -114,8 +117,12 @@ class ChatViewModel(
                     }
                     refreshCatalog()
                 } else {
+                    commandsCatalog.clear()
                     sessionForegroundCoordinator?.setServerOrigin(null)
                     connectionGateway.setTarget(null, null)
+                    _uiState.update { current ->
+                        current.copy(availableCommands = emptyList())
+                    }
                 }
             }
         }
@@ -388,7 +395,7 @@ class ChatViewModel(
                 composerText = "",
                 composerError = null,
                 composerSubmitting = false,
-                availableCommands = emptyList(),
+                availableCommands = commandsFor(draftSession),
                 voiceCommandPrefix = "",
                 voiceCommandListVisible = false,
                 pendingPermissions = emptyList(),
@@ -705,9 +712,13 @@ class ChatViewModel(
                     deviceId = paired.deviceId,
                 )
             }
+            commandsCatalog.clear()
             connectionGateway.setTarget(null, null)
             connectionGateway.disconnect()
             clearPersistedSession()
+            _uiState.update { current ->
+                current.copy(availableCommands = emptyList())
+            }
             activeSessionTracker?.replaceAll(emptyList())
             sessionForegroundCoordinator?.onSessionsChanged()
             sessionForegroundCoordinator?.setServerOrigin(null)
@@ -841,7 +852,7 @@ class ChatViewModel(
                 transcript = emptyAcpTranscript,
                 composerText = "",
                 composerError = null,
-                availableCommands = emptyList(),
+                availableCommands = commandsFor(row),
                 voiceCommandPrefix = "",
                 voiceCommandListVisible = false,
                 pendingPermissions = emptyList(),
@@ -870,9 +881,10 @@ class ChatViewModel(
                 }
                 val commands = parseAvailableCommands(message.update)
                 if (commands != null) {
+                    commandsCatalog.remember(message.agentId, message.sessionId, commands)
                     _uiState.update { current ->
                         current.copy(
-                            availableCommands = commands,
+                            availableCommands = commandsFor(current.selectedSession),
                             streamReconnecting = false,
                         )
                     }
@@ -1151,7 +1163,11 @@ class ChatViewModel(
         navigationPreferences.clearLastSessionId()
     }
 
+    private fun commandsFor(session: SessionRow?): List<AvailableCommand> =
+        commandsCatalog.current(session?.agentId, session?.sessionId)
+
     private fun dropSession(row: SessionRow) {
+        commandsCatalog.forget(row.agentId, row.sessionId)
         catalog = catalog.filterNot { item -> item.id == row.id }
         val selectedWasDeleted = _uiState.value.selectedSession?.id == row.id
         if (selectedWasDeleted) {
