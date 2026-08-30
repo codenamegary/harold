@@ -142,6 +142,7 @@ fun AppNavHost(
 
             ChatScreen(
                 uiState = chatUiState,
+                composerState = chatViewModel.composerState,
                 onSessionSelectorClick = chatViewModel::showPicker,
                 onDismissSessionMenu = chatViewModel::hidePicker,
                 onWorkspacesClick = { navController.navigate(Routes.Workspaces) },
@@ -156,6 +157,7 @@ fun AppNavHost(
                     navController.navigate(Routes.CreateSession)
                 },
                 onComposerTextChanged = chatViewModel::onComposerTextChanged,
+                onComposerEdit = chatViewModel::onComposerEdit,
                 onComposerSubmit = chatViewModel::submitComposerPrompt,
                 onComposerCancel = chatViewModel::submitCancel,
                 onPermissionOptionSelect = chatViewModel::submitPermissionOption,

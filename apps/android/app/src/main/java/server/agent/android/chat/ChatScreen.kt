@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.MoreVert
@@ -63,11 +65,12 @@ import server.agent.android.R
 import server.agent.android.chat.auth.AgentAuthPanel
 import server.agent.android.chat.composer.CommandListPanel
 import server.agent.android.chat.composer.PromptComposer
-import server.agent.android.chat.composer.activeSlashQuery
+import server.agent.android.chat.composer.activeCommandQuery
 import server.agent.android.chat.composer.filterCommands
 import server.agent.android.chat.composer.insertSlashShortcut
-import server.agent.android.chat.composer.removeTrailingSlashToken
+import server.agent.android.chat.composer.removeCommandToken
 import server.agent.android.contracts.AuthSessionStatus
+import server.agent.android.ui.promptinput.PromptEdit
 
 private val MIN_TOUCH_TARGET = 48.dp
 private val SessionMenuItemPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
@@ -102,6 +105,7 @@ private fun SessionMenuRow(
 @Composable
 fun ChatScreen(
     uiState: ChatUiState,
+    composerState: TextFieldState = rememberTextFieldState(),
     onSessionSelectorClick: () -> Unit = {},
     onDismissSessionMenu: () -> Unit = {},
     onWorkspacesClick: () -> Unit = {},
@@ -109,6 +113,7 @@ fun ChatScreen(
     onSeeAllSessionsClick: () -> Unit = {},
     onCreateClick: () -> Unit = {},
     onComposerTextChanged: (String) -> Unit = {},
+    onComposerEdit: (PromptEdit) -> Unit = {},
     onComposerSubmit: () -> Unit = {},
     onComposerCancel: () -> Unit = {},
     onPermissionOptionSelect: (String) -> Unit = {},
@@ -138,6 +143,8 @@ fun ChatScreen(
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     var disconnectConfirmVisible by remember { mutableStateOf(false) }
+    val composerText = composerState.text.toString()
+    val composerSelection = composerState.selection
     val sessionLabel = uiState.selectedSession?.name ?: "Select session"
     val hasSelectedSession = uiState.selectedSession != null
     val context = LocalContext.current
@@ -575,10 +582,15 @@ fun ChatScreen(
                 }
 
                 // Command list takes over the conversation area. In keyboard
-                // mode a trailing /token opens it and filters it; in inline
-                // voice mode the rail's / button toggles the full list.
+                // mode the command token under the caret opens it and filters
+                // it; in inline voice mode the rail's / button toggles the
+                // full list.
                 val inVoiceMode = uiState.composerInVoiceMode
-                val textCommandQuery = if (inVoiceMode) null else activeSlashQuery(uiState.composerText)
+                val textCommandQuery = if (inVoiceMode) {
+                    null
+                } else {
+                    activeCommandQuery(composerText, composerSelection)
+                }
                 val commandsAvailable = uiState.availableCommands.isNotEmpty()
                 when {
                     hasSelectedSession && commandsAvailable && textCommandQuery != null -> {
@@ -586,8 +598,8 @@ fun ChatScreen(
                             commands = filterCommands(uiState.availableCommands, textCommandQuery),
                             onPick = onComposerCommandPick,
                             onClose = {
-                                onComposerTextChanged(
-                                    removeTrailingSlashToken(uiState.composerText),
+                                onComposerEdit(
+                                    removeCommandToken(composerText, composerSelection),
                                 )
                             },
                         )
@@ -658,7 +670,7 @@ fun ChatScreen(
                 }
 
                 PromptComposer(
-                    composerText = uiState.composerText,
+                    composerState = composerState,
                     composerEnabled = composerEnabled,
                     showCancel = uiState.showComposerCancel,
                     cancelSubmitting = uiState.cancelSubmitting,
@@ -668,12 +680,11 @@ fun ChatScreen(
                     voiceMessage = uiState.voiceMessage,
                     voiceCommandPrefix = uiState.voiceCommandPrefix,
                     voiceCommandListVisible = uiState.voiceCommandListVisible,
-                    onTextChanged = onComposerTextChanged,
                     onSubmit = onComposerSubmit,
                     onCancel = onComposerCancel,
                     onMicClick = { openVoiceDictation() },
                     onSlashClick = {
-                        onComposerTextChanged(insertSlashShortcut(uiState.composerText))
+                        onComposerTextChanged(insertSlashShortcut(composerText))
                     },
                     onVoiceKeyboard = onVoiceDictationConfirm,
                     onVoiceExpand = onVoiceDictationExpand,
