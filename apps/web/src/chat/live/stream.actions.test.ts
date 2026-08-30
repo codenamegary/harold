@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import { createStore } from "jotai"
 import { selectionAtom } from "../selection/atoms"
-import { pendingPromptAtom, permissionAtom, transcriptAtom } from "./atoms"
+import {
+  availableCommandsAtom,
+  pendingPromptAtom,
+  permissionAtom,
+  transcriptAtom,
+} from "./atoms"
 import { applyStreamMessageAtom } from "./stream.actions"
 
 const storeOnSession = () => {
@@ -51,6 +56,63 @@ describe("stream actions", () => {
     })
 
     expect(store.get(transcriptAtom).rows).toEqual([])
+  })
+
+  test("keeps available commands out of the transcript", () => {
+    const store = storeOnSession()
+
+    store.set(applyStreamMessageAtom, {
+      type: "session_update",
+      agentId: "cursor",
+      sessionId: "sess_01",
+      update: {
+        sessionUpdate: "available_commands_update",
+        availableCommands: [{ name: "plan", description: "Draft a plan" }],
+      },
+    })
+
+    expect(store.get(availableCommandsAtom)).toEqual([
+      { name: "plan", description: "Draft a plan" },
+    ])
+    expect(store.get(transcriptAtom).rows).toEqual([])
+  })
+
+  test("ignores available commands for a different session", () => {
+    const store = storeOnSession()
+
+    store.set(applyStreamMessageAtom, {
+      type: "session_update",
+      agentId: "cursor",
+      sessionId: "sess_other",
+      update: {
+        sessionUpdate: "available_commands_update",
+        availableCommands: [{ name: "plan", description: "Draft a plan" }],
+      },
+    })
+
+    expect(store.get(availableCommandsAtom)).toEqual([])
+  })
+
+  test("replaces the whole list when the agent sends a new one", () => {
+    const store = storeOnSession()
+    const send = (commands: ReadonlyArray<{ name: string; description: string }>) => {
+      store.set(applyStreamMessageAtom, {
+        type: "session_update",
+        agentId: "cursor",
+        sessionId: "sess_01",
+        update: {
+          sessionUpdate: "available_commands_update",
+          availableCommands: commands,
+        },
+      })
+    }
+
+    send([{ name: "plan", description: "Draft a plan" }])
+    send([{ name: "test", description: "Run tests" }])
+
+    expect(store.get(availableCommandsAtom)).toEqual([
+      { name: "test", description: "Run tests" },
+    ])
   })
 
   test("stores a matching permission request", () => {

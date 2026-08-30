@@ -26,10 +26,27 @@ export type PluginRenderProps = {
   chars: React.ReactNode
 }
 
+export type PluginOverlayProps = {
+  token: Token
+  /**
+   * Swap the active token for `text`. PromptInput owns the trailing space and
+   * the caret, so a click and a commit always land the same way.
+   */
+  replaceToken: (text: string) => void
+}
+
+/**
+ * `render` runs for every token. `overlay` and `onCommit` run only for the
+ * token holding a collapsed caret.
+ */
 export type Plugin = {
   kind: string
   match?: Matcher
   render: (props: PluginRenderProps) => React.ReactNode
+  /** Rendered above the token while the caret is inside it. */
+  overlay?: (props: PluginOverlayProps) => React.ReactNode
+  /** Enter on this token. Return replacement text, or null for a newline. */
+  onCommit?: (token: Token) => string | null
 }
 
 export const clampCaret = (caret: number, length: number): number =>
@@ -64,6 +81,13 @@ export const offsetIsSelected = (range: CaretRange, offset: number): boolean =>
 
 export const caretIsInside = (token: Token, caret: number): boolean =>
   caret >= token.start && caret <= token.end
+
+/**
+ * The token a collapsed caret sits in. A caret on a boundary belongs to the
+ * token that ends there, so typing at the tail of `/cmd` keeps it active.
+ */
+export const tokenAtCaret = (tokens: Token[], caret: number): Token | null =>
+  tokens.find((token) => caretIsInside(token, caret)) ?? null
 
 export const rangeTouches = (token: Token, range: CaretRange): boolean => {
   if (selectionIsCollapsed(range)) {
@@ -196,6 +220,28 @@ export const insertText = (state: EditorState, text: string): EditorState => {
 }
 
 export const deleteRange = (state: EditorState): EditorState => insertText(state, "")
+
+/**
+ * Swap `token` for `text` and leave the caret past a single trailing space.
+ * Reuses a space that already follows so picking mid-sentence does not double
+ * it.
+ */
+export const replaceToken = (
+  state: EditorState,
+  token: Token,
+  text: string,
+): EditorState => {
+  const next = state.value[token.end]
+  const spaceFollows = next !== undefined && /\s/.test(next)
+  const inserted = spaceFollows ? text : `${text} `
+  return {
+    value:
+      state.value.slice(0, token.start) +
+      inserted +
+      state.value.slice(token.end),
+    ...collapse(token.start + inserted.length + (spaceFollows ? 1 : 0)),
+  }
+}
 
 export const deleteBackward = (state: EditorState): EditorState => {
   if (!selectionIsCollapsed(state)) {

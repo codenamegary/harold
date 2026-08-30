@@ -10,8 +10,10 @@ import {
   Plugin,
   PluginRenderProps,
   rangeTouches,
+  replaceToken,
   scanTokens,
   Token,
+  tokenAtCaret,
   wordLeft,
   wordRight,
 } from "./prompt.input.model"
@@ -225,5 +227,54 @@ describe("prompt.input.model", () => {
     expect(wordLeft("hello world", 6)).toBe(0)
     expect(wordRight("hello world", 0)).toBe(5)
     expect(wordRight("hello world", 5)).toBe(11)
+  })
+})
+
+describe("tokenAtCaret", () => {
+  const tokens = scanTokens("look at /pl", [textPlugin, commandPlugin])
+
+  test("finds the token holding the caret", () => {
+    expect(tokenAtCaret(tokens, 10)?.value).toBe("/pl")
+  })
+
+  test("gives the boundary to the token that ends there", () => {
+    expect(tokenAtCaret(tokens, 11)?.value).toBe("/pl")
+  })
+
+  test("gives the start boundary to the token before it", () => {
+    expect(tokenAtCaret(tokens, 8)?.kind).toBe("text")
+  })
+
+  test("returns null past the end", () => {
+    expect(tokenAtCaret(tokens, 99)).toBeNull()
+  })
+})
+
+describe("replaceToken", () => {
+  const commandAt8 = token("command", "/pl", 8)
+
+  test("swaps the token and adds a trailing space", () => {
+    const next = replaceToken(editorAt("look at /pl", 11), commandAt8, "/plan")
+    expect(next.value).toBe("look at /plan ")
+    expect(next.focus).toBe(14)
+  })
+
+  test("reuses a space that already follows", () => {
+    const next = replaceToken(
+      editorAt("look at /pl more", 11),
+      commandAt8,
+      "/plan",
+    )
+    expect(next.value).toBe("look at /plan more")
+    expect(next.focus).toBe(14)
+  })
+
+  test("collapses the selection after the replacement", () => {
+    const next = replaceToken(
+      { value: "look at /pl", anchor: 0, focus: 11 },
+      commandAt8,
+      "/plan",
+    )
+    expect(next.anchor).toBe(next.focus)
   })
 })

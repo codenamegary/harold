@@ -1,16 +1,19 @@
 import { describe, expect, test } from "bun:test"
 import { fireEvent, render } from "@testing-library/react"
 import { PromptInput } from "../../design-system/PromptInput"
-import { chatPlugins } from "./ChatPlugins"
+import { createChatPlugins, mentionChatPlugin } from "./ChatPlugins"
 
-describe.skip("chatPlugins", () => {
+const plugins = createChatPlugins({ commands: [] })
+const withMentions = [...plugins, mentionChatPlugin]
+
+describe("chatPlugins", () => {
   test("paints a complete command as a chip", () => {
     const { getByText } = render(
       <PromptInput
         aria-label="Prompt"
         value="hello /cmd "
         onChange={() => undefined}
-        plugins={chatPlugins}
+        plugins={plugins}
       />,
     )
 
@@ -24,7 +27,7 @@ describe.skip("chatPlugins", () => {
         aria-label="Prompt"
         value="hello /cmd"
         onChange={() => undefined}
-        plugins={chatPlugins}
+        plugins={plugins}
       />,
     )
 
@@ -40,7 +43,7 @@ describe.skip("chatPlugins", () => {
         aria-label="Prompt"
         value="hello /cmd"
         onChange={() => undefined}
-        plugins={chatPlugins}
+        plugins={plugins}
       />,
     )
 
@@ -54,7 +57,7 @@ describe.skip("chatPlugins", () => {
         aria-label="Prompt"
         value="see @notes-from-meeting"
         onChange={() => undefined}
-        plugins={chatPlugins}
+        plugins={withMentions}
       />,
     )
 
@@ -68,7 +71,7 @@ describe.skip("chatPlugins", () => {
         aria-label="Prompt"
         value="see @notes-from-meeting "
         onChange={() => undefined}
-        plugins={chatPlugins}
+        plugins={withMentions}
       />,
     )
 
@@ -85,7 +88,7 @@ describe.skip("chatPlugins", () => {
         aria-label="Prompt"
         value="see @notes-from-meeting "
         onChange={() => undefined}
-        plugins={chatPlugins}
+        plugins={withMentions}
       />,
     )
 
@@ -104,7 +107,7 @@ describe.skip("chatPlugins", () => {
         aria-label="Prompt"
         value="hello /cmd "
         onChange={() => undefined}
-        plugins={chatPlugins}
+        plugins={plugins}
       />,
     )
 

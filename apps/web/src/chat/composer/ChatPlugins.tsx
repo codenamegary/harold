@@ -5,6 +5,9 @@ import {
   rangeTouches,
   Token,
 } from "../../design-system/prompt.input.model"
+import { AvailableCommand } from "../live/commands.available"
+import { CommandMenu } from "./CommandMenu"
+import { commandQuery, filterCommands } from "./commands.filter"
 import {
   chatTokenKind,
   looksComplete,
@@ -62,7 +65,9 @@ const textPlugin: Plugin = {
   render: ({ chars }) => chars,
 }
 
-const commandPlugin: Plugin = {
+const createCommandPlugin = (
+  commands: ReadonlyArray<AvailableCommand>,
+): Plugin => ({
   kind: chatTokenKind.command,
   match: matchCommand,
   render: ({ token, selection, raw, chars }) =>
@@ -74,7 +79,22 @@ const commandPlugin: Plugin = {
       className: commandChipClass,
       collapsedText: token.value,
     }),
-}
+  overlay: ({ token, replaceToken }) => {
+    if (commands.length === 0) {
+      return null
+    }
+    return (
+      <CommandMenu
+        matches={filterCommands(commands, commandQuery(token))}
+        onPick={(name) => replaceToken(`/${name}`)}
+      />
+    )
+  },
+  onCommit: (token) => {
+    const first = filterCommands(commands, commandQuery(token))[0]
+    return first === undefined ? null : `/${first.name}`
+  },
+})
 
 const mentionPlugin: Plugin = {
   kind: chatTokenKind.mention,
@@ -91,10 +111,14 @@ const mentionPlugin: Plugin = {
     }),
 }
 
-const chatPluginCatalog = {
-  text: textPlugin,
-  command: commandPlugin,
-  mention: mentionPlugin,
+type CreateChatPluginsParams = {
+  commands: ReadonlyArray<AvailableCommand>
 }
 
-export const chatPlugins: Plugin[] = [chatPluginCatalog.text]
+/** Mentions have no picker yet, so the mention plugin stays out of the list. */
+export const createChatPlugins = (params: CreateChatPluginsParams): Plugin[] => [
+  textPlugin,
+  createCommandPlugin(params.commands),
+]
+
+export const mentionChatPlugin = mentionPlugin
