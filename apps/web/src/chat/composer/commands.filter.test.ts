@@ -9,6 +9,9 @@ const commands: ReadonlyArray<AvailableCommand> = [
   { name: "review", description: "Review the diff" },
 ]
 
+const namesOf = (query: string): ReadonlyArray<string> =>
+  filterCommands(commands, query).map((command) => command.name)
+
 const commandToken = (value: string): Token => ({
   kind: "command",
   value,
@@ -24,24 +27,27 @@ describe("commandQuery", () => {
 })
 
 describe("filterCommands", () => {
-  test("keeps prefix matches in catalog order", () => {
-    expect(filterCommands(commands, "pl").map((c) => c.name)).toEqual([
-      "plan",
-      "play",
-    ])
+  test("keeps prefix matches first, in catalog order", () => {
+    expect(namesOf("pl")).toEqual(["plan", "play", "review"])
+  })
+
+  test("ranks a mid-name typo above farther names", () => {
+    expect(namesOf("lan")[0]).toBe("plan")
+  })
+
+  test("ranks a swapped pair as a close match", () => {
+    expect(namesOf("plna")[0]).toBe("plan")
   })
 
   test("ignores case on both sides", () => {
-    expect(filterCommands(commands, "REV").map((c) => c.name)).toEqual([
-      "review",
-    ])
+    expect(namesOf("REV")[0]).toBe("review")
   })
 
-  test("matches everything on an empty query", () => {
-    expect(filterCommands(commands, "")).toHaveLength(3)
+  test("keeps catalog order on an empty query", () => {
+    expect(namesOf("")).toEqual(["plan", "play", "review"])
   })
 
-  test("matches prefixes only, not substrings", () => {
-    expect(filterCommands(commands, "lan")).toEqual([])
+  test("never drops a command", () => {
+    expect(namesOf("zzz")).toHaveLength(3)
   })
 })

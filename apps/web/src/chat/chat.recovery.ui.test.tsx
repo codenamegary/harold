@@ -219,7 +219,11 @@ describe("Chat recovery UI", () => {
     await waitFor(() => {
       expect(getByText("/review")).toBeInTheDocument()
     })
-    expect(queryByRole("button", { name: /\/plan/ })).toBeNull()
+    expect(getByRole("button", { name: /\/review/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    )
+    expect(getByText("/plan")).toBeInTheDocument()
 
     fireEvent.keyDown(field, { key: "Enter" })
 
