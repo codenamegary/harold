@@ -2,11 +2,11 @@ package server.agent.android.chat
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,9 +14,38 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+
+private const val TailScrollOffset = 1_000_000
+
+internal fun liveAssistantRowIndex(
+    rows: List<TranscriptRow>,
+    isRunning: Boolean,
+): Int {
+    if (!isRunning) {
+        return -1
+    }
+
+    val turnId = rows.lastOrNull()?.turnId ?: return -1
+    return rows.indexOfLast { row ->
+        row is TranscriptAssistantRow && row.turnId == turnId
+    }
+}
+
+internal fun measuredTailSize(listState: LazyListState): Int? {
+    val info = listState.layoutInfo
+    val last = info.visibleItemsInfo.lastOrNull() ?: return null
+    if (last.index != info.totalItemsCount - 1) {
+        return null
+    }
+
+    return last.size
+}
 
 @Composable
 fun ChatTranscript(
@@ -34,12 +63,25 @@ fun ChatTranscript(
         hasPendingPermission = hasPendingPermission,
     )
     val showActivity = activity != null
+    val streamingRowIndex = liveAssistantRowIndex(rows = rows, isRunning = isRunning)
 
     LaunchedEffect(blocks.size, showActivity, rows, activity?.label) {
         val lastIndex = blocks.size - 1 + if (showActivity) 1 else 0
         if (lastIndex >= 0) {
-            listState.animateScrollToItem(lastIndex)
+            listState.scrollToItem(lastIndex, scrollOffset = TailScrollOffset)
         }
+    }
+
+    LaunchedEffect(listState) {
+        snapshotFlow { measuredTailSize(listState) }
+            .filterNotNull()
+            .distinctUntilChanged()
+            .collect {
+                val lastIndex = listState.layoutInfo.totalItemsCount - 1
+                if (lastIndex >= 0) {
+                    listState.scrollToItem(lastIndex, scrollOffset = TailScrollOffset)
+                }
+            }
     }
 
     when {
@@ -64,6 +106,7 @@ fun ChatTranscript(
                             TranscriptBlockRow(
                                 row = block.row,
                                 index = block.index,
+                                streaming = block.index == streamingRowIndex,
                             )
                         }
                     }
@@ -93,6 +136,7 @@ fun ChatTranscript(
 private fun TranscriptBlockRow(
     row: TranscriptRow,
     index: Int,
+    streaming: Boolean,
 ) {
     when (row) {
         is TranscriptUserRow -> {
@@ -123,6 +167,7 @@ private fun TranscriptBlockRow(
                     .fillMaxWidth()
                     .padding(horizontal = 4.dp)
                     .testTag("transcript_assistant"),
+                streaming = streaming,
             )
         }
 

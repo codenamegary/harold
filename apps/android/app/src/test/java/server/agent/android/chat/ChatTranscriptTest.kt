@@ -1,5 +1,11 @@
 package server.agent.android.chat
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -8,6 +14,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,6 +29,14 @@ import server.agent.android.ui.theme.AgentServerTheme
 class ChatTranscriptTest {
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    private fun toolRow(toolCallId: String, toolName: String) = TranscriptToolRow(
+        turnId = "turn_1",
+        toolCallId = toolCallId,
+        toolName = toolName,
+        toolKind = ToolKind.Execute,
+        status = ToolCallStatus.Completed,
+    )
 
     @Test
     fun showsThinkingStickyStatusWhileRunningBeforeAssistantOutput() {
@@ -88,6 +103,87 @@ class ChatTranscriptTest {
 
         composeTestRule.onNodeWithText("Thinking").performClick()
         composeTestRule.onNodeWithText("planning").assertIsDisplayed()
+    }
+
+    @Test
+    fun showsTheFinalAssistantReplyOnACompletedTurn() {
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                Box(modifier = Modifier.height(320.dp)) {
+                    ChatTranscript(
+                        rows = listOf(
+                            TranscriptUserRow(
+                                turnId = "turn_1",
+                                text = "Yes go ahead and add the reciprocal links to the doc, " +
+                                    "then mirror them in the chrome-testing skill so agents " +
+                                    "pick them up there too.",
+                            ),
+                            TranscriptThinkingRow(turnId = "turn_1", text = "planning the edit"),
+                            toolRow("t1", "read"),
+                            toolRow("t2", "grep"),
+                            toolRow("t3", "edit"),
+                            toolRow("t4", "read"),
+                            toolRow("t5", "edit"),
+                            toolRow("t6", "shell"),
+                            TranscriptAssistantRow(
+                                turnId = "turn_1",
+                                text = "Added.",
+                            ),
+                        ),
+                        isRunning = false,
+                        showWelcome = false,
+                    )
+                }
+            }
+        }
+
+        composeTestRule.onAllNodesWithTag("thinking_section_body").assertCountEquals(0)
+        composeTestRule.onNodeWithText("Added.").assertIsDisplayed()
+    }
+
+    @Test
+    fun keepsTheFinalAssistantReplyVisibleWhenTheTurnCompletes() {
+        val turnRows = listOf(
+            TranscriptUserRow(
+                turnId = "turn_1",
+                text = "Yes go ahead and add the reciprocal links to the doc, " +
+                    "then mirror them in the chrome-testing skill so agents " +
+                    "pick them up there too.",
+            ),
+            TranscriptThinkingRow(turnId = "turn_1", text = "planning the edit"),
+            toolRow("t1", "read"),
+            toolRow("t2", "grep"),
+            toolRow("t3", "edit"),
+            toolRow("t4", "read"),
+            toolRow("t5", "edit"),
+            toolRow("t6", "shell"),
+        )
+        var rows by mutableStateOf(turnRows)
+        var running by mutableStateOf(true)
+
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                Box(modifier = Modifier.height(320.dp)) {
+                    ChatTranscript(
+                        rows = rows,
+                        isRunning = running,
+                        showWelcome = false,
+                    )
+                }
+            }
+        }
+
+        composeTestRule.runOnIdle {
+            rows = turnRows + TranscriptAssistantRow(turnId = "turn_1", text = "Add")
+        }
+        composeTestRule.runOnIdle {
+            rows = turnRows + TranscriptAssistantRow(turnId = "turn_1", text = "Added.")
+        }
+        composeTestRule.runOnIdle {
+            running = false
+        }
+
+        composeTestRule.onNodeWithText("Added.").assertIsDisplayed()
     }
 
     @Test
