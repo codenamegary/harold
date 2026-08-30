@@ -7,8 +7,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
 import server.agent.android.BuildConfig
-import server.agent.android.connection.ConnectionGateway
-import server.agent.android.connection.DefaultConnectionGateway
+import server.agent.android.live.DefaultSessionOwner
+import server.agent.android.live.SessionOwner
 import server.agent.android.credentials.CredentialHolder
 import server.agent.android.credentials.CredentialStore
 import server.agent.android.credentials.DefaultCredentialStore
@@ -48,7 +48,7 @@ interface AppContainer {
     val pairingCoordinator: PairingCoordinator
     val deviceNameProvider: () -> String
     val agentApi: AgentApi
-    val connectionGateway: ConnectionGateway
+    val sessionOwner: SessionOwner
     val navigationPreferences: NavigationPreferences
     val operatorRepository: OperatorRepository
     val activeSessionTracker: ActiveSessionTracker
@@ -90,7 +90,7 @@ class DefaultAppContainer(
     private val sessionStreamFactory: SessionStreamFactory = OkHttpSessionStreamFactory(
         client = authenticatedClient,
     )
-    override val connectionGateway: ConnectionGateway = DefaultConnectionGateway(
+    override val sessionOwner: SessionOwner = DefaultSessionOwner(
         streamFactory = sessionStreamFactory,
         scope = applicationScope,
     )

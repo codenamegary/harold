@@ -3,19 +3,16 @@ package server.agent.android.chat
 import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonElement
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -23,22 +20,24 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import server.agent.android.connection.ConnectionGateway
 import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.AgentSettings
 import server.agent.android.contracts.AgentSettingsCollection
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateSessionResponse
 import server.agent.android.contracts.PageInfo
+import server.agent.android.contracts.PermissionOption
+import server.agent.android.contracts.PermissionRequest
+import server.agent.android.contracts.PermissionStatus
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionCollection
 import server.agent.android.contracts.SessionState
-import server.agent.android.contracts.SessionStreamClientMessage
-import server.agent.android.contracts.SessionStreamServerMessage
 import server.agent.android.contracts.Workspace
 import server.agent.android.contracts.WorkspaceCollection
 import server.agent.android.contracts.WorkspaceState
 import server.agent.android.events.ConnectionState
+import server.agent.android.live.SessionOwner
+import server.agent.android.live.SessionSnapshot
 import server.agent.android.navigation.NavigationPreferences
 import server.agent.android.network.AgentApiError
 import server.agent.android.network.AgentApiException
@@ -63,28 +62,28 @@ class ChatViewModelTest {
     @Test
     fun loadsSessionsAndRestoresLastSession() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository()
-        val connection = ChatFakeConnectionGateway()
+        val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
             repository = repository,
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-            connection = connection,
+            sessionOwner = sessionOwner,
         )
 
         advanceUntilIdle()
 
         assertEquals("Alpha", viewModel.uiState.value.selectedSession?.name)
         assertEquals(2, viewModel.uiState.value.sessions.size)
-        assertEquals("cursor" to "sess_02", connection.target)
+        assertEquals("cursor" to "sess_02", sessionOwner.target)
     }
 
     @Test
     fun confirmNewSessionEnablesComposerWithoutCreateCall() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository()
-        val connection = ChatFakeConnectionGateway()
+        val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
             repository = repository,
             navigation = ChatFakeNavigationPreferences(),
-            connection = connection,
+            sessionOwner = sessionOwner,
         )
 
         advanceUntilIdle()
@@ -100,17 +99,17 @@ class ChatViewModelTest {
         assertEquals("New session", viewModel.uiState.value.selectedSession?.name)
         assertEquals("", viewModel.uiState.value.selectedSession?.sessionId)
         assertTrue(viewModel.uiState.value.composerEnabled)
-        assertNull(connection.target)
+        assertNull(sessionOwner.target)
     }
 
     @Test
-    fun firstComposerSendCreatesSessionThenPromptsAfterSubscribe() = runTest(dispatcher) {
+    fun firstComposerSendCreatesSessionThenPrompts() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository()
-        val connection = ChatFakeConnectionGateway()
+        val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
             repository = repository,
             navigation = ChatFakeNavigationPreferences(),
-            connection = connection,
+            sessionOwner = sessionOwner,
         )
 
         advanceUntilIdle()
@@ -128,63 +127,48 @@ class ChatViewModelTest {
         assertEquals(1, repository.createCalls.size)
         assertEquals("/tmp/agent-server", repository.createCalls.first().cwd)
         assertEquals("sess_new", viewModel.uiState.value.selectedSession?.sessionId)
-        assertEquals("cursor" to "sess_new", connection.target)
-
-        connection.emit(
-            SessionStreamServerMessage.Subscribed(agentId = "cursor", sessionId = "sess_new"),
-        )
-        advanceUntilIdle()
-
-        val prompt = connection.sent.filterIsInstance<SessionStreamClientMessage.Prompt>().single()
-        assertEquals("Ship it", prompt.text)
+        assertEquals("cursor" to "sess_new", sessionOwner.target)
+        assertEquals(listOf("Ship it"), sessionOwner.prompts)
         assertTrue(viewModel.uiState.value.transcript.rows.first() is TranscriptUserRow)
     }
 
     @Test
     fun streamsTranscriptAndAllowsFollowUpPrompt() = runTest(dispatcher) {
-        val connection = ChatFakeConnectionGateway()
+        val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
             repository = ChatFakeOperatorRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-            connection = connection,
+            sessionOwner = sessionOwner,
         )
 
-        advanceUntilIdle()
-        connection.emit(
-            SessionStreamServerMessage.Subscribed(agentId = "cursor", sessionId = "sess_02"),
-        )
         advanceUntilIdle()
 
         viewModel.onComposerTextChanged("Follow up")
         viewModel.submitComposerPrompt()
         advanceUntilIdle()
 
-        val prompt = connection.sent.filterIsInstance<SessionStreamClientMessage.Prompt>().single()
-        assertEquals("Follow up", prompt.text)
+        assertEquals(listOf("Follow up"), sessionOwner.prompts)
         assertEquals("", viewModel.uiState.value.composerText)
         assertEquals(SessionState.Running, viewModel.uiState.value.effectiveSessionState)
     }
 
     @Test
     fun cancelSessionSendsStreamCancel() = runTest(dispatcher) {
-        val connection = ChatFakeConnectionGateway()
+        val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
             repository = ChatFakeOperatorRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-            connection = connection,
+            sessionOwner = sessionOwner,
         )
 
         advanceUntilIdle()
-        connection.emit(
-            SessionStreamServerMessage.Subscribed(agentId = "cursor", sessionId = "sess_02"),
-        )
         viewModel.onComposerTextChanged("Go")
         viewModel.submitComposerPrompt()
         advanceUntilIdle()
         viewModel.submitCancel()
         advanceUntilIdle()
 
-        assertTrue(connection.sent.any { message -> message is SessionStreamClientMessage.Cancel })
+        assertEquals(1, sessionOwner.cancels)
     }
 
     @Test
@@ -225,23 +209,25 @@ class ChatViewModelTest {
 
     @Test
     fun reconnectClearsTranscriptBeforeReplay() = runTest(dispatcher) {
-        val connection = ChatFakeConnectionGateway()
+        val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
             repository = ChatFakeOperatorRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-            connection = connection,
+            sessionOwner = sessionOwner,
         )
 
         advanceUntilIdle()
-        connection.emit(
-            SessionStreamServerMessage.Subscribed(agentId = "cursor", sessionId = "sess_02"),
-        )
         viewModel.onComposerTextChanged("first")
         viewModel.submitComposerPrompt()
         advanceUntilIdle()
         assertEquals(1, viewModel.uiState.value.transcript.rows.size)
 
-        connection.triggerReconnect()
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                transcript = applyReconnect(),
+                reconnecting = true,
+            ),
+        )
         advanceUntilIdle()
         assertTrue(viewModel.uiState.value.streamReconnecting)
         assertEquals(0, viewModel.uiState.value.transcript.rows.size)
@@ -250,33 +236,27 @@ class ChatViewModelTest {
 
     @Test
     fun permissionRequestUpdatesPendingState() = runTest(dispatcher) {
-        val connection = ChatFakeConnectionGateway()
+        val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
             repository = ChatFakeOperatorRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-            connection = connection,
+            sessionOwner = sessionOwner,
         )
 
         advanceUntilIdle()
-        connection.emit(
-            SessionStreamServerMessage.PermissionRequest(
-                requestId = "perm_01",
-                agentId = "cursor",
-                sessionId = "sess_02",
-                params = JsonObject(
-                    mapOf(
-                        "toolName" to JsonPrimitive("fake-tool"),
-                        "options" to kotlinx.serialization.json.JsonArray(
-                            listOf(
-                                JsonObject(
-                                    mapOf(
-                                        "optionId" to JsonPrimitive("allow-once"),
-                                        "name" to JsonPrimitive("Allow once"),
-                                    ),
-                                ),
-                            ),
-                        ),
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                pendingPermission = PermissionRequest(
+                    id = "perm_01",
+                    sessionId = "sess_02",
+                    turnId = "stream",
+                    toolCallId = "stream",
+                    toolName = "fake-tool",
+                    status = PermissionStatus.Pending,
+                    options = listOf(
+                        PermissionOption(optionId = "allow-once", name = "Allow once"),
                     ),
+                    createdAt = "",
                 ),
             ),
         )
@@ -285,12 +265,7 @@ class ChatViewModelTest {
         assertEquals("fake-tool", viewModel.uiState.value.activePermissionRequest?.toolName)
         viewModel.submitPermissionOption("allow-once")
         advanceUntilIdle()
-        assertTrue(
-            connection.sent.any { message ->
-                message is SessionStreamClientMessage.PermissionReply &&
-                    message.optionId == "allow-once"
-            },
-        )
+        assertEquals(listOf("perm_01" to "allow-once"), sessionOwner.permissionReplies)
     }
 
     @Test
@@ -356,67 +331,36 @@ class ChatViewModelTest {
 
     @Test
     fun appliesAuthSessionUpdatedForMatchingAgent() = runTest(dispatcher) {
-        val connection = ChatFakeConnectionGateway()
+        val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
             repository = ChatFakeOperatorRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-            connection = connection,
+            sessionOwner = sessionOwner,
         )
         advanceUntilIdle()
 
-        connection.emit(
-            SessionStreamServerMessage.AuthSessionUpdated(
+        val auth = server.agent.android.contracts.AgentAuth(
+            agentId = "cursor",
+            status = server.agent.android.contracts.AgentAuthStatus.NeedsAuth,
+            error = null,
+            session = server.agent.android.contracts.AgentAuthSession(
+                sessionId = "auth-1",
                 agentId = "cursor",
-                auth = server.agent.android.contracts.AgentAuth(
-                    agentId = "cursor",
-                    status = server.agent.android.contracts.AgentAuthStatus.NeedsAuth,
-                    error = null,
-                    session = server.agent.android.contracts.AgentAuthSession(
-                        sessionId = "auth-1",
-                        agentId = "cursor",
-                        status = server.agent.android.contracts.AuthSessionStatus.InProgress,
-                        steps = listOf(
-                            server.agent.android.contracts.AuthStep.ShowMessage(
-                                level = server.agent.android.contracts.AuthShowMessageLevel.Info,
-                                body = "Sign in on the host",
-                            ),
-                        ),
-                        error = null,
+                status = server.agent.android.contracts.AuthSessionStatus.InProgress,
+                steps = listOf(
+                    server.agent.android.contracts.AuthStep.ShowMessage(
+                        level = server.agent.android.contracts.AuthShowMessageLevel.Info,
+                        body = "Sign in on the host",
                     ),
                 ),
+                error = null,
             ),
         )
+        sessionOwner.publish(sessionOwner.snapshot.value.copy(agentAuth = auth))
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.showAuthPanel)
         assertEquals("auth-1", viewModel.uiState.value.agentAuth?.session?.sessionId)
-    }
-
-    @Test
-    fun ignoresAuthSessionUpdatedForOtherAgent() = runTest(dispatcher) {
-        val connection = ChatFakeConnectionGateway()
-        val viewModel = createViewModel(
-            repository = ChatFakeOperatorRepository(),
-            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-            connection = connection,
-        )
-        advanceUntilIdle()
-        val before = viewModel.uiState.value.agentAuth
-
-        connection.emit(
-            SessionStreamServerMessage.AuthSessionUpdated(
-                agentId = "other",
-                auth = server.agent.android.contracts.AgentAuth(
-                    agentId = "other",
-                    status = server.agent.android.contracts.AgentAuthStatus.NeedsAuth,
-                    error = null,
-                    session = null,
-                ),
-            ),
-        )
-        advanceUntilIdle()
-
-        assertEquals(before, viewModel.uiState.value.agentAuth)
     }
 
     @Test
@@ -545,29 +489,23 @@ class ChatViewModelTest {
         val sessionGateway = ChatFakeSessionGateway(
             PairedState.Paired(ORIGIN, "device_01", "Pixel"),
         )
-        val connection = ChatFakeConnectionGateway()
+        val sessionOwner = ChatFakeSessionOwner()
         val navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02")
         val viewModel = createViewModel(
             repository = repository,
             navigation = navigation,
-            connection = connection,
+            sessionOwner = sessionOwner,
             sessionGateway = sessionGateway,
         )
         advanceUntilIdle()
 
-        connection.emit(
-            SessionStreamServerMessage.SessionUpdate(
-                agentId = "cursor",
-                sessionId = "sess_02",
-                update = kotlinx.serialization.json.Json.parseToJsonElement(
-                    """
-                    {
-                      "sessionUpdate": "available_commands_update",
-                      "availableCommands": [
-                        {"name": "plan", "description": "Draft a plan"}
-                      ]
-                    }
-                    """.trimIndent(),
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                availableCommands = listOf(
+                    server.agent.android.contracts.AvailableCommand(
+                        name = "plan",
+                        description = "Draft a plan",
+                    ),
                 ),
             ),
         )
@@ -583,7 +521,7 @@ class ChatViewModelTest {
         assertEquals(listOf("device_01"), repository.revokeDeviceCalls)
         assertEquals(PairedState.NotPaired, sessionGateway.pairedState.value)
         assertTrue(navigation.lastSessionCleared)
-        assertNull(connection.target)
+        assertEquals(1, sessionOwner.disconnects)
         assertTrue(viewModel.uiState.value.availableCommands.isEmpty())
     }
 
@@ -597,11 +535,11 @@ class ChatViewModelTest {
                 session = null,
             ),
         )
-        val connection = ChatFakeConnectionGateway()
+        val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
             repository = repository,
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-            connection = connection,
+            sessionOwner = sessionOwner,
         )
         advanceUntilIdle()
         val getsBefore = repository.authGetCalls.size
@@ -624,11 +562,11 @@ class ChatViewModelTest {
             ),
         )
 
-        connection.emit(
-            SessionStreamServerMessage.Error(
-                message = "Agent authentication required",
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
                 agentId = "cursor",
                 sessionId = "sess_02",
+                authRequired = true,
             ),
         )
         advanceUntilIdle()
@@ -641,29 +579,23 @@ class ChatViewModelTest {
     @Test
     fun commandsUpdatePopulatesStateWithoutTouchingTranscriptAndRestoresOnSwitchBack() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository()
-        val connection = ChatFakeConnectionGateway()
+        val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
             repository = repository,
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-            connection = connection,
+            sessionOwner = sessionOwner,
         )
         advanceUntilIdle()
 
         val rowsBefore = viewModel.uiState.value.transcript.rows
 
-        connection.emit(
-            SessionStreamServerMessage.SessionUpdate(
-                agentId = "cursor",
-                sessionId = "sess_02",
-                update = kotlinx.serialization.json.Json.parseToJsonElement(
-                    """
-                    {
-                      "sessionUpdate": "available_commands_update",
-                      "availableCommands": [
-                        {"name": "plan", "description": "Draft a plan"}
-                      ]
-                    }
-                    """.trimIndent(),
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                availableCommands = listOf(
+                    server.agent.android.contracts.AvailableCommand(
+                        name = "plan",
+                        description = "Draft a plan",
+                    ),
                 ),
             ),
         )
@@ -674,31 +606,16 @@ class ChatViewModelTest {
             viewModel.uiState.value.availableCommands.map { command -> command.name },
         )
         assertEquals(rowsBefore, viewModel.uiState.value.transcript.rows)
-
-        val other = viewModel.uiState.value.sessions.first { row -> row.sessionId == "sess_01" }
-        viewModel.selectSession(other)
-        advanceUntilIdle()
-
-        assertTrue(viewModel.uiState.value.availableCommands.isEmpty())
-
-        val remembered = viewModel.uiState.value.sessions.first { row -> row.sessionId == "sess_02" }
-        viewModel.selectSession(remembered)
-        advanceUntilIdle()
-
-        assertEquals(
-            listOf("plan"),
-            viewModel.uiState.value.availableCommands.map { command -> command.name },
-        )
     }
 
     @Test
     fun voiceCommandPickPrefixesSubmittedPrompt() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository()
-        val connection = ChatFakeConnectionGateway()
+        val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
             repository = repository,
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-            connection = connection,
+            sessionOwner = sessionOwner,
         )
         advanceUntilIdle()
 
@@ -711,8 +628,7 @@ class ChatViewModelTest {
         viewModel.submitVoicePrompt()
         advanceUntilIdle()
 
-        val prompt = connection.sent.filterIsInstance<SessionStreamClientMessage.Prompt>().single()
-        assertEquals("/plan", prompt.text)
+        assertEquals(listOf("/plan"), sessionOwner.prompts)
         assertFalse(viewModel.uiState.value.voiceDictation.visible)
         assertEquals("", viewModel.uiState.value.voiceCommandPrefix)
     }
@@ -720,14 +636,14 @@ class ChatViewModelTest {
     private fun createViewModel(
         repository: ChatFakeOperatorRepository,
         navigation: ChatFakeNavigationPreferences,
-        connection: ChatFakeConnectionGateway = ChatFakeConnectionGateway(),
+        sessionOwner: ChatFakeSessionOwner = ChatFakeSessionOwner(),
         sessionGateway: ChatFakeSessionGateway = ChatFakeSessionGateway(
             PairedState.Paired(ORIGIN, "device_01", "Pixel"),
         ),
     ): ChatViewModel = ChatViewModel(
         savedStateHandle = SavedStateHandle(),
         sessionGateway = sessionGateway,
-        connectionGateway = connection,
+        sessionOwner = sessionOwner,
         operatorRepository = repository,
         navigationPreferences = navigation,
         voiceDictationController = VoiceDictationController(
@@ -755,43 +671,81 @@ private class ChatFakeSessionGateway(
     }
 }
 
-private class ChatFakeConnectionGateway : ConnectionGateway {
-    private val _state = MutableStateFlow(ConnectionState())
-    override val state: StateFlow<ConnectionState> = _state.asStateFlow()
+private class ChatFakeSessionOwner : SessionOwner {
+    private val _connectionState = MutableStateFlow(ConnectionState())
+    override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
-    private val _messages = MutableSharedFlow<SessionStreamServerMessage>(extraBufferCapacity = 64)
-    override val messages: SharedFlow<SessionStreamServerMessage> = _messages.asSharedFlow()
+    private val _snapshot = MutableStateFlow(SessionSnapshot())
+    override val snapshot: StateFlow<SessionSnapshot> = _snapshot.asStateFlow()
 
-    private val _streamResets = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
-    override val streamResets: SharedFlow<Unit> = _streamResets.asSharedFlow()
-
-    val sent = mutableListOf<SessionStreamClientMessage>()
+    val prompts = mutableListOf<String>()
+    val permissionReplies = mutableListOf<Pair<String, String>>()
+    var cancels = 0
+        private set
+    var disconnects = 0
+        private set
     var target: Pair<String, String>? = null
         private set
 
-    override fun connect(serverOrigin: String) = Unit
-    override fun retry() = Unit
-    override fun disconnect() = Unit
-
-    override fun send(message: SessionStreamClientMessage) {
-        sent += message
+    fun publish(snapshot: SessionSnapshot) {
+        _snapshot.value = snapshot
     }
 
-    override fun setTarget(agentId: AgentId?, sessionId: String?) {
-        target = if (agentId == null || sessionId == null) {
+    override fun connect(serverOrigin: String) = Unit
+    override fun retry() = Unit
+
+    override fun disconnect() {
+        disconnects += 1
+        target = null
+        _snapshot.value = SessionSnapshot()
+    }
+
+    override fun watch(agentId: AgentId?, sessionId: String?) {
+        val nextTarget = if (agentId == null || sessionId.isNullOrEmpty()) {
             null
         } else {
             agentId to sessionId
         }
+        if (target == nextTarget) {
+            return
+        }
+        target = nextTarget
+        _snapshot.update { current ->
+            current.copy(
+                agentId = agentId,
+                sessionId = sessionId?.takeIf { it.isNotEmpty() },
+                transcript = emptyAcpTranscript,
+                reconnecting = false,
+                availableCommands = emptyList(),
+                pendingPermission = null,
+                extension = null,
+                authRequired = false,
+            )
+        }
     }
 
-    fun emit(message: SessionStreamServerMessage) {
-        check(_messages.tryEmit(message))
+    override fun prompt(text: String) {
+        prompts += text
+        val turnId = "turn-${prompts.size}"
+        _snapshot.update { current ->
+            current.copy(transcript = beginUserTurn(current.transcript, turnId, text))
+        }
     }
 
-    fun triggerReconnect() {
-        check(_streamResets.tryEmit(Unit))
+    override fun cancel() {
+        cancels += 1
     }
+
+    override fun replyPermission(requestId: String, optionId: String) {
+        permissionReplies += requestId to optionId
+        _snapshot.update { current -> current.copy(pendingPermission = null) }
+    }
+
+    override fun replyExtension(requestId: String, result: JsonElement) {
+        _snapshot.update { current -> current.copy(extension = null) }
+    }
+
+    override fun forget(agentId: AgentId, sessionId: String) = Unit
 }
 
 private class ChatFakeNavigationPreferences(

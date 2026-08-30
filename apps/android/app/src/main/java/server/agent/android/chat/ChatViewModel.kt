@@ -13,25 +13,21 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
-import server.agent.android.chat.composer.AvailableCommandsCatalog
 import server.agent.android.chat.composer.completeSlashCommand
-import server.agent.android.connection.ConnectionGateway
 import server.agent.android.contracts.AgentAuth
 import server.agent.android.contracts.AgentAuthStatus
 import server.agent.android.contracts.AgentAuthSummary
 import server.agent.android.contracts.AgentId
-import server.agent.android.contracts.AvailableCommand
 import server.agent.android.contracts.AuthSessionAction
 import server.agent.android.contracts.AuthSessionStatus
 import server.agent.android.contracts.CreateSessionBody
-import server.agent.android.contracts.parseAvailableCommands
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionState
-import server.agent.android.contracts.SessionStreamClientMessage
-import server.agent.android.contracts.SessionStreamServerMessage
 import server.agent.android.contracts.WorkspaceState
 import server.agent.android.contracts.catalogSessionKey
 import server.agent.android.contracts.toSummary
+import server.agent.android.live.SessionOwner
+import server.agent.android.live.SessionSnapshot
 import server.agent.android.events.ConnectionStatus
 import server.agent.android.foreground.ActiveSessionSnapshot
 import server.agent.android.foreground.ActiveSessionTracker
@@ -49,7 +45,7 @@ import server.agent.android.ui.promptinput.applyEdit
 class ChatViewModel(
     private val savedStateHandle: SavedStateHandle,
     private val sessionGateway: SessionGateway,
-    private val connectionGateway: ConnectionGateway,
+    private val sessionOwner: SessionOwner,
     private val operatorRepository: OperatorRepository,
     private val navigationPreferences: NavigationPreferences,
     private val activeSessionTracker: ActiveSessionTracker? = null,
@@ -70,11 +66,10 @@ class ChatViewModel(
     private var workspaceByPath: Map<String, WorkspaceRow> = emptyMap()
     private var agentLabels: Map<AgentId, String> = emptyMap()
     private var agentAuthSummaries: Map<AgentId, AgentAuthSummary> = emptyMap()
-    private var pendingPrompt: String? = null
-    private var turnSerial: Int = 0
     private var catalog: List<SessionRow> = emptyList()
     private var authHydrateGeneration: Int = 0
-    private val commandsCatalog = AvailableCommandsCatalog()
+    private var lastLiveWatchKey: String? = null
+    private var lastAuthRequired: Boolean = false
 
     init {
         voiceDictationController.onStateChanged = ::syncVoiceDictationState
@@ -101,7 +96,7 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
-            connectionGateway.state.collect { state ->
+            sessionOwner.connectionState.collect { state ->
                 val banner = when (val status = state.status) {
                     ConnectionStatus.Idle -> null
                     ConnectionStatus.Connecting -> "Connecting…"
@@ -115,23 +110,7 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
-            connectionGateway.streamResets.collect {
-                pendingPrompt = null
-                _uiState.update { current ->
-                    current.copy(
-                        transcript = applyReconnect(),
-                        pendingPermissions = emptyList(),
-                        permissionUiState = PermissionUiState(),
-                        extensionUiState = ExtensionUiState(),
-                        streamReconnecting = true,
-                    )
-                }
-                syncSelectedState(SessionState.Offline)
-            }
-        }
-
-        viewModelScope.launch {
-            connectionGateway.messages.collect(::applyStreamMessage)
+            sessionOwner.snapshot.collect(::applyLiveSnapshot)
         }
 
         viewModelScope.launch {
@@ -139,13 +118,12 @@ class ChatViewModel(
                 if (paired is PairedState.Paired) {
                     sessionForegroundCoordinator?.setServerOrigin(paired.serverOrigin)
                     _uiState.value.selectedSession?.let { selected ->
-                        connectionGateway.setTarget(selected.agentId, selected.sessionId)
+                        sessionOwner.watch(selected.agentId, selected.sessionId)
                     }
                     refreshCatalog()
                 } else {
-                    commandsCatalog.clear()
                     sessionForegroundCoordinator?.setServerOrigin(null)
-                    connectionGateway.setTarget(null, null)
+                    sessionOwner.watch(null, null)
                     _uiState.update { current ->
                         current.copy(availableCommands = emptyList())
                     }
@@ -424,7 +402,6 @@ class ChatViewModel(
             return
         }
 
-        pendingPrompt = null
         val draftSession = draftNewSessionRow(workspace = workspace, agentId = agentId)
         hideCreateDialog()
         clearComposer()
@@ -439,7 +416,7 @@ class ChatViewModel(
                 composerText = "",
                 composerError = null,
                 composerSubmitting = false,
-                availableCommands = commandsFor(draftSession),
+                availableCommands = emptyList(),
                 voiceCommandPrefix = "",
                 voiceCommandListVisible = false,
                 pendingPermissions = emptyList(),
@@ -453,7 +430,7 @@ class ChatViewModel(
                 authError = null,
             )
         }
-        connectionGateway.setTarget(agentId, null)
+        sessionOwner.watch(agentId, null)
         syncActiveSessionsFromUiState()
         viewModelScope.launch {
             hydrateAgentAuth(agentId)
@@ -473,24 +450,15 @@ class ChatViewModel(
             return
         }
 
-        val turnId = nextTurnId()
         clearComposer()
         _uiState.update { current ->
             current.copy(
                 composerText = "",
                 composerSubmitting = false,
                 composerError = null,
-                transcript = beginUserTurn(current.transcript, turnId, prompt),
             )
         }
-        syncSelectedState(SessionState.Running)
-        connectionGateway.send(
-            SessionStreamClientMessage.Prompt(
-                agentId = session.agentId,
-                sessionId = session.sessionId,
-                text = prompt,
-            ),
-        )
+        sessionOwner.prompt(prompt)
     }
 
     fun submitPermissionOption(optionId: String) {
@@ -505,22 +473,9 @@ class ChatViewModel(
                     submittingOptionId = optionId,
                     error = null,
                 ),
-                transcript = applyPermissionResolved(current.transcript),
-                pendingPermissions = current.pendingPermissions.filterNot { item ->
-                    item.id == active.id
-                },
             )
         }
-        syncSelectedState(SessionState.Running)
-        connectionGateway.send(
-            SessionStreamClientMessage.PermissionReply(
-                requestId = active.id,
-                optionId = optionId,
-            ),
-        )
-        _uiState.update { current ->
-            current.copy(permissionUiState = PermissionUiState())
-        }
+        sessionOwner.replyPermission(requestId = active.id, optionId = optionId)
     }
 
     fun submitCancel() {
@@ -532,12 +487,7 @@ class ChatViewModel(
         _uiState.update { current ->
             current.copy(cancelSubmitting = true, cancelError = null)
         }
-        connectionGateway.send(
-            SessionStreamClientMessage.Cancel(
-                agentId = session.agentId,
-                sessionId = session.sessionId,
-            ),
-        )
+        sessionOwner.cancel()
         _uiState.update { current ->
             current.copy(cancelSubmitting = false)
         }
@@ -574,28 +524,15 @@ class ChatViewModel(
         _uiState.update { current ->
             current.copy(extensionUiState = current.extensionUiState.copy(submitting = true))
         }
-        connectionGateway.send(
-            SessionStreamClientMessage.ExtensionReply(
-                requestId = request.requestId,
-                result = parsed,
-            ),
-        )
-        _uiState.update { current ->
-            current.copy(extensionUiState = ExtensionUiState())
-        }
+        sessionOwner.replyExtension(requestId = request.requestId, result = parsed)
     }
 
     fun skipExtension() {
         val request = _uiState.value.extensionUiState.request ?: return
-        connectionGateway.send(
-            SessionStreamClientMessage.ExtensionReply(
-                requestId = request.requestId,
-                result = JsonObject(emptyMap()),
-            ),
+        sessionOwner.replyExtension(
+            requestId = request.requestId,
+            result = JsonObject(emptyMap()),
         )
-        _uiState.update { current ->
-            current.copy(extensionUiState = ExtensionUiState())
-        }
     }
 
     fun deleteSession(row: SessionRow) {
@@ -620,7 +557,6 @@ class ChatViewModel(
     }
 
     fun selectSession(row: SessionRow) {
-        pendingPrompt = null
         viewModelScope.launch {
             activateSession(row)
         }
@@ -757,9 +693,7 @@ class ChatViewModel(
                     deviceId = paired.deviceId,
                 )
             }
-            commandsCatalog.clear()
-            connectionGateway.setTarget(null, null)
-            connectionGateway.disconnect()
+            sessionOwner.disconnect()
             clearPersistedSession()
             _uiState.update { current ->
                 current.copy(availableCommands = emptyList())
@@ -898,7 +832,7 @@ class ChatViewModel(
                 transcript = emptyAcpTranscript,
                 composerText = "",
                 composerError = null,
-                availableCommands = commandsFor(row),
+                availableCommands = emptyList(),
                 voiceCommandPrefix = "",
                 voiceCommandListVisible = false,
                 pendingPermissions = emptyList(),
@@ -912,167 +846,69 @@ class ChatViewModel(
                 authError = null,
             )
         }
-        connectionGateway.setTarget(row.agentId, row.sessionId)
+        sessionOwner.watch(row.agentId, row.sessionId)
         syncActiveSessionsFromUiState()
         hydrateAgentAuth(row.agentId)
     }
 
-    private fun applyStreamMessage(message: SessionStreamServerMessage) {
-        val selected = _uiState.value.selectedSession
+    private fun applyLiveSnapshot(snapshot: SessionSnapshot) {
+        val watchKey = catalogSessionKey(
+            snapshot.agentId.orEmpty(),
+            snapshot.sessionId.orEmpty(),
+        )
+        if (watchKey != lastLiveWatchKey) {
+            lastLiveWatchKey = watchKey
+            lastAuthRequired = false
+        }
 
-        when (message) {
-            is SessionStreamServerMessage.SessionUpdate -> {
-                if (!belongsToSelection(message.agentId, message.sessionId, selected)) {
-                    return
-                }
-                val commands = parseAvailableCommands(message.update)
-                if (commands != null) {
-                    commandsCatalog.remember(message.agentId, message.sessionId, commands)
-                    _uiState.update { current ->
-                        current.copy(
-                            availableCommands = commandsFor(current.selectedSession),
-                            streamReconnecting = false,
-                        )
-                    }
-                    return
-                }
-                _uiState.update { current ->
-                    current.copy(
-                        transcript = foldAcpUpdate(current.transcript, parseAcpUpdate(message.update)),
-                        streamReconnecting = false,
-                    )
-                }
-                syncSelectedState(_uiState.value.transcript.sessionState)
+        val streamAuth = snapshot.agentAuth
+        val streamAuthSummary = if (streamAuth != null) {
+            val agentId = snapshot.agentId
+            val canLogout = agentId?.let { id -> agentAuthSummaries[id]?.canLogout } ?: false
+            val summary = streamAuth.toSummary(canLogout = canLogout)
+            if (agentId != null) {
+                agentAuthSummaries = agentAuthSummaries + (agentId to summary)
             }
-            is SessionStreamServerMessage.Subscribed -> {
-                if (!belongsToSelection(message.agentId, message.sessionId, selected)) {
-                    return
-                }
-                _uiState.update { current ->
-                    current.copy(
-                        transcript = applySubscribed(current.transcript),
-                        streamReconnecting = false,
-                    )
-                }
-                val queued = pendingPrompt
-                pendingPrompt = null
-                if (queued != null) {
-                    val turnId = nextTurnId()
-                    _uiState.update { current ->
-                        current.copy(transcript = beginUserTurn(current.transcript, turnId, queued))
-                    }
-                    connectionGateway.send(
-                        SessionStreamClientMessage.Prompt(
-                            agentId = message.agentId,
-                            sessionId = message.sessionId,
-                            text = queued,
-                        ),
-                    )
-                }
-                syncSelectedState(_uiState.value.transcript.sessionState)
+            summary
+        } else {
+            null
+        }
+
+        _uiState.update { current ->
+            val extensionUi = when {
+                snapshot.extension == null -> ExtensionUiState()
+                current.extensionUiState.request?.requestId == snapshot.extension.requestId ->
+                    current.extensionUiState
+                else -> ExtensionUiState(request = snapshot.extension)
             }
-            is SessionStreamServerMessage.PromptComplete -> {
-                if (!belongsToSelection(message.agentId, message.sessionId, selected)) {
-                    return
-                }
-                _uiState.update { current ->
-                    current.copy(transcript = applyPromptComplete(current.transcript))
-                }
-                syncSelectedState(SessionState.Idle)
+            val permissionUi = if (snapshot.pendingPermission == null) {
+                PermissionUiState()
+            } else {
+                current.permissionUiState
             }
-            is SessionStreamServerMessage.Cancelled -> {
-                if (!belongsToSelection(message.agentId, message.sessionId, selected)) {
-                    return
-                }
-                _uiState.update { current ->
-                    current.copy(transcript = applyCancelled(current.transcript))
-                }
-                syncSelectedState(SessionState.Idle)
-            }
-            is SessionStreamServerMessage.PermissionRequest -> {
-                if (!belongsToSelection(message.agentId, message.sessionId, selected)) {
-                    return
-                }
-                val parsed = parseStreamPermission(
-                    requestId = message.requestId,
-                    sessionId = message.sessionId,
-                    params = message.params,
-                ) ?: return
-                _uiState.update { current ->
-                    current.copy(
-                        pendingPermissions = listOf(parsed),
-                        transcript = applyPermissionRequested(current.transcript),
-                    )
-                }
-                syncSelectedState(SessionState.AwaitingPermission)
-            }
-            is SessionStreamServerMessage.ExtensionRequest -> {
-                if (!belongsToSelection(message.agentId, message.sessionId, selected)) {
-                    return
-                }
-                _uiState.update { current ->
-                    current.copy(
-                        extensionUiState = ExtensionUiState(
-                            request = StreamExtension(
-                                requestId = message.requestId,
-                                method = message.method,
-                                params = message.params,
-                            ),
-                        ),
-                    )
-                }
-            }
-            is SessionStreamServerMessage.Error -> {
-                if (
-                    message.sessionId != null &&
-                    message.sessionId != selected?.sessionId
-                ) {
-                    return
-                }
-                _uiState.update { current ->
-                    current.copy(transcript = applyStreamError(current.transcript))
-                }
-                syncSelectedState(SessionState.Error)
-                if (isAuthRequiredError(message.message) && selected != null) {
-                    viewModelScope.launch {
-                        hydrateAgentAuth(
-                            agentId = selected.agentId,
-                            attachHostLoginIfNeeded = true,
-                        )
-                    }
-                }
-            }
-            is SessionStreamServerMessage.AuthSessionUpdated -> {
-                if (selected == null || selected.agentId != message.agentId) {
-                    return
-                }
-                val canLogout = agentAuthSummaries[message.agentId]?.canLogout ?: false
-                val summary = message.auth.toSummary(canLogout = canLogout)
-                agentAuthSummaries = agentAuthSummaries + (message.agentId to summary)
-                _uiState.update { current ->
-                    current.copy(
-                        agentAuth = message.auth,
-                        agentAuthSummary = summary,
-                        authError = null,
-                    )
+            current.copy(
+                transcript = snapshot.transcript,
+                streamReconnecting = snapshot.reconnecting,
+                availableCommands = snapshot.availableCommands,
+                pendingPermissions = listOfNotNull(snapshot.pendingPermission),
+                permissionUiState = permissionUi,
+                extensionUiState = extensionUi,
+                agentAuth = streamAuth ?: current.agentAuth,
+                agentAuthSummary = streamAuthSummary ?: current.agentAuthSummary,
+            )
+        }
+        syncSelectedState(snapshot.transcript.sessionState)
+
+        if (snapshot.authRequired && !lastAuthRequired) {
+            val agentId = snapshot.agentId
+            if (agentId != null) {
+                viewModelScope.launch {
+                    hydrateAgentAuth(agentId, attachHostLoginIfNeeded = true)
                 }
             }
         }
+        lastAuthRequired = snapshot.authRequired
     }
-
-    private fun isAuthRequiredError(message: String): Boolean {
-        val lower = message.lowercase()
-        return lower.contains("agent authentication required") ||
-            lower.contains("auth_required")
-    }
-
-    private fun belongsToSelection(
-        agentId: AgentId,
-        sessionId: String,
-        selected: SessionRow?,
-    ): Boolean = selected != null &&
-        selected.agentId == agentId &&
-        selected.sessionId == sessionId
 
     private suspend fun openSessionFromNotification(sessionId: String) {
         if (_uiState.value.selectedSession?.sessionId == sessionId) {
@@ -1164,7 +1000,7 @@ class ChatViewModel(
             ?: catalog.firstOrNull { session -> session.sessionId == savedId }
             ?: return
         if (_uiState.value.selectedSession?.id == row.id) {
-            connectionGateway.setTarget(row.agentId, row.sessionId)
+            sessionOwner.watch(row.agentId, row.sessionId)
             return
         }
         activateSession(row)
@@ -1209,15 +1045,12 @@ class ChatViewModel(
         navigationPreferences.clearLastSessionId()
     }
 
-    private fun commandsFor(session: SessionRow?): List<AvailableCommand> =
-        commandsCatalog.current(session?.agentId, session?.sessionId)
-
     private fun dropSession(row: SessionRow) {
-        commandsCatalog.forget(row.agentId, row.sessionId)
+        sessionOwner.forget(row.agentId, row.sessionId)
         catalog = catalog.filterNot { item -> item.id == row.id }
         val selectedWasDeleted = _uiState.value.selectedSession?.id == row.id
         if (selectedWasDeleted) {
-            connectionGateway.setTarget(null, null)
+            sessionOwner.watch(null, null)
             clearComposer()
             viewModelScope.launch { clearPersistedSession() }
         }
@@ -1288,7 +1121,6 @@ class ChatViewModel(
     private fun createSessionFromComposer(session: SessionRow, prompt: String) {
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
 
-        pendingPrompt = prompt
         clearComposer()
         _uiState.update { current ->
             current.copy(
@@ -1310,14 +1142,12 @@ class ChatViewModel(
             result.fold(
                 onSuccess = { created ->
                     val row = created.toSessionRow()
-                    val turnId = nextTurnId()
                     navigationPreferences.saveLastSessionId(row.id)
                     persistSelectedSession(row.id)
                     _uiState.update { current ->
                         current.copy(
                             selectedSession = row,
                             composerSubmitting = false,
-                            transcript = beginUserTurn(emptyAcpTranscript, turnId, prompt),
                             pendingPermissions = emptyList(),
                             permissionUiState = PermissionUiState(),
                             extensionUiState = ExtensionUiState(),
@@ -1329,14 +1159,13 @@ class ChatViewModel(
                             authError = null,
                         )
                     }
-                    connectionGateway.setTarget(row.agentId, row.sessionId)
-                    syncSelectedState(SessionState.Running)
+                    sessionOwner.watch(row.agentId, row.sessionId)
+                    sessionOwner.prompt(prompt)
                     syncActiveSessionsFromUiState()
                     hydrateAgentAuth(row.agentId)
                     refreshCatalog()
                 },
                 onFailure = { error ->
-                    pendingPrompt = null
                     _uiState.update { current ->
                         current.copy(
                             composerSubmitting = false,
@@ -1364,11 +1193,6 @@ class ChatViewModel(
         )
     }
 
-    private fun nextTurnId(): String {
-        turnSerial += 1
-        return "turn-$turnSerial"
-    }
-
     private fun errorMessage(error: Throwable): String =
         when (val apiError = (error as? AgentApiException)?.error) {
             is AgentApiError.Unauthorized -> apiError.detail ?: "Authentication required"
@@ -1380,7 +1204,7 @@ class ChatViewModel(
 
     override fun onCleared() {
         voiceDictationController.destroy()
-        connectionGateway.setTarget(null, null)
+        sessionOwner.watch(null, null)
         super.onCleared()
     }
 
@@ -1394,7 +1218,7 @@ class ChatViewModel(
 class ChatViewModelFactory(
     private val savedStateHandle: SavedStateHandle,
     private val sessionGateway: SessionGateway,
-    private val connectionGateway: ConnectionGateway,
+    private val sessionOwner: SessionOwner,
     private val operatorRepository: OperatorRepository,
     private val navigationPreferences: NavigationPreferences,
     private val activeSessionTracker: ActiveSessionTracker,
@@ -1408,7 +1232,7 @@ class ChatViewModelFactory(
             return ChatViewModel(
                 savedStateHandle = savedStateHandle,
                 sessionGateway = sessionGateway,
-                connectionGateway = connectionGateway,
+                sessionOwner = sessionOwner,
                 operatorRepository = operatorRepository,
                 navigationPreferences = navigationPreferences,
                 activeSessionTracker = activeSessionTracker,
