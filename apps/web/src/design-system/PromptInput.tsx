@@ -20,8 +20,11 @@ import {
   Token,
   tokenAtCaret,
 } from "./prompt.input.model"
+import { overlayAnchor } from "./prompt.input.overlay.anchor"
 import { offsetFromElement, offsetFromPoint } from "./prompt.input.mouse"
 import { useKeyboardInput } from "./use.keyboard.input"
+
+const overlayGapPx = 6
 
 export type PromptInputProps = {
   value: string
@@ -46,12 +49,13 @@ export const PromptInput: React.FC<PromptInputProps> = (props) => {
     onKeyDown,
   } = props
 
+  const shellRef = useRef<HTMLDivElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const activeTokenRef = useRef<HTMLSpanElement>(null)
   const draggingRef = useRef(false)
   const [rangeState, setRangeState] = useState(() => collapse(value.length))
   const [focused, setFocused] = useState(false)
-  const [overlayLeft, setOverlayLeft] = useState(0)
+  const [overlayOffset, setOverlayOffset] = useState({ left: 0, bottom: 0 })
   const range = clampRange(rangeState, value.length)
   const caret = range.focus
   const state: EditorState = { value, ...range }
@@ -80,16 +84,30 @@ export const PromptInput: React.FC<PromptInputProps> = (props) => {
           token: activeToken,
           replaceToken: (text) => apply(replaceToken(state, activeToken, text)),
         }) ?? null)
+  const overlayOpen = overlay !== null
 
   // The token lives inside a scrolling box, so the overlay renders outside it
-  // and borrows the token's x. Layout effect keeps that off the painted frame.
+  // and borrows the first painted span's box. Layout effect keeps that off the
+  // painted frame.
   useLayoutEffect(() => {
-    const span = activeTokenRef.current
-    if (span === null) {
+    const host = shellRef.current
+    const token = activeTokenRef.current
+    if (host === null || token === null || !overlayOpen) {
       return
     }
-    setOverlayLeft(span.offsetLeft)
-  }, [activeToken?.start, value])
+    const first = token.querySelector("[data-offset]")
+    const anchor = first instanceof HTMLElement ? first : token
+    const next = overlayAnchor(
+      host.getBoundingClientRect(),
+      anchor.getBoundingClientRect(),
+      overlayGapPx,
+    )
+    setOverlayOffset((current) =>
+      current.left === next.left && current.bottom === next.bottom
+        ? current
+        : next,
+    )
+  }, [activeToken?.start, value, overlayOpen])
 
   const placeOffset = (offset: number, extend: boolean) => {
     const next = clampCaret(offset, value.length)
@@ -181,11 +199,11 @@ export const PromptInput: React.FC<PromptInputProps> = (props) => {
   const disabledClasses = disabled ? "opacity-50 pointer-events-none" : ""
 
   return (
-    <div className="relative">
+    <div ref={shellRef} className="relative">
       {overlay === null ? null : (
         <div
-          className="absolute bottom-full z-50 mb-1.5"
-          style={{ left: overlayLeft }}
+          className="absolute z-50"
+          style={{ left: overlayOffset.left, bottom: overlayOffset.bottom }}
         >
           {overlay}
         </div>
