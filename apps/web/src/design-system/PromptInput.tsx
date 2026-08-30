@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from "react"
-import { promptKeyHandlers } from "./prompt.input.keyboard"
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { on, promptKeyHandlers } from "./prompt.input.keyboard"
 import {
   assertTokensMatchValue,
   CaretRange,
@@ -12,14 +12,19 @@ import {
   offsetIsSelected,
   Plugin,
   pluginMap,
+  replaceToken,
   requirePlugin,
   scanTokens,
   selectedText,
   selectionIsCollapsed,
   Token,
+  tokenAtCaret,
 } from "./prompt.input.model"
+import { overlayAnchor } from "./prompt.input.overlay.anchor"
 import { offsetFromElement, offsetFromPoint } from "./prompt.input.mouse"
 import { useKeyboardInput } from "./use.keyboard.input"
+
+const overlayGapPx = 6
 
 export type PromptInputProps = {
   value: string
@@ -44,10 +49,13 @@ export const PromptInput: React.FC<PromptInputProps> = (props) => {
     onKeyDown,
   } = props
 
+  const shellRef = useRef<HTMLDivElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  const activeTokenRef = useRef<HTMLSpanElement>(null)
   const draggingRef = useRef(false)
   const [rangeState, setRangeState] = useState(() => collapse(value.length))
   const [focused, setFocused] = useState(false)
+  const [overlayOffset, setOverlayOffset] = useState({ left: 0, bottom: 0 })
   const range = clampRange(rangeState, value.length)
   const caret = range.focus
   const state: EditorState = { value, ...range }
@@ -61,6 +69,45 @@ export const PromptInput: React.FC<PromptInputProps> = (props) => {
       onChange(next.value)
     }
   }
+
+  const activeToken =
+    disabled || !focused || !selectionIsCollapsed(range)
+      ? null
+      : tokenAtCaret(tokens, caret)
+  const activePlugin =
+    activeToken === null ? null : requirePlugin(pluginsByKind, activeToken.kind)
+
+  const overlay =
+    activeToken === null || activePlugin === null
+      ? null
+      : (activePlugin.overlay?.({
+          token: activeToken,
+          replaceToken: (text) => apply(replaceToken(state, activeToken, text)),
+        }) ?? null)
+  const overlayOpen = overlay !== null
+
+  // The token lives inside a scrolling box, so the overlay renders outside it
+  // and borrows the first painted span's box. Layout effect keeps that off the
+  // painted frame.
+  useLayoutEffect(() => {
+    const host = shellRef.current
+    const token = activeTokenRef.current
+    if (host === null || token === null || !overlayOpen) {
+      return
+    }
+    const first = token.querySelector("[data-offset]")
+    const anchor = first instanceof HTMLElement ? first : token
+    const next = overlayAnchor(
+      host.getBoundingClientRect(),
+      anchor.getBoundingClientRect(),
+      overlayGapPx,
+    )
+    setOverlayOffset((current) =>
+      current.left === next.left && current.bottom === next.bottom
+        ? current
+        : next,
+    )
+  }, [activeToken?.start, value, overlayOpen])
 
   const placeOffset = (offset: number, extend: boolean) => {
     const next = clampCaret(offset, value.length)
@@ -99,8 +146,25 @@ export const PromptInput: React.FC<PromptInputProps> = (props) => {
     }
   }, [value.length])
 
+  const committed =
+    activeToken === null ? null : (activePlugin?.onCommit?.(activeToken) ?? null)
+
+  // Prepended so Enter picks before it inserts a newline. `on("Enter")` needs
+  // an unmodified key, so Cmd/Ctrl+Enter still belongs to the consumer.
+  const handlers =
+    activeToken === null || committed === null
+      ? promptKeyHandlers
+      : [
+          {
+            match: on("Enter"),
+            run: (next: EditorState) =>
+              replaceToken(next, activeToken, committed),
+          },
+          ...promptKeyHandlers,
+        ]
+
   const handleKeyDown = useKeyboardInput({
-    handlers: promptKeyHandlers,
+    handlers,
     state,
     onState: apply,
     disabled,
@@ -135,55 +199,73 @@ export const PromptInput: React.FC<PromptInputProps> = (props) => {
   const disabledClasses = disabled ? "opacity-50 pointer-events-none" : ""
 
   return (
-    <div
-      ref={rootRef}
-      role="textbox"
-      aria-label={ariaLabel}
-      aria-multiline="true"
-      aria-placeholder={placeholder}
-      aria-disabled={disabled ? "true" : undefined}
-      data-placeholder={placeholder}
-      tabIndex={disabled ? -1 : 0}
-      className={`cursor-text whitespace-pre-wrap outline-none ${disabledClasses} ${className}`}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      onMouseDown={handleMouseDown}
-      onKeyDown={handleKeyDown}
-      onCopy={handleCopy}
-      onCut={handleCut}
-      onPaste={handlePaste}
-    >
-      {value.length === 0 ? (
-        <span className="pointer-events-none relative">
-          {focused && !disabled ? <Caret /> : null}
-          {placeholder !== undefined ? (
-            <span className="text-dim">{placeholder}</span>
-          ) : null}
-        </span>
-      ) : (
-        tokens.map((token) => {
-          const plugin = requirePlugin(pluginsByKind, token.kind)
-          return (
-            <React.Fragment key={token.start}>
-              {plugin.render({
-                token,
-                caret,
-                selection: range,
-                raw: value,
-                chars: (
-                  <TokenChars
-                    token={token}
-                    value={value}
-                    caret={caret}
-                    range={range}
-                    focused={focused}
-                  />
-                ),
-              })}
-            </React.Fragment>
-          )
-        })
+    <div ref={shellRef} className="relative">
+      {overlay === null ? null : (
+        <div
+          className="absolute z-50"
+          style={{ left: overlayOffset.left, bottom: overlayOffset.bottom }}
+        >
+          {overlay}
+        </div>
       )}
+      <div
+        ref={rootRef}
+        role="textbox"
+        aria-label={ariaLabel}
+        aria-multiline="true"
+        aria-placeholder={placeholder}
+        aria-disabled={disabled ? "true" : undefined}
+        data-placeholder={placeholder}
+        tabIndex={disabled ? -1 : 0}
+        className={`cursor-text whitespace-pre-wrap outline-none ${disabledClasses} ${className}`}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onMouseDown={handleMouseDown}
+        onKeyDown={handleKeyDown}
+        onCopy={handleCopy}
+        onCut={handleCut}
+        onPaste={handlePaste}
+      >
+        {value.length === 0 ? (
+          <span className="pointer-events-none relative">
+            {focused && !disabled ? <Caret /> : null}
+            {placeholder !== undefined ? (
+              <span className="text-dim">{placeholder}</span>
+            ) : null}
+          </span>
+        ) : (
+          tokens.map((token) => {
+            const plugin = requirePlugin(pluginsByKind, token.kind)
+            const painted = plugin.render({
+              token,
+              caret,
+              selection: range,
+              raw: value,
+              chars: (
+                <TokenChars
+                  token={token}
+                  value={value}
+                  caret={caret}
+                  range={range}
+                  focused={focused}
+                />
+              ),
+            })
+
+            if (activeToken?.start !== token.start) {
+              return (
+                <React.Fragment key={token.start}>{painted}</React.Fragment>
+              )
+            }
+
+            return (
+              <span key={token.start} ref={activeTokenRef}>
+                {painted}
+              </span>
+            )
+          })
+        )}
+      </div>
     </div>
   )
 }
@@ -208,6 +290,7 @@ const TokenChars: React.FC<TokenCharsProps> = ({
       const offset = token.start + index
       const atEnd = offset === value.length - 1
       const selected = offsetIsSelected(range, offset)
+      const trailingBreak = ch === "\n" && atEnd
       return (
         <span key={offset} className="relative">
           {focused && caret === offset ? <Caret /> : null}
@@ -217,7 +300,17 @@ const TokenChars: React.FC<TokenCharsProps> = ({
           >
             {ch}
           </span>
-          {focused && atEnd && caret === value.length ? <Caret after /> : null}
+          {focused && atEnd && caret === value.length && !trailingBreak ? (
+            <Caret after />
+          ) : null}
+          {trailingBreak ? (
+            <span className="relative">
+              {focused && caret === value.length ? <Caret /> : null}
+              <span data-offset={value.length} data-trailing-break>
+                {"\u200B"}
+              </span>
+            </span>
+          ) : null}
         </span>
       )
     })}

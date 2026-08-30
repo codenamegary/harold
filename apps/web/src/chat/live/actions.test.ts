@@ -3,7 +3,12 @@ import { createStore } from "jotai"
 import { selectionAtom } from "../selection/atoms"
 import { emptyAcpTranscript } from "./acp.transcript.reducer"
 import { clearLiveAtom, resetLiveAtom } from "./actions"
-import { pendingPromptAtom, permissionAtom, transcriptAtom } from "./atoms"
+import {
+  availableCommandsAtom,
+  pendingPromptAtom,
+  permissionAtom,
+  transcriptAtom,
+} from "./atoms"
 import { applyStreamMessageAtom } from "./stream.actions"
 
 const storeWithLiveState = () => {
@@ -43,6 +48,15 @@ describe("live actions", () => {
 
     expect(store.get(transcriptAtom).rows).toEqual([])
     expect(store.get(permissionAtom)).toBeNull()
+  })
+
+  test("clearLive drops the command list, since the next session has its own", () => {
+    const store = storeWithLiveState()
+    store.set(availableCommandsAtom, [{ name: "plan", description: "Plan it" }])
+
+    store.set(clearLiveAtom, emptyAcpTranscript)
+
+    expect(store.get(availableCommandsAtom)).toEqual([])
   })
 
   test("clearLive keeps a queued prompt so a reconnect can deliver it", () => {

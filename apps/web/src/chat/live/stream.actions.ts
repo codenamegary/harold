@@ -4,6 +4,7 @@ import { SessionStreamServerMessage } from "contracts/http/session.stream"
 import { ChatSelection } from "../selection/persist"
 import { selectionAtom } from "../selection/atoms"
 import { parseAcpUpdate } from "./acp.update"
+import { parseAvailableCommands } from "./commands.available"
 import {
   applyCancelled,
   applyPermissionRequested,
@@ -14,6 +15,7 @@ import {
 } from "./acp.transcript.reducer"
 import { parseStreamPermission } from "./parse.permission"
 import {
+  availableCommandsAtom,
   extensionAtom,
   pendingPromptAtom,
   permissionAtom,
@@ -46,6 +48,11 @@ export const applyStreamMessageAtom = atom(
     switch (message.type) {
       case "session_update": {
         if (!belongsToSelection(selection, message)) {
+          return noEffect
+        }
+        const commands = parseAvailableCommands(message.update)
+        if (commands !== null) {
+          set(availableCommandsAtom, commands)
           return noEffect
         }
         set(

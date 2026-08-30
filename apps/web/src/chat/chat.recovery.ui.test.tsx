@@ -168,6 +168,67 @@ describe("Chat recovery UI", () => {
     expect(getByLabelText("online status")).toBeInTheDocument()
   })
 
+  test("advertised commands drive the composer picker", async () => {
+    const { getByRole, getByText, queryByRole } = renderChat()
+    await joinSessionByName({ getByRole }, idleSession.title)
+    subscribe(idleSession)
+
+    await waitFor(() => {
+      expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute(
+        "aria-disabled",
+      )
+    })
+
+    act(() => {
+      gatewaySocket()?.dispatch(
+        "message",
+        JSON.stringify({
+          type: "session_update",
+          agentId: idleSession.agentId,
+          sessionId: idleSession.sessionId,
+          update: {
+            sessionUpdate: "available_commands_update",
+            availableCommands: [
+              { name: "plan", description: "Look at code" },
+              { name: "review", description: "Check the diff" },
+            ],
+          },
+        }),
+      )
+    })
+
+    // A command list is not a turn. The session stays idle.
+    expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute(
+      "aria-disabled",
+    )
+    expect(queryByRole("button", { name: "Cancel turn" })).toBeNull()
+
+    const field = getByRole("textbox", { name: "Chat message" })
+    fireEvent.focus(field)
+    fireEvent.keyDown(field, { key: "/" })
+
+    await waitFor(() => {
+      expect(
+        getByRole("list", { name: "Available commands" }),
+      ).toBeInTheDocument()
+    })
+    expect(getByText("/plan")).toBeInTheDocument()
+    expect(getByText("/review")).toBeInTheDocument()
+
+    fireEvent.keyDown(field, { key: "r" })
+    await waitFor(() => {
+      expect(getByText("/review")).toBeInTheDocument()
+    })
+    expect(queryByRole("button", { name: /\/plan/ })).toBeNull()
+
+    fireEvent.keyDown(field, { key: "Enter" })
+
+    await waitFor(() => {
+      expect(queryByRole("list", { name: "Available commands" })).toBeNull()
+    })
+    expect(field).toHaveTextContent("/review")
+  })
+
   test("live session_update after subscribe disables composer", async () => {
     const { getByRole } = renderChat()
     await joinSessionByName({ getByRole }, idleSession.title)

@@ -1,7 +1,9 @@
-import React, { useState } from "react"
+import React, { useMemo, useState } from "react"
+import { useAtomValue } from "jotai"
 import { ArrowUp, Square } from "lucide-react"
 import { PromptInput } from "../../design-system/PromptInput"
-import { chatPlugins } from "./ChatPlugins"
+import { availableCommandsAtom } from "../live/atoms"
+import { createChatPlugins } from "./ChatPlugins"
 
 type ChatComposerProps = {
   disabled: boolean
@@ -19,6 +21,8 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   onCancel,
 }) => {
   const [value, setValue] = useState("")
+  const commands = useAtomValue(availableCommandsAtom)
+  const plugins = useMemo(() => createChatPlugins({ commands }), [commands])
   const canSend = !disabled && !running && value.trim().length > 0
   const editing = !disabled && !running
 
@@ -56,7 +60,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
           placeholder="Ask the agent…"
           value={value}
           onChange={setValue}
-          plugins={chatPlugins}
+          plugins={plugins}
           disabled={!editing}
           className="block min-h-[88px] max-h-[130px] w-full overflow-auto px-3.5 pt-3.5 pb-[42px] text-base leading-normal text-body"
           onKeyDown={(event) => {

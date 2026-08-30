@@ -6,12 +6,15 @@ import {
   AcpTranscriptState,
 } from "./acp.transcript.reducer"
 import {
+  availableCommandsAtom,
   extensionAtom,
   pendingPromptAtom,
   permissionAtom,
   streamAuthAtom,
   transcriptAtom,
 } from "./atoms"
+
+const noCommands: ReadonlyArray<never> = []
 
 /**
  * Drops everything the current subscription produced. A queued prompt survives
@@ -24,6 +27,7 @@ export const clearLiveAtom = atom(
     set(permissionAtom, null)
     set(extensionAtom, null)
     set(streamAuthAtom, null)
+    set(availableCommandsAtom, noCommands)
   },
 )
 
