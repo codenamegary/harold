@@ -197,6 +197,29 @@ describe("PromptInput", () => {
     expect(field.querySelectorAll(".prompt-input-selected")).toHaveLength(1)
   })
 
+  test("Enter at the end opens a line on the first press", () => {
+    const View: React.FC = () => {
+      const [value, setValue] = useState("hi")
+      return (
+        <div>
+          <PromptInput
+            aria-label="Prompt"
+            value={value}
+            onChange={setValue}
+            plugins={[textPlugin]}
+          />
+          <output data-testid="value">{value}</output>
+        </div>
+      )
+    }
+    const { getByRole, getByTestId } = render(<View />)
+    const field = getByRole("textbox", { name: "Prompt" })
+    fireEvent.focus(field)
+    fireEvent.keyDown(field, { key: "Enter" })
+    expect(getByTestId("value").textContent).toBe("hi\n")
+    expect(field.querySelector("[data-trailing-break]")).not.toBeNull()
+  })
+
   test("mod+enter is left unhandled for the parent", () => {
     const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
       if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {

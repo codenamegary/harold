@@ -290,6 +290,7 @@ const TokenChars: React.FC<TokenCharsProps> = ({
       const offset = token.start + index
       const atEnd = offset === value.length - 1
       const selected = offsetIsSelected(range, offset)
+      const trailingBreak = ch === "\n" && atEnd
       return (
         <span key={offset} className="relative">
           {focused && caret === offset ? <Caret /> : null}
@@ -299,7 +300,17 @@ const TokenChars: React.FC<TokenCharsProps> = ({
           >
             {ch}
           </span>
-          {focused && atEnd && caret === value.length ? <Caret after /> : null}
+          {focused && atEnd && caret === value.length && !trailingBreak ? (
+            <Caret after />
+          ) : null}
+          {trailingBreak ? (
+            <span className="relative">
+              {focused && caret === value.length ? <Caret /> : null}
+              <span data-offset={value.length} data-trailing-break>
+                {"\u200B"}
+              </span>
+            </span>
+          ) : null}
         </span>
       )
     })}
