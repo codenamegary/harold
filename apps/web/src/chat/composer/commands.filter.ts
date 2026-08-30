@@ -1,16 +1,34 @@
 import { Token } from "../../design-system/prompt.input.model"
-import { damerauLevenshtein } from "../../lib/damerau.levenshtein"
 import { AvailableCommand } from "../live/commands.available"
 
 /** The typed name, without the leading slash. */
 export const commandQuery = (token: Token): string => token.value.slice(1)
 
-const commandScore = (name: string, query: string): number => {
-  const hay = name.toLowerCase()
-  return Math.min(
-    damerauLevenshtein(query, hay),
-    damerauLevenshtein(query, hay.slice(0, query.length)),
-  )
+const matchRanks = [
+  "name-prefix",
+  "name-contains",
+  "description-prefix",
+  "description-contains",
+] as const
+
+type MatchRank = (typeof matchRanks)[number]
+
+const rankOf = (command: AvailableCommand, query: string): MatchRank | null => {
+  const name = command.name.toLowerCase()
+  const description = command.description.toLowerCase()
+  if (name.startsWith(query)) {
+    return "name-prefix"
+  }
+  if (name.includes(query)) {
+    return "name-contains"
+  }
+  if (description.startsWith(query)) {
+    return "description-prefix"
+  }
+  if (description.includes(query)) {
+    return "description-contains"
+  }
+  return null
 }
 
 export const filterCommands = (
@@ -22,11 +40,18 @@ export const filterCommands = (
     return commands
   }
 
-  return [...commands].sort((left, right) => {
-    const diff = commandScore(left.name, needle) - commandScore(right.name, needle)
-    if (diff !== 0) {
-      return diff
-    }
-    return 0
-  })
+  return commands
+    .flatMap((command) => {
+      const rank = rankOf(command, needle)
+      return rank === null ? [] : [{ command, rank }]
+    })
+    .sort((left, right) => {
+      const diff =
+        matchRanks.indexOf(left.rank) - matchRanks.indexOf(right.rank)
+      if (diff !== 0) {
+        return diff
+      }
+      return 0
+    })
+    .map((row) => row.command)
 }

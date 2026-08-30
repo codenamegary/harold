@@ -189,8 +189,8 @@ describe("Chat recovery UI", () => {
           update: {
             sessionUpdate: "available_commands_update",
             availableCommands: [
-              { name: "plan", description: "Draft a plan" },
-              { name: "review", description: "Review the diff" },
+              { name: "plan", description: "Look at code" },
+              { name: "review", description: "Check the diff" },
             ],
           },
         }),
@@ -219,11 +219,7 @@ describe("Chat recovery UI", () => {
     await waitFor(() => {
       expect(getByText("/review")).toBeInTheDocument()
     })
-    expect(getByRole("button", { name: /\/review/ })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    )
-    expect(getByText("/plan")).toBeInTheDocument()
+    expect(queryByRole("button", { name: /\/plan/ })).toBeNull()
 
     fireEvent.keyDown(field, { key: "Enter" })
 
