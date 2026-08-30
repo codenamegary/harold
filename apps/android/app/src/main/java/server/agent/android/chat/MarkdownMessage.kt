@@ -11,12 +11,45 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.model.rememberMarkdownState
 import com.mikepenz.markdown.model.rememberStreamingMarkdownState
 
 @Composable
 fun MarkdownMessage(
     text: String,
     modifier: Modifier = Modifier,
+    streaming: Boolean = false,
+) {
+    if (streaming) {
+        StreamingMarkdown(text = text, modifier = modifier)
+    } else {
+        CompletedMarkdown(text = text, modifier = modifier)
+    }
+}
+
+@Composable
+private fun CompletedMarkdown(
+    text: String,
+    modifier: Modifier,
+) {
+    val markdownState = rememberMarkdownState(
+        content = text,
+        retainState = true,
+        immediate = true,
+    )
+
+    SelectionContainer {
+        Markdown(
+            markdownState = markdownState,
+            modifier = modifier.testTag("markdown_message"),
+        )
+    }
+}
+
+@Composable
+private fun StreamingMarkdown(
+    text: String,
+    modifier: Modifier,
 ) {
     var streamEpoch by remember { mutableIntStateOf(0) }
 
