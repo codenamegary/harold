@@ -16,6 +16,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import server.agent.android.contracts.AgentId
+import server.agent.android.contracts.AttachmentReference
 import server.agent.android.contracts.ItemCollection
 import server.agent.android.contracts.PageInfo
 import server.agent.android.contracts.Workspace
@@ -230,7 +231,7 @@ private class FakeSessionOwner : SessionOwner {
 
     override fun watch(agentId: AgentId?, sessionId: String?) = Unit
 
-    override fun prompt(text: String) = Unit
+    override fun prompt(text: String, attachments: List<AttachmentReference>) = Unit
 
     override fun cancel() = Unit
 
@@ -254,6 +255,7 @@ private class FakeAgentApi(
 
         return result
     }
+
 
     override suspend fun getRuntimeSettings(
         serverOrigin: String,

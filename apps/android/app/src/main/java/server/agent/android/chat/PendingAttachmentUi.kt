@@ -1,0 +1,49 @@
+package server.agent.android.chat
+
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import server.agent.android.contracts.AttachmentKind
+import server.agent.android.contracts.AttachmentReference
+
+enum class AttachmentUploadStatus { Uploading, Ready, Failed }
+
+data class PendingAttachmentUi(
+    val localId: String,
+    val name: String,
+    val size: Long,
+    val kind: AttachmentKind,
+    val mimeType: String,
+    val bytes: ByteArray,
+    val status: AttachmentUploadStatus = AttachmentUploadStatus.Uploading,
+    val error: String? = null,
+    val uploadedPath: String? = null,
+    val uploadedId: String? = null,
+    val preview: ImageBitmap? = null,
+) {
+    fun toReference(): AttachmentReference? {
+        val path = uploadedPath ?: return null
+        return AttachmentReference(
+            kind = kind,
+            name = name,
+            mimeType = mimeType.ifEmpty { "application/octet-stream" },
+            path = path,
+        )
+    }
+
+    /** Content equality is local identity only; bytes can be large. */
+    override fun equals(other: Any?): Boolean = other is PendingAttachmentUi && other.localId == localId
+
+    override fun hashCode(): Int = localId.hashCode()
+}
+
+/** Decode image previews off the main thread; null for non-images or failures. */
+fun decodePreview(bytes: ByteArray, kind: AttachmentKind): ImageBitmap? {
+    if (kind != AttachmentKind.Image) {
+        return null
+    }
+    return try {
+        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+    } catch (_: Throwable) {
+        null
+    }
+}

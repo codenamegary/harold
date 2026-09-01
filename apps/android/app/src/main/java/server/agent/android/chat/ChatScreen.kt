@@ -32,6 +32,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,8 +60,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
 import server.agent.android.R
@@ -112,6 +113,8 @@ fun ChatScreen(
     onSessionClick: (SessionRow) -> Unit = {},
     onSeeAllSessionsClick: () -> Unit = {},
     onCreateClick: () -> Unit = {},
+    onAttachmentsPicked: (List<AttachmentPick>) -> Unit = {},
+    onRemoveAttachment: (String) -> Unit = {},
     onComposerTextChanged: (String) -> Unit = {},
     onComposerEdit: (PromptEdit) -> Unit = {},
     onComposerSubmit: () -> Unit = {},
@@ -144,6 +147,29 @@ fun ChatScreen(
     var menuExpanded by remember { mutableStateOf(false) }
     var disconnectConfirmVisible by remember { mutableStateOf(false) }
     val composerText = composerState.text.toString()
+    val attachmentContext = LocalContext.current
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(maxItems = 5),
+    ) { uris ->
+        if (uris.isEmpty()) {
+            return@rememberLauncherForActivityResult
+        }
+        val picks = uris.mapNotNull { uri ->
+            readAttachmentPick(attachmentContext, uri, fallbackMime = "image/jpeg")
+        }
+        onAttachmentsPicked(picks)
+    }
+    val documentPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris ->
+        if (uris.isEmpty()) {
+            return@rememberLauncherForActivityResult
+        }
+        val picks = uris.mapNotNull { uri ->
+            readAttachmentPick(attachmentContext, uri, fallbackMime = "application/octet-stream")
+        }
+        onAttachmentsPicked(picks)
+    }
     val composerSelection = composerState.selection
     val sessionLabel = uiState.selectedSession?.name ?: "Select session"
     val hasSelectedSession = uiState.selectedSession != null
@@ -674,6 +700,24 @@ fun ChatScreen(
                     composerEnabled = composerEnabled,
                     showCancel = uiState.showComposerCancel,
                     cancelSubmitting = uiState.cancelSubmitting,
+                    supportsImages = uiState.supportsImageAttachments,
+                    supportsFiles = uiState.supportsFileAttachments,
+                    pendingAttachments = uiState.pendingAttachments,
+                    onAttachPhoto = {
+                        if (uiState.supportsImageAttachments) {
+                            photoPickerLauncher.launch(
+                                PickVisualMediaRequest(
+                                    ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                ),
+                            )
+                        }
+                    },
+                    onAttachFiles = {
+                        if (uiState.supportsFileAttachments) {
+                            documentPickerLauncher.launch(arrayOf("*/*"))
+                        }
+                    },
+                    onRemoveAttachment = onRemoveAttachment,
                     voice = uiState.voiceDictation,
                     voiceMicEnabled = voiceMicEnabled,
                     micContentDescription = voiceMicContentDescription,
@@ -715,4 +759,36 @@ fun ChatScreen(
         onOpenPermissionSettings = { openAppPermissionSettings() },
     )
     }
+}
+
+/** A file handed from the pickers to the view model: bytes read, metadata resolved. */
+data class AttachmentPick(
+    val name: String,
+    val mimeType: String,
+    val bytes: ByteArray,
+)
+
+private fun readAttachmentPick(
+    context: android.content.Context,
+    uri: android.net.Uri,
+    fallbackMime: String,
+): AttachmentPick? {
+    val resolver = context.contentResolver
+    val name = try {
+        android.provider.OpenableColumns.DISPLAY_NAME.let {
+            resolver.query(uri, arrayOf(it), null, null, null)?.use { cursor ->
+                val index = cursor.getColumnIndex(it)
+                if (cursor.moveToFirst() && index >= 0) cursor.getString(index) else null
+            }
+        } ?: "attachment"
+    } catch (_: Throwable) {
+        "attachment"
+    }
+    val mimeType = resolver.getType(uri) ?: fallbackMime
+    val bytes = try {
+        resolver.openInputStream(uri)?.use { stream -> stream.readBytes() } ?: return null
+    } catch (_: Throwable) {
+        return null
+    }
+    return AttachmentPick(name = name, mimeType = mimeType, bytes = bytes)
 }

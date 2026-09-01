@@ -7,13 +7,21 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import server.agent.android.contracts.AgentCapabilityInventory
+import server.agent.android.contracts.AttachmentDescriptor
+import server.agent.android.contracts.AttachmentKind
+import server.agent.android.contracts.AttachmentUploadRequest
+import server.agent.android.contracts.AttachmentReference
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.joinAll
 import kotlinx.serialization.json.JsonObject
 import server.agent.android.chat.composer.completeSlashCommand
+import server.agent.android.chat.composer.supportsFileAttachments
+import server.agent.android.chat.composer.supportsImageAttachments
 import server.agent.android.contracts.AgentAuth
 import server.agent.android.contracts.AgentAuthStatus
 import server.agent.android.contracts.AgentAuthSummary
@@ -26,6 +34,9 @@ import server.agent.android.contracts.SessionState
 import server.agent.android.contracts.WorkspaceState
 import server.agent.android.contracts.catalogSessionKey
 import server.agent.android.contracts.toSummary
+import server.agent.android.network.AgentApiError
+import server.agent.android.network.AgentApiException
+import server.agent.android.network.AttachmentApi
 import server.agent.android.live.SessionOwner
 import server.agent.android.live.SessionSnapshot
 import server.agent.android.events.ConnectionStatus
@@ -34,8 +45,6 @@ import server.agent.android.foreground.ActiveSessionTracker
 import server.agent.android.foreground.OpenSessionRequests
 import server.agent.android.foreground.SessionForegroundCoordinator
 import server.agent.android.navigation.NavigationPreferences
-import server.agent.android.network.AgentApiError
-import server.agent.android.network.AgentApiException
 import server.agent.android.operator.OperatorRepository
 import server.agent.android.session.PairedState
 import server.agent.android.session.SessionGateway
@@ -47,6 +56,7 @@ class ChatViewModel(
     private val sessionGateway: SessionGateway,
     private val sessionOwner: SessionOwner,
     private val operatorRepository: OperatorRepository,
+    private val attachmentApi: AttachmentApi,
     private val navigationPreferences: NavigationPreferences,
     private val activeSessionTracker: ActiveSessionTracker? = null,
     private val sessionForegroundCoordinator: SessionForegroundCoordinator? = null,
@@ -66,6 +76,8 @@ class ChatViewModel(
     private var workspaceByPath: Map<String, WorkspaceRow> = emptyMap()
     private var agentLabels: Map<AgentId, String> = emptyMap()
     private var agentAuthSummaries: Map<AgentId, AgentAuthSummary> = emptyMap()
+    private var agentCapabilities: Map<AgentId, AgentCapabilityInventory?> = emptyMap()
+    private var attachmentLocalIdCounter: Int = 0
     private var catalog: List<SessionRow> = emptyList()
     private var authHydrateGeneration: Int = 0
     private var lastLiveWatchKey: String? = null
@@ -445,8 +457,25 @@ class ChatViewModel(
             return
         }
 
+        val pending = _uiState.value.pendingAttachments
+        if (pending.any { it.status == AttachmentUploadStatus.Uploading }) {
+            _uiState.update { current ->
+                current.copy(composerError = "Waiting for uploads to finish…")
+            }
+            return
+        }
+        val failed = pending.filter { it.status == AttachmentUploadStatus.Failed }
+        if (failed.isNotEmpty()) {
+            _uiState.update { current ->
+                current.copy(composerError = "An attachment failed to upload. Retry or remove it.")
+            }
+            return
+        }
+
+        val references = pending.mapNotNull { it.toReference() }
+
         if (session.sessionId.isEmpty()) {
-            createSessionFromComposer(session = session, prompt = prompt)
+            createSessionFromComposer(session = session, prompt = prompt, attachments = references)
             return
         }
 
@@ -456,9 +485,151 @@ class ChatViewModel(
                 composerText = "",
                 composerSubmitting = false,
                 composerError = null,
+                pendingAttachments = emptyList(),
             )
         }
-        sessionOwner.prompt(prompt)
+        sessionOwner.prompt(prompt, references)
+    }
+
+    /** Picker intake: bytes are read by the screen, previews decode off-main. */
+    fun onAttachmentsPicked(files: List<AttachmentPick>) {
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        if (files.isEmpty()) {
+            return
+        }
+
+        val created = files.map { pick ->
+            attachmentLocalIdCounter += 1
+            val kind = if (pick.mimeType.startsWith("image/")) AttachmentKind.Image else AttachmentKind.File
+            PendingAttachmentUi(
+                localId = "att_local_${attachmentLocalIdCounter}",
+                name = pick.name,
+                size = pick.bytes.size.toLong(),
+                kind = kind,
+                mimeType = pick.mimeType,
+                bytes = pick.bytes,
+            )
+        }
+
+        _uiState.update { current ->
+            current.copy(pendingAttachments = current.pendingAttachments + created)
+        }
+
+        for (attachment in created) {
+            viewModelScope.launch {
+                val preview = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    decodePreview(attachment.bytes, attachment.kind)
+                }
+                _uiState.update { current ->
+                    current.copy(
+                        pendingAttachments = current.pendingAttachments.map { existing ->
+                            if (existing.localId == attachment.localId) {
+                                existing.copy(preview = preview)
+                            } else {
+                                existing
+                            }
+                        },
+                    )
+                }
+            }
+            viewModelScope.launch { uploadAttachment(paired.serverOrigin, attachment) }
+        }
+    }
+
+    fun removeAttachment(localId: String) {
+        val attachment = _uiState.value.pendingAttachments.find { it.localId == localId } ?: return
+        _uiState.update { current ->
+            current.copy(
+                pendingAttachments = current.pendingAttachments.filter { it.localId != localId },
+            )
+        }
+        if (attachment.status == AttachmentUploadStatus.Ready && attachment.uploadedId != null) {
+            viewModelScope.launch {
+                val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return@launch
+                val workspaceId = _uiState.value.selectedSession?.workspaceId ?: return@launch
+                attachmentApi.deleteAttachment(paired.serverOrigin, workspaceId, attachment.uploadedId)
+            }
+        }
+    }
+
+    fun retryAttachment(localId: String) {
+        val attachment = _uiState.value.pendingAttachments.find { it.localId == localId } ?: return
+        if (attachment.status != AttachmentUploadStatus.Failed) {
+            return
+        }
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        _uiState.update { current ->
+            current.copy(
+                pendingAttachments = current.pendingAttachments.map { existing ->
+                    if (existing.localId == localId) {
+                        existing.copy(status = AttachmentUploadStatus.Uploading, error = null)
+                    } else {
+                        existing
+                    }
+                },
+            )
+        }
+        viewModelScope.launch { uploadAttachment(paired.serverOrigin, attachment) }
+    }
+
+    private suspend fun uploadAttachment(serverOrigin: String, attachment: PendingAttachmentUi) {
+        val workspaceId = _uiState.value.selectedSession?.workspaceId ?: return
+        val result = attachmentApi.uploadAttachment(
+            serverOrigin = serverOrigin,
+            request = AttachmentUploadRequest(
+                workspaceId = workspaceId,
+                fileName = attachment.name,
+                mimeType = attachment.mimeType,
+                bytes = attachment.bytes,
+                kind = attachment.kind,
+            ),
+        )
+        result.fold(
+            onSuccess = { descriptor ->
+                _uiState.update { current ->
+                    current.copy(
+                        pendingAttachments = current.pendingAttachments.map { existing ->
+                            if (existing.localId == attachment.localId) {
+                                existing.copy(
+                                    status = AttachmentUploadStatus.Ready,
+                                    uploadedPath = descriptor.path,
+                                    uploadedId = descriptor.id,
+                                )
+                            } else {
+                                existing
+                            }
+                        },
+                    )
+                }
+            },
+            onFailure = { error ->
+                _uiState.update { current ->
+                    current.copy(
+                        pendingAttachments = current.pendingAttachments.map { existing ->
+                            if (existing.localId == attachment.localId) {
+                                existing.copy(
+                                    status = AttachmentUploadStatus.Failed,
+                                    error = error.message ?: "Upload failed",
+                                )
+                            } else {
+                                existing
+                            }
+                        },
+                    )
+                }
+            },
+        )
+    }
+
+    private fun syncAttachmentGating() {
+        val session = _uiState.value.selectedSession
+        val inventory = session?.agentId?.let { agentId -> agentCapabilities[agentId] }
+        _uiState.update { current ->
+            current.copy(
+                supportsImageAttachments = supportsImageAttachments(inventory),
+                supportsFileAttachments = supportsFileAttachments(inventory),
+            )
+        }
     }
 
     fun submitPermissionOption(optionId: String) {
@@ -559,6 +730,7 @@ class ChatViewModel(
     fun selectSession(row: SessionRow) {
         viewModelScope.launch {
             activateSession(row)
+            syncAttachmentGating()
         }
     }
 
@@ -941,6 +1113,9 @@ class ChatViewModel(
             .associate { agent -> agent.id to agent.displayName }
         agentAuthSummaries = agentsResult.getOrNull()?.items.orEmpty()
             .associate { agent -> agent.id to agent.authSummary }
+        agentCapabilities = agentsResult.getOrNull()?.items.orEmpty()
+            .associate { agent -> agent.id to agent.capabilities }
+        syncAttachmentGating()
 
         sessionsResult.fold(
             onSuccess = { collection ->
@@ -1010,6 +1185,7 @@ class ChatViewModel(
         val row = catalog.firstOrNull { session -> session.id == sessionKey }
             ?: return
         _uiState.update { current -> current.copy(selectedSession = row) }
+        syncAttachmentGating()
     }
 
     private suspend fun loadCreateForm(serverOrigin: String): CreateSessionUiState {
@@ -1118,7 +1294,11 @@ class ChatViewModel(
             updatedAt = "",
         )
 
-    private fun createSessionFromComposer(session: SessionRow, prompt: String) {
+    private fun createSessionFromComposer(
+        session: SessionRow,
+        prompt: String,
+        attachments: List<AttachmentReference> = emptyList(),
+    ) {
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
 
         clearComposer()
@@ -1160,7 +1340,10 @@ class ChatViewModel(
                         )
                     }
                     sessionOwner.watch(row.agentId, row.sessionId)
-                    sessionOwner.prompt(prompt)
+                    sessionOwner.prompt(prompt, attachments)
+                    _uiState.update { current ->
+                        current.copy(pendingAttachments = emptyList())
+                    }
                     syncActiveSessionsFromUiState()
                     hydrateAgentAuth(row.agentId)
                     refreshCatalog()
@@ -1220,6 +1403,7 @@ class ChatViewModelFactory(
     private val sessionGateway: SessionGateway,
     private val sessionOwner: SessionOwner,
     private val operatorRepository: OperatorRepository,
+    private val attachmentApi: AttachmentApi,
     private val navigationPreferences: NavigationPreferences,
     private val activeSessionTracker: ActiveSessionTracker,
     private val sessionForegroundCoordinator: SessionForegroundCoordinator,
@@ -1234,6 +1418,7 @@ class ChatViewModelFactory(
                 sessionGateway = sessionGateway,
                 sessionOwner = sessionOwner,
                 operatorRepository = operatorRepository,
+                attachmentApi = attachmentApi,
                 navigationPreferences = navigationPreferences,
                 activeSessionTracker = activeSessionTracker,
                 sessionForegroundCoordinator = sessionForegroundCoordinator,

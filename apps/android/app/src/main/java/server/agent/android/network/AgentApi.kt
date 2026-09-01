@@ -4,6 +4,9 @@ import server.agent.android.contracts.AgentAuth
 import server.agent.android.contracts.AgentAuthSession
 import server.agent.android.contracts.AgentAuthSummary
 import server.agent.android.contracts.AgentId
+import server.agent.android.contracts.AttachmentDescriptor
+import server.agent.android.contracts.AttachmentKind
+import server.agent.android.contracts.AttachmentUploadRequest
 import server.agent.android.contracts.AgentSettingsCollection
 import server.agent.android.contracts.AuthSessionAction
 import server.agent.android.contracts.CreateSessionBody
@@ -102,5 +105,19 @@ interface AgentApi {
     suspend fun revokeDevice(
         serverOrigin: String,
         deviceId: String,
+    ): Result<Unit>
+}
+
+/** Upload surface for chat attachments. Workspace-scoped, server-validated. */
+interface AttachmentApi {
+    suspend fun uploadAttachment(
+        serverOrigin: String,
+        request: AttachmentUploadRequest,
+    ): Result<AttachmentDescriptor>
+
+    suspend fun deleteAttachment(
+        serverOrigin: String,
+        workspaceId: String,
+        attachmentId: String,
     ): Result<Unit>
 }

@@ -21,6 +21,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import server.agent.android.contracts.AgentId
+import server.agent.android.contracts.AttachmentReference
+import server.agent.android.contracts.AttachmentDescriptor
+import server.agent.android.contracts.AttachmentUploadRequest
+import server.agent.android.network.AgentApiError
+import server.agent.android.network.AgentApiException
+import server.agent.android.network.AttachmentApi
 import server.agent.android.contracts.AgentSettings
 import server.agent.android.contracts.AgentSettingsCollection
 import server.agent.android.contracts.CreateSessionBody
@@ -39,8 +45,6 @@ import server.agent.android.events.ConnectionState
 import server.agent.android.live.SessionOwner
 import server.agent.android.live.SessionSnapshot
 import server.agent.android.navigation.NavigationPreferences
-import server.agent.android.network.AgentApiError
-import server.agent.android.network.AgentApiException
 import server.agent.android.operator.OperatorRepository
 import server.agent.android.session.PairedState
 import server.agent.android.session.SessionGateway
@@ -645,6 +649,7 @@ class ChatViewModelTest {
         sessionGateway = sessionGateway,
         sessionOwner = sessionOwner,
         operatorRepository = repository,
+        attachmentApi = NoopAttachmentApi(),
         navigationPreferences = navigation,
         voiceDictationController = VoiceDictationController(
             speechClient = FakeSpeechRecognitionClient(),
@@ -656,6 +661,20 @@ class ChatViewModelTest {
     private companion object {
         const val ORIGIN = "http://127.0.0.1:8787"
     }
+}
+
+private class NoopAttachmentApi : AttachmentApi {
+
+    override suspend fun uploadAttachment(
+        serverOrigin: String,
+        request: AttachmentUploadRequest,
+    ): Result<AttachmentDescriptor> = Result.failure(UnsupportedOperationException("not used"))
+
+    override suspend fun deleteAttachment(
+        serverOrigin: String,
+        workspaceId: String,
+        attachmentId: String,
+    ): Result<Unit> = Result.success(Unit)
 }
 
 private class ChatFakeSessionGateway(
@@ -724,7 +743,7 @@ private class ChatFakeSessionOwner : SessionOwner {
         }
     }
 
-    override fun prompt(text: String) {
+    override fun prompt(text: String, attachments: List<AttachmentReference>) {
         prompts += text
         val turnId = "turn-${prompts.size}"
         _snapshot.update { current ->

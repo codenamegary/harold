@@ -95,6 +95,9 @@ data class ChatUiState(
     val notificationPermissionDenied: Boolean = false,
     val voiceDictation: VoiceDictationUiState = VoiceDictationUiState(),
     val availableCommands: List<AvailableCommand> = emptyList(),
+    val supportsImageAttachments: Boolean = false,
+    val supportsFileAttachments: Boolean = false,
+    val pendingAttachments: List<PendingAttachmentUi> = emptyList(),
     /** A completed slash command chosen from the picker in voice mode, e.g. "/plan ". */
     val voiceCommandPrefix: String = "",
     /** Voice mode toggles the command list from a button instead of a typed slash. */
