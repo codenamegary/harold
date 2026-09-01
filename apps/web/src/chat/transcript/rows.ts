@@ -1,9 +1,17 @@
 import { ToolCallStatus, ToolKind } from "contracts/events/primitives"
 
+export type TranscriptAttachmentPreview = {
+  kind: "image" | "file"
+  name: string
+  size: number
+  previewUrl?: string
+}
+
 export type TranscriptUserRow = {
   kind: "user"
   turnId: string
   text: string
+  attachments?: ReadonlyArray<TranscriptAttachmentPreview>
 }
 
 export type TranscriptThinkingRow = {

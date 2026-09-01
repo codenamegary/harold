@@ -139,7 +139,7 @@ describe("stream actions", () => {
 
   test("asks the caller to send a queued prompt once subscribed", () => {
     const store = storeOnSession()
-    store.set(pendingPromptAtom, "ship it")
+    store.set(pendingPromptAtom, { text: "ship it" })
 
     const effect = store.set(applyStreamMessageAtom, {
       type: "subscribed",
@@ -158,7 +158,7 @@ describe("stream actions", () => {
 
   test("does not resend a queued prompt on a second subscribe", () => {
     const store = storeOnSession()
-    store.set(pendingPromptAtom, "ship it")
+    store.set(pendingPromptAtom, { text: "ship it" })
 
     store.set(applyStreamMessageAtom, {
       type: "subscribed",
@@ -176,7 +176,7 @@ describe("stream actions", () => {
 
   test("keeps a queued prompt when another session subscribes", () => {
     const store = storeOnSession()
-    store.set(pendingPromptAtom, "ship it")
+    store.set(pendingPromptAtom, { text: "ship it" })
 
     const effect = store.set(applyStreamMessageAtom, {
       type: "subscribed",
@@ -185,6 +185,6 @@ describe("stream actions", () => {
     })
 
     expect(effect).toEqual({ kind: "none" })
-    expect(store.get(pendingPromptAtom)).toBe("ship it")
+    expect(store.get(pendingPromptAtom)).toEqual({ text: "ship it" })
   })
 })

@@ -1,5 +1,6 @@
 import { atom } from "jotai"
 import { AgentAuth } from "contracts/http/agent-auth"
+import { AttachmentReference } from "contracts/http/attachments"
 import { SessionState } from "contracts/http/session"
 import { emptyAcpTranscript, AcpTranscriptState } from "./acp.transcript.reducer"
 import { AvailableCommand } from "./commands.available"
@@ -23,8 +24,13 @@ export const extensionAtom = atom<StreamExtension | null>(null)
 
 export const streamAuthAtom = atom<AgentAuth | null>(null)
 
+export type PendingPrompt = {
+  text: string
+  attachments?: ReadonlyArray<AttachmentReference>
+}
+
 /** Prompt typed before a session existed. Sent once the stream subscribes. */
-export const pendingPromptAtom = atom<string | null>(null)
+export const pendingPromptAtom = atom<PendingPrompt | null>(null)
 
 /**
  * Slash commands the agent advertised for this session. The hub replays its

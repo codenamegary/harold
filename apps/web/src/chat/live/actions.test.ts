@@ -61,16 +61,16 @@ describe("live actions", () => {
 
   test("clearLive keeps a queued prompt so a reconnect can deliver it", () => {
     const store = storeWithLiveState()
-    store.set(pendingPromptAtom, "ship it")
+    store.set(pendingPromptAtom, { text: "ship it" })
 
     store.set(clearLiveAtom, emptyAcpTranscript)
 
-    expect(store.get(pendingPromptAtom)).toBe("ship it")
+    expect(store.get(pendingPromptAtom)).toEqual({ text: "ship it" })
   })
 
   test("resetLive also drops the queued prompt", () => {
     const store = storeWithLiveState()
-    store.set(pendingPromptAtom, "ship it")
+    store.set(pendingPromptAtom, { text: "ship it" })
 
     store.set(resetLiveAtom)
 

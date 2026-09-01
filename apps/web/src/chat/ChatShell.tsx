@@ -4,9 +4,14 @@ import { AgentIdSchema } from "contracts/http/agent-settings"
 import { AgentAuthPanel } from "../agent/auth/AgentAuthPanel"
 import { useAgentAuthQuery } from "../agent/auth/use.agent.auth"
 import { useAgentSettingsQuery } from "../agent-settings/use.agent.settings.query"
+import {
+  supportsFileAttachments,
+  supportsImageAttachments,
+} from "./composer/capabilities"
 import { ChatComposer } from "./composer/ChatComposer"
 import { ChatHeader } from "./header/ChatHeader"
 import { streamAuthAtom, transcriptAtom } from "./live/atoms"
+import { useChatAttachments } from "./live/use.attachments"
 import { ExtensionPanel } from "./live/ExtensionPanel"
 import { PermissionPanel } from "./live/PermissionPanel"
 import { useTranscriptAutoscroll } from "./live/use.autoscroll"
@@ -27,8 +32,9 @@ export const ChatShell: React.FC = () => {
 
   useChatResume()
   const stream = useChatStream()
+  const chatAttachments = useChatAttachments({ workspaceId: selection.workspaceId })
   const { send, cancel, running, composerEnabled, blockedMessage } =
-    useChatPrompt(stream)
+    useChatPrompt(stream, chatAttachments)
   const { permission, extension, replyToPermission, replyToExtension } =
     useLiveReplies(stream)
 
@@ -115,6 +121,12 @@ export const ChatShell: React.FC = () => {
           disabled={!composerEnabled}
           running={running}
           blockedMessage={blockedMessage}
+          supportsImages={supportsImageAttachments(selectedAgent?.capabilities)}
+          supportsFiles={supportsFileAttachments(selectedAgent?.capabilities)}
+          attachments={chatAttachments.attachments}
+          onFilesPicked={chatAttachments.addFiles}
+          onRemoveAttachment={chatAttachments.remove}
+          onRetryAttachment={chatAttachments.retry}
           onSend={send}
           onCancel={cancel}
         />

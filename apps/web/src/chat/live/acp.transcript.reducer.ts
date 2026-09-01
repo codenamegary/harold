@@ -2,6 +2,7 @@ import { SessionState } from "contracts/http/session"
 import { ParsedAcpUpdate } from "./acp.update"
 import {
   TranscriptAssistantRow,
+  TranscriptAttachmentPreview,
   TranscriptRow,
   TranscriptThinkingRow,
   TranscriptToolRow,
@@ -93,7 +94,11 @@ const withLiveRunning = (state: AcpTranscriptState): AcpTranscriptState => {
 
 export const beginUserTurn = (
   state: AcpTranscriptState,
-  params: { turnId: string; text: string },
+  params: {
+    turnId: string
+    text: string
+    attachments?: ReadonlyArray<TranscriptAttachmentPreview>
+  },
 ): AcpTranscriptState => ({
   rows: [
     ...state.rows,
@@ -101,6 +106,9 @@ export const beginUserTurn = (
       kind: "user",
       turnId: params.turnId,
       text: params.text,
+      ...(params.attachments !== undefined && params.attachments.length > 0
+        ? { attachments: params.attachments }
+        : {}),
     },
   ],
   sessionState: "running",
