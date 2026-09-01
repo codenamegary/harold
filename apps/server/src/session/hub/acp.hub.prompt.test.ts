@@ -22,6 +22,11 @@ const collectSink = (): {
   }
 }
 
+const noAttachmentsDeps = () => ({
+  resolveAttachment: async () => null,
+  advertisesPromptCapability: () => false,
+})
+
 describe("createAcpHubPromptSession", () => {
   test("awaits ACP session/prompt completion before returning ok", async () => {
     let resolveCompletion:
@@ -29,6 +34,7 @@ describe("createAcpHubPromptSession", () => {
       | undefined
 
     const promptSession = createAcpHubPromptSession({
+      ...noAttachmentsDeps(),
       startPrompt: async () => ({
         ok: true as const,
         turnId: "turn-1",
@@ -58,6 +64,7 @@ describe("createAcpHubPromptSession", () => {
 
   test("returns ACP prompt failure reasons to the hub", async () => {
     const promptSession = createAcpHubPromptSession({
+      ...noAttachmentsDeps(),
       startPrompt: async () => ({
         ok: true as const,
         turnId: "turn-1",
@@ -92,6 +99,7 @@ describe("createAcpHubPromptSession", () => {
       cwdCache,
       loadSession: async () => ({ ok: true }),
       promptSession: createAcpHubPromptSession({
+        ...noAttachmentsDeps(),
         startPrompt: async () => ({
           ok: true as const,
           turnId: "turn-1",
@@ -176,5 +184,128 @@ describe("createAcpHubPromptSession", () => {
           message.message === "session/prompt failed: boom",
       ),
     ).toBe(true)
+  })
+})
+
+describe("createAcpHubPromptSession with attachments", () => {
+  const baseStartPrompt = () => async () => ({
+    ok: true as const,
+    turnId: "turn-1",
+    completion: Promise.resolve({ ok: true as const, result: { stopReason: "end_turn" } }),
+  })
+
+  const ref = {
+    kind: "image" as const,
+    name: "shot.png",
+    mimeType: "image/png",
+    path: "/tmp/ws/.agent-server/attachments/att_1.png",
+  }
+
+  test("maps an image attachment to an ACP image content block", async () => {
+    const prompts: unknown[] = []
+    const promptSession = createAcpHubPromptSession({
+      startPrompt: async ({ prompt }) => {
+        prompts.push(prompt)
+        return baseStartPrompt()()
+      },
+      resolveAttachment: async ({ reference }) => reference,
+      advertisesPromptCapability: () => true,
+    })
+
+    await expect(
+      promptSession({ agentId: "a", sessionId: "s1", text: "look", attachments: [ref] }),
+    ).resolves.toEqual({ ok: true })
+
+    expect(prompts[0]).toEqual([
+      { type: "text", text: "look" },
+      { type: "image", url: `file://${ref.path}`, mimeType: "image/png" },
+    ])
+  })
+
+  test("maps a file attachment to a resource_link content block", async () => {
+    const prompts: unknown[] = []
+    const promptSession = createAcpHubPromptSession({
+      startPrompt: async ({ prompt }) => {
+        prompts.push(prompt)
+        return baseStartPrompt()()
+      },
+      resolveAttachment: async ({ reference }) => reference,
+      advertisesPromptCapability: () => true,
+    })
+
+    await expect(
+      promptSession({
+        agentId: "a",
+        sessionId: "s1",
+        text: "read",
+        attachments: [{ kind: "file", name: "notes.md", mimeType: "text/markdown", path: "/tmp/ws/.agent-server/attachments/att_2.md" }],
+      }),
+    ).resolves.toEqual({ ok: true })
+
+    expect(prompts[0]).toEqual([
+      { type: "text", text: "read" },
+      {
+        type: "resource_link",
+        uri: "file:///tmp/ws/.agent-server/attachments/att_2.md",
+        name: "notes.md",
+        mimeType: "text/markdown",
+      },
+    ])
+  })
+
+  test("rejects an image when the agent lacks promptCapabilities.image", async () => {
+    const startPrompt = baseStartPrompt()
+    const promptSession = createAcpHubPromptSession({
+      startPrompt,
+      resolveAttachment: async ({ reference }) => reference,
+      advertisesPromptCapability: ({ kind }) => kind !== "image",
+    })
+
+    await expect(
+      promptSession({ agentId: "a", sessionId: "s1", text: "look", attachments: [ref] }),
+    ).resolves.toEqual({
+      ok: false,
+      reason: "Agent does not advertise promptCapabilities.image — cannot attach shot.png",
+    })
+  })
+
+  test("rejects a file when the agent lacks promptCapabilities.embeddedContext", async () => {
+    const promptSession = createAcpHubPromptSession({
+      startPrompt: baseStartPrompt(),
+      resolveAttachment: async ({ reference }) => reference,
+      advertisesPromptCapability: () => false,
+    })
+
+    await expect(
+      promptSession({
+        agentId: "a",
+        sessionId: "s1",
+        text: "read",
+        attachments: [{ kind: "file", name: "notes.md", mimeType: "text/markdown", path: "/tmp/x.md" }],
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      reason: "Agent does not advertise promptCapabilities.embeddedContext — cannot attach notes.md",
+    })
+  })
+
+  test("rejects a prompt when an attachment no longer resolves", async () => {
+    let startPromptCalls = 0
+    const promptSession = createAcpHubPromptSession({
+      startPrompt: async () => {
+        startPromptCalls += 1
+        return baseStartPrompt()()
+      },
+      resolveAttachment: async () => null,
+      advertisesPromptCapability: () => true,
+    })
+
+    await expect(
+      promptSession({ agentId: "a", sessionId: "s1", text: "look", attachments: [ref] }),
+    ).resolves.toEqual({
+      ok: false,
+      reason: "Attachment is no longer available: shot.png",
+    })
+    expect(startPromptCalls).toBe(0)
   })
 })

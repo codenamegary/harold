@@ -204,6 +204,10 @@ export const registerSessionStreamRoutes = (
                   agentId: message.agentId,
                   sessionId: message.sessionId,
                   text: message.text,
+                  ...(message.attachments !== undefined &&
+                  message.attachments.length > 0
+                    ? { attachments: message.attachments }
+                    : {}),
                 })
                 return
               case "cancel":

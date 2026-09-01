@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { AttachmentReferenceSchema, MAX_ATTACHMENTS_PER_PROMPT } from "./attachments"
 import { AgentAuthSchema } from "./agent-auth"
 import { AgentIdSchema } from "./agent-settings"
 
@@ -19,6 +20,10 @@ export const SessionStreamPromptSchema = z.strictObject({
   agentId: AgentIdSchema,
   sessionId: z.string().min(1),
   text: z.string().min(1).max(32_768),
+  attachments: z
+    .array(AttachmentReferenceSchema)
+    .max(MAX_ATTACHMENTS_PER_PROMPT)
+    .optional(),
 })
 
 export const SessionStreamCancelSchema = z.strictObject({

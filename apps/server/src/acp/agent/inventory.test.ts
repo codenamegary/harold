@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import { knownCapabilityPaths } from "./capabilities"
-import { buildCapabilityInventory, inventoryEntry } from "./inventory"
+import {
+  buildCapabilityInventory,
+  inventoryAdvertisesEmbeddedContext,
+  inventoryAdvertisesPromptImage,
+  inventoryEntry,
+} from "./inventory"
 import { agentMethodDeclarations } from "./method.declarations"
 
 describe("buildCapabilityInventory", () => {
@@ -161,5 +166,43 @@ describe("buildCapabilityInventory", () => {
       known: false,
       requiredBy: [],
     })
+  })
+})
+
+describe("prompt capability predicates", () => {
+  const inventoryWithPromptCaps = (agentCapabilities: unknown) =>
+    buildCapabilityInventory({
+      initializeResult: { agentCapabilities },
+      declarations: agentMethodDeclarations,
+    })
+
+  test("image and embeddedContext advertised as true", () => {
+    const inventory = inventoryWithPromptCaps({
+      promptCapabilities: { image: true, embeddedContext: true },
+    })
+
+    expect(inventoryAdvertisesPromptImage(inventory)).toBe(true)
+    expect(inventoryAdvertisesEmbeddedContext(inventory)).toBe(true)
+  })
+
+  test("explicitly false capabilities are not advertised", () => {
+    const inventory = inventoryWithPromptCaps({
+      promptCapabilities: { image: false, embeddedContext: false },
+    })
+
+    expect(inventoryAdvertisesPromptImage(inventory)).toBe(false)
+    expect(inventoryAdvertisesEmbeddedContext(inventory)).toBe(false)
+  })
+
+  test("missing capabilities are not advertised", () => {
+    const inventory = inventoryWithPromptCaps({ loadSession: true })
+
+    expect(inventoryAdvertisesPromptImage(inventory)).toBe(false)
+    expect(inventoryAdvertisesEmbeddedContext(inventory)).toBe(false)
+  })
+
+  test("null inventory is not advertised", () => {
+    expect(inventoryAdvertisesPromptImage(null)).toBe(false)
+    expect(inventoryAdvertisesEmbeddedContext(undefined)).toBe(false)
   })
 })

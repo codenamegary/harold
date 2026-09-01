@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { AttachmentReferenceSchema, MAX_ATTACHMENTS_PER_PROMPT } from "./attachments"
 import { TurnIdSchema } from "../events/primitives"
 import { AgentId, AgentIdSchema } from "./agent-settings"
 import { IdSchema, TimestampSchema } from "./primitives"
@@ -75,6 +76,10 @@ export const SessionDeleteTargetSchema = z.strictObject({
 
 export const PromptSessionBodySchema = z.strictObject({
   text: z.string().min(1).max(32_768),
+  attachments: z
+    .array(AttachmentReferenceSchema)
+    .max(MAX_ATTACHMENTS_PER_PROMPT)
+    .optional(),
 })
 
 export const PromptSessionResponseSchema = z.strictObject({
