@@ -201,14 +201,15 @@ describe("createAcpHubPromptSession with attachments", () => {
     path: "/tmp/ws/.agent-server/attachments/att_1.png",
   }
 
-  test("maps an image attachment to an ACP image content block", async () => {
+  test("maps an image attachment to an ACP image content block with base64 data", async () => {
     const prompts: unknown[] = []
+    const bytes = new Uint8Array([137, 80, 78, 71])
     const promptSession = createAcpHubPromptSession({
       startPrompt: async ({ prompt }) => {
         prompts.push(prompt)
         return baseStartPrompt()()
       },
-      resolveAttachment: async ({ reference }) => reference,
+      resolveAttachment: async ({ reference }) => ({ reference, bytes }),
       advertisesPromptCapability: () => true,
     })
 
@@ -218,7 +219,11 @@ describe("createAcpHubPromptSession with attachments", () => {
 
     expect(prompts[0]).toEqual([
       { type: "text", text: "look" },
-      { type: "image", url: `file://${ref.path}`, mimeType: "image/png" },
+      {
+        type: "image",
+        data: Buffer.from(bytes).toString("base64"),
+        mimeType: "image/png",
+      },
     ])
   })
 
@@ -229,7 +234,10 @@ describe("createAcpHubPromptSession with attachments", () => {
         prompts.push(prompt)
         return baseStartPrompt()()
       },
-      resolveAttachment: async ({ reference }) => reference,
+      resolveAttachment: async ({ reference }) => ({
+        reference,
+        bytes: new Uint8Array([1]),
+      }),
       advertisesPromptCapability: () => true,
     })
 
@@ -248,7 +256,6 @@ describe("createAcpHubPromptSession with attachments", () => {
         type: "resource_link",
         uri: "file:///tmp/ws/.agent-server/attachments/att_2.md",
         name: "notes.md",
-        mimeType: "text/markdown",
       },
     ])
   })
@@ -272,7 +279,10 @@ describe("createAcpHubPromptSession with attachments", () => {
   test("rejects a file when the agent lacks promptCapabilities.embeddedContext", async () => {
     const promptSession = createAcpHubPromptSession({
       startPrompt: baseStartPrompt(),
-      resolveAttachment: async ({ reference }) => reference,
+      resolveAttachment: async ({ reference }) => ({
+        reference,
+        bytes: new Uint8Array(),
+      }),
       advertisesPromptCapability: () => false,
     })
 

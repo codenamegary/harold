@@ -271,7 +271,7 @@ export const createServer = async ({
         if (workspaceRoot === undefined) {
           return null
         }
-        return attachmentsService.resolveAttachment({
+        return attachmentsService.loadAttachment({
           workspacePath: workspaceRoot,
           reference,
         })

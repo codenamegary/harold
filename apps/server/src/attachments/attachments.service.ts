@@ -99,14 +99,18 @@ export const createAttachmentsService = (
   }
 
   /**
-   * The prompt reference echoes client-held descriptor fields, so the server
-   * re-validates before mapping to a content block: the path must resolve
-   * inside this workspace's attachments folder and the file must exist.
+   * The prompt reference echoes client-supplied descriptor fields, so the
+   * server re-validates before mapping to a content block: the path must
+   * resolve inside this workspace's attachments folder and the file must
+   * exist. Returns the reference with its bytes for content-block embedding.
    */
-  const resolveAttachment = async ({
+  const loadAttachment = async ({
     workspacePath,
     reference,
-  }: ResolveAttachmentParams): Promise<AttachmentReference | null> => {
+  }: ResolveAttachmentParams): Promise<{
+    reference: AttachmentReference
+    bytes: Uint8Array
+  } | null> => {
     const attachmentsRoot = await ensureAttachmentsDir(workspacePath)
     const resolved = path.resolve(reference.path)
     if (!isPathUnderAllowedRoot({ allowedRoot: attachmentsRoot, candidatePath: resolved })) {
@@ -120,7 +124,8 @@ export const createAttachmentsService = (
     } catch {
       return null
     }
-    return { ...reference, path: resolved }
+    const bytes = new Uint8Array(await readFile(resolved))
+    return { reference: { ...reference, path: resolved }, bytes }
   }
 
   const deleteAttachment = async (params: {
@@ -154,7 +159,11 @@ export const createAttachmentsService = (
 
   return {
     saveAttachment,
-    resolveAttachment,
+    resolveAttachment: async (params: ResolveAttachmentParams) => {
+      const loaded = await loadAttachment(params)
+      return loaded?.reference ?? null
+    },
+    loadAttachment,
     deleteAttachment,
     validateFileName,
     readGitignoreState,
