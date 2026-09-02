@@ -14,6 +14,7 @@
     "catalog:codegen": "bun run src/acp/catalog/catalog.codegen.cli.ts"
   },
   "dependencies": {
+    "@fastify/multipart": "^10.1.1",
     "@fastify/websocket": "^11.3.0",
     "contracts": "workspace:*",
     "drizzle-orm": "catalog:",

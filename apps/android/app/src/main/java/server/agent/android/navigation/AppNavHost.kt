@@ -23,6 +23,7 @@ import server.agent.android.chat.AddWorkspaceViewModelFactory
 import server.agent.android.chat.ChatScreen
 import server.agent.android.chat.ChatViewModel
 import server.agent.android.chat.ChatViewModelFactory
+import server.agent.android.network.AttachmentApi
 import server.agent.android.chat.HandlerVoiceDictationRestartScheduler
 import server.agent.android.chat.VoiceDictationController
 import server.agent.android.chat.VoskSpeechRecognitionClient
@@ -120,6 +121,7 @@ fun AppNavHost(
                     sessionGateway = appContainer.sessionGateway,
                     sessionOwner = appContainer.sessionOwner,
                     operatorRepository = appContainer.operatorRepository,
+                    attachmentApi = appContainer.agentApi as AttachmentApi,
                     navigationPreferences = appContainer.navigationPreferences,
                     activeSessionTracker = appContainer.activeSessionTracker,
                     sessionForegroundCoordinator = appContainer.sessionForegroundCoordinator,
@@ -143,6 +145,8 @@ fun AppNavHost(
             ChatScreen(
                 uiState = chatUiState,
                 composerState = chatViewModel.composerState,
+                onAttachmentsPicked = chatViewModel::onAttachmentsPicked,
+                onRemoveAttachment = chatViewModel::removeAttachment,
                 onSessionSelectorClick = chatViewModel::showPicker,
                 onDismissSessionMenu = chatViewModel::hidePicker,
                 onWorkspacesClick = { navController.navigate(Routes.Workspaces) },
@@ -198,6 +202,7 @@ fun AppNavHost(
                     sessionGateway = appContainer.sessionGateway,
                     sessionOwner = appContainer.sessionOwner,
                     operatorRepository = appContainer.operatorRepository,
+                    attachmentApi = appContainer.agentApi as AttachmentApi,
                     navigationPreferences = appContainer.navigationPreferences,
                     activeSessionTracker = appContainer.activeSessionTracker,
                     sessionForegroundCoordinator = appContainer.sessionForegroundCoordinator,
@@ -234,6 +239,7 @@ fun AppNavHost(
                     sessionGateway = appContainer.sessionGateway,
                     sessionOwner = appContainer.sessionOwner,
                     operatorRepository = appContainer.operatorRepository,
+                    attachmentApi = appContainer.agentApi as AttachmentApi,
                     navigationPreferences = appContainer.navigationPreferences,
                     activeSessionTracker = appContainer.activeSessionTracker,
                     sessionForegroundCoordinator = appContainer.sessionForegroundCoordinator,

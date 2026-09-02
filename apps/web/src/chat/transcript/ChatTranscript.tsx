@@ -66,6 +66,27 @@ export const ChatTranscript: React.FC<ChatTranscriptProps> = ({
               className="rounded-lg border border-line bg-[#12161b] px-3.5 py-3 text-sm text-body"
             >
               {row.text}
+              {row.attachments !== undefined && row.attachments.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {row.attachments.map((attachment, attachmentIndex) =>
+                    attachment.kind === "image" && attachment.previewUrl !== undefined ? (
+                      <img
+                        key={`${row.turnId}-${attachmentIndex}`}
+                        src={attachment.previewUrl}
+                        alt={attachment.name}
+                        className="size-16 rounded-md border border-line object-cover"
+                      />
+                    ) : (
+                      <span
+                        key={`${row.turnId}-${attachmentIndex}`}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-line bg-[#181d25] px-2 py-1 font-mono text-2xs text-body-soft"
+                      >
+                        {attachment.name}
+                      </span>
+                    ),
+                  )}
+                </div>
+              ) : null}
             </div>
           )
         }

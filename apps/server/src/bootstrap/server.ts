@@ -1,8 +1,10 @@
 import Fastify, { FastifyInstance, FastifyRequest } from "fastify"
 import { Writable } from "node:stream"
 import websocket from "@fastify/websocket"
+import multipart from "@fastify/multipart"
 import { z } from "zod"
 import { LogLevel } from "contracts/http/runtime-settings"
+import { MAX_ATTACHMENT_BYTES } from "contracts/http/attachments"
 import { registerErrorHandler } from "../error/error.handler"
 import { Config } from "../config/config"
 import { EnvBindOverrides } from "../config/env.bind.overrides"
@@ -21,6 +23,8 @@ import { AppliedRuntimeSettingsHolder } from "../runtime-settings/applied.runtim
 import { createWorkspaceRepository } from "../workspace/repository"
 import { registerWorkspaceRoutes } from "../workspace/routes"
 import { registerFilesystemBrowseRoutes } from "../filesystem/routes"
+import { createAttachmentsService } from "../attachments/attachments.service"
+import { registerAttachmentRoutes } from "../attachments/routes"
 import { registerSessionRoutes } from "../session/routes"
 import { createArchivedAcpSessionsStore } from "../session/archived.acp.sessions.store"
 import { createWorkspaceService } from "../workspace/service"
@@ -37,6 +41,10 @@ import { registerAgentAuthRoutes } from "../agent/auth/routes"
 import { createSupervisorAuthHooks } from "../agent/auth/supervisor.hooks"
 import { createAcpSupervisor } from "../acp/supervisor/supervisor"
 import { AcpSupervisor } from "../acp/supervisor/models"
+import {
+  inventoryAdvertisesEmbeddedContext,
+  inventoryAdvertisesPromptImage,
+} from "../acp/agent/inventory"
 import { SpawnAgentProcessFn } from "../acp/supervisor/spawn.agent.process"
 import { registerSessionStreamRoutes } from "../session/stream.routes"
 import { createLogBuffer } from "../logs/log.buffer"
@@ -162,6 +170,13 @@ export const createServer = async ({
     },
   })
 
+  await app.register(multipart, {
+    limits: {
+      fileSize: MAX_ATTACHMENT_BYTES,
+      files: 1,
+    },
+  })
+
   const deviceRepository = createDeviceRepository(database)
   const runtimeSettingsRepository =
     providedRuntimeSettingsRepository ??
@@ -175,6 +190,8 @@ export const createServer = async ({
     getTrustedProxies: () => runtimeSettingsRepository.get().trustedProxies,
     isLoopbackRequest,
   })
+
+  const attachmentsService = createAttachmentsService()
 
   const agentSettingsRepository = createAgentSettingsRepository(database, {
     whichFn,
@@ -247,6 +264,25 @@ export const createServer = async ({
     },
     promptSession: createAcpHubPromptSession({
       startPrompt: (params) => acpSupervisor.startPromptAcpSession(params),
+      resolveAttachment: async ({ sessionId, reference }) => {
+        const workspaceRoot = acpSupervisor
+          .getSessionBindingRegistry()
+          .getWorkspaceRoot(sessionId)
+        if (workspaceRoot === undefined) {
+          return null
+        }
+        return attachmentsService.loadAttachment({
+          workspacePath: workspaceRoot,
+          reference,
+        })
+      },
+      advertisesPromptCapability: ({ agentId, kind }) => {
+        const inventory = acpSupervisor.getCapabilityInventory(agentId)
+        if (kind === "image") {
+          return inventoryAdvertisesPromptImage(inventory)
+        }
+        return inventoryAdvertisesEmbeddedContext(inventory)
+      },
     }),
     cancelSession: async ({ sessionId }) => {
       const cancelled = await acpSupervisor.cancelAcpSession({
@@ -292,6 +328,11 @@ export const createServer = async ({
 
   registerWorkspaceRoutes(app, workspaceRepository, workspaceService, acpSupervisor)
   registerFilesystemBrowseRoutes(app, () => runtimeSettingsRepository.get().allowedRoots)
+  registerAttachmentRoutes(
+    app,
+    workspaceRepository,
+    attachmentsService,
+  )
   registerAgentSettingsRoutes(app, agentSettingsRepository, acpSupervisor, authBroker)
   registerAgentAuthRoutes(app, authBroker, agentExists)
   registerRuntimeSettingsRoutes(app, runtimeSettingsRepository, {

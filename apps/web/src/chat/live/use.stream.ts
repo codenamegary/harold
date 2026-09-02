@@ -39,6 +39,9 @@ export const useChatStream = (): ChatStream => {
             agentId: effect.agentId,
             sessionId: effect.sessionId,
             text: effect.text,
+            ...(effect.attachments !== undefined && effect.attachments.length > 0
+              ? { attachments: [...effect.attachments] }
+              : {}),
           })
           return
         case "refresh-auth":

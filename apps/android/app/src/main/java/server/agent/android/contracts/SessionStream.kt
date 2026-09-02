@@ -26,6 +26,7 @@ sealed interface SessionStreamClientMessage {
         val agentId: AgentId,
         val sessionId: String,
         val text: String,
+        val attachments: List<AttachmentReference> = emptyList(),
     ) : SessionStreamClientMessage
 
     @Serializable

@@ -16,8 +16,13 @@ fun beginUserTurn(
     state: AcpTranscriptState,
     turnId: String,
     text: String,
+    attachmentNames: List<String> = emptyList(),
 ): AcpTranscriptState = state.copy(
-    rows = state.rows + TranscriptUserRow(turnId = turnId, text = text),
+    rows = state.rows + TranscriptUserRow(
+        turnId = turnId,
+        text = text,
+        attachmentNames = attachmentNames,
+    ),
     sessionState = SessionState.Running,
     currentTurnId = turnId,
 )

@@ -1,5 +1,6 @@
 import { AgentAuth } from "contracts/http/agent-auth"
 import { AgentId } from "contracts/http/agent-settings"
+import { AttachmentReference } from "contracts/http/attachments"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
 import { AUTH_GATED_PROMPT_MESSAGE } from "../../acp/auth.required"
 import { parseAvailableCommandsUpdate } from "./commands.available"
@@ -30,6 +31,7 @@ export type SessionHubPromptSession = (params: {
   agentId: AgentId
   sessionId: string
   text: string
+  attachments?: ReadonlyArray<AttachmentReference>
 }) => Promise<
   { ok: true } | { ok: false; reason: string; authRequired?: boolean }
 >
@@ -90,6 +92,7 @@ export type SessionHub = {
     agentId: AgentId
     sessionId: string
     text: string
+    attachments?: ReadonlyArray<AttachmentReference>
   }) => Promise<void>
   cancel: (params: {
     subscriberId: string
@@ -446,6 +449,9 @@ export const createSessionHub = ({
         agentId: params.agentId,
         sessionId: params.sessionId,
         text: params.text,
+        ...(params.attachments !== undefined && params.attachments.length > 0
+          ? { attachments: params.attachments }
+          : {}),
       })
       if (!result.ok) {
         if (result.authRequired === true && authHooks !== undefined) {

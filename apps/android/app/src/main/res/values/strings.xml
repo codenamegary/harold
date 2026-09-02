@@ -31,6 +31,8 @@
     <string name="chat_session_selector_content_description">Select session: %1$s</string>
     <string name="chat_overflow_content_description">More chat options</string>
     <string name="chat_send_content_description">Send message</string>
+    <string name="chat_attach_photo_content_description">Attach photo</string>
+    <string name="chat_attach_files_content_description">Attach files</string>
     <string name="chat_cancel_content_description">Cancel run</string>
     <string name="chat_voice_mic_content_description">Dictate with voice</string>
     <string name="chat_voice_mic_disabled_composer_content_description">Voice dictation unavailable while the composer is disabled</string>

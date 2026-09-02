@@ -1,5 +1,7 @@
 import { useAtomValue, useSetAtom } from "jotai"
 import { AgentIdSchema } from "contracts/http/agent-settings"
+import { AttachmentReference } from "contracts/http/attachments"
+import { TranscriptAttachmentPreview } from "../transcript/rows"
 import { useCreateSessionMutation } from "../../session/use.create.session.mutation"
 import { useWorkspacesInfiniteQuery } from "../../workspace/use.workspaces.infinite.query"
 import { adoptSessionAtom } from "../selection/actions"
@@ -21,7 +23,17 @@ type UseChatPromptResult = {
   blockedMessage: string | null
 }
 
-export const useChatPrompt = (stream: ChatStream): UseChatPromptResult => {
+type AttachmentSendSource = {
+  resolveForSend: () => Promise<AttachmentReference[] | null>
+  clear: () => void
+  beginTurnPreview: () => TranscriptAttachmentPreview[]
+}
+
+
+export const useChatPrompt = (
+  stream: ChatStream,
+  attachments?: AttachmentSendSource,
+): UseChatPromptResult => {
   const selection = useAtomValue(selectionAtom)
   const transcriptSessionState = useAtomValue(sessionStateAtom)
   const setPendingPrompt = useSetAtom(pendingPromptAtom)
@@ -51,7 +63,16 @@ export const useChatPrompt = (stream: ChatStream): UseChatPromptResult => {
   const blockedMessage = composerBlockedMessage(effectiveSessionState)
 
   const send = (text: string) => {
+    void sendAsync(text)
+  }
+
+  const sendAsync = async (text: string) => {
     if (text.length === 0 || selection.workspaceId === "" || selection.agentId === "") {
+      return
+    }
+
+    const attachmentRefs = attachments === undefined ? [] : await attachments.resolveForSend()
+    if (attachmentRefs === null) {
       return
     }
 
@@ -67,7 +88,10 @@ export const useChatPrompt = (stream: ChatStream): UseChatPromptResult => {
       }
 
       // Held until the stream subscribes to the session we are about to create.
-      setPendingPrompt(text)
+      setPendingPrompt({
+        text,
+        ...(attachmentRefs.length > 0 ? { attachments: attachmentRefs } : {}),
+      })
       createSessionMutation.mutate(
         {
           agentId: parsedAgent.data,
@@ -80,20 +104,29 @@ export const useChatPrompt = (stream: ChatStream): UseChatPromptResult => {
               agentId: created.agentId,
               sessionId: created.sessionId,
             })
-            beginFirstUserTurn(text)
+            beginFirstUserTurn({
+              text,
+              attachments: attachments?.beginTurnPreview(),
+            })
+            attachments?.clear()
           },
         },
       )
       return
     }
 
-    beginUserTurn(text)
+    beginUserTurn({
+      text,
+      attachments: attachments?.beginTurnPreview(),
+    })
     stream.send({
       type: "prompt",
       agentId: parsedAgent.data,
       sessionId: selection.sessionId,
       text,
+      ...(attachmentRefs.length > 0 ? { attachments: attachmentRefs } : {}),
     })
+    attachments?.clear()
   }
 
   const cancel = () => {

@@ -187,6 +187,15 @@ export const inventoryAdvertisesSessionList = (
   inventory: CapabilityInventory | null | undefined,
 ): boolean => inventoryAdvertisesObjectCapability(inventory, "sessionCapabilities.list")
 
+export const inventoryAdvertisesPromptImage = (
+  inventory: CapabilityInventory | null | undefined,
+): boolean => inventoryEntry(inventory, "promptCapabilities.image")?.value === true
+
+export const inventoryAdvertisesEmbeddedContext = (
+  inventory: CapabilityInventory | null | undefined,
+): boolean =>
+  inventoryEntry(inventory, "promptCapabilities.embeddedContext")?.value === true
+
 export const inventorySupportsRequiredCapability = (
   inventory: CapabilityInventory | null | undefined,
   path: RequiredCapabilityPath,

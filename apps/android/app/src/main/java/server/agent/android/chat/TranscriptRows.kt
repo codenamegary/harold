@@ -10,6 +10,7 @@ sealed interface TranscriptRow {
 data class TranscriptUserRow(
     override val turnId: String,
     val text: String,
+    val attachmentNames: List<String> = emptyList(),
 ) : TranscriptRow
 
 data class TranscriptThinkingRow(

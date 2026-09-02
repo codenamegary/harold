@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -13,6 +14,9 @@ import server.agent.android.contracts.AgentAuth
 import server.agent.android.contracts.AgentAuthSession
 import server.agent.android.contracts.AgentAuthSummary
 import server.agent.android.contracts.AgentId
+import server.agent.android.contracts.AttachmentDescriptor
+import server.agent.android.contracts.AttachmentKind
+import server.agent.android.contracts.AttachmentUploadRequest
 import server.agent.android.contracts.AgentServerJson
 import server.agent.android.contracts.AgentSettingsCollection
 import server.agent.android.contracts.AuthSessionAction
@@ -35,7 +39,7 @@ import server.agent.android.contracts.WorkspaceCollection
 class DefaultAgentApi(
     private val client: OkHttpClient,
     private val json: Json = AgentServerJson,
-) : AgentApi {
+) : AgentApi, AttachmentApi {
     override suspend fun listWorkspaces(
         serverOrigin: String,
         limit: Int,
@@ -45,6 +49,86 @@ class DefaultAgentApi(
         query = mapOf("limit" to limit.toString()),
     ) { body ->
         json.decodeFromString(ItemCollection.serializer(Workspace.serializer()), body)
+    }
+
+    override suspend fun uploadAttachment(
+        serverOrigin: String,
+        request: AttachmentUploadRequest,
+    ): Result<AttachmentDescriptor> = withContext(Dispatchers.IO) {
+        val url = buildUrl(
+            serverOrigin = serverOrigin,
+            pathSegments = "v1/workspaces/${request.workspaceId}/attachments",
+            query = emptyMap(),
+        ) ?: return@withContext failure(
+            AgentApiError.Transport(IllegalArgumentException("Invalid server origin")),
+        )
+
+        val bodyBuilder = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart(
+                "file",
+                request.fileName,
+                request.bytes.toRequestBody(request.mimeType.toMediaType()),
+            )
+        if (request.kind != null) {
+            bodyBuilder.addFormDataPart(
+                "kind",
+                if (request.kind == AttachmentKind.Image) "image" else "file",
+            )
+        }
+
+        val httpRequest = Request.Builder()
+            .url(url)
+            .post(bodyBuilder.build())
+            .build()
+
+        try {
+            client.newCall(httpRequest).execute().use { response ->
+                val responseBody = response.body?.string().orEmpty()
+                if (response.isSuccessful) {
+                    return@withContext Result.success(
+                        json.decodeFromString(AttachmentDescriptor.serializer(), responseBody),
+                    )
+                }
+                failure(errorFor(response.code, responseBody))
+            }
+        } catch (error: Throwable) {
+            failure(AgentApiError.Transport(error))
+        }
+    }
+
+    override suspend fun deleteAttachment(
+        serverOrigin: String,
+        workspaceId: String,
+        attachmentId: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val url = buildUrl(
+            serverOrigin = serverOrigin,
+            pathSegments = "v1/workspaces/$workspaceId/attachments/$attachmentId",
+            query = emptyMap(),
+        ) ?: return@withContext failure(
+            AgentApiError.Transport(IllegalArgumentException("Invalid server origin")),
+        )
+
+        val httpRequest = Request.Builder()
+            .url(url)
+            .delete()
+            .build()
+
+        try {
+            client.newCall(httpRequest).execute().use { response ->
+                val responseBody = response.body?.string().orEmpty()
+                if (response.code == HTTP_NO_CONTENT) {
+                    return@withContext Result.success(Unit)
+                }
+                if (!response.isSuccessful) {
+                    return@withContext failure(errorFor(response.code, responseBody))
+                }
+                Result.success(Unit)
+            }
+        } catch (error: Throwable) {
+            failure(AgentApiError.Transport(error))
+        }
     }
 
     override suspend fun getRuntimeSettings(serverOrigin: String): Result<RuntimeSettingsView> = get(

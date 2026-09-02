@@ -1,4 +1,5 @@
 import { atom } from "jotai"
+import { TranscriptAttachmentPreview } from "../transcript/rows"
 import {
   applyPermissionResolved,
   beginUserTurn,
@@ -37,20 +38,48 @@ export const resetLiveAtom = atom(null, (_get, set) => {
   set(pendingPromptAtom, null)
 })
 
-export const beginUserTurnAtom = atom(null, (get, set, text: string) => {
-  set(
-    transcriptAtom,
-    beginUserTurn(get(transcriptAtom), { turnId: crypto.randomUUID(), text }),
-  )
-})
+export const beginUserTurnAtom = atom(
+  null,
+  (
+    get,
+    set,
+    params: {
+      text: string
+      attachments?: TranscriptAttachmentPreview[]
+    },
+  ) => {
+    set(
+      transcriptAtom,
+      beginUserTurn(get(transcriptAtom), {
+        turnId: crypto.randomUUID(),
+        text: params.text,
+        attachments: params.attachments,
+      }),
+    )
+  },
+)
 
 /** First turn of a brand new session, so the transcript starts from empty. */
-export const beginFirstUserTurnAtom = atom(null, (_get, set, text: string) => {
-  set(
-    transcriptAtom,
-    beginUserTurn(emptyAcpTranscript, { turnId: crypto.randomUUID(), text }),
-  )
-})
+export const beginFirstUserTurnAtom = atom(
+  null,
+  (
+    _get,
+    set,
+    params: {
+      text: string
+      attachments?: TranscriptAttachmentPreview[]
+    },
+  ) => {
+    set(
+      transcriptAtom,
+      beginUserTurn(emptyAcpTranscript, {
+        turnId: crypto.randomUUID(),
+        text: params.text,
+        attachments: params.attachments,
+      }),
+    )
+  },
+)
 
 export const resolvePermissionAtom = atom(null, (get, set) => {
   set(permissionAtom, null)

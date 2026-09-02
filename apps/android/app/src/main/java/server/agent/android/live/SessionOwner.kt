@@ -3,6 +3,7 @@ package server.agent.android.live
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.JsonElement
 import server.agent.android.contracts.AgentId
+import server.agent.android.contracts.AttachmentReference
 import server.agent.android.events.ConnectionState
 
 /**
@@ -26,7 +27,7 @@ interface SessionOwner {
      */
     fun watch(agentId: AgentId?, sessionId: String?)
 
-    fun prompt(text: String)
+    fun prompt(text: String, attachments: List<AttachmentReference> = emptyList())
 
     fun cancel()
 

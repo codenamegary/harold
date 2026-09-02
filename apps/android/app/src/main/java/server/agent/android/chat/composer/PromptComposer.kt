@@ -14,7 +14,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Stop
@@ -34,6 +36,8 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import server.agent.android.R
+import server.agent.android.chat.AttachmentUploadStatus
+import server.agent.android.chat.PendingAttachmentUi
 import server.agent.android.chat.VoiceDictationUiState
 import server.agent.android.ui.components.AgentButtonVariant
 import server.agent.android.ui.components.AgentIconButton
@@ -53,6 +57,12 @@ fun PromptComposer(
     composerEnabled: Boolean,
     showCancel: Boolean,
     cancelSubmitting: Boolean,
+    supportsImages: Boolean,
+    supportsFiles: Boolean,
+    pendingAttachments: List<PendingAttachmentUi>,
+    onAttachPhoto: () -> Unit,
+    onAttachFiles: () -> Unit,
+    onRemoveAttachment: (String) -> Unit,
     voice: VoiceDictationUiState,
     voiceMicEnabled: Boolean,
     micContentDescription: String,
@@ -112,6 +122,10 @@ fun PromptComposer(
                     composerState = composerState,
                     composerEnabled = composerEnabled,
                 )
+                PendingAttachmentChips(
+                    attachments = pendingAttachments,
+                    onRemove = onRemoveAttachment,
+                )
                 TextActionRail(
                     composerEnabled = composerEnabled,
                     sendEnabled = composerEnabled && composerState.text.isNotBlank(),
@@ -119,6 +133,10 @@ fun PromptComposer(
                     cancelSubmitting = cancelSubmitting,
                     voiceMicEnabled = voiceMicEnabled,
                     micContentDescription = micContentDescription,
+                    supportsImages = supportsImages,
+                    supportsFiles = supportsFiles,
+                    onAttachPhoto = onAttachPhoto,
+                    onAttachFiles = onAttachFiles,
                     onSlashClick = onSlashClick,
                     onCancel = onCancel,
                     onMicClick = onMicClick,
@@ -207,6 +225,10 @@ private fun TextActionRail(
     cancelSubmitting: Boolean,
     voiceMicEnabled: Boolean,
     micContentDescription: String,
+    supportsImages: Boolean,
+    supportsFiles: Boolean,
+    onAttachPhoto: () -> Unit,
+    onAttachFiles: () -> Unit,
     onSlashClick: () -> Unit,
     onCancel: () -> Unit,
     onMicClick: () -> Unit,
@@ -222,6 +244,36 @@ private fun TextActionRail(
             onClick = onSlashClick,
             testTag = "chat_command_button",
         )
+
+        if (supportsImages) {
+            AgentIconButton(
+                onClick = onAttachPhoto,
+                enabled = composerEnabled,
+                contentDescription = stringResource(R.string.chat_attach_photo_content_description),
+                modifier = Modifier.testTag("chat_attach_photo_button"),
+                icon = {
+                    Icon(
+                        imageVector = Icons.Filled.Image,
+                        contentDescription = null,
+                    )
+                },
+            )
+        }
+
+        if (supportsFiles) {
+            AgentIconButton(
+                onClick = onAttachFiles,
+                enabled = composerEnabled,
+                contentDescription = stringResource(R.string.chat_attach_files_content_description),
+                modifier = Modifier.testTag("chat_attach_files_button"),
+                icon = {
+                    Icon(
+                        imageVector = Icons.Filled.AttachFile,
+                        contentDescription = null,
+                    )
+                },
+            )
+        }
 
         Spacer(modifier = Modifier.weight(1f))
 
@@ -386,4 +438,68 @@ fun SlashButton(
             )
         },
     )
+}
+
+@Composable
+private fun PendingAttachmentChips(
+    attachments: List<PendingAttachmentUi>,
+    onRemove: (String) -> Unit,
+) {
+    if (attachments.isEmpty()) {
+        return
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        attachments.forEach { attachment ->
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.weight(1f, fill = false),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = attachment.name,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    val statusLabel = when (attachment.status) {
+                        AttachmentUploadStatus.Uploading -> "…"
+                        AttachmentUploadStatus.Ready -> "✓"
+                        AttachmentUploadStatus.Failed -> "!"
+                    }
+                    Text(
+                        text = statusLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (attachment.status == AttachmentUploadStatus.Failed) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                        modifier = Modifier.padding(start = 4.dp),
+                    )
+                    AgentIconButton(
+                        onClick = { onRemove(attachment.localId) },
+                        contentDescription = "Remove ${attachment.name}",
+                        modifier = Modifier.testTag("chat_attachment_remove_${attachment.localId}"),
+                        icon = {
+                            Text(
+                                text = "×",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        },
+                    )
+                }
+            }
+        }
+    }
 }

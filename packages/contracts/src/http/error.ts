@@ -9,6 +9,8 @@ export const PROBLEM_TYPES = {
   workspaceActiveSessions: "https://agent-server.local/problems/workspace-has-active-sessions",
   allowedRootHasWorkspaces:
     "https://agent-server.local/problems/allowed-root-has-workspaces",
+  payloadTooLarge: "https://agent-server.local/problems/payload-too-large",
+  unsupportedMediaType: "https://agent-server.local/problems/unsupported-media-type",
 } as const
 
 export const ProblemErrorSchema = z.strictObject({
@@ -54,6 +56,16 @@ export const ConflictProblemSchema = z.strictObject({
 export const UnauthorizedProblemSchema = z.strictObject({
   ...InternalProblemFieldsSchema.shape,
   type: z.literal(PROBLEM_TYPES.unauthorized),
+})
+
+export const PayloadTooLargeProblemSchema = z.strictObject({
+  ...InternalProblemFieldsSchema.shape,
+  type: z.literal(PROBLEM_TYPES.payloadTooLarge),
+})
+
+export const UnsupportedMediaTypeProblemSchema = z.strictObject({
+  ...InternalProblemFieldsSchema.shape,
+  type: z.literal(PROBLEM_TYPES.unsupportedMediaType),
 })
 
 export const WorkspaceActiveSessionsProblemSchema = z.strictObject({

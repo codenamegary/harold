@@ -35,6 +35,11 @@ export type PromptInputProps = {
   placeholder?: string
   "aria-label": string
   onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>
+  /**
+   * Called before the default text-only paste. Return true when the paste was
+   * handled (e.g. an image from the clipboard) to skip text insertion.
+   */
+  onFilePaste?: (files: File[]) => boolean
 }
 
 export const PromptInput: React.FC<PromptInputProps> = (props) => {
@@ -47,6 +52,7 @@ export const PromptInput: React.FC<PromptInputProps> = (props) => {
     placeholder,
     "aria-label": ariaLabel,
     onKeyDown,
+    onFilePaste,
   } = props
 
   const shellRef = useRef<HTMLDivElement>(null)
@@ -192,6 +198,15 @@ export const PromptInput: React.FC<PromptInputProps> = (props) => {
     event.preventDefault()
     if (disabled) {
       return
+    }
+    const clipboardFiles = Array.from(event.clipboardData.items)
+      .filter((item) => item.kind === "file")
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null)
+    if (clipboardFiles.length > 0 && onFilePaste !== undefined) {
+      if (onFilePaste(clipboardFiles)) {
+        return
+      }
     }
     apply(insertText(state, event.clipboardData.getData("text/plain")))
   }

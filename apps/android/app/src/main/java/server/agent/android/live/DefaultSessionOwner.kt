@@ -28,6 +28,7 @@ import server.agent.android.chat.foldAcpUpdate
 import server.agent.android.chat.parseAcpUpdate
 import server.agent.android.chat.parseStreamPermission
 import server.agent.android.contracts.AgentId
+import server.agent.android.contracts.AttachmentReference
 import server.agent.android.contracts.SessionStreamClientMessage
 import server.agent.android.contracts.SessionStreamServerMessage
 import server.agent.android.contracts.catalogSessionKey
@@ -135,7 +136,7 @@ class DefaultSessionOwner(
         sendSubscribeForTarget()
     }
 
-    override fun prompt(text: String) {
+    override fun prompt(text: String, attachments: List<AttachmentReference>) {
         val agentId: AgentId
         val sessionId: String
         val live: Boolean
@@ -145,7 +146,12 @@ class DefaultSessionOwner(
             val turnId = nextTurnIdLocked()
             _snapshot.update { current ->
                 current.copy(
-                    transcript = beginUserTurn(current.transcript, turnId, text),
+                    transcript = beginUserTurn(
+                        current.transcript,
+                        turnId,
+                        text,
+                        attachments.map { it.name },
+                    ),
                     reconnecting = false,
                 )
             }
@@ -160,6 +166,7 @@ class DefaultSessionOwner(
                     agentId = agentId,
                     sessionId = sessionId,
                     text = text,
+                    attachments = attachments,
                 ),
             )
         }

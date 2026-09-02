@@ -1,5 +1,6 @@
 import { atom } from "jotai"
 import { AgentId } from "contracts/http/agent-settings"
+import { AttachmentReference } from "contracts/http/attachments"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
 import { ChatSelection } from "../selection/persist"
 import { selectionAtom } from "../selection/atoms"
@@ -29,7 +30,13 @@ import {
  */
 export type StreamEffect =
   | { kind: "none" }
-  | { kind: "send-prompt"; agentId: AgentId; sessionId: string; text: string }
+  | {
+      kind: "send-prompt"
+      agentId: AgentId
+      sessionId: string
+      text: string
+      attachments?: ReadonlyArray<AttachmentReference>
+    }
   | { kind: "refresh-auth"; agentId: AgentId }
 
 const noEffect: StreamEffect = { kind: "none" }
@@ -76,7 +83,10 @@ export const applyStreamMessageAtom = atom(
           kind: "send-prompt",
           agentId: message.agentId,
           sessionId: message.sessionId,
-          text: queued,
+          text: queued.text,
+          ...(queued.attachments !== undefined && queued.attachments.length > 0
+            ? { attachments: queued.attachments }
+            : {}),
         }
       }
       case "prompt_complete": {
