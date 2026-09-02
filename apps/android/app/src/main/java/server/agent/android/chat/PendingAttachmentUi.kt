@@ -30,8 +30,22 @@ data class PendingAttachmentUi(
         )
     }
 
-    /** Content equality is local identity only; bytes can be large. */
-    override fun equals(other: Any?): Boolean = other is PendingAttachmentUi && other.localId == localId
+    /**
+     * Equality covers every UI-visible field. The chips live in a
+     * MutableStateFlow, which conflates structurally-equal values, so any
+     * field that changes after creation (status, error, upload result,
+     * preview) must participate — otherwise a copied chip stays "equal" to
+     * the previous state and the composer never re-renders the change. Only
+     * [bytes] is excluded on purpose: it is large and never rendered.
+     */
+    override fun equals(other: Any?): Boolean =
+        other is PendingAttachmentUi &&
+            other.localId == localId &&
+            other.status == status &&
+            other.error == error &&
+            other.uploadedPath == uploadedPath &&
+            other.uploadedId == uploadedId &&
+            other.preview === preview
 
     override fun hashCode(): Int = localId.hashCode()
 }
