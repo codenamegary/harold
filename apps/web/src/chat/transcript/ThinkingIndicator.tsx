@@ -9,7 +9,7 @@ export const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({
 }) => {
   return (
     <span className="thinking-indicator inline-flex items-center" aria-hidden>
-      <span className="thinking-indicator-label">{label}</span>
+      <span className="thinking-indicator-label wrap-anywhere">{label}</span>
     </span>
   )
 }

@@ -61,6 +61,27 @@ const isToolForCall =
   (row: TranscriptRow): row is TranscriptToolRow =>
     row.kind === "tool" && row.toolCallId === toolCallId
 
+/**
+ * Tool output can arrive as whole snapshots (session replay, cumulative
+ * terminal dumps) or as appended deltas (streamed terminal chunks). When one
+ * side fully contains the other, keep the longer; otherwise concatenate.
+ */
+const mergeToolDetail = (
+  existing: string | undefined,
+  next: string,
+): string => {
+  if (existing === undefined || existing.length === 0) {
+    return next
+  }
+  if (next.includes(existing)) {
+    return next
+  }
+  if (existing.includes(next)) {
+    return existing
+  }
+  return `${existing}${next}`
+}
+
 const turnHasUserRow = (rows: ReadonlyArray<TranscriptRow>, turnId: string) =>
   rows.some((row) => row.kind === "user" && row.turnId === turnId)
 
@@ -258,7 +279,9 @@ export const foldAcpUpdate = (
           ...row,
           ...(parsed.toolName === undefined ? {} : { toolName: parsed.toolName }),
           ...(parsed.toolKind === undefined ? {} : { toolKind: parsed.toolKind }),
-          ...(parsed.detail === undefined ? {} : { detail: parsed.detail }),
+          ...(parsed.detail === undefined
+            ? {}
+            : { detail: mergeToolDetail(row.detail, parsed.detail) }),
           status: parsed.status,
         })),
       })

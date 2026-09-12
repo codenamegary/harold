@@ -8,13 +8,13 @@ const ChunkContentSchema = z.union([
   z.object({ text: z.string() }).passthrough(),
 ])
 
-const ToolCallStatusSchema = z.enum(["pending", "in_progress"])
-const ToolCallUpdateStatusSchema = z.enum([
+const ToolCallStatusSchema = z.enum([
   "pending",
   "in_progress",
   "completed",
   "failed",
 ])
+const ToolCallUpdateStatusSchema = ToolCallStatusSchema
 
 const readUpdateKind = (fields: Record<string, unknown>): string | undefined => {
   const sessionUpdate = z.string().safeParse(fields.sessionUpdate)
@@ -77,6 +77,63 @@ const readToolKind = (fields: Record<string, unknown>): ToolKind => {
   return "execute"
 }
 
+const TextBlockSchema = z.object({ text: z.string() }).passthrough()
+const NestedTextBlockSchema = z
+  .object({ content: TextBlockSchema })
+  .passthrough()
+
+const readTextFromBlocks = (blocks: unknown): string | undefined => {
+  if (!Array.isArray(blocks)) {
+    return undefined
+  }
+
+  const texts: string[] = []
+  for (const block of blocks) {
+    if (typeof block === "string") {
+      texts.push(block)
+      continue
+    }
+    const text = TextBlockSchema.safeParse(block)
+    if (text.success) {
+      texts.push(text.data.text)
+      continue
+    }
+    const nested = NestedTextBlockSchema.safeParse(block)
+    if (nested.success) {
+      texts.push(nested.data.content.text)
+    }
+  }
+
+  const joined = texts.join("\n").trim()
+  return joined.length > 0 ? joined : undefined
+}
+
+const readToolDetail = (fields: Record<string, unknown>): string | undefined => {
+  const terminal = z
+    .object({ _meta: z.object({ terminal_output: z.object({ data: z.string() }) }).passthrough() })
+    .passthrough()
+    .safeParse(fields)
+  if (terminal.success) {
+    const data = terminal.data._meta.terminal_output.data
+    if (data.trim().length > 0) {
+      return data
+    }
+  }
+
+  const rawOutput = z
+    .object({ rawOutput: z.object({ content: z.unknown() }).passthrough() })
+    .passthrough()
+    .safeParse(fields)
+  if (rawOutput.success) {
+    const detail = readTextFromBlocks(rawOutput.data.rawOutput.content)
+    if (detail !== undefined) {
+      return detail
+    }
+  }
+
+  return readTextFromBlocks(fields.content)
+}
+
 export type ParsedAcpUpdate =
   | { kind: "agent_message_chunk"; text: string }
   | { kind: "agent_thought_chunk"; text: string }
@@ -85,7 +142,7 @@ export type ParsedAcpUpdate =
       toolCallId: string
       toolName: string
       toolKind: ToolKind
-      status: "pending" | "in_progress"
+      status: "pending" | "in_progress" | "completed" | "failed"
       detail?: string
     }
   | {
@@ -139,6 +196,9 @@ export const parseAcpUpdate = (update: unknown): ParsedAcpUpdate => {
         toolName,
         toolKind: readToolKind(fields),
         status,
+        ...(readToolDetail(fields) === undefined
+          ? {}
+          : { detail: readToolDetail(fields) }),
       }
     }
     case "tool_call_update": {
@@ -150,11 +210,13 @@ export const parseAcpUpdate = (update: unknown): ParsedAcpUpdate => {
 
       const toolName = readToolName(fields)
       const toolKind = ToolKindSchema.safeParse(fields.toolKind ?? fields.kind)
+      const detail = readToolDetail(fields)
       return {
         kind: "tool_call_update",
         toolCallId: toolCallId.data,
         ...(toolName === undefined ? {} : { toolName }),
         ...(toolKind.success ? { toolKind: toolKind.data } : {}),
+        ...(detail === undefined ? {} : { detail }),
         status: status.data,
       }
     }
