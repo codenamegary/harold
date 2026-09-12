@@ -167,4 +167,124 @@ describe("acp transcript reducer", () => {
     )
     expect(next.rows).toHaveLength(1)
   })
+
+  test("fills tool detail from tool_call_update onto the existing row", () => {
+    const started = beginUserTurn(emptyAcpTranscript, {
+      turnId: "turn-1",
+      text: "run it",
+    })
+    const withCall = foldAcpUpdate(
+      started,
+      parseAcpUpdate({
+        sessionUpdate: "tool_call",
+        toolCallId: "call-1",
+        title: "bash",
+        kind: "execute",
+        status: "in_progress",
+      }),
+    )
+    const withOutput = foldAcpUpdate(
+      withCall,
+      parseAcpUpdate({
+        sessionUpdate: "tool_call_update",
+        toolCallId: "call-1",
+        status: "completed",
+        _meta: { terminal_output: { terminal_id: "call-1", data: "out" } },
+      }),
+    )
+
+    expect(withOutput.rows).toEqual([
+      { kind: "user", turnId: "turn-1", text: "run it" },
+      {
+        kind: "tool",
+        turnId: "turn-1",
+        toolCallId: "call-1",
+        toolName: "bash",
+        toolKind: "execute",
+        status: "completed",
+        detail: "out",
+      },
+    ])
+  })
+
+  test("appends streamed terminal detail without duplicating replayed output", () => {
+    const started = beginUserTurn(emptyAcpTranscript, {
+      turnId: "turn-1",
+      text: "run it",
+    })
+    const withCall = foldAcpUpdate(
+      started,
+      parseAcpUpdate({
+        sessionUpdate: "tool_call",
+        toolCallId: "call-1",
+        title: "bash",
+        kind: "execute",
+        status: "in_progress",
+      }),
+    )
+    const withChunk = foldAcpUpdate(
+      withCall,
+      parseAcpUpdate({
+        sessionUpdate: "tool_call_update",
+        toolCallId: "call-1",
+        status: "in_progress",
+        _meta: { terminal_output: { terminal_id: "call-1", data: "PLAN.md\n" } },
+      }),
+    )
+    const withRest = foldAcpUpdate(
+      withChunk,
+      parseAcpUpdate({
+        sessionUpdate: "tool_call_update",
+        toolCallId: "call-1",
+        status: "completed",
+        _meta: {
+          terminal_output: { terminal_id: "call-1", data: "PLAN.md\napps\n" },
+        },
+      }),
+    )
+
+    const row = withRest.rows.findLast((r) => r.kind === "tool")
+    expect(row).toMatchObject({ kind: "tool", detail: "PLAN.md\napps\n" })
+  })
+
+  test("does not duplicate detail when the update repeats the tool result", () => {
+    const started = beginUserTurn(emptyAcpTranscript, {
+      turnId: "turn-1",
+      text: "read it",
+    })
+    const withCall = foldAcpUpdate(
+      started,
+      parseAcpUpdate({
+        sessionUpdate: "tool_call",
+        toolCallId: "call-1",
+        title: "read",
+        kind: "read",
+        status: "completed",
+        rawOutput: {
+          role: "toolResult",
+          toolCallId: "call-1",
+          content: [{ type: "text", text: "file body" }],
+        },
+      }),
+    )
+    const withUpdate = foldAcpUpdate(
+      withCall,
+      parseAcpUpdate({
+        sessionUpdate: "tool_call_update",
+        toolCallId: "call-1",
+        status: "completed",
+        content: [
+          { type: "content", content: { type: "text", text: "file body" } },
+        ],
+        rawOutput: {
+          role: "toolResult",
+          toolCallId: "call-1",
+          content: [{ type: "text", text: "file body" }],
+        },
+      }),
+    )
+
+    const row = withUpdate.rows.findLast((r) => r.kind === "tool")
+    expect(row).toMatchObject({ kind: "tool", detail: "file body" })
+  })
 })
