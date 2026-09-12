@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { act, cleanup, render, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react"
 import { ChatTranscript } from "./ChatTranscript"
 import { MarkdownMessage } from "./MarkdownMessage"
 
@@ -31,6 +31,26 @@ describe("MarkdownMessage", () => {
     const { getByText } = render(<MarkdownMessage text="Auth uses JWT" />)
 
     expect(getByText("Auth uses JWT")).toBeInTheDocument()
+  })
+
+  test("opens links in a new tab without an external-link confirmation", () => {
+    const { getByRole, queryByText } = render(
+      <MarkdownMessage
+        text="[Repo](https://github.com/codenamegary/agent-server)"
+      />,
+    )
+
+    const link = getByRole("link", { name: "Repo" })
+    expect(link.getAttribute("target")).toBe("_blank")
+
+    act(() => {
+      fireEvent.click(link)
+    })
+
+    expect(queryByText("Open external link?")).not.toBeInTheDocument()
+    expect(
+      queryByText("You're about to visit an external website."),
+    ).not.toBeInTheDocument()
   })
 })
 
