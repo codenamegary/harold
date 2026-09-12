@@ -248,8 +248,16 @@
 
 .markdown-message [data-streamdown="unordered-list"],
 .markdown-message [data-streamdown="ordered-list"] {
+  /* Streamdown's list-disc/list-decimal utilities are never generated (the
+     @source glob above matches no files), so preflight's list-style: none
+     wins. Own the markers here instead. */
+  list-style: disc;
   margin: 0.35em 0;
   padding-left: 1.25em;
+}
+
+.markdown-message [data-streamdown="ordered-list"] {
+  list-style: decimal;
 }
 
 .markdown-message [data-streamdown="list-item"] {
