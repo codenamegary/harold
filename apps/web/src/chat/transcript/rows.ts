@@ -11,6 +11,7 @@ export type TranscriptUserRow = {
   kind: "user"
   turnId: string
   text: string
+  messageId?: string
   attachments?: ReadonlyArray<TranscriptAttachmentPreview>
 }
 
@@ -18,12 +19,14 @@ export type TranscriptThinkingRow = {
   kind: "thinking"
   turnId: string
   text: string
+  messageId?: string
 }
 
 export type TranscriptAssistantRow = {
   kind: "assistant"
   turnId: string
   text: string
+  messageId?: string
 }
 
 export type TranscriptToolRow = {

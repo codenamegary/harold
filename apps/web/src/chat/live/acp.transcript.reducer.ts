@@ -163,7 +163,10 @@ export const foldAcpUpdate = (
         })
       }
 
-      if (turnHasUserRow(state.rows, turnId)) {
+      const lastUserRow = state.rows.findLast(isUserForTurn(turnId))
+      const startsNewBlock =
+        parsed.messageId !== undefined && lastUserRow?.messageId !== parsed.messageId
+      if (turnHasUserRow(state.rows, turnId) && !startsNewBlock) {
         return withLiveRunning({
           ...state,
           rows: updateLastMatching(state.rows, isUserForTurn(turnId), (row) => ({
@@ -181,13 +184,16 @@ export const foldAcpUpdate = (
             kind: "user",
             turnId,
             text: parsed.text,
+            ...(parsed.messageId === undefined ? {} : { messageId: parsed.messageId }),
           },
         ],
       })
     }
     case "agent_thought_chunk": {
       const existing = state.rows.findLast(isThinkingForTurn(turnId))
-      if (existing === undefined) {
+      const startsNewBlock =
+        parsed.messageId !== undefined && existing?.messageId !== parsed.messageId
+      if (existing === undefined || startsNewBlock) {
         return withLiveRunning({
           ...state,
           rows: [
@@ -196,6 +202,7 @@ export const foldAcpUpdate = (
               kind: "thinking",
               turnId,
               text: parsed.text,
+              ...(parsed.messageId === undefined ? {} : { messageId: parsed.messageId }),
             },
           ],
         })
@@ -211,7 +218,9 @@ export const foldAcpUpdate = (
     }
     case "agent_message_chunk": {
       const existing = state.rows.findLast(isAssistantForTurn(turnId))
-      if (existing === undefined) {
+      const startsNewBlock =
+        parsed.messageId !== undefined && existing?.messageId !== parsed.messageId
+      if (existing === undefined || startsNewBlock) {
         return withLiveRunning({
           ...state,
           rows: [
@@ -220,6 +229,7 @@ export const foldAcpUpdate = (
               kind: "assistant",
               turnId,
               text: parsed.text,
+              ...(parsed.messageId === undefined ? {} : { messageId: parsed.messageId }),
             },
           ],
         })

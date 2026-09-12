@@ -49,6 +49,11 @@ const readChunkText = (fields: Record<string, unknown>): string | undefined => {
   return typeof content.data === "string" ? content.data : content.data.text
 }
 
+const readMessageId = (fields: Record<string, unknown>): string | undefined => {
+  const messageId = z.string().min(1).safeParse(fields.messageId)
+  return messageId.success ? messageId.data : undefined
+}
+
 const readToolName = (fields: Record<string, unknown>): string | undefined => {
   const toolName = z.string().min(1).safeParse(fields.toolName)
   if (toolName.success) {
@@ -135,8 +140,8 @@ const readToolDetail = (fields: Record<string, unknown>): string | undefined => 
 }
 
 export type ParsedAcpUpdate =
-  | { kind: "agent_message_chunk"; text: string }
-  | { kind: "agent_thought_chunk"; text: string }
+  | { kind: "agent_message_chunk"; text: string; messageId?: string }
+  | { kind: "agent_thought_chunk"; text: string; messageId?: string }
   | {
       kind: "tool_call"
       toolCallId: string
@@ -153,7 +158,7 @@ export type ParsedAcpUpdate =
       status: "pending" | "in_progress" | "completed" | "failed"
       detail?: string
     }
-  | { kind: "user_message_chunk"; text: string }
+  | { kind: "user_message_chunk"; text: string; messageId?: string }
   | { kind: "ignored" }
 
 export const parseAcpUpdate = (update: unknown): ParsedAcpUpdate => {
@@ -174,14 +179,24 @@ export const parseAcpUpdate = (update: unknown): ParsedAcpUpdate => {
       if (text === undefined) {
         return { kind: "ignored" }
       }
-      return { kind: "agent_message_chunk", text }
+      const messageId = readMessageId(fields)
+      return {
+        kind: "agent_message_chunk",
+        text,
+        ...(messageId === undefined ? {} : { messageId }),
+      }
     }
     case "agent_thought_chunk": {
       const text = readChunkText(fields)
       if (text === undefined) {
         return { kind: "ignored" }
       }
-      return { kind: "agent_thought_chunk", text }
+      const messageId = readMessageId(fields)
+      return {
+        kind: "agent_thought_chunk",
+        text,
+        ...(messageId === undefined ? {} : { messageId }),
+      }
     }
     case "tool_call": {
       const toolCallId = z.string().min(1).safeParse(fields.toolCallId)
@@ -225,7 +240,12 @@ export const parseAcpUpdate = (update: unknown): ParsedAcpUpdate => {
       if (text === undefined || text.length === 0) {
         return { kind: "ignored" }
       }
-      return { kind: "user_message_chunk", text }
+      const messageId = readMessageId(fields)
+      return {
+        kind: "user_message_chunk",
+        text,
+        ...(messageId === undefined ? {} : { messageId }),
+      }
     }
     default:
       return { kind: "ignored" }
