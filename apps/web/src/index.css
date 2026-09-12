@@ -228,6 +228,12 @@
   background: var(--color-surface-deep);
 }
 
+/* Streamdown bundles my-4 for vertical rhythm, but that utility is never
+   generated (see the @source note above). */
+.markdown-message [data-streamdown="code-block"] {
+  margin: 1rem 0;
+}
+
 .markdown-message [data-streamdown="code-block"] pre,
 .markdown-message [data-streamdown="code-block-body"] pre {
   margin: 0;
