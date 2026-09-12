@@ -23,7 +23,7 @@ export const ActivityStatusLine: React.FC<ActivityStatusLineProps> = ({
     >
       <ThinkingIndicator label={label} />
       {hasSubtitle ? (
-        <span className="font-mono text-sm text-dim">{subtitle}</span>
+        <span className="font-mono text-base text-dim">{subtitle}</span>
       ) : null}
     </div>
   )

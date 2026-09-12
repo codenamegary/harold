@@ -63,7 +63,7 @@ export const ChatTranscript: React.FC<ChatTranscriptProps> = ({
           return (
             <div
               key={rowKey(row, index)}
-              className="rounded-lg border border-line bg-[#12161b] px-3.5 py-3 text-sm text-body"
+              className="rounded-lg border border-line bg-[#12161b] px-3.5 py-3 text-base text-body"
             >
               {row.text}
               {row.attachments !== undefined && row.attachments.length > 0 ? (
