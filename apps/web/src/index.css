@@ -223,15 +223,25 @@
 
 .markdown-message [data-streamdown="code-block"],
 .markdown-message [data-streamdown="code-block-body"] {
-  border: 1px solid var(--color-line);
-  border-radius: 8px;
   background: var(--color-surface-deep);
 }
 
-/* Streamdown bundles my-4 for vertical rhythm, but that utility is never
-   generated (see the @source note above). */
 .markdown-message [data-streamdown="code-block"] {
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
   margin: 1rem 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.markdown-message [data-streamdown="code-block-body"] {
+  border: none;
+  border-radius: 0;
+}
+
+.markdown-message [data-streamdown="code-block-header"] {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--color-line);
 }
 
 .markdown-message [data-streamdown="code-block"] pre,
