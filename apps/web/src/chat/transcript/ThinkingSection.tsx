@@ -11,7 +11,7 @@ export const ThinkingSection: React.FC<ThinkingSectionProps> = ({ text }) => {
         <span className="inline-flex items-center gap-2">
           <span
             aria-hidden
-            className="text-sm text-dim transition-transform group-open:rotate-90"
+            className="text-base text-dim transition-transform group-open:rotate-90"
           >
             ▸
           </span>
@@ -20,7 +20,7 @@ export const ThinkingSection: React.FC<ThinkingSectionProps> = ({ text }) => {
           </span>
         </span>
       </summary>
-      <div className="border-t border-line-soft px-3 py-2 text-sm leading-relaxed text-body whitespace-pre-wrap">
+      <div className="border-t border-line-soft px-3 py-2 text-base leading-relaxed text-body whitespace-pre-wrap">
         {text}
       </div>
     </details>

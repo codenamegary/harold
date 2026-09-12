@@ -30,11 +30,11 @@ export const ToolCallGroup: React.FC<ToolCallGroupProps> = ({ tools }) => {
 
   return (
     <details className="group/tool-group rounded-md border border-line-soft bg-[#0d1117] open:bg-[#0f141b]">
-      <summary className="cursor-pointer list-none px-3 py-2 font-mono text-sm text-[#8b949e] marker:content-none [&::-webkit-details-marker]:hidden">
+      <summary className="cursor-pointer list-none px-3 py-2 font-mono text-base text-[#8b949e] marker:content-none [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2">
           <span
             aria-hidden
-            className="text-sm text-dim transition-transform group-open/tool-group:rotate-90"
+            className="text-base text-dim transition-transform group-open/tool-group:rotate-90"
           >
             ▸
           </span>
@@ -45,11 +45,11 @@ export const ToolCallGroup: React.FC<ToolCallGroupProps> = ({ tools }) => {
         {tools.map((tool) => (
           <li key={tool.toolCallId}>
             <details className="group/tool-item rounded border border-line-soft/80 bg-[#0b0f14]">
-              <summary className="cursor-pointer list-none px-2.5 py-1.5 font-mono text-sm text-[#8b949e] marker:content-none [&::-webkit-details-marker]:hidden">
+              <summary className="cursor-pointer list-none px-2.5 py-1.5 font-mono text-base text-[#8b949e] marker:content-none [&::-webkit-details-marker]:hidden">
                 <span className="inline-flex min-w-0 items-center gap-2">
                   <span
                     aria-hidden
-                    className="shrink-0 text-sm text-dim transition-transform group-open/tool-item:rotate-90"
+                    className="shrink-0 text-base text-dim transition-transform group-open/tool-item:rotate-90"
                   >
                     ▸
                   </span>
@@ -58,7 +58,7 @@ export const ToolCallGroup: React.FC<ToolCallGroupProps> = ({ tools }) => {
                   </span>
                 </span>
               </summary>
-              <pre className="m-0 overflow-x-auto border-t border-line-soft px-2.5 py-2 font-mono text-sm leading-relaxed whitespace-pre-wrap text-body-soft">
+              <pre className="m-0 overflow-x-auto border-t border-line-soft px-2.5 py-2 font-mono text-base leading-relaxed whitespace-pre-wrap text-body-soft">
                 {toolDetailBody(tool)}
               </pre>
             </details>

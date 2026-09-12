@@ -10,7 +10,7 @@ export const WelcomeMessage: React.FC = () => (
       <SquareTerminal className="size-5" />
     </div>
     <h3 className="m-0 mb-2 text-lg">Chat with an agent</h3>
-    <p className="text-sm text-muted">
+    <p className="text-base text-muted">
       Send a prompt directly to an agent without leaving the console.
     </p>
   </div>
