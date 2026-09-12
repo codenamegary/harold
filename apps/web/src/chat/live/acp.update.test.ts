@@ -119,6 +119,32 @@ describe("parseAcpUpdate", () => {
     })
   })
 
+  test("preserves messageId on chunk updates", () => {
+    expect(
+      parseAcpUpdate({
+        sessionUpdate: "agent_message_chunk",
+        messageId: "msg_1",
+        content: { type: "text", text: "Hello" },
+      }),
+    ).toEqual({ kind: "agent_message_chunk", text: "Hello", messageId: "msg_1" })
+
+    expect(
+      parseAcpUpdate({
+        sessionUpdate: "agent_thought_chunk",
+        messageId: "msg_2",
+        text: "thinking",
+      }),
+    ).toEqual({ kind: "agent_thought_chunk", text: "thinking", messageId: "msg_2" })
+
+    expect(
+      parseAcpUpdate({
+        sessionUpdate: "user_message_chunk",
+        messageId: "msg_3",
+        content: { type: "text", text: "hi" },
+      }),
+    ).toEqual({ kind: "user_message_chunk", text: "hi", messageId: "msg_3" })
+  })
+
   test("ignores unknown update kinds", () => {
     expect(parseAcpUpdate({ sessionUpdate: "session_info_update" })).toEqual({
       kind: "ignored",

@@ -130,6 +130,168 @@ describe("acp transcript reducer", () => {
     ])
   })
 
+  test("starts a new assistant row when the message id changes", () => {
+    const first = foldAcpUpdate(
+      emptyAcpTranscript,
+      parseAcpUpdate({
+        sessionUpdate: "agent_message_chunk",
+        messageId: "msg_1",
+        content: { type: "text", text: "First block" },
+      }),
+    )
+    const second = foldAcpUpdate(
+      first,
+      parseAcpUpdate({
+        sessionUpdate: "agent_message_chunk",
+        messageId: "msg_2",
+        content: { type: "text", text: "Second block" },
+      }),
+    )
+
+    expect(second.rows).toEqual([
+      {
+        kind: "assistant",
+        turnId: "replay",
+        text: "First block",
+        messageId: "msg_1",
+      },
+      {
+        kind: "assistant",
+        turnId: "replay",
+        text: "Second block",
+        messageId: "msg_2",
+      },
+    ])
+  })
+
+  test("appends streamed chunks that share one message id", () => {
+    const first = foldAcpUpdate(
+      emptyAcpTranscript,
+      parseAcpUpdate({
+        sessionUpdate: "agent_message_chunk",
+        messageId: "msg_1",
+        content: { type: "text", text: "Hello" },
+      }),
+    )
+    const second = foldAcpUpdate(
+      first,
+      parseAcpUpdate({
+        sessionUpdate: "agent_message_chunk",
+        messageId: "msg_1",
+        content: { type: "text", text: " world" },
+      }),
+    )
+
+    expect(second.rows).toEqual([
+      {
+        kind: "assistant",
+        turnId: "replay",
+        text: "Hello world",
+        messageId: "msg_1",
+      },
+    ])
+  })
+
+  test("places a new message block after interleaved tool rows", () => {
+    const first = foldAcpUpdate(
+      emptyAcpTranscript,
+      parseAcpUpdate({
+        sessionUpdate: "agent_message_chunk",
+        messageId: "msg_1",
+        content: { type: "text", text: "Running the check" },
+      }),
+    )
+    const withTool = foldAcpUpdate(
+      first,
+      parseAcpUpdate({
+        sessionUpdate: "tool_call",
+        toolCallId: "call-1",
+        title: "bash",
+        kind: "execute",
+        status: "completed",
+      }),
+    )
+    const next = foldAcpUpdate(
+      withTool,
+      parseAcpUpdate({
+        sessionUpdate: "agent_message_chunk",
+        messageId: "msg_2",
+        content: { type: "text", text: "Check passed" },
+      }),
+    )
+
+    expect(next.rows).toEqual([
+      {
+        kind: "assistant",
+        turnId: "replay",
+        text: "Running the check",
+        messageId: "msg_1",
+      },
+      {
+        kind: "tool",
+        turnId: "replay",
+        toolCallId: "call-1",
+        toolName: "bash",
+        toolKind: "execute",
+        status: "completed",
+      },
+      {
+        kind: "assistant",
+        turnId: "replay",
+        text: "Check passed",
+        messageId: "msg_2",
+      },
+    ])
+  })
+
+  test("starts a new thinking row when the message id changes", () => {
+    const first = foldAcpUpdate(
+      emptyAcpTranscript,
+      parseAcpUpdate({
+        sessionUpdate: "agent_thought_chunk",
+        messageId: "msg_1",
+        text: "first thought",
+      }),
+    )
+    const second = foldAcpUpdate(
+      first,
+      parseAcpUpdate({
+        sessionUpdate: "agent_thought_chunk",
+        messageId: "msg_2",
+        text: "second thought",
+      }),
+    )
+
+    expect(second.rows).toEqual([
+      { kind: "thinking", turnId: "replay", text: "first thought", messageId: "msg_1" },
+      { kind: "thinking", turnId: "replay", text: "second thought", messageId: "msg_2" },
+    ])
+  })
+
+  test("starts a new user row when consecutive user messages have different ids", () => {
+    const first = foldAcpUpdate(
+      emptyAcpTranscript,
+      parseAcpUpdate({
+        sessionUpdate: "user_message_chunk",
+        messageId: "msg_1",
+        content: { type: "text", text: "First" },
+      }),
+    )
+    const second = foldAcpUpdate(
+      first,
+      parseAcpUpdate({
+        sessionUpdate: "user_message_chunk",
+        messageId: "msg_2",
+        content: { type: "text", text: "Second" },
+      }),
+    )
+
+    expect(second.rows).toEqual([
+      { kind: "user", turnId: "replay", text: "First", messageId: "msg_1" },
+      { kind: "user", turnId: "replay", text: "Second", messageId: "msg_2" },
+    ])
+  })
+
   test("marks running when live updates arrive after subscribe", () => {
     const replayed = foldAcpUpdate(
       emptyAcpTranscript,
