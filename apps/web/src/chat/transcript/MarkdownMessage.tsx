@@ -9,7 +9,9 @@ type MarkdownMessageProps = {
 export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ text }) => {
   return (
     <div className="markdown-message text-sm leading-relaxed text-body">
-      <Streamdown controls={false}>{text}</Streamdown>
+      <Streamdown controls={false} linkSafety={{ enabled: false }}>
+        {text}
+      </Streamdown>
     </div>
   )
 }
