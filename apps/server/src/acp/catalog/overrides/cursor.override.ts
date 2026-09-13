@@ -10,5 +10,8 @@ export const cursorAgentProfileOverride: AgentProfileOverride = {
       writeTextFile: true,
     },
     terminal: true,
+    _meta: {
+      parameterizedModelPicker: true,
+    },
   },
 }

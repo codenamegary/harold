@@ -71,6 +71,23 @@ describe("createCursorAuthAdapter", () => {
     })
   })
 
+  test("declares the parameterized model picker capability", () => {
+    const adapter = createCursorAuthAdapter({
+      execFile: async () => ({ stdout: "{}", stderr: "" }),
+    })
+
+    expect(
+      adapter.clientAuthCapabilities({
+        agentId: "cursor",
+        hostIdentity: { id: "default" },
+        hostMachineName: "dev-box",
+        initializeResult: null,
+      }),
+    ).toEqual({
+      _meta: { parameterizedModelPicker: true },
+    })
+  })
+
   test("matches cursor agent id only", () => {
     const adapter = createCursorAuthAdapter({
       execFile: async () => ({ stdout: "{}", stderr: "" }),
