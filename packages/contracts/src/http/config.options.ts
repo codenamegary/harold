@@ -3,13 +3,16 @@ import { z } from "zod"
 export const ConfigOptionValueSchema = z.strictObject({
   value: z.string(),
   name: z.string(),
-  description: z.string().optional(),
+  description: z.string().nullish(),
+  _meta: z.unknown().nullish(),
 })
 
 const OptionIdentityFields = {
   id: z.string().min(1),
   name: z.string().min(1),
-  category: z.string().min(1).optional(),
+  description: z.string().nullish(),
+  category: z.string().min(1).nullish(),
+  _meta: z.unknown().nullish(),
 }
 
 export const SelectOptionSchema = z.strictObject({
@@ -54,7 +57,7 @@ const RESERVED_CATEGORIES: ReadonlyArray<string> = [
 
 export const categoryOf = (option: ConfigOption): ConfigCategory => {
   const { category } = option
-  if (category === undefined || category.startsWith("_")) {
+  if (category === undefined || category === null || category.startsWith("_")) {
     return "other"
   }
   return RESERVED_CATEGORIES.includes(category)

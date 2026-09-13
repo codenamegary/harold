@@ -1,10 +1,17 @@
 export type FakeConfigOption = {
   id: string
   name?: string
-  category?: string
+  description?: string | null
+  category?: string | null
   type: "select" | "boolean"
   currentValue: string | boolean
-  options?: ReadonlyArray<{ value: string; name: string }>
+  options?: ReadonlyArray<{
+    value: string
+    name: string
+    description?: string | null
+    _meta?: unknown
+  }>
+  _meta?: unknown
 }
 
 export type FakeAcpConfigState = {

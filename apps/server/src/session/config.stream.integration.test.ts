@@ -140,12 +140,25 @@ describe("session config stream integration", () => {
       {
         id: "model",
         name: "Model",
+        description: "Select the model for this session",
         category: "model",
         type: "select",
         currentValue: "m1",
         options: [
-          { value: "m1", name: "M1" },
-          { value: "m2", name: "M2" },
+          { value: "m1", name: "M1", description: null },
+          { value: "m2", name: "M2", description: "The second model" },
+        ],
+      },
+      {
+        id: "thought_level",
+        name: "Thinking",
+        description: "Set the reasoning effort for this session",
+        category: "thought_level",
+        type: "select",
+        currentValue: "medium",
+        options: [
+          { value: "low", name: "Thinking: low", description: null },
+          { value: "medium", name: "Thinking: medium", description: null },
         ],
       },
     ]

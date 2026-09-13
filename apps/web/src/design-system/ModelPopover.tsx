@@ -156,7 +156,7 @@ export const ModelPopover: React.FC<ModelPopoverProps> = ({
                 }`}
               >
                 <span className="w-full truncate font-mono">{item.name}</span>
-                {item.description !== undefined ? (
+                {typeof item.description === "string" ? (
                   <span className="w-full truncate text-2xs text-dim">{item.description}</span>
                 ) : (
                   <span className="w-full truncate text-2xs text-dim">{item.value}</span>

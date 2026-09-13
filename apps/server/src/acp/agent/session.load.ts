@@ -65,7 +65,7 @@ export const createSessionLoadHandler = (): AgentMethodHandler<"session/load"> =
 
     try {
       const result = await context.transport.request<{
-        sessionId: string
+        sessionId?: string
         configOptions?: unknown
       }>(
         "session/load",
@@ -77,11 +77,16 @@ export const createSessionLoadHandler = (): AgentMethodHandler<"session/load"> =
         operationContext,
       )
 
+      const resolvedAcpSessionId =
+        typeof result.sessionId === "string" && result.sessionId.length > 0
+          ? result.sessionId
+          : acpSessionId
+
       const configOptions = SessionConfigSchema.safeParse(result.configOptions ?? [])
 
-      context.sessionBindings.unbind({ acpSessionId: result.sessionId })
+      context.sessionBindings.unbind({ acpSessionId })
       context.sessionBindings.bind({
-        acpSessionId: result.sessionId,
+        acpSessionId: resolvedAcpSessionId,
         sessionId,
         workspaceId,
         workspaceRoot: workspaceCwd,
@@ -89,12 +94,12 @@ export const createSessionLoadHandler = (): AgentMethodHandler<"session/load"> =
       })
       context.sessionOwnership.remember({
         agentId: context.agentId,
-        acpSessionId: result.sessionId,
+        acpSessionId: resolvedAcpSessionId,
       })
 
       return {
         ok: true,
-        acpSessionId: result.sessionId,
+        acpSessionId: resolvedAcpSessionId,
         configOptions: configOptions.success ? configOptions.data : [],
       }
     } catch (error: unknown) {

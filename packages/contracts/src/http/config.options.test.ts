@@ -38,6 +38,36 @@ describe("config option contracts", () => {
     })
   })
 
+  test("parses an ACP option carrying descriptions and metadata", () => {
+    const option = ConfigOptionSchema.parse({
+      id: "thought_level",
+      name: "Thinking",
+      description: "Set the reasoning effort for this session",
+      category: "thought_level",
+      type: "select",
+      currentValue: "medium",
+      options: [
+        { value: "off", name: "Thinking: off", description: null },
+        {
+          value: "medium",
+          name: "Thinking: medium",
+          description: "Balanced",
+          _meta: { vendor: "pi" },
+        },
+      ],
+      _meta: { source: "pi-acp" },
+    })
+
+    expect(option).toMatchObject({
+      id: "thought_level",
+      description: "Set the reasoning effort for this session",
+      options: [
+        { value: "off", name: "Thinking: off", description: null },
+        { value: "medium", name: "Thinking: medium", description: "Balanced" },
+      ],
+    })
+  })
+
   test("parses a boolean config option", () => {
     expect(
       ConfigOptionSchema.parse({
@@ -66,7 +96,7 @@ describe("config option contracts", () => {
   })
 
   test("categoryOf maps reserved categories and demotes the rest", () => {
-    const select = (category?: string) =>
+    const select = (category?: string | null) =>
       ConfigOptionSchema.parse({
         id: "x",
         name: "X",
@@ -83,6 +113,7 @@ describe("config option contracts", () => {
     expect(categoryOf(select("vendor_custom"))).toBe("other")
     expect(categoryOf(select("_private"))).toBe("other")
     expect(categoryOf(select())).toBe("other")
+    expect(categoryOf(select(null))).toBe("other")
   })
 
   test("session config is a readonly array of options", () => {

@@ -56,12 +56,12 @@ describe("spawnFakeAcp", () => {
     })
     expect(created.sessionId).toBe("lifecycle-session")
 
-    const loaded = await client.request<{ sessionId: string }>("session/load", {
+    const loaded = await client.request<Record<string, unknown>>("session/load", {
       sessionId: "lifecycle-session",
       cwd: "/tmp",
       mcpServers: [],
     })
-    expect(loaded.sessionId).toBe("lifecycle-session")
+    expect(loaded).toEqual({})
 
     await client.request("session/close", { sessionId: "lifecycle-session" })
   })

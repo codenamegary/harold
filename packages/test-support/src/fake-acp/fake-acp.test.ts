@@ -277,7 +277,7 @@ describe("fake ACP protocol", () => {
     expect(response).toEqual({
       jsonrpc: "2.0",
       id: 4,
-      result: { sessionId: "session-test-1" },
+      result: {},
     })
   })
 
@@ -753,9 +753,9 @@ describe("fake ACP config options", () => {
       cwd: "/tmp/project",
     })
     expect(response?.result).toMatchObject({
-      sessionId: "fake-session-load",
       configOptions,
     })
+    expect(response?.result).not.toHaveProperty("sessionId")
   })
 
   test("session/set_config_option applies the value and returns the full state", () => {

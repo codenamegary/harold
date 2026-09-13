@@ -327,10 +327,10 @@ const handleSessionLoad = (
 
   configState.initialize(config.sessionLoadSessionId)
   return {
-    response: jsonRpcResult(request.id, {
-      sessionId: config.sessionLoadSessionId,
-      ...(config.configOptions.length > 0 ? { configOptions: config.configOptions } : {}),
-    }),
+    response: jsonRpcResult(
+      request.id,
+      config.configOptions.length > 0 ? { configOptions: config.configOptions } : {},
+    ),
     notifications: config.emitLoadReplayUpdates
       ? loadReplayUpdates(config.sessionLoadSessionId)
       : [],
