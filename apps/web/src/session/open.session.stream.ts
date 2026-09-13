@@ -73,7 +73,7 @@ export const openSessionStream = (params: {
     },
     close: () => {
       intentionalClose.value = true
-      socket.close()
+      if (socket.readyState === socket.OPEN) socket.close()
     },
   }
 }
