@@ -5,6 +5,7 @@ import { sessionListDeclaration } from "./session.list"
 import { sessionLoadDeclaration } from "./session.load"
 import { sessionNewDeclaration } from "./session.new"
 import { sessionPromptDeclaration } from "./session.prompt"
+import { sessionSetConfigOptionDeclaration } from "./session.set-config-option"
 
 export type AgentMethodDeclarationReader = {
   list: () => ReadonlyArray<AgentMethodDeclaration>
@@ -37,6 +38,7 @@ export const createAgentMethodDeclarations = (
 export const agentMethodDeclarations: AgentMethodDeclarationReader = createAgentMethodDeclarations([
   sessionNewDeclaration,
   sessionPromptDeclaration,
+  sessionSetConfigOptionDeclaration,
   sessionCancelDeclaration,
   sessionLoadDeclaration,
   sessionListDeclaration,

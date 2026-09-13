@@ -9,6 +9,7 @@ import {
 import { createAuthBroker } from "../../agent/auth/broker"
 import { createDefaultAuthAdapter } from "../../agent/auth/adapters/default.adapter"
 import { createSupervisorAuthHooks } from "../../agent/auth/supervisor.hooks"
+import { createAcpJsonRpcError } from "../transport/json-rpc-error"
 import { createAcpSupervisor } from "./supervisor"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
 import { SpawnedAgentProcess } from "./spawn.agent.process"
@@ -1485,5 +1486,216 @@ describe("createAcpSupervisor", () => {
         update: { kind: "turn_complete" },
       },
     ])
+  })
+})
+
+describe("session config options", () => {
+  const supervisors: Awaited<ReturnType<typeof createAcpSupervisor>>[] = []
+
+  afterEach(async () => {
+    await Promise.all(supervisors.splice(0).map((supervisor) => supervisor.stop()))
+  })
+
+  const sampleConfig = [
+    {
+      id: "model",
+      name: "Model",
+      category: "model",
+      type: "select",
+      currentValue: "m1",
+      options: [{ value: "m1", name: "M1" }],
+    },
+  ]
+
+  const startReadySupervisor = async (
+    mock: ReturnType<typeof createMockTransport>,
+    hooks: { onSessionConfig?: (input: { agentId: AgentId; acpSessionId: string; configOptions: unknown }) => void },
+  ) => {
+    mock.setHandler("initialize", () => ({
+      protocolVersion: 1,
+      agentCapabilities: { loadSession: true },
+    }))
+    mock.setHandler("authenticate", () => ({}))
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: () => createMockProcess(),
+      createTransportFn: () => mock.transport,
+      ...(hooks.onSessionConfig === undefined ? {} : { onSessionConfig: hooks.onSessionConfig }),
+    })
+    supervisors.push(supervisor)
+    await supervisor.start("cursor")
+    return supervisor
+  }
+
+  test("createSession surfaces agent configOptions and fires onSessionConfig", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("session/new", () => ({
+      sessionId: "s-new",
+      configOptions: sampleConfig,
+    }))
+    const fired: Array<{ agentId: AgentId; acpSessionId: string; configOptions: unknown }> = []
+    const supervisor = await startReadySupervisor(mock, {
+      onSessionConfig: (input) => {
+        fired.push(input)
+      },
+    })
+
+    const result = await supervisor.createSession({ agentId: "cursor", cwd: "/tmp/proj" })
+
+    expect(result).toMatchObject({ ok: true, acpSessionId: "s-new" })
+    if (result.ok) {
+      expect(result.configOptions).toEqual(sampleConfig)
+    }
+    expect(fired).toEqual([
+      { agentId: "cursor", acpSessionId: "s-new", configOptions: sampleConfig },
+    ])
+  })
+
+  test("createSession without configOptions in the agent response stays clean", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("session/new", () => ({ sessionId: "s-new" }))
+    const fired: unknown[] = []
+    const supervisor = await startReadySupervisor(mock, {
+      onSessionConfig: (input) => {
+        fired.push(input)
+      },
+    })
+
+    const result = await supervisor.createSession({ agentId: "cursor", cwd: "/tmp/proj" })
+
+    expect(result).toMatchObject({ ok: true, acpSessionId: "s-new" })
+    if (result.ok) {
+      expect(result.configOptions).toBeUndefined()
+    }
+    expect(fired).toEqual([])
+  })
+
+  test("loadSession surfaces configOptions and fires onSessionConfig", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("session/load", () => ({
+      sessionId: "s-load",
+      configOptions: sampleConfig,
+    }))
+    const fired: Array<{ agentId: AgentId; acpSessionId: string; configOptions: unknown }> = []
+    const supervisor = await startReadySupervisor(mock, {
+      onSessionConfig: (input) => {
+        fired.push(input)
+      },
+    })
+
+    const result = await supervisor.loadSession({
+      agentId: "cursor",
+      sessionId: "s-load",
+      cwd: "/tmp/proj",
+    })
+
+    expect(result).toMatchObject({ ok: true, acpSessionId: "s-load" })
+    expect(fired).toEqual([
+      { agentId: "cursor", acpSessionId: "s-load", configOptions: sampleConfig },
+    ])
+  })
+
+  test("setConfigOption proxies the ACP request and returns the full state", async () => {
+    const mock = createMockTransport()
+    const seenParams: unknown[] = []
+    mock.setHandler("session/set_config_option", (params) => {
+      seenParams.push(params)
+      return { configOptions: sampleConfig }
+    })
+    const fired: Array<{ agentId: AgentId; acpSessionId: string; configOptions: unknown }> = []
+    const supervisor = await startReadySupervisor(mock, {
+      onSessionConfig: (input) => {
+        fired.push(input)
+      },
+    })
+
+    const result = await supervisor.setConfigOption({
+      agentId: "cursor",
+      sessionId: "s-1",
+      configId: "model",
+      value: "m2",
+    })
+
+    expect(seenParams).toEqual([
+      { sessionId: "s-1", configId: "model", value: "m2" },
+    ])
+    expect(result).toMatchObject({ ok: true })
+    if (result.ok) {
+      expect(result.configOptions).toEqual(sampleConfig)
+    }
+    expect(fired).toEqual([
+      { agentId: "cursor", acpSessionId: "s-1", configOptions: sampleConfig },
+    ])
+  })
+
+  test("setConfigOption classifies invalid option errors", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("session/set_config_option", () => {
+      throw createAcpJsonRpcError("unknown configId or invalid value", -32602)
+    })
+    const supervisor = await startReadySupervisor(mock, {})
+
+    const result = await supervisor.setConfigOption({
+      agentId: "cursor",
+      sessionId: "s-1",
+      configId: "model",
+      value: "nope",
+    })
+
+    expect(result).toMatchObject({ ok: false, kind: "invalid-option" })
+  })
+
+  test("setConfigOption classifies unsupported agents", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("session/set_config_option", () => {
+      throw createAcpJsonRpcError("method not found", -32601)
+    })
+    const supervisor = await startReadySupervisor(mock, {})
+
+    const result = await supervisor.setConfigOption({
+      agentId: "cursor",
+      sessionId: "s-1",
+      configId: "model",
+      value: "m2",
+    })
+
+    expect(result).toMatchObject({ ok: false, kind: "unsupported" })
+  })
+
+  test("setConfigOption classifies unknown sessions", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("session/set_config_option", () => {
+      throw createAcpJsonRpcError("session not found", -32002)
+    })
+    const supervisor = await startReadySupervisor(mock, {})
+
+    const result = await supervisor.setConfigOption({
+      agentId: "cursor",
+      sessionId: "s-missing",
+      configId: "model",
+      value: "m2",
+    })
+
+    expect(result).toMatchObject({ ok: false, kind: "unknown-session" })
+  })
+
+  test("setConfigOption reports transport failures as errors", async () => {
+    const mock = createMockTransport()
+    mock.setHandler("session/set_config_option", () => {
+      throw new Error("transport blew up")
+    })
+    const supervisor = await startReadySupervisor(mock, {})
+
+    const result = await supervisor.setConfigOption({
+      agentId: "cursor",
+      sessionId: "s-1",
+      configId: "model",
+      value: "m2",
+    })
+
+    expect(result).toMatchObject({ ok: false, kind: "error" })
   })
 })

@@ -7,6 +7,11 @@ import {
   permissionAtom,
   transcriptAtom,
 } from "./atoms"
+import {
+  configErrorBySessionAtom,
+  pendingConfigBySessionAtom,
+  sessionConfigBySessionAtom,
+} from "../config/atoms"
 import { applyStreamMessageAtom } from "./stream.actions"
 
 const storeOnSession = () => {
@@ -186,5 +191,82 @@ describe("stream actions", () => {
 
     expect(effect).toEqual({ kind: "none" })
     expect(store.get(pendingPromptAtom)).toEqual({ text: "ship it" })
+  })
+})
+
+const modelOption = (currentValue: string) => ({
+  id: "model",
+  name: "Model",
+  category: "model",
+  type: "select" as const,
+  currentValue,
+  options: [
+    { value: "m1", name: "M1" },
+    { value: "m2", name: "M2" },
+  ],
+})
+
+describe("stream actions session_config", () => {
+  test("replaces the whole config array for the selected session", () => {
+    const store = storeOnSession()
+
+    store.set(applyStreamMessageAtom, {
+      type: "session_config",
+      agentId: "cursor",
+      sessionId: "sess_01",
+      configOptions: [modelOption("m1")],
+    })
+
+    expect(store.get(sessionConfigBySessionAtom).get("sess_01")).toEqual([
+      modelOption("m1"),
+    ])
+  })
+
+  test("ignores session_config for a different session", () => {
+    const store = storeOnSession()
+
+    store.set(applyStreamMessageAtom, {
+      type: "session_config",
+      agentId: "cursor",
+      sessionId: "sess_other",
+      configOptions: [modelOption("m1")],
+    })
+
+    expect(store.get(sessionConfigBySessionAtom).size).toBe(0)
+  })
+
+  test("a confirming session_config frame clears the pending set and the error", () => {
+    const store = storeOnSession()
+    store.set(pendingConfigBySessionAtom, new Map([["sess_01", { configId: "model", value: "m2" }]]))
+    store.set(configErrorBySessionAtom, new Map([["sess_01", "Config option rejected"]]))
+
+    store.set(applyStreamMessageAtom, {
+      type: "session_config",
+      agentId: "cursor",
+      sessionId: "sess_01",
+      configOptions: [modelOption("m2")],
+    })
+
+    expect(store.get(pendingConfigBySessionAtom).size).toBe(0)
+    expect(store.get(configErrorBySessionAtom).size).toBe(0)
+    expect(store.get(sessionConfigBySessionAtom).get("sess_01")).toEqual([modelOption("m2")])
+  })
+
+  test("a non-confirming session_config frame keeps the pending set", () => {
+    const store = storeOnSession()
+    store.set(pendingConfigBySessionAtom, new Map([["sess_01", { configId: "model", value: "m2" }]]))
+
+    store.set(applyStreamMessageAtom, {
+      type: "session_config",
+      agentId: "cursor",
+      sessionId: "sess_01",
+      configOptions: [modelOption("m1")],
+    })
+
+    expect(store.get(pendingConfigBySessionAtom).get("sess_01")).toEqual({
+      configId: "model",
+      value: "m2",
+    })
+    expect(store.get(sessionConfigBySessionAtom).get("sess_01")).toEqual([modelOption("m1")])
   })
 })

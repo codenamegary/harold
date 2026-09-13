@@ -7,6 +7,7 @@ import {
   AcpSessionCloseResult,
   AcpSessionOperationResult,
   AcpSessionPromptStartResult,
+  AcpSetConfigOptionResult,
   SessionDiscoveredHandler,
 } from "../supervisor/models"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
@@ -33,6 +34,7 @@ export const agentMethodNames = [
   "session/load",
   "session/list",
   "session/close",
+  "session/set_config_option",
 ] as const
 
 export type AgentMethodName = (typeof agentMethodNames)[number]
@@ -88,6 +90,10 @@ export type AgentMethodSignatures = {
   "session/close": {
     params: { acpSessionId: string }
     result: AcpSessionCloseResult
+  }
+  "session/set_config_option": {
+    params: { acpSessionId: string; configId: string; value: string | boolean }
+    result: AcpSetConfigOptionResult
   }
 }
 

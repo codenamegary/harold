@@ -1,3 +1,4 @@
+import { SessionConfigSchema } from "contracts/http/config-options"
 import { sanitizeAcpRejection } from "../sanitize.error"
 import { isAcpJsonRpcError } from "../transport/json-rpc-error"
 import { AcpOperationContext } from "../transport/json-rpc-transport"
@@ -63,7 +64,10 @@ export const createSessionLoadHandler = (): AgentMethodHandler<"session/load"> =
     }
 
     try {
-      const result = await context.transport.request<{ sessionId: string }>(
+      const result = await context.transport.request<{
+        sessionId: string
+        configOptions?: unknown
+      }>(
         "session/load",
         {
           sessionId: acpSessionId,
@@ -72,6 +76,9 @@ export const createSessionLoadHandler = (): AgentMethodHandler<"session/load"> =
         },
         operationContext,
       )
+
+      const configOptions = SessionConfigSchema.safeParse(result.configOptions)
+      const validatedConfigOptions = configOptions.success ? configOptions.data : undefined
 
       context.sessionBindings.unbind({ acpSessionId: result.sessionId })
       context.sessionBindings.bind({
@@ -86,7 +93,11 @@ export const createSessionLoadHandler = (): AgentMethodHandler<"session/load"> =
         acpSessionId: result.sessionId,
       })
 
-      return { ok: true, acpSessionId: result.sessionId }
+      return {
+        ok: true,
+        acpSessionId: result.sessionId,
+        ...(validatedConfigOptions === undefined ? {} : { configOptions: validatedConfigOptions }),
+      }
     } catch (error: unknown) {
       context.sessionBindings.unbind({ acpSessionId })
       if (wasLive) {

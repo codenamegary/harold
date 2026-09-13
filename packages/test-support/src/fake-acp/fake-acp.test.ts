@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { readFakeAcpConfig } from "./config"
+import { readFakeAcpConfig, fakeAcpEnvFromCapabilities } from "./config"
+import { createFakeAcpConfigState } from "./config.state"
 import {
   completePromptIfActive,
   handleJsonRpcNotification,
@@ -665,5 +666,174 @@ describe("fake ACP protocol", () => {
       result: { stopReason: "end_turn" },
     })
     expect(completePromptIfActive(promptState, "session-a")).toBeUndefined()
+  })
+})
+
+describe("fake ACP config options", () => {
+  const configOptions = [
+    {
+      id: "model",
+      name: "Model",
+      category: "model",
+      type: "select",
+      currentValue: "m1",
+      options: [
+        { value: "m1", name: "M1" },
+        { value: "m2", name: "M2" },
+      ],
+    },
+    {
+      id: "thought_level",
+      name: "Thinking",
+      category: "thought_level",
+      type: "select",
+      currentValue: "medium",
+      options: [
+        { value: "off", name: "Off" },
+        { value: "low", name: "Low" },
+        { value: "medium", name: "Medium" },
+        { value: "high", name: "High" },
+      ],
+    },
+  ]
+
+  const configWith = (
+    env: Record<string, string> = {},
+  ) =>
+    readFakeAcpConfig({
+      FAKE_ACP_LOAD_SESSION: "true",
+      FAKE_ACP_SESSION_NEW_SESSION_ID: "fake-session-new",
+      FAKE_ACP_CONFIG_OPTIONS: JSON.stringify(configOptions),
+      ...env,
+    })
+
+  const request = (
+    method: string,
+    params: unknown,
+    options: { withSession?: boolean } = {},
+  ) => {
+    const promptState = createPromptState()
+    const configState = createFakeAcpConfigState(configOptions)
+    if (options.withSession === true) {
+      handleJsonRpcRequest(
+        { jsonrpc: "2.0", id: 6, method: "session/new", params: { cwd: "/tmp/project" } },
+        configWith(),
+        promptState,
+        configState,
+      )
+    }
+    return handleJsonRpcRequest(
+      { jsonrpc: "2.0", id: 7, method, params },
+      configWith(),
+      promptState,
+      configState,
+    )
+  }
+
+  test("parses the configured configOptions from the environment", () => {
+    expect(configWith().configOptions).toEqual(configOptions)
+    expect(
+      fakeAcpEnvFromCapabilities({
+        configOptions,
+      }).FAKE_ACP_CONFIG_OPTIONS,
+    ).toBe(JSON.stringify(configOptions))
+  })
+
+  test("session/new returns the configured configOptions", () => {
+    const { response } = request("session/new", { cwd: "/tmp/project" })
+    expect(response?.result).toMatchObject({
+      sessionId: "fake-session-new",
+      configOptions,
+    })
+  })
+
+  test("session/load returns the configured configOptions", () => {
+    const { response } = request("session/load", {
+      sessionId: "fake-session-load",
+      cwd: "/tmp/project",
+    })
+    expect(response?.result).toMatchObject({
+      sessionId: "fake-session-load",
+      configOptions,
+    })
+  })
+
+  test("session/set_config_option applies the value and returns the full state", () => {
+    const configState = createFakeAcpConfigState(configOptions)
+    const state = { configOptions, prompt: createPromptState() }
+    const call = (method: string, params: unknown) =>
+      handleJsonRpcRequest(
+        { jsonrpc: "2.0", id: 7, method, params },
+        configWith(),
+        state.prompt,
+        configState,
+      )
+
+    call("session/new", { cwd: "/tmp/project" })
+    const { response } = call("session/set_config_option", {
+      sessionId: "fake-session-new",
+      configId: "model",
+      value: "m2",
+    })
+
+    expect(response?.result).toEqual({
+      configOptions: [
+        {
+          ...configOptions[0],
+          currentValue: "m2",
+        },
+        configOptions[1],
+      ],
+    })
+  })
+
+  test("session/set_config_option rejects an unknown configId", () => {
+    const { response } = request(
+      "session/set_config_option",
+      {
+        sessionId: "fake-session-new",
+        configId: "nope",
+        value: "m2",
+      },
+      { withSession: true },
+    )
+    expect(response?.error?.code).toBe(-32602)
+  })
+
+  test("session/set_config_option rejects a value outside the option list", () => {
+    const { response } = request(
+      "session/set_config_option",
+      {
+        sessionId: "fake-session-new",
+        configId: "model",
+        value: "not-a-model",
+      },
+      { withSession: true },
+    )
+    expect(response?.error?.code).toBe(-32602)
+  })
+
+  test("session/set_config_option reports an unknown session", () => {
+    const { response } = request("session/set_config_option", {
+      sessionId: "never-created",
+      configId: "model",
+      value: "m2",
+    })
+    expect(response?.error?.code).toBe(-32002)
+  })
+
+  test("session/set_config_option is method-not-found when unsupported", () => {
+    const { response } = handleJsonRpcRequest(
+      {
+        jsonrpc: "2.0",
+        id: 7,
+        method: "session/set_config_option",
+        params: { sessionId: "fake-session-new", configId: "model", value: "m2" },
+      },
+      configWith({ FAKE_ACP_SET_CONFIG_OPTION: "false" }),
+      createPromptState(),
+      createFakeAcpConfigState(configOptions),
+    )
+    expect(response?.error?.code).toBe(-32601)
   })
 })

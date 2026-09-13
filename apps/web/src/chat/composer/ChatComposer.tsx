@@ -1,10 +1,23 @@
 import React, { useMemo, useRef, useState } from "react"
+import { ConfigOption, ConfigOptionValue } from "contracts/http/config-options"
 import { useAtomValue } from "jotai"
 import { ArrowUp, Paperclip, ImagePlus, Check, RotateCcw, X, LoaderCircle, Square } from "lucide-react"
 import { PromptInput } from "../../design-system/PromptInput"
 import { availableCommandsAtom } from "../live/atoms"
 import { PendingAttachment } from "../live/use.attachments"
 import { createChatPlugins } from "./ChatPlugins"
+import { modeBorderClass } from "../config/mode.colors"
+import { SessionConfigRow } from "../config/SessionConfigRow"
+
+export type ChatComposerConfig = {
+  model?: ConfigOption
+  mode?: ConfigOption
+  thinking?: ConfigOption
+  error?: string | null
+  onModelPick: (value: string) => void
+  onModeCycle: (next: ConfigOptionValue) => void
+  onThinkingCycle: (next: ConfigOptionValue) => void
+}
 
 type ChatComposerProps = {
   disabled: boolean
@@ -18,6 +31,7 @@ type ChatComposerProps = {
   onRetryAttachment: (localId: string) => void
   onSend: (text: string) => void
   onCancel: () => void
+  config?: ChatComposerConfig
 }
 
 const formatSize = (bytes: number) =>
@@ -88,6 +102,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
   onRetryAttachment,
   onSend,
   onCancel,
+  config,
 }) => {
   const [value, setValue] = useState("")
   const [dragOver, setDragOver] = useState(false)
@@ -137,7 +152,10 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
       <div
         className={`relative cursor-text rounded-[9px] border bg-[#0a0d12] shadow-[0_8px_30px_rgba(0,0,0,0.25)] ${
           dragOver ? "border-lime" : "border-[#303845]"
-        }`}
+        } ${(() => {
+          const border = modeBorderClass(config?.mode?.type === "select" ? config.mode.currentValue : "")
+          return border === undefined ? "" : `border-l-4 ${border}`
+        })()}`}
         onMouseDown={focusPrompt}
         onDragOver={(event) => {
           event.preventDefault()
@@ -180,8 +198,8 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
             }
           }}
         />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-[37px] items-center justify-between px-2 pb-1.5 pl-[11px]">
-          <div className="flex items-center gap-1 text-2xs text-[#4f5865]">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-[37px] items-center justify-between gap-3 px-2 pb-1.5 pl-[11px] pr-2">
+          <div className="flex min-w-0 items-center gap-1 text-2xs text-[#4f5865]">
             {supportsImages ? (
               <button
                 type="button"
@@ -206,36 +224,48 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
                 <Paperclip aria-hidden className="size-4" />
               </button>
             ) : null}
-            <span className="ml-1.5">
+            <div className="min-w-0">
+              <SessionConfigRow
+                model={config?.model}
+                mode={config?.mode}
+                thinking={config?.thinking}
+                onModelPick={config?.onModelPick ?? (() => undefined)}
+                onModeCycle={config?.onModeCycle ?? (() => undefined)}
+                onThinkingCycle={config?.onThinkingCycle ?? (() => undefined)}
+                disabled={blockedMessage !== null}
+              />
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2 text-2xs text-[#4f5865]">
+            <span>
               <kbd className="rounded-[3px] border border-[#2e3540] bg-[#151920] px-[3px] py-px font-mono text-2xs text-[#77818e]">
                 ⌘
               </kbd>{" "}
               <kbd className="rounded-[3px] border border-[#2e3540] bg-[#151920] px-[3px] py-px font-mono text-2xs text-[#77818e]">
                 ↵
-              </kbd>{" "}
-              to send
+              </kbd>
             </span>
+            {running ? (
+              <button
+                type="button"
+                aria-label="Cancel turn"
+                onClick={onCancel}
+                className="pointer-events-auto grid size-[27px] place-items-center rounded-md border-0 bg-[#3a1d1d] text-sm font-bold text-[#f2a8a8]"
+              >
+                <Square aria-hidden className="size-3 fill-current" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                aria-label="Send message"
+                disabled={!canSend}
+                onClick={handleSend}
+                className="pointer-events-auto grid size-[27px] place-items-center rounded-md border-0 bg-lime text-sm font-bold text-lime-ink disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ArrowUp aria-hidden className="size-3.5" />
+              </button>
+            )}
           </div>
-          {running ? (
-            <button
-              type="button"
-              aria-label="Cancel turn"
-              onClick={onCancel}
-              className="pointer-events-auto grid size-[27px] place-items-center rounded-md border-0 bg-[#3a1d1d] text-sm font-bold text-[#f2a8a8]"
-            >
-              <Square aria-hidden className="size-3 fill-current" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              aria-label="Send message"
-              disabled={!canSend}
-              onClick={handleSend}
-              className="pointer-events-auto grid size-[27px] place-items-center rounded-md border-0 bg-lime text-sm font-bold text-lime-ink disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <ArrowUp aria-hidden className="size-3.5" />
-            </button>
-          )}
         </div>
         <input
           ref={imageInputRef}
@@ -270,7 +300,9 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
         />
       </div>
       <div className="flex h-[30px] items-center justify-end font-mono text-2xs text-[#414a56]">
-        {blockedMessage !== null ? (
+        {config?.error ? (
+          <span className="text-danger">{config.error}</span>
+        ) : blockedMessage !== null ? (
           <span className="text-body-soft">{blockedMessage}</span>
         ) : (
           <span>Prompts run locally on this machine</span>

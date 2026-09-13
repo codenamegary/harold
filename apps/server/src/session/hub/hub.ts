@@ -1,6 +1,7 @@
 import { AgentAuth } from "contracts/http/agent-auth"
 import { AgentId } from "contracts/http/agent-settings"
 import { AttachmentReference } from "contracts/http/attachments"
+import { SessionConfig } from "contracts/http/config-options"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
 import { AUTH_GATED_PROMPT_MESSAGE } from "../../acp/auth.required"
 import { parseAvailableCommandsUpdate } from "./commands.available"
@@ -104,6 +105,11 @@ export type SessionHub = {
     sessionId: string
     update: unknown
   }) => void
+  handleSessionConfig: (params: {
+    agentId: AgentId
+    sessionId: string
+    configOptions: SessionConfig
+  }) => void
   broadcastAuthSessionUpdated: (params: {
     agentId: AgentId
     auth: AgentAuth
@@ -153,6 +159,7 @@ export const createSessionHub = ({
   const subscribersBySession = new Map<SessionKey, Set<string>>()
   const replayTargetBySession = new Map<SessionKey, string>()
   const pendingById = new Map<string, PendingClientRpc>()
+  const configBySession = new Map<SessionKey, SessionConfig>()
 
   const sendError = (
     subscriber: SessionHubSubscriber,
@@ -309,6 +316,16 @@ export const createSessionHub = ({
 
     const key = sessionKey(params.agentId, params.sessionId)
     attachToSession(subscriber, key)
+
+    const cachedConfig = configBySession.get(key)
+    if (cachedConfig !== undefined) {
+      subscriber.sink.send({
+        type: "session_config",
+        agentId: params.agentId,
+        sessionId: params.sessionId,
+        configOptions: cachedConfig,
+      })
+    }
 
     const loaded = await loadForSubscriber({
       subscriber,
@@ -511,6 +528,16 @@ export const createSessionHub = ({
         agentId,
         sessionId,
         update,
+      })
+    },
+    handleSessionConfig: ({ agentId, sessionId, configOptions }) => {
+      const key = sessionKey(agentId, sessionId)
+      configBySession.set(key, configOptions)
+      fanOut(key, {
+        type: "session_config",
+        agentId,
+        sessionId,
+        configOptions,
       })
     },
     broadcastAuthSessionUpdated: ({ agentId, auth }) => {
