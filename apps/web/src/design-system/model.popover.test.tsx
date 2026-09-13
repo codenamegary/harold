@@ -111,12 +111,62 @@ describe("ModelPopover", () => {
     await user.type(input, "pickle")
 
     expect(getByRole("option", { name: /Big Pickle/ })).toBeTruthy()
-    expect(queryByRole("option", { name: /GPT-5\.2/ })).toBeNull()
+    // The current value is always pinned to the top, even when filtered out.
+    expect(getByRole("option", { name: /GPT-5\.2/ })).toBeTruthy()
 
     await user.clear(input)
     await user.type(input, "anthropic")
     expect(getByRole("option", { name: /Claude 4/ })).toBeTruthy()
     expect(queryByRole("option", { name: /Big Pickle/ })).toBeNull()
+  })
+
+  test("always shows the current option first", () => {
+    const option = modelOption("anthropic/claude-4")
+    const { getAllByRole } = render(
+      <ModelPopover
+        open
+        options={toValues(option)}
+        currentValue="anthropic/claude-4"
+        onPick={() => undefined}
+        onClose={() => undefined}
+      />,
+    )
+
+    const rendered = getAllByRole("option")
+    expect(rendered[0].textContent).toContain("Claude 4")
+    // The current option is not duplicated in the remainder of the list.
+    const claudeMatches = rendered.filter((node) =>
+      node.textContent?.includes("Claude 4"),
+    )
+    expect(claudeMatches).toHaveLength(1)
+  })
+
+  test("keeps the current option first when it matches the filter", async () => {
+    const user = userEvent.setup()
+    const filler = Array.from({ length: 25 }, (_, index) => ({
+      value: `vendor/filler-${index}`,
+      name: `Filler ${index}`,
+    }))
+    const options = [
+      { value: "opencode/big-pickle", name: "Big Pickle" },
+      { value: "openai/gpt-5.2", name: "GPT-5.2" },
+      { value: "anthropic/claude-4", name: "Claude 4" },
+      ...filler,
+    ]
+    const { getByPlaceholderText, getAllByRole } = render(
+      <ModelPopover
+        open
+        options={options}
+        currentValue="openai/gpt-5.2"
+        onPick={() => undefined}
+        onClose={() => undefined}
+      />,
+    )
+
+    const input = getByPlaceholderText("Filter models")
+    await user.type(input, "gpt")
+
+    expect(getAllByRole("option")[0].textContent).toContain("GPT-5.2")
   })
 
   test("no filter input for short lists", () => {
@@ -153,6 +203,75 @@ describe("ModelPopover", () => {
     )
 
     fireEvent.keyDown(getByRole("listbox", { name: "Model options" }), { key: "Escape" })
+
+    expect(picked).toEqual([])
+    expect(closed).toEqual([true])
+  })
+
+  test("Escape anywhere in the document closes without picking", () => {
+    const picked: string[] = []
+    const closed: boolean[] = []
+    const option = modelOption("openai/gpt-5.2")
+    render(
+      <ModelPopover
+        open
+        options={toValues(option)}
+        currentValue="openai/gpt-5.2"
+        onPick={(value) => {
+          picked.push(value)
+        }}
+        onClose={() => {
+          closed.push(true)
+        }}
+      />,
+    )
+
+    // Fire on the document, i.e. focus is not inside the popover.
+    fireEvent.keyDown(document, { key: "Escape" })
+
+    expect(picked).toEqual([])
+    expect(closed).toEqual([true])
+  })
+
+  test("removes the document Escape listener when closed", () => {
+    const closed: boolean[] = []
+    const { unmount } = render(
+      <ModelPopover
+        open
+        options={toValues(modelOption("openai/gpt-5.2"))}
+        currentValue="openai/gpt-5.2"
+        onPick={() => undefined}
+        onClose={() => {
+          closed.push(true)
+        }}
+      />,
+    )
+
+    unmount()
+    fireEvent.keyDown(document, { key: "Escape" })
+
+    expect(closed).toEqual([])
+  })
+
+  test("the close button closes without picking", () => {
+    const picked: string[] = []
+    const closed: boolean[] = []
+    const option = modelOption("openai/gpt-5.2")
+    const { getByRole } = render(
+      <ModelPopover
+        open
+        options={toValues(option)}
+        currentValue="openai/gpt-5.2"
+        onPick={(value) => {
+          picked.push(value)
+        }}
+        onClose={() => {
+          closed.push(true)
+        }}
+      />,
+    )
+
+    fireEvent.click(getByRole("button", { name: "Close model list" }))
 
     expect(picked).toEqual([])
     expect(closed).toEqual([true])

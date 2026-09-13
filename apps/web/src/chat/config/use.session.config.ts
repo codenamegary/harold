@@ -11,7 +11,7 @@ import {
 import { createConfigSetController } from "./set.controller"
 import { setConfigOption } from "./set.config.option"
 
-const DEFAULT_DEBOUNCE_MS = 2_000
+const DEFAULT_DEBOUNCE_MS = 1_500
 
 export const findReservedOption = (
   config: ReadonlyArray<ConfigOption>,

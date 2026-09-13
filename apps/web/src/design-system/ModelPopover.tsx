@@ -1,8 +1,22 @@
-import React, { useMemo, useRef, useState } from "react"
-import { ChevronDown } from "lucide-react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
+import { ChevronDown, X } from "lucide-react"
 import { ConfigOption, ConfigOptionValue } from "contracts/http/config.options"
 
 const FILTER_INPUT_THRESHOLD = 20
+
+const pinCurrentFirst = (
+  allItems: ReadonlyArray<ConfigOptionValue>,
+  matches: ReadonlyArray<ConfigOptionValue>,
+  currentValue: string,
+): ReadonlyArray<ConfigOptionValue> => {
+  // Pull the current option from the full list so it stays visible even when
+  // an active filter would otherwise exclude it, then pin it to the top.
+  const current = allItems.find((item) => item.value === currentValue)
+  if (current === undefined) {
+    return matches
+  }
+  return [current, ...matches.filter((item) => item.value !== currentValue)]
+}
 
 export type ModelLinkProps = {
   option: ConfigOption
@@ -29,8 +43,8 @@ export const ModelLink: React.FC<ModelLinkProps> = ({
       type="button"
       disabled={disabled}
       onClick={onPick}
-      aria-label={`Model: ${label}. Open the model list.`}
-      className={`inline-flex max-w-[180px] items-center gap-0.5 rounded px-0.5 font-mono text-xs outline-none focus-visible:ring-1 focus-visible:ring-current disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      aria-label={`Model: ${label}. Toggle the model list.`}
+      className={`inline-flex shrink-0 cursor-pointer items-center justify-between gap-0.5 rounded px-0.5 font-mono text-xs outline-none focus-visible:ring-1 focus-visible:ring-current disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
     >
       <span className="truncate">{label}</span>
       <ChevronDown aria-hidden className="size-3 shrink-0" />
@@ -61,15 +75,37 @@ export const ModelPopover: React.FC<ModelPopoverProps> = ({
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    if (needle === "") {
-      return options
+    const matches =
+      needle === ""
+        ? options
+        : options.filter(
+            (item) =>
+              item.name.toLowerCase().includes(needle)
+              || item.value.toLowerCase().includes(needle),
+          )
+
+    // Always surface the currently selected option at the top of the list,
+    // even when a filter is active and would otherwise exclude it.
+    return pinCurrentFirst(options, matches, currentValue)
+  }, [options, query, currentValue])
+
+  useEffect(() => {
+    if (!open) {
+      return
     }
-    return options.filter(
-      (item) =>
-        item.name.toLowerCase().includes(needle)
-        || item.value.toLowerCase().includes(needle),
-    )
-  }, [options, query])
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault()
+        onClose()
+      }
+    }
+
+    document.addEventListener("keydown", handleEscape)
+    return () => {
+      document.removeEventListener("keydown", handleEscape)
+    }
+  }, [open, onClose])
 
   if (!open) {
     return null
@@ -84,11 +120,6 @@ export const ModelPopover: React.FC<ModelPopoverProps> = ({
   }
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
-    if (event.key === "Escape") {
-      event.preventDefault()
-      onClose()
-      return
-    }
     if (event.key === "ArrowDown") {
       event.preventDefault()
       setHighlighted(Math.min(effectiveHighlight + 1, filtered.length - 1))
@@ -113,9 +144,19 @@ export const ModelPopover: React.FC<ModelPopoverProps> = ({
 
   return (
     <div
-      className={`absolute bottom-full left-0 z-30 mb-2 w-[360px] max-w-full rounded-lg border border-line-modal bg-panel-elevated p-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.45)] ${className}`}
+      className={`absolute bottom-full left-0 z-30 mb-2 rounded-lg border border-line-modal bg-panel-elevated p-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.45)] ${className}`}
       onKeyDown={handleKeyDown}
     >
+      <div className="mb-1 flex items-center justify-end">
+        <button
+          type="button"
+          aria-label="Close model list"
+          onClick={onClose}
+          className="grid size-4 cursor-pointer place-items-center rounded text-dim hover:text-body"
+        >
+          <X aria-hidden className="size-3.5" />
+        </button>
+      </div>
       {options.length > FILTER_INPUT_THRESHOLD ? (
         <input
           type="text"

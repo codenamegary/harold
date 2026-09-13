@@ -47,7 +47,7 @@ export const MultiToggleButton: React.FC<MultiToggleButtonProps> = ({
       type="button"
       disabled={disabled}
       onClick={handlePress}
-      className={`rounded px-0.5 font-mono text-xs outline-none focus-visible:ring-1 focus-visible:ring-current disabled:cursor-not-allowed disabled:opacity-50 ${colorClassName?.(option.currentValue) ?? ""} ${className}`}
+      className={`cursor-pointer rounded px-0.5 font-mono text-xs outline-none focus-visible:ring-1 focus-visible:ring-current disabled:cursor-not-allowed disabled:opacity-50 ${colorClassName?.(option.currentValue) ?? ""} ${className}`}
       {...props}
     >
       {children ?? current?.name}

@@ -1,6 +1,6 @@
 import React from "react"
 import { ConfigOption, ConfigOptionValue } from "contracts/http/config.options"
-import { ProgressButton } from "../../design-system/ProgressButton"
+import { stripThinkingPrefix } from "./thinking.label"
 
 export const ThinkingControl: React.FC<{
   option: ConfigOption
@@ -17,17 +17,27 @@ export const ThinkingControl: React.FC<{
   )
   const current = option.options[idx]
   const next = option.options[(idx + 1) % option.options.length]
-  const label = current?.name ?? option.currentValue
+  const level = stripThinkingPrefix(current?.name ?? option.currentValue)
+  const nextLevel =
+    next === undefined ? undefined : stripThinkingPrefix(next.name)
+  const label = `Thinking: ${level}`
+
+  const handlePress = () => {
+    if (next === undefined || disabled) {
+      return
+    }
+    onCycle(next)
+  }
 
   return (
-    <ProgressButton
-      option={option}
-      onCycle={onCycle}
+    <button
+      type="button"
       disabled={disabled}
-      fillClassName="bg-lime"
-      aria-label={`Thinking: ${label}, level ${idx + 1} of ${option.options.length}. Press for ${next?.name ?? "next"}.`}
+      onClick={handlePress}
+      aria-label={`Thinking: ${level}, level ${idx + 1} of ${option.options.length}. Press for ${nextLevel ?? "next"}.`}
+      className="inline-flex shrink-0 cursor-pointer items-center truncate rounded px-0.5 font-mono text-xs outline-none focus-visible:ring-1 focus-visible:ring-current disabled:cursor-not-allowed disabled:opacity-50"
     >
-      {label}
-    </ProgressButton>
+      <span className="truncate">{label}</span>
+    </button>
   )
 }

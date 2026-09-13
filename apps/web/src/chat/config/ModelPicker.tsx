@@ -22,7 +22,7 @@ export const ModelPicker: React.FC<{
     <div className="relative">
       <ModelLink
         option={option}
-        onPick={() => setOpen(true)}
+        onPick={() => setOpen((current) => !current)}
         disabled={disabled}
       />
       <ModelPopover

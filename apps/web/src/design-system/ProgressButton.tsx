@@ -48,7 +48,7 @@ export const ProgressButton: React.FC<ProgressButtonProps> = ({
       type="button"
       disabled={disabled}
       onClick={handlePress}
-      className={`relative rounded pb-1 font-mono text-xs outline-none focus-visible:ring-1 focus-visible:ring-current disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`relative cursor-pointer rounded pb-1 font-mono text-xs outline-none focus-visible:ring-1 focus-visible:ring-current disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       {...props}
     >
       {children}

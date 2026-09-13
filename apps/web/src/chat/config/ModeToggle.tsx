@@ -23,6 +23,7 @@ export const ModeToggle: React.FC<{
       colorClassName={modeTextClass}
       onCycle={onCycle}
       disabled={disabled}
+      className="w-[50px] truncate"
       aria-label={`Mode: ${label}. Press for ${next?.name ?? "next"}.`}
     >
       {label}
