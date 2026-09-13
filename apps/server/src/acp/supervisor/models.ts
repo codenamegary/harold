@@ -1,5 +1,5 @@
 import { AgentId, AgentSpawnSnapshot } from "contracts/http/agent-settings"
-import { SessionConfig } from "contracts/http/config-options"
+import { SessionConfig } from "contracts/http/config.options"
 import { SupervisorAuthHooks } from "../../agent/auth/supervisor.hooks"
 import { CapabilityInventory } from "../agent/inventory"
 import { AgentProfile } from "../agent-profile"
@@ -20,7 +20,7 @@ export type AcpAgentRuntimeState = {
 }
 
 export type AcpSessionOperationResult =
-  | { ok: true; acpSessionId: string; configOptions?: SessionConfig }
+  | { ok: true; acpSessionId: string; configOptions: SessionConfig }
   | { ok: false; reason: string; authRequired?: boolean }
 
 export type AcpSetConfigOptionResult =

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { fireEvent, render } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { ConfigOption, ConfigOptionValue } from "contracts/http/config-options"
+import { ConfigOption, ConfigOptionValue } from "contracts/http/config.options"
 import { ModelLink, ModelPopover } from "./ModelPopover"
 
 const modelOption = (currentValue: string): ConfigOption => ({

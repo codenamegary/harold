@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { ConfigOption } from "contracts/http/config-options"
+import { ConfigOption } from "contracts/http/config.options"
 import { ModelLink, ModelPopover } from "../../design-system/ModelPopover"
 
 export const ModelPicker: React.FC<{

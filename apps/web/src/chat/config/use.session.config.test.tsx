@@ -11,7 +11,7 @@ import {
   sessionConfigBySessionAtom,
 } from "./atoms"
 import { useSessionConfig } from "./use.session.config"
-import { ConfigOption } from "contracts/http/config-options"
+import { ConfigOption } from "contracts/http/config.options"
 
 const originalFetch = globalThis.fetch
 

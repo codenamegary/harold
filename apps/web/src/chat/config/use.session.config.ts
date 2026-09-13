@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import { useAtomValue, useSetAtom } from "jotai"
-import { ConfigOption, ConfigOptionValue } from "contracts/http/config-options"
-import { categoryOf } from "contracts/http/config-options"
+import { ConfigOption, ConfigOptionValue } from "contracts/http/config.options"
+import { categoryOf } from "contracts/http/config.options"
 import { selectionAtom } from "../selection/atoms"
 import {
   configErrorBySessionAtom,

@@ -1,4 +1,4 @@
-import { SetConfigOptionBodySchema } from "contracts/http/config-options"
+import { SetConfigOptionBodySchema } from "contracts/http/config.options"
 import {
   PROBLEM_TYPES,
   ValidationProblemSchema,
@@ -17,7 +17,7 @@ import { AgentSettingsRepository } from "../agent-settings/agent-settings-reposi
 import { CommandsCache } from "./hub/commands.cache"
 import { SessionCwdCache } from "./hub/hub"
 import { ArchivedAcpSessionsStore } from "./archived.acp.sessions.store"
-import { SetConfigOptionQuerySchema } from "./config-options.query"
+import { SetConfigOptionQuerySchema } from "./config.options.query"
 import { deleteAcpSession } from "./delete.acp.session"
 import { ensureSupervisorReady, agentAdvertisesSessionList } from "./session.acp.ready"
 import {

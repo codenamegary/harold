@@ -1037,7 +1037,7 @@ describe("createAcpSupervisor", () => {
       cwd: "/tmp/project",
     })
 
-    expect(created).toEqual({ ok: true, acpSessionId: "catalog-sess-1" })
+    expect(created).toEqual({ ok: true, acpSessionId: "catalog-sess-1", configOptions: [] })
     expect(sessionNewCalls).toEqual([{ cwd: "/tmp/project", mcpServers: [] }])
   })
 
@@ -1072,7 +1072,7 @@ describe("createAcpSupervisor", () => {
       agentId: "cursor",
       cwd: "/tmp/project",
     })
-    expect(created).toEqual({ ok: true, acpSessionId: "live-sess-1" })
+    expect(created).toEqual({ ok: true, acpSessionId: "live-sess-1", configOptions: [] })
 
     const loaded = await supervisor.loadSession({
       agentId: "cursor",
@@ -1080,7 +1080,7 @@ describe("createAcpSupervisor", () => {
       cwd: "/tmp/project",
     })
 
-    expect(loaded).toEqual({ ok: true, acpSessionId: "live-sess-1" })
+    expect(loaded).toEqual({ ok: true, acpSessionId: "live-sess-1", configOptions: [] })
     expect(loadCalls).toEqual([
       {
         sessionId: "live-sess-1",
@@ -1121,7 +1121,7 @@ describe("createAcpSupervisor", () => {
       agentId: "cursor",
       cwd: "/tmp/project",
     })
-    expect(created).toEqual({ ok: true, acpSessionId: "live-sess-2" })
+    expect(created).toEqual({ ok: true, acpSessionId: "live-sess-2", configOptions: [] })
 
     const loaded = await supervisor.loadSession({
       agentId: "cursor",
@@ -1129,7 +1129,7 @@ describe("createAcpSupervisor", () => {
       cwd: "/tmp/project",
     })
 
-    expect(loaded).toEqual({ ok: true, acpSessionId: "live-sess-2" })
+    expect(loaded).toEqual({ ok: true, acpSessionId: "live-sess-2", configOptions: [] })
     expect(loadCalls).toEqual([
       {
         sessionId: "live-sess-2",
@@ -1171,7 +1171,7 @@ describe("createAcpSupervisor", () => {
       cwd: "/tmp/project",
     })
 
-    expect(loaded).toEqual({ ok: true, acpSessionId: "disk-sess-1" })
+    expect(loaded).toEqual({ ok: true, acpSessionId: "disk-sess-1", configOptions: [] })
     expect(loadCalls).toEqual([
       {
         sessionId: "disk-sess-1",
@@ -1554,7 +1554,7 @@ describe("session config options", () => {
     ])
   })
 
-  test("createSession without configOptions in the agent response stays clean", async () => {
+  test("createSession without configOptions in the agent response returns an empty array and stays silent", async () => {
     const mock = createMockTransport()
     mock.setHandler("session/new", () => ({ sessionId: "s-new" }))
     const fired: unknown[] = []
@@ -1568,7 +1568,7 @@ describe("session config options", () => {
 
     expect(result).toMatchObject({ ok: true, acpSessionId: "s-new" })
     if (result.ok) {
-      expect(result.configOptions).toBeUndefined()
+      expect(result.configOptions).toEqual([])
     }
     expect(fired).toEqual([])
   })

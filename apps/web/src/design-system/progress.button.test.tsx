@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { fireEvent, render } from "@testing-library/react"
-import { ConfigOption, ConfigOptionValue } from "contracts/http/config-options"
+import { ConfigOption, ConfigOptionValue } from "contracts/http/config.options"
 import { ProgressButton } from "./ProgressButton"
 
 const thinkingOption = (currentValue: string): ConfigOption => ({

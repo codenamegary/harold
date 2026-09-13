@@ -5,7 +5,7 @@ import {
   SessionConfigSchema,
   setConfigOptionPath,
   SetConfigOptionBodySchema,
-} from "./config-options"
+} from "./config.options"
 
 describe("config option contracts", () => {
   test("parses a select config option with ordered values", () => {

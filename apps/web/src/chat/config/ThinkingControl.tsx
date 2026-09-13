@@ -1,5 +1,5 @@
 import React from "react"
-import { ConfigOption, ConfigOptionValue } from "contracts/http/config-options"
+import { ConfigOption, ConfigOptionValue } from "contracts/http/config.options"
 import { ProgressButton } from "../../design-system/ProgressButton"
 
 export const ThinkingControl: React.FC<{

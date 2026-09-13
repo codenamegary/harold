@@ -8,7 +8,7 @@ import { agentMethodDeclarations } from "../agent/method.declarations"
 import { createAgentMethodTable } from "../agent/method.table"
 import { registerSessionCancelHandler } from "../agent/session.cancel"
 import { registerSessionCloseHandler } from "../agent/session.close"
-import { registerSessionSetConfigOptionHandler } from "../agent/session.set-config-option"
+import { registerSessionSetConfigOptionHandler } from "../agent/session.set_config_option"
 import { AcpSetConfigOptionResult } from "../supervisor/models"
 import { registerSessionListHandler } from "../agent/session.list"
 import { registerSessionLoadHandler } from "../agent/session.load"
@@ -593,7 +593,7 @@ export const createAcpSupervisor = ({
       },
     })
 
-    if (result.ok && result.configOptions !== undefined) {
+    if (result.ok && result.configOptions.length > 0) {
       onSessionConfig({
         agentId,
         acpSessionId: result.acpSessionId,
@@ -764,7 +764,7 @@ export const createAcpSupervisor = ({
       },
     })
 
-    if (result.ok && result.configOptions !== undefined) {
+    if (result.ok && result.configOptions.length > 0) {
       onSessionConfig({
         agentId: runtime.agentId,
         acpSessionId: result.acpSessionId,

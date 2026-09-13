@@ -505,21 +505,22 @@ describe("session hub config options", () => {
     expect(c.messages.filter((m) => m.type === "session_config")).toHaveLength(0)
   })
 
-  test("config with no subscriber is cached and snapshotted to the joiner before subscribed", async () => {
+  test("config captured during load reaches the joiner before subscribed", async () => {
     const cwdCache = createSessionCwdCache()
     cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
 
     const hub = createSessionHub({
       cwdCache,
-      loadSession: async () => ({ ok: true }),
+      loadSession: async ({ sessionId }) => {
+        hub.handleSessionConfig({
+          agentId: "cursor",
+          sessionId,
+          configOptions: sampleConfig,
+        })
+        return { ok: true }
+      },
       promptSession: async () => ({ ok: true }),
       cancelSession: async () => ({ ok: true }),
-    })
-
-    hub.handleSessionConfig({
-      agentId: "cursor",
-      sessionId: "s1",
-      configOptions: sampleConfig,
     })
 
     const a = collectSink()

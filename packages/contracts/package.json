@@ -10,7 +10,7 @@
     "./http/workspace": "./src/http/workspace.ts",
     "./http/session": "./src/http/session.ts",
     "./http/session.stream": "./src/http/session.stream.ts",
-    "./http/config-options": "./src/http/config-options.ts",
+    "./http/config.options": "./src/http/config.options.ts",
     "./http/permission": "./src/http/permission.ts",
     "./http/device": "./src/http/device.ts",
     "./http/pairing-code": "./src/http/pairing-code.ts",

@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from "react"
 import { ChevronDown } from "lucide-react"
-import { ConfigOption, ConfigOptionValue } from "contracts/http/config-options"
+import { ConfigOption, ConfigOptionValue } from "contracts/http/config.options"
 
 const FILTER_INPUT_THRESHOLD = 20
 

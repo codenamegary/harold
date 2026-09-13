@@ -1,4 +1,4 @@
-import { SessionConfigSchema } from "contracts/http/config-options"
+import { SessionConfigSchema } from "contracts/http/config.options"
 import { sanitizeAcpRejection } from "../sanitize.error"
 import { isAcpJsonRpcError } from "../transport/json-rpc-error"
 import {

@@ -5,7 +5,7 @@ import { sessionListDeclaration } from "./session.list"
 import { sessionLoadDeclaration } from "./session.load"
 import { sessionNewDeclaration } from "./session.new"
 import { sessionPromptDeclaration } from "./session.prompt"
-import { sessionSetConfigOptionDeclaration } from "./session.set-config-option"
+import { sessionSetConfigOptionDeclaration } from "./session.set_config_option"
 
 export type AgentMethodDeclarationReader = {
   list: () => ReadonlyArray<AgentMethodDeclaration>

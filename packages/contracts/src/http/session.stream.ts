@@ -2,7 +2,7 @@ import { z } from "zod"
 import { AttachmentReferenceSchema, MAX_ATTACHMENTS_PER_PROMPT } from "./attachments"
 import { AgentAuthSchema } from "./agent-auth"
 import { AgentIdSchema } from "./agent-settings"
-import { SessionConfigSchema } from "./config-options"
+import { SessionConfigSchema } from "./config.options"
 
 export const SessionStreamSubscribeSchema = z.strictObject({
   type: z.literal("subscribe"),

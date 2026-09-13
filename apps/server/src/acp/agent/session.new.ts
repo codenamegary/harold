@@ -1,4 +1,4 @@
-import { SessionConfigSchema } from "contracts/http/config-options"
+import { SessionConfigSchema } from "contracts/http/config.options"
 import { sanitizeAcpRejection } from "../sanitize.error"
 import { isAcpAuthRequiredError } from "../auth.required"
 import { isAcpJsonRpcError } from "../transport/json-rpc-error"
@@ -61,8 +61,7 @@ export const createSessionNewHandler = (): AgentMethodHandler<"session/new"> => 
         operationContext,
       )
 
-      const configOptions = SessionConfigSchema.safeParse(result.configOptions)
-      const validatedConfigOptions = configOptions.success ? configOptions.data : undefined
+      const configOptions = SessionConfigSchema.safeParse(result.configOptions ?? [])
 
       context.sessionOwnership.remember({
         agentId: context.agentId,
@@ -91,7 +90,7 @@ export const createSessionNewHandler = (): AgentMethodHandler<"session/new"> => 
       return {
         ok: true,
         acpSessionId: result.sessionId,
-        ...(validatedConfigOptions === undefined ? {} : { configOptions: validatedConfigOptions }),
+        configOptions: configOptions.success ? configOptions.data : [],
       }
     } catch (error: unknown) {
       return {

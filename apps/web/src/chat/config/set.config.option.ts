@@ -1,5 +1,5 @@
-import { SetConfigOptionBody } from "contracts/http/config-options"
-import { setConfigOptionPath } from "contracts/http/config-options"
+import { SetConfigOptionBody } from "contracts/http/config.options"
+import { setConfigOptionPath } from "contracts/http/config.options"
 
 export type ConfigSetError = Error & {
   readonly detail: string

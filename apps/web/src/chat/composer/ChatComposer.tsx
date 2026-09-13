@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from "react"
-import { ConfigOption, ConfigOptionValue } from "contracts/http/config-options"
+import { ConfigOption, ConfigOptionValue } from "contracts/http/config.options"
 import { useAtomValue } from "jotai"
 import { ArrowUp, Paperclip, ImagePlus, Check, RotateCcw, X, LoaderCircle, Square } from "lucide-react"
 import { PromptInput } from "../../design-system/PromptInput"

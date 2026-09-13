@@ -134,7 +134,7 @@ const openStreamClient = (wsUrl: string): Promise<StreamClient> =>
   })
 
 describe("session config stream integration", () => {
-  test("create caches config for the joiner and a PUT fans the new state to every subscriber", async () => {
+  test("session/load delivers config to the joiner and a PUT fans the new state to every subscriber", async () => {
     const dataDir = await createTempDataDir(resources)
     const fakeConfigOptions = [
       {
@@ -178,8 +178,8 @@ describe("session config stream integration", () => {
     })
     await subscriber.waitFor((message) => message.type === "subscribed")
 
-    const cached = subscriber.messages.find((message) => message.type === "session_config")
-    expect(cached).toMatchObject({
+    const loaded = subscriber.messages.find((message) => message.type === "session_config")
+    expect(loaded).toMatchObject({
       type: "session_config",
       agentId: "cursor",
       sessionId: created.sessionId,

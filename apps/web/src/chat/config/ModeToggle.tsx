@@ -1,5 +1,5 @@
 import React from "react"
-import { ConfigOption, ConfigOptionValue } from "contracts/http/config-options"
+import { ConfigOption, ConfigOptionValue } from "contracts/http/config.options"
 import { MultiToggleButton } from "../../design-system/MultiToggleButton"
 import { modeTextClass } from "./mode.colors"
 

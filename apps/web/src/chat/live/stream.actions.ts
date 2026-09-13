@@ -1,7 +1,7 @@
 import { atom, Getter, Setter } from "jotai"
 import { AgentId } from "contracts/http/agent-settings"
 import { AttachmentReference } from "contracts/http/attachments"
-import { SessionConfig } from "contracts/http/config-options"
+import { SessionConfig } from "contracts/http/config.options"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
 import { ChatSelection } from "../selection/persist"
 import { selectionAtom } from "../selection/atoms"
