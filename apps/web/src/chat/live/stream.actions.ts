@@ -1,11 +1,10 @@
-import { atom, Getter, Setter } from "jotai"
+import { atom } from "jotai"
 import { AgentId } from "contracts/http/agent-settings"
 import { AttachmentReference } from "contracts/http/attachments"
-import { SessionConfig } from "contracts/http/config.options"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
 import { ChatSelection } from "../selection/persist"
 import { selectionAtom } from "../selection/atoms"
-import { configErrorBySessionAtom, pendingConfigBySessionAtom, sessionConfigBySessionAtom } from "../config/atoms"
+import { sessionConfigBySessionAtom } from "../config/atoms"
 import { parseAcpUpdate } from "./acp.update"
 import { parseAvailableCommands } from "./commands.available"
 import {
@@ -49,50 +48,6 @@ const belongsToSelection = (
 ): boolean =>
   frame.sessionId === selection.sessionId && frame.agentId === selection.agentId
 
-/**
- * Whole-array replace of the session's config state. A pending optimistic set
- * survives until a frame confirms it: the confirming option carries the
- * pending value as the authoritative currentValue. A confirming frame also
- * clears any config error for the session.
- */
-const setSessionConfig = (
-  get: Getter,
-  set: Setter,
-  sessionId: string,
-  configOptions: SessionConfig,
-) => {
-  set(sessionConfigBySessionAtom, (current) => {
-    const next = new Map(current)
-    next.set(sessionId, configOptions)
-    return next
-  })
-
-  const pending = get(pendingConfigBySessionAtom).get(sessionId)
-  if (pending !== undefined) {
-    const confirmed = configOptions.some(
-      (option) => option.id === pending.configId && option.currentValue === pending.value,
-    )
-    if (confirmed) {
-      set(pendingConfigBySessionAtom, (current) => {
-        const next = new Map(current)
-        next.delete(sessionId)
-        return next
-      })
-      set(configErrorBySessionAtom, (current) => {
-        const next = new Map(current)
-        next.delete(sessionId)
-        return next
-      })
-    }
-  } else {
-    set(configErrorBySessionAtom, (current) => {
-      const next = new Map(current)
-      next.delete(sessionId)
-      return next
-    })
-  }
-}
-
 export const applyStreamMessageAtom = atom(
   null,
   (get, set, message: SessionStreamServerMessage): StreamEffect => {
@@ -118,7 +73,11 @@ export const applyStreamMessageAtom = atom(
         if (!belongsToSelection(selection, message)) {
           return noEffect
         }
-        setSessionConfig(get, set, message.sessionId, message.configOptions)
+        set(sessionConfigBySessionAtom, (current) => {
+          const next = new Map(current)
+          next.set(message.sessionId, message.configOptions)
+          return next
+        })
         return noEffect
       }
       case "subscribed": {

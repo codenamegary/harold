@@ -1,15 +1,11 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
+import { QueryClientProvider } from "@tanstack/react-query"
 import { act, renderHook, waitFor } from "@testing-library/react"
 import { createStore, Provider } from "jotai"
 import React from "react"
 import { selectionAtom } from "../selection/atoms"
-import { renderWithProviders } from "../../query/render.with.providers"
-
-import {
-  configErrorBySessionAtom,
-  pendingConfigBySessionAtom,
-  sessionConfigBySessionAtom,
-} from "./atoms"
+import { createTestQueryClient } from "../../query/create.test.query.client"
+import { sessionConfigBySessionAtom } from "./atoms"
 import { useSessionConfig } from "./use.session.config"
 import { ConfigOption } from "contracts/http/config.options"
 
@@ -54,57 +50,47 @@ const seedStore = () => {
   return store
 }
 
+const renderSessionConfigHook = (store: ReturnType<typeof createStore>) =>
+  renderHook(() => useSessionConfig(), {
+    wrapper: ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={createTestQueryClient()}>
+        <Provider store={store}>{children}</Provider>
+      </QueryClientProvider>
+    ),
+  })
+
 describe("useSessionConfig", () => {
   test("resolves the reserved composer options for the selected session", () => {
     const store = seedStore()
 
-    const { result } = renderHook(() => useSessionConfig(), {
-      wrapper: ({ children }: { children: React.ReactNode }) => (
-        <Provider store={store}>{children}</Provider>
-      ),
-    })
+    const { result } = renderSessionConfigHook(store)
 
     expect(result.current.model?.id).toBe("model")
     expect(result.current.mode?.id).toBe("mode")
     expect(result.current.thinking).toBeUndefined()
   })
 
-  test("setOption flips the pending overlay immediately and PUTs after the debounce", async () => {
+  test("setOption flips the config value optimistically and PUTs immediately", async () => {
     const store = seedStore()
     const fetchMock = mock(async () => new Response("", { status: 202 }))
     globalThis.fetch = fetchMock
 
-    const Probe = () => {
-      const config = useSessionConfig()
-      return (
-        <button
-          type="button"
-          onClick={() => config.setOption({ configId: "model", value: "m2" })}
-        >
-          set
-        </button>
-      )
-    }
-
-    const { getByRole, jotaiStore } = renderWithProviders(<Probe />, {
-      jotaiStore: store,
-    })
+    const { result } = renderSessionConfigHook(store)
 
     act(() => {
-      getByRole("button", { name: "set" }).click()
+      result.current.setOption({ configId: "model", value: "m2" })
     })
 
-    expect(jotaiStore.get(pendingConfigBySessionAtom).get("sess_01")).toEqual({
-      configId: "model",
-      value: "m2",
-    })
+    expect(
+      store
+        .get(sessionConfigBySessionAtom)
+        .get("sess_01")
+        ?.find((option) => option.id === "model")?.currentValue,
+    ).toBe("m2")
 
-    await waitFor(
-      () => {
-        expect(fetchMock).toHaveBeenCalledTimes(1)
-      },
-      { timeout: 4_000 },
-    )
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
 
     const [url, init] = (fetchMock.mock.calls[0] ?? []) as [string, RequestInit]
     expect(url).toBe("/v1/sessions/sess_01/config-options/model?agentId=cursor")
@@ -112,7 +98,7 @@ describe("useSessionConfig", () => {
     expect(JSON.parse(init.body as string)).toEqual({ value: "m2" })
   })
 
-  test("a failed PUT rolls the pending set back and surfaces the error", async () => {
+  test("a failed PUT rolls the value back and surfaces the error detail", async () => {
     const store = seedStore()
     const fetchMock = mock(async () => new Response(JSON.stringify({
       type: "https://agent-server.local/problems/validation-error",
@@ -124,34 +110,91 @@ describe("useSessionConfig", () => {
     }), { status: 422 }))
     globalThis.fetch = fetchMock
 
-    const Probe = () => {
-      const config = useSessionConfig()
-      return (
-        <button
-          type="button"
-          onClick={() => config.setOption({ configId: "model", value: "m2" })}
-        >
-          set
-        </button>
-      )
-    }
-
-    const { getByRole, jotaiStore } = renderWithProviders(<Probe />, {
-      jotaiStore: store,
-    })
+    const { result } = renderSessionConfigHook(store)
 
     act(() => {
-      getByRole("button", { name: "set" }).click()
+      result.current.setOption({ configId: "model", value: "m2" })
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 2200))
-    expect(jotaiStore.get(configErrorBySessionAtom).get("sess_01")).toBe(
-      "Config option rejected",
-    )
-    expect(jotaiStore.get(pendingConfigBySessionAtom).size).toBe(0)
-    expect(jotaiStore.get(sessionConfigBySessionAtom).get("sess_01")).toEqual([
+    await waitFor(() => {
+      expect(result.current.error).toBe("Config option rejected")
+    })
+
+    expect(store.get(sessionConfigBySessionAtom).get("sess_01")).toEqual([
       modelOption("m1"),
       modeOption("agent"),
     ])
+  })
+
+  test("saving is true only while the PUT is in flight", async () => {
+    const store = seedStore()
+    let release: (() => void) | undefined
+    globalThis.fetch = mock(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = () => resolve(new Response("", { status: 202 }))
+        }),
+    )
+
+    const { result } = renderSessionConfigHook(store)
+
+    expect(result.current.saving).toBe(false)
+
+    act(() => {
+      result.current.setOption({ configId: "model", value: "m2" })
+    })
+
+    await waitFor(() => {
+      expect(result.current.saving).toBe(true)
+    })
+
+    act(() => {
+      release?.()
+    })
+
+    await waitFor(() => {
+      expect(result.current.saving).toBe(false)
+    })
+  })
+
+  test("a new set aborts the in-flight PUT", async () => {
+    const store = seedStore()
+    const signals: AbortSignal[] = []
+    const releases: Array<() => void> = []
+    globalThis.fetch = mock(
+      (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((resolve) => {
+          signals.push(init?.signal ?? new AbortController().signal)
+          releases.push(() => resolve(new Response("", { status: 202 })))
+        }),
+    )
+
+    const { result } = renderSessionConfigHook(store)
+
+    act(() => {
+      result.current.setOption({ configId: "model", value: "m2" })
+    })
+    await waitFor(() => {
+      expect(result.current.saving).toBe(true)
+    })
+
+    act(() => {
+      result.current.setOption({ configId: "mode", value: "ask" })
+    })
+
+    await waitFor(() => {
+      expect(signals[0]?.aborted).toBe(true)
+    })
+    expect(signals).toHaveLength(2)
+
+    act(() => {
+      for (const release of releases) {
+        release()
+      }
+    })
+
+    await waitFor(() => {
+      expect(result.current.saving).toBe(false)
+    })
   })
 })

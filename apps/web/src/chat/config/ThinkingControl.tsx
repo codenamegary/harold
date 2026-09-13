@@ -5,8 +5,9 @@ import { stripThinkingPrefix } from "./thinking.label"
 export const ThinkingControl: React.FC<{
   option: ConfigOption
   onCycle: (next: ConfigOptionValue) => void
+  saving?: boolean
   disabled?: boolean
-}> = ({ option, onCycle, disabled = false }) => {
+}> = ({ option, onCycle, saving = false, disabled = false }) => {
   if (option.type !== "select") {
     return null
   }
@@ -37,7 +38,7 @@ export const ThinkingControl: React.FC<{
       aria-label={`Thinking: ${level}, level ${idx + 1} of ${option.options.length}. Press for ${nextLevel ?? "next"}.`}
       className="inline-flex shrink-0 cursor-pointer items-center truncate rounded px-0.5 font-mono text-xs outline-none focus-visible:ring-1 focus-visible:ring-current disabled:cursor-not-allowed disabled:opacity-50"
     >
-      <span className="truncate">{label}</span>
+      <span className={`truncate${saving ? " config-saving-label" : ""}`}>{label}</span>
     </button>
   )
 }

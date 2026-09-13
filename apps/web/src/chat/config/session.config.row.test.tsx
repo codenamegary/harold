@@ -33,8 +33,8 @@ const thinking = selectOption("thought_level", "thought_level", "thinking: high"
 ])
 
 describe("SessionConfigRow", () => {
-  test("renders nothing when there are no options", () => {
-    const { container } = render(
+  test("renders a non-interactive ghost row when there are no options", () => {
+    const { container, getByText } = render(
       <SessionConfigRow
         onModelPick={() => undefined}
         onModeCycle={() => undefined}
@@ -42,7 +42,11 @@ describe("SessionConfigRow", () => {
       />,
     )
 
-    expect(container.firstChild).toBeNull()
+    expect(getByText("provider/model")).toBeTruthy()
+    expect(getByText("mode")).toBeTruthy()
+    expect(getByText("thinking")).toBeTruthy()
+    expect(container.querySelector("button")).toBeNull()
+    expect(container.firstElementChild?.className).toContain("text-dim")
   })
 
   test("renders the model link, mode toggle, and thinking control", () => {
@@ -60,6 +64,52 @@ describe("SessionConfigRow", () => {
     expect(getByRole("button", { name: /Model: GPT-5\.2/ })).toBeTruthy()
     expect(getByRole("button", { name: /Mode: Agent/ })).toBeTruthy()
     expect(getByRole("button", { name: /Thinking: high/ })).toBeTruthy()
+  })
+
+  test("shimmers every label while saving and none while idle", () => {
+    const saving = render(
+      <SessionConfigRow
+        model={model}
+        mode={mode}
+        thinking={thinking}
+        saving
+        onModelPick={() => undefined}
+        onModeCycle={() => undefined}
+        onThinkingCycle={() => undefined}
+      />,
+    )
+
+    const savingLabels = [
+      ...saving.getByRole("button", { name: /Model: GPT-5\.2/ }).querySelectorAll("span"),
+      saving.getByRole("button", { name: /Mode: Agent/ }),
+      ...saving.getByRole("button", { name: /Thinking: high/ }).querySelectorAll("span"),
+    ]
+    expect(savingLabels.length).toBeGreaterThan(0)
+    for (const label of savingLabels) {
+      expect(label.className).toContain("config-saving-label")
+    }
+
+    saving.unmount()
+
+    const idle = render(
+      <SessionConfigRow
+        model={model}
+        mode={mode}
+        thinking={thinking}
+        onModelPick={() => undefined}
+        onModeCycle={() => undefined}
+        onThinkingCycle={() => undefined}
+      />,
+    )
+
+    const idleLabels = [
+      ...idle.getByRole("button", { name: /Model: GPT-5\.2/ }).querySelectorAll("span"),
+      idle.getByRole("button", { name: /Mode: Agent/ }),
+      ...idle.getByRole("button", { name: /Thinking: high/ }).querySelectorAll("span"),
+    ]
+    for (const label of idleLabels) {
+      expect(label.className).not.toContain("config-saving-label")
+    }
   })
 
   test("opens the model popover and reports the picked value", () => {

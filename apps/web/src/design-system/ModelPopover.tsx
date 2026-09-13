@@ -22,6 +22,7 @@ export type ModelLinkProps = {
   option: ConfigOption
   onPick: () => void
   className?: string
+  saving?: boolean
   disabled?: boolean
 }
 
@@ -29,6 +30,7 @@ export const ModelLink: React.FC<ModelLinkProps> = ({
   option,
   onPick,
   className = "",
+  saving = false,
   disabled = false,
 }) => {
   if (option.type !== "select") {
@@ -46,7 +48,9 @@ export const ModelLink: React.FC<ModelLinkProps> = ({
       aria-label={`Model: ${label}. Toggle the model list.`}
       className={`inline-flex shrink-0 cursor-pointer items-center justify-between gap-0.5 rounded px-0.5 font-mono text-xs outline-none focus-visible:ring-1 focus-visible:ring-current disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
     >
-      <span className="truncate">{label}</span>
+      {/* The saving sheen rides on the label span only, so the sweep stays
+          over the text and leaves the ChevronDown out of it. */}
+      <span className={`truncate${saving ? " config-saving-label" : ""}`}>{label}</span>
       <ChevronDown aria-hidden className="size-3 shrink-0" />
     </button>
   )

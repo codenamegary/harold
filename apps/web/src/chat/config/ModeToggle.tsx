@@ -6,8 +6,9 @@ import { modeTextClass } from "./mode.colors"
 export const ModeToggle: React.FC<{
   option: ConfigOption
   onCycle: (next: ConfigOptionValue) => void
+  saving?: boolean
   disabled?: boolean
-}> = ({ option, onCycle, disabled = false }) => {
+}> = ({ option, onCycle, saving = false, disabled = false }) => {
   if (option.type !== "select") {
     return null
   }
@@ -23,7 +24,7 @@ export const ModeToggle: React.FC<{
       colorClassName={modeTextClass}
       onCycle={onCycle}
       disabled={disabled}
-      className="w-[50px] truncate"
+      className={`truncate${saving ? " config-saving-label" : ""}`}
       aria-label={`Mode: ${label}. Press for ${next?.name ?? "next"}.`}
     >
       {label}

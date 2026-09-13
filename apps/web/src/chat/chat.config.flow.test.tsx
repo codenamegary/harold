@@ -204,7 +204,7 @@ describe("Chat session config flow", () => {
     fireEvent.click(getByRole("button", { name: "Send message" }))
   }
 
-  test("session_config frames drive the composer controls and a debounced PUT", async () => {
+  test("session_config frames drive the composer controls and an immediate PUT", async () => {
     const fetchMock = globalThis.fetch as ReturnType<typeof mock>
     const { getByRole } = renderChat()
     await startNewSession({ getByRole })
@@ -259,7 +259,6 @@ describe("Chat session config flow", () => {
           value: "ask",
         })
       },
-      { timeout: 4_000 },
     )
   }, 10_000)
 })

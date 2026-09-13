@@ -50,6 +50,7 @@ export const ChatShell: React.FC = () => {
           ...(sessionConfig.mode === undefined ? {} : { mode: sessionConfig.mode }),
           ...(sessionConfig.thinking === undefined ? {} : { thinking: sessionConfig.thinking }),
           ...(sessionConfig.error === null ? {} : { error: sessionConfig.error }),
+          saving: sessionConfig.saving,
           onModelPick: (value) => {
             if (sessionConfig.model !== undefined) {
               sessionConfig.setOption({ configId: sessionConfig.model.id, value })
