@@ -1,7 +1,6 @@
 package server.agent.android.stream
 
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -33,7 +32,7 @@ fun interface SessionStreamFactory {
 
 class OkHttpSessionStreamFactory(
     private val client: OkHttpClient,
-    private val json: Json = AgentServerJson,
+    private val frameDecoder: ServerFrameDecoder = ServerFrameDecoder(),
 ) : SessionStreamFactory {
     override fun open(serverOrigin: String, handlers: SessionStreamHandlers): SessionStream {
         val finished = AtomicBoolean(false)
@@ -58,14 +57,16 @@ class OkHttpSessionStreamFactory(
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                val parsed = runCatching {
-                    json.decodeFromString(SessionStreamServerMessage.serializer(), text)
-                }.getOrElse { error ->
-                    finish(DisconnectCause.Protocol(error.message ?: "unknown type"))
-                    webSocket.cancel()
-                    return
+                when (val outcome = frameDecoder.decode(text)) {
+                    is FrameOutcome.Decoded -> handlers.onMessage(outcome.message)
+
+                    is FrameOutcome.UnknownFrame -> Unit
+
+                    is FrameOutcome.MalformedFrame -> {
+                        finish(DisconnectCause.Protocol(outcome.detail))
+                        webSocket.cancel()
+                    }
                 }
-                handlers.onMessage(parsed)
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
@@ -89,7 +90,7 @@ class OkHttpSessionStreamFactory(
 
         return object : SessionStream {
             override fun send(message: SessionStreamClientMessage) {
-                val encoded = json.encodeToString(SessionStreamClientMessage.serializer(), message)
+                val encoded = AgentServerJson.encodeToString(SessionStreamClientMessage.serializer(), message)
                 val openSocket = socket
                 if (openSocket != null && queued.isEmpty()) {
                     val sent = openSocket.send(encoded)
