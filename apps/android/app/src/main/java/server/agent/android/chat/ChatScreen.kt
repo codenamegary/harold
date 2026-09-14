@@ -65,6 +65,7 @@ import android.content.pm.PackageManager
 import server.agent.android.R
 import server.agent.android.chat.auth.AgentAuthPanel
 import server.agent.android.chat.composer.CommandListPanel
+import server.agent.android.chat.composer.ComposerConfigActions
 import server.agent.android.chat.composer.PromptComposer
 import server.agent.android.chat.composer.activeCommandQuery
 import server.agent.android.chat.composer.filterCommands
@@ -107,6 +108,7 @@ private fun SessionMenuRow(
 fun ChatScreen(
     uiState: ChatUiState,
     composerState: TextFieldState = rememberTextFieldState(),
+    composerActions: ComposerConfigActions = ComposerConfigActions(),
     onSessionSelectorClick: () -> Unit = {},
     onDismissSessionMenu: () -> Unit = {},
     onWorkspacesClick: () -> Unit = {},
@@ -698,6 +700,8 @@ fun ChatScreen(
                 PromptComposer(
                     composerState = composerState,
                     composerEnabled = composerEnabled,
+                    config = uiState.composerConfig,
+                    configActions = composerActions,
                     showCancel = uiState.showComposerCancel,
                     cancelSubmitting = uiState.cancelSubmitting,
                     supportsImages = uiState.supportsImageAttachments,

@@ -78,6 +78,8 @@ fun PromptComposer(
     onVoiceToggleListening: () -> Unit,
     onVoiceCommandToggle: () -> Unit,
     onVoiceSubmit: () -> Unit,
+    config: ComposerConfigUi = ComposerConfigUi(),
+    configActions: ComposerConfigActions = ComposerConfigActions(),
     modifier: Modifier = Modifier,
 ) {
     val inVoiceMode = voice.visible

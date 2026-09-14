@@ -1,6 +1,7 @@
 package server.agent.android.chat
 
 import kotlinx.serialization.json.JsonElement
+import server.agent.android.chat.composer.ComposerConfigUi
 import server.agent.android.contracts.AgentAuth
 import server.agent.android.contracts.AvailableCommand
 import server.agent.android.contracts.AgentAuthStatus
@@ -86,6 +87,7 @@ data class ChatUiState(
     val composerText: String = "",
     val composerSubmitting: Boolean = false,
     val composerError: String? = null,
+    val composerConfig: ComposerConfigUi = ComposerConfigUi(),
     val cancelSubmitting: Boolean = false,
     val cancelError: String? = null,
     val streamReconnecting: Boolean = false,
