@@ -528,6 +528,41 @@ class DefaultSessionOwnerTest {
     }
 
     @Test
+    fun sessionConfigFrameIsANoOpUntilTheStoreLands() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(holdOpen()),
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+
+        val before = owner.snapshot.value
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionConfig(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                configOptions = listOf(
+                    JsonObject(
+                        mapOf(
+                            "id" to JsonPrimitive("model"),
+                            "type" to JsonPrimitive("select"),
+                            "currentValue" to JsonPrimitive("m1"),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(before, owner.snapshot.value)
+        assertEquals(ConnectionStatus.Live, owner.connectionState.value.status)
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
     fun commandsUpdateDoesNotTouchTranscriptAndRestoresOnWatchBack() = runTest {
         val factory = ScriptedSessionStreamFactory(
             listOf(holdOpen()),

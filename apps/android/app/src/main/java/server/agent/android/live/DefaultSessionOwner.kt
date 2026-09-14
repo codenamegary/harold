@@ -315,6 +315,8 @@ class DefaultSessionOwner(
                         )
                     }
                 }
+                is SessionStreamServerMessage.SessionConfig -> Unit
+
                 is SessionStreamServerMessage.Subscribed -> {
                     if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
                         return

@@ -13,3 +13,13 @@ val AgentServerJson: Json = Json {
     coerceInputValues = false
     classDiscriminator = "type"
 }
+
+/**
+ * Boundary decoder for Session Stream frames. The host ships frame types and
+ * extra fields independently of an installed build, so unknown keys inside a
+ * known frame are ignored. Required fields stay strict: a missing or invalid
+ * field is a malformed frame, not drift to shrug off.
+ */
+val SessionStreamJson: Json = Json(from = AgentServerJson) {
+    ignoreUnknownKeys = true
+}

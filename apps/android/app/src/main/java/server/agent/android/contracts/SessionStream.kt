@@ -62,6 +62,14 @@ sealed interface SessionStreamServerMessage {
     ) : SessionStreamServerMessage
 
     @Serializable
+    @SerialName("session_config")
+    data class SessionConfig(
+        val agentId: AgentId,
+        val sessionId: String,
+        val configOptions: List<JsonElement>,
+    ) : SessionStreamServerMessage
+
+    @Serializable
     @SerialName("subscribed")
     data class Subscribed(
         val agentId: AgentId,
