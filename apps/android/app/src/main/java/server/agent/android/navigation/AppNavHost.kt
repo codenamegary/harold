@@ -32,6 +32,7 @@ import server.agent.android.chat.SessionsScreen
 import server.agent.android.chat.WorkspacesScreen
 import server.agent.android.chat.WorkspacesViewModel
 import server.agent.android.chat.WorkspacesViewModelFactory
+import server.agent.android.chat.composer.ComposerConfigActions
 import server.agent.android.di.AppContainer
 import server.agent.android.pairing.PairingScreen
 import server.agent.android.pairing.PairingViewModel
@@ -53,6 +54,7 @@ fun AppNavHost(
             silenceScheduler = HandlerVoiceDictationRestartScheduler(),
         )
     }
+    val composerActions = remember { ComposerConfigActions() }
     val shellViewModel: ShellViewModel = viewModel(
         factory = ShellViewModelFactory(
             sessionGateway = appContainer.sessionGateway,
@@ -145,6 +147,7 @@ fun AppNavHost(
             ChatScreen(
                 uiState = chatUiState,
                 composerState = chatViewModel.composerState,
+                composerActions = composerActions,
                 onAttachmentsPicked = chatViewModel::onAttachmentsPicked,
                 onRemoveAttachment = chatViewModel::removeAttachment,
                 onSessionSelectorClick = chatViewModel::showPicker,
