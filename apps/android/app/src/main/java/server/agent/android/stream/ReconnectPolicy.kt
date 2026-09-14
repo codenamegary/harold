@@ -1,4 +1,4 @@
-package server.agent.android.events
+package server.agent.android.stream
 
 /**
  * Bounded exponential backoff without jitter: `min(250 * 2^(attempt - 1), 4000)` ms.

@@ -39,7 +39,7 @@ import server.agent.android.network.AgentApiException
 import server.agent.android.network.AttachmentApi
 import server.agent.android.live.SessionOwner
 import server.agent.android.live.SessionSnapshot
-import server.agent.android.events.ConnectionStatus
+import server.agent.android.stream.ConnectionStatus
 import server.agent.android.foreground.ActiveSessionSnapshot
 import server.agent.android.foreground.ActiveSessionTracker
 import server.agent.android.foreground.OpenSessionRequests

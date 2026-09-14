@@ -21,11 +21,11 @@ import server.agent.android.contracts.AuthStep
 import server.agent.android.contracts.SessionState
 import server.agent.android.contracts.SessionStreamClientMessage
 import server.agent.android.contracts.SessionStreamServerMessage
-import server.agent.android.events.ConnectionStatus
-import server.agent.android.events.DisconnectCause
-import server.agent.android.events.SessionStream
-import server.agent.android.events.SessionStreamFactory
-import server.agent.android.events.SessionStreamHandlers
+import server.agent.android.stream.ConnectionStatus
+import server.agent.android.stream.DisconnectCause
+import server.agent.android.stream.SessionStream
+import server.agent.android.stream.SessionStreamFactory
+import server.agent.android.stream.SessionStreamHandlers
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DefaultSessionOwnerTest {

@@ -1,4 +1,4 @@
-package server.agent.android.events
+package server.agent.android.stream
 
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.serialization.json.Json

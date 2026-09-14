@@ -1,4 +1,4 @@
-package server.agent.android.events
+package server.agent.android.stream
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

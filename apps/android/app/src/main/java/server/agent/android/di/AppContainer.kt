@@ -12,8 +12,8 @@ import server.agent.android.live.SessionOwner
 import server.agent.android.credentials.CredentialHolder
 import server.agent.android.credentials.CredentialStore
 import server.agent.android.credentials.DefaultCredentialStore
-import server.agent.android.events.OkHttpSessionStreamFactory
-import server.agent.android.events.SessionStreamFactory
+import server.agent.android.stream.OkHttpSessionStreamFactory
+import server.agent.android.stream.SessionStreamFactory
 import server.agent.android.foreground.ActiveSessionTracker
 import server.agent.android.foreground.AndroidNotificationPermissionChecker
 import server.agent.android.foreground.AndroidSessionForegroundLauncher

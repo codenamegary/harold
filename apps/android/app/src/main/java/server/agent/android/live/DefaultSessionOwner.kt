@@ -33,15 +33,15 @@ import server.agent.android.contracts.SessionStreamClientMessage
 import server.agent.android.contracts.SessionStreamServerMessage
 import server.agent.android.contracts.catalogSessionKey
 import server.agent.android.contracts.parseAvailableCommands
-import server.agent.android.events.ConnectionSignal
-import server.agent.android.events.ConnectionState
-import server.agent.android.events.ConnectionStatus
-import server.agent.android.events.DisconnectCause
-import server.agent.android.events.ReconnectPolicy
-import server.agent.android.events.SessionStream
-import server.agent.android.events.SessionStreamFactory
-import server.agent.android.events.SessionStreamHandlers
-import server.agent.android.events.reduce
+import server.agent.android.stream.ConnectionSignal
+import server.agent.android.stream.ConnectionState
+import server.agent.android.stream.ConnectionStatus
+import server.agent.android.stream.DisconnectCause
+import server.agent.android.stream.ReconnectPolicy
+import server.agent.android.stream.SessionStream
+import server.agent.android.stream.SessionStreamFactory
+import server.agent.android.stream.SessionStreamHandlers
+import server.agent.android.stream.reduce
 
 /**
  * One socket, one unbounded inbox, one pump. Chat never sees a raw frame.
