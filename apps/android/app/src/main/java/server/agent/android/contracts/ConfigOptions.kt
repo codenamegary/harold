@@ -2,6 +2,7 @@ package server.agent.android.contracts
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class ConfigOptionValue(
@@ -54,3 +55,15 @@ fun categoryOf(option: ConfigOption): ConfigCategory = when (option.category) {
     "thought_level" -> ConfigCategory.ThoughtLevel
     else -> ConfigCategory.Other
 }
+
+/**
+ * Decodes one session_config frame's raw options. An element that is not a
+ * valid select or boolean option is dropped; a bad element never kills the
+ * frame or the stream.
+ */
+fun parseConfigOptions(options: List<JsonElement>): List<ConfigOption> =
+    options.mapNotNull { element ->
+        runCatching {
+            SessionStreamJson.decodeFromString(ConfigOption.serializer(), element.toString())
+        }.getOrNull()
+    }

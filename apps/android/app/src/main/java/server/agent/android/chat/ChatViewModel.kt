@@ -19,7 +19,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.joinAll
 import kotlinx.serialization.json.JsonObject
+import server.agent.android.chat.composer.ComposerConfigUi
 import server.agent.android.chat.composer.completeSlashCommand
+import server.agent.android.chat.composer.composerConfigOf
 import server.agent.android.chat.composer.supportsFileAttachments
 import server.agent.android.chat.composer.supportsImageAttachments
 import server.agent.android.contracts.AgentAuth
@@ -137,7 +139,10 @@ class ChatViewModel(
                     sessionForegroundCoordinator?.setServerOrigin(null)
                     sessionOwner.watch(null, null)
                     _uiState.update { current ->
-                        current.copy(availableCommands = emptyList())
+                        current.copy(
+                            availableCommands = emptyList(),
+                            composerConfig = ComposerConfigUi(),
+                        )
                     }
                 }
             }
@@ -429,6 +434,7 @@ class ChatViewModel(
                 composerError = null,
                 composerSubmitting = false,
                 availableCommands = emptyList(),
+                composerConfig = ComposerConfigUi(),
                 voiceCommandPrefix = "",
                 voiceCommandListVisible = false,
                 pendingPermissions = emptyList(),
@@ -868,7 +874,10 @@ class ChatViewModel(
             sessionOwner.disconnect()
             clearPersistedSession()
             _uiState.update { current ->
-                current.copy(availableCommands = emptyList())
+                current.copy(
+                    availableCommands = emptyList(),
+                    composerConfig = ComposerConfigUi(),
+                )
             }
             activeSessionTracker?.replaceAll(emptyList())
             sessionForegroundCoordinator?.onSessionsChanged()
@@ -1005,6 +1014,7 @@ class ChatViewModel(
                 composerText = "",
                 composerError = null,
                 availableCommands = emptyList(),
+                composerConfig = ComposerConfigUi(),
                 voiceCommandPrefix = "",
                 voiceCommandListVisible = false,
                 pendingPermissions = emptyList(),
@@ -1062,6 +1072,7 @@ class ChatViewModel(
                 transcript = snapshot.transcript,
                 streamReconnecting = snapshot.reconnecting,
                 availableCommands = snapshot.availableCommands,
+                composerConfig = composerConfigOf(snapshot.configOptions),
                 pendingPermissions = listOfNotNull(snapshot.pendingPermission),
                 permissionUiState = permissionUi,
                 extensionUiState = extensionUi,
@@ -1237,6 +1248,7 @@ class ChatViewModel(
                 transcript = if (selectedWasDeleted) emptyAcpTranscript else current.transcript,
                 composerText = if (selectedWasDeleted) "" else current.composerText,
                 availableCommands = if (selectedWasDeleted) emptyList() else current.availableCommands,
+                composerConfig = if (selectedWasDeleted) ComposerConfigUi() else current.composerConfig,
                 voiceCommandPrefix = if (selectedWasDeleted) "" else current.voiceCommandPrefix,
                 voiceCommandListVisible = if (selectedWasDeleted) false else current.voiceCommandListVisible,
                 pendingPermissions = if (selectedWasDeleted) emptyList() else current.pendingPermissions,

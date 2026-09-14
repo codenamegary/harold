@@ -4,6 +4,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
@@ -18,6 +19,7 @@ import server.agent.android.contracts.AgentAuthStatus
 import server.agent.android.contracts.AuthSessionStatus
 import server.agent.android.contracts.AuthShowMessageLevel
 import server.agent.android.contracts.AuthStep
+import server.agent.android.contracts.SelectOption
 import server.agent.android.contracts.SessionState
 import server.agent.android.contracts.SessionStreamClientMessage
 import server.agent.android.contracts.SessionStreamServerMessage
@@ -528,7 +530,7 @@ class DefaultSessionOwnerTest {
     }
 
     @Test
-    fun sessionConfigFrameIsANoOpUntilTheStoreLands() = runTest {
+    fun sessionConfigFramePopulatesSnapshotAndRestoresOnWatchBack() = runTest {
         val factory = ScriptedSessionStreamFactory(
             listOf(holdOpen()),
         )
@@ -538,7 +540,44 @@ class DefaultSessionOwnerTest {
         owner.watch("cursor", "sess_02")
         advanceUntilIdle()
 
-        val before = owner.snapshot.value
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionConfig(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                configOptions = listOf(selectElement(id = "model", currentValue = "m1")),
+            ),
+        )
+        advanceUntilIdle()
+
+        val options = owner.snapshot.value.configOptions
+        assertEquals(listOf("model"), options.map { option -> option.id })
+        assertEquals("m1", (options.single() as SelectOption).currentValue)
+
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+        assertTrue(owner.snapshot.value.configOptions.isEmpty())
+
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+        assertEquals(
+            listOf("model"),
+            owner.snapshot.value.configOptions.map { option -> option.id },
+        )
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun sessionConfigFrameDropsInvalidOptionsAndKeepsValidOnes() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(holdOpen()),
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+
         factory.lastStream!!.emit(
             SessionStreamServerMessage.SessionConfig(
                 agentId = "cursor",
@@ -546,18 +585,112 @@ class DefaultSessionOwnerTest {
                 configOptions = listOf(
                     JsonObject(
                         mapOf(
-                            "id" to JsonPrimitive("model"),
-                            "type" to JsonPrimitive("select"),
-                            "currentValue" to JsonPrimitive("m1"),
+                            "id" to JsonPrimitive("raw"),
+                            "name" to JsonPrimitive("Raw"),
                         ),
                     ),
+                    selectElement(id = "model", currentValue = "m1"),
                 ),
             ),
         )
         advanceUntilIdle()
 
-        assertEquals(before, owner.snapshot.value)
-        assertEquals(ConnectionStatus.Live, owner.connectionState.value.status)
+        assertEquals(
+            listOf("model"),
+            owner.snapshot.value.configOptions.map { option -> option.id },
+        )
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun forgetClearsSessionConfig() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(holdOpen()),
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionConfig(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                configOptions = listOf(selectElement(id = "model", currentValue = "m1")),
+            ),
+        )
+        advanceUntilIdle()
+
+        owner.forget("cursor", "sess_02")
+        assertTrue(owner.snapshot.value.configOptions.isEmpty())
+
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+        assertTrue(owner.snapshot.value.configOptions.isEmpty())
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun disconnectClearsSessionConfig() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(holdOpen(), holdOpen()),
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionConfig(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                configOptions = listOf(selectElement(id = "model", currentValue = "m1")),
+            ),
+        )
+        advanceUntilIdle()
+
+        owner.disconnect()
+        advanceUntilIdle()
+        assertTrue(owner.snapshot.value.configOptions.isEmpty())
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+        assertTrue(owner.snapshot.value.configOptions.isEmpty())
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun serverMoveClearsSessionConfig() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(holdOpen(), holdOpen()),
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionConfig(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                configOptions = listOf(selectElement(id = "model", currentValue = "m1")),
+            ),
+        )
+        advanceUntilIdle()
+
+        owner.connect(MOVED_ORIGIN)
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+        assertTrue(owner.snapshot.value.configOptions.isEmpty())
         owner.disconnect()
         advanceUntilIdle()
     }
@@ -664,8 +797,28 @@ class DefaultSessionOwnerTest {
             ),
         )
 
+    private fun selectElement(id: String, currentValue: String): JsonObject = JsonObject(
+        mapOf(
+            "type" to JsonPrimitive("select"),
+            "id" to JsonPrimitive(id),
+            "name" to JsonPrimitive(id),
+            "currentValue" to JsonPrimitive(currentValue),
+            "options" to JsonArray(
+                listOf(
+                    JsonObject(
+                        mapOf(
+                            "value" to JsonPrimitive(currentValue),
+                            "name" to JsonPrimitive(currentValue),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
     private companion object {
         const val ORIGIN = "http://127.0.0.1:8787"
+        const val MOVED_ORIGIN = "http://127.0.0.1:9999"
     }
 }
 
