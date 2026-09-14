@@ -6,6 +6,7 @@ import server.agent.android.chat.emptyAcpTranscript
 import server.agent.android.contracts.AgentAuth
 import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.AvailableCommand
+import server.agent.android.contracts.ConfigOption
 import server.agent.android.contracts.PermissionRequest
 
 data class SessionSnapshot(
@@ -14,6 +15,7 @@ data class SessionSnapshot(
     val transcript: AcpTranscriptState = emptyAcpTranscript,
     val reconnecting: Boolean = false,
     val availableCommands: List<AvailableCommand> = emptyList(),
+    val configOptions: List<ConfigOption> = emptyList(),
     val pendingPermission: PermissionRequest? = null,
     val extension: StreamExtension? = null,
     val agentAuth: AgentAuth? = null,

@@ -23,6 +23,7 @@ import server.agent.android.chat.applyStreamError
 import server.agent.android.chat.applySubscribed
 import server.agent.android.chat.beginUserTurn
 import server.agent.android.chat.composer.AvailableCommandsCatalog
+import server.agent.android.chat.composer.SessionConfigCatalog
 import server.agent.android.chat.emptyAcpTranscript
 import server.agent.android.chat.foldAcpUpdate
 import server.agent.android.chat.parseAcpUpdate
@@ -33,6 +34,7 @@ import server.agent.android.contracts.SessionStreamClientMessage
 import server.agent.android.contracts.SessionStreamServerMessage
 import server.agent.android.contracts.catalogSessionKey
 import server.agent.android.contracts.parseAvailableCommands
+import server.agent.android.contracts.parseConfigOptions
 import server.agent.android.stream.ConnectionSignal
 import server.agent.android.stream.ConnectionState
 import server.agent.android.stream.ConnectionStatus
@@ -52,6 +54,7 @@ class DefaultSessionOwner(
 ) : SessionOwner {
     private val lock = Any()
     private val commandsCatalog = AvailableCommandsCatalog()
+    private val configCatalog = SessionConfigCatalog()
 
     private val _connectionState = MutableStateFlow(ConnectionState())
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
@@ -115,6 +118,7 @@ class DefaultSessionOwner(
             watchSessionId = null
             subscribedKey = null
             commandsCatalog.clear()
+            configCatalog.clear()
             _snapshot.value = SessionSnapshot()
         }
         _connectionState.update { current -> current.copy(status = ConnectionStatus.Idle) }
@@ -221,9 +225,13 @@ class DefaultSessionOwner(
     override fun forget(agentId: AgentId, sessionId: String) {
         synchronized(lock) {
             commandsCatalog.forget(agentId, sessionId)
+            configCatalog.forget(agentId, sessionId)
             if (watchAgentId == agentId && watchSessionId == sessionId) {
                 _snapshot.update { current ->
-                    current.copy(availableCommands = emptyList())
+                    current.copy(
+                        availableCommands = emptyList(),
+                        configOptions = emptyList(),
+                    )
                 }
             }
         }
@@ -315,7 +323,19 @@ class DefaultSessionOwner(
                         )
                     }
                 }
-                is SessionStreamServerMessage.SessionConfig -> Unit
+                is SessionStreamServerMessage.SessionConfig -> {
+                    if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
+                        return
+                    }
+                    val options = parseConfigOptions(message.configOptions)
+                    configCatalog.remember(message.agentId, message.sessionId, options)
+                    _snapshot.update { current ->
+                        current.copy(
+                            configOptions = options,
+                            reconnecting = false,
+                        )
+                    }
+                }
 
                 is SessionStreamServerMessage.Subscribed -> {
                     if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
@@ -473,6 +493,7 @@ class DefaultSessionOwner(
         subscribedKey = null
         if (clearCatalog) {
             commandsCatalog.clear()
+            configCatalog.clear()
         }
         _snapshot.value = SessionSnapshot()
     }
@@ -486,6 +507,7 @@ class DefaultSessionOwner(
             transcript = if (reconnecting) applyReconnect() else emptyAcpTranscript,
             reconnecting = reconnecting,
             availableCommands = commandsCatalog.current(agentId, sessionId),
+            configOptions = configCatalog.current(agentId, sessionId),
         )
     }
 

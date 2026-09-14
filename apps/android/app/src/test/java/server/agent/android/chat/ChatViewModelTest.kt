@@ -29,12 +29,15 @@ import server.agent.android.network.AgentApiException
 import server.agent.android.network.AttachmentApi
 import server.agent.android.contracts.AgentSettings
 import server.agent.android.contracts.AgentSettingsCollection
+import server.agent.android.contracts.BooleanOption
+import server.agent.android.contracts.ConfigOptionValue
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateSessionResponse
 import server.agent.android.contracts.PageInfo
 import server.agent.android.contracts.PermissionOption
 import server.agent.android.contracts.PermissionRequest
 import server.agent.android.contracts.PermissionStatus
+import server.agent.android.contracts.SelectOption
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionCollection
 import server.agent.android.contracts.SessionState
@@ -270,6 +273,43 @@ class ChatViewModelTest {
         viewModel.submitPermissionOption("allow-once")
         advanceUntilIdle()
         assertEquals(listOf("perm_01" to "allow-once"), sessionOwner.permissionReplies)
+    }
+
+    @Test
+    fun liveSnapshotMapsComposerConfig() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = ChatFakeOperatorRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = sessionOwner,
+        )
+
+        advanceUntilIdle()
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                configOptions = listOf(
+                    SelectOption(
+                        id = "model",
+                        name = "Model",
+                        category = "model",
+                        currentValue = "m2",
+                        options = listOf(ConfigOptionValue(value = "m2", name = "M2")),
+                    ),
+                    BooleanOption(
+                        id = "thinking",
+                        name = "Thinking",
+                        category = "thought_level",
+                        currentValue = true,
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        val config = viewModel.uiState.value.composerConfig
+        assertEquals("m2", (config.model as SelectOption).currentValue)
+        assertNull(config.mode)
+        assertTrue((config.thinking as BooleanOption).currentValue)
     }
 
     @Test
