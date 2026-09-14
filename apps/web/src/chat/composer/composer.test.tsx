@@ -68,31 +68,39 @@ describe("ChatComposer attachment buttons", () => {
       />,
     )
 
-  test("hides both buttons when the agent advertises neither capability", () => {
-    const { queryByRole } = renderComposer({})
-    expect(queryByRole("button", { name: "Attach photo" })).toBeNull()
-    expect(queryByRole("button", { name: "Attach files" })).toBeNull()
+  test("disables both buttons when the agent advertises neither capability", () => {
+    const { getByRole } = renderComposer({})
+    expect(getByRole("button", { name: "Attach photo" })).toBeDisabled()
+    expect(getByRole("button", { name: "Attach files" })).toBeDisabled()
   })
 
-  test("shows the photo button when promptCapabilities.image is advertised", () => {
-    const { getByRole, queryByRole } = renderComposer({ supportsImages: true })
-    expect(getByRole("button", { name: "Attach photo" })).toBeTruthy()
-    expect(queryByRole("button", { name: "Attach files" })).toBeNull()
+  test("enables only the photo button when promptCapabilities.image is advertised", () => {
+    const { getByRole } = renderComposer({ supportsImages: true })
+    expect(getByRole("button", { name: "Attach photo" })).toBeEnabled()
+    expect(getByRole("button", { name: "Attach files" })).toBeDisabled()
+    expect(getByRole("button", { name: "Attach files" })).toHaveAttribute(
+      "title",
+      "Attach Files - Sorry, this agent does not support file attachments.",
+    )
   })
 
-  test("shows the files button when promptCapabilities.embeddedContext is advertised", () => {
-    const { getByRole, queryByRole } = renderComposer({ supportsFiles: true })
-    expect(getByRole("button", { name: "Attach files" })).toBeTruthy()
-    expect(queryByRole("button", { name: "Attach photo" })).toBeNull()
+  test("enables only the files button when promptCapabilities.embeddedContext is advertised", () => {
+    const { getByRole } = renderComposer({ supportsFiles: true })
+    expect(getByRole("button", { name: "Attach files" })).toBeEnabled()
+    expect(getByRole("button", { name: "Attach photo" })).toBeDisabled()
+    expect(getByRole("button", { name: "Attach photo" })).toHaveAttribute(
+      "title",
+      "Attach Images - Sorry, this agent does not support image attachments.",
+    )
   })
 
-  test("shows both buttons when both capabilities are advertised", () => {
+  test("enables both buttons when both capabilities are advertised", () => {
     const { getByRole } = renderComposer({
       supportsImages: true,
       supportsFiles: true,
     })
-    expect(getByRole("button", { name: "Attach photo" })).toBeTruthy()
-    expect(getByRole("button", { name: "Attach files" })).toBeTruthy()
+    expect(getByRole("button", { name: "Attach photo" })).toBeEnabled()
+    expect(getByRole("button", { name: "Attach files" })).toBeEnabled()
   })
 
   test("file picker feeds onFilesPicked", () => {
