@@ -234,6 +234,13 @@ export const createServer = async ({
           update,
         })
       },
+      onSessionConfig: ({ agentId, acpSessionId, configOptions }) => {
+        sessionHubRef.current?.handleSessionConfig({
+          agentId,
+          sessionId: acpSessionId,
+          configOptions,
+        })
+      },
       onSessionDiscovered: ({ agentId, sessionId, cwd }) => {
         cwdCache.remember({ agentId, sessionId, cwd })
       },

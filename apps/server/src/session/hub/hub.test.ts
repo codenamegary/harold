@@ -452,3 +452,118 @@ describe("session hub", () => {
     expect(a.messages.some((m) => m.type === "session_update")).toBe(false)
   })
 })
+
+describe("session hub config options", () => {
+  const sampleConfig = [
+    {
+      id: "model",
+      name: "Model",
+      category: "model",
+      type: "select",
+      currentValue: "m1",
+      options: [{ value: "m1", name: "M1" }],
+    },
+  ]
+
+  test("handleSessionConfig fans a session_config frame to every session subscriber", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+    cwdCache.remember({ agentId: "cursor", sessionId: "s2", cwd: "/tmp/b" })
+
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      promptSession: async () => ({ ok: true }),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const a = collectSink()
+    const b = collectSink()
+    const c = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    hub.addSubscriber({ id: "b", sink: b.sink, sessionKey: null })
+    hub.addSubscriber({ id: "c", sink: c.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+    await hub.subscribe({ subscriberId: "b", agentId: "cursor", sessionId: "s1" })
+    await hub.subscribe({ subscriberId: "c", agentId: "cursor", sessionId: "s2" })
+
+    hub.handleSessionConfig({
+      agentId: "cursor",
+      sessionId: "s1",
+      configOptions: sampleConfig,
+    })
+
+    expect(a.messages.filter((m) => m.type === "session_config")).toEqual([
+      {
+        type: "session_config",
+        agentId: "cursor",
+        sessionId: "s1",
+        configOptions: sampleConfig,
+      },
+    ])
+    expect(b.messages.filter((m) => m.type === "session_config")).toHaveLength(1)
+    expect(c.messages.filter((m) => m.type === "session_config")).toHaveLength(0)
+  })
+
+  test("config captured during load reaches the joiner before subscribed", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async ({ sessionId }) => {
+        hub.handleSessionConfig({
+          agentId: "cursor",
+          sessionId,
+          configOptions: sampleConfig,
+        })
+        return { ok: true }
+      },
+      promptSession: async () => ({ ok: true }),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const a = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    const configIndex = a.messages.findIndex((m) => m.type === "session_config")
+    const subscribedIndex = a.messages.findIndex((m) => m.type === "subscribed")
+    expect(configIndex).toBeGreaterThanOrEqual(0)
+    expect(configIndex).toBeLessThan(subscribedIndex)
+    expect(a.messages[configIndex]).toMatchObject({
+      type: "session_config",
+      agentId: "cursor",
+      sessionId: "s1",
+      configOptions: sampleConfig,
+    })
+  })
+
+  test("config arriving during load is routed to the loading subscriber only", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async ({ sessionId }) => {
+        hub.handleSessionConfig({
+          agentId: "cursor",
+          sessionId,
+          configOptions: sampleConfig,
+        })
+        return { ok: true }
+      },
+      promptSession: async () => ({ ok: true }),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const a = collectSink()
+    const b = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    hub.addSubscriber({ id: "b", sink: b.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    expect(a.messages.filter((m) => m.type === "session_config")).toHaveLength(1)
+    expect(b.messages.filter((m) => m.type === "session_config")).toHaveLength(0)
+  })
+})

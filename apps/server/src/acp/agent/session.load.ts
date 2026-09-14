@@ -1,3 +1,4 @@
+import { SessionConfigSchema } from "contracts/http/config.options"
 import { sanitizeAcpRejection } from "../sanitize.error"
 import { isAcpJsonRpcError } from "../transport/json-rpc-error"
 import { AcpOperationContext } from "../transport/json-rpc-transport"
@@ -63,7 +64,10 @@ export const createSessionLoadHandler = (): AgentMethodHandler<"session/load"> =
     }
 
     try {
-      const result = await context.transport.request<{ sessionId: string }>(
+      const result = await context.transport.request<{
+        sessionId?: string
+        configOptions?: unknown
+      }>(
         "session/load",
         {
           sessionId: acpSessionId,
@@ -73,9 +77,16 @@ export const createSessionLoadHandler = (): AgentMethodHandler<"session/load"> =
         operationContext,
       )
 
-      context.sessionBindings.unbind({ acpSessionId: result.sessionId })
+      const resolvedAcpSessionId =
+        typeof result.sessionId === "string" && result.sessionId.length > 0
+          ? result.sessionId
+          : acpSessionId
+
+      const configOptions = SessionConfigSchema.safeParse(result.configOptions ?? [])
+
+      context.sessionBindings.unbind({ acpSessionId })
       context.sessionBindings.bind({
-        acpSessionId: result.sessionId,
+        acpSessionId: resolvedAcpSessionId,
         sessionId,
         workspaceId,
         workspaceRoot: workspaceCwd,
@@ -83,10 +94,14 @@ export const createSessionLoadHandler = (): AgentMethodHandler<"session/load"> =
       })
       context.sessionOwnership.remember({
         agentId: context.agentId,
-        acpSessionId: result.sessionId,
+        acpSessionId: resolvedAcpSessionId,
       })
 
-      return { ok: true, acpSessionId: result.sessionId }
+      return {
+        ok: true,
+        acpSessionId: resolvedAcpSessionId,
+        configOptions: configOptions.success ? configOptions.data : [],
+      }
     } catch (error: unknown) {
       context.sessionBindings.unbind({ acpSessionId })
       if (wasLive) {
@@ -97,7 +112,7 @@ export const createSessionLoadHandler = (): AgentMethodHandler<"session/load"> =
           workspaceRoot: workspaceCwd,
           phase: "live",
         })
-        return { ok: true, acpSessionId }
+        return { ok: true, acpSessionId, configOptions: [] }
       }
       return {
         ok: false,

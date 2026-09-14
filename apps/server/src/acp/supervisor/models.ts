@@ -1,4 +1,5 @@
 import { AgentId, AgentSpawnSnapshot } from "contracts/http/agent-settings"
+import { SessionConfig } from "contracts/http/config.options"
 import { SupervisorAuthHooks } from "../../agent/auth/supervisor.hooks"
 import { CapabilityInventory } from "../agent/inventory"
 import { AgentProfile } from "../agent-profile"
@@ -19,8 +20,22 @@ export type AcpAgentRuntimeState = {
 }
 
 export type AcpSessionOperationResult =
-  | { ok: true; acpSessionId: string }
+  | { ok: true; acpSessionId: string; configOptions: SessionConfig }
   | { ok: false; reason: string; authRequired?: boolean }
+
+export type AcpSetConfigOptionResult =
+  | { ok: true; configOptions: SessionConfig }
+  | {
+      ok: false
+      reason: string
+      kind: "unknown-session" | "invalid-option" | "unsupported" | "error"
+    }
+
+export type SessionConfigHandler = (input: {
+  agentId: AgentId
+  acpSessionId: string
+  configOptions: SessionConfig
+}) => void
 
 export type AcpSessionCloseResult =
   | { ok: true }
@@ -113,6 +128,12 @@ export type AcpSupervisor = {
     agentId: AgentId
     cwd: string
   }) => Promise<AcpSessionOperationResult>
+  setConfigOption: (params: {
+    agentId: AgentId
+    sessionId: string
+    configId: string
+    value: string | boolean
+  }) => Promise<AcpSetConfigOptionResult>
   loadSession: (params: {
     agentId: AgentId
     sessionId: string
@@ -161,6 +182,7 @@ export type CreateAcpSupervisorParams = {
   agentSettingsRepository: AgentSettingsReader
   serverVersion: string
   onSessionUpdate?: SessionUpdateHandler
+  onSessionConfig?: SessionConfigHandler
   onSessionDiscovered?: SessionDiscoveredHandler
   requestPermission?: RequestPermissionFn
   requestExtensionRpc?: RequestExtensionRpcFn

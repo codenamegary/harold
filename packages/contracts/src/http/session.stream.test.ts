@@ -32,6 +32,49 @@ describe("session stream contracts", () => {
     })
   })
 
+  test("parses a session_config frame with the full option array", () => {
+    expect(
+      SessionStreamServerMessageSchema.parse({
+        type: "session_config",
+        agentId: "cursor",
+        sessionId: "acp-1",
+        configOptions: [
+          {
+            id: "model",
+            name: "Model",
+            category: "model",
+            type: "select",
+            currentValue: "m1",
+            options: [{ value: "m1", name: "M1" }],
+          },
+        ],
+      }),
+    ).toEqual({
+      type: "session_config",
+      agentId: "cursor",
+      sessionId: "acp-1",
+      configOptions: [
+        {
+          id: "model",
+          name: "Model",
+          category: "model",
+          type: "select",
+          currentValue: "m1",
+          options: [{ value: "m1", name: "M1" }],
+        },
+      ],
+    })
+
+    expect(() =>
+      SessionStreamServerMessageSchema.parse({
+        type: "session_config",
+        agentId: "cursor",
+        sessionId: "acp-1",
+        configOptions: [{ type: "slider" }],
+      }),
+    ).toThrow()
+  })
+
   test("rejects subscribe without sessionId", () => {
     expect(() =>
       SessionStreamClientMessageSchema.parse({

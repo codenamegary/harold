@@ -1,6 +1,7 @@
 import { AgentAuth } from "contracts/http/agent-auth"
 import { AgentId } from "contracts/http/agent-settings"
 import { AttachmentReference } from "contracts/http/attachments"
+import { SessionConfig } from "contracts/http/config.options"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
 import { AUTH_GATED_PROMPT_MESSAGE } from "../../acp/auth.required"
 import { parseAvailableCommandsUpdate } from "./commands.available"
@@ -103,6 +104,11 @@ export type SessionHub = {
     agentId: AgentId
     sessionId: string
     update: unknown
+  }) => void
+  handleSessionConfig: (params: {
+    agentId: AgentId
+    sessionId: string
+    configOptions: SessionConfig
   }) => void
   broadcastAuthSessionUpdated: (params: {
     agentId: AgentId
@@ -511,6 +517,14 @@ export const createSessionHub = ({
         agentId,
         sessionId,
         update,
+      })
+    },
+    handleSessionConfig: ({ agentId, sessionId, configOptions }) => {
+      fanOut(sessionKey(agentId, sessionId), {
+        type: "session_config",
+        agentId,
+        sessionId,
+        configOptions,
       })
     },
     broadcastAuthSessionUpdated: ({ agentId, auth }) => {

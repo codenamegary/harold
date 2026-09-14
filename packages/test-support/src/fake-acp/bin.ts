@@ -4,6 +4,7 @@ import {
   handleJsonRpcMessage,
   shouldEmitDeferredNotification,
 } from "./handlers"
+import { createFakeAcpConfigState } from "./config.state"
 import { createFakeAcpPromptState } from "./prompt-state"
 import {
   isJsonRpcNotification,
@@ -21,6 +22,7 @@ export const runFakeAcpStdio = (
 ) => {
   const config = readFakeAcpConfig()
   const promptState = createFakeAcpPromptState()
+  const configState = createFakeAcpConfigState(config.configOptions)
   const buffer: string[] = [""]
   let heldPromptSessionId: string | undefined
 
@@ -59,7 +61,7 @@ export const runFakeAcpStdio = (
     const message = parseJsonRpcLine(line)
 
     if (isJsonRpcNotification(message)) {
-      const handled = handleJsonRpcMessage(message, config, promptState)
+      const handled = handleJsonRpcMessage(message, config, promptState, configState)
       if (handled !== undefined && "promptResponse" in handled && handled.promptResponse) {
         output.write(serializeJsonRpcMessage(handled.promptResponse))
       }
@@ -82,7 +84,7 @@ export const runFakeAcpStdio = (
     }
 
     const request = message
-    const handled = handleJsonRpcMessage(request, config, promptState)
+    const handled = handleJsonRpcMessage(request, config, promptState, configState)
     if (!handled || !("outbound" in handled)) {
       return
     }

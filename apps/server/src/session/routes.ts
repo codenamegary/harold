@@ -1,3 +1,8 @@
+import { SetConfigOptionBodySchema } from "contracts/http/config.options"
+import {
+  PROBLEM_TYPES,
+  ValidationProblemSchema,
+} from "contracts/http/error"
 import {
   CreateSessionBodySchema,
   CreateSessionResponseSchema,
@@ -12,6 +17,7 @@ import { AgentSettingsRepository } from "../agent-settings/agent-settings-reposi
 import { CommandsCache } from "./hub/commands.cache"
 import { SessionCwdCache } from "./hub/hub"
 import { ArchivedAcpSessionsStore } from "./archived.acp.sessions.store"
+import { SetConfigOptionQuerySchema } from "./config.options.query"
 import { deleteAcpSession } from "./delete.acp.session"
 import { ensureSupervisorReady, agentAdvertisesSessionList } from "./session.acp.ready"
 import {
@@ -20,6 +26,7 @@ import {
   buildAgentNotFoundProblem,
   buildAgentUnavailableProblem,
   buildAuthRequiredProblem,
+  buildSessionNotFoundProblem,
 } from "./session.problems"
 
 const sendProblem = (
@@ -146,6 +153,73 @@ export const registerSessionRoutes = (
         items: visible,
       }),
     )
+  })
+
+  app.put("/v1/sessions/:sessionId/config-options/:configId", async (request, reply) => {
+    const { sessionId, configId } = request.params as {
+      sessionId: string
+      configId: string
+    }
+    const body = SetConfigOptionBodySchema.parse(request.body)
+    const query = SetConfigOptionQuerySchema.parse(request.query)
+
+    const agentSettings = agentSettingsRepository
+      .list()
+      .find((settings) => settings.id === query.agentId)
+
+    if (agentSettings === undefined) {
+      return sendProblem(reply, 404, buildAgentNotFoundProblem())
+    }
+
+    if (!agentSettings.available) {
+      return sendProblem(reply, 409, buildAgentUnavailableProblem())
+    }
+
+    if (!agentSettings.enabled) {
+      return sendProblem(reply, 409, buildAgentDisabledProblem())
+    }
+
+    const supervisorReady = await ensureSupervisorReady(acpSupervisor, query.agentId)
+    if (!supervisorReady.ok) {
+      app.log.warn(
+        { agentId: query.agentId, reason: supervisorReady.reason },
+        "ACP agent start failed",
+      )
+      return sendProblem(reply, 409, buildAcpUnavailableProblem(supervisorReady.reason))
+    }
+
+    if (cwdCache.get({ agentId: query.agentId, sessionId }) === undefined) {
+      return sendProblem(reply, 404, buildSessionNotFoundProblem())
+    }
+
+    const result = await acpSupervisor.setConfigOption({
+      agentId: query.agentId,
+      sessionId,
+      configId,
+      value: body.value,
+    })
+
+    if (!result.ok) {
+      if (result.kind === "unknown-session") {
+        return sendProblem(reply, 404, buildSessionNotFoundProblem(result.reason))
+      }
+      if (result.kind === "invalid-option") {
+        return sendProblem(
+          reply,
+          422,
+          ValidationProblemSchema.parse({
+            type: PROBLEM_TYPES.validationError,
+            title: "Config option rejected",
+            status: 422,
+            code: "validation.configOption.invalid",
+            errors: [{ pointer: "#/value", code: "validation.configOption.invalid" }],
+          }),
+        )
+      }
+      return sendProblem(reply, 409, buildAcpUnavailableProblem(result.reason))
+    }
+
+    return reply.status(202).send()
   })
 
   app.delete("/v1/sessions/:sessionId", async (request, reply) => {

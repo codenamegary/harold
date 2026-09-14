@@ -19,6 +19,9 @@ describe("resolveAgentProfile", () => {
           writeTextFile: true,
         },
         terminal: true,
+        _meta: {
+          parameterizedModelPicker: true,
+        },
       },
     })
 

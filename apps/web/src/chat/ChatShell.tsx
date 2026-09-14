@@ -8,13 +8,14 @@ import {
   supportsFileAttachments,
   supportsImageAttachments,
 } from "./composer/capabilities"
-import { ChatComposer } from "./composer/ChatComposer"
+import { ChatComposer, ChatComposerConfig } from "./composer/ChatComposer"
 import { ChatHeader } from "./header/ChatHeader"
 import { streamAuthAtom, transcriptAtom } from "./live/atoms"
 import { useChatAttachments } from "./live/use.attachments"
 import { ExtensionPanel } from "./live/ExtensionPanel"
 import { PermissionPanel } from "./live/PermissionPanel"
 import { useTranscriptAutoscroll } from "./live/use.autoscroll"
+import { useSessionConfig } from "./config/use.session.config"
 import { useChatPrompt } from "./live/use.prompt"
 import { useLiveReplies } from "./live/use.replies"
 import { useChatStream } from "./live/use.stream"
@@ -37,6 +38,35 @@ export const ChatShell: React.FC = () => {
     useChatPrompt(stream, chatAttachments)
   const { permission, extension, replyToPermission, replyToExtension } =
     useLiveReplies(stream)
+  const sessionConfig = useSessionConfig()
+
+  const composerConfig: ChatComposerConfig | undefined =
+    sessionConfig.model === undefined
+    && sessionConfig.mode === undefined
+    && sessionConfig.thinking === undefined
+      ? undefined
+      : {
+          ...(sessionConfig.model === undefined ? {} : { model: sessionConfig.model }),
+          ...(sessionConfig.mode === undefined ? {} : { mode: sessionConfig.mode }),
+          ...(sessionConfig.thinking === undefined ? {} : { thinking: sessionConfig.thinking }),
+          ...(sessionConfig.error === null ? {} : { error: sessionConfig.error }),
+          saving: sessionConfig.saving,
+          onModelPick: (value) => {
+            if (sessionConfig.model !== undefined) {
+              sessionConfig.setOption({ configId: sessionConfig.model.id, value })
+            }
+          },
+          onModeCycle: (next) => {
+            if (sessionConfig.mode !== undefined) {
+              sessionConfig.setOption({ configId: sessionConfig.mode.id, value: next })
+            }
+          },
+          onThinkingCycle: (next) => {
+            if (sessionConfig.thinking !== undefined) {
+              sessionConfig.setOption({ configId: sessionConfig.thinking.id, value: next })
+            }
+          },
+        }
 
   const agentsQuery = useAgentSettingsQuery()
   const agents = agentsQuery.data?.items ?? []
@@ -129,6 +159,7 @@ export const ChatShell: React.FC = () => {
           onRetryAttachment={chatAttachments.retry}
           onSend={send}
           onCancel={cancel}
+          config={composerConfig}
         />
       </div>
     </div>

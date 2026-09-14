@@ -1,3 +1,5 @@
+import { FakeConfigOption } from "./config.state"
+
 export type FakeAcpCapabilities = {
   loadSession: boolean
   sessionClose: boolean
@@ -7,6 +9,8 @@ export type FakeAcpCapabilities = {
 export type FakeAcpConfig = FakeAcpCapabilities & {
   sessionNewSessionId: string | undefined
   sessionLoadSessionId: string
+  configOptions: ReadonlyArray<FakeConfigOption>
+  setConfigOption: boolean
   sessionCloseFails: boolean
   sessionLoadFails: boolean
   sessionNewFailsWithAuthRequired: boolean
@@ -60,6 +64,21 @@ const readEnvString = (
 const stringEnv = (key: string, value: string | undefined): Record<string, string> | undefined =>
   value === undefined ? undefined : { [key]: value }
 
+export const parseConfigOptionsEnv = (
+  value: string | undefined,
+): ReadonlyArray<FakeConfigOption> => {
+  if (value === undefined) {
+    return []
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return Array.isArray(parsed) ? (parsed as FakeConfigOption[]) : []
+  } catch {
+    return []
+  }
+}
+
 export const readFakeAcpConfig = (
   env: Record<string, string | undefined> = process.env,
 ): FakeAcpConfig => ({
@@ -68,6 +87,8 @@ export const readFakeAcpConfig = (
   sessionList: parseBooleanEnv(env.FAKE_ACP_SESSION_LIST, true),
   sessionNewSessionId: env.FAKE_ACP_SESSION_NEW_SESSION_ID,
   sessionLoadSessionId: readEnvString(env, "FAKE_ACP_SESSION_LOAD_SESSION_ID", "fake-session-load"),
+  configOptions: parseConfigOptionsEnv(env.FAKE_ACP_CONFIG_OPTIONS),
+  setConfigOption: parseBooleanEnv(env.FAKE_ACP_SET_CONFIG_OPTION, true),
   sessionCloseFails: parseBooleanEnv(env.FAKE_ACP_SESSION_CLOSE_FAILS, false),
   sessionLoadFails: parseBooleanEnv(env.FAKE_ACP_SESSION_LOAD_FAILS, false),
   sessionNewFailsWithAuthRequired: parseBooleanEnv(
@@ -105,6 +126,8 @@ export type FakeAcpEnvOptions = {
   capabilities?: Partial<FakeAcpCapabilities>
   sessionNewSessionId?: string
   sessionLoadSessionId?: string
+  configOptions?: ReadonlyArray<FakeConfigOption>
+  setConfigOption?: boolean
   sessionCloseFails?: boolean
   sessionLoadFails?: boolean
   sessionNewFailsWithAuthRequired?: boolean
@@ -147,6 +170,10 @@ export const fakeAcpEnvFromCapabilities = (options: FakeAcpEnvOptions): Record<s
   FAKE_ACP_SESSION_LIST: String(options.capabilities?.sessionList ?? true),
   ...stringEnv("FAKE_ACP_SESSION_NEW_SESSION_ID", options.sessionNewSessionId),
   ...stringEnv("FAKE_ACP_SESSION_LOAD_SESSION_ID", options.sessionLoadSessionId),
+  ...(options.configOptions === undefined
+    ? {}
+    : { FAKE_ACP_CONFIG_OPTIONS: JSON.stringify(options.configOptions) }),
+  ...optionalBooleanEnv("FAKE_ACP_SET_CONFIG_OPTION", options.setConfigOption),
   ...optionalBooleanEnv("FAKE_ACP_SESSION_CLOSE_FAILS", options.sessionCloseFails),
   ...optionalBooleanEnv("FAKE_ACP_SESSION_LOAD_FAILS", options.sessionLoadFails),
   ...optionalBooleanEnv(

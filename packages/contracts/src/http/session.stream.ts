@@ -2,6 +2,7 @@ import { z } from "zod"
 import { AttachmentReferenceSchema, MAX_ATTACHMENTS_PER_PROMPT } from "./attachments"
 import { AgentAuthSchema } from "./agent-auth"
 import { AgentIdSchema } from "./agent-settings"
+import { SessionConfigSchema } from "./config.options"
 
 export const SessionStreamSubscribeSchema = z.strictObject({
   type: z.literal("subscribe"),
@@ -60,6 +61,13 @@ export const SessionStreamSessionUpdateSchema = z.strictObject({
   update: z.unknown(),
 })
 
+export const SessionStreamSessionConfigSchema = z.strictObject({
+  type: z.literal("session_config"),
+  agentId: AgentIdSchema,
+  sessionId: z.string().min(1),
+  configOptions: SessionConfigSchema,
+})
+
 export const SessionStreamSubscribedSchema = z.strictObject({
   type: z.literal("subscribed"),
   agentId: AgentIdSchema,
@@ -110,6 +118,7 @@ export const SessionStreamAuthSessionUpdatedSchema = z.strictObject({
 
 export const SessionStreamServerMessageSchema = z.discriminatedUnion("type", [
   SessionStreamSessionUpdateSchema,
+  SessionStreamSessionConfigSchema,
   SessionStreamSubscribedSchema,
   SessionStreamPermissionRequestSchema,
   SessionStreamExtensionRequestSchema,

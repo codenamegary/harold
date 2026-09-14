@@ -18,6 +18,7 @@
   --color-lime-ink: #10150c;
   --color-violet: #9d8cff;
   --color-violet-soft: #c0b6ff;
+  --color-sky: #7cc9f2;
   --color-line: #242a35;
   --color-line-soft: #1a1f28;
   --color-line-input: #2e3540;
@@ -183,6 +184,28 @@
   -webkit-background-clip: text;
   color: transparent;
   animation: thinking-shimmer 2.4s ease-in-out infinite;
+}
+
+/* Saving shimmer for the composer config labels — a soft light band sweeps
+   over the intact label (mode colors ride on currentColor and are never
+   masked), like a sheen passing across it. */
+.config-saving-label {
+  position: relative;
+}
+
+.config-saving-label::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    100deg,
+    transparent 42%,
+    rgba(255, 255, 255, 0.14) 50%,
+    transparent 58%
+  );
+  background-size: 220% 100%;
+  animation: thinking-shimmer 2s ease-in-out infinite;
 }
 
 /* Chat assistant Markdown — denser than Streamdown defaults, app tokens. */

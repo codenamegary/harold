@@ -1,4 +1,5 @@
 import { FakeAcpConfig } from "./config"
+import { FakeAcpConfigState, createFakeAcpConfigState } from "./config.state"
 import { FakeAcpPromptState } from "./prompt-state"
 import {
   isJsonRpcNotification,
@@ -262,6 +263,7 @@ const handleSessionNew = (
   request: JsonRpcRequest,
   config: FakeAcpConfig,
   promptState: FakeAcpPromptState,
+  configState: FakeAcpConfigState,
 ): HandlerResult => {
   if (config.sessionNewFailsWithAuthRequired) {
     return {
@@ -272,8 +274,12 @@ const handleSessionNew = (
 
   const sessionId = config.sessionNewSessionId ?? promptState.allocateSessionId()
   promptState.recordSession({ sessionId, cwd: readCwd(request.params) })
+  configState.initialize(sessionId)
   return {
-    response: jsonRpcResult(request.id, { sessionId }),
+    response: jsonRpcResult(request.id, {
+      sessionId,
+      ...(config.configOptions.length > 0 ? { configOptions: config.configOptions } : {}),
+    }),
     outbound: outboundAfterSessionNew(sessionId, config),
     notifications: config.emitAvailableCommandsOnNew
       ? [availableCommandsUpdate(sessionId)]
@@ -300,7 +306,11 @@ const handleSessionList = (
   }
 }
 
-const handleSessionLoad = (request: JsonRpcRequest, config: FakeAcpConfig): HandlerResult => {
+const handleSessionLoad = (
+  request: JsonRpcRequest,
+  config: FakeAcpConfig,
+  configState: FakeAcpConfigState,
+): HandlerResult => {
   if (!config.loadSession) {
     return {
       response: jsonRpcError(request.id, -32601, "loadSession not supported"),
@@ -315,8 +325,12 @@ const handleSessionLoad = (request: JsonRpcRequest, config: FakeAcpConfig): Hand
     }
   }
 
+  configState.initialize(config.sessionLoadSessionId)
   return {
-    response: jsonRpcResult(request.id, { sessionId: config.sessionLoadSessionId }),
+    response: jsonRpcResult(
+      request.id,
+      config.configOptions.length > 0 ? { configOptions: config.configOptions } : {},
+    ),
     notifications: config.emitLoadReplayUpdates
       ? loadReplayUpdates(config.sessionLoadSessionId)
       : [],
@@ -351,6 +365,56 @@ const handleSessionClose = (
 
   return {
     response: jsonRpcResult(request.id, {}),
+    ...emptyHandlerExtras(),
+  }
+}
+
+const handleSessionSetConfigOption = (
+  request: JsonRpcRequest,
+  config: FakeAcpConfig,
+  configState: FakeAcpConfigState,
+): HandlerResult => {
+  if (!config.setConfigOption) {
+    return {
+      response: jsonRpcError(request.id, -32601, "set_config_option not supported"),
+      ...emptyHandlerExtras(),
+    }
+  }
+
+  const params = request.params as {
+    sessionId?: string
+    configId?: string
+    value?: string | boolean
+  }
+  if (params.sessionId === undefined || params.configId === undefined) {
+    return {
+      response: jsonRpcError(request.id, -32602, "sessionId and configId are required"),
+      ...emptyHandlerExtras(),
+    }
+  }
+
+  const outcome = configState.apply(
+    params.sessionId,
+    params.configId,
+    params.value ?? "",
+  )
+  if (outcome === "unknown-session") {
+    return {
+      response: jsonRpcError(request.id, -32002, "session not found"),
+      ...emptyHandlerExtras(),
+    }
+  }
+  if (outcome === "invalid") {
+    return {
+      response: jsonRpcError(request.id, -32602, "unknown configId or invalid value"),
+      ...emptyHandlerExtras(),
+    }
+  }
+
+  return {
+    response: jsonRpcResult(request.id, {
+      configOptions: configState.get(params.sessionId),
+    }),
     ...emptyHandlerExtras(),
   }
 }
@@ -430,26 +494,31 @@ type RequestHandler = (
   request: JsonRpcRequest,
   config: FakeAcpConfig,
   promptState: FakeAcpPromptState,
+  configState: FakeAcpConfigState,
 ) => HandlerResult
 
 const requestHandlers: Record<string, RequestHandler> = {
   initialize: (request, config) => handleInitialize(request, config),
   authenticate: (request) => handleAuthenticate(request),
-  "session/new": (request, config, promptState) =>
-    handleSessionNew(request, config, promptState),
+  "session/new": (request, config, promptState, configState) =>
+    handleSessionNew(request, config, promptState, configState),
   "session/list": (request, config, promptState) =>
     handleSessionList(request, config, promptState),
-  "session/load": (request, config) => handleSessionLoad(request, config),
+  "session/load": (request, config, _promptState, configState) =>
+    handleSessionLoad(request, config, configState),
   "session/close": (request, config, promptState) =>
     handleSessionClose(request, config, promptState),
   "session/prompt": (request, config, promptState) =>
     handleSessionPrompt(request, config, promptState),
+  "session/set_config_option": (request, config, _promptState, configState) =>
+    handleSessionSetConfigOption(request, config, configState),
 }
 
 export const handleJsonRpcRequest = (
   request: JsonRpcRequest,
   config: FakeAcpConfig,
   promptState: FakeAcpPromptState,
+  configState: FakeAcpConfigState = createFakeAcpConfigState(config.configOptions),
 ): HandlerResult => {
   const handler = requestHandlers[request.method]
   if (!handler) {
@@ -459,7 +528,7 @@ export const handleJsonRpcRequest = (
     }
   }
 
-  return handler(request, config, promptState)
+  return handler(request, config, promptState, configState)
 }
 
 export const handleJsonRpcNotification = (
@@ -489,6 +558,7 @@ export const handleJsonRpcMessage = (
   message: JsonRpcMessage,
   config: FakeAcpConfig,
   promptState: FakeAcpPromptState,
+  configState: FakeAcpConfigState,
 ): HandlerResult | NotificationHandlerResult | undefined => {
   if (isJsonRpcNotification(message)) {
     return handleJsonRpcNotification(message, promptState)
@@ -498,7 +568,7 @@ export const handleJsonRpcMessage = (
     return undefined
   }
 
-  return handleJsonRpcRequest(message, config, promptState)
+  return handleJsonRpcRequest(message, config, promptState, configState)
 }
 
 export const shouldEmitDeferredNotification = (

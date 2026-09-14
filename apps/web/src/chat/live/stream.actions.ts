@@ -4,6 +4,7 @@ import { AttachmentReference } from "contracts/http/attachments"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
 import { ChatSelection } from "../selection/persist"
 import { selectionAtom } from "../selection/atoms"
+import { sessionConfigBySessionAtom } from "../config/atoms"
 import { parseAcpUpdate } from "./acp.update"
 import { parseAvailableCommands } from "./commands.available"
 import {
@@ -66,6 +67,17 @@ export const applyStreamMessageAtom = atom(
           transcriptAtom,
           foldAcpUpdate(get(transcriptAtom), parseAcpUpdate(message.update)),
         )
+        return noEffect
+      }
+      case "session_config": {
+        if (!belongsToSelection(selection, message)) {
+          return noEffect
+        }
+        set(sessionConfigBySessionAtom, (current) => {
+          const next = new Map(current)
+          next.set(message.sessionId, message.configOptions)
+          return next
+        })
         return noEffect
       }
       case "subscribed": {

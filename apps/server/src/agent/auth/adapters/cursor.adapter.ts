@@ -46,7 +46,9 @@ export const createCursorAuthAdapter = (
   return {
     id: "cursor",
     matches: (agentId) => CURSOR_AGENT_IDS.has(agentId),
-    clientAuthCapabilities: fallback.clientAuthCapabilities,
+    clientAuthCapabilities: () => ({
+      _meta: { parameterizedModelPicker: true },
+    }),
     hostLoginInstructions: (ctx) =>
       `Cursor is not signed in on this host (${ctx.hostMachineName}).\n\nOn the machine running Agent Server, open a terminal and run:\n  cursor-agent login\n\nWhen finished, tap I have logged in.`,
     probe: async (_ctx) => {

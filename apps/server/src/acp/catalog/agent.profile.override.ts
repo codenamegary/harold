@@ -6,6 +6,9 @@ export type AcpClientCapabilities = {
     readonly writeTextFile: true
   }
   readonly terminal: true
+  readonly _meta?: {
+    readonly parameterizedModelPicker?: boolean
+  }
 }
 
 export type PresenceProbeContext = {

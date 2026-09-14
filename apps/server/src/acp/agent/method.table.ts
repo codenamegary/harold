@@ -27,6 +27,7 @@ export const createAgentMethodTable = (): AgentMethodTable => {
     "session/load": new Map(),
     "session/list": new Map(),
     "session/close": new Map(),
+    "session/set_config_option": new Map(),
   }
 
   return {

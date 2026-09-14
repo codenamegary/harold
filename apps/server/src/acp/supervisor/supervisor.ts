@@ -8,6 +8,8 @@ import { agentMethodDeclarations } from "../agent/method.declarations"
 import { createAgentMethodTable } from "../agent/method.table"
 import { registerSessionCancelHandler } from "../agent/session.cancel"
 import { registerSessionCloseHandler } from "../agent/session.close"
+import { registerSessionSetConfigOptionHandler } from "../agent/session.set_config_option"
+import { AcpSetConfigOptionResult } from "../supervisor/models"
 import { registerSessionListHandler } from "../agent/session.list"
 import { registerSessionLoadHandler } from "../agent/session.load"
 import { registerSessionNewHandler } from "../agent/session.new"
@@ -163,6 +165,7 @@ export const createAcpSupervisor = ({
   agentSettingsRepository,
   serverVersion,
   onSessionUpdate = () => undefined,
+  onSessionConfig = () => undefined,
   onSessionDiscovered = () => undefined,
   requestPermission = createUnavailableRequestPermission(),
   requestExtensionRpc = createUnavailableRequestExtensionRpc(),
@@ -182,6 +185,7 @@ export const createAcpSupervisor = ({
   const sessionOwnership = createSessionOwnership()
   const agentMethodTable = createAgentMethodTable()
   registerSessionCloseHandler(agentMethodTable)
+  registerSessionSetConfigOptionHandler(agentMethodTable)
   registerSessionLoadHandler(agentMethodTable)
   registerSessionListHandler(agentMethodTable)
   registerSessionNewHandler(agentMethodTable)
@@ -571,7 +575,7 @@ export const createAcpSupervisor = ({
       return { ok: false, reason: "Agent does not support session/new" }
     }
 
-    return handler({
+    const result = await handler({
       params: {
         workspaceCwd: cwd,
         sessionId: "",
@@ -588,6 +592,68 @@ export const createAcpSupervisor = ({
           inventorySupportsRequiredCapability(runtime.capabilityInventory, path),
       },
     })
+
+    if (result.ok && result.configOptions.length > 0) {
+      onSessionConfig({
+        agentId,
+        acpSessionId: result.acpSessionId,
+        configOptions: result.configOptions,
+      })
+    }
+
+    return result
+  }
+
+  const setConfigOption = async ({
+    agentId,
+    sessionId,
+    configId,
+    value,
+  }: {
+    agentId: AgentId
+    sessionId: string
+    configId: string
+    value: string | boolean
+  }): Promise<AcpSetConfigOptionResult> => {
+    const runtime = getReadyRuntime(agentId)
+    if (runtime === null || runtime.transport === null) {
+      return { ok: false, kind: "error", reason: "ACP supervisor is not ready" }
+    }
+
+    const handler = agentMethodTable.resolve({
+      agentId,
+      method: "session/set_config_option",
+    })
+    if (handler === undefined) {
+      return {
+        ok: false,
+        kind: "unsupported",
+        reason: "Agent does not support session/set_config_option",
+      }
+    }
+
+    const result = await handler({
+      params: { acpSessionId: sessionId, configId, value },
+      context: {
+        agentId,
+        transport: runtime.transport,
+        sessionBindings: sessionBindingRegistry,
+        sessionOwnership,
+        onSessionDiscovered,
+        supportsCapability: (path) =>
+          inventorySupportsRequiredCapability(runtime.capabilityInventory, path),
+      },
+    })
+
+    if (result.ok) {
+      onSessionConfig({
+        agentId,
+        acpSessionId: sessionId,
+        configOptions: result.configOptions,
+      })
+    }
+
+    return result
   }
 
   const listAcpSessions = async (params?: {
@@ -685,7 +751,7 @@ export const createAcpSupervisor = ({
       return { ok: false, reason: "Agent does not support session/load" }
     }
 
-    return handler({
+    const result = await handler({
       params: { acpSessionId, workspaceCwd, sessionId, workspaceId },
       context: {
         agentId: runtime.agentId,
@@ -697,6 +763,16 @@ export const createAcpSupervisor = ({
           inventorySupportsRequiredCapability(runtime.capabilityInventory, path),
       },
     })
+
+    if (result.ok && result.configOptions.length > 0) {
+      onSessionConfig({
+        agentId: runtime.agentId,
+        acpSessionId: result.acpSessionId,
+        configOptions: result.configOptions,
+      })
+    }
+
+    return result
   }
 
   const closeAcpSession = async ({
@@ -908,6 +984,7 @@ export const createAcpSupervisor = ({
     listAcpSessions,
     createAcpSession,
     createSession,
+    setConfigOption,
     loadSession,
     loadAcpSession,
     closeAcpSession,
