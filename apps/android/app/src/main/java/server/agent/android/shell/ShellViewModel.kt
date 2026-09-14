@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import server.agent.android.live.SessionOwner
-import server.agent.android.events.ConnectionStatus
+import server.agent.android.stream.ConnectionStatus
 import server.agent.android.network.AgentApi
 import server.agent.android.network.AgentApiError
 import server.agent.android.network.AgentApiException

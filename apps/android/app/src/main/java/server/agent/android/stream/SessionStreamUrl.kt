@@ -1,4 +1,4 @@
-package server.agent.android.events
+package server.agent.android.stream
 
 const val SESSIONS_STREAM_PATH = "/v1/sessions/stream"
 

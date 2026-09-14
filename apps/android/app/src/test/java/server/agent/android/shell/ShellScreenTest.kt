@@ -17,8 +17,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import server.agent.android.events.ConnectionState
-import server.agent.android.events.ConnectionStatus
+import server.agent.android.stream.ConnectionState
+import server.agent.android.stream.ConnectionStatus
 import server.agent.android.session.PairedState
 import server.agent.android.ui.theme.AgentServerTheme
 

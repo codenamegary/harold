@@ -1,7 +1,7 @@
 package server.agent.android.shell
 
-import server.agent.android.events.ConnectionState
-import server.agent.android.events.ConnectionStatus
+import server.agent.android.stream.ConnectionState
+import server.agent.android.stream.ConnectionStatus
 import server.agent.android.session.PairedState
 
 sealed interface WorkspaceProbe {

@@ -1,4 +1,4 @@
-package server.agent.android.events
+package server.agent.android.stream
 
 sealed interface ConnectionStatus {
     data object Idle : ConnectionStatus

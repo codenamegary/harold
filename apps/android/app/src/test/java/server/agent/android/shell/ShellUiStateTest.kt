@@ -5,8 +5,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import server.agent.android.events.ConnectionState
-import server.agent.android.events.ConnectionStatus
+import server.agent.android.stream.ConnectionState
+import server.agent.android.stream.ConnectionStatus
 import server.agent.android.session.PairedState
 
 class ShellUiStateTest {

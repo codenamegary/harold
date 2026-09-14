@@ -4,7 +4,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.JsonElement
 import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.AttachmentReference
-import server.agent.android.events.ConnectionState
+import server.agent.android.stream.ConnectionState
 
 /**
  * Process-scoped owner of the session stream. Chat reads [snapshot] and

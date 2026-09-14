@@ -1,6 +1,8 @@
 package server.agent.android.contracts
 
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -357,6 +359,62 @@ class ContractDecodingTest {
 
         assertEquals(1, collection.items.size)
         assertEquals("agent-server", collection.items.single().name)
+    }
+
+    @Test
+    fun decodesSessionConfigStreamMessage() {
+        val message = SessionStreamJson.decodeFromString(
+            SessionStreamServerMessage.serializer(),
+            """
+            {
+              "type": "session_config",
+              "agentId": "cursor",
+              "sessionId": "sess_01",
+              "configOptions": [
+                {
+                  "id": "model",
+                  "name": "Model",
+                  "category": "model",
+                  "type": "select",
+                  "currentValue": "m1",
+                  "options": [{ "value": "m1", "name": "M1" }]
+                },
+                {
+                  "id": "thinking",
+                  "name": "Thinking",
+                  "type": "boolean",
+                  "currentValue": true
+                }
+              ]
+            }
+            """.trimIndent(),
+        )
+
+        val config = message as SessionStreamServerMessage.SessionConfig
+        assertEquals("cursor", config.agentId)
+        assertEquals("sess_01", config.sessionId)
+        assertEquals(2, config.configOptions.size)
+        assertEquals(
+            "model",
+            config.configOptions.first().jsonObject.getValue("id").jsonPrimitive.content,
+        )
+    }
+
+    @Test
+    fun rejectsSessionConfigWithNonArrayConfigOptions() {
+        assertThrowsSerialization {
+            SessionStreamJson.decodeFromString(
+                SessionStreamServerMessage.serializer(),
+                """
+                {
+                  "type": "session_config",
+                  "agentId": "cursor",
+                  "sessionId": "sess_01",
+                  "configOptions": { "id": "model" }
+                }
+                """.trimIndent(),
+            )
+        }
     }
 
     private fun assertThrowsSerialization(block: () -> Unit) {

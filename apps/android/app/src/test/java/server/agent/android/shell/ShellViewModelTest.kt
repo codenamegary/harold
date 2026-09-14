@@ -22,8 +22,8 @@ import server.agent.android.contracts.PageInfo
 import server.agent.android.contracts.Workspace
 import server.agent.android.contracts.WorkspaceCollection
 import server.agent.android.contracts.WorkspaceState
-import server.agent.android.events.ConnectionState
-import server.agent.android.events.ConnectionStatus
+import server.agent.android.stream.ConnectionState
+import server.agent.android.stream.ConnectionStatus
 import server.agent.android.live.SessionOwner
 import server.agent.android.live.SessionSnapshot
 import server.agent.android.network.AgentApi
