@@ -15,6 +15,7 @@ import org.robolectric.annotation.Config
 import server.agent.android.contracts.AgentAuthStatus
 import server.agent.android.contracts.AuthSessionAction
 import server.agent.android.contracts.AuthSessionStatus
+import server.agent.android.contracts.ConfigValue
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateWorkspaceBody
 import server.agent.android.contracts.WorkspaceState
@@ -279,6 +280,85 @@ class DefaultAgentApiTest {
                 status = 409,
                 title = "Conflict",
                 detail = "Agent is disabled",
+            ),
+            error,
+        )
+    }
+
+    @Test
+    fun setConfigOptionPutsTextValueWithAgentIdQuery() = runTest {
+        server.enqueue(MockResponse().setResponseCode(202))
+
+        val result = agentApi.setConfigOption(
+            serverOrigin = origin(),
+            agentId = "cursor",
+            sessionId = "sess_01",
+            configId = "model",
+            value = ConfigValue.Text("m2"),
+        )
+
+        val recorded = server.takeRequest()
+        assertEquals("PUT", recorded.method)
+        assertEquals(
+            "/v1/sessions/sess_01/config-options/model?agentId=cursor",
+            recorded.path,
+        )
+        assertEquals("""{"value":"m2"}""", recorded.body.readUtf8())
+        assertTrue(result.isSuccess)
+    }
+
+    @Test
+    fun setConfigOptionPutsBooleanValue() = runTest {
+        server.enqueue(MockResponse().setResponseCode(202))
+
+        val result = agentApi.setConfigOption(
+            serverOrigin = origin(),
+            agentId = "cursor",
+            sessionId = "sess_01",
+            configId = "thinking",
+            value = ConfigValue.Toggle(true),
+        )
+
+        val recorded = server.takeRequest()
+        assertEquals("""{"value":true}""", recorded.body.readUtf8())
+        assertTrue(result.isSuccess)
+    }
+
+    @Test
+    fun setConfigOptionMapsValidationProblem() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(422)
+                .setBody(
+                    """
+                    {
+                      "type": "https://agent-server.local/problems/validation-error",
+                      "title": "Config option rejected",
+                      "status": 422,
+                      "code": "validation.configOption.invalid",
+                      "errors": [
+                        { "pointer": "#/value", "code": "validation.configOption.invalid" }
+                      ]
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val error = errorOf(
+            agentApi.setConfigOption(
+                serverOrigin = origin(),
+                agentId = "cursor",
+                sessionId = "sess_01",
+                configId = "model",
+                value = ConfigValue.Text("m2"),
+            ),
+        )
+
+        assertEquals(
+            AgentApiError.Problem(
+                status = 422,
+                title = "Config option rejected",
+                detail = null,
             ),
             error,
         )

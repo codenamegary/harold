@@ -9,6 +9,7 @@ import server.agent.android.contracts.AttachmentKind
 import server.agent.android.contracts.AttachmentUploadRequest
 import server.agent.android.contracts.AgentSettingsCollection
 import server.agent.android.contracts.AuthSessionAction
+import server.agent.android.contracts.ConfigValue
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateSessionResponse
 import server.agent.android.contracts.CreateWorkspaceBody
@@ -119,5 +120,16 @@ interface AttachmentApi {
         serverOrigin: String,
         workspaceId: String,
         attachmentId: String,
+    ): Result<Unit>
+}
+
+/** Write surface for session config options. The session_config frame echoes the result. */
+interface SessionConfigApi {
+    suspend fun setConfigOption(
+        serverOrigin: String,
+        agentId: AgentId,
+        sessionId: String,
+        configId: String,
+        value: ConfigValue,
     ): Result<Unit>
 }
