@@ -16,20 +16,25 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import server.agent.android.chat.composer.ComposerConfigActions
+import server.agent.android.chat.composer.ComposerConfigUi
 import server.agent.android.chat.composer.completeSlashCommand
 import server.agent.android.ui.promptinput.applyEdit
 import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.AvailableCommand
+import server.agent.android.contracts.ConfigOptionValue
 import server.agent.android.contracts.PermissionOption
 import server.agent.android.contracts.PermissionOptionKind
 import server.agent.android.contracts.PermissionRequest
 import server.agent.android.contracts.PermissionStatus
+import server.agent.android.contracts.SelectOption
 import server.agent.android.contracts.SessionState
 import server.agent.android.ui.theme.AgentServerTheme
 
@@ -38,6 +43,68 @@ import server.agent.android.ui.theme.AgentServerTheme
 class ChatScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Test
+    fun rendersComposerConfigChipsAndForwardsModeCycle() {
+        var cycled: ConfigOptionValue? = null
+        val composerState = TextFieldState()
+        composeTestRule.setContent {
+            AgentServerTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        selectedSession = SessionRow(
+                            sessionId = "sess_01",
+                            name = "Alpha",
+                            cwd = "/tmp/agent-server",
+                            workspaceId = "ws_01",
+                            workspaceLabel = "agent-server",
+                            agentId = "cursor",
+                            agentLabel = "Cursor",
+                            state = SessionState.Idle,
+                            updatedAt = "2026-08-05T01:00:00.000Z",
+                        ),
+                        composerConfig = ComposerConfigUi(
+                            model = SelectOption(
+                                id = "model",
+                                name = "Model",
+                                category = "model",
+                                currentValue = "opus",
+                                options = listOf(
+                                    ConfigOptionValue(value = "opus", name = "Claude Opus 4.5"),
+                                ),
+                            ),
+                            mode = SelectOption(
+                                id = "mode",
+                                name = "Mode",
+                                category = "mode",
+                                currentValue = "agent",
+                                options = listOf(
+                                    ConfigOptionValue(value = "agent", name = "Agent"),
+                                    ConfigOptionValue(value = "plan", name = "Plan"),
+                                ),
+                            ),
+                        ),
+                    ),
+                    composerState = composerState,
+                    composerActions = ComposerConfigActions(onModeCycle = { cycled = it }),
+                    onSessionSelectorClick = {},
+                    onDismissSessionMenu = {},
+                    onWorkspacesClick = {},
+                    onSessionClick = {},
+                    onSeeAllSessionsClick = {},
+                    onCreateClick = {},
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onPermissionOptionSelect = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Claude Opus 4.5").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("composer_config_mode_chip").performClick()
+
+        assertEquals("plan", cycled?.value)
+    }
 
     @Test
     fun showsTranscriptAndSubmitsFollowUpPrompt() {

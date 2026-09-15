@@ -120,6 +120,10 @@ fun PromptComposer(
                     onSend = onVoiceSubmit,
                 )
             } else {
+                ComposerConfigRow(
+                    config = config,
+                    configActions = configActions,
+                )
                 TextSlot(
                     composerState = composerState,
                     composerEnabled = composerEnabled,

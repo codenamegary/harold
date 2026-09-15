@@ -23,6 +23,7 @@ val LineInput = Color(0xFF2E3540)
 
 val Violet = Color(0xFF9D8CFF)
 val VioletSoft = Color(0xFFC0B6FF)
+val Sky = Color(0xFF7CC9F2)
 val Danger = Color(0xFFFF756D)
 val Amber = Color(0xFFF4BC5F)
 

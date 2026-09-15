@@ -54,6 +54,11 @@
     <string name="command_list_empty">No matching commands</string>
     <string name="command_list_close_content_description">Close command list</string>
     <string name="composer_placeholder">Message</string>
+    <string name="composer_config_model_content_description">Model: %1$s. Change model.</string>
+    <string name="composer_config_mode_content_description">Mode: %1$s. Press for %2$s.</string>
+    <string name="composer_config_thinking_content_description">Thinking: %1$s. Press for %2$s.</string>
+    <string name="composer_config_model_title">Model</string>
+    <string name="composer_config_search_hint">Search models</string>
     <string name="voice_dictation_permission_body">Microphone permission is required for voice input.</string>
     <string name="voice_dictation_permission_grant">Allow microphone</string>
     <string name="voice_dictation_permission_grant_content_description">Request microphone permission</string>
