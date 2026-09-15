@@ -59,6 +59,9 @@
     <string name="composer_config_thinking_content_description">Thinking: %1$s. Press for %2$s.</string>
     <string name="composer_config_model_title">Model</string>
     <string name="composer_config_search_hint">Search models</string>
+    <string name="composer_config_thinking_toast">Thinking set to %1$s</string>
+    <string name="composer_config_model_placeholder">provider/model</string>
+    <string name="composer_config_mode_placeholder">mode</string>
     <string name="voice_dictation_permission_body">Microphone permission is required for voice input.</string>
     <string name="voice_dictation_permission_grant">Allow microphone</string>
     <string name="voice_dictation_permission_grant_content_description">Request microphone permission</string>

@@ -39,6 +39,7 @@ import server.agent.android.R
 import server.agent.android.chat.AttachmentUploadStatus
 import server.agent.android.chat.PendingAttachmentUi
 import server.agent.android.chat.VoiceDictationUiState
+import server.agent.android.contracts.SelectOption
 import server.agent.android.ui.components.AgentButtonVariant
 import server.agent.android.ui.components.AgentIconButton
 import server.agent.android.ui.components.AudioPill
@@ -84,18 +85,18 @@ fun PromptComposer(
 ) {
     val inVoiceMode = voice.visible
 
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-                .animateContentSize(),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+    if (inVoiceMode) {
+        Surface(
+            modifier = modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
         ) {
-            if (inVoiceMode) {
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .animateContentSize(),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 VoiceSlot(
                     voiceMessage = voiceMessage,
                     voiceCommandPrefix = voiceCommandPrefix,
@@ -119,35 +120,58 @@ fun PromptComposer(
                     onCommandToggle = onVoiceCommandToggle,
                     onSend = onVoiceSubmit,
                 )
-            } else {
+            }
+        }
+    } else {
+        Column(
+            modifier = modifier.fillMaxWidth(),
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 0.dp, bottomEnd = 0.dp),
+                color = MaterialTheme.colorScheme.surface,
+            ) {
                 ComposerConfigRow(
                     config = config,
                     configActions = configActions,
                 )
-                TextSlot(
-                    composerState = composerState,
-                    composerEnabled = composerEnabled,
-                )
-                PendingAttachmentChips(
-                    attachments = pendingAttachments,
-                    onRemove = onRemoveAttachment,
-                )
-                TextActionRail(
-                    composerEnabled = composerEnabled,
-                    sendEnabled = composerEnabled && composerState.text.isNotBlank(),
-                    showCancel = showCancel,
-                    cancelSubmitting = cancelSubmitting,
-                    voiceMicEnabled = voiceMicEnabled,
-                    micContentDescription = micContentDescription,
-                    supportsImages = supportsImages,
-                    supportsFiles = supportsFiles,
-                    onAttachPhoto = onAttachPhoto,
-                    onAttachFiles = onAttachFiles,
-                    onSlashClick = onSlashClick,
-                    onCancel = onCancel,
-                    onMicClick = onMicClick,
-                    onSubmit = onSubmit,
-                )
+            }
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 24.dp, bottomEnd = 24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .animateContentSize(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    TextSlot(
+                        composerState = composerState,
+                        composerEnabled = composerEnabled,
+                    )
+                    PendingAttachmentChips(
+                        attachments = pendingAttachments,
+                        onRemove = onRemoveAttachment,
+                    )
+                    TextActionRail(
+                        composerEnabled = composerEnabled,
+                        sendEnabled = composerEnabled && composerState.text.isNotBlank(),
+                        showCancel = showCancel,
+                        cancelSubmitting = cancelSubmitting,
+                        voiceMicEnabled = voiceMicEnabled,
+                        micContentDescription = micContentDescription,
+                        supportsImages = supportsImages,
+                        supportsFiles = supportsFiles,
+                        onAttachPhoto = onAttachPhoto,
+                        onAttachFiles = onAttachFiles,
+                        onSlashClick = onSlashClick,
+                        onCancel = onCancel,
+                        onMicClick = onMicClick,
+                        onSubmit = onSubmit,
+                    )
+                }
             }
         }
     }

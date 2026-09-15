@@ -2,7 +2,7 @@ package server.agent.android.chat.composer
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -41,8 +41,11 @@ class ComposerConfigRowTest {
         composeTestRule.onNodeWithTag("composer_config_mode_chip").assertIsDisplayed()
         composeTestRule.onNodeWithTag("composer_config_thinking_chip").assertIsDisplayed()
         composeTestRule.onNodeWithText("Claude Opus 4.5").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Agent").assertIsDisplayed()
-        composeTestRule.onNodeWithText("High").assertIsDisplayed()
+        composeTestRule.onNodeWithText("AGENT").assertIsDisplayed()
+        // 3 bars rendered for 3 options
+        composeTestRule.onNodeWithTag("composer_config_thinking_bar_0", useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithTag("composer_config_thinking_bar_1", useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithTag("composer_config_thinking_bar_2", useUnmergedTree = true).assertExists()
     }
 
     @Test
@@ -65,10 +68,19 @@ class ComposerConfigRowTest {
     }
 
     @Test
-    fun rendersNothingWithoutOptions() {
+    fun rendersEmptyPlaceholdersWithoutOptions() {
         setRow(ComposerConfigUi())
 
-        composeTestRule.onAllNodesWithTag("composer_config_row").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("composer_config_row").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("composer_config_model_placeholder").assertIsDisplayed()
+        composeTestRule.onNodeWithText("provider/model").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("composer_config_mode_placeholder").assertIsDisplayed()
+        composeTestRule.onNodeWithText("mode").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("composer_config_thinking_placeholder").assertIsDisplayed()
+        for (i in 0 until 4) {
+            composeTestRule.onNodeWithTag("composer_config_thinking_placeholder_bar_$i", useUnmergedTree = true).assertExists()
+        }
+        composeTestRule.onAllNodesWithTag("composer_config_thinking_placeholder_bar_4", useUnmergedTree = true).assertCountEquals(0)
     }
 
     @Test
@@ -98,17 +110,41 @@ class ComposerConfigRowTest {
     }
 
     @Test
-    fun thinkingCycleStripsPrefixAndPassesNext() {
+    fun thinkingCycleStripsPrefixPassesNextAndShowsToast() {
         var picked: ConfigOptionValue? = null
         setRow(
             ComposerConfigUi(thinking = thinkingOption(currentValue = "high")),
             ComposerConfigActions(onThinkingCycle = { picked = it }),
         )
 
-        composeTestRule.onNodeWithText("High").assertIsDisplayed()
         composeTestRule.onNodeWithTag("composer_config_thinking_chip").performClick()
 
         assertEquals("low", picked?.value)
+        composeTestRule.onNodeWithTag("composer_thinking_toast").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Thinking set to Low").assertIsDisplayed()
+    }
+
+    @Test
+    fun dynamicStepperRendersNBarsForNOptions() {
+        val fiveOptions = SelectOption(
+            id = "thinking",
+            name = "Thinking",
+            category = "thought_level",
+            currentValue = "level_3",
+            options = listOf(
+                ConfigOptionValue(value = "level_1", name = "Level 1"),
+                ConfigOptionValue(value = "level_2", name = "Level 2"),
+                ConfigOptionValue(value = "level_3", name = "Level 3"),
+                ConfigOptionValue(value = "level_4", name = "Level 4"),
+                ConfigOptionValue(value = "level_5", name = "Level 5"),
+            ),
+        )
+        setRow(ComposerConfigUi(thinking = fiveOptions))
+
+        for (i in 0 until 5) {
+            composeTestRule.onNodeWithTag("composer_config_thinking_bar_$i", useUnmergedTree = true).assertExists()
+        }
+        composeTestRule.onAllNodesWithTag("composer_config_thinking_bar_5", useUnmergedTree = true).assertCountEquals(0)
     }
 
     @Test
@@ -136,7 +172,7 @@ class ComposerConfigRowTest {
     }
 
     @Test
-    fun savingDisablesChips() {
+    fun savingLeavesChipsEnabledAndShowsSavingBeam() {
         setRow(
             ComposerConfigUi(
                 model = modelOption(),
@@ -146,9 +182,10 @@ class ComposerConfigRowTest {
             ),
         )
 
-        composeTestRule.onNodeWithTag("composer_config_model_chip").assertIsNotEnabled()
-        composeTestRule.onNodeWithTag("composer_config_mode_chip").assertIsNotEnabled()
-        composeTestRule.onNodeWithTag("composer_config_thinking_chip").assertIsNotEnabled()
+        composeTestRule.onNodeWithTag("composer_config_model_chip").assertIsEnabled()
+        composeTestRule.onNodeWithTag("composer_config_mode_chip").assertIsEnabled()
+        composeTestRule.onNodeWithTag("composer_config_thinking_chip").assertIsEnabled()
+        composeTestRule.onNodeWithTag("composer_config_saving_beam").assertIsDisplayed()
     }
 
     @Test
