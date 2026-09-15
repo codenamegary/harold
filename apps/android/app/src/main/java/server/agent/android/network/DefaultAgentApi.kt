@@ -3,6 +3,8 @@ package server.agent.android.network
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
@@ -20,6 +22,7 @@ import server.agent.android.contracts.AttachmentUploadRequest
 import server.agent.android.contracts.AgentServerJson
 import server.agent.android.contracts.AgentSettingsCollection
 import server.agent.android.contracts.AuthSessionAction
+import server.agent.android.contracts.ConfigValue
 import server.agent.android.contracts.ConflictProblem
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateSessionResponse
@@ -39,7 +42,7 @@ import server.agent.android.contracts.WorkspaceCollection
 class DefaultAgentApi(
     private val client: OkHttpClient,
     private val json: Json = AgentServerJson,
-) : AgentApi, AttachmentApi {
+) : AgentApi, AttachmentApi, SessionConfigApi {
     override suspend fun listWorkspaces(
         serverOrigin: String,
         limit: Int,
@@ -130,6 +133,28 @@ class DefaultAgentApi(
             failure(AgentApiError.Transport(error))
         }
     }
+
+    override suspend fun setConfigOption(
+        serverOrigin: String,
+        agentId: AgentId,
+        sessionId: String,
+        configId: String,
+        value: ConfigValue,
+    ): Result<Unit> = request(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/sessions/$sessionId/config-options/$configId",
+        query = mapOf("agentId" to agentId),
+        method = "PUT",
+        body = JsonObject(
+            mapOf(
+                "value" to when (value) {
+                    is ConfigValue.Text -> JsonPrimitive(value.value)
+                    is ConfigValue.Toggle -> JsonPrimitive(value.value)
+                },
+            ),
+        ).toString(),
+        decode = { Unit },
+    )
 
     override suspend fun getRuntimeSettings(serverOrigin: String): Result<RuntimeSettingsView> = get(
         serverOrigin = serverOrigin,

@@ -24,6 +24,7 @@ import server.agent.android.chat.ChatScreen
 import server.agent.android.chat.ChatViewModel
 import server.agent.android.chat.ChatViewModelFactory
 import server.agent.android.network.AttachmentApi
+import server.agent.android.network.SessionConfigApi
 import server.agent.android.chat.HandlerVoiceDictationRestartScheduler
 import server.agent.android.chat.VoiceDictationController
 import server.agent.android.chat.VoskSpeechRecognitionClient
@@ -54,7 +55,6 @@ fun AppNavHost(
             silenceScheduler = HandlerVoiceDictationRestartScheduler(),
         )
     }
-    val composerActions = remember { ComposerConfigActions() }
     val shellViewModel: ShellViewModel = viewModel(
         factory = ShellViewModelFactory(
             sessionGateway = appContainer.sessionGateway,
@@ -124,6 +124,7 @@ fun AppNavHost(
                     sessionOwner = appContainer.sessionOwner,
                     operatorRepository = appContainer.operatorRepository,
                     attachmentApi = appContainer.agentApi as AttachmentApi,
+                    configApi = appContainer.agentApi as SessionConfigApi,
                     navigationPreferences = appContainer.navigationPreferences,
                     activeSessionTracker = appContainer.activeSessionTracker,
                     sessionForegroundCoordinator = appContainer.sessionForegroundCoordinator,
@@ -147,7 +148,13 @@ fun AppNavHost(
             ChatScreen(
                 uiState = chatUiState,
                 composerState = chatViewModel.composerState,
-                composerActions = composerActions,
+                composerActions = remember(chatViewModel) {
+                    ComposerConfigActions(
+                        onModelPick = chatViewModel::onModelPick,
+                        onModeCycle = chatViewModel::onModeCycle,
+                        onThinkingCycle = chatViewModel::onThinkingCycle,
+                    )
+                },
                 onAttachmentsPicked = chatViewModel::onAttachmentsPicked,
                 onRemoveAttachment = chatViewModel::removeAttachment,
                 onSessionSelectorClick = chatViewModel::showPicker,
@@ -206,6 +213,7 @@ fun AppNavHost(
                     sessionOwner = appContainer.sessionOwner,
                     operatorRepository = appContainer.operatorRepository,
                     attachmentApi = appContainer.agentApi as AttachmentApi,
+                    configApi = appContainer.agentApi as SessionConfigApi,
                     navigationPreferences = appContainer.navigationPreferences,
                     activeSessionTracker = appContainer.activeSessionTracker,
                     sessionForegroundCoordinator = appContainer.sessionForegroundCoordinator,
@@ -243,6 +251,7 @@ fun AppNavHost(
                     sessionOwner = appContainer.sessionOwner,
                     operatorRepository = appContainer.operatorRepository,
                     attachmentApi = appContainer.agentApi as AttachmentApi,
+                    configApi = appContainer.agentApi as SessionConfigApi,
                     navigationPreferences = appContainer.navigationPreferences,
                     activeSessionTracker = appContainer.activeSessionTracker,
                     sessionForegroundCoordinator = appContainer.sessionForegroundCoordinator,

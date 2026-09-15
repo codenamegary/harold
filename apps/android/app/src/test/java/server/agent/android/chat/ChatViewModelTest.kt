@@ -27,10 +27,12 @@ import server.agent.android.contracts.AttachmentUploadRequest
 import server.agent.android.network.AgentApiError
 import server.agent.android.network.AgentApiException
 import server.agent.android.network.AttachmentApi
+import server.agent.android.network.SessionConfigApi
 import server.agent.android.contracts.AgentSettings
 import server.agent.android.contracts.AgentSettingsCollection
 import server.agent.android.contracts.BooleanOption
 import server.agent.android.contracts.ConfigOptionValue
+import server.agent.android.contracts.ConfigValue
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.CreateSessionResponse
 import server.agent.android.contracts.PageInfo
@@ -310,6 +312,120 @@ class ChatViewModelTest {
         assertEquals("m2", (config.model as SelectOption).currentValue)
         assertNull(config.mode)
         assertTrue((config.thinking as BooleanOption).currentValue)
+    }
+
+    @Test
+    fun modelPickAppliesOptimisticallyAndCallsTheApi() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val configApi = RecordingSessionConfigApi()
+        val viewModel = createViewModel(
+            repository = ChatFakeOperatorRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = sessionOwner,
+            configApi = configApi,
+        )
+
+        advanceUntilIdle()
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                configOptions = listOf(modelOption(currentValue = "m1")),
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.onModelPick("m2")
+        advanceUntilIdle()
+
+        assertEquals(
+            "m2",
+            (viewModel.uiState.value.composerConfig.model as SelectOption).currentValue,
+        )
+        assertTrue(viewModel.uiState.value.composerConfig.saving)
+        assertEquals(
+            listOf(
+                RecordingSessionConfigApi.Call(
+                    serverOrigin = ORIGIN,
+                    agentId = "cursor",
+                    sessionId = "sess_02",
+                    configId = "model",
+                    value = ConfigValue.Text("m2"),
+                ),
+            ),
+            configApi.calls,
+        )
+    }
+
+    @Test
+    fun configEchoSettlesTheOptimisticPick() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = ChatFakeOperatorRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = sessionOwner,
+        )
+
+        advanceUntilIdle()
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                configOptions = listOf(modelOption(currentValue = "m1")),
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.onModelPick("m2")
+        advanceUntilIdle()
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                configOptions = listOf(modelOption(currentValue = "m2")),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.composerConfig.saving)
+        assertEquals(
+            "m2",
+            (viewModel.uiState.value.composerConfig.model as SelectOption).currentValue,
+        )
+    }
+
+    @Test
+    fun modeCycleUsesTheReservedOptionId() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val configApi = RecordingSessionConfigApi()
+        val viewModel = createViewModel(
+            repository = ChatFakeOperatorRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = sessionOwner,
+            configApi = configApi,
+        )
+
+        advanceUntilIdle()
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                configOptions = listOf(
+                    SelectOption(
+                        id = "mode",
+                        name = "Mode",
+                        category = "mode",
+                        currentValue = "ask",
+                        options = listOf(ConfigOptionValue(value = "ask", name = "Ask")),
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.onModeCycle(ConfigOptionValue(value = "plan", name = "Plan"))
+        advanceUntilIdle()
+
+        assertEquals("mode", configApi.calls.single().configId)
+        assertEquals(ConfigValue.Text("plan"), configApi.calls.single().value)
     }
 
     @Test
@@ -684,12 +800,14 @@ class ChatViewModelTest {
         sessionGateway: ChatFakeSessionGateway = ChatFakeSessionGateway(
             PairedState.Paired(ORIGIN, "device_01", "Pixel"),
         ),
+        configApi: SessionConfigApi = RecordingSessionConfigApi(),
     ): ChatViewModel = ChatViewModel(
         savedStateHandle = SavedStateHandle(),
         sessionGateway = sessionGateway,
         sessionOwner = sessionOwner,
         operatorRepository = repository,
         attachmentApi = NoopAttachmentApi(),
+        configApi = configApi,
         navigationPreferences = navigation,
         voiceDictationController = VoiceDictationController(
             speechClient = FakeSpeechRecognitionClient(),
@@ -698,8 +816,39 @@ class ChatViewModelTest {
         ),
     )
 
+    private fun modelOption(currentValue: String): SelectOption = SelectOption(
+        id = "model",
+        name = "Model",
+        category = "model",
+        currentValue = currentValue,
+        options = listOf(ConfigOptionValue(value = currentValue, name = currentValue)),
+    )
+
     private companion object {
         const val ORIGIN = "http://127.0.0.1:8787"
+    }
+}
+
+private class RecordingSessionConfigApi : SessionConfigApi {
+    data class Call(
+        val serverOrigin: String,
+        val agentId: String,
+        val sessionId: String,
+        val configId: String,
+        val value: ConfigValue,
+    )
+
+    val calls = mutableListOf<Call>()
+
+    override suspend fun setConfigOption(
+        serverOrigin: String,
+        agentId: String,
+        sessionId: String,
+        configId: String,
+        value: ConfigValue,
+    ): Result<Unit> {
+        calls += Call(serverOrigin, agentId, sessionId, configId, value)
+        return Result.success(Unit)
     }
 }
 

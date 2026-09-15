@@ -19,6 +19,13 @@ sealed interface ConfigOption {
     val category: String?
 }
 
+/** A writable value: the PUT body's `string | boolean` union. */
+sealed interface ConfigValue {
+    data class Text(val value: String) : ConfigValue
+
+    data class Toggle(val value: Boolean) : ConfigValue
+}
+
 @Serializable
 @SerialName("select")
 data class SelectOption(

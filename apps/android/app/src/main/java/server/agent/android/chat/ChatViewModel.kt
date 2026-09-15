@@ -20,8 +20,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.joinAll
 import kotlinx.serialization.json.JsonObject
 import server.agent.android.chat.composer.ComposerConfigUi
+import server.agent.android.chat.composer.SessionConfigWriter
 import server.agent.android.chat.composer.completeSlashCommand
-import server.agent.android.chat.composer.composerConfigOf
 import server.agent.android.chat.composer.supportsFileAttachments
 import server.agent.android.chat.composer.supportsImageAttachments
 import server.agent.android.contracts.AgentAuth
@@ -30,6 +30,8 @@ import server.agent.android.contracts.AgentAuthSummary
 import server.agent.android.contracts.AgentId
 import server.agent.android.contracts.AuthSessionAction
 import server.agent.android.contracts.AuthSessionStatus
+import server.agent.android.contracts.ConfigOptionValue
+import server.agent.android.contracts.ConfigValue
 import server.agent.android.contracts.CreateSessionBody
 import server.agent.android.contracts.Session
 import server.agent.android.contracts.SessionState
@@ -39,6 +41,7 @@ import server.agent.android.contracts.toSummary
 import server.agent.android.network.AgentApiError
 import server.agent.android.network.AgentApiException
 import server.agent.android.network.AttachmentApi
+import server.agent.android.network.SessionConfigApi
 import server.agent.android.live.SessionOwner
 import server.agent.android.live.SessionSnapshot
 import server.agent.android.stream.ConnectionStatus
@@ -59,6 +62,7 @@ class ChatViewModel(
     private val sessionOwner: SessionOwner,
     private val operatorRepository: OperatorRepository,
     private val attachmentApi: AttachmentApi,
+    private val configApi: SessionConfigApi,
     private val navigationPreferences: NavigationPreferences,
     private val activeSessionTracker: ActiveSessionTracker? = null,
     private val sessionForegroundCoordinator: SessionForegroundCoordinator? = null,
@@ -67,6 +71,8 @@ class ChatViewModel(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+
+    private val configWriter = SessionConfigWriter(configApi, viewModelScope)
 
     /**
      * The composer's text and caret. The prompt input paints its tokens from
@@ -125,6 +131,12 @@ class ChatViewModel(
 
         viewModelScope.launch {
             sessionOwner.snapshot.collect(::applyLiveSnapshot)
+        }
+
+        viewModelScope.launch {
+            configWriter.state.collect { config ->
+                _uiState.update { current -> current.copy(composerConfig = config) }
+            }
         }
 
         viewModelScope.launch {
@@ -284,6 +296,21 @@ class ChatViewModel(
         _uiState.update { current ->
             current.copy(composerText = text, composerError = null)
         }
+    }
+
+    fun onModelPick(value: String) {
+        val configId = _uiState.value.composerConfig.model?.id ?: return
+        configWriter.set(configId, ConfigValue.Text(value))
+    }
+
+    fun onModeCycle(value: ConfigOptionValue) {
+        val configId = _uiState.value.composerConfig.mode?.id ?: return
+        configWriter.set(configId, ConfigValue.Text(value.value))
+    }
+
+    fun onThinkingCycle(value: ConfigOptionValue) {
+        val configId = _uiState.value.composerConfig.thinking?.id ?: return
+        configWriter.set(configId, ConfigValue.Text(value.value))
     }
 
     /** Applies a token-aware edit, keeping the caret the edit asked for. */
@@ -1056,6 +1083,13 @@ class ChatViewModel(
             null
         }
 
+        configWriter.onSnapshot(
+            serverOrigin = (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin,
+            agentId = snapshot.agentId,
+            sessionId = snapshot.sessionId,
+            configOptions = snapshot.configOptions,
+        )
+
         _uiState.update { current ->
             val extensionUi = when {
                 snapshot.extension == null -> ExtensionUiState()
@@ -1072,7 +1106,6 @@ class ChatViewModel(
                 transcript = snapshot.transcript,
                 streamReconnecting = snapshot.reconnecting,
                 availableCommands = snapshot.availableCommands,
-                composerConfig = composerConfigOf(snapshot.configOptions),
                 pendingPermissions = listOfNotNull(snapshot.pendingPermission),
                 permissionUiState = permissionUi,
                 extensionUiState = extensionUi,
@@ -1416,6 +1449,7 @@ class ChatViewModelFactory(
     private val sessionOwner: SessionOwner,
     private val operatorRepository: OperatorRepository,
     private val attachmentApi: AttachmentApi,
+    private val configApi: SessionConfigApi,
     private val navigationPreferences: NavigationPreferences,
     private val activeSessionTracker: ActiveSessionTracker,
     private val sessionForegroundCoordinator: SessionForegroundCoordinator,
@@ -1431,6 +1465,7 @@ class ChatViewModelFactory(
                 sessionOwner = sessionOwner,
                 operatorRepository = operatorRepository,
                 attachmentApi = attachmentApi,
+                configApi = configApi,
                 navigationPreferences = navigationPreferences,
                 activeSessionTracker = activeSessionTracker,
                 sessionForegroundCoordinator = sessionForegroundCoordinator,
