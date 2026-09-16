@@ -1,4 +1,5 @@
 import {
+  CreateWorkspaceBody,
   CreateWorkspaceBodySchema,
   DeleteWorkspaceQuerySchema,
   ListWorkspacesQuerySchema,
@@ -7,9 +8,13 @@ import {
   WorkspaceSchema,
 } from "contracts/http/workspace"
 import { FastifyInstance } from "fastify"
-import { WorkspaceRepository } from "./repository"
-import { WorkspaceService } from "./service"
-import { DeleteWorkspaceCommand, DeleteWorkspaceResult } from "./delete.usecase"
+import { RegisterWorkspaceResult } from "./workspace.register.usecase"
+import {
+  DeleteWorkspace,
+  FindWorkspaceById,
+  ListWorkspaces,
+  UpdateWorkspaceName,
+} from "./workspace.ports"
 import {
   buildConflictProblem,
   buildInvalidCursorProblem,
@@ -25,15 +30,18 @@ const sendProblem = (
   problem: unknown,
 ) => reply.status(status).type("application/problem+json").send(problem)
 
-export const registerWorkspaceRoutes = (
-  app: FastifyInstance,
-  repository: WorkspaceRepository,
-  workspaceService: WorkspaceService,
-  deleteWorkspace: (command: DeleteWorkspaceCommand) => Promise<DeleteWorkspaceResult>,
-) => {
+export type WorkspaceRouteDeps = Readonly<{
+  registerWorkspace: (body: CreateWorkspaceBody) => RegisterWorkspaceResult
+  listWorkspaces: ListWorkspaces
+  findWorkspaceById: FindWorkspaceById
+  updateWorkspaceName: UpdateWorkspaceName
+  deleteWorkspace: DeleteWorkspace
+}>
+
+export const registerWorkspaceRoutes = (app: FastifyInstance, deps: WorkspaceRouteDeps) => {
   app.post("/v1/workspaces", async (request, reply) => {
     const body = CreateWorkspaceBodySchema.parse(request.body)
-    const result = workspaceService.create(body)
+    const result = deps.registerWorkspace(body)
 
     if (!result.ok) {
       if (result.error.kind === "path") {
@@ -50,7 +58,7 @@ export const registerWorkspaceRoutes = (
 
   app.get("/v1/workspaces", async (request, reply) => {
     const query = ListWorkspacesQuerySchema.parse(request.query)
-    const result = repository.list(query)
+    const result = deps.listWorkspaces(query)
 
     if (!result.ok) {
       return sendProblem(reply, 400, buildInvalidCursorProblem())
@@ -71,7 +79,7 @@ export const registerWorkspaceRoutes = (
 
   app.get("/v1/workspaces/:workspaceId", async (request, reply) => {
     const { workspaceId } = request.params as { workspaceId: string }
-    const result = repository.getById({ id: workspaceId })
+    const result = deps.findWorkspaceById({ id: workspaceId })
 
     if (!result.ok) {
       return sendProblem(reply, 404, buildNotFoundProblem())
@@ -83,7 +91,7 @@ export const registerWorkspaceRoutes = (
   app.patch("/v1/workspaces/:workspaceId", async (request, reply) => {
     const { workspaceId } = request.params as { workspaceId: string }
     const body = UpdateWorkspaceBodySchema.parse(request.body)
-    const result = workspaceService.updateName({ id: workspaceId, ...body })
+    const result = deps.updateWorkspaceName({ id: workspaceId, name: body.name })
 
     if (!result.ok) {
       return sendProblem(reply, 404, buildNotFoundProblem())
@@ -97,7 +105,7 @@ export const registerWorkspaceRoutes = (
     const query = DeleteWorkspaceQuerySchema.parse(request.query)
     const force = query.force ?? false
 
-    const deleted = await deleteWorkspace({
+    const deleted = await deps.deleteWorkspace({
       workspaceId,
       force,
     })

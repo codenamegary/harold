@@ -1,5 +1,5 @@
 import { Workspace } from "contracts/http/workspace"
-import { isPathUnderAllowedRoot } from "../workspace/is.path.under.allowed.root"
+import { isPathUnderAllowedRoot } from "../workspace/workspace.is.path.under.allowed.root"
 
 export const findWorkspacesAffectedByRootRemoval = (params: {
   workspaces: readonly Workspace[]

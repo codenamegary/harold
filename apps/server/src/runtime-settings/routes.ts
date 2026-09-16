@@ -5,8 +5,7 @@ import {
 } from "contracts/http/runtime-settings"
 import { FastifyInstance } from "fastify"
 import { EnvBindOverrides } from "../config/env.bind.overrides"
-import { DeleteWorkspaceCommand, DeleteWorkspaceResult } from "../workspace/delete.usecase"
-import { ListAllWorkspaces } from "../workspace/workspace.ports"
+import { DeleteWorkspace, ListAllWorkspaces } from "../workspace/workspace.ports"
 import { canonicalizeAllowedRoots } from "./canonicalize.allowed.roots"
 import { findWorkspacesAffectedByRootRemoval } from "./find.workspaces.affected.by.root.removal"
 import { RuntimeSettingsRepository } from "./repository"
@@ -20,7 +19,7 @@ import { buildRuntimeSettingsView } from "./resolve.runtime.settings.state"
 export type RegisterRuntimeSettingsRoutesOptions = {
   onLogLevelChanged?: (logLevel: LogLevel) => void
   listAllWorkspaces: ListAllWorkspaces
-  deleteWorkspace: (command: DeleteWorkspaceCommand) => Promise<DeleteWorkspaceResult>
+  deleteWorkspace: DeleteWorkspace
   appliedRuntimeSettings?: AppliedRuntimeSettingsHolder
   envBindOverrides?: EnvBindOverrides
 }

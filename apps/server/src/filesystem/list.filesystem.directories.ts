@@ -1,7 +1,7 @@
 import { readdirSync, realpathSync, statSync } from "node:fs"
 import path from "node:path"
 import { canonicalizePath } from "./filesystem.canonicalize.path"
-import { isPathUnderAllowedRoot } from "../workspace/is.path.under.allowed.root"
+import { isPathUnderAllowedRoot } from "../workspace/workspace.is.path.under.allowed.root"
 import { FilesystemPathError } from "./filesystem.errors"
 
 export type FilesystemDirectoryItem = {

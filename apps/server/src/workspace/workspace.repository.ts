@@ -6,8 +6,8 @@ import {
 } from "contracts/http/workspace"
 import { AgentDatabase, DbExecutor } from "../persistence/database"
 import { workspaces } from "../persistence/schema/workspaces"
-import { createWorkspaceId } from "./create.workspace.id"
-import { probeWorkspaceState } from "./probe.workspace.state"
+import { createWorkspaceId } from "./workspace.create.workspace.id"
+import { probeWorkspaceState } from "./workspace.probe.workspace.state"
 import { InsertWorkspace, InsertWorkspaceInput } from "./workspace.ports"
 import { WorkspaceRepositoryError } from "./workspace.errors"
 import {

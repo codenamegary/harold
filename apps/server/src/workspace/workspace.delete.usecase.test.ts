@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Workspace } from "contracts/http/workspace"
-import { makeDeleteWorkspace } from "./delete.usecase"
+import { makeDeleteWorkspace } from "./workspace.delete.usecase"
 import { WorkspaceLiveSession } from "./workspace.ports"
 
 const storedWorkspace: Workspace = {

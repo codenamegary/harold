@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Workspace } from "contracts/http/workspace"
-import { makeRegisterWorkspace } from "./register.usecase"
+import { makeRegisterWorkspace } from "./workspace.register.usecase"
 
 const storedWorkspace = (input: {
   name: string

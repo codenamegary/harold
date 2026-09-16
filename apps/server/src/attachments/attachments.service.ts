@@ -7,7 +7,7 @@ import {
   AttachmentReference,
   BLOCKED_ATTACHMENT_EXTENSIONS,
 } from "contracts/http/attachments"
-import { isPathUnderAllowedRoot } from "../workspace/is.path.under.allowed.root"
+import { isPathUnderAllowedRoot } from "../workspace/workspace.is.path.under.allowed.root"
 import { ensureAttachmentsDir, ensureGitignoreEntry } from "./gitignore"
 
 const ATTACHMENT_ID_PREFIX = "att_"

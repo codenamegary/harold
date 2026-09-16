@@ -1,13 +1,13 @@
 import { FastifyInstance } from "fastify"
 import { AgentDatabase } from "../persistence/database"
 import { canonicalizePath } from "../filesystem/filesystem.canonicalize.path"
-import { makeDeleteWorkspace } from "./delete.usecase"
-import { makeRegisterWorkspace } from "./register.usecase"
-import { createWorkspaceRepository } from "./repository"
-import { registerWorkspaceRoutes } from "./routes"
-import { createWorkspaceService } from "./service"
+import { makeDeleteWorkspace } from "./workspace.delete.usecase"
+import { makeRegisterWorkspace } from "./workspace.register.usecase"
+import { createWorkspaceRepository } from "./workspace.repository"
+import { registerWorkspaceRoutes } from "./workspace.routes"
 import {
   CloseWorkspaceSessions,
+  DeleteWorkspace,
   FindWorkspaceById,
   GetAllowedRoots,
   ListAllWorkspaces,
@@ -27,19 +27,15 @@ export type WorkspaceSlice = Readonly<{
   registerRoutes: (app: FastifyInstance) => void
   findById: FindWorkspaceById
   listAll: ListAllWorkspaces
-  deleteWorkspace: ReturnType<typeof makeDeleteWorkspace>
+  deleteWorkspace: DeleteWorkspace
 }>
 
 export const assembleWorkspaceSlice = (deps: AssembleWorkspaceSliceDeps): WorkspaceSlice => {
   const workspaceRepository = createWorkspaceRepository(deps.database)
   const registerWorkspace = makeRegisterWorkspace({
-    canonicalizePath: canonicalizePath,
+    canonicalizePath,
     getAllowedRoots: deps.getAllowedRoots,
     insertWorkspace: workspaceRepository.insert,
-  })
-  const workspaceService = createWorkspaceService({
-    workspaceRepository,
-    registerWorkspace,
   })
   const deleteWorkspace = makeDeleteWorkspace({
     findWorkspaceById: workspaceRepository.getById,
@@ -51,7 +47,13 @@ export const assembleWorkspaceSlice = (deps: AssembleWorkspaceSliceDeps): Worksp
 
   return {
     registerRoutes: (app) => {
-      registerWorkspaceRoutes(app, workspaceRepository, workspaceService, deleteWorkspace)
+      registerWorkspaceRoutes(app, {
+        registerWorkspace,
+        listWorkspaces: workspaceRepository.list,
+        findWorkspaceById: workspaceRepository.getById,
+        updateWorkspaceName: workspaceRepository.updateName,
+        deleteWorkspace,
+      })
     },
     findById: workspaceRepository.getById,
     listAll: workspaceRepository.listAll,

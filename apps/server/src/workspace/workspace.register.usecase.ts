@@ -1,5 +1,5 @@
 import { CreateWorkspaceBody, Workspace } from "contracts/http/workspace"
-import { isPathUnderAllowedRoot } from "./is.path.under.allowed.root"
+import { isPathUnderAllowedRoot } from "./workspace.is.path.under.allowed.root"
 import { CanonicalizePath, GetAllowedRoots, InsertWorkspace } from "./workspace.ports"
 import { WorkspaceRepositoryError } from "./workspace.errors"
 

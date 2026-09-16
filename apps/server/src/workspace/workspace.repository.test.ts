@@ -5,7 +5,7 @@ import os from "node:os"
 import path from "node:path"
 import { openDatabase } from "../persistence/database"
 import { workspaces } from "../persistence/schema/workspaces"
-import { createWorkspaceRepository } from "./repository"
+import { createWorkspaceRepository } from "./workspace.repository"
 import { encodeWorkspacePageCursor } from "./workspace.page.cursor"
 
 const tempDirs: string[] = []

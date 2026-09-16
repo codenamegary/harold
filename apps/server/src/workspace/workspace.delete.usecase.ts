@@ -1,5 +1,8 @@
 import {
   CloseWorkspaceSessions,
+  DeleteWorkspace,
+  DeleteWorkspaceCommand,
+  DeleteWorkspaceResult,
   DeleteWorkspaceRow,
   FindWorkspaceById,
   ListLiveByWorkspaceRoot,
@@ -14,21 +17,8 @@ export type DeleteWorkspaceDeps = Readonly<{
   deleteWorkspaceRow: DeleteWorkspaceRow
 }>
 
-export type DeleteWorkspaceCommand = Readonly<{
-  workspaceId: string
-  force: boolean
-}>
-
-export type DeleteWorkspaceError =
-  | { readonly kind: "not_found" }
-  | { readonly kind: "active_sessions"; readonly detail: string }
-
-export type DeleteWorkspaceResult =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly error: DeleteWorkspaceError }
-
 export const makeDeleteWorkspace =
-  (deps: DeleteWorkspaceDeps) =>
+  (deps: DeleteWorkspaceDeps): DeleteWorkspace =>
   async (command: DeleteWorkspaceCommand): Promise<DeleteWorkspaceResult> => {
     const workspace = deps.findWorkspaceById({ id: command.workspaceId })
     if (!workspace.ok) {
