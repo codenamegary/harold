@@ -53,7 +53,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -92,7 +91,6 @@ fun ComposerConfigRow(
     val thinking = config.thinking as? SelectOption
     val isEmpty = model == null && mode == null && thinking == null
 
-    val context = LocalContext.current
     var modelSheetVisible by remember { mutableStateOf(false) }
 
     // 2-second non-intrusive saving timer triggered on interactions
@@ -220,6 +218,10 @@ fun ComposerConfigRow(
                 } else {
                     // Section 1: Model
                     model?.let { option ->
+                        val modelDescription = stringResource(
+                            R.string.composer_config_model_content_description,
+                            option.currentLabel(),
+                        )
                         Row(
                             modifier = Modifier
                                 .weight(1f)
@@ -227,10 +229,7 @@ fun ComposerConfigRow(
                                 .clickable { modelSheetVisible = true }
                                 .padding(horizontal = 12.dp)
                                 .semantics {
-                                    this.contentDescription = context.getString(
-                                        R.string.composer_config_model_content_description,
-                                        option.currentLabel(),
-                                    )
+                                    this.contentDescription = modelDescription
                                 }
                                 .testTag("composer_config_model_chip"),
                             verticalAlignment = Alignment.CenterVertically,
@@ -273,6 +272,11 @@ fun ComposerConfigRow(
                     mode?.let { option ->
                         val modeColor = modeColorOf(option.currentValue)
                             ?: MaterialTheme.colorScheme.primary
+                        val modeDescription = stringResource(
+                            R.string.composer_config_mode_content_description,
+                            option.currentLabel(),
+                            nextOptionValue(option)?.name ?: option.currentLabel(),
+                        )
                         Box(
                             modifier = Modifier
                                 .fillMaxHeight()
@@ -283,11 +287,7 @@ fun ComposerConfigRow(
                                 }
                                 .padding(horizontal = 14.dp)
                                 .semantics {
-                                    this.contentDescription = context.getString(
-                                        R.string.composer_config_mode_content_description,
-                                        option.currentLabel(),
-                                        nextOptionValue(option)?.name ?: option.currentLabel(),
-                                    )
+                                    this.contentDescription = modeDescription
                                 }
                                 .testTag("composer_config_mode_chip"),
                             contentAlignment = Alignment.Center,
@@ -328,6 +328,17 @@ fun ComposerConfigRow(
                             val currentLabel = stripThinkingPrefix(option.currentLabel())
                             val nextOption = nextOptionValue(option)
                             val nextLabel = nextOption?.let { stripThinkingPrefix(it.name) } ?: currentLabel
+                            val thinkingDescription = stringResource(
+                                R.string.composer_config_thinking_content_description,
+                                currentLabel,
+                                nextLabel,
+                            )
+                            val nextToast = nextOption?.let { next ->
+                                stringResource(
+                                    R.string.composer_config_thinking_toast,
+                                    stripThinkingPrefix(next.name),
+                                )
+                            }
 
                             Box(
                                 modifier = Modifier
@@ -335,11 +346,7 @@ fun ComposerConfigRow(
                                     .clickable {
                                         nextOption?.let { next ->
                                             triggerSaving()
-                                            val cleanName = stripThinkingPrefix(next.name)
-                                            toastMessage = context.getString(
-                                                R.string.composer_config_thinking_toast,
-                                                cleanName,
-                                            )
+                                            toastMessage = nextToast
                                             val nextIndex = option.options.indexOfFirst { it.value == next.value }
                                             val nextIsOff = nextIndex < 0 ||
                                                 next.value.equals("off", ignoreCase = true) ||
@@ -351,11 +358,7 @@ fun ComposerConfigRow(
                                     }
                                     .padding(horizontal = 12.dp)
                                     .semantics {
-                                        this.contentDescription = context.getString(
-                                            R.string.composer_config_thinking_content_description,
-                                            currentLabel,
-                                            nextLabel,
-                                        )
+                                        this.contentDescription = thinkingDescription
                                     }
                                     .testTag("composer_config_thinking_chip"),
                                 contentAlignment = Alignment.Center,
