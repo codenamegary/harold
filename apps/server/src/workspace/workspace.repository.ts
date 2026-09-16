@@ -1,14 +1,8 @@
 import { and, asc, count, desc, eq, gt, lt, or, sql } from "drizzle-orm"
-import {
-  UpdateWorkspaceBody,
-  Workspace,
-  WorkspaceState,
-} from "contracts/http/workspace"
-import { AgentDatabase, DbExecutor } from "../persistence/database"
+import { Workspace, WorkspaceState } from "contracts/http/workspace"
+import { AgentDatabase } from "../persistence/database"
 import { workspaces } from "../persistence/schema/workspaces"
-import { createWorkspaceId } from "./workspace.create.workspace.id"
 import { probeWorkspaceState } from "./workspace.probe.workspace.state"
-import { InsertWorkspace, InsertWorkspaceInput } from "./workspace.ports"
 import { WorkspaceRepositoryError } from "./workspace.errors"
 import {
   decodeWorkspacePageCursor,
@@ -27,24 +21,13 @@ export type WorkspaceListOptions = {
   state?: WorkspaceState
 }
 
-export type GetWorkspaceByIdInput = {
-  id: string
-}
-
 export type UpdateWorkspaceNameInput = {
   id: string
-  executor?: DbExecutor
-} & UpdateWorkspaceBody
+  name: string
+}
 
 export type DeleteWorkspaceInput = {
   id: string
-  executor?: DbExecutor
-}
-
-export type TouchWorkspaceLastUsedInput = {
-  id: string
-  lastUsedAt: string
-  executor?: DbExecutor
 }
 
 export type WorkspaceListPage = {
@@ -62,9 +45,6 @@ export type WorkspaceListResult =
 type WorkspaceRow = typeof workspaces.$inferSelect
 
 const DEFAULT_LIST_LIMIT = 100
-
-const isUniqueConstraintError = (error: unknown): boolean =>
-  error instanceof Error && error.message.includes("UNIQUE constraint failed")
 
 const rowToWorkspace = (row: WorkspaceRow): Workspace => ({
   id: row.id,
@@ -166,7 +146,6 @@ const conditionBefore = (row: WorkspaceRow) =>
 const nowIso = (): string => new Date().toISOString()
 
 export const createWorkspaceRepository = (database: AgentDatabase) => {
-  const resolveExecutor = (executor?: DbExecutor): DbExecutor => executor ?? database.db
   const countAll = (): number =>
     database.db.select({ value: count() }).from(workspaces).get()?.value ?? 0
 
@@ -246,40 +225,6 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
             .all()
 
     return [...rows].sort((left, right) => compareWorkspaces(rowToWorkspace(left), rowToWorkspace(right)))
-  }
-
-  const insert: InsertWorkspace = (input: InsertWorkspaceInput) => {
-    const timestamp = nowIso()
-    const id = createWorkspaceId()
-
-    try {
-      database.db
-        .insert(workspaces)
-        .values({
-          id,
-          name: input.name,
-          canonicalPath: input.canonicalPath,
-          createdAt: timestamp,
-          lastUsedAt: timestamp,
-        })
-        .run()
-    } catch (error: unknown) {
-      if (isUniqueConstraintError(error)) {
-        return { ok: false, error: { kind: "duplicate_path" } }
-      }
-      throw error
-    }
-
-    return {
-      ok: true,
-      value: rowToWorkspace({
-        id,
-        name: input.name,
-        canonicalPath: input.canonicalPath,
-        createdAt: timestamp,
-        lastUsedAt: timestamp,
-      }),
-    }
   }
 
   const searchRows = (query?: string): WorkspaceRow[] => {
@@ -380,24 +325,12 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
     }
   }
 
-  const getById = ({ id }: GetWorkspaceByIdInput): WorkspaceRepositoryResult<Workspace> => {
-    const row = getRowById(id)
-
-    if (row === undefined) {
-      return { ok: false, error: { kind: "not_found" } }
-    }
-
-    return { ok: true, value: rowToWorkspace(row) }
-  }
-
   const updateName = ({
     id,
     name,
-    executor,
   }: UpdateWorkspaceNameInput): WorkspaceRepositoryResult<Workspace> => {
-    const db = resolveExecutor(executor)
     const timestamp = nowIso()
-    const row = db
+    const row = database.db
       .update(workspaces)
       .set({ name, lastUsedAt: timestamp })
       .where(eq(workspaces.id, id))
@@ -411,35 +344,14 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
     return { ok: true, value: rowToWorkspace(row) }
   }
 
-  const deleteById = ({ id, executor }: DeleteWorkspaceInput): WorkspaceRepositoryResult<void> => {
-    const db = resolveExecutor(executor)
-    const row = db.delete(workspaces).where(eq(workspaces.id, id)).returning().get()
+  const deleteById = ({ id }: DeleteWorkspaceInput): WorkspaceRepositoryResult<void> => {
+    const row = database.db.delete(workspaces).where(eq(workspaces.id, id)).returning().get()
 
     if (row === undefined) {
       return { ok: false, error: { kind: "not_found" } }
     }
 
     return { ok: true, value: undefined }
-  }
-
-  const touchLastUsed = ({
-    id,
-    lastUsedAt,
-    executor,
-  }: TouchWorkspaceLastUsedInput): WorkspaceRepositoryResult<Workspace> => {
-    const db = resolveExecutor(executor)
-    const row = db
-      .update(workspaces)
-      .set({ lastUsedAt })
-      .where(eq(workspaces.id, id))
-      .returning()
-      .get()
-
-    if (row === undefined) {
-      return { ok: false, error: { kind: "not_found" } }
-    }
-
-    return { ok: true, value: rowToWorkspace(row) }
   }
 
   const listAll = (): Workspace[] =>
@@ -451,13 +363,10 @@ export const createWorkspaceRepository = (database: AgentDatabase) => {
       .map(rowToWorkspace)
 
   return {
-    insert,
     list,
     listAll,
-    getById,
     updateName,
     delete: deleteById,
-    touchLastUsed,
   }
 }
 

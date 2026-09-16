@@ -5,6 +5,7 @@ import { makeDeleteWorkspace } from "./workspace.delete.usecase"
 import { makeRegisterWorkspace } from "./workspace.register.usecase"
 import { createWorkspaceRepository } from "./workspace.repository"
 import { registerWorkspaceRoutes } from "./workspace.routes"
+import { makeFindWorkspaceById, makeInsertWorkspace } from "./workspace.sqlite.adapters"
 import {
   CloseWorkspaceSessions,
   DeleteWorkspace,
@@ -31,14 +32,16 @@ export type WorkspaceSlice = Readonly<{
 }>
 
 export const assembleWorkspaceSlice = (deps: AssembleWorkspaceSliceDeps): WorkspaceSlice => {
+  const insertWorkspace = makeInsertWorkspace(deps.database)
+  const findWorkspaceById = makeFindWorkspaceById(deps.database)
   const workspaceRepository = createWorkspaceRepository(deps.database)
   const registerWorkspace = makeRegisterWorkspace({
     canonicalizePath,
     getAllowedRoots: deps.getAllowedRoots,
-    insertWorkspace: workspaceRepository.insert,
+    insertWorkspace,
   })
   const deleteWorkspace = makeDeleteWorkspace({
-    findWorkspaceById: workspaceRepository.getById,
+    findWorkspaceById,
     listLiveByWorkspaceRoot: deps.listLiveByWorkspaceRoot,
     closeWorkspaceSessions: deps.closeWorkspaceSessions,
     unbindWorkspaceSessions: deps.unbindWorkspaceSessions,
@@ -50,12 +53,12 @@ export const assembleWorkspaceSlice = (deps: AssembleWorkspaceSliceDeps): Worksp
       registerWorkspaceRoutes(app, {
         registerWorkspace,
         listWorkspaces: workspaceRepository.list,
-        findWorkspaceById: workspaceRepository.getById,
+        findWorkspaceById,
         updateWorkspaceName: workspaceRepository.updateName,
         deleteWorkspace,
       })
     },
-    findById: workspaceRepository.getById,
+    findById: findWorkspaceById,
     listAll: workspaceRepository.listAll,
     deleteWorkspace,
   }
