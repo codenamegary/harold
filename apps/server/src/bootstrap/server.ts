@@ -20,17 +20,12 @@ import {
 } from "../runtime-settings/repository"
 import { registerRuntimeSettingsRoutes } from "../runtime-settings/routes"
 import { AppliedRuntimeSettingsHolder } from "../runtime-settings/applied.runtime.settings"
-import { canonicalizeWorkspacePath } from "../workspace/canonicalize.workspace.path"
-import { createWorkspaceRepository } from "../workspace/repository"
-import { makeRegisterWorkspace } from "../workspace/register.usecase"
-import { makeDeleteWorkspace } from "../workspace/delete.usecase"
-import { registerWorkspaceRoutes } from "../workspace/routes"
+import { assembleWorkspaceSlice } from "../workspace/workspace.assembly"
 import { registerFilesystemBrowseRoutes } from "../filesystem/routes"
 import { createAttachmentsService } from "../attachments/attachments.service"
 import { registerAttachmentRoutes } from "../attachments/routes"
 import { registerSessionRoutes } from "../session/routes"
 import { createArchivedAcpSessionsStore } from "../session/archived.acp.sessions.store"
-import { createWorkspaceService } from "../workspace/service"
 import { createDeviceRepository } from "../device/repository"
 import { createDeviceService } from "../device/service"
 import { registerDeviceRoutes } from "../device/routes"
@@ -204,7 +199,6 @@ export const createServer = async ({
   })
   const archivedAcpSessions = createArchivedAcpSessionsStore(database)
   const getAllowedRoots = () => runtimeSettingsRepository.get().allowedRoots
-  const workspaceRepository = createWorkspaceRepository(database)
 
   const sessionHubRef: { current: SessionHub | null } = { current: null }
   const cwdCache = createSessionCwdCache()
@@ -327,41 +321,29 @@ export const createServer = async ({
 
   registerStatusRoutes(app, runtime, config, acpSupervisor)
   registerLogRoutes(app, logBuffer)
-  const workspaceService = createWorkspaceService({
-    workspaceRepository,
-    registerWorkspace: makeRegisterWorkspace({
-      canonicalizePath: canonicalizeWorkspacePath,
-      getAllowedRoots,
-      insertWorkspace: workspaceRepository.insert,
-    }),
-  })
-  const deleteWorkspace = makeDeleteWorkspace({
-    findWorkspaceById: workspaceRepository.getById,
+  const workspace = assembleWorkspaceSlice({
+    database,
+    getAllowedRoots,
     listLiveByWorkspaceRoot: acpSupervisor.listLiveByWorkspaceRoot,
     closeWorkspaceSessions: acpSupervisor.closeWorkspaceSessions,
     unbindWorkspaceSessions: acpSupervisor.unbindWorkspaceSessions,
-    deleteWorkspaceRow: workspaceRepository.delete,
   })
   const runtimeStatusService = createRuntimeStatusService({
     runtime,
   })
   runtimeStatusService.persistStarting()
 
-  registerWorkspaceRoutes(app, workspaceRepository, workspaceService, deleteWorkspace)
+  workspace.registerRoutes(app)
   registerFilesystemBrowseRoutes(app, getAllowedRoots)
-  registerAttachmentRoutes(
-    app,
-    workspaceRepository,
-    attachmentsService,
-  )
+  registerAttachmentRoutes(app, workspace.findById, attachmentsService)
   registerAgentSettingsRoutes(app, agentSettingsRepository, acpSupervisor, authBroker)
   registerAgentAuthRoutes(app, authBroker, agentExists)
   registerRuntimeSettingsRoutes(app, runtimeSettingsRepository, {
     onLogLevelChanged: (nextLevel) => {
       app.log.level = nextLevel
     },
-    workspaceRepository,
-    deleteWorkspace,
+    listAllWorkspaces: workspace.listAll,
+    deleteWorkspace: workspace.deleteWorkspace,
     appliedRuntimeSettings,
     envBindOverrides,
   })

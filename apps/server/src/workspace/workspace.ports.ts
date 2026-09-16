@@ -11,9 +11,8 @@ export type InsertWorkspaceInput = {
   canonicalPath: string
 }
 
-export type InsertWorkspace = (
-  input: InsertWorkspaceInput,
-) => { ok: true; value: Workspace } | { ok: false; error: { kind: "duplicate_path" } }
+export type InsertWorkspace = (input: InsertWorkspaceInput) =>
+  | { ok: true; value: Workspace } | { ok: false; error: { kind: "duplicate_path" } }
 
 export type FindWorkspaceById = (input: { id: string }) =>
   | { ok: true; value: Workspace }
@@ -22,6 +21,8 @@ export type FindWorkspaceById = (input: { id: string }) =>
 export type DeleteWorkspaceRow = (input: { id: string }) =>
   | { ok: true; value: void }
   | { ok: false; error: WorkspaceRepositoryError }
+
+export type ListAllWorkspaces = () => ReadonlyArray<Workspace>
 
 export type WorkspaceLiveSession = Readonly<{
   acpSessionId: string

@@ -6,7 +6,7 @@ import {
 import { FastifyInstance } from "fastify"
 import { EnvBindOverrides } from "../config/env.bind.overrides"
 import { DeleteWorkspaceCommand, DeleteWorkspaceResult } from "../workspace/delete.usecase"
-import { WorkspaceRepository } from "../workspace/repository"
+import { ListAllWorkspaces } from "../workspace/workspace.ports"
 import { canonicalizeAllowedRoots } from "./canonicalize.allowed.roots"
 import { findWorkspacesAffectedByRootRemoval } from "./find.workspaces.affected.by.root.removal"
 import { RuntimeSettingsRepository } from "./repository"
@@ -19,7 +19,7 @@ import { buildRuntimeSettingsView } from "./resolve.runtime.settings.state"
 
 export type RegisterRuntimeSettingsRoutesOptions = {
   onLogLevelChanged?: (logLevel: LogLevel) => void
-  workspaceRepository: WorkspaceRepository
+  listAllWorkspaces: ListAllWorkspaces
   deleteWorkspace: (command: DeleteWorkspaceCommand) => Promise<DeleteWorkspaceResult>
   appliedRuntimeSettings?: AppliedRuntimeSettingsHolder
   envBindOverrides?: EnvBindOverrides
@@ -93,7 +93,7 @@ export const registerRuntimeSettingsRoutes = (
 
     if (nextAllowedRoots !== undefined && nextAllowedRoots.ok) {
       const affected = findWorkspacesAffectedByRootRemoval({
-        workspaces: options.workspaceRepository.listAll(),
+        workspaces: options.listAllWorkspaces(),
         previousRoots: previous.allowedRoots,
         nextRoots: nextAllowedRoots.canonicalRoots,
       })
