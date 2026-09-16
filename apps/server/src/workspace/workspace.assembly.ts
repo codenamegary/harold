@@ -3,9 +3,15 @@ import { AgentDatabase } from "../persistence/database"
 import { canonicalizePath } from "../filesystem/filesystem.canonicalize.path"
 import { makeDeleteWorkspace } from "./workspace.delete.usecase"
 import { makeRegisterWorkspace } from "./workspace.register.usecase"
-import { createWorkspaceRepository } from "./workspace.repository"
 import { registerWorkspaceRoutes } from "./workspace.routes"
-import { makeFindWorkspaceById, makeInsertWorkspace } from "./workspace.sqlite.adapters"
+import {
+  makeDeleteWorkspaceRow,
+  makeFindWorkspaceById,
+  makeInsertWorkspace,
+  makeListAllWorkspaces,
+  makeListWorkspaces,
+  makeUpdateWorkspaceName,
+} from "./workspace.sqlite.adapters"
 import {
   CloseWorkspaceSessions,
   DeleteWorkspace,
@@ -34,7 +40,10 @@ export type WorkspaceSlice = Readonly<{
 export const assembleWorkspaceSlice = (deps: AssembleWorkspaceSliceDeps): WorkspaceSlice => {
   const insertWorkspace = makeInsertWorkspace(deps.database)
   const findWorkspaceById = makeFindWorkspaceById(deps.database)
-  const workspaceRepository = createWorkspaceRepository(deps.database)
+  const listWorkspaces = makeListWorkspaces(deps.database)
+  const listAllWorkspaces = makeListAllWorkspaces(deps.database)
+  const updateWorkspaceName = makeUpdateWorkspaceName(deps.database)
+  const deleteWorkspaceRow = makeDeleteWorkspaceRow(deps.database)
   const registerWorkspace = makeRegisterWorkspace({
     canonicalizePath,
     getAllowedRoots: deps.getAllowedRoots,
@@ -45,21 +54,21 @@ export const assembleWorkspaceSlice = (deps: AssembleWorkspaceSliceDeps): Worksp
     listLiveByWorkspaceRoot: deps.listLiveByWorkspaceRoot,
     closeWorkspaceSessions: deps.closeWorkspaceSessions,
     unbindWorkspaceSessions: deps.unbindWorkspaceSessions,
-    deleteWorkspaceRow: workspaceRepository.delete,
+    deleteWorkspaceRow,
   })
 
   return {
     registerRoutes: (app) => {
       registerWorkspaceRoutes(app, {
         registerWorkspace,
-        listWorkspaces: workspaceRepository.list,
+        listWorkspaces,
         findWorkspaceById,
-        updateWorkspaceName: workspaceRepository.updateName,
+        updateWorkspaceName,
         deleteWorkspace,
       })
     },
     findById: findWorkspaceById,
-    listAll: workspaceRepository.listAll,
+    listAll: listAllWorkspaces,
     deleteWorkspace,
   }
 }
