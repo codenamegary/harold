@@ -1,16 +1,14 @@
 import { and, asc, count, desc, eq, gt, lt, or, sql } from "drizzle-orm"
 import {
-  CreateWorkspaceBody,
   UpdateWorkspaceBody,
   Workspace,
   WorkspaceState,
 } from "contracts/http/workspace"
 import { AgentDatabase, DbExecutor } from "../persistence/database"
 import { workspaces } from "../persistence/schema/workspaces"
-import { canonicalizeWorkspacePath } from "./canonicalize.workspace.path"
 import { createWorkspaceId } from "./create.workspace.id"
-import { isPathUnderAllowedRoot } from "./is.path.under.allowed.root"
 import { probeWorkspaceState } from "./probe.workspace.state"
+import { InsertWorkspace, InsertWorkspaceInput } from "./workspace.ports"
 import { WorkspaceRepositoryError } from "./workspace.errors"
 import {
   decodeWorkspacePageCursor,
@@ -167,18 +165,7 @@ const conditionBefore = (row: WorkspaceRow) =>
 
 const nowIso = (): string => new Date().toISOString()
 
-export type CreateWorkspaceInput = CreateWorkspaceBody & {
-  executor?: DbExecutor
-}
-
-export type WorkspaceRepositoryOptions = {
-  getAllowedRoots?: () => readonly string[]
-}
-
-export const createWorkspaceRepository = (
-  database: AgentDatabase,
-  options: WorkspaceRepositoryOptions = {},
-) => {
+export const createWorkspaceRepository = (database: AgentDatabase) => {
   const resolveExecutor = (executor?: DbExecutor): DbExecutor => executor ?? database.db
   const countAll = (): number =>
     database.db.select({ value: count() }).from(workspaces).get()?.value ?? 0
@@ -261,39 +248,17 @@ export const createWorkspaceRepository = (
     return [...rows].sort((left, right) => compareWorkspaces(rowToWorkspace(left), rowToWorkspace(right)))
   }
 
-  const create = (input: CreateWorkspaceInput): WorkspaceRepositoryResult<Workspace> => {
-    const { name, path: inputPath, executor } = input
-    const db = resolveExecutor(executor)
-    const canonicalizeResult = canonicalizeWorkspacePath(inputPath)
-    if (!canonicalizeResult.ok) {
-      return { ok: false, error: { kind: "path", error: canonicalizeResult.error } }
-    }
-
-    const allowedRoots = options.getAllowedRoots?.() ?? []
-    if (allowedRoots.length === 0) {
-      return { ok: false, error: { kind: "outside_allowed_root" } }
-    }
-
-    const isAllowed = allowedRoots.some((allowedRoot) =>
-      isPathUnderAllowedRoot({
-        allowedRoot,
-        candidatePath: canonicalizeResult.canonicalPath,
-      }),
-    )
-    if (!isAllowed) {
-      return { ok: false, error: { kind: "outside_allowed_root" } }
-    }
-
+  const insert: InsertWorkspace = (input: InsertWorkspaceInput) => {
     const timestamp = nowIso()
     const id = createWorkspaceId()
 
     try {
-      db
+      database.db
         .insert(workspaces)
         .values({
           id,
-          name,
-          canonicalPath: canonicalizeResult.canonicalPath,
+          name: input.name,
+          canonicalPath: input.canonicalPath,
           createdAt: timestamp,
           lastUsedAt: timestamp,
         })
@@ -309,8 +274,8 @@ export const createWorkspaceRepository = (
       ok: true,
       value: rowToWorkspace({
         id,
-        name,
-        canonicalPath: canonicalizeResult.canonicalPath,
+        name: input.name,
+        canonicalPath: input.canonicalPath,
         createdAt: timestamp,
         lastUsedAt: timestamp,
       }),
@@ -486,7 +451,7 @@ export const createWorkspaceRepository = (
       .map(rowToWorkspace)
 
   return {
-    create,
+    insert,
     list,
     listAll,
     getById,

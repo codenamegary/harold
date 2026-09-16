@@ -8,23 +8,20 @@ export type WorkspaceServiceResult<T> =
 
 type WorkspaceServiceContext = {
   workspaceRepository: WorkspaceRepository
+  registerWorkspace: (dto: CreateWorkspaceBody) => WorkspaceServiceResult<Workspace>
 }
 
 export const createWorkspaceService = (context: WorkspaceServiceContext) => {
   const create = (input: CreateWorkspaceBody): WorkspaceServiceResult<Workspace> =>
-    context.workspaceRepository.create(input)
+    context.registerWorkspace(input)
 
   const updateName = (
     input: UpdateWorkspaceNameInput,
   ): WorkspaceServiceResult<Workspace> => context.workspaceRepository.updateName(input)
 
-  const deleteWorkspace = (input: { id: string }): WorkspaceServiceResult<void> =>
-    context.workspaceRepository.delete(input)
-
   return {
     create,
     updateName,
-    delete: deleteWorkspace,
   }
 }
 

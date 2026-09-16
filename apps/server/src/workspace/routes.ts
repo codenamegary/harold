@@ -7,9 +7,9 @@ import {
   WorkspaceSchema,
 } from "contracts/http/workspace"
 import { FastifyInstance } from "fastify"
-import { AcpSupervisor } from "../acp/supervisor/models"
 import { WorkspaceRepository } from "./repository"
 import { WorkspaceService } from "./service"
+import { DeleteWorkspaceCommand, DeleteWorkspaceResult } from "./delete.usecase"
 import {
   buildConflictProblem,
   buildInvalidCursorProblem,
@@ -18,7 +18,6 @@ import {
   buildPathValidationProblem,
   buildWorkspaceActiveSessionsProblem,
 } from "./workspace.problems"
-import { deleteWorkspaceWithCascade } from "./delete.workspace.cascade"
 
 const sendProblem = (
   reply: { status: (code: number) => { type: (type: string) => { send: (body: unknown) => unknown } } },
@@ -30,7 +29,7 @@ export const registerWorkspaceRoutes = (
   app: FastifyInstance,
   repository: WorkspaceRepository,
   workspaceService: WorkspaceService,
-  acpSupervisor: AcpSupervisor,
+  deleteWorkspace: (command: DeleteWorkspaceCommand) => Promise<DeleteWorkspaceResult>,
 ) => {
   app.post("/v1/workspaces", async (request, reply) => {
     const body = CreateWorkspaceBodySchema.parse(request.body)
@@ -98,22 +97,14 @@ export const registerWorkspaceRoutes = (
     const query = DeleteWorkspaceQuerySchema.parse(request.query)
     const force = query.force ?? false
 
-    const workspace = repository.getById({ id: workspaceId })
-    if (!workspace.ok) {
-      return sendProblem(reply, 404, buildNotFoundProblem())
-    }
-
-    const deleted = await deleteWorkspaceWithCascade({
+    const deleted = await deleteWorkspace({
       workspaceId,
       force,
-      workspaceRepository: repository,
-      workspaceService,
-      acpSupervisor,
     })
 
     if (!deleted.ok) {
-      if (deleted.kind === "active_sessions") {
-        return sendProblem(reply, 409, buildWorkspaceActiveSessionsProblem(deleted.detail))
+      if (deleted.error.kind === "active_sessions") {
+        return sendProblem(reply, 409, buildWorkspaceActiveSessionsProblem(deleted.error.detail))
       }
       return sendProblem(reply, 404, buildNotFoundProblem())
     }

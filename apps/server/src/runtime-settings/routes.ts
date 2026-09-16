@@ -5,10 +5,8 @@ import {
 } from "contracts/http/runtime-settings"
 import { FastifyInstance } from "fastify"
 import { EnvBindOverrides } from "../config/env.bind.overrides"
-import { AcpSupervisor } from "../acp/supervisor/models"
-import { deleteWorkspaceWithCascade } from "../workspace/delete.workspace.cascade"
+import { DeleteWorkspaceCommand, DeleteWorkspaceResult } from "../workspace/delete.usecase"
 import { WorkspaceRepository } from "../workspace/repository"
-import { WorkspaceService } from "../workspace/service"
 import { canonicalizeAllowedRoots } from "./canonicalize.allowed.roots"
 import { findWorkspacesAffectedByRootRemoval } from "./find.workspaces.affected.by.root.removal"
 import { RuntimeSettingsRepository } from "./repository"
@@ -21,9 +19,8 @@ import { buildRuntimeSettingsView } from "./resolve.runtime.settings.state"
 
 export type RegisterRuntimeSettingsRoutesOptions = {
   onLogLevelChanged?: (logLevel: LogLevel) => void
-  workspaceRepository?: WorkspaceRepository
-  workspaceService?: WorkspaceService
-  acpSupervisor?: AcpSupervisor
+  workspaceRepository: WorkspaceRepository
+  deleteWorkspace: (command: DeleteWorkspaceCommand) => Promise<DeleteWorkspaceResult>
   appliedRuntimeSettings?: AppliedRuntimeSettingsHolder
   envBindOverrides?: EnvBindOverrides
 }
@@ -41,7 +38,7 @@ const sendProblem = (
 export const registerRuntimeSettingsRoutes = (
   app: FastifyInstance,
   repository: RuntimeSettingsRepository,
-  options: RegisterRuntimeSettingsRoutesOptions = {},
+  options: RegisterRuntimeSettingsRoutesOptions,
 ) => {
   app.get("/v1/settings/runtime", async (_request, reply) => {
     const persisted = repository.get()
@@ -94,11 +91,7 @@ export const registerRuntimeSettingsRoutes = (
         ? { ...body, allowedRoots: nextAllowedRoots.canonicalRoots }
         : body
 
-    if (
-      nextAllowedRoots !== undefined &&
-      nextAllowedRoots.ok &&
-      options.workspaceRepository !== undefined
-    ) {
+    if (nextAllowedRoots !== undefined && nextAllowedRoots.ok) {
       const affected = findWorkspacesAffectedByRootRemoval({
         workspaces: options.workspaceRepository.listAll(),
         previousRoots: previous.allowedRoots,
@@ -110,22 +103,14 @@ export const registerRuntimeSettingsRoutes = (
         return sendProblem(reply, 409, buildAllowedRootHasWorkspacesProblem(detail))
       }
 
-      if (
-        affected.length > 0 &&
-        force &&
-        options.workspaceService !== undefined &&
-        options.acpSupervisor !== undefined
-      ) {
+      if (affected.length > 0 && force) {
         for (const workspace of affected) {
-          const deleted = await deleteWorkspaceWithCascade({
+          const deleted = await options.deleteWorkspace({
             workspaceId: workspace.id,
             force: true,
-            workspaceRepository: options.workspaceRepository,
-            workspaceService: options.workspaceService,
-            acpSupervisor: options.acpSupervisor,
           })
 
-          if (!deleted.ok && deleted.kind === "not_found") {
+          if (!deleted.ok && deleted.error.kind === "not_found") {
             return sendProblem(reply, 404, {
               type: "https://agent-server.local/problems/not-found",
               title: "Workspace not found",

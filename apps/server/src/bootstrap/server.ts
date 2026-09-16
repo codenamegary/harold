@@ -20,7 +20,10 @@ import {
 } from "../runtime-settings/repository"
 import { registerRuntimeSettingsRoutes } from "../runtime-settings/routes"
 import { AppliedRuntimeSettingsHolder } from "../runtime-settings/applied.runtime.settings"
+import { canonicalizeWorkspacePath } from "../workspace/canonicalize.workspace.path"
 import { createWorkspaceRepository } from "../workspace/repository"
+import { makeRegisterWorkspace } from "../workspace/register.usecase"
+import { makeDeleteWorkspace } from "../workspace/delete.usecase"
 import { registerWorkspaceRoutes } from "../workspace/routes"
 import { registerFilesystemBrowseRoutes } from "../filesystem/routes"
 import { createAttachmentsService } from "../attachments/attachments.service"
@@ -200,9 +203,8 @@ export const createServer = async ({
     registryUrl,
   })
   const archivedAcpSessions = createArchivedAcpSessionsStore(database)
-  const workspaceRepository = createWorkspaceRepository(database, {
-    getAllowedRoots: () => runtimeSettingsRepository.get().allowedRoots,
-  })
+  const getAllowedRoots = () => runtimeSettingsRepository.get().allowedRoots
+  const workspaceRepository = createWorkspaceRepository(database)
 
   const sessionHubRef: { current: SessionHub | null } = { current: null }
   const cwdCache = createSessionCwdCache()
@@ -327,14 +329,26 @@ export const createServer = async ({
   registerLogRoutes(app, logBuffer)
   const workspaceService = createWorkspaceService({
     workspaceRepository,
+    registerWorkspace: makeRegisterWorkspace({
+      canonicalizePath: canonicalizeWorkspacePath,
+      getAllowedRoots,
+      insertWorkspace: workspaceRepository.insert,
+    }),
+  })
+  const deleteWorkspace = makeDeleteWorkspace({
+    findWorkspaceById: workspaceRepository.getById,
+    listLiveByWorkspaceRoot: acpSupervisor.listLiveByWorkspaceRoot,
+    closeWorkspaceSessions: acpSupervisor.closeWorkspaceSessions,
+    unbindWorkspaceSessions: acpSupervisor.unbindWorkspaceSessions,
+    deleteWorkspaceRow: workspaceRepository.delete,
   })
   const runtimeStatusService = createRuntimeStatusService({
     runtime,
   })
   runtimeStatusService.persistStarting()
 
-  registerWorkspaceRoutes(app, workspaceRepository, workspaceService, acpSupervisor)
-  registerFilesystemBrowseRoutes(app, () => runtimeSettingsRepository.get().allowedRoots)
+  registerWorkspaceRoutes(app, workspaceRepository, workspaceService, deleteWorkspace)
+  registerFilesystemBrowseRoutes(app, getAllowedRoots)
   registerAttachmentRoutes(
     app,
     workspaceRepository,
@@ -347,8 +361,7 @@ export const createServer = async ({
       app.log.level = nextLevel
     },
     workspaceRepository,
-    workspaceService,
-    acpSupervisor,
+    deleteWorkspace,
     appliedRuntimeSettings,
     envBindOverrides,
   })
