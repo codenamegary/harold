@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify"
 import { AgentDatabase } from "../persistence/database"
-import { canonicalizeWorkspacePath } from "./canonicalize.workspace.path"
+import { canonicalizePath } from "../filesystem/filesystem.canonicalize.path"
 import { makeDeleteWorkspace } from "./delete.usecase"
 import { makeRegisterWorkspace } from "./register.usecase"
 import { createWorkspaceRepository } from "./repository"
@@ -33,7 +33,7 @@ export type WorkspaceSlice = Readonly<{
 export const assembleWorkspaceSlice = (deps: AssembleWorkspaceSliceDeps): WorkspaceSlice => {
   const workspaceRepository = createWorkspaceRepository(deps.database)
   const registerWorkspace = makeRegisterWorkspace({
-    canonicalizePath: canonicalizeWorkspacePath,
+    canonicalizePath: canonicalizePath,
     getAllowedRoots: deps.getAllowedRoots,
     insertWorkspace: workspaceRepository.insert,
   })

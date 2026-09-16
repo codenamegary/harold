@@ -1,8 +1,8 @@
-import { CanonicalizeWorkspacePathResult } from "./canonicalize.workspace.path"
+import { CanonicalizePathResult } from "../filesystem/filesystem.canonicalize.path"
 import { Workspace } from "contracts/http/workspace"
 import { WorkspaceRepositoryError } from "./workspace.errors"
 
-export type CanonicalizePath = (inputPath: string) => CanonicalizeWorkspacePathResult
+export type CanonicalizePath = (inputPath: string) => CanonicalizePathResult
 
 export type GetAllowedRoots = () => readonly string[]
 

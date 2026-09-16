@@ -1,9 +1,9 @@
-import { canonicalizeWorkspacePath } from "../workspace/canonicalize.workspace.path"
-import { WorkspacePathError } from "../workspace/workspace.errors"
+import { canonicalizePath } from "../filesystem/filesystem.canonicalize.path"
+import { FilesystemPathError } from "../filesystem/filesystem.errors"
 
 export type CanonicalizeAllowedRootsResult =
   | { ok: true; canonicalRoots: string[] }
-  | { ok: false; error: WorkspacePathError; index: number }
+  | { ok: false; error: FilesystemPathError; index: number }
 
 export const canonicalizeAllowedRoots = (
   roots: readonly string[],
@@ -11,7 +11,7 @@ export const canonicalizeAllowedRoots = (
   const canonicalRoots: string[] = []
 
   for (const [index, root] of roots.entries()) {
-    const canonicalizeResult = canonicalizeWorkspacePath(root)
+    const canonicalizeResult = canonicalizePath(root)
     if (!canonicalizeResult.ok) {
       return { ok: false, error: canonicalizeResult.error, index }
     }

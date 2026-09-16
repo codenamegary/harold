@@ -1,16 +1,16 @@
 import { accessSync, constants, realpathSync, statSync } from "node:fs"
 import path from "node:path"
-import { expandHomePath } from "../config/expand-home-path"
+import { expandHomePath } from "./filesystem.expand.home.path"
 import { isMissingFilesystemError, isPermissionFilesystemError } from "./filesystem.errors"
-import { WorkspacePathError } from "./workspace.errors"
+import { FilesystemPathError } from "./filesystem.errors"
 
-export type CanonicalizeWorkspacePathResult =
+export type CanonicalizePathResult =
   | { ok: true; canonicalPath: string }
-  | { ok: false; error: WorkspacePathError }
+  | { ok: false; error: FilesystemPathError }
 
-export const canonicalizeWorkspacePath = (
+export const canonicalizePath = (
   inputPath: string,
-): CanonicalizeWorkspacePathResult => {
+): CanonicalizePathResult => {
   const expanded = expandHomePath(inputPath)
   const resolved = path.resolve(expanded)
 
