@@ -7,9 +7,9 @@ import { readEnvBindOverrides } from "./config/env.bind.overrides"
 import { openDatabase } from "./persistence/database"
 import { createAppliedRuntimeSettingsHolder } from "./runtime-settings/applied.runtime.settings"
 import {
-  createRuntimeSettingsRepository,
+  makeRuntimeSettingsFileStore,
   seedDefaultsFromConfig,
-} from "./runtime-settings/repository"
+} from "./runtime-settings/runtime-settings.file.adapters"
 import { buildAppliedRuntimeSettings } from "./runtime-settings/resolve.runtime.settings.state"
 import { createRuntime } from "./runtime/runtime"
 
@@ -17,11 +17,11 @@ const main = async () => {
   const envBindOverrides = readEnvBindOverrides(process.env)
   const envConfig = parseConfig(process.env)
   const database = openDatabase({ dataDir: envConfig.dataDir })
-  const runtimeSettingsRepository = createRuntimeSettingsRepository({
+  const runtimeSettingsStore = makeRuntimeSettingsFileStore({
     dataDir: envConfig.dataDir,
     seedDefaults: seedDefaultsFromConfig(envConfig),
   })
-  const persisted = runtimeSettingsRepository.get()
+  const persisted = runtimeSettingsStore.get()
   const appliedRuntimeSettings = createAppliedRuntimeSettingsHolder(
     buildAppliedRuntimeSettings({ persisted, envOverrides: envBindOverrides }),
   )
@@ -40,7 +40,7 @@ const main = async () => {
     config,
     runtime,
     database,
-    runtimeSettingsRepository,
+    runtimeSettingsStore,
     appliedRuntimeSettings,
     envBindOverrides,
     logLevel: persisted.logLevel,

@@ -6,9 +6,9 @@ import { createConnectionTestService } from "./connection.test.service"
 import { registerConnectionTestRoutes } from "./routes"
 import { bootTestApp, bootTestDatabase, registerTestApp } from "../test-support/test.harness"
 import {
-  createRuntimeSettingsRepository,
+  makeRuntimeSettingsFileStore,
   seedDefaultsFromConfig,
-} from "../runtime-settings/repository"
+} from "../runtime-settings/runtime-settings.file.adapters"
 import { parseConfig } from "../config/config"
 import { assembleDeviceSlice } from "../device/device.assembly"
 import { makeListDevices } from "../device/device.sqlite.adapters"
@@ -34,11 +34,12 @@ describe("connection test API", () => {
       AGENT_SERVER_PORT: "3847",
       AGENT_SERVER_DATA_DIR: dataDir,
     })
-    const runtimeSettingsRepository = createRuntimeSettingsRepository({
+    const runtimeSettingsStore = makeRuntimeSettingsFileStore({
       dataDir,
       seedDefaults: seedDefaultsFromConfig(config),
     })
-    runtimeSettingsRepository.update({
+    runtimeSettingsStore.save({
+      ...runtimeSettingsStore.get(),
       advertisedUrl: "https://agents.example.com",
     })
 
@@ -46,7 +47,7 @@ describe("connection test API", () => {
       database,
       loopbackEndpoint: `http://${config.host}:${config.port}`,
       getAdvertisedEndpointSettings: () => {
-        const settings = runtimeSettingsRepository.get()
+          const settings = runtimeSettingsStore.get()
         return {
           advertisedUrl: settings.advertisedUrl,
           advertisedUrlEnabled: settings.advertisedUrlEnabled,
@@ -56,7 +57,7 @@ describe("connection test API", () => {
 
     const advertisedUrl = "https://agents.example.com"
     const connectionTestService = createConnectionTestService({
-      runtimeSettingsRepository,
+      getAdvertisedUrl: () => runtimeSettingsStore.get().advertisedUrl,
       deviceProvisioning: device,
       deps: {
         lookupHost: async () => [{ address: "127.0.0.1", family: 4 }],
@@ -112,11 +113,12 @@ describe("connection test API", () => {
       AGENT_SERVER_PORT: "3847",
       AGENT_SERVER_DATA_DIR: dataDir,
     })
-    const runtimeSettingsRepository = createRuntimeSettingsRepository({
+    const runtimeSettingsStore = makeRuntimeSettingsFileStore({
       dataDir,
       seedDefaults: seedDefaultsFromConfig(config),
     })
-    runtimeSettingsRepository.update({
+    runtimeSettingsStore.save({
+      ...runtimeSettingsStore.get(),
       advertisedUrl: "https://agents.example.com",
     })
 
@@ -124,7 +126,7 @@ describe("connection test API", () => {
       database,
       loopbackEndpoint: `http://${config.host}:${config.port}`,
       getAdvertisedEndpointSettings: () => {
-        const settings = runtimeSettingsRepository.get()
+          const settings = runtimeSettingsStore.get()
         return {
           advertisedUrl: settings.advertisedUrl,
           advertisedUrlEnabled: settings.advertisedUrlEnabled,
@@ -133,7 +135,7 @@ describe("connection test API", () => {
     })
 
     const connectionTestService = createConnectionTestService({
-      runtimeSettingsRepository,
+      getAdvertisedUrl: () => runtimeSettingsStore.get().advertisedUrl,
       deviceProvisioning: device,
       deps: {
         lookupHost: async () => {
@@ -175,11 +177,12 @@ describe("connection test API", () => {
       AGENT_SERVER_PORT: "3847",
       AGENT_SERVER_DATA_DIR: dataDir,
     })
-    const runtimeSettingsRepository = createRuntimeSettingsRepository({
+    const runtimeSettingsStore = makeRuntimeSettingsFileStore({
       dataDir,
       seedDefaults: seedDefaultsFromConfig(config),
     })
-    runtimeSettingsRepository.update({
+    runtimeSettingsStore.save({
+      ...runtimeSettingsStore.get(),
       advertisedUrl: "https://agents.example.com",
     })
 
@@ -187,7 +190,7 @@ describe("connection test API", () => {
       database,
       loopbackEndpoint: `http://${config.host}:${config.port}`,
       getAdvertisedEndpointSettings: () => {
-        const settings = runtimeSettingsRepository.get()
+          const settings = runtimeSettingsStore.get()
         return {
           advertisedUrl: settings.advertisedUrl,
           advertisedUrlEnabled: settings.advertisedUrlEnabled,
@@ -196,7 +199,7 @@ describe("connection test API", () => {
     })
 
     const connectionTestService = createConnectionTestService({
-      runtimeSettingsRepository,
+      getAdvertisedUrl: () => runtimeSettingsStore.get().advertisedUrl,
       deviceProvisioning: device,
       deps: {
         lookupHost: async () => [{ address: "127.0.0.1", family: 4 }],
@@ -235,11 +238,12 @@ describe("connection test API", () => {
       AGENT_SERVER_PORT: "3847",
       AGENT_SERVER_DATA_DIR: dataDir,
     })
-    const runtimeSettingsRepository = createRuntimeSettingsRepository({
+    const runtimeSettingsStore = makeRuntimeSettingsFileStore({
       dataDir,
       seedDefaults: seedDefaultsFromConfig(config),
     })
-    runtimeSettingsRepository.update({
+    runtimeSettingsStore.save({
+      ...runtimeSettingsStore.get(),
       advertisedUrl: "https://agents.example.com:8443",
     })
 
@@ -247,7 +251,7 @@ describe("connection test API", () => {
       database,
       loopbackEndpoint: `http://${config.host}:${config.port}`,
       getAdvertisedEndpointSettings: () => {
-        const settings = runtimeSettingsRepository.get()
+          const settings = runtimeSettingsStore.get()
         return {
           advertisedUrl: settings.advertisedUrl,
           advertisedUrlEnabled: settings.advertisedUrlEnabled,
@@ -257,7 +261,7 @@ describe("connection test API", () => {
 
     let requestedUrl = ""
     const connectionTestService = createConnectionTestService({
-      runtimeSettingsRepository,
+      getAdvertisedUrl: () => runtimeSettingsStore.get().advertisedUrl,
       deviceProvisioning: device,
       deps: {
         lookupHost: async () => [{ address: "127.0.0.1", family: 4 }],

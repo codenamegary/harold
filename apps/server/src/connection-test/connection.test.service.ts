@@ -12,7 +12,6 @@ import {
   RevokeDeviceCommand,
   RevokeDeviceResult,
 } from "../device/device.revoke.device.usecase"
-import { RuntimeSettingsRepository } from "../runtime-settings/repository"
 import { computeConnectionGates, isSelfSignedTlsError } from "./compute.connection.gates"
 import { parseAdvertisedEndpoint } from "./parse.advertised.endpoint"
 
@@ -266,8 +265,10 @@ export type DeviceProvisioningPort = Readonly<{
   revokeDevice: (command: RevokeDeviceCommand) => RevokeDeviceResult
 }>
 
+export type GetAdvertisedUrl = () => string | null
+
 export const createConnectionTestService = (context: {
-  runtimeSettingsRepository: RuntimeSettingsRepository
+  getAdvertisedUrl: GetAdvertisedUrl
   deviceProvisioning: DeviceProvisioningPort
   deps?: ConnectionTestDeps
 }) => {
@@ -277,7 +278,7 @@ export const createConnectionTestService = (context: {
   const fetchDeviceAuth = context.deps?.fetchDeviceAuth ?? defaultFetchDeviceAuth
 
   const run = async (): Promise<ConnectionTestResult> => {
-    const advertisedUrl = context.runtimeSettingsRepository.get().advertisedUrl
+    const advertisedUrl = context.getAdvertisedUrl()
     if (advertisedUrl === null) {
       return { ok: false, error: { kind: "missing_advertised_url" } }
     }

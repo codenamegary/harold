@@ -1,13 +1,9 @@
 import { canonicalizePath } from "../filesystem/filesystem.canonicalize.path"
-import { FilesystemPathError } from "../filesystem/filesystem.errors"
+import { CanonicalizeAllowedRoots } from "./runtime-settings.ports"
 
-export type CanonicalizeAllowedRootsResult =
-  | { ok: true; canonicalRoots: string[] }
-  | { ok: false; error: FilesystemPathError; index: number }
-
-export const canonicalizeAllowedRoots = (
-  roots: readonly string[],
-): CanonicalizeAllowedRootsResult => {
+export const canonicalizeAllowedRoots: CanonicalizeAllowedRoots = (
+  roots,
+): ReturnType<CanonicalizeAllowedRoots> => {
   const canonicalRoots: string[] = []
 
   for (const [index, root] of roots.entries()) {
