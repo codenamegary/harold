@@ -26,9 +26,7 @@ import { createAttachmentsService } from "../attachments/attachments.service"
 import { registerAttachmentRoutes } from "../attachments/routes"
 import { registerSessionRoutes } from "../session/routes"
 import { createArchivedAcpSessionsStore } from "../session/archived.acp.sessions.store"
-import { createDeviceRepository } from "../device/repository"
-import { createDeviceService } from "../device/service"
-import { registerDeviceRoutes } from "../device/routes"
+import { assembleDeviceSlice } from "../device/device.assembly"
 import { createConnectionTestService } from "../connection-test/connection.test.service"
 import { registerConnectionTestRoutes } from "../connection-test/routes"
 import { createRuntimeStatusService } from "../runtime/status.service"
@@ -57,7 +55,7 @@ import {
 } from "../session/hub/hub"
 import { createCommandsCache } from "../session/hub/commands.cache"
 import { registerAuthMiddleware } from "../auth/middleware"
-import { redactPairingCodeInUrl } from "../device/redact.pairing.code.in.url"
+import { redactPairingCodeInUrl } from "../device/device.redact.pairing.code.in.url"
 import { FetchRegistryFn } from "../agent-settings/agent-settings-repository"
 import { startEnabledAgents } from "./start.enabled.agents"
 
@@ -175,7 +173,6 @@ export const createServer = async ({
     },
   })
 
-  const deviceRepository = createDeviceRepository(database)
   const runtimeSettingsRepository =
     providedRuntimeSettingsRepository ??
     createRuntimeSettingsRepository({
@@ -183,8 +180,22 @@ export const createServer = async ({
       seedDefaults: seedDefaultsFromConfig(config),
     })
 
+  const device = assembleDeviceSlice({
+    database,
+    loopbackEndpoint: `http://${config.host}:${config.port}`,
+    getAdvertisedEndpointSettings: () => {
+      const settings = runtimeSettingsRepository.get()
+      return {
+        advertisedUrl: settings.advertisedUrl,
+        advertisedUrlEnabled: settings.advertisedUrlEnabled,
+      }
+    },
+  })
+  device.registerRoutes(app)
+
   registerAuthMiddleware(app, {
-    deviceRepository,
+    findDeviceByCredentialHash: device.findDeviceByCredentialHash,
+    touchDeviceLastSeen: device.touchDeviceLastSeen,
     getTrustedProxies: () => runtimeSettingsRepository.get().trustedProxies,
     isLoopbackRequest,
   })
@@ -312,7 +323,8 @@ export const createServer = async ({
   })
 
   registerSessionStreamRoutes(app, {
-    deviceRepository,
+    findDeviceByCredentialHash: device.findDeviceByCredentialHash,
+    touchDeviceLastSeen: device.touchDeviceLastSeen,
     sessionHub,
     getTrustedProxies: () => runtimeSettingsRepository.get().trustedProxies,
     isLoopbackRequest,
@@ -357,17 +369,9 @@ export const createServer = async ({
     authBroker,
   )
 
-  const deviceService = createDeviceService({
-    database,
-    deviceRepository,
-    config,
-    runtimeSettingsRepository,
-  })
-  registerDeviceRoutes(app, deviceService)
-
   const connectionTestService = createConnectionTestService({
     runtimeSettingsRepository,
-    deviceService,
+    deviceProvisioning: device,
   })
   registerConnectionTestRoutes(app, connectionTestService)
 

@@ -1,4 +1,4 @@
-import { hashDeviceCredential } from "../device/hash.device.credential"
+import { hashDeviceCredential } from "../device/device.hash.credential"
 import { parseAuthorizationHeader } from "./bearer"
 import {
   devicePrincipal,

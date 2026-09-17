@@ -10,7 +10,7 @@ import { createSecondClient } from "test-support/second-client"
 import { closeWebSocket, waitForSocketClose } from "test-support/second-client/streams"
 import { bootTestApp } from "../test-support/test.harness"
 import { createWorkspaceDir } from "../test-support/test.app"
-import { clearDevicePresence } from "./presence"
+import { clearDevicePresence } from "./device.presence"
 import { pairingCodes } from "../persistence/schema/pairing-codes"
 
 afterEach(async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { hashDeviceCredential } from "../device/hash.device.credential"
+import { hashDeviceCredential } from "../device/device.hash.credential"
 import { authenticate } from "./authenticate"
 import { authorizeActiveFullOperator } from "./authorize"
 import { parseAuthorizationHeader } from "./bearer"

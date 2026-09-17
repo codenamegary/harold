@@ -1,7 +1,7 @@
-import { DeviceRepository } from "./repository"
+import { TouchDeviceLastSeen } from "./device.ports"
 
 type TouchDeviceLastSeenParams = {
-  deviceRepository: DeviceRepository
+  touchDeviceLastSeen: TouchDeviceLastSeen
   deviceId: string
   occurredAt?: string
 }
@@ -15,13 +15,13 @@ const nowIso = (): string => new Date().toISOString()
 const isClosedDatabaseError = (error: unknown): boolean =>
   error instanceof RangeError && error.message.includes("closed database")
 
-export const touchDeviceLastSeen = (
+export const touchDeviceLastSeenTolerant = (
   params: TouchDeviceLastSeenParams,
 ): TouchDeviceLastSeenResult => {
   const occurredAt = params.occurredAt ?? nowIso()
 
   try {
-    params.deviceRepository.touchLastSeen({
+    params.touchDeviceLastSeen({
       deviceId: params.deviceId,
       lastSeenAt: occurredAt,
     })

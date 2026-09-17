@@ -13,15 +13,19 @@ import {
 } from "../auth/ws.auth"
 import { hostPrincipal, Principal } from "../auth/principal"
 import { websocketRawDataText } from "../auth/websocket.raw.data.text"
-import { touchDeviceLastSeen } from "../device/connection.lifecycle"
-import { DeviceRepository } from "../device/repository"
-import { registerDevicePresence } from "../device/presence"
+import { touchDeviceLastSeenTolerant } from "../device/device.connection.lifecycle"
+import {
+  FindDeviceByCredentialHash,
+  TouchDeviceLastSeen,
+} from "../device/device.ports"
+import { registerDevicePresence } from "../device/device.presence"
 import { SessionHub } from "./hub/hub"
 
 export const SESSIONS_STREAM_PATH = "/v1/sessions/stream"
 
 type RegisterSessionStreamRoutesParams = {
-  deviceRepository: DeviceRepository
+  findDeviceByCredentialHash: FindDeviceByCredentialHash
+  touchDeviceLastSeen: TouchDeviceLastSeen
   sessionHub: SessionHub
   getTrustedProxies?: () => readonly string[]
   isLoopbackRequest?: (request: FastifyRequest) => boolean
@@ -31,7 +35,7 @@ type RegisterSessionStreamRoutesParams = {
 const resolveStreamPrincipal = async (params: {
   request: FastifyRequest
   socket: WebSocket
-  deviceRepository: DeviceRepository
+  findDeviceByCredentialHash: FindDeviceByCredentialHash
   isLoopback: boolean
   timeoutMs: number
 }): Promise<Principal | undefined> => {
@@ -47,8 +51,7 @@ const resolveStreamPrincipal = async (params: {
   const frameResult = await waitForAuthFrame({
     socket: params.socket,
     timeoutMs: params.timeoutMs,
-    lookupByCredentialHash: (credentialHash) =>
-      params.deviceRepository.getByCredentialHash({ credentialHash }),
+    lookupByCredentialHash: params.findDeviceByCredentialHash,
   })
 
   if (!frameResult.ok) {
@@ -62,15 +65,15 @@ const resolveStreamPrincipal = async (params: {
 const attachDevicePresence = (params: {
   principal: Principal
   socket: WebSocket
-  deviceRepository: DeviceRepository
+  touchDeviceLastSeen: TouchDeviceLastSeen
 }): void => {
   if (params.principal.kind !== "device") {
     return
   }
 
   const deviceId = params.principal.deviceId
-  touchDeviceLastSeen({
-    deviceRepository: params.deviceRepository,
+  touchDeviceLastSeenTolerant({
+    touchDeviceLastSeen: params.touchDeviceLastSeen,
     deviceId,
   })
 
@@ -86,8 +89,8 @@ const attachDevicePresence = (params: {
     }
     closedConnections.add(params.socket)
     unregisterPresence()
-    touchDeviceLastSeen({
-      deviceRepository: params.deviceRepository,
+    touchDeviceLastSeenTolerant({
+      touchDeviceLastSeen: params.touchDeviceLastSeen,
       deviceId,
     })
   }
@@ -124,7 +127,7 @@ export const registerSessionStreamRoutes = (
         const principal = await resolveStreamPrincipal({
           request,
           socket,
-          deviceRepository: params.deviceRepository,
+          findDeviceByCredentialHash: params.findDeviceByCredentialHash,
           isLoopback: resolveHostPrincipal(request),
           timeoutMs,
         })
@@ -139,7 +142,7 @@ export const registerSessionStreamRoutes = (
         attachDevicePresence({
           principal,
           socket,
-          deviceRepository: params.deviceRepository,
+          touchDeviceLastSeen: params.touchDeviceLastSeen,
         })
 
         const subscriberId = crypto.randomUUID()
