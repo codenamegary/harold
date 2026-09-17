@@ -1,6 +1,8 @@
+import { accessSync, constants, statSync } from "node:fs"
 import { and, asc, count, desc, eq, gt, lt, or, sql } from "drizzle-orm"
 import { Workspace } from "contracts/http/workspace"
 import { AgentDatabase } from "../persistence/database"
+import { isMissingFilesystemError, isPermissionFilesystemError } from "../filesystem/filesystem.errors"
 import { workspaces } from "../persistence/schema/workspaces"
 import { createWorkspaceId } from "./workspace.create.workspace.id"
 import {
@@ -11,7 +13,6 @@ import {
   ListWorkspaces,
   UpdateWorkspaceName,
 } from "./workspace.ports"
-import { probeWorkspaceState } from "./workspace.probe.workspace.state"
 import {
   decodeWorkspacePageCursor,
   encodeWorkspacePageCursor,
@@ -24,6 +25,26 @@ const DEFAULT_LIST_LIMIT = 100
 
 const isUniqueConstraintError = (error: unknown): boolean =>
   error instanceof Error && error.message.includes("UNIQUE constraint failed")
+
+const probeWorkspaceState = (canonicalPath: string): Workspace["state"] => {
+  try {
+    const stats = statSync(canonicalPath)
+    if (!stats.isDirectory()) {
+      return "missing"
+    }
+
+    accessSync(canonicalPath, constants.R_OK | constants.X_OK)
+    return "available"
+  } catch (error: unknown) {
+    if (isMissingFilesystemError(error)) {
+      return "missing"
+    }
+    if (isPermissionFilesystemError(error)) {
+      return "unavailable"
+    }
+    throw error
+  }
+}
 
 const rowToWorkspace = (row: WorkspaceRow): Workspace => ({
   id: row.id,

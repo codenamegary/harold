@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { eq } from "drizzle-orm"
-import { mkdir, mkdtemp, rm } from "node:fs/promises"
+import { accessSync } from "node:fs"
+import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { AgentDatabase, openDatabase } from "../persistence/database"
@@ -436,5 +437,34 @@ describe("workspace sqlite adapters", () => {
     }
 
     database.close()
+  })
+
+  test("reports unavailable state when the directory is unreadable", async () => {
+    const dataDir = await createTempDataDir()
+    const workspaceDir = await createWorkspaceDir(dataDir, "restricted")
+    const database = openDatabase({ dataDir })
+    const { insertWorkspace, findWorkspaceById } = openWorkspaceAdapters(database)
+
+    const created = insertWorkspace({ name: "Restricted", canonicalPath: path.resolve(workspaceDir) })
+    expect(created.ok).toBe(true)
+    if (!created.ok) {
+      database.close()
+      return
+    }
+
+    await chmod(workspaceDir, 0o000)
+    try {
+      accessSync(workspaceDir)
+      return
+    } catch {
+      const fetched = findWorkspaceById({ id: created.value.id })
+      expect(fetched.ok).toBe(true)
+      if (fetched.ok) {
+        expect(fetched.value.state).toBe("unavailable")
+      }
+    } finally {
+      await chmod(workspaceDir, 0o755)
+      database.close()
+    }
   })
 })
