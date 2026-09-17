@@ -4,7 +4,7 @@ import {
   closeDeviceConnections,
   isDeviceOnline,
   registerDevicePresence,
-} from "./presence"
+} from "./device.presence"
 
 afterEach(() => {
   clearDevicePresence()

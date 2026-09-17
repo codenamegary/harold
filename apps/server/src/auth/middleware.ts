@@ -1,5 +1,8 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
-import { DeviceRepository } from "../device/repository"
+import {
+  FindDeviceByCredentialHash,
+  TouchDeviceLastSeen,
+} from "../device/device.ports"
 import { authenticate } from "./authenticate"
 import { authorizeActiveFullOperator } from "./authorize"
 import { isHostPrincipalRequest } from "./request.origin"
@@ -17,7 +20,8 @@ export const setRequestPrincipal = (request: object, principal: Principal): void
 }
 
 export type AuthMiddlewareDeps = {
-  deviceRepository: DeviceRepository
+  findDeviceByCredentialHash: FindDeviceByCredentialHash
+  touchDeviceLastSeen: TouchDeviceLastSeen
   getTrustedProxies?: () => readonly string[]
   isLoopbackRequest?: (request: FastifyRequest) => boolean
 }
@@ -31,15 +35,15 @@ const sendUnauthorized = (reply: FastifyReply) =>
 
 const SESSIONS_STREAM_PATH = "/v1/sessions/stream"
 
-const touchDeviceLastSeen = (params: {
+const touchDeviceLastSeenForPrincipal = (params: {
   principal: Principal
-  deviceRepository: DeviceRepository
+  touchDeviceLastSeen: TouchDeviceLastSeen
 }): void => {
   if (params.principal.kind !== "device") {
     return
   }
 
-  params.deviceRepository.touchLastSeen({
+  params.touchDeviceLastSeen({
     deviceId: params.principal.deviceId,
     lastSeenAt: new Date().toISOString(),
   })
@@ -64,8 +68,7 @@ export const registerAuthMiddleware = (
     const authResult = authenticate({
       authorization: request.headers.authorization,
       isLoopback: resolveHostPrincipal(request),
-      lookupByCredentialHash: (credentialHash) =>
-        deps.deviceRepository.getByCredentialHash({ credentialHash }),
+      lookupByCredentialHash: deps.findDeviceByCredentialHash,
     })
 
     setRequestPrincipal(request, authResult.principal)
@@ -78,9 +81,9 @@ export const registerAuthMiddleware = (
       if (rejectPresentedInvalid) {
         return sendUnauthorized(reply)
       }
-      touchDeviceLastSeen({
+      touchDeviceLastSeenForPrincipal({
         principal: authResult.principal,
-        deviceRepository: deps.deviceRepository,
+        touchDeviceLastSeen: deps.touchDeviceLastSeen,
       })
       return
     }
@@ -93,9 +96,9 @@ export const registerAuthMiddleware = (
       return sendUnauthorized(reply)
     }
 
-    touchDeviceLastSeen({
+    touchDeviceLastSeenForPrincipal({
       principal: authResult.principal,
-      deviceRepository: deps.deviceRepository,
+      touchDeviceLastSeen: deps.touchDeviceLastSeen,
     })
   })
 }

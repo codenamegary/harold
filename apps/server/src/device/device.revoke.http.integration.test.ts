@@ -15,7 +15,7 @@ import {
 import { WebSocket } from "ws"
 import { bootTestApp } from "../test-support/test.harness"
 import { Config } from "../config/config"
-import { clearDevicePresence } from "./presence"
+import { clearDevicePresence } from "./device.presence"
 
 afterEach(async () => {
   clearDevicePresence()

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { redactPairingCodeInUrl } from "./redact.pairing.code.in.url"
+import { redactPairingCodeInUrl } from "./device.redact.pairing.code.in.url"
 
 describe("redactPairingCodeInUrl", () => {
   test("redacts pairing code segment in claim path", () => {

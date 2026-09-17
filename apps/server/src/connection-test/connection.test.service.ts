@@ -7,7 +7,11 @@ import {
   ConnectionCheckResult,
   ConnectionTestResponse,
 } from "contracts/http/connection-test"
-import { DeviceService } from "../device/service"
+import { CreateProbeDeviceResult } from "../device/device.create.probe.device.usecase"
+import {
+  RevokeDeviceCommand,
+  RevokeDeviceResult,
+} from "../device/device.revoke.device.usecase"
 import { RuntimeSettingsRepository } from "../runtime-settings/repository"
 import { computeConnectionGates, isSelfSignedTlsError } from "./compute.connection.gates"
 import { parseAdvertisedEndpoint } from "./parse.advertised.endpoint"
@@ -257,9 +261,14 @@ const runDnsCheck = async (params: {
   }
 }
 
+export type DeviceProvisioningPort = Readonly<{
+  createProbeDevice: () => CreateProbeDeviceResult
+  revokeDevice: (command: RevokeDeviceCommand) => RevokeDeviceResult
+}>
+
 export const createConnectionTestService = (context: {
   runtimeSettingsRepository: RuntimeSettingsRepository
-  deviceService: DeviceService
+  deviceProvisioning: DeviceProvisioningPort
   deps?: ConnectionTestDeps
 }) => {
   const lookupHost = context.deps?.lookupHost ?? lookup
@@ -299,7 +308,7 @@ export const createConnectionTestService = (context: {
     }
 
     if (dns.status === "pass" && (tls.status === "pass" || tls.status === "warn")) {
-      const probe = context.deviceService.createProbeDevice()
+      const probe = context.deviceProvisioning.createProbeDevice()
       if (!probe.ok) {
         return { ok: false, error: { kind: "probe_device_failed" } }
       }
@@ -313,7 +322,7 @@ export const createConnectionTestService = (context: {
           allowSelfSignedTls: tls.status === "warn",
         })
       } finally {
-        context.deviceService.revoke({ deviceId: probe.value.device.id })
+        context.deviceProvisioning.revokeDevice({ deviceId: probe.value.device.id })
       }
     }
 

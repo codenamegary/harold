@@ -14,7 +14,6 @@ import {
   ListDevicesQuerySchema,
 } from "contracts/http/device"
 import { FastifyInstance } from "fastify"
-import { DeviceService } from "./service"
 import {
   buildAdvertisedEndpointUnavailableProblem,
   buildDeviceNotFoundProblem,
@@ -23,8 +22,18 @@ import {
   buildPairingCodeExpiredProblem,
   buildPairingCodeNotFoundProblem,
   buildPairingCodeRevokedProblem,
-} from "./problems"
-import { DeviceError } from "./errors"
+} from "./device.problems"
+import { DeviceError } from "./device.errors"
+import {
+  ClaimPairingCodeCommand,
+  ClaimPairingCodeResult,
+} from "./device.claim.pairing.code.usecase"
+import { ListDevices } from "./device.ports"
+import { CreatePairingCodeResult } from "./device.create.pairing.code.usecase"
+import {
+  RevokeDeviceCommand,
+  RevokeDeviceResult,
+} from "./device.revoke.device.usecase"
 
 const sendProblem = (
   reply: {
@@ -69,17 +78,33 @@ const isDeviceError = (error: { kind: string }): error is DeviceError => {
   }
 }
 
-export const registerDeviceRoutes = (app: FastifyInstance, service: DeviceService) => {
+const sendErrorProblem = (
+  reply: Parameters<typeof sendProblem>[0],
+  error: { kind: string },
+) => {
+  if (isDeviceError(error)) {
+    const mapped = problemForError(error)
+    return sendProblem(reply, mapped.status, mapped.problem)
+  }
+  return sendProblem(reply, 500, { title: "Internal error", status: 500 })
+}
+
+export type DeviceRouteDeps = Readonly<{
+  createPairingCode: (body?: {
+    endpoint?: "loopback" | "advertised"
+  }) => Promise<CreatePairingCodeResult>
+  claimPairingCode: (command: ClaimPairingCodeCommand) => Promise<ClaimPairingCodeResult>
+  listDevices: ListDevices
+  revokeDevice: (command: RevokeDeviceCommand) => RevokeDeviceResult
+}>
+
+export const registerDeviceRoutes = (app: FastifyInstance, deps: DeviceRouteDeps) => {
   app.post(PAIRING_CODES_PATH, async (request, reply) => {
     const body = CreatePairingCodeBodySchema.parse(request.body ?? {})
-    const result = await service.createPairingCode(body)
+    const result = await deps.createPairingCode(body)
 
     if (!result.ok) {
-      if (isDeviceError(result.error)) {
-        const mapped = problemForError(result.error)
-        return sendProblem(reply, mapped.status, mapped.problem)
-      }
-      return sendProblem(reply, 500, { title: "Internal error", status: 500 })
+      return sendErrorProblem(reply, result.error)
     }
 
     return reply
@@ -90,14 +115,10 @@ export const registerDeviceRoutes = (app: FastifyInstance, service: DeviceServic
   app.post(claimPairingCodePath(":code"), async (request, reply) => {
     const { code } = request.params as { code: string }
     const body = ClaimPairingCodeBodySchema.parse(request.body ?? {})
-    const result = await service.claimPairingCode({ code, body })
+    const result = await deps.claimPairingCode({ code, body })
 
     if (!result.ok) {
-      if (isDeviceError(result.error)) {
-        const mapped = problemForError(result.error)
-        return sendProblem(reply, mapped.status, mapped.problem)
-      }
-      return sendProblem(reply, 500, { title: "Internal error", status: 500 })
+      return sendErrorProblem(reply, result.error)
     }
 
     return reply
@@ -107,29 +128,30 @@ export const registerDeviceRoutes = (app: FastifyInstance, service: DeviceServic
 
   app.get(DEVICES_PATH, async (request, reply) => {
     const query = ListDevicesQuerySchema.parse(request.query)
-    const result = service.list(query)
+    const result = deps.listDevices(query)
 
     if (!result.ok) {
-      if (result.error.kind === "invalid_cursor") {
-        return sendProblem(reply, 400, buildInvalidCursorProblem())
-      }
-      return sendProblem(reply, 500, { title: "Internal error", status: 500 })
+      return sendProblem(reply, 400, buildInvalidCursorProblem())
     }
 
-    return reply.status(200).send(DeviceCollectionSchema.parse(result.value))
+    return reply.status(200).send(DeviceCollectionSchema.parse({
+      items: result.value.items,
+      page: {
+        limit: result.value.limit,
+        nextCursor: result.value.nextCursor,
+        previousCursor: result.value.previousCursor,
+        count: result.value.count,
+      },
+    }))
   })
 
   app.delete(devicePath(":deviceId"), async (request, reply) => {
     const { deviceId } = request.params as { deviceId: string }
     const query = DeleteDeviceQuerySchema.parse(request.query)
-    const result = service.revoke({ deviceId, hardDelete: query.hardDelete })
+    const result = deps.revokeDevice({ deviceId, hardDelete: query.hardDelete })
 
     if (!result.ok) {
-      if (isDeviceError(result.error)) {
-        const mapped = problemForError(result.error)
-        return sendProblem(reply, mapped.status, mapped.problem)
-      }
-      return sendProblem(reply, 500, { title: "Internal error", status: 500 })
+      return sendErrorProblem(reply, result.error)
     }
 
     return reply.status(204).send()

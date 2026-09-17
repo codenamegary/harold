@@ -10,8 +10,8 @@ import {
   seedDefaultsFromConfig,
 } from "../runtime-settings/repository"
 import { parseConfig } from "../config/config"
-import { createDeviceService } from "../device/service"
-import { createDeviceRepository } from "../device/repository"
+import { assembleDeviceSlice } from "../device/device.assembly"
+import { makeListDevices } from "../device/device.sqlite.adapters"
 import Fastify from "fastify"
 
 describe("connection test API", () => {
@@ -42,18 +42,22 @@ describe("connection test API", () => {
       advertisedUrl: "https://agents.example.com",
     })
 
-    const deviceRepository = createDeviceRepository(database)
-    const deviceService = createDeviceService({
+    const device = assembleDeviceSlice({
       database,
-      deviceRepository,
-      config,
-      runtimeSettingsRepository,
+      loopbackEndpoint: `http://${config.host}:${config.port}`,
+      getAdvertisedEndpointSettings: () => {
+        const settings = runtimeSettingsRepository.get()
+        return {
+          advertisedUrl: settings.advertisedUrl,
+          advertisedUrlEnabled: settings.advertisedUrlEnabled,
+        }
+      },
     })
 
     const advertisedUrl = "https://agents.example.com"
     const connectionTestService = createConnectionTestService({
       runtimeSettingsRepository,
-      deviceService,
+      deviceProvisioning: device,
       deps: {
         lookupHost: async () => [{ address: "127.0.0.1", family: 4 }],
         connectTcp: async () => undefined,
@@ -73,7 +77,8 @@ describe("connection test API", () => {
     const probeApp = registerTestApp(Fastify())
     registerConnectionTestRoutes(probeApp, connectionTestService)
 
-    const beforeDevices = deviceRepository.list({ limit: 100 })
+    const listDevices = makeListDevices(database)
+    const beforeDevices = listDevices({ limit: 100 })
     expect(beforeDevices.ok).toBe(true)
 
     const response = await probeApp.inject({
@@ -87,7 +92,7 @@ describe("connection test API", () => {
     expect(body.canContinueAnyway).toBe(false)
     expect(body.checks.map((check) => check.id)).toEqual(["dns", "tls", "device-auth"])
 
-    const afterDevices = deviceRepository.list({ limit: 100 })
+    const afterDevices = listDevices({ limit: 100 })
     expect(afterDevices.ok).toBe(true)
     if (!afterDevices.ok || !beforeDevices.ok) {
       throw new Error("device list failed")
@@ -115,17 +120,21 @@ describe("connection test API", () => {
       advertisedUrl: "https://agents.example.com",
     })
 
-    const deviceRepository = createDeviceRepository(database)
-    const deviceService = createDeviceService({
+    const device = assembleDeviceSlice({
       database,
-      deviceRepository,
-      config,
-      runtimeSettingsRepository,
+      loopbackEndpoint: `http://${config.host}:${config.port}`,
+      getAdvertisedEndpointSettings: () => {
+        const settings = runtimeSettingsRepository.get()
+        return {
+          advertisedUrl: settings.advertisedUrl,
+          advertisedUrlEnabled: settings.advertisedUrlEnabled,
+        }
+      },
     })
 
     const connectionTestService = createConnectionTestService({
       runtimeSettingsRepository,
-      deviceService,
+      deviceProvisioning: device,
       deps: {
         lookupHost: async () => {
           throw new Error("ENOTFOUND agents.example.com")
@@ -174,17 +183,21 @@ describe("connection test API", () => {
       advertisedUrl: "https://agents.example.com",
     })
 
-    const deviceRepository = createDeviceRepository(database)
-    const deviceService = createDeviceService({
+    const device = assembleDeviceSlice({
       database,
-      deviceRepository,
-      config,
-      runtimeSettingsRepository,
+      loopbackEndpoint: `http://${config.host}:${config.port}`,
+      getAdvertisedEndpointSettings: () => {
+        const settings = runtimeSettingsRepository.get()
+        return {
+          advertisedUrl: settings.advertisedUrl,
+          advertisedUrlEnabled: settings.advertisedUrlEnabled,
+        }
+      },
     })
 
     const connectionTestService = createConnectionTestService({
       runtimeSettingsRepository,
-      deviceService,
+      deviceProvisioning: device,
       deps: {
         lookupHost: async () => [{ address: "127.0.0.1", family: 4 }],
         connectTcp: async () => undefined,
@@ -230,18 +243,22 @@ describe("connection test API", () => {
       advertisedUrl: "https://agents.example.com:8443",
     })
 
-    const deviceRepository = createDeviceRepository(database)
-    const deviceService = createDeviceService({
+    const device = assembleDeviceSlice({
       database,
-      deviceRepository,
-      config,
-      runtimeSettingsRepository,
+      loopbackEndpoint: `http://${config.host}:${config.port}`,
+      getAdvertisedEndpointSettings: () => {
+        const settings = runtimeSettingsRepository.get()
+        return {
+          advertisedUrl: settings.advertisedUrl,
+          advertisedUrlEnabled: settings.advertisedUrlEnabled,
+        }
+      },
     })
 
     let requestedUrl = ""
     const connectionTestService = createConnectionTestService({
       runtimeSettingsRepository,
-      deviceService,
+      deviceProvisioning: device,
       deps: {
         lookupHost: async () => [{ address: "127.0.0.1", family: 4 }],
         connectTcp: async () => undefined,
