@@ -5,31 +5,16 @@ import { DeviceCollectionSchema, DEVICES_PATH, devicePath } from "contracts/http
 import { WorkspaceSchema } from "contracts/http/workspace"
 import { createLogCapture, assertSecretFreeLogs } from "test-support/second-client/log-capture"
 import { getListeningEndpoints } from "test-support/second-client/endpoint"
-import {
-  claimPairingCode,
-  createPairingCode,
-  pairDevice,
-} from "test-support/second-client/pairing"
+import { claimPairingCode, createPairingCode, pairDevice } from "test-support/second-client/pairing"
 import { createSecondClient } from "test-support/second-client"
-import {
-  closeWebSocket,
-  waitForSocketClose,
-} from "test-support/second-client/streams"
-import {
-  cleanupTestAppResources,
-  createTempDataDir,
-  createTestApp,
-  createTestAppResources,
-  createWorkspaceDir,
-} from "../test-support/create-test-app"
+import { closeWebSocket, waitForSocketClose } from "test-support/second-client/streams"
+import { bootTestApp } from "../test-support/test.harness"
+import { createWorkspaceDir } from "../test-support/test.app"
 import { clearDevicePresence } from "./presence"
 import { pairingCodes } from "../persistence/schema/pairing-codes"
 
-const resources = createTestAppResources()
-
 afterEach(async () => {
   clearDevicePresence()
-  await cleanupTestAppResources(resources)
 })
 
 const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 5_000) => {
@@ -45,8 +30,7 @@ const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 
 describe("second-client journey", () => {
   test("full MS2 lifecycle: pair, reconnect, operate, presence, revoke, access loss", async () => {
     const logCapture = createLogCapture()
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir, {
+    const { app, config, dataDir } = await bootTestApp({
       logStream: logCapture.stream,
     })
     const { httpBase, wsUrl } = await getListeningEndpoints({
@@ -148,8 +132,7 @@ describe("second-client journey", () => {
   })
 
   test("recovery: claimed and expired codes return structured errors, regenerate succeeds", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config, database } = await createTestApp(resources, dataDir)
+    const { app, config, database } = await bootTestApp()
     const { httpBase } = await getListeningEndpoints({
       app,
       host: config.host,
@@ -170,9 +153,7 @@ describe("second-client journey", () => {
       body: { name: "Second claim" },
     })
     expect(secondClaim.response.status).toBe(409)
-    expect(secondClaim.response.headers.get("content-type")).toContain(
-      "application/problem+json",
-    )
+    expect(secondClaim.response.headers.get("content-type")).toContain("application/problem+json")
     const claimedProblem = ConflictProblemSchema.parse(await secondClaim.response.json())
     expect(claimedProblem.title).toBe("Pairing code already claimed")
 

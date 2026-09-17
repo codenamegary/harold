@@ -1,49 +1,22 @@
-import { afterEach, describe, expect, test } from "bun:test"
-import { mkdtemp, rm } from "node:fs/promises"
+import { describe, expect, test } from "bun:test"
 import net from "node:net"
-import os from "node:os"
 import path from "node:path"
-import { createServer } from "../bootstrap/server"
 import { listen, registerShutdown } from "../bootstrap/shutdown"
-import { parseConfig } from "../config/config"
-import { openDatabase } from "./database"
-import { createRuntime } from "../runtime/runtime"
-
-const tempDirs: string[] = []
-
-const createTempDataDir = async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-startup-"))
-  tempDirs.push(dir)
-  return dir
-}
-
-afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
-})
+import { bootTestApp } from "../test-support/test.harness"
 
 describe("startup with database", () => {
   test("opens SQLite in a temp data dir before listening", async () => {
-    const dataDir = await createTempDataDir()
-    const config = parseConfig({
-      AGENT_SERVER_HOST: "127.0.0.1",
-      AGENT_SERVER_PORT: "0",
-      AGENT_SERVER_DATA_DIR: dataDir,
-    })
-    const database = openDatabase({ dataDir: config.dataDir })
-    const runtime = createRuntime("0.1.0")
-    const { app, acpSupervisor, runtimeStatusService } = await createServer({
-      config,
-      runtime,
-      database,
+    const result = await bootTestApp({
+      config: { host: "127.0.0.1" },
       registerTestRoutes: true,
     })
+    const { app, database, config, acpSupervisor, runtimeStatusService } = result
 
     registerShutdown(app, database, acpSupervisor, runtimeStatusService, [])
     await listen(app, config, runtimeStatusService)
 
     const address = app.server.address()
-    const port =
-      typeof address === "object" && address !== null ? address.port : 0
+    const port = typeof address === "object" && address !== null ? address.port : 0
 
     const connected = await new Promise<boolean>((resolve) => {
       const socket = net.connect({ host: "127.0.0.1", port }, () => {
@@ -54,9 +27,6 @@ describe("startup with database", () => {
     })
 
     expect(connected).toBe(true)
-    expect(database.path).toBe(path.join(dataDir, "agent-server.db"))
-
-    await app.close()
-    database.close()
+    expect(database.path).toBe(path.join(result.dataDir, "agent-server.db"))
   })
 })

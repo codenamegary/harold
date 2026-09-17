@@ -6,22 +6,19 @@ import {
   PAIRING_CODES_PATH,
   claimPairingCodePath,
 } from "contracts/http/pairing-code"
-import { DeviceCollectionSchema, DEVICES_PATH, deleteDevicePath, devicePath } from "contracts/http/device"
-import { WebSocket } from "ws"
 import {
-  cleanupTestAppResources,
-  createTempDataDir,
-  createTestApp,
-  createTestAppResources,
-} from "../test-support/create-test-app"
+  DeviceCollectionSchema,
+  DEVICES_PATH,
+  deleteDevicePath,
+  devicePath,
+} from "contracts/http/device"
+import { WebSocket } from "ws"
+import { bootTestApp } from "../test-support/test.harness"
 import { Config } from "../config/config"
 import { clearDevicePresence } from "./presence"
 
-const resources = createTestAppResources()
-
 afterEach(async () => {
   clearDevicePresence()
-  await cleanupTestAppResources(resources)
 })
 
 const getListeningBase = async (
@@ -52,14 +49,11 @@ const pairDevice = async (httpBase: string, body: Record<string, unknown> = {}) 
   expect(createResponse.status).toBe(201)
   const created = CreatePairingCodeResponseSchema.parse(await createResponse.json())
 
-  const claimResponse = await fetch(
-    `${httpBase}${claimPairingCodePath(created.code)}`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    },
-  )
+  const claimResponse = await fetch(`${httpBase}${claimPairingCodePath(created.code)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  })
   expect(claimResponse.status).toBe(201)
   return ClaimPairingCodeResponseSchema.parse(await claimResponse.json())
 }
@@ -114,8 +108,7 @@ const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 
 
 describe("device revoke", () => {
   test("DELETE revokes device, closes WS, blocks credential", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase, wsUrl } = await getListeningBase(app, config)
     const paired = await pairDevice(httpBase, { name: "To revoke", platform: "android" })
 
@@ -129,10 +122,9 @@ describe("device revoke", () => {
 
     const closePromise = waitForClose(deviceWs)
 
-    const revokeResponse = await fetch(
-      `${httpBase}${devicePath(paired.device.id)}`,
-      { method: "DELETE" },
-    )
+    const revokeResponse = await fetch(`${httpBase}${devicePath(paired.device.id)}`, {
+      method: "DELETE",
+    })
     expect(revokeResponse.status).toBe(204)
     expect(await revokeResponse.text()).toBe("")
 
@@ -164,12 +156,10 @@ describe("device revoke", () => {
     expect(listed.items).toHaveLength(1)
     expect(listed.items[0]?.id).toBe(paired.device.id)
     expect(listed.items[0]?.state).toBe("revoked")
-
   })
 
   test("idempotent second DELETE returns 204", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningBase(app, config)
     const paired = await pairDevice(httpBase)
 
@@ -190,22 +180,19 @@ describe("device revoke", () => {
   })
 
   test("unknown deviceId returns 404 Problem+JSON", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningBase(app, config)
 
-    const response = await fetch(
-      `${httpBase}${devicePath("device_01J0000000000000000000000")}`,
-      { method: "DELETE" },
-    )
+    const response = await fetch(`${httpBase}${devicePath("device_01J0000000000000000000000")}`, {
+      method: "DELETE",
+    })
     expect(response.status).toBe(404)
     expect(response.headers.get("content-type")).toContain("application/problem+json")
     NotFoundProblemSchema.parse(await response.json())
   })
 
   test("hardDelete removes device from list", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningBase(app, config)
     const paired = await pairDevice(httpBase, { name: "Hard delete me", platform: "ios" })
 
@@ -222,8 +209,7 @@ describe("device revoke", () => {
   })
 
   test("hardDelete of already-revoked device removes row", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningBase(app, config)
     const paired = await pairDevice(httpBase)
 

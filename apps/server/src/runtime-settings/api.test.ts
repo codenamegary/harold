@@ -1,6 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test"
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises"
-import os from "node:os"
+import { describe, expect, test } from "bun:test"
+import { mkdir, readFile } from "node:fs/promises"
 import path from "node:path"
 import { ValidationProblemSchema } from "contracts/http/error"
 import {
@@ -10,11 +9,9 @@ import {
 } from "contracts/http/runtime-settings"
 import YAML from "yaml"
 import { catalogAgentIds } from "../acp/catalog/generated/catalog.agents.generated"
-import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
 import { readEnvBindOverrides } from "../config/env.bind.overrides"
-import { openDatabase } from "../persistence/database"
-import { createRuntime } from "../runtime/runtime"
+import { bootTestApp, bootTestDirectory } from "../test-support/test.harness"
 import { createAppliedRuntimeSettingsHolder } from "./applied.runtime.settings"
 import {
   createRuntimeSettingsRepository,
@@ -23,60 +20,30 @@ import {
 } from "./repository"
 import { buildAppliedRuntimeSettings } from "./resolve.runtime.settings.state"
 
-const tempDirs: string[] = []
-const apps: Awaited<ReturnType<typeof createServer>>["app"][] = []
-
-const createTempDataDir = async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-runtime-settings-api-"))
-  tempDirs.push(dir)
-  return dir
-}
-
-const createTestApp = async (
-  dataDir: string,
-  options?: { envBindOverrides?: ReturnType<typeof readEnvBindOverrides> },
-) => {
-  const envBindOverrides = options?.envBindOverrides ?? readEnvBindOverrides({})
-  const config = parseConfig({
-    AGENT_SERVER_HOST: "127.0.0.1",
-    AGENT_SERVER_PORT: "0",
-    AGENT_SERVER_DATA_DIR: dataDir,
-  })
-  const database = openDatabase({ dataDir: config.dataDir })
-  const runtime = createRuntime("0.1.0")
-  const runtimeSettingsRepository = createRuntimeSettingsRepository({
-    dataDir: config.dataDir,
-  })
-  const persisted = runtimeSettingsRepository.get()
-  const appliedRuntimeSettings = createAppliedRuntimeSettingsHolder(
-    buildAppliedRuntimeSettings({ persisted, envOverrides: envBindOverrides }),
-  )
-  const applied = appliedRuntimeSettings.get()
-  const { app } = await createServer({
-    config: {
-      host: applied.bindHost,
-      port: applied.bindPort,
-      dataDir: config.dataDir,
+const createTestApp = (options?: { envBindOverrides?: ReturnType<typeof readEnvBindOverrides> }) =>
+  bootTestApp({
+    setup: ({ config }) => {
+      const envBindOverrides = options?.envBindOverrides ?? readEnvBindOverrides({})
+      const runtimeSettingsRepository = createRuntimeSettingsRepository({
+        dataDir: config.dataDir,
+      })
+      const persisted = runtimeSettingsRepository.get()
+      const appliedRuntimeSettings = createAppliedRuntimeSettingsHolder(
+        buildAppliedRuntimeSettings({ persisted, envOverrides: envBindOverrides }),
+      )
+      const applied = appliedRuntimeSettings.get()
+      return {
+        config: { ...config, host: applied.bindHost, port: applied.bindPort },
+        runtimeSettingsRepository,
+        appliedRuntimeSettings,
+        envBindOverrides,
+      }
     },
-    runtime,
-    database,
-    runtimeSettingsRepository,
-    appliedRuntimeSettings,
-    envBindOverrides,
   })
-  apps.push(app)
-  return { app, database, config, runtimeSettingsRepository, appliedRuntimeSettings }
-}
-
-afterEach(async () => {
-  await Promise.all(apps.splice(0).map((app) => app.close()))
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
-})
 
 describe("GET /v1/settings/runtime", () => {
   test("returns seeded defaults and writes settings.yml", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app, dataDir } = await createTestApp()
 
     const response = await app.inject({
       method: "GET",
@@ -109,8 +76,7 @@ describe("GET /v1/settings/runtime", () => {
   })
 
   test("reports env bind port override on GET", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir, {
+    const { app } = await createTestApp({
       envBindOverrides: { bindPort: 4123 },
     })
 
@@ -130,10 +96,9 @@ describe("GET /v1/settings/runtime", () => {
 
 describe("PATCH /v1/settings/runtime", () => {
   test("persists live fields without restartRequired", async () => {
-    const dataDir = await createTempDataDir()
+    const { app, dataDir } = await createTestApp()
     const allowedDir = path.join(dataDir, "allowed")
     await mkdir(allowedDir)
-    const { app } = await createTestApp(dataDir)
 
     const response = await app.inject({
       method: "PATCH",
@@ -165,8 +130,7 @@ describe("PATCH /v1/settings/runtime", () => {
   })
 
   test("sets restartRequired when bind port changes", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app } = await createTestApp()
 
     const response = await app.inject({
       method: "PATCH",
@@ -183,8 +147,7 @@ describe("PATCH /v1/settings/runtime", () => {
   })
 
   test("sets restartRequired when log path changes", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app } = await createTestApp()
 
     const response = await app.inject({
       method: "PATCH",
@@ -200,8 +163,7 @@ describe("PATCH /v1/settings/runtime", () => {
   })
 
   test("clears advertised URL with null", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app } = await createTestApp()
 
     await app.inject({
       method: "PATCH",
@@ -222,8 +184,7 @@ describe("PATCH /v1/settings/runtime", () => {
   })
 
   test("clears advertised URL with empty string", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app } = await createTestApp()
 
     await app.inject({
       method: "PATCH",
@@ -244,8 +205,7 @@ describe("PATCH /v1/settings/runtime", () => {
   })
 
   test("returns Problem+JSON for http advertised URL", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app } = await createTestApp()
 
     const response = await app.inject({
       method: "PATCH",
@@ -261,8 +221,7 @@ describe("PATCH /v1/settings/runtime", () => {
   })
 
   test("returns Problem+JSON for hostname trusted proxy", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app } = await createTestApp()
 
     const response = await app.inject({
       method: "PATCH",
@@ -278,8 +237,7 @@ describe("PATCH /v1/settings/runtime", () => {
   })
 
   test("returns Problem+JSON for non-loopback bind host", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app } = await createTestApp()
 
     const response = await app.inject({
       method: "PATCH",
@@ -295,8 +253,7 @@ describe("PATCH /v1/settings/runtime", () => {
   })
 
   test("does not touch agent_settings", async () => {
-    const dataDir = await createTempDataDir()
-    const { app, database } = await createTestApp(dataDir)
+    const { app, database } = await createTestApp()
 
     await app.inject({
       method: "PATCH",
@@ -317,37 +274,9 @@ describe("PATCH /v1/settings/runtime", () => {
 
 describe("runtime settings durability", () => {
   test("keeps settings across server restart via settings.yml", async () => {
-    const dataDir = await createTempDataDir()
+    const first = await createTestApp()
 
-    const firstConfig = parseConfig({
-      AGENT_SERVER_HOST: "127.0.0.1",
-      AGENT_SERVER_PORT: "0",
-      AGENT_SERVER_DATA_DIR: dataDir,
-    })
-    const firstDatabase = openDatabase({ dataDir: firstConfig.dataDir })
-    const firstRuntime = createRuntime("0.1.0")
-    const firstRepository = createRuntimeSettingsRepository({
-      dataDir: firstConfig.dataDir,
-    })
-    const firstPersisted = firstRepository.get()
-    const firstApplied = createAppliedRuntimeSettingsHolder(
-      buildAppliedRuntimeSettings({ persisted: firstPersisted, envOverrides: {} }),
-    )
-    const firstAppliedValues = firstApplied.get()
-    const { app: firstApp } = await createServer({
-      config: {
-        host: firstAppliedValues.bindHost,
-        port: firstAppliedValues.bindPort,
-        dataDir: firstConfig.dataDir,
-      },
-      runtime: firstRuntime,
-      database: firstDatabase,
-      runtimeSettingsRepository: firstRepository,
-      appliedRuntimeSettings: firstApplied,
-      envBindOverrides: {},
-    })
-
-    await firstApp.inject({
+    await first.app.inject({
       method: "PATCH",
       url: "/v1/settings/runtime",
       payload: {
@@ -358,32 +287,9 @@ describe("runtime settings durability", () => {
       },
     })
 
-    await firstApp.close()
-    firstDatabase.close()
+    const second = await first.reopen()
 
-    const secondDatabase = openDatabase({ dataDir })
-    const secondRuntime = createRuntime("0.1.0")
-    const secondRepository = createRuntimeSettingsRepository({ dataDir })
-    const secondPersisted = secondRepository.get()
-    const secondApplied = createAppliedRuntimeSettingsHolder(
-      buildAppliedRuntimeSettings({ persisted: secondPersisted, envOverrides: {} }),
-    )
-    const secondAppliedValues = secondApplied.get()
-    const { app: secondApp } = await createServer({
-      config: {
-        host: secondAppliedValues.bindHost,
-        port: secondAppliedValues.bindPort,
-        dataDir: firstConfig.dataDir,
-      },
-      runtime: secondRuntime,
-      database: secondDatabase,
-      runtimeSettingsRepository: secondRepository,
-      appliedRuntimeSettings: secondApplied,
-      envBindOverrides: {},
-    })
-    apps.push(secondApp)
-
-    const response = await secondApp.inject({
+    const response = await second.app.inject({
       method: "GET",
       url: "/v1/settings/runtime",
     })
@@ -393,12 +299,10 @@ describe("runtime settings durability", () => {
     expect(body.settings.bindPort).toBe(4100)
     expect(body.settings.logLevel).toBe("warn")
     expect(body.settings.trustedProxies).toEqual(["192.168.0.0/16"])
-
-    secondDatabase.close()
   })
 
   test("seeds missing settings.yml bind port from env config defaults", async () => {
-    const dataDir = await createTempDataDir()
+    const dataDir = await bootTestDirectory()
     const config = parseConfig({
       AGENT_SERVER_HOST: "127.0.0.1",
       AGENT_SERVER_PORT: "4123",
@@ -417,20 +321,9 @@ describe("runtime settings durability", () => {
 
 describe("createServer runtime settings seed", () => {
   test("bare createServer seeds missing settings.yml from config", async () => {
-    const dataDir = await createTempDataDir()
-    const config = parseConfig({
-      AGENT_SERVER_HOST: "127.0.0.1",
-      AGENT_SERVER_PORT: "4123",
-      AGENT_SERVER_DATA_DIR: dataDir,
+    const { app, dataDir } = await bootTestApp({
+      config: { host: "127.0.0.1", port: 4123 },
     })
-    const database = openDatabase({ dataDir: config.dataDir })
-    const runtime = createRuntime("0.1.0")
-    const { app } = await createServer({
-      config,
-      runtime,
-      database,
-    })
-    apps.push(app)
 
     const response = await app.inject({
       method: "GET",

@@ -11,7 +11,7 @@ import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
-import { allowWorkspaceRoots } from "../test-support/create-test-app"
+import { allowWorkspaceRoots } from "../test-support/test.app"
 
 const SUBSCRIBE_TIMEOUT_MS = 30_000
 const PROMPT_DEADLINE_MS = 120_000
@@ -80,10 +80,7 @@ const pngChunk = (type: string, data: Uint8Array): Uint8Array => {
 }
 
 /** Minimal valid PNG: solid color, so the model can answer a color question. */
-const createSolidPng = (
-  size: number,
-  rgb: [number, number, number],
-): Uint8Array => {
+const createSolidPng = (size: number, rgb: [number, number, number]): Uint8Array => {
   const signature = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
   const ihdr = new Uint8Array(13)
   new DataView(ihdr.buffer).setUint32(0, size)
@@ -149,9 +146,7 @@ const uploadImage = (
   })
 }
 
-const boundStreamUrl = (app: {
-  server: { address: () => unknown }
-}): string => {
+const boundStreamUrl = (app: { server: { address: () => unknown } }): string => {
   const address = app.server.address()
   if (address === null || typeof address === "string") {
     throw new Error("expected bound server address")
@@ -299,9 +294,7 @@ const permissionAllowOptionId = (params: Record<string, unknown>): string => {
   return typeof chosen.optionId === "string" ? chosen.optionId : ""
 }
 
-const assistantTextFromMessages = (
-  messages: Array<Record<string, unknown>>,
-): string =>
+const assistantTextFromMessages = (messages: Array<Record<string, unknown>>): string =>
   messages
     .filter((message) => message.type === "session_update")
     .map((message) => {
@@ -313,8 +306,7 @@ const assistantTextFromMessages = (
     .filter(
       (update) =>
         update !== undefined &&
-        (update.sessionUpdate === "agent_message_chunk" ||
-          update.type === "agent_message_chunk"),
+        (update.sessionUpdate === "agent_message_chunk" || update.type === "agent_message_chunk"),
     )
     .map((update) => {
       const content: unknown = update.content
@@ -322,7 +314,7 @@ const assistantTextFromMessages = (
         return content
           .map((part) =>
             typeof (part as { text?: unknown }).text === "string"
-              ? ((part as { text: string }).text)
+              ? (part as { text: string }).text
               : "",
           )
           .join("")
@@ -344,8 +336,7 @@ describe("cursor attachment smoke", () => {
       await mkdir(workspaceDir)
 
       const detectedPath = execSync("which agent", { encoding: "utf8" }).trim()
-      const whichFn: WhichFn = (binaryName) =>
-        binaryName === "agent" ? detectedPath : undefined
+      const whichFn: WhichFn = (binaryName) => (binaryName === "agent" ? detectedPath : undefined)
 
       const config = parseConfig({
         AGENT_SERVER_HOST: "127.0.0.1",
@@ -388,9 +379,9 @@ describe("cursor attachment smoke", () => {
         const uploadResponse = await uploadImage(app, workspaceId, "red-square.png", png)
         expect(uploadResponse.statusCode).toBe(201)
         const descriptor = AttachmentDescriptorSchema.parse(JSON.parse(uploadResponse.body))
-        expect(descriptor.path.startsWith(path.join(workspaceDir, ".agent-server", "attachments"))).toBe(
-          true,
-        )
+        expect(
+          descriptor.path.startsWith(path.join(workspaceDir, ".agent-server", "attachments")),
+        ).toBe(true)
 
         const client = await openStreamClient(boundStreamUrl(app))
         try {
