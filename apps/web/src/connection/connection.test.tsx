@@ -23,7 +23,7 @@ const originalWebSocket = globalThis.WebSocket
 const stubWebSocket = () => {
   globalThis.WebSocket = function FakeWebSocket(url: string | URL) {
     return {
-        url: hrefOf(url),
+      url: hrefOf(url),
       readyState: 1,
       close: () => undefined,
       send: () => undefined,
@@ -57,7 +57,7 @@ describe("fetchStatus", () => {
   test("rejects when the status endpoint is unreachable", async () => {
     globalThis.fetch = mock(() => Promise.reject(new Error("network error"))) as typeof fetch
 
-    await expect(fetchStatus()).rejects.toThrow("network error")
+    expect(fetchStatus()).rejects.toThrow("network error")
   })
 })
 

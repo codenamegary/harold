@@ -67,12 +67,14 @@ const createMockProcess = (): SpawnedAgentProcess => ({
   waitForExit: () => new Promise(() => undefined),
 })
 
-const createRepository = (agents: Array<{
-  id: AgentId
-  enabled: boolean
-  path: string | null
-  args?: string[]
-}>) => ({
+const createRepository = (
+  agents: Array<{
+    id: AgentId
+    enabled: boolean
+    path: string | null
+    args?: string[]
+  }>,
+) => ({
   list: () =>
     agents.map((agent) => ({
       ...agent,
@@ -122,18 +124,16 @@ describe("createAcpSupervisor", () => {
     })
     supervisors.push(supervisor)
 
-    await expect(supervisor.start("cursor")).rejects.toThrow("Agent is not enabled")
+    expect(supervisor.start("cursor")).rejects.toThrow("Agent is not enabled")
     expect(supervisor.getStatus().state).toBe("stopped")
 
     const missingPath = createAcpSupervisor({
-      agentSettingsRepository: createRepository([
-        { id: "cursor", enabled: true, path: null },
-      ]),
+      agentSettingsRepository: createRepository([{ id: "cursor", enabled: true, path: null }]),
       serverVersion: "0.1.0",
     })
     supervisors.push(missingPath)
 
-    await expect(missingPath.start("cursor")).rejects.toThrow("Agent executable path is not configured")
+    expect(missingPath.start("cursor")).rejects.toThrow("Agent executable path is not configured")
     expect(missingPath.getStatus().state).toBe("stopped")
   })
 
@@ -275,7 +275,7 @@ describe("createAcpSupervisor", () => {
     })
     supervisors.push(supervisor)
 
-    await expect(supervisor.start("cursor")).rejects.toThrow("initialize failed")
+    expect(supervisor.start("cursor")).rejects.toThrow("initialize failed")
     expect(supervisor.getStatus().state).toBe("error")
     expect(supervisor.getAgentRuntimeState("cursor")).toEqual({
       status: "error",
@@ -1354,9 +1354,7 @@ describe("createAcpSupervisor", () => {
     })
 
     expect(result).toEqual({ ok: true, result: { stopReason: "end_turn" } })
-    expect(promptCalls).toEqual([
-      { sessionId: "acp-session-prompt", prompt },
-    ])
+    expect(promptCalls).toEqual([{ sessionId: "acp-session-prompt", prompt }])
   })
 
   test("cancelAcpSession sends session/cancel as a notification", async () => {
@@ -1509,7 +1507,13 @@ describe("session config options", () => {
 
   const startReadySupervisor = async (
     mock: ReturnType<typeof createMockTransport>,
-    hooks: { onSessionConfig?: (input: { agentId: AgentId; acpSessionId: string; configOptions: unknown }) => void },
+    hooks: {
+      onSessionConfig?: (input: {
+        agentId: AgentId
+        acpSessionId: string
+        configOptions: unknown
+      }) => void
+    },
   ) => {
     mock.setHandler("initialize", () => ({
       protocolVersion: 1,
@@ -1619,16 +1623,12 @@ describe("session config options", () => {
       value: "m2",
     })
 
-    expect(seenParams).toEqual([
-      { sessionId: "s-1", configId: "model", value: "m2" },
-    ])
+    expect(seenParams).toEqual([{ sessionId: "s-1", configId: "model", value: "m2" }])
     expect(result).toMatchObject({ ok: true })
     if (result.ok) {
       expect(result.configOptions).toEqual(sampleConfig)
     }
-    expect(fired).toEqual([
-      { agentId: "cursor", acpSessionId: "s-1", configOptions: sampleConfig },
-    ])
+    expect(fired).toEqual([{ agentId: "cursor", acpSessionId: "s-1", configOptions: sampleConfig }])
   })
 
   test("setConfigOption classifies invalid option errors", async () => {

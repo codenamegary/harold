@@ -65,6 +65,6 @@ describe("fetchLogs", () => {
       ),
     ) as typeof fetch
 
-    await expect(fetchLogs()).rejects.toThrow("Logs fetch failed with 500")
+    expect(fetchLogs()).rejects.toThrow("Logs fetch failed with 500")
   })
 })

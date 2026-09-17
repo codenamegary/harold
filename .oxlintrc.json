@@ -5,10 +5,7 @@
   },
   "plugins": ["typescript", "oxc", "unicorn", "import", "react"],
   "rules": {
-    "typescript/consistent-type-imports": [
-      "error",
-      { "prefer": "no-type-imports" }
-    ],
+    "typescript/consistent-type-imports": ["error", { "prefer": "no-type-imports" }],
     "typescript/consistent-type-definitions": ["error", "type"],
     "typescript/no-explicit-any": "error",
     "typescript/no-unnecessary-type-assertion": "error",
@@ -37,6 +34,13 @@
       }
     },
     {
+      // Declaration merging (for example bun:test Matchers) requires interface.
+      "files": ["**/*.d.ts"],
+      "rules": {
+        "typescript/consistent-type-definitions": "off"
+      }
+    },
+    {
       "files": ["**/*.tsx"],
       "rules": {
         "unicorn/filename-case": [
@@ -55,10 +59,7 @@
     },
     {
       // Vite and Drizzle require default-exported configuration.
-      "files": [
-        "**/drizzle.config.ts",
-        "**/vite.config.ts"
-      ],
+      "files": ["**/drizzle.config.ts", "**/vite.config.ts"],
       "rules": {
         "import/no-default-export": "off"
       }

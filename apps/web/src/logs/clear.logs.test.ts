@@ -22,6 +22,6 @@ describe("clearLogs", () => {
       Promise.resolve(new Response("server error", { status: 500 })),
     ) as typeof fetch
 
-    await expect(clearLogs()).rejects.toThrow("Logs clear failed with 500")
+    expect(clearLogs()).rejects.toThrow("Logs clear failed with 500")
   })
 })

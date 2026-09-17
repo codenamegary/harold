@@ -67,6 +67,6 @@ describe("fetchWorkspaces", () => {
       ),
     ) as typeof fetch
 
-    await expect(fetchWorkspaces()).rejects.toThrow("Workspaces fetch failed with 500")
+    expect(fetchWorkspaces()).rejects.toThrow("Workspaces fetch failed with 500")
   })
 })

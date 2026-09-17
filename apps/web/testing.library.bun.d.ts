@@ -1,9 +1,11 @@
+import { TestingLibraryMatchers } from "@testing-library/jest-dom/matchers"
+import { expect } from "bun:test"
+
 export {}
 
 declare module "bun:test" {
-  interface Matchers<T = unknown>
-    extends import("@testing-library/jest-dom/types/matchers").TestingLibraryMatchers<
-      ReturnType<typeof import("bun:test").expect.stringContaining>,
-      T
-    > {}
+  interface Matchers<T = unknown> extends TestingLibraryMatchers<
+    ReturnType<typeof expect.stringContaining>,
+    T
+  > {}
 }

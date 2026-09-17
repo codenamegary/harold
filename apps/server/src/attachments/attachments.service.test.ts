@@ -41,9 +41,9 @@ describe("saveAttachment", () => {
     if (!result.ok) return
     expect(result.descriptor.kind).toBe("image")
     expect(result.descriptor.size).toBe(3)
-    expect(result.descriptor.path.startsWith(path.join(workspace, ".agent-server", "attachments"))).toBe(
-      true,
-    )
+    expect(
+      result.descriptor.path.startsWith(path.join(workspace, ".agent-server", "attachments")),
+    ).toBe(true)
     const stored = await readFile(result.descriptor.path)
     expect([...stored]).toEqual([1, 2, 3])
   })
@@ -94,7 +94,7 @@ describe("resolveAttachment", () => {
     })
     if (!saved.ok) throw new Error("save failed")
 
-    await expect(
+    expect(
       service.resolveAttachment({
         workspacePath: workspace,
         reference: {
@@ -116,7 +116,7 @@ describe("resolveAttachment", () => {
     const workspace = await createTempWorkspace()
     const service = createAttachmentsService()
 
-    await expect(
+    expect(
       service.resolveAttachment({
         workspacePath: workspace,
         reference: {
@@ -133,14 +133,23 @@ describe("resolveAttachment", () => {
     const workspace = await createTempWorkspace()
     const service = createAttachmentsService()
 
-    await expect(
+    expect(
       service.resolveAttachment({
         workspacePath: workspace,
         reference: {
           kind: "file",
           name: "x",
           mimeType: "text/plain",
-          path: path.join(workspace, ".agent-server", "attachments", "..", "..", "..", "etc", "passwd"),
+          path: path.join(
+            workspace,
+            ".agent-server",
+            "attachments",
+            "..",
+            "..",
+            "..",
+            "etc",
+            "passwd",
+          ),
         },
       }),
     ).resolves.toBeNull()
@@ -150,7 +159,7 @@ describe("resolveAttachment", () => {
     const workspace = await createTempWorkspace()
     const service = createAttachmentsService()
 
-    await expect(
+    expect(
       service.resolveAttachment({
         workspacePath: workspace,
         reference: {
@@ -178,10 +187,8 @@ describe("deleteAttachment", () => {
     if (!saved.ok) throw new Error("save failed")
     const attachmentId = path.basename(saved.descriptor.path)
 
-    await expect(
-      service.deleteAttachment({ workspacePath: workspace, attachmentId }),
-    ).resolves.toBe(true)
-    await expect(
+    expect(service.deleteAttachment({ workspacePath: workspace, attachmentId })).resolves.toBe(true)
+    expect(
       service.resolveAttachment({
         workspacePath: workspace,
         reference: {
@@ -198,10 +205,10 @@ describe("deleteAttachment", () => {
     const workspace = await createTempWorkspace()
     const service = createAttachmentsService()
 
-    await expect(
+    expect(
       service.deleteAttachment({ workspacePath: workspace, attachmentId: "../escape.txt" }),
     ).resolves.toBe(false)
-    await expect(
+    expect(
       service.deleteAttachment({ workspacePath: workspace, attachmentId: "random.txt" }),
     ).resolves.toBe(false)
   })
@@ -236,7 +243,7 @@ describe("ensureGitignoreEntry", () => {
     const result = await ensureGitignoreEntry(workspace)
 
     expect(result).toEqual({ patched: false, skipped: "no-gitignore" })
-    await expect(readFile(path.join(workspace, ".gitignore"), "utf8")).rejects.toThrow()
+    expect(readFile(path.join(workspace, ".gitignore"), "utf8")).rejects.toThrow()
   })
 
   test("inserts a separating newline when the file does not end with one", async () => {

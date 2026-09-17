@@ -4,7 +4,10 @@
   "type": "module",
   "packageManager": "bun@1.4.0",
   "workspaces": {
-    "packages": ["apps/*", "packages/*"],
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
     "catalog": {
       "zod": "^4.4.3",
       "drizzle-orm": "^0.45.2",
@@ -16,6 +19,8 @@
   "scripts": {
     "dev": "bun run --filter '*' dev",
     "build": "bun run --filter '*' build",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
     "lint": "bun run --filter '*' lint",
     "test": "bun run --filter '*' test",
     "typecheck": "bun run --filter '*' typecheck",
@@ -23,9 +28,13 @@
     "test:coverage": "bun run --filter server test:coverage && bun run --filter web test:coverage",
     "test:smoke": "AGENT_SERVER_RUN_CURSOR_SMOKE=1 bun --filter server test src/smoke",
     "db:generate": "bun run --filter server db:generate",
-    "catalog:codegen": "bun run --filter server catalog:codegen"
+    "catalog:codegen": "bun run --filter server catalog:codegen",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^17.5.1",
+    "oxfmt": "^0.68.0",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "^7.0.2001"
   }

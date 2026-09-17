@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { createAcpHubPromptSession } from "./acp.hub.prompt"
-import {
-  createSessionCwdCache,
-  createSessionHub,
-  SessionStreamSink,
-} from "./hub"
+import { createSessionCwdCache, createSessionHub, SessionStreamSink } from "./hub"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
 
 const collectSink = (): {
@@ -58,7 +54,7 @@ describe("createAcpHubPromptSession", () => {
     expect(settled).toBe(false)
 
     resolveCompletion?.({ ok: true, result: { stopReason: "end_turn" } })
-    await expect(pending).resolves.toEqual({ ok: true })
+    expect(pending).resolves.toEqual({ ok: true })
     expect(settled).toBe(true)
   })
 
@@ -75,7 +71,7 @@ describe("createAcpHubPromptSession", () => {
       }),
     })
 
-    await expect(
+    expect(
       promptSession({
         agentId: "cursor",
         sessionId: "s1",
@@ -127,16 +123,12 @@ describe("createAcpHubPromptSession", () => {
     })
 
     await Promise.resolve()
-    expect(sink.messages.some((message) => message.type === "prompt_complete")).toBe(
-      false,
-    )
+    expect(sink.messages.some((message) => message.type === "prompt_complete")).toBe(false)
 
     resolveCompletion?.({ ok: true, result: { stopReason: "end_turn" } })
     await promptDone
 
-    expect(sink.messages.some((message) => message.type === "prompt_complete")).toBe(
-      true,
-    )
+    expect(sink.messages.some((message) => message.type === "prompt_complete")).toBe(true)
   })
 
   test("hub emits error when ACP prompt completion fails", async () => {
@@ -174,14 +166,10 @@ describe("createAcpHubPromptSession", () => {
       text: "hello",
     })
 
-    expect(sink.messages.some((message) => message.type === "prompt_complete")).toBe(
-      false,
-    )
+    expect(sink.messages.some((message) => message.type === "prompt_complete")).toBe(false)
     expect(
       sink.messages.some(
-        (message) =>
-          message.type === "error" &&
-          message.message === "session/prompt failed: boom",
+        (message) => message.type === "error" && message.message === "session/prompt failed: boom",
       ),
     ).toBe(true)
   })
@@ -213,7 +201,7 @@ describe("createAcpHubPromptSession with attachments", () => {
       advertisesPromptCapability: () => true,
     })
 
-    await expect(
+    expect(
       promptSession({ agentId: "a", sessionId: "s1", text: "look", attachments: [ref] }),
     ).resolves.toEqual({ ok: true })
 
@@ -241,12 +229,19 @@ describe("createAcpHubPromptSession with attachments", () => {
       advertisesPromptCapability: () => true,
     })
 
-    await expect(
+    expect(
       promptSession({
         agentId: "a",
         sessionId: "s1",
         text: "read",
-        attachments: [{ kind: "file", name: "notes.md", mimeType: "text/markdown", path: "/tmp/ws/.agent-server/attachments/att_2.md" }],
+        attachments: [
+          {
+            kind: "file",
+            name: "notes.md",
+            mimeType: "text/markdown",
+            path: "/tmp/ws/.agent-server/attachments/att_2.md",
+          },
+        ],
       }),
     ).resolves.toEqual({ ok: true })
 
@@ -268,7 +263,7 @@ describe("createAcpHubPromptSession with attachments", () => {
       advertisesPromptCapability: ({ kind }) => kind !== "image",
     })
 
-    await expect(
+    expect(
       promptSession({ agentId: "a", sessionId: "s1", text: "look", attachments: [ref] }),
     ).resolves.toEqual({
       ok: false,
@@ -286,16 +281,19 @@ describe("createAcpHubPromptSession with attachments", () => {
       advertisesPromptCapability: () => false,
     })
 
-    await expect(
+    expect(
       promptSession({
         agentId: "a",
         sessionId: "s1",
         text: "read",
-        attachments: [{ kind: "file", name: "notes.md", mimeType: "text/markdown", path: "/tmp/x.md" }],
+        attachments: [
+          { kind: "file", name: "notes.md", mimeType: "text/markdown", path: "/tmp/x.md" },
+        ],
       }),
     ).resolves.toEqual({
       ok: false,
-      reason: "Agent does not advertise promptCapabilities.embeddedContext — cannot attach notes.md",
+      reason:
+        "Agent does not advertise promptCapabilities.embeddedContext — cannot attach notes.md",
     })
   })
 
@@ -310,7 +308,7 @@ describe("createAcpHubPromptSession with attachments", () => {
       advertisesPromptCapability: () => true,
     })
 
-    await expect(
+    expect(
       promptSession({ agentId: "a", sessionId: "s1", text: "look", attachments: [ref] }),
     ).resolves.toEqual({
       ok: false,

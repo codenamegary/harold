@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import {
-  createSessionCwdCache,
-  createSessionHub,
-  SessionStreamSink,
-} from "./hub"
+import { createSessionCwdCache, createSessionHub, SessionStreamSink } from "./hub"
 import { createCommandsCache } from "./commands.cache"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
 
@@ -98,15 +94,13 @@ describe("session hub", () => {
     expect(
       b.messages.some(
         (m) =>
-          m.type === "session_update" &&
-          (m.update as { text?: string }).text === "still-on-s1",
+          m.type === "session_update" && (m.update as { text?: string }).text === "still-on-s1",
       ),
     ).toBe(true)
     expect(
       a.messages.some(
         (m) =>
-          m.type === "session_update" &&
-          (m.update as { text?: string }).text === "still-on-s1",
+          m.type === "session_update" && (m.update as { text?: string }).text === "still-on-s1",
       ),
     ).toBe(false)
   })
@@ -143,7 +137,7 @@ describe("session hub", () => {
     hub.resolvePermissionReply({ requestId: "req-1", optionId: "allow-once" })
     hub.resolvePermissionReply({ requestId: "req-1", optionId: "reject-once" })
 
-    await expect(pending).resolves.toEqual({
+    expect(pending).resolves.toEqual({
       outcome: { outcome: "selected", optionId: "allow-once" },
     })
   })
@@ -220,9 +214,7 @@ describe("session hub", () => {
     expect(a.messages.some((m) => m.type === "prompt_complete")).toBe(false)
     expect(
       a.messages.some(
-        (m) =>
-          m.type === "error"
-          && m.message.includes("Agent authentication required"),
+        (m) => m.type === "error" && m.message.includes("Agent authentication required"),
       ),
     ).toBe(true)
     expect(challenges).toBe(0)
@@ -284,9 +276,7 @@ describe("session hub", () => {
     expect(a.messages.some((m) => m.type === "prompt_complete")).toBe(false)
     expect(
       a.messages.some(
-        (m) =>
-          m.type === "error"
-          && m.message.includes("Agent authentication required"),
+        (m) => m.type === "error" && m.message.includes("Agent authentication required"),
       ),
     ).toBe(true)
   })
@@ -372,8 +362,7 @@ describe("session hub", () => {
       messages.filter(
         (m) =>
           m.type === "session_update" &&
-          (m.update as { sessionUpdate?: string }).sessionUpdate ===
-            "available_commands_update",
+          (m.update as { sessionUpdate?: string }).sessionUpdate === "available_commands_update",
       )
 
     expect(commandUpdates(a.messages).map((m) => m.update)).toEqual([first, second])
@@ -415,8 +404,7 @@ describe("session hub", () => {
       b.messages.some(
         (m) =>
           m.type === "session_update" &&
-          (m.update as { sessionUpdate?: string }).sessionUpdate ===
-            "available_commands_update",
+          (m.update as { sessionUpdate?: string }).sessionUpdate === "available_commands_update",
       ),
     ).toBe(true)
   })
