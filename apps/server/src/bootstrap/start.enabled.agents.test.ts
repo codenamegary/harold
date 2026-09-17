@@ -35,10 +35,9 @@ describe("startEnabledAgents", () => {
     )
 
     expect(start).toHaveBeenCalledTimes(2)
-    expect(start.mock.calls.map((call) => call[0]).sort()).toEqual([
-      "claude-acp",
-      "cursor",
-    ])
+    expect(
+      start.mock.calls.map((call) => call[0]).sort((left, right) => left.localeCompare(right)),
+    ).toEqual(["claude-acp", "cursor"])
     expect(results).toEqual([
       { agentId: "cursor", ok: true },
       { agentId: "claude-acp", ok: true },

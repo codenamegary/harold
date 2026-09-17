@@ -1,7 +1,7 @@
 import { AttachmentKindSchema, MAX_ATTACHMENT_BYTES, AttachmentKind } from "contracts/http/attachments"
 import { FastifyInstance } from "fastify"
 import { MultipartFile } from "@fastify/multipart"
-import { WorkspaceRepository } from "../workspace/repository"
+import { FindWorkspaceById } from "../workspace/workspace.ports"
 import { AttachmentsService } from "./attachments.service"
 import {
   buildAttachmentNotFoundProblem,
@@ -30,12 +30,12 @@ const parseKindField = (value: unknown): AttachmentKind | undefined => {
 
 export const registerAttachmentRoutes = (
   app: FastifyInstance,
-  workspaceRepository: WorkspaceRepository,
+  findWorkspaceById: FindWorkspaceById,
   attachmentsService: AttachmentsService,
 ) => {
   app.post("/v1/workspaces/:workspaceId/attachments", async (request, reply) => {
     const { workspaceId } = request.params as { workspaceId: string }
-    const workspaceResult = workspaceRepository.getById({ id: workspaceId })
+    const workspaceResult = findWorkspaceById({ id: workspaceId })
 
     if (!workspaceResult.ok) {
       return sendProblem(reply, 404, buildWorkspaceNotFoundProblem())
@@ -124,7 +124,7 @@ export const registerAttachmentRoutes = (
       workspaceId: string
       attachmentId: string
     }
-    const workspaceResult = workspaceRepository.getById({ id: workspaceId })
+    const workspaceResult = findWorkspaceById({ id: workspaceId })
 
     if (!workspaceResult.ok) {
       return sendProblem(reply, 404, buildWorkspaceNotFoundProblem())

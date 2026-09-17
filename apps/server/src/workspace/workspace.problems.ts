@@ -6,15 +6,15 @@ import {
   WorkspaceActiveSessionsProblemSchema,
 } from "contracts/http/error"
 import { sanitizeAcpErrorMessage } from "../acp/sanitize.error"
-import { WorkspacePathError } from "./workspace.errors"
+import { FilesystemPathError } from "../filesystem/filesystem.errors"
 
-const pathErrorCodes: Record<WorkspacePathError["kind"], string> = {
+const pathErrorCodes: Record<FilesystemPathError["kind"], string> = {
   missing: "validation.field.path.missing",
   not_directory: "validation.field.path.not_directory",
   unreadable: "validation.field.path.unreadable",
 }
 
-export const buildPathValidationProblem = (error: WorkspacePathError) =>
+export const buildPathValidationProblem = (error: FilesystemPathError) =>
   ValidationProblemSchema.parse({
     type: PROBLEM_TYPES.validationError,
     title: "Request validation failed",

@@ -1,10 +1,7 @@
-export type WorkspacePathError =
-  | { kind: "missing" }
-  | { kind: "not_directory" }
-  | { kind: "unreadable" }
+import { FilesystemPathError } from "../filesystem/filesystem.errors"
 
 export type WorkspaceRepositoryError =
-  | { kind: "path"; error: WorkspacePathError }
+  | { kind: "path"; error: FilesystemPathError }
   | { kind: "outside_allowed_root" }
   | { kind: "not_found" }
   | { kind: "duplicate_path" }

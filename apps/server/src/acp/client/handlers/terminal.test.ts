@@ -62,9 +62,11 @@ describe("createAcpTerminalHandlers", () => {
       terminalId: "term-test",
     })
 
-    await expect(handlers["terminal/output"]({
-      sessionId: "terminal-session",
-      terminalId: "term-test",
-    })).rejects.toMatchObject({ message: "terminal not found" })
+    expect(
+      handlers["terminal/output"]({
+        sessionId: "terminal-session",
+        terminalId: "term-test",
+      }),
+    ).rejects.toMatchObject({ message: "terminal not found" })
   })
 })

@@ -98,14 +98,14 @@ describe("ACP supervisor integration", () => {
     expect(inventoryAdvertisesSessionList(inventory)).toBe(true)
 
     await acpSupervisor.stop()
-        await app.close()
+    await app.close()
     database.close()
   })
 
   test("status stays stopped when start is called for a disabled agent", async () => {
     const { app, acpSupervisor, database } = await createTestHarness()
 
-    await expect(acpSupervisor.start("cursor")).rejects.toThrow()
+    expect(acpSupervisor.start("cursor")).rejects.toThrow()
 
     const statusResponse = await app.inject({ method: "GET", url: "/v1/status" })
     const status = StatusSchema.parse(JSON.parse(statusResponse.body))
@@ -115,54 +115,62 @@ describe("ACP supervisor integration", () => {
     database.close()
   })
 
-  test("disabling a running agent stops the supervisor", async () => {
-    const { app, acpSupervisor, database } = await createTestHarness()
+  test(
+    "disabling a running agent stops the supervisor",
+    async () => {
+      const { app, acpSupervisor, database } = await createTestHarness()
 
-    await app.inject({
-      method: "PATCH",
-      url: "/v1/settings/agents/cursor",
-      payload: { enabled: true, path: "/fake/agent" },
-    })
-    await acpSupervisor.start("cursor")
-    expect(acpSupervisor.getStatus().state).toBe("ready")
+      await app.inject({
+        method: "PATCH",
+        url: "/v1/settings/agents/cursor",
+        payload: { enabled: true, path: "/fake/agent" },
+      })
+      await acpSupervisor.start("cursor")
+      expect(acpSupervisor.getStatus().state).toBe("ready")
 
-    await app.inject({
-      method: "PATCH",
-      url: "/v1/settings/agents/cursor",
-      payload: { enabled: false },
-    })
+      await app.inject({
+        method: "PATCH",
+        url: "/v1/settings/agents/cursor",
+        payload: { enabled: false },
+      })
 
-    expect(acpSupervisor.getStatus().state).toBe("stopped")
+      expect(acpSupervisor.getStatus().state).toBe("stopped")
 
-    const statusResponse = await app.inject({ method: "GET", url: "/v1/status" })
-    const status = StatusSchema.parse(JSON.parse(statusResponse.body))
-    expect(status.acp.state).toBe("stopped")
+      const statusResponse = await app.inject({ method: "GET", url: "/v1/status" })
+      const status = StatusSchema.parse(JSON.parse(statusResponse.body))
+      expect(status.acp.state).toBe("stopped")
 
-    await acpSupervisor.stop()
-    await app.close()
-    database.close()
-  }, { timeout: 20_000 })
+      await acpSupervisor.stop()
+      await app.close()
+      database.close()
+    },
+    { timeout: 20_000 },
+  )
 
-  test("PATCH enable starts the supervisor", async () => {
-    const { app, acpSupervisor, database } = await createTestHarness()
+  test(
+    "PATCH enable starts the supervisor",
+    async () => {
+      const { app, acpSupervisor, database } = await createTestHarness()
 
-    const enableResponse = await app.inject({
-      method: "PATCH",
-      url: "/v1/settings/agents/cursor",
-      payload: { enabled: true, path: "/fake/agent" },
-    })
-    expect(enableResponse.statusCode).toBe(200)
-    expect(acpSupervisor.getStatus().state).toBe("ready")
-    expect(acpSupervisor.getRunningAgentIds()).toEqual(["cursor"])
+      const enableResponse = await app.inject({
+        method: "PATCH",
+        url: "/v1/settings/agents/cursor",
+        payload: { enabled: true, path: "/fake/agent" },
+      })
+      expect(enableResponse.statusCode).toBe(200)
+      expect(acpSupervisor.getStatus().state).toBe("ready")
+      expect(acpSupervisor.getRunningAgentIds()).toEqual(["cursor"])
 
-    const statusResponse = await app.inject({ method: "GET", url: "/v1/status" })
-    const status = StatusSchema.parse(JSON.parse(statusResponse.body))
-    expect(status.acp.state).toBe("ready")
+      const statusResponse = await app.inject({ method: "GET", url: "/v1/status" })
+      const status = StatusSchema.parse(JSON.parse(statusResponse.body))
+      expect(status.acp.state).toBe("ready")
 
-    await acpSupervisor.stop()
-    await app.close()
-    database.close()
-  }, { timeout: 20_000 })
+      await acpSupervisor.stop()
+      await app.close()
+      database.close()
+    },
+    { timeout: 20_000 },
+  )
 
   test("shutdown stops the ACP child before the database closes", async () => {
     const { spawnAgentProcessFn, killed } = createFakeSpawnFn()
@@ -195,7 +203,7 @@ describe("ACP supervisor integration", () => {
     expect(killed.value).toBe(true)
     expect(acpSupervisor.getStatus().state).toBe("stopped")
 
-        await app.close()
+    await app.close()
     database.close()
   })
 

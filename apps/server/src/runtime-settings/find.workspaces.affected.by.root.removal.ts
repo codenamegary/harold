@@ -1,5 +1,5 @@
 import { Workspace } from "contracts/http/workspace"
-import { isPathUnderAllowedRoot } from "../workspace/is.path.under.allowed.root"
+import { isDescendantOf } from "../filesystem/filesystem.is.descendant.of"
 
 export const findWorkspacesAffectedByRootRemoval = (params: {
   workspaces: readonly Workspace[]
@@ -16,14 +16,14 @@ export const findWorkspacesAffectedByRootRemoval = (params: {
 
   return params.workspaces.filter((workspace) => {
     const coveredByNext = params.nextRoots.some((root) =>
-      isPathUnderAllowedRoot({ allowedRoot: root, candidatePath: workspace.path }),
+      isDescendantOf({ path: root, candidatePath: workspace.path }),
     )
     if (coveredByNext) {
       return false
     }
 
     return removedRoots.some((root) =>
-      isPathUnderAllowedRoot({ allowedRoot: root, candidatePath: workspace.path }),
+      isDescendantOf({ path: root, candidatePath: workspace.path }),
     )
   })
 }

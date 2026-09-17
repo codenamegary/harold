@@ -9,3 +9,7 @@ export const isPermissionFilesystemError = (error: unknown): boolean =>
   error !== null &&
   "code" in error &&
   (error.code === "EACCES" || error.code === "EPERM")
+
+export type FilesystemPathError = { kind: "missing" } |
+{ kind: "not_directory" } |
+{ kind: "unreadable" } 

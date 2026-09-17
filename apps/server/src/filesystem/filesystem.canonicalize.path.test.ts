@@ -3,7 +3,7 @@ import { accessSync } from "node:fs"
 import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { canonicalizeWorkspacePath } from "./canonicalize.workspace.path"
+import { canonicalizePath } from "./filesystem.canonicalize.path"
 
 const tempDirs: string[] = []
 
@@ -26,10 +26,10 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
-describe("canonicalizeWorkspacePath", () => {
+describe("canonicalizePath", () => {
   test("expands ~ and resolves to real path", async () => {
     const home = os.homedir()
-    const result = canonicalizeWorkspacePath("~")
+    const result = canonicalizePath("~")
 
     expect(result.ok).toBe(true)
     if (result.ok) {
@@ -44,7 +44,7 @@ describe("canonicalizeWorkspacePath", () => {
     await mkdir(target)
     await symlink(target, link)
 
-    const result = canonicalizeWorkspacePath(link)
+    const result = canonicalizePath(link)
 
     expect(result.ok).toBe(true)
     if (result.ok) {
@@ -53,7 +53,7 @@ describe("canonicalizeWorkspacePath", () => {
   })
 
   test("rejects missing paths", () => {
-    const result = canonicalizeWorkspacePath("/tmp/agent-server-missing-path-xyz")
+    const result = canonicalizePath("/tmp/agent-server-missing-path-xyz")
 
     expect(result.ok).toBe(false)
     if (!result.ok) {
@@ -66,7 +66,7 @@ describe("canonicalizeWorkspacePath", () => {
     const filePath = path.join(base, "file.txt")
     await writeFile(filePath, "not a directory")
 
-    const result = canonicalizeWorkspacePath(filePath)
+    const result = canonicalizePath(filePath)
 
     expect(result.ok).toBe(false)
     if (!result.ok) {
@@ -85,7 +85,7 @@ describe("canonicalizeWorkspacePath", () => {
       return
     }
 
-    const result = canonicalizeWorkspacePath(restricted)
+    const result = canonicalizePath(restricted)
 
     await chmod(restricted, 0o755)
 

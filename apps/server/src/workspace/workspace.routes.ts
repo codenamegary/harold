@@ -1,4 +1,5 @@
 import {
+  CreateWorkspaceBody,
   CreateWorkspaceBodySchema,
   DeleteWorkspaceQuerySchema,
   ListWorkspacesQuerySchema,
@@ -7,9 +8,13 @@ import {
   WorkspaceSchema,
 } from "contracts/http/workspace"
 import { FastifyInstance } from "fastify"
-import { AcpSupervisor } from "../acp/supervisor/models"
-import { WorkspaceRepository } from "./repository"
-import { WorkspaceService } from "./service"
+import { RegisterWorkspaceResult } from "./workspace.register.usecase"
+import {
+  DeleteWorkspace,
+  FindWorkspaceById,
+  ListWorkspaces,
+  UpdateWorkspaceName,
+} from "./workspace.ports"
 import {
   buildConflictProblem,
   buildInvalidCursorProblem,
@@ -18,7 +23,6 @@ import {
   buildPathValidationProblem,
   buildWorkspaceActiveSessionsProblem,
 } from "./workspace.problems"
-import { deleteWorkspaceWithCascade } from "./delete.workspace.cascade"
 
 const sendProblem = (
   reply: { status: (code: number) => { type: (type: string) => { send: (body: unknown) => unknown } } },
@@ -26,15 +30,18 @@ const sendProblem = (
   problem: unknown,
 ) => reply.status(status).type("application/problem+json").send(problem)
 
-export const registerWorkspaceRoutes = (
-  app: FastifyInstance,
-  repository: WorkspaceRepository,
-  workspaceService: WorkspaceService,
-  acpSupervisor: AcpSupervisor,
-) => {
+export type WorkspaceRouteDeps = Readonly<{
+  registerWorkspace: (body: CreateWorkspaceBody) => RegisterWorkspaceResult
+  listWorkspaces: ListWorkspaces
+  findWorkspaceById: FindWorkspaceById
+  updateWorkspaceName: UpdateWorkspaceName
+  deleteWorkspace: DeleteWorkspace
+}>
+
+export const registerWorkspaceRoutes = (app: FastifyInstance, deps: WorkspaceRouteDeps) => {
   app.post("/v1/workspaces", async (request, reply) => {
     const body = CreateWorkspaceBodySchema.parse(request.body)
-    const result = workspaceService.create(body)
+    const result = deps.registerWorkspace(body)
 
     if (!result.ok) {
       if (result.error.kind === "path") {
@@ -51,7 +58,7 @@ export const registerWorkspaceRoutes = (
 
   app.get("/v1/workspaces", async (request, reply) => {
     const query = ListWorkspacesQuerySchema.parse(request.query)
-    const result = repository.list(query)
+    const result = deps.listWorkspaces(query)
 
     if (!result.ok) {
       return sendProblem(reply, 400, buildInvalidCursorProblem())
@@ -72,7 +79,7 @@ export const registerWorkspaceRoutes = (
 
   app.get("/v1/workspaces/:workspaceId", async (request, reply) => {
     const { workspaceId } = request.params as { workspaceId: string }
-    const result = repository.getById({ id: workspaceId })
+    const result = deps.findWorkspaceById({ id: workspaceId })
 
     if (!result.ok) {
       return sendProblem(reply, 404, buildNotFoundProblem())
@@ -84,7 +91,7 @@ export const registerWorkspaceRoutes = (
   app.patch("/v1/workspaces/:workspaceId", async (request, reply) => {
     const { workspaceId } = request.params as { workspaceId: string }
     const body = UpdateWorkspaceBodySchema.parse(request.body)
-    const result = workspaceService.updateName({ id: workspaceId, ...body })
+    const result = deps.updateWorkspaceName({ id: workspaceId, name: body.name })
 
     if (!result.ok) {
       return sendProblem(reply, 404, buildNotFoundProblem())
@@ -98,22 +105,14 @@ export const registerWorkspaceRoutes = (
     const query = DeleteWorkspaceQuerySchema.parse(request.query)
     const force = query.force ?? false
 
-    const workspace = repository.getById({ id: workspaceId })
-    if (!workspace.ok) {
-      return sendProblem(reply, 404, buildNotFoundProblem())
-    }
-
-    const deleted = await deleteWorkspaceWithCascade({
+    const deleted = await deps.deleteWorkspace({
       workspaceId,
       force,
-      workspaceRepository: repository,
-      workspaceService,
-      acpSupervisor,
     })
 
     if (!deleted.ok) {
-      if (deleted.kind === "active_sessions") {
-        return sendProblem(reply, 409, buildWorkspaceActiveSessionsProblem(deleted.detail))
+      if (deleted.error.kind === "active_sessions") {
+        return sendProblem(reply, 409, buildWorkspaceActiveSessionsProblem(deleted.error.detail))
       }
       return sendProblem(reply, 404, buildNotFoundProblem())
     }

@@ -1,17 +1,32 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { eq } from "drizzle-orm"
-import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises"
+import { accessSync } from "node:fs"
+import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { openDatabase } from "../persistence/database"
+import { AgentDatabase, openDatabase } from "../persistence/database"
 import { workspaces } from "../persistence/schema/workspaces"
-import { createWorkspaceRepository } from "./repository"
 import { encodeWorkspacePageCursor } from "./workspace.page.cursor"
+import {
+  makeDeleteWorkspaceRow,
+  makeFindWorkspaceById,
+  makeInsertWorkspace,
+  makeListWorkspaces,
+  makeUpdateWorkspaceName,
+} from "./workspace.sqlite.adapters"
+
+const openWorkspaceAdapters = (database: AgentDatabase) => ({
+  insertWorkspace: makeInsertWorkspace(database),
+  findWorkspaceById: makeFindWorkspaceById(database),
+  listWorkspaces: makeListWorkspaces(database),
+  updateWorkspaceName: makeUpdateWorkspaceName(database),
+  deleteWorkspaceRow: makeDeleteWorkspaceRow(database),
+})
 
 const tempDirs: string[] = []
 
 const createTempDataDir = async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-workspace-repo-"))
+  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-workspace-adapters-"))
   tempDirs.push(dir)
   return dir
 }
@@ -22,23 +37,18 @@ const createWorkspaceDir = async (parent: string, name: string) => {
   return dir
 }
 
-const createRepository = (database: ReturnType<typeof openDatabase>, dataDir: string) =>
-  createWorkspaceRepository(database, {
-    getAllowedRoots: () => [path.resolve(dataDir)],
-  })
-
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
-describe("workspace repository", () => {
+describe("workspace sqlite adapters", () => {
   test("creates a workspace with ws_ id and available state", async () => {
     const dataDir = await createTempDataDir()
     const workspaceDir = await createWorkspaceDir(dataDir, "project")
     const database = openDatabase({ dataDir })
-    const repository = createRepository(database, dataDir)
+    const insertWorkspace = makeInsertWorkspace(database)
 
-    const result = repository.create({ name: "My Project", path: workspaceDir })
+    const result = insertWorkspace({ name: "My Project", canonicalPath: path.resolve(workspaceDir) })
 
     expect(result.ok).toBe(true)
     if (result.ok) {
@@ -55,13 +65,11 @@ describe("workspace repository", () => {
   test("rejects duplicate canonical paths", async () => {
     const dataDir = await createTempDataDir()
     const target = await createWorkspaceDir(dataDir, "target")
-    const link = path.join(dataDir, "link")
-    await symlink(target, link)
     const database = openDatabase({ dataDir })
-    const repository = createRepository(database, dataDir)
+    const insertWorkspace = makeInsertWorkspace(database)
 
-    const first = repository.create({ name: "First", path: target })
-    const second = repository.create({ name: "Second", path: link })
+    const first = insertWorkspace({ name: "First", canonicalPath: path.resolve(target) })
+    const second = insertWorkspace({ name: "Second", canonicalPath: path.resolve(target) })
 
     expect(first.ok).toBe(true)
     expect(second.ok).toBe(false)
@@ -78,11 +86,11 @@ describe("workspace repository", () => {
     const beta = await createWorkspaceDir(dataDir, "beta")
     const gamma = await createWorkspaceDir(dataDir, "gamma")
     const database = openDatabase({ dataDir })
-    const repository = createRepository(database, dataDir)
+    const { insertWorkspace, listWorkspaces, updateWorkspaceName } = openWorkspaceAdapters(database)
 
-    const first = repository.create({ name: "Alpha", path: alpha })
-    const second = repository.create({ name: "Beta", path: beta })
-    const third = repository.create({ name: "Gamma", path: gamma })
+    const first = insertWorkspace({ name: "Alpha", canonicalPath: path.resolve(alpha) })
+    const second = insertWorkspace({ name: "Beta", canonicalPath: path.resolve(beta) })
+    const third = insertWorkspace({ name: "Gamma", canonicalPath: path.resolve(gamma) })
 
     expect(first.ok && second.ok && third.ok).toBe(true)
     if (!first.ok || !second.ok || !third.ok) {
@@ -100,10 +108,10 @@ describe("workspace repository", () => {
       .where(eq(workspaces.id, third.value.id))
       .run()
 
-    const renamed = repository.updateName({ id: second.value.id, name: "Beta Renamed" })
+    const renamed = updateWorkspaceName({ id: second.value.id, name: "Beta Renamed" })
     expect(renamed.ok).toBe(true)
 
-    const listResult = repository.list({ limit: 100 })
+    const listResult = listWorkspaces({ limit: 100 })
     expect(listResult.ok).toBe(true)
     if (!listResult.ok) {
       return
@@ -123,7 +131,7 @@ describe("workspace repository", () => {
     const alpha = await createWorkspaceDir(dataDir, "alpha")
     const beta = await createWorkspaceDir(dataDir, "beta")
     const database = openDatabase({ dataDir })
-    const repository = createRepository(database, dataDir)
+    const { listWorkspaces } = openWorkspaceAdapters(database)
     const timestamp = "2026-01-01T00:00:00.000Z"
 
     database.db
@@ -146,7 +154,7 @@ describe("workspace repository", () => {
       ])
       .run()
 
-    const listResult = repository.list({ limit: 100 })
+    const listResult = listWorkspaces({ limit: 100 })
     expect(listResult.ok).toBe(true)
     if (!listResult.ok) {
       return
@@ -164,32 +172,33 @@ describe("workspace repository", () => {
     const dataDir = await createTempDataDir()
     const workspaceDir = await createWorkspaceDir(dataDir, "project")
     const database = openDatabase({ dataDir })
-    const repository = createRepository(database, dataDir)
+    const { insertWorkspace, findWorkspaceById, updateWorkspaceName, deleteWorkspaceRow } =
+      openWorkspaceAdapters(database)
 
-    const created = repository.create({ name: "Original", path: workspaceDir })
+    const created = insertWorkspace({ name: "Original", canonicalPath: path.resolve(workspaceDir) })
     expect(created.ok).toBe(true)
     if (!created.ok) {
       return
     }
 
-    const fetched = repository.getById({ id: created.value.id })
+    const fetched = findWorkspaceById({ id: created.value.id })
     expect(fetched.ok).toBe(true)
     if (fetched.ok) {
       expect(fetched.value.name).toBe("Original")
       expect(fetched.value.state).toBe("available")
     }
 
-    const renamed = repository.updateName({ id: created.value.id, name: "Renamed" })
+    const renamed = updateWorkspaceName({ id: created.value.id, name: "Renamed" })
     expect(renamed.ok).toBe(true)
     if (renamed.ok) {
       expect(renamed.value.name).toBe("Renamed")
       expect(renamed.value.lastUsedAt >= created.value.lastUsedAt).toBe(true)
     }
 
-    const deleted = repository.delete({ id: created.value.id })
+    const deleted = deleteWorkspaceRow({ id: created.value.id })
     expect(deleted.ok).toBe(true)
 
-    const missing = repository.getById({ id: created.value.id })
+    const missing = findWorkspaceById({ id: created.value.id })
     expect(missing.ok).toBe(false)
     if (!missing.ok) {
       expect(missing.error.kind).toBe("not_found")
@@ -206,14 +215,14 @@ describe("workspace repository", () => {
       createWorkspaceDir(dataDir, "three"),
     ])
     const database = openDatabase({ dataDir })
-    const repository = createRepository(database, dataDir)
+    const { insertWorkspace, listWorkspaces } = openWorkspaceAdapters(database)
 
     for (const [index, dir] of dirs.entries()) {
-      const created = repository.create({ name: `Workspace ${index + 1}`, path: dir })
+      const created = insertWorkspace({ name: `Workspace ${index + 1}`, canonicalPath: path.resolve(dir) })
       expect(created.ok).toBe(true)
     }
 
-    const firstPage = repository.list({ limit: 2 })
+    const firstPage = listWorkspaces({ limit: 2 })
     expect(firstPage.ok).toBe(true)
     if (!firstPage.ok) {
       return
@@ -223,7 +232,7 @@ describe("workspace repository", () => {
     expect(firstPage.value.count).toBe(3)
     expect(firstPage.value.nextCursor).toBeDefined()
 
-    const secondPage = repository.list({
+    const secondPage = listWorkspaces({
       limit: 2,
       cursor: firstPage.value.nextCursor,
     })
@@ -235,7 +244,7 @@ describe("workspace repository", () => {
     expect(secondPage.value.items.length).toBe(1)
     expect(secondPage.value.nextCursor).toBeUndefined()
 
-    const invalid = repository.list({
+    const invalid = listWorkspaces({
       cursor: encodeWorkspacePageCursor({
         id: "ws_01J0000000000000000000000",
         edge: "after",
@@ -257,20 +266,20 @@ describe("workspace repository", () => {
       createWorkspaceDir(dataDir, "three"),
     ])
     const database = openDatabase({ dataDir })
-    const repository = createRepository(database, dataDir)
+    const { insertWorkspace, listWorkspaces } = openWorkspaceAdapters(database)
 
     for (const [index, dir] of dirs.entries()) {
-      const created = repository.create({ name: `Workspace ${index + 1}`, path: dir })
+      const created = insertWorkspace({ name: `Workspace ${index + 1}`, canonicalPath: path.resolve(dir) })
       expect(created.ok).toBe(true)
     }
 
-    const firstPage = repository.list({ limit: 2 })
+    const firstPage = listWorkspaces({ limit: 2 })
     expect(firstPage.ok).toBe(true)
     if (!firstPage.ok) {
       return
     }
 
-    const secondPage = repository.list({
+    const secondPage = listWorkspaces({
       limit: 2,
       cursor: firstPage.value.nextCursor,
     })
@@ -279,7 +288,7 @@ describe("workspace repository", () => {
       return
     }
 
-    const backToFirst = repository.list({
+    const backToFirst = listWorkspaces({
       limit: 2,
       cursor: secondPage.value.previousCursor,
     })
@@ -300,19 +309,19 @@ describe("workspace repository", () => {
     const alpha = await createWorkspaceDir(dataDir, "alpha-project")
     const beta = await createWorkspaceDir(dataDir, "beta-other")
     const database = openDatabase({ dataDir })
-    const repository = createRepository(database, dataDir)
+    const { insertWorkspace, listWorkspaces } = openWorkspaceAdapters(database)
 
-    repository.create({ name: "Alpha Project", path: alpha })
-    repository.create({ name: "Beta Other", path: beta })
+    insertWorkspace({ name: "Alpha Project", canonicalPath: path.resolve(alpha) })
+    insertWorkspace({ name: "Beta Other", canonicalPath: path.resolve(beta) })
 
-    const byName = repository.list({ q: "alpha" })
+    const byName = listWorkspaces({ q: "alpha" })
     expect(byName.ok).toBe(true)
     if (byName.ok) {
       expect(byName.value.items.map((workspace) => workspace.name)).toEqual(["Alpha Project"])
       expect(byName.value.count).toBe(1)
     }
 
-    const byPath = repository.list({ q: "beta-other" })
+    const byPath = listWorkspaces({ q: "beta-other" })
     expect(byPath.ok).toBe(true)
     if (byPath.ok) {
       expect(byPath.value.items.map((workspace) => workspace.name)).toEqual(["Beta Other"])
@@ -327,10 +336,10 @@ describe("workspace repository", () => {
     const availableDir = await createWorkspaceDir(dataDir, "available")
     const missingDir = await createWorkspaceDir(dataDir, "missing")
     const database = openDatabase({ dataDir })
-    const repository = createRepository(database, dataDir)
+    const { insertWorkspace, listWorkspaces } = openWorkspaceAdapters(database)
 
-    const available = repository.create({ name: "Available", path: availableDir })
-    const missing = repository.create({ name: "Missing", path: missingDir })
+    const available = insertWorkspace({ name: "Available", canonicalPath: path.resolve(availableDir) })
+    const missing = insertWorkspace({ name: "Missing", canonicalPath: path.resolve(missingDir) })
     expect(available.ok && missing.ok).toBe(true)
     if (!available.ok || !missing.ok) {
       return
@@ -338,14 +347,14 @@ describe("workspace repository", () => {
 
     await rm(missingDir, { recursive: true, force: true })
 
-    const availableOnly = repository.list({ state: "available" })
+    const availableOnly = listWorkspaces({ state: "available" })
     expect(availableOnly.ok).toBe(true)
     if (availableOnly.ok) {
       expect(availableOnly.value.items.map((workspace) => workspace.name)).toEqual(["Available"])
       expect(availableOnly.value.count).toBe(1)
     }
 
-    const missingOnly = repository.list({ state: "missing" })
+    const missingOnly = listWorkspaces({ state: "missing" })
     expect(missingOnly.ok).toBe(true)
     if (missingOnly.ok) {
       expect(missingOnly.value.items.map((workspace) => workspace.name)).toEqual(["Missing"])
@@ -363,14 +372,14 @@ describe("workspace repository", () => {
       createWorkspaceDir(dataDir, "other"),
     ])
     const database = openDatabase({ dataDir })
-    const repository = createRepository(database, dataDir)
+    const { insertWorkspace, listWorkspaces } = openWorkspaceAdapters(database)
 
-    repository.create({ name: "Agent One", path: dirs[0] })
-    repository.create({ name: "Agent Two", path: dirs[1] })
-    repository.create({ name: "Other", path: dirs[2] })
+    insertWorkspace({ name: "Agent One", canonicalPath: path.resolve(dirs[0]) })
+    insertWorkspace({ name: "Agent Two", canonicalPath: path.resolve(dirs[1]) })
+    insertWorkspace({ name: "Other", canonicalPath: path.resolve(dirs[2]) })
     await rm(dirs[1], { recursive: true, force: true })
 
-    const firstPage = repository.list({ q: "agent-one", state: "available", limit: 1 })
+    const firstPage = listWorkspaces({ q: "agent-one", state: "available", limit: 1 })
     expect(firstPage.ok).toBe(true)
     if (!firstPage.ok) {
       return
@@ -386,14 +395,15 @@ describe("workspace repository", () => {
   test("returns not_found for missing ids", async () => {
     const dataDir = await createTempDataDir()
     const database = openDatabase({ dataDir })
-    const repository = createRepository(database, dataDir)
+    const { findWorkspaceById, updateWorkspaceName, deleteWorkspaceRow } =
+      openWorkspaceAdapters(database)
 
-    const getResult = repository.getById({ id: "ws_01J0000000000000000000000" })
-    const updateResult = repository.updateName({
+    const getResult = findWorkspaceById({ id: "ws_01J0000000000000000000000" })
+    const updateResult = updateWorkspaceName({
       id: "ws_01J0000000000000000000000",
       name: "Nope",
     })
-    const deleteResult = repository.delete({ id: "ws_01J0000000000000000000000" })
+    const deleteResult = deleteWorkspaceRow({ id: "ws_01J0000000000000000000000" })
 
     expect(getResult.ok).toBe(false)
     expect(updateResult.ok).toBe(false)
@@ -410,9 +420,9 @@ describe("workspace repository", () => {
     const dataDir = await createTempDataDir()
     const workspaceDir = await createWorkspaceDir(dataDir, "ephemeral")
     const database = openDatabase({ dataDir })
-    const repository = createRepository(database, dataDir)
+    const { insertWorkspace, findWorkspaceById } = openWorkspaceAdapters(database)
 
-    const created = repository.create({ name: "Ephemeral", path: workspaceDir })
+    const created = insertWorkspace({ name: "Ephemeral", canonicalPath: path.resolve(workspaceDir) })
     expect(created.ok).toBe(true)
     if (!created.ok) {
       return
@@ -420,12 +430,41 @@ describe("workspace repository", () => {
 
     await rm(workspaceDir, { recursive: true, force: true })
 
-    const fetched = repository.getById({ id: created.value.id })
+    const fetched = findWorkspaceById({ id: created.value.id })
     expect(fetched.ok).toBe(true)
     if (fetched.ok) {
       expect(fetched.value.state).toBe("missing")
     }
 
     database.close()
+  })
+
+  test("reports unavailable state when the directory is unreadable", async () => {
+    const dataDir = await createTempDataDir()
+    const workspaceDir = await createWorkspaceDir(dataDir, "restricted")
+    const database = openDatabase({ dataDir })
+    const { insertWorkspace, findWorkspaceById } = openWorkspaceAdapters(database)
+
+    const created = insertWorkspace({ name: "Restricted", canonicalPath: path.resolve(workspaceDir) })
+    expect(created.ok).toBe(true)
+    if (!created.ok) {
+      database.close()
+      return
+    }
+
+    await chmod(workspaceDir, 0o000)
+    try {
+      accessSync(workspaceDir)
+      return
+    } catch {
+      const fetched = findWorkspaceById({ id: created.value.id })
+      expect(fetched.ok).toBe(true)
+      if (fetched.ok) {
+        expect(fetched.value.state).toBe("unavailable")
+      }
+    } finally {
+      await chmod(workspaceDir, 0o755)
+      database.close()
+    }
   })
 })

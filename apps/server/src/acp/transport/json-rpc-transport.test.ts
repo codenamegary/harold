@@ -63,7 +63,7 @@ describe("createJsonRpcTransport", () => {
       ),
     )
 
-    await expect(responsePromise).resolves.toEqual({ protocolVersion: 1 })
+    expect(responsePromise).resolves.toEqual({ protocolVersion: 1 })
     await writer.close()
     transport.close()
   })
@@ -96,9 +96,7 @@ describe("createJsonRpcTransport", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 10))
 
-    expect(notifications).toEqual([
-      { sessionId: "sess-1", update: { kind: "text" } },
-    ])
+    expect(notifications).toEqual([{ sessionId: "sess-1", update: { kind: "text" } }])
     expect(written).toHaveLength(0)
 
     await writer.close()
@@ -161,7 +159,7 @@ describe("createJsonRpcTransport", () => {
       ),
     )
 
-    await expect(responsePromise).rejects.toThrow("auth failed")
+    expect(responsePromise).rejects.toThrow("auth failed")
     await writer.close()
     transport.close()
   })

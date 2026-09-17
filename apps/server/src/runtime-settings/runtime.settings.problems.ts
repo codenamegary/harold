@@ -3,16 +3,16 @@ import {
   PROBLEM_TYPES,
   ValidationProblemSchema,
 } from "contracts/http/error"
-import { WorkspacePathError } from "../workspace/workspace.errors"
+import { FilesystemPathError } from "../filesystem/filesystem.errors"
 
-const pathErrorCodes: Record<WorkspacePathError["kind"], string> = {
+const pathErrorCodes: Record<FilesystemPathError["kind"], string> = {
   missing: "validation.field.allowedRoots.missing",
   not_directory: "validation.field.allowedRoots.not_directory",
   unreadable: "validation.field.allowedRoots.unreadable",
 }
 
 export const buildAllowedRootValidationProblem = (params: {
-  error: WorkspacePathError
+  error: FilesystemPathError
   index: number
 }) =>
   ValidationProblemSchema.parse({

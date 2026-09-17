@@ -80,7 +80,8 @@ const uploadAttachment = (
   workspaceId: string,
   options: { fileName: string; mimeType: string; bytes: Uint8Array; kind?: string },
 ) => {
-  const { payload, contentType } = makeMultipartBody(options,
+  const { payload, contentType } = makeMultipartBody(
+    options,
     options.kind !== undefined ? [{ name: "kind", value: options.kind }] : [],
   )
   return app.inject({
@@ -112,21 +113,19 @@ describe("POST /v1/workspaces/:workspaceId/attachments", () => {
     const descriptor = AttachmentDescriptorSchema.parse(JSON.parse(response.body))
     expect(descriptor.workspaceId).toBe(workspaceId)
     expect(descriptor.kind).toBe("image")
-    expect(descriptor.path.startsWith(
-      path.join(workspaceDir, ".agent-server", "attachments"),
-    )).toBe(true)
-    await expect(readFile(descriptor.path)).resolves.toEqual(new Uint8Array([1, 2, 3, 4]))
+    expect(
+      descriptor.path.startsWith(path.join(workspaceDir, ".agent-server", "attachments")),
+    ).toBe(true)
+    expect(readFile(descriptor.path)).resolves.toEqual(new Uint8Array([1, 2, 3, 4]))
   })
 
   test("patches an existing workspace .gitignore on upload", async () => {
     const dataDir = await createTempDataDir()
     const { app } = await createTestApp(dataDir)
     const { workspaceId, workspaceDir } = await createWorkspace(app, dataDir)
-    await (await import("node:fs/promises")).writeFile(
-      path.join(workspaceDir, ".gitignore"),
-      "node_modules\n",
-      "utf8",
-    )
+    await (
+      await import("node:fs/promises")
+    ).writeFile(path.join(workspaceDir, ".gitignore"), "node_modules\n", "utf8")
 
     const response = await uploadAttachment(app, workspaceId, {
       fileName: "notes.md",
@@ -151,7 +150,7 @@ describe("POST /v1/workspaces/:workspaceId/attachments", () => {
     })
 
     expect(response.statusCode).toBe(201)
-    await expect(readFile(path.join(workspaceDir, ".gitignore"), "utf8")).rejects.toThrow()
+    expect(readFile(path.join(workspaceDir, ".gitignore"), "utf8")).rejects.toThrow()
   })
 
   test("returns 404 for an unknown workspace", async () => {
@@ -200,7 +199,7 @@ describe("DELETE /v1/workspaces/:workspaceId/attachments/:attachmentId", () => {
     })
 
     expect(response.statusCode).toBe(204)
-    await expect(readFile(descriptor.path)).rejects.toThrow()
+    expect(readFile(descriptor.path)).rejects.toThrow()
   })
 
   test("returns 404 for an unknown attachment id", async () => {
