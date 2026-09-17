@@ -1,45 +1,25 @@
-import { afterEach, describe, expect, test } from "bun:test"
-import {
-  NotFoundProblemSchema,
-  PROBLEM_TYPES,
-} from "contracts/http/error"
+import { describe, expect, test } from "bun:test"
+import { NotFoundProblemSchema, PROBLEM_TYPES } from "contracts/http/error"
 import {
   CreateSessionResponseSchema,
   SessionCollectionSchema,
   deleteSessionPath,
 } from "contracts/http/session"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
-import {
-  acceptTestExecutablePath,
-  cleanupTestAppResources,
-  createTempDataDir,
-  createTestApp,
-  createTestAppResources,
-  enableAgent,
-} from "../test-support/create-test-app"
-
-const resources = createTestAppResources()
-
-afterEach(async () => {
-  await cleanupTestAppResources(resources)
-})
+import { enableAgent } from "../test-support/test.app"
+import { bootTestApp } from "../test-support/test.harness"
 
 describe("ACP catalog sessions HTTP", () => {
   test("POST /v1/sessions creates via session/new and GET lists ACP rows", async () => {
-    const dataDir = await createTempDataDir(resources)
     const detectedPath = "/usr/local/bin/agent"
-    const whichFn: WhichFn = (binaryName) =>
-      binaryName === "agent" ? detectedPath : undefined
-    const { app, acpSupervisor } = await createTestApp(
-      resources,
-      dataDir,
+    const whichFn: WhichFn = (binaryName) => (binaryName === "agent" ? detectedPath : undefined)
+    const { app, acpSupervisor } = await bootTestApp({
       whichFn,
-      acceptTestExecutablePath,
-      {
+      fakeAcpOptions: {
         capabilities: { loadSession: true, sessionClose: true, sessionList: true },
         sessionNewSessionId: "catalog-created-1",
       },
-    )
+    })
     await enableAgent(app, "cursor", whichFn)
 
     const createResponse = await app.inject({
@@ -79,7 +59,6 @@ describe("ACP catalog sessions HTTP", () => {
   })
 
   test("GET /v1/sessions unions rows from two ready agents", async () => {
-    const dataDir = await createTempDataDir(resources)
     const whichFn: WhichFn = (binaryName) => {
       if (binaryName === "agent") {
         return "/usr/local/bin/agent"
@@ -89,15 +68,12 @@ describe("ACP catalog sessions HTTP", () => {
       }
       return undefined
     }
-    const { app, acpSupervisor } = await createTestApp(
-      resources,
-      dataDir,
+    const { app, acpSupervisor } = await bootTestApp({
       whichFn,
-      acceptTestExecutablePath,
-      {
+      fakeAcpOptions: {
         capabilities: { loadSession: false, sessionClose: false, sessionList: true },
       },
-    )
+    })
     await enableAgent(app, "cursor", whichFn)
     await enableAgent(app, "opencode", whichFn)
 
@@ -137,19 +113,15 @@ describe("ACP catalog sessions HTTP", () => {
   })
 
   test("DELETE /v1/sessions/:sessionId closes via session/close and drops the catalog row", async () => {
-    const dataDir = await createTempDataDir(resources)
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? "/usr/local/bin/agent" : undefined
-    const { app } = await createTestApp(
-      resources,
-      dataDir,
+    const { app } = await bootTestApp({
       whichFn,
-      acceptTestExecutablePath,
-      {
+      fakeAcpOptions: {
         capabilities: { loadSession: true, sessionClose: true, sessionList: true },
         sessionNewSessionId: "catalog-close-1",
       },
-    )
+    })
     await enableAgent(app, "cursor", whichFn)
 
     const createResponse = await app.inject({
@@ -179,19 +151,15 @@ describe("ACP catalog sessions HTTP", () => {
   })
 
   test("DELETE /v1/sessions/:sessionId archives when the agent has no session/close", async () => {
-    const dataDir = await createTempDataDir(resources)
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? "/usr/local/bin/agent" : undefined
-    const { app } = await createTestApp(
-      resources,
-      dataDir,
+    const { app } = await bootTestApp({
       whichFn,
-      acceptTestExecutablePath,
-      {
+      fakeAcpOptions: {
         capabilities: { loadSession: true, sessionClose: false, sessionList: true },
         sessionNewSessionId: "catalog-close-unsupported",
       },
-    )
+    })
     await enableAgent(app, "cursor", whichFn)
 
     const createResponse = await app.inject({
@@ -221,19 +189,15 @@ describe("ACP catalog sessions HTTP", () => {
   })
 
   test("DELETE /v1/sessions/:sessionId is idempotent after archive", async () => {
-    const dataDir = await createTempDataDir(resources)
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? "/usr/local/bin/agent" : undefined
-    const { app } = await createTestApp(
-      resources,
-      dataDir,
+    const { app } = await bootTestApp({
       whichFn,
-      acceptTestExecutablePath,
-      {
+      fakeAcpOptions: {
         capabilities: { loadSession: true, sessionClose: false, sessionList: true },
         sessionNewSessionId: "catalog-close-idempotent",
       },
-    )
+    })
     await enableAgent(app, "cursor", whichFn)
 
     const createResponse = await app.inject({
@@ -266,20 +230,16 @@ describe("ACP catalog sessions HTTP", () => {
   })
 
   test("DELETE /v1/sessions/:sessionId archives when session/close fails", async () => {
-    const dataDir = await createTempDataDir(resources)
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? "/usr/local/bin/agent" : undefined
-    const { app } = await createTestApp(
-      resources,
-      dataDir,
+    const { app } = await bootTestApp({
       whichFn,
-      acceptTestExecutablePath,
-      {
+      fakeAcpOptions: {
         capabilities: { loadSession: true, sessionClose: true, sessionList: true },
         sessionNewSessionId: "catalog-close-fails",
         sessionCloseFails: true,
       },
-    )
+    })
     await enableAgent(app, "cursor", whichFn)
 
     const createResponse = await app.inject({
@@ -307,8 +267,7 @@ describe("ACP catalog sessions HTTP", () => {
   })
 
   test("DELETE /v1/sessions/:sessionId returns 404 for unknown agent id", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app } = await createTestApp(resources, dataDir)
+    const { app } = await bootTestApp()
 
     const deleteResponse = await app.inject({
       method: "DELETE",
@@ -320,19 +279,15 @@ describe("ACP catalog sessions HTTP", () => {
   })
 
   test("GET /v1/sessions after disable/enable lists sessions from the restarted agent", async () => {
-    const dataDir = await createTempDataDir(resources)
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? "/usr/local/bin/agent" : undefined
-    const { app } = await createTestApp(
-      resources,
-      dataDir,
+    const { app } = await bootTestApp({
       whichFn,
-      acceptTestExecutablePath,
-      {
+      fakeAcpOptions: {
         capabilities: { loadSession: true, sessionClose: true, sessionList: true },
         sessionNewSessionId: "after-respawn-1",
       },
-    )
+    })
     await enableAgent(app, "cursor", whichFn)
 
     const createBefore = await app.inject({
@@ -380,19 +335,15 @@ describe("ACP catalog sessions HTTP", () => {
   })
 
   test("DELETE /v1/sessions/:sessionId succeeds while unknown agent returns 404", async () => {
-    const dataDir = await createTempDataDir(resources)
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? "/usr/local/bin/agent" : undefined
-    const { app } = await createTestApp(
-      resources,
-      dataDir,
+    const { app } = await bootTestApp({
       whichFn,
-      acceptTestExecutablePath,
-      {
+      fakeAcpOptions: {
         capabilities: { loadSession: true, sessionClose: true, sessionList: true },
         sessionNewSessionId: "catalog-parallel-1",
       },
-    )
+    })
     await enableAgent(app, "cursor", whichFn)
 
     const createResponse = await app.inject({

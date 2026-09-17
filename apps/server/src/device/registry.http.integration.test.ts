@@ -7,20 +7,12 @@ import {
 } from "contracts/http/pairing-code"
 import { DeviceCollectionSchema, DEVICES_PATH } from "contracts/http/device"
 import { WebSocket } from "ws"
-import {
-  cleanupTestAppResources,
-  createTempDataDir,
-  createTestApp,
-  createTestAppResources,
-} from "../test-support/create-test-app"
+import { bootTestApp } from "../test-support/test.harness"
 import { Config } from "../config/config"
 import { clearDevicePresence } from "./presence"
 
-const resources = createTestAppResources()
-
 afterEach(async () => {
   clearDevicePresence()
-  await cleanupTestAppResources(resources)
 })
 
 const getListeningBase = async (
@@ -51,14 +43,11 @@ const pairDevice = async (httpBase: string, body: Record<string, unknown> = {}) 
   expect(createResponse.status).toBe(201)
   const created = CreatePairingCodeResponseSchema.parse(await createResponse.json())
 
-  const claimResponse = await fetch(
-    `${httpBase}${claimPairingCodePath(created.code)}`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    },
-  )
+  const claimResponse = await fetch(`${httpBase}${claimPairingCodePath(created.code)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  })
   expect(claimResponse.status).toBe(201)
   return ClaimPairingCodeResponseSchema.parse(await claimResponse.json())
 }
@@ -125,8 +114,7 @@ const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 
 
 describe("device registry and presence", () => {
   test("GET /v1/devices lists empty and paired devices with offline state", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningBase(app, config)
 
     const emptyResponse = await fetch(`${httpBase}${DEVICES_PATH}`)
@@ -149,8 +137,7 @@ describe("device registry and presence", () => {
   })
 
   test("claim persists paired device in registry", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningBase(app, config)
 
     const paired = await pairDevice(httpBase, { name: "Watch", platform: "wearos" })
@@ -169,8 +156,7 @@ describe("device registry and presence", () => {
   })
 
   test("list state follows real WS presence for connect/disconnect", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase, wsUrl } = await getListeningBase(app, config)
     const paired = await pairDevice(httpBase)
 
@@ -188,9 +174,7 @@ describe("device registry and presence", () => {
     })
 
     const onlineFilter = DeviceCollectionSchema.parse(
-      await (
-        await fetch(`${httpBase}${DEVICES_PATH}?state=online`)
-      ).json(),
+      await (await fetch(`${httpBase}${DEVICES_PATH}?state=online`)).json(),
     )
     expect(onlineFilter.items).toHaveLength(1)
 
@@ -204,8 +188,7 @@ describe("device registry and presence", () => {
   })
 
   test("host streams do not mark devices online", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase, wsUrl } = await getListeningBase(app, config)
     const paired = await pairDevice(httpBase)
     const host = await openHostStream(wsUrl)
@@ -222,8 +205,7 @@ describe("device registry and presence", () => {
   })
 
   test("authenticated device HTTP updates lastSeenAt without flipping online", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningBase(app, config)
     const paired = await pairDevice(httpBase)
     const initialLastSeen = paired.device.lastSeenAt

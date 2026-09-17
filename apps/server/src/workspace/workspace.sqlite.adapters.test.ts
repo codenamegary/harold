@@ -1,12 +1,12 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import { eq } from "drizzle-orm"
 import { accessSync } from "node:fs"
-import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises"
-import os from "node:os"
+import { chmod, mkdir, rm } from "node:fs/promises"
 import path from "node:path"
-import { AgentDatabase, openDatabase } from "../persistence/database"
+import { AgentDatabase } from "../persistence/database"
 import { workspaces } from "../persistence/schema/workspaces"
 import { encodeWorkspacePageCursor } from "./workspace.page.cursor"
+import { bootTestDatabase } from "../test-support/test.harness"
 import {
   makeDeleteWorkspaceRow,
   makeFindWorkspaceById,
@@ -23,32 +23,22 @@ const openWorkspaceAdapters = (database: AgentDatabase) => ({
   deleteWorkspaceRow: makeDeleteWorkspaceRow(database),
 })
 
-const tempDirs: string[] = []
-
-const createTempDataDir = async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-workspace-adapters-"))
-  tempDirs.push(dir)
-  return dir
-}
-
 const createWorkspaceDir = async (parent: string, name: string) => {
   const dir = path.join(parent, name)
   await mkdir(dir)
   return dir
 }
 
-afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
-})
-
 describe("workspace sqlite adapters", () => {
   test("creates a workspace with ws_ id and available state", async () => {
-    const dataDir = await createTempDataDir()
+    const { database, dataDir } = await bootTestDatabase()
     const workspaceDir = await createWorkspaceDir(dataDir, "project")
-    const database = openDatabase({ dataDir })
     const insertWorkspace = makeInsertWorkspace(database)
 
-    const result = insertWorkspace({ name: "My Project", canonicalPath: path.resolve(workspaceDir) })
+    const result = insertWorkspace({
+      name: "My Project",
+      canonicalPath: path.resolve(workspaceDir),
+    })
 
     expect(result.ok).toBe(true)
     if (result.ok) {
@@ -58,14 +48,11 @@ describe("workspace sqlite adapters", () => {
       expect(result.value.state).toBe("available")
       expect(result.value.createdAt).toBe(result.value.lastUsedAt)
     }
-
-    database.close()
   })
 
   test("rejects duplicate canonical paths", async () => {
-    const dataDir = await createTempDataDir()
+    const { database, dataDir } = await bootTestDatabase()
     const target = await createWorkspaceDir(dataDir, "target")
-    const database = openDatabase({ dataDir })
     const insertWorkspace = makeInsertWorkspace(database)
 
     const first = insertWorkspace({ name: "First", canonicalPath: path.resolve(target) })
@@ -76,16 +63,13 @@ describe("workspace sqlite adapters", () => {
     if (!second.ok) {
       expect(second.error.kind).toBe("duplicate_path")
     }
-
-    database.close()
   })
 
   test("lists workspaces sorted by lastUsedAt desc then id asc", async () => {
-    const dataDir = await createTempDataDir()
+    const { database, dataDir } = await bootTestDatabase()
     const alpha = await createWorkspaceDir(dataDir, "alpha")
     const beta = await createWorkspaceDir(dataDir, "beta")
     const gamma = await createWorkspaceDir(dataDir, "gamma")
-    const database = openDatabase({ dataDir })
     const { insertWorkspace, listWorkspaces, updateWorkspaceName } = openWorkspaceAdapters(database)
 
     const first = insertWorkspace({ name: "Alpha", canonicalPath: path.resolve(alpha) })
@@ -122,15 +106,12 @@ describe("workspace sqlite adapters", () => {
       third.value.id,
       first.value.id,
     ])
-
-    database.close()
   })
 
   test("breaks ties on id asc when lastUsedAt matches", async () => {
-    const dataDir = await createTempDataDir()
+    const { database, dataDir } = await bootTestDatabase()
     const alpha = await createWorkspaceDir(dataDir, "alpha")
     const beta = await createWorkspaceDir(dataDir, "beta")
-    const database = openDatabase({ dataDir })
     const { listWorkspaces } = openWorkspaceAdapters(database)
     const timestamp = "2026-01-01T00:00:00.000Z"
 
@@ -164,14 +145,11 @@ describe("workspace sqlite adapters", () => {
       "ws_AAAAAAAAAAAAAAAAAAAAAAAAA",
       "ws_ZZZZZZZZZZZZZZZZZZZZZZZZZZ",
     ])
-
-    database.close()
   })
 
   test("gets, renames, and deletes by id", async () => {
-    const dataDir = await createTempDataDir()
+    const { database, dataDir } = await bootTestDatabase()
     const workspaceDir = await createWorkspaceDir(dataDir, "project")
-    const database = openDatabase({ dataDir })
     const { insertWorkspace, findWorkspaceById, updateWorkspaceName, deleteWorkspaceRow } =
       openWorkspaceAdapters(database)
 
@@ -203,22 +181,22 @@ describe("workspace sqlite adapters", () => {
     if (!missing.ok) {
       expect(missing.error.kind).toBe("not_found")
     }
-
-    database.close()
   })
 
   test("pages forward with opaque cursors and count", async () => {
-    const dataDir = await createTempDataDir()
+    const { database, dataDir } = await bootTestDatabase()
     const dirs = await Promise.all([
       createWorkspaceDir(dataDir, "one"),
       createWorkspaceDir(dataDir, "two"),
       createWorkspaceDir(dataDir, "three"),
     ])
-    const database = openDatabase({ dataDir })
     const { insertWorkspace, listWorkspaces } = openWorkspaceAdapters(database)
 
     for (const [index, dir] of dirs.entries()) {
-      const created = insertWorkspace({ name: `Workspace ${index + 1}`, canonicalPath: path.resolve(dir) })
+      const created = insertWorkspace({
+        name: `Workspace ${index + 1}`,
+        canonicalPath: path.resolve(dir),
+      })
       expect(created.ok).toBe(true)
     }
 
@@ -254,22 +232,22 @@ describe("workspace sqlite adapters", () => {
     if (!invalid.ok) {
       expect(invalid.error.kind).toBe("invalid_cursor")
     }
-
-    database.close()
   })
 
   test("pages backward with encoded previous cursor", async () => {
-    const dataDir = await createTempDataDir()
+    const { database, dataDir } = await bootTestDatabase()
     const dirs = await Promise.all([
       createWorkspaceDir(dataDir, "one"),
       createWorkspaceDir(dataDir, "two"),
       createWorkspaceDir(dataDir, "three"),
     ])
-    const database = openDatabase({ dataDir })
     const { insertWorkspace, listWorkspaces } = openWorkspaceAdapters(database)
 
     for (const [index, dir] of dirs.entries()) {
-      const created = insertWorkspace({ name: `Workspace ${index + 1}`, canonicalPath: path.resolve(dir) })
+      const created = insertWorkspace({
+        name: `Workspace ${index + 1}`,
+        canonicalPath: path.resolve(dir),
+      })
       expect(created.ok).toBe(true)
     }
 
@@ -300,15 +278,12 @@ describe("workspace sqlite adapters", () => {
     expect(backToFirst.value.items.map((workspace) => workspace.id)).toEqual(
       firstPage.value.items.map((workspace) => workspace.id),
     )
-
-    database.close()
   })
 
   test("filters by search query on name and path", async () => {
-    const dataDir = await createTempDataDir()
+    const { database, dataDir } = await bootTestDatabase()
     const alpha = await createWorkspaceDir(dataDir, "alpha-project")
     const beta = await createWorkspaceDir(dataDir, "beta-other")
-    const database = openDatabase({ dataDir })
     const { insertWorkspace, listWorkspaces } = openWorkspaceAdapters(database)
 
     insertWorkspace({ name: "Alpha Project", canonicalPath: path.resolve(alpha) })
@@ -327,18 +302,18 @@ describe("workspace sqlite adapters", () => {
       expect(byPath.value.items.map((workspace) => workspace.name)).toEqual(["Beta Other"])
       expect(byPath.value.count).toBe(1)
     }
-
-    database.close()
   })
 
   test("filters by state after probing paths", async () => {
-    const dataDir = await createTempDataDir()
+    const { database, dataDir } = await bootTestDatabase()
     const availableDir = await createWorkspaceDir(dataDir, "available")
     const missingDir = await createWorkspaceDir(dataDir, "missing")
-    const database = openDatabase({ dataDir })
     const { insertWorkspace, listWorkspaces } = openWorkspaceAdapters(database)
 
-    const available = insertWorkspace({ name: "Available", canonicalPath: path.resolve(availableDir) })
+    const available = insertWorkspace({
+      name: "Available",
+      canonicalPath: path.resolve(availableDir),
+    })
     const missing = insertWorkspace({ name: "Missing", canonicalPath: path.resolve(missingDir) })
     expect(available.ok && missing.ok).toBe(true)
     if (!available.ok || !missing.ok) {
@@ -360,18 +335,15 @@ describe("workspace sqlite adapters", () => {
       expect(missingOnly.value.items.map((workspace) => workspace.name)).toEqual(["Missing"])
       expect(missingOnly.value.count).toBe(1)
     }
-
-    database.close()
   })
 
   test("combines search and state filters with pagination", async () => {
-    const dataDir = await createTempDataDir()
+    const { database, dataDir } = await bootTestDatabase()
     const dirs = await Promise.all([
       createWorkspaceDir(dataDir, "agent-one"),
       createWorkspaceDir(dataDir, "agent-two"),
       createWorkspaceDir(dataDir, "other"),
     ])
-    const database = openDatabase({ dataDir })
     const { insertWorkspace, listWorkspaces } = openWorkspaceAdapters(database)
 
     insertWorkspace({ name: "Agent One", canonicalPath: path.resolve(dirs[0]) })
@@ -388,13 +360,10 @@ describe("workspace sqlite adapters", () => {
     expect(firstPage.value.items.map((workspace) => workspace.name)).toEqual(["Agent One"])
     expect(firstPage.value.count).toBe(1)
     expect(firstPage.value.nextCursor).toBeUndefined()
-
-    database.close()
   })
 
   test("returns not_found for missing ids", async () => {
-    const dataDir = await createTempDataDir()
-    const database = openDatabase({ dataDir })
+    const { database } = await bootTestDatabase()
     const { findWorkspaceById, updateWorkspaceName, deleteWorkspaceRow } =
       openWorkspaceAdapters(database)
 
@@ -412,17 +381,17 @@ describe("workspace sqlite adapters", () => {
     if (!getResult.ok) {
       expect(getResult.error.kind).toBe("not_found")
     }
-
-    database.close()
   })
 
   test("reports missing state when directory is removed after create", async () => {
-    const dataDir = await createTempDataDir()
+    const { database, dataDir } = await bootTestDatabase()
     const workspaceDir = await createWorkspaceDir(dataDir, "ephemeral")
-    const database = openDatabase({ dataDir })
     const { insertWorkspace, findWorkspaceById } = openWorkspaceAdapters(database)
 
-    const created = insertWorkspace({ name: "Ephemeral", canonicalPath: path.resolve(workspaceDir) })
+    const created = insertWorkspace({
+      name: "Ephemeral",
+      canonicalPath: path.resolve(workspaceDir),
+    })
     expect(created.ok).toBe(true)
     if (!created.ok) {
       return
@@ -435,20 +404,19 @@ describe("workspace sqlite adapters", () => {
     if (fetched.ok) {
       expect(fetched.value.state).toBe("missing")
     }
-
-    database.close()
   })
 
   test("reports unavailable state when the directory is unreadable", async () => {
-    const dataDir = await createTempDataDir()
+    const { database, dataDir } = await bootTestDatabase()
     const workspaceDir = await createWorkspaceDir(dataDir, "restricted")
-    const database = openDatabase({ dataDir })
     const { insertWorkspace, findWorkspaceById } = openWorkspaceAdapters(database)
 
-    const created = insertWorkspace({ name: "Restricted", canonicalPath: path.resolve(workspaceDir) })
+    const created = insertWorkspace({
+      name: "Restricted",
+      canonicalPath: path.resolve(workspaceDir),
+    })
     expect(created.ok).toBe(true)
     if (!created.ok) {
-      database.close()
       return
     }
 
@@ -464,7 +432,6 @@ describe("workspace sqlite adapters", () => {
       }
     } finally {
       await chmod(workspaceDir, 0o755)
-      database.close()
     }
   })
 })

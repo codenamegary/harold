@@ -1,42 +1,13 @@
-import { afterEach, describe, expect, test } from "bun:test"
-import { mkdtemp, readFile, rm } from "node:fs/promises"
-import os from "node:os"
+import { describe, expect, test } from "bun:test"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { AttachmentDescriptorSchema } from "contracts/http/attachments"
-import { createServer } from "../bootstrap/server"
-import { parseConfig } from "../config/config"
-import { openDatabase } from "../persistence/database"
-import { createRuntime } from "../runtime/runtime"
-import { allowWorkspaceRoots } from "../test-support/create-test-app"
+import { bootTestApp, TestApp } from "../test-support/test.harness"
+import { allowWorkspaceRoots } from "../test-support/test.app"
 
-const tempDirs: string[] = []
-const apps: Awaited<ReturnType<typeof createServer>>["app"][] = []
-
-const createTempDataDir = async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-att-api-"))
-  tempDirs.push(dir)
-  return dir
-}
-
-const createTestApp = async (dataDir: string) => {
-  const config = parseConfig({
-    AGENT_SERVER_HOST: "127.0.0.1",
-    AGENT_SERVER_PORT: "0",
-    AGENT_SERVER_DATA_DIR: dataDir,
-  })
-  const database = openDatabase({ dataDir: config.dataDir })
-  const runtime = createRuntime("0.1.0")
-  const { app } = await createServer({ config, runtime, database })
-  apps.push(app)
-  return { app }
-}
-
-const createWorkspace = async (
-  app: Awaited<ReturnType<typeof createServer>>["app"],
-  dataDir: string,
-) => {
+const createWorkspace = async (app: TestApp["app"], dataDir: string) => {
   const workspaceDir = path.join(dataDir, "project")
-  await (await import("node:fs/promises")).mkdir(workspaceDir, { recursive: true })
+  await mkdir(workspaceDir, { recursive: true })
   await allowWorkspaceRoots(app, [dataDir])
   const response = await app.inject({
     method: "POST",
@@ -76,7 +47,7 @@ const makeMultipartBody = (
 }
 
 const uploadAttachment = (
-  app: Awaited<ReturnType<typeof createServer>>["app"],
+  app: TestApp["app"],
   workspaceId: string,
   options: { fileName: string; mimeType: string; bytes: Uint8Array; kind?: string },
 ) => {
@@ -92,15 +63,9 @@ const uploadAttachment = (
   })
 }
 
-afterEach(async () => {
-  await Promise.all(apps.splice(0).map((app) => app.close()))
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
-})
-
 describe("POST /v1/workspaces/:workspaceId/attachments", () => {
   test("stores the file and returns a descriptor", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app, dataDir } = await bootTestApp()
     const { workspaceId, workspaceDir } = await createWorkspace(app, dataDir)
 
     const response = await uploadAttachment(app, workspaceId, {
@@ -120,12 +85,9 @@ describe("POST /v1/workspaces/:workspaceId/attachments", () => {
   })
 
   test("patches an existing workspace .gitignore on upload", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app, dataDir } = await bootTestApp()
     const { workspaceId, workspaceDir } = await createWorkspace(app, dataDir)
-    await (
-      await import("node:fs/promises")
-    ).writeFile(path.join(workspaceDir, ".gitignore"), "node_modules\n", "utf8")
+    await writeFile(path.join(workspaceDir, ".gitignore"), "node_modules\n", "utf8")
 
     const response = await uploadAttachment(app, workspaceId, {
       fileName: "notes.md",
@@ -139,8 +101,7 @@ describe("POST /v1/workspaces/:workspaceId/attachments", () => {
   })
 
   test("never creates a .gitignore when the workspace has none", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app, dataDir } = await bootTestApp()
     const { workspaceId, workspaceDir } = await createWorkspace(app, dataDir)
 
     const response = await uploadAttachment(app, workspaceId, {
@@ -154,8 +115,7 @@ describe("POST /v1/workspaces/:workspaceId/attachments", () => {
   })
 
   test("returns 404 for an unknown workspace", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app } = await bootTestApp()
 
     const response = await uploadAttachment(app, "ws_missing", {
       fileName: "notes.md",
@@ -167,8 +127,7 @@ describe("POST /v1/workspaces/:workspaceId/attachments", () => {
   })
 
   test("returns 415 for executable extensions", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app, dataDir } = await bootTestApp()
     const { workspaceId } = await createWorkspace(app, dataDir)
 
     const response = await uploadAttachment(app, workspaceId, {
@@ -183,8 +142,7 @@ describe("POST /v1/workspaces/:workspaceId/attachments", () => {
 
 describe("DELETE /v1/workspaces/:workspaceId/attachments/:attachmentId", () => {
   test("removes a stored attachment", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app, dataDir } = await bootTestApp()
     const { workspaceId } = await createWorkspace(app, dataDir)
     const uploaded = await uploadAttachment(app, workspaceId, {
       fileName: "notes.md",
@@ -203,8 +161,7 @@ describe("DELETE /v1/workspaces/:workspaceId/attachments/:attachmentId", () => {
   })
 
   test("returns 404 for an unknown attachment id", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app, dataDir } = await bootTestApp()
     const { workspaceId } = await createWorkspace(app, dataDir)
 
     const response = await app.inject({
@@ -216,8 +173,7 @@ describe("DELETE /v1/workspaces/:workspaceId/attachments/:attachmentId", () => {
   })
 
   test("returns 404 for an id shaped like a traversal", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app, dataDir } = await bootTestApp()
     const { workspaceId } = await createWorkspace(app, dataDir)
 
     const response = await app.inject({

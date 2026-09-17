@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import { CreateSessionResponseSchema } from "contracts/http/session"
 import {
   SessionStreamClientMessage,
@@ -9,22 +9,11 @@ import { WebSocket } from "ws"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { Config } from "../config/config"
 import { eventDataText } from "../test/event.data.text"
-import {
-  cleanupTestAppResources,
-  createTempDataDir,
-  createTestApp,
-  createTestAppResources,
-  enableAgent,
-} from "../test-support/create-test-app"
-
-const resources = createTestAppResources()
+import { enableAgent } from "../test-support/test.app"
+import { bootTestApp } from "../test-support/test.harness"
 
 const whichFn: WhichFn = (binaryName) =>
   binaryName === "agent" ? "/usr/local/bin/agent" : undefined
-
-afterEach(async () => {
-  await cleanupTestAppResources(resources)
-})
 
 const getListeningBase = async (
   app: {
@@ -135,7 +124,6 @@ const openStreamClient = (wsUrl: string): Promise<StreamClient> =>
 
 describe("session config stream integration", () => {
   test("session/load delivers config to the joiner and a PUT fans the new state to every subscriber", async () => {
-    const dataDir = await createTempDataDir(resources)
     const fakeConfigOptions = [
       {
         id: "model",
@@ -162,11 +150,14 @@ describe("session config stream integration", () => {
         ],
       },
     ]
-    const { app, config } = await createTestApp(resources, dataDir, whichFn, undefined, {
-      capabilities: { loadSession: true, sessionClose: true, sessionList: true },
-      sessionNewSessionId: "config-stream-1",
-      sessionLoadSessionId: "config-stream-1",
-      configOptions: fakeConfigOptions,
+    const { app, config } = await bootTestApp({
+      whichFn,
+      fakeAcpOptions: {
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+        sessionNewSessionId: "config-stream-1",
+        sessionLoadSessionId: "config-stream-1",
+        configOptions: fakeConfigOptions,
+      },
     })
     await enableAgent(app, "cursor", whichFn)
 
@@ -212,11 +203,10 @@ describe("session config stream integration", () => {
 
     const updated = await subscriber.waitFor(
       (message) =>
-        message.type === "session_config"
-        && message.configOptions.some(
-          (option) => option.id === "model"
-            && option.type === "select"
-            && option.currentValue === "m2",
+        message.type === "session_config" &&
+        message.configOptions.some(
+          (option) =>
+            option.id === "model" && option.type === "select" && option.currentValue === "m2",
         ),
     )
     expect(updated).toMatchObject({

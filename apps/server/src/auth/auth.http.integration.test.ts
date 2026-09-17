@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import { UnauthorizedProblemSchema } from "contracts/http/error"
 import {
   ClaimPairingCodeResponseSchema,
@@ -8,12 +8,7 @@ import {
 } from "contracts/http/pairing-code"
 import { eq } from "drizzle-orm"
 import { WebSocket } from "ws"
-import {
-  cleanupTestAppResources,
-  createTempDataDir,
-  createTestApp,
-  createTestAppResources,
-} from "../test-support/create-test-app"
+import { bootTestApp } from "../test-support/test.harness"
 import { devices } from "../persistence/schema/devices"
 import { AgentDatabase } from "../persistence/database"
 import { Config } from "../config/config"
@@ -28,12 +23,6 @@ const patchTrustedProxies = async (httpBase: string, trustedProxies: string[]) =
   })
   expect(response.status).toBe(200)
 }
-
-const resources = createTestAppResources()
-
-afterEach(async () => {
-  await cleanupTestAppResources(resources)
-})
 
 const getListeningHttpBase = async (
   app: {
@@ -63,14 +52,11 @@ const pairDevice = async (httpBase: string) => {
   expect(createResponse.status).toBe(201)
   const created = CreatePairingCodeResponseSchema.parse(await createResponse.json())
 
-  const claimResponse = await fetch(
-    `${httpBase}${claimPairingCodePath(created.code)}`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: "Auth test device" }),
-    },
-  )
+  const claimResponse = await fetch(`${httpBase}${claimPairingCodePath(created.code)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Auth test device" }),
+  })
   expect(claimResponse.status).toBe(201)
   return ClaimPairingCodeResponseSchema.parse(await claimResponse.json())
 }
@@ -100,8 +86,7 @@ const websocketUpgradeHeaders = {
 
 describe("device auth HTTP", () => {
   test("host loopback without Bearer can create pairing codes and list workspaces", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
 
     const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
@@ -116,8 +101,7 @@ describe("device auth HTTP", () => {
   })
 
   test("valid device Bearer unlocks operator HTTP", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
     const paired = await pairDevice(httpBase)
 
@@ -128,8 +112,7 @@ describe("device auth HTTP", () => {
   })
 
   test("bad Bearer on loopback returns 401 with Bearer challenge", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
 
     const response = await fetch(`${httpBase}/v1/workspaces`, {
@@ -144,8 +127,7 @@ describe("device auth HTTP", () => {
   })
 
   test("revoked device credential returns 401", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config, database } = await createTestApp(resources, dataDir)
+    const { app, config, database } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
     const paired = await pairDevice(httpBase)
 
@@ -164,8 +146,7 @@ describe("device auth HTTP", () => {
   })
 
   test("pairing claim stays open without operator auth", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
 
     const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
@@ -175,20 +156,16 @@ describe("device auth HTTP", () => {
     })
     const created = CreatePairingCodeResponseSchema.parse(await createResponse.json())
 
-    const claimResponse = await fetch(
-      `${httpBase}${claimPairingCodePath(created.code)}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({}),
-      },
-    )
+    const claimResponse = await fetch(`${httpBase}${claimPairingCodePath(created.code)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    })
     expect(claimResponse.status).toBe(201)
   })
 
   test("status stays open without Bearer", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
 
     const response = await fetch(`${httpBase}/v1/status`)
@@ -196,10 +173,7 @@ describe("device auth HTTP", () => {
   })
 
   test("non-loopback without Bearer is rejected on protected routes", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir, {
-      isLoopbackRequest: () => false,
-    })
+    const { app, config } = await bootTestApp({ isLoopbackRequest: () => false })
     const { httpBase } = await getListeningHttpBase(app, config)
 
     const workspaces = await fetch(`${httpBase}/v1/workspaces`)
@@ -223,8 +197,7 @@ describe("device auth HTTP", () => {
 
 describe("trusted proxy host principal", () => {
   test("direct loopback outside trustedProxies stays host", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
 
     const response = await fetch(`${httpBase}/v1/workspaces`)
@@ -232,8 +205,7 @@ describe("trusted proxy host principal", () => {
   })
 
   test("trusted proxy without forwarded headers is not host", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
     await patchTrustedProxies(httpBase, ["127.0.0.1"])
 
@@ -243,8 +215,7 @@ describe("trusted proxy host principal", () => {
   })
 
   test("trusted loopback peer with forwarded headers is not host", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
     await patchTrustedProxies(httpBase, ["127.0.0.1"])
 
@@ -259,8 +230,7 @@ describe("trusted proxy host principal", () => {
   })
 
   test("spoofed forwarded headers from untrusted loopback stay host", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
 
     const response = await fetch(`${httpBase}/v1/workspaces`, {
@@ -273,8 +243,7 @@ describe("trusted proxy host principal", () => {
   })
 
   test("hot-reloads trusted proxies after PATCH", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
 
     const beforePatch = await fetch(`${httpBase}/v1/workspaces`, {
@@ -295,8 +264,7 @@ describe("trusted proxy host principal", () => {
   })
 
   test("allowlist miss ignores forwarded headers on loopback", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
     await patchTrustedProxies(httpBase, ["10.0.0.0/8"])
 
@@ -312,8 +280,7 @@ describe("trusted proxy host principal", () => {
 
 describe("device auth WebSocket", () => {
   test("loopback without Bearer connects as host", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { wsUrl } = await getListeningHttpBase(app, config)
 
     const opened = await new Promise<boolean>((resolve, reject) => {
@@ -337,10 +304,7 @@ describe("device auth WebSocket", () => {
   })
 
   test("trusted proxy without forwarded headers does not connect as host", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir, {
-      wsAuthFrameTimeoutMs: 200,
-    })
+    const { app, config } = await bootTestApp({ wsAuthFrameTimeoutMs: 200 })
     const { httpBase, wsUrl } = await getListeningHttpBase(app, config)
     await patchTrustedProxies(httpBase, ["127.0.0.1"])
 
@@ -366,8 +330,7 @@ describe("device auth WebSocket", () => {
   })
 
   test("Upgrade Authorization Bearer unlocks event stream", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase, wsUrl } = await getListeningHttpBase(app, config)
     const paired = await pairDevice(httpBase)
 
@@ -395,8 +358,7 @@ describe("device auth WebSocket", () => {
   })
 
   test("bad Upgrade Bearer rejects with 401 challenge", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
 
     const response = await fetch(`${httpBase}/v1/sessions/stream`, {
@@ -412,8 +374,7 @@ describe("device auth WebSocket", () => {
   })
 
   test("first-message auth frame unlocks non-loopback stream", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config, database } = await createTestApp(resources, dataDir, {
+    const { app, config, database } = await bootTestApp({
       isLoopbackRequest: () => false,
       wsAuthFrameTimeoutMs: 2_000,
     })
@@ -461,8 +422,7 @@ describe("device auth WebSocket", () => {
   })
 
   test("missing first-message auth on non-loopback fails closed", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir, {
+    const { app, config } = await bootTestApp({
       isLoopbackRequest: () => false,
       wsAuthFrameTimeoutMs: 200,
     })

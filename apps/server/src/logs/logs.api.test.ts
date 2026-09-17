@@ -1,22 +1,10 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import { LogCollectionSchema } from "contracts/http/logs"
-import {
-  cleanupTestAppResources,
-  createTempDataDir,
-  createTestApp,
-  createTestAppResources,
-} from "../test-support/create-test-app"
-
-const resources = createTestAppResources()
-
-afterEach(async () => {
-  await cleanupTestAppResources(resources)
-})
+import { bootTestApp } from "../test-support/test.harness"
 
 describe("GET /v1/logs", () => {
   test("returns recent pino lines from this process", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app } = await createTestApp(resources, dataDir)
+    const { app } = await bootTestApp()
     const marker = "cursor-chat-failed-probe"
 
     app.log.warn({ agentId: "cursor", reason: "session ended" }, marker)
@@ -38,8 +26,7 @@ describe("GET /v1/logs", () => {
   })
 
   test("filters to min level", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app } = await createTestApp(resources, dataDir)
+    const { app } = await bootTestApp()
     const infoMarker = "logs-info-only"
     const warnMarker = "logs-warn-only"
 
@@ -59,8 +46,7 @@ describe("GET /v1/logs", () => {
 
 describe("DELETE /v1/logs", () => {
   test("clears the process log buffer", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app } = await createTestApp(resources, dataDir)
+    const { app } = await bootTestApp()
     const marker = "logs-clear-probe"
 
     app.log.info(marker)

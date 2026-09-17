@@ -1,30 +1,16 @@
-import { afterEach, describe, expect, test } from "bun:test"
-import { mkdir, mkdtemp, rm } from "node:fs/promises"
-import os from "node:os"
+import { describe, expect, test } from "bun:test"
+import { mkdir, rm } from "node:fs/promises"
 import path from "node:path"
 import {
   ConflictProblemSchema,
   NotFoundProblemSchema,
   ValidationProblemSchema,
 } from "contracts/http/error"
-import {
-  WorkspaceCollectionSchema,
-  WorkspaceSchema,
-} from "contracts/http/workspace"
-import { createServer } from "../bootstrap/server"
-import { parseConfig } from "../config/config"
-import { openDatabase } from "../persistence/database"
-import { createRuntime } from "../runtime/runtime"
+import { WorkspaceCollectionSchema, WorkspaceSchema } from "contracts/http/workspace"
+import { bootTestApp } from "../test-support/test.harness"
 import { encodeWorkspacePageCursor } from "./workspace.page.cursor"
 
-const tempDirs: string[] = []
-const apps: Awaited<ReturnType<typeof createServer>>["app"][] = []
-
-const createTempDataDir = async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-workspace-api-"))
-  tempDirs.push(dir)
-  return dir
-}
+type TestServerApp = Awaited<ReturnType<typeof bootTestApp>>["app"]
 
 const createWorkspaceDir = async (parent: string, name: string) => {
   const dir = path.join(parent, name)
@@ -32,23 +18,7 @@ const createWorkspaceDir = async (parent: string, name: string) => {
   return dir
 }
 
-const createTestApp = async (dataDir: string) => {
-  const config = parseConfig({
-    AGENT_SERVER_HOST: "127.0.0.1",
-    AGENT_SERVER_PORT: "0",
-    AGENT_SERVER_DATA_DIR: dataDir,
-  })
-  const database = openDatabase({ dataDir: config.dataDir })
-  const runtime = createRuntime("0.1.0")
-  const { app } = await createServer({ config, runtime, database })
-  apps.push(app)
-  return { app, database, config }
-}
-
-const allowRoots = async (
-  app: Awaited<ReturnType<typeof createServer>>["app"],
-  roots: string[],
-) => {
+const allowRoots = async (app: TestServerApp, roots: string[]) => {
   await app.inject({
     method: "PATCH",
     url: "/v1/settings/runtime",
@@ -57,7 +27,7 @@ const allowRoots = async (
 }
 
 const registerWorkspace = async (
-  app: Awaited<ReturnType<typeof createServer>>["app"],
+  app: TestServerApp,
   dataDir: string,
   payload: { name: string; path: string },
 ) => {
@@ -69,16 +39,10 @@ const registerWorkspace = async (
   })
 }
 
-afterEach(async () => {
-  await Promise.all(apps.splice(0).map((app) => app.close()))
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
-})
-
 describe("POST /v1/workspaces", () => {
   test("returns 201 with WorkspaceSchema", async () => {
-    const dataDir = await createTempDataDir()
+    const { app, dataDir } = await bootTestApp()
     const workspaceDir = await createWorkspaceDir(dataDir, "project")
-    const { app } = await createTestApp(dataDir)
 
     const response = await registerWorkspace(app, dataDir, {
       name: "My Project",
@@ -95,8 +59,7 @@ describe("POST /v1/workspaces", () => {
   })
 
   test("returns 400 for missing path", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app, dataDir } = await bootTestApp()
     const missingPath = path.join(dataDir, "missing")
 
     const response = await app.inject({
@@ -114,12 +77,11 @@ describe("POST /v1/workspaces", () => {
   })
 
   test("returns 400 for non-directory path", async () => {
-    const dataDir = await createTempDataDir()
+    const { app, dataDir } = await bootTestApp()
     const filePath = path.join(dataDir, "file.txt")
     await mkdir(dataDir, { recursive: true })
     const { writeFile } = await import("node:fs/promises")
     await writeFile(filePath, "not a directory")
-    const { app } = await createTestApp(dataDir)
 
     const response = await app.inject({
       method: "POST",
@@ -135,12 +97,11 @@ describe("POST /v1/workspaces", () => {
   })
 
   test("returns 409 for duplicate canonical path", async () => {
-    const dataDir = await createTempDataDir()
+    const { app, dataDir } = await bootTestApp()
     const target = await createWorkspaceDir(dataDir, "target")
     const { symlink } = await import("node:fs/promises")
     const link = path.join(dataDir, "link")
     await symlink(target, link)
-    const { app } = await createTestApp(dataDir)
 
     const first = await registerWorkspace(app, dataDir, { name: "First", path: target })
     const second = await registerWorkspace(app, dataDir, { name: "Second", path: link })
@@ -155,10 +116,9 @@ describe("POST /v1/workspaces", () => {
 
 describe("GET /v1/workspaces", () => {
   test("returns WorkspaceCollectionSchema with limit and count", async () => {
-    const dataDir = await createTempDataDir()
+    const { app, dataDir } = await bootTestApp()
     const alpha = await createWorkspaceDir(dataDir, "alpha")
     const beta = await createWorkspaceDir(dataDir, "beta")
-    const { app } = await createTestApp(dataDir)
 
     await registerWorkspace(app, dataDir, { name: "Alpha", path: alpha })
     await registerWorkspace(app, dataDir, { name: "Beta", path: beta })
@@ -178,13 +138,12 @@ describe("GET /v1/workspaces", () => {
   })
 
   test("pages forward and backward with opaque cursors", async () => {
-    const dataDir = await createTempDataDir()
+    const { app, dataDir } = await bootTestApp()
     const dirs = await Promise.all([
       createWorkspaceDir(dataDir, "one"),
       createWorkspaceDir(dataDir, "two"),
       createWorkspaceDir(dataDir, "three"),
     ])
-    const { app } = await createTestApp(dataDir)
 
     for (const [index, dir] of dirs.entries()) {
       await registerWorkspace(app, dataDir, {
@@ -240,8 +199,7 @@ describe("GET /v1/workspaces", () => {
   })
 
   test("returns 400 for invalid cursor", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app } = await bootTestApp()
 
     const response = await app.inject({
       method: "GET",
@@ -259,10 +217,9 @@ describe("GET /v1/workspaces", () => {
   })
 
   test("filters by search query and state", async () => {
-    const dataDir = await createTempDataDir()
+    const { app, dataDir } = await bootTestApp()
     const alpha = await createWorkspaceDir(dataDir, "alpha-project")
     const beta = await createWorkspaceDir(dataDir, "beta-other")
-    const { app } = await createTestApp(dataDir)
 
     await registerWorkspace(app, dataDir, { name: "Alpha Project", path: alpha })
     await registerWorkspace(app, dataDir, { name: "Beta Other", path: beta })
@@ -292,9 +249,8 @@ describe("GET /v1/workspaces", () => {
 
 describe("GET /v1/workspaces/:workspaceId", () => {
   test("returns live workspace state", async () => {
-    const dataDir = await createTempDataDir()
+    const { app, dataDir } = await bootTestApp()
     const workspaceDir = await createWorkspaceDir(dataDir, "live")
-    const { app } = await createTestApp(dataDir)
 
     const created = await registerWorkspace(app, dataDir, {
       name: "Live",
@@ -315,8 +271,7 @@ describe("GET /v1/workspaces/:workspaceId", () => {
   })
 
   test("returns 404 for unknown id", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app } = await bootTestApp()
 
     const response = await app.inject({
       method: "GET",
@@ -332,9 +287,8 @@ describe("GET /v1/workspaces/:workspaceId", () => {
 
 describe("PATCH /v1/workspaces/:workspaceId", () => {
   test("renames workspace and updates lastUsedAt", async () => {
-    const dataDir = await createTempDataDir()
+    const { app, dataDir } = await bootTestApp()
     const workspaceDir = await createWorkspaceDir(dataDir, "rename")
-    const { app } = await createTestApp(dataDir)
 
     const created = await registerWorkspace(app, dataDir, {
       name: "Original",
@@ -356,8 +310,7 @@ describe("PATCH /v1/workspaces/:workspaceId", () => {
   })
 
   test("returns 404 for unknown id", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app } = await bootTestApp()
 
     const response = await app.inject({
       method: "PATCH",
@@ -372,9 +325,8 @@ describe("PATCH /v1/workspaces/:workspaceId", () => {
 
 describe("DELETE /v1/workspaces/:workspaceId", () => {
   test("returns 204 and removes metadata only", async () => {
-    const dataDir = await createTempDataDir()
+    const { app, dataDir } = await bootTestApp()
     const workspaceDir = await createWorkspaceDir(dataDir, "delete-me")
-    const { app } = await createTestApp(dataDir)
 
     const created = await registerWorkspace(app, dataDir, {
       name: "Delete Me",
@@ -398,8 +350,7 @@ describe("DELETE /v1/workspaces/:workspaceId", () => {
   })
 
   test("returns 404 for unknown id", async () => {
-    const dataDir = await createTempDataDir()
-    const { app } = await createTestApp(dataDir)
+    const { app } = await bootTestApp()
 
     const response = await app.inject({
       method: "DELETE",
@@ -413,9 +364,8 @@ describe("DELETE /v1/workspaces/:workspaceId", () => {
 
 describe("workspace state transitions", () => {
   test("reports missing state after directory removal", async () => {
-    const dataDir = await createTempDataDir()
+    const { app, dataDir } = await bootTestApp()
     const workspaceDir = await createWorkspaceDir(dataDir, "ephemeral")
-    const { app } = await createTestApp(dataDir)
 
     const created = await registerWorkspace(app, dataDir, {
       name: "Ephemeral",
@@ -437,47 +387,22 @@ describe("workspace state transitions", () => {
 
 describe("restart durability", () => {
   test("keeps workspace metadata across server restart", async () => {
-    const dataDir = await createTempDataDir()
-    const workspaceDir = await createWorkspaceDir(dataDir, "durable")
+    const first = await bootTestApp()
+    const workspaceDir = await createWorkspaceDir(first.dataDir, "durable")
 
-    const firstConfig = parseConfig({
-      AGENT_SERVER_HOST: "127.0.0.1",
-      AGENT_SERVER_PORT: "0",
-      AGENT_SERVER_DATA_DIR: dataDir,
-    })
-    const firstDatabase = openDatabase({ dataDir: firstConfig.dataDir })
-    const firstRuntime = createRuntime("0.1.0")
-    const { app: firstApp } = await createServer({
-      config: firstConfig,
-      runtime: firstRuntime,
-      database: firstDatabase,
-    })
-
-    const created = await registerWorkspace(firstApp, dataDir, {
+    const created = await registerWorkspace(first.app, first.dataDir, {
       name: "Durable",
       path: workspaceDir,
     })
     const workspace = WorkspaceSchema.parse(JSON.parse(created.body))
 
-    await firstApp.close()
-    firstDatabase.close()
+    const second = await first.reopen()
 
-    const secondDatabase = openDatabase({ dataDir })
-    const secondRuntime = createRuntime("0.1.0")
-    const { app: secondApp } = await createServer({
-      config: firstConfig,
-      runtime: secondRuntime,
-      database: secondDatabase,
-    })
-    apps.push(secondApp)
-
-    const listResponse = await secondApp.inject({ method: "GET", url: "/v1/workspaces" })
+    const listResponse = await second.app.inject({ method: "GET", url: "/v1/workspaces" })
     const list = WorkspaceCollectionSchema.parse(JSON.parse(listResponse.body))
 
     expect(list.items.length).toBe(1)
     expect(list.items[0]?.id).toBe(workspace.id)
     expect(list.items[0]?.name).toBe("Durable")
-
-    secondDatabase.close()
   })
 })

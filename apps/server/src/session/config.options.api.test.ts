@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import {
   ConflictProblemSchema,
   NotFoundProblemSchema,
@@ -7,16 +7,8 @@ import {
 } from "contracts/http/error"
 import { CreateSessionResponseSchema } from "contracts/http/session"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
-import {
-  acceptTestExecutablePath,
-  cleanupTestAppResources,
-  createTempDataDir,
-  createTestApp,
-  createTestAppResources,
-  enableAgent,
-} from "../test-support/create-test-app"
-
-const resources = createTestAppResources()
+import { enableAgent } from "../test-support/test.app"
+import { bootTestApp } from "../test-support/test.harness"
 
 const whichFn: WhichFn = (binaryName) =>
   binaryName === "agent" ? "/usr/local/bin/agent" : undefined
@@ -35,17 +27,9 @@ const fakeConfigOptions = [
   },
 ]
 
-afterEach(async () => {
-  await cleanupTestAppResources(resources)
-})
-
-const createConfigApp = async (
-  extraFakeOptions: Record<string, unknown> = {},
-) => {
-  const dataDir = await createTempDataDir(resources)
-  const { app } = await createTestApp(resources, dataDir, {
+const createConfigApp = async (extraFakeOptions: Record<string, unknown> = {}) => {
+  const { app } = await bootTestApp({
     whichFn,
-    validateExecutablePathFn: acceptTestExecutablePath,
     fakeAcpOptions: {
       capabilities: { loadSession: true, sessionClose: true, sessionList: true },
       sessionNewSessionId: "fake-session-new",

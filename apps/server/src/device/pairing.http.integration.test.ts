@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import { createHash } from "node:crypto"
 import { eq } from "drizzle-orm"
 import {
@@ -9,21 +9,10 @@ import {
   claimPairingCodePath,
 } from "contracts/http/pairing-code"
 import { NotFoundProblemSchema, ConflictProblemSchema } from "contracts/http/error"
-import {
-  cleanupTestAppResources,
-  createTempDataDir,
-  createTestApp,
-  createTestAppResources,
-} from "../test-support/create-test-app"
+import { bootTestApp } from "../test-support/test.harness"
 import { devices } from "../persistence/schema/devices"
 import { pairingCodes } from "../persistence/schema/pairing-codes"
 import { Config } from "../config/config"
-
-const resources = createTestAppResources()
-
-afterEach(async () => {
-  await cleanupTestAppResources(resources)
-})
 
 const getListeningHttpBase = async (
   app: {
@@ -43,8 +32,7 @@ const getListeningHttpBase = async (
 
 describe("pairing HTTP integration", () => {
   test("create without credential, claim once, second claim fails", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config, database } = await createTestApp(resources, dataDir)
+    const { app, config, database } = await bootTestApp()
     const httpBase = await getListeningHttpBase(app, config)
 
     const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
@@ -61,8 +49,7 @@ describe("pairing HTTP integration", () => {
     expect(PairingCodeValueSchema.parse(created.code)).toBe(created.code)
     expect(created.state).toBe("active")
     expect(created.endpoint).toBe(`http://${config.host}:${config.port}`)
-    const ttlMs =
-      Date.parse(created.expiresAt) - Date.parse(created.createdAt)
+    const ttlMs = Date.parse(created.expiresAt) - Date.parse(created.createdAt)
     expect(ttlMs).toBe(10 * 60 * 1000)
 
     const claimResponse = await fetch(
@@ -102,26 +89,20 @@ describe("pairing HTTP integration", () => {
     )
     expect(deviceRow?.credentialHash.includes(claimed.credential)).toBe(false)
 
-    const secondClaim = await fetch(
-      `${httpBase}${claimPairingCodePath(created.code)}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: "Other" }),
-      },
-    )
+    const secondClaim = await fetch(`${httpBase}${claimPairingCodePath(created.code)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Other" }),
+    })
 
     expect(secondClaim.status).toBe(409)
-    expect(secondClaim.headers.get("content-type")).toContain(
-      "application/problem+json",
-    )
+    expect(secondClaim.headers.get("content-type")).toContain("application/problem+json")
     const problem = ConflictProblemSchema.parse(await secondClaim.json())
     expect(problem.title).toBe("Pairing code already claimed")
   })
 
   test("expired pairing codes cannot be claimed", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config, database } = await createTestApp(resources, dataDir)
+    const { app, config, database } = await bootTestApp()
     const httpBase = await getListeningHttpBase(app, config)
 
     const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
@@ -137,47 +118,35 @@ describe("pairing HTTP integration", () => {
       .where(eq(pairingCodes.id, created.id))
       .run()
 
-    const claimResponse = await fetch(
-      `${httpBase}${claimPairingCodePath(created.code)}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({}),
-      },
-    )
+    const claimResponse = await fetch(`${httpBase}${claimPairingCodePath(created.code)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    })
 
     expect(claimResponse.status).toBe(409)
-    expect(claimResponse.headers.get("content-type")).toContain(
-      "application/problem+json",
-    )
+    expect(claimResponse.headers.get("content-type")).toContain("application/problem+json")
     const problem = ConflictProblemSchema.parse(await claimResponse.json())
     expect(problem.title).toBe("Pairing code expired")
   })
 
   test("unknown pairing code returns not found", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const httpBase = await getListeningHttpBase(app, config)
 
-    const claimResponse = await fetch(
-      `${httpBase}${claimPairingCodePath("AAA-AAA")}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({}),
-      },
-    )
+    const claimResponse = await fetch(`${httpBase}${claimPairingCodePath("AAA-AAA")}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    })
 
     expect(claimResponse.status).toBe(404)
-    expect(claimResponse.headers.get("content-type")).toContain(
-      "application/problem+json",
-    )
+    expect(claimResponse.headers.get("content-type")).toContain("application/problem+json")
     NotFoundProblemSchema.parse(await claimResponse.json())
   })
 
   test("create pairing code uses advertised URL when set", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const httpBase = await getListeningHttpBase(app, config)
 
     const patchResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
@@ -199,8 +168,7 @@ describe("pairing HTTP integration", () => {
   })
 
   test("claim accepts display name", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const httpBase = await getListeningHttpBase(app, config)
 
     const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
@@ -210,14 +178,11 @@ describe("pairing HTTP integration", () => {
     })
     const created = CreatePairingCodeResponseSchema.parse(await createResponse.json())
 
-    const claimResponse = await fetch(
-      `${httpBase}${claimPairingCodePath(created.code)}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: "Pixel 8", platform: "android" }),
-      },
-    )
+    const claimResponse = await fetch(`${httpBase}${claimPairingCodePath(created.code)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Pixel 8", platform: "android" }),
+    })
 
     expect(claimResponse.status).toBe(201)
     const claimed = ClaimPairingCodeResponseSchema.parse(await claimResponse.json())
@@ -226,8 +191,7 @@ describe("pairing HTTP integration", () => {
   })
 
   test("pairing endpoint uses advertised URL when set, otherwise loopback", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const httpBase = await getListeningHttpBase(app, config)
 
     const loopbackCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
@@ -235,9 +199,7 @@ describe("pairing HTTP integration", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({}),
     })
-    const loopbackPairing = CreatePairingCodeResponseSchema.parse(
-      await loopbackCreate.json(),
-    )
+    const loopbackPairing = CreatePairingCodeResponseSchema.parse(await loopbackCreate.json())
     expect(loopbackPairing.endpoint).toBe(`http://${config.host}:${config.port}`)
 
     const patchResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
@@ -252,9 +214,7 @@ describe("pairing HTTP integration", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({}),
     })
-    const advertisedPairing = CreatePairingCodeResponseSchema.parse(
-      await advertisedCreate.json(),
-    )
+    const advertisedPairing = CreatePairingCodeResponseSchema.parse(await advertisedCreate.json())
     expect(advertisedPairing.endpoint).toBe("https://agents.example.com")
 
     const clearResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
@@ -269,15 +229,12 @@ describe("pairing HTTP integration", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({}),
     })
-    const clearedPairing = CreatePairingCodeResponseSchema.parse(
-      await clearedCreate.json(),
-    )
+    const clearedPairing = CreatePairingCodeResponseSchema.parse(await clearedCreate.json())
     expect(clearedPairing.endpoint).toBe(`http://${config.host}:${config.port}`)
   })
 
   test("local pairing after clearing stale advertised URL uses loopback endpoint", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const httpBase = await getListeningHttpBase(app, config)
 
     const setAdvertisedResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
@@ -312,8 +269,7 @@ describe("pairing HTTP integration", () => {
   })
 
   test("loopback pairing keeps advertised URL when requested", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const httpBase = await getListeningHttpBase(app, config)
 
     const setAdvertisedResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
@@ -328,9 +284,7 @@ describe("pairing HTTP integration", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ endpoint: "loopback" }),
     })
-    const loopbackPairing = CreatePairingCodeResponseSchema.parse(
-      await loopbackCreate.json(),
-    )
+    const loopbackPairing = CreatePairingCodeResponseSchema.parse(await loopbackCreate.json())
     expect(loopbackPairing.endpoint).toBe(`http://${config.host}:${config.port}`)
 
     const settingsResponse = await fetch(`${httpBase}/v1/settings/runtime`)
@@ -341,8 +295,7 @@ describe("pairing HTTP integration", () => {
   })
 
   test("disabled advertised URL uses loopback until re-enabled", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const { app, config } = await createTestApp(resources, dataDir)
+    const { app, config } = await bootTestApp()
     const httpBase = await getListeningHttpBase(app, config)
 
     const setAdvertisedResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
@@ -364,9 +317,7 @@ describe("pairing HTTP integration", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({}),
     })
-    const disabledPairing = CreatePairingCodeResponseSchema.parse(
-      await disabledCreate.json(),
-    )
+    const disabledPairing = CreatePairingCodeResponseSchema.parse(await disabledCreate.json())
     expect(disabledPairing.endpoint).toBe(`http://${config.host}:${config.port}`)
 
     const advertisedCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {

@@ -1,17 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { mkdtemp } from "node:fs/promises"
-import os from "node:os"
-import path from "node:path"
+import { describe, expect, test } from "bun:test"
 import { CONNECTION_TEST_PATH, ConnectionTestResponseSchema } from "contracts/http/connection-test"
 import { DEVICES_PATH } from "contracts/http/device"
 import { ValidationProblemSchema } from "contracts/http/error"
 import { createConnectionTestService } from "./connection.test.service"
 import { registerConnectionTestRoutes } from "./routes"
-import {
-  cleanupTestAppResources,
-  createTestApp,
-  createTestAppResources,
-} from "../test-support/create-test-app"
+import { bootTestApp, bootTestDatabase, registerTestApp } from "../test-support/test.harness"
 import {
   createRuntimeSettingsRepository,
   seedDefaultsFromConfig,
@@ -22,20 +15,8 @@ import { createDeviceRepository } from "../device/repository"
 import Fastify from "fastify"
 
 describe("connection test API", () => {
-  const resources = createTestAppResources()
-  let dataDir = ""
-
-  beforeEach(async () => {
-    dataDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-connection-test-"))
-    resources.addTempDir(dataDir)
-  })
-
-  afterEach(async () => {
-    await cleanupTestAppResources(resources)
-  })
-
   test("POST returns 400 when advertised URL is missing", async () => {
-    const { app } = await createTestApp(resources, dataDir)
+    const { app } = await bootTestApp()
 
     const response = await app.inject({
       method: "POST",
@@ -47,6 +28,7 @@ describe("connection test API", () => {
   })
 
   test("POST returns classified checks and revokes probe device on pass path", async () => {
+    const { database, dataDir } = await bootTestDatabase()
     const config = parseConfig({
       AGENT_SERVER_HOST: "127.0.0.1",
       AGENT_SERVER_PORT: "3847",
@@ -60,7 +42,6 @@ describe("connection test API", () => {
       advertisedUrl: "https://agents.example.com",
     })
 
-    const { database } = await createTestApp(resources, dataDir)
     const deviceRepository = createDeviceRepository(database)
     const deviceService = createDeviceService({
       database,
@@ -89,9 +70,8 @@ describe("connection test API", () => {
       },
     })
 
-    const probeApp = Fastify()
+    const probeApp = registerTestApp(Fastify())
     registerConnectionTestRoutes(probeApp, connectionTestService)
-    resources.addApp(probeApp)
 
     const beforeDevices = deviceRepository.list({ limit: 100 })
     expect(beforeDevices.ok).toBe(true)
@@ -121,6 +101,7 @@ describe("connection test API", () => {
   })
 
   test("POST classifies DNS, TLS, and auth failures", async () => {
+    const { database, dataDir } = await bootTestDatabase()
     const config = parseConfig({
       AGENT_SERVER_HOST: "127.0.0.1",
       AGENT_SERVER_PORT: "3847",
@@ -134,7 +115,6 @@ describe("connection test API", () => {
       advertisedUrl: "https://agents.example.com",
     })
 
-    const { database } = await createTestApp(resources, dataDir)
     const deviceRepository = createDeviceRepository(database)
     const deviceService = createDeviceService({
       database,
@@ -164,9 +144,8 @@ describe("connection test API", () => {
       },
     })
 
-    const probeApp = Fastify()
+    const probeApp = registerTestApp(Fastify())
     registerConnectionTestRoutes(probeApp, connectionTestService)
-    resources.addApp(probeApp)
 
     const response = await probeApp.inject({
       method: "POST",
@@ -181,6 +160,7 @@ describe("connection test API", () => {
   })
 
   test("POST warns on self-signed TLS and allows continue anyway when auth passes", async () => {
+    const { database, dataDir } = await bootTestDatabase()
     const config = parseConfig({
       AGENT_SERVER_HOST: "127.0.0.1",
       AGENT_SERVER_PORT: "3847",
@@ -194,7 +174,6 @@ describe("connection test API", () => {
       advertisedUrl: "https://agents.example.com",
     })
 
-    const { database } = await createTestApp(resources, dataDir)
     const deviceRepository = createDeviceRepository(database)
     const deviceService = createDeviceService({
       database,
@@ -222,9 +201,8 @@ describe("connection test API", () => {
       },
     })
 
-    const probeApp = Fastify()
+    const probeApp = registerTestApp(Fastify())
     registerConnectionTestRoutes(probeApp, connectionTestService)
-    resources.addApp(probeApp)
 
     const response = await probeApp.inject({
       method: "POST",
@@ -238,6 +216,7 @@ describe("connection test API", () => {
   })
 
   test("device auth probe targets devices collection path", async () => {
+    const { database, dataDir } = await bootTestDatabase()
     const config = parseConfig({
       AGENT_SERVER_HOST: "127.0.0.1",
       AGENT_SERVER_PORT: "3847",
@@ -251,7 +230,6 @@ describe("connection test API", () => {
       advertisedUrl: "https://agents.example.com:8443",
     })
 
-    const { database } = await createTestApp(resources, dataDir)
     const deviceRepository = createDeviceRepository(database)
     const deviceService = createDeviceService({
       database,
@@ -283,9 +261,8 @@ describe("connection test API", () => {
       },
     })
 
-    const probeApp = Fastify()
+    const probeApp = registerTestApp(Fastify())
     registerConnectionTestRoutes(probeApp, connectionTestService)
-    resources.addApp(probeApp)
 
     await probeApp.inject({
       method: "POST",

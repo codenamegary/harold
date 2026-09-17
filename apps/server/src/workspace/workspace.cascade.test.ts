@@ -1,32 +1,20 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import { WorkspaceActiveSessionsProblemSchema } from "contracts/http/error"
-import {
-  cleanupTestAppResources,
-  createTempDataDir,
-  createTestApp,
-  createTestAppResources,
-  enableAgent,
-  seedBoundSession,
-  seedWorkspace,
-} from "../test-support/create-test-app"
-import { WhichFn } from "../agent-settings/resolve-agent-path"
+import { bootTestApp } from "../test-support/test.harness"
+import { enableAgent, seedBoundSession, seedWorkspace } from "../test-support/test.app"
 
-const resources = createTestAppResources()
-
-afterEach(async () => {
-  await cleanupTestAppResources(resources)
-})
+const whichFn = (binaryName: string) =>
+  binaryName === "agent" ? "/usr/local/bin/agent" : undefined
 
 describe("DELETE /v1/workspaces/:id cascade", () => {
   test("closes live sessions and deletes workspace metadata", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const detectedPath = "/usr/local/bin/agent"
-    const whichFn: WhichFn = (binaryName) =>
-      binaryName === "agent" ? detectedPath : undefined
-    const { app, acpSupervisor } = await createTestApp(resources, dataDir, whichFn, undefined, {
-      capabilities: { loadSession: true, sessionClose: true, sessionList: true },
-      sessionNewSessionId: "cascade-session",
-      sessionLoadSessionId: "cascade-session",
+    const { app, acpSupervisor, dataDir } = await bootTestApp({
+      whichFn,
+      fakeAcpOptions: {
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+        sessionNewSessionId: "cascade-session",
+        sessionLoadSessionId: "cascade-session",
+      },
     })
     const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)
@@ -59,14 +47,13 @@ describe("DELETE /v1/workspaces/:id cascade", () => {
   })
 
   test("returns 409 with forceDeleteAvailable when close fails, then succeeds with force=true", async () => {
-    const dataDir = await createTempDataDir(resources)
-    const detectedPath = "/usr/local/bin/agent"
-    const whichFn: WhichFn = (binaryName) =>
-      binaryName === "agent" ? detectedPath : undefined
-    const { app, acpSupervisor } = await createTestApp(resources, dataDir, whichFn, undefined, {
-      capabilities: { loadSession: true, sessionClose: true, sessionList: true },
-      sessionNewSessionId: "force-delete-session",
-      sessionCloseFails: true,
+    const { app, acpSupervisor, dataDir } = await bootTestApp({
+      whichFn,
+      fakeAcpOptions: {
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+        sessionNewSessionId: "force-delete-session",
+        sessionCloseFails: true,
+      },
     })
     const { workspaceId, workspaceDir } = await seedWorkspace(app, dataDir)
     await enableAgent(app, "cursor", whichFn)

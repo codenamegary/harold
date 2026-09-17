@@ -1,37 +1,26 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import { Database } from "bun:sqlite"
 import { createHash } from "node:crypto"
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
-import os from "node:os"
+import { readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { catalogAgentIds } from "../acp/catalog/generated/catalog.agents.generated"
 import { openDatabase } from "./database"
-
-const tempDirs: string[] = []
+import { bootTestDirectory, registerTestCleanup } from "../test-support/test.harness"
 const migrationsFolder = path.join(import.meta.dir, "drizzle")
 const ms1MigrationCount = 4
 const currentMigrationCount = 10
 
-const createTempDataDir = async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-test-"))
-  tempDirs.push(dir)
-  return dir
-}
-
-afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
-})
-
 const tableNames = (sqlite: Database) =>
   sqlite
-    .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+    .query<{ name: string }, []>(
+      "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
+    )
     .all()
     .map((row) => row.name)
 
 const migrationCount = (sqlite: Database) =>
-  sqlite
-    .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM __drizzle_migrations")
-    .get()?.count
+  sqlite.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM __drizzle_migrations").get()
+    ?.count
 
 const createMs1Database = async (dataDir: string) => {
   const databasePath = path.join(dataDir, "agent-server.db")
@@ -85,8 +74,9 @@ const createMs1Database = async (dataDir: string) => {
 
 describe("drizzle migrations", () => {
   test("creates __drizzle_migrations and applies workspaces table", async () => {
-    const dataDir = await createTempDataDir()
+    const dataDir = await bootTestDirectory()
     const database = openDatabase({ dataDir })
+    registerTestCleanup(() => database.close())
 
     const tables = tableNames(database.sqlite)
 
@@ -100,13 +90,7 @@ describe("drizzle migrations", () => {
       .all()
       .map((row) => row.name)
 
-    expect(columns).toEqual([
-      "id",
-      "name",
-      "canonical_path",
-      "created_at",
-      "last_used_at",
-    ])
+    expect(columns).toEqual(["id", "name", "canonical_path", "created_at", "last_used_at"])
 
     const agentSettingsColumns = database.sqlite
       .query<{ name: string }, []>("PRAGMA table_info(agent_settings)")
@@ -133,13 +117,12 @@ describe("drizzle migrations", () => {
     expect(seededAgents).toEqual([{ agent_id: "cursor", enabled: 0 }])
     expect(catalogAgentIds).toContain("cursor")
     expect(catalogAgentIds).toContain("claude-acp")
-
-    database.close()
   })
 
   test("drops sessions and events tables", async () => {
-    const dataDir = await createTempDataDir()
+    const dataDir = await bootTestDirectory()
     const database = openDatabase({ dataDir })
+    registerTestCleanup(() => database.close())
 
     const tables = tableNames(database.sqlite)
     expect(tables).not.toContain("sessions")
@@ -148,13 +131,12 @@ describe("drizzle migrations", () => {
     expect(tables).toContain("devices")
     expect(tables).toContain("archived_acp_sessions")
     expect(migrationCount(database.sqlite)).toBe(currentMigrationCount)
-
-    database.close()
   })
 
   test("creates archived_acp_sessions with composite primary key", async () => {
-    const dataDir = await createTempDataDir()
+    const dataDir = await bootTestDirectory()
     const database = openDatabase({ dataDir })
+    registerTestCleanup(() => database.close())
 
     const columns = database.sqlite
       .query<{ name: string }, []>("PRAGMA table_info(archived_acp_sessions)")
@@ -172,13 +154,12 @@ describe("drizzle migrations", () => {
     expect(tableSql).toContain("PRIMARY KEY")
     expect(tableSql).toContain("agent_id")
     expect(tableSql).toContain("session_id")
-
-    database.close()
   })
 
   test("creates devices and pairing_codes tables with hash columns only", async () => {
-    const dataDir = await createTempDataDir()
+    const dataDir = await bootTestDirectory()
     const database = openDatabase({ dataDir })
+    registerTestCleanup(() => database.close())
 
     const tables = tableNames(database.sqlite)
     expect(tables).toContain("devices")
@@ -230,10 +211,7 @@ describe("drizzle migrations", () => {
       .all()
       .map((row) => row.name)
 
-    expect(deviceIndexes).toEqual([
-      "devices_credential_hash_unique",
-      "devices_revoked_at_idx",
-    ])
+    expect(deviceIndexes).toEqual(["devices_credential_hash_unique", "devices_revoked_at_idx"])
 
     const pairingCodeIndexes = database.sqlite
       .query<{ name: string }, []>(
@@ -264,23 +242,24 @@ describe("drizzle migrations", () => {
         to: "id",
       }),
     ])
-
-    database.close()
   })
 
   test("applies device tables onto an existing MS1 database", async () => {
-    const dataDir = await createTempDataDir()
+    const dataDir = await bootTestDirectory()
     await createMs1Database(dataDir)
 
     const before = new Database(path.join(dataDir, "agent-server.db"))
+
+    registerTestCleanup(() => before.close())
     expect(migrationCount(before)).toBe(ms1MigrationCount)
     expect(tableNames(before)).toContain("sessions")
     expect(tableNames(before)).toContain("events")
     expect(tableNames(before)).not.toContain("devices")
     expect(tableNames(before)).not.toContain("pairing_codes")
-    before.close()
 
     const database = openDatabase({ dataDir })
+
+    registerTestCleanup(() => database.close())
 
     expect(migrationCount(database.sqlite)).toBe(currentMigrationCount)
     expect(tableNames(database.sqlite)).not.toContain("sessions")
@@ -297,34 +276,32 @@ describe("drizzle migrations", () => {
     expect(workspace).toEqual({ id: "ws_ms1", name: "MS1 Workspace" })
 
     const seededAgents = database.sqlite
-      .query<{ agent_id: string }, []>(
-        "SELECT agent_id FROM agent_settings ORDER BY agent_id",
-      )
+      .query<{ agent_id: string }, []>("SELECT agent_id FROM agent_settings ORDER BY agent_id")
       .all()
       .map((row) => row.agent_id)
 
     expect(seededAgents).toEqual(["cursor"])
     expect(seededAgents).not.toContain("claude")
-
-    database.close()
   })
 
   test("second open is idempotent", async () => {
-    const dataDir = await createTempDataDir()
+    const dataDir = await bootTestDirectory()
     const first = openDatabase({ dataDir })
-    first.close()
+    registerTestCleanup(() => first.close())
 
     const second = openDatabase({ dataDir })
 
+    registerTestCleanup(() => second.close())
+
     expect(migrationCount(second.sqlite)).toBe(currentMigrationCount)
-    second.close()
   })
 })
 
 describe("openDatabase", () => {
   test("creates data dir, opens agent-server.db, and enables WAL", async () => {
-    const dataDir = await createTempDataDir()
+    const dataDir = await bootTestDirectory()
     const database = openDatabase({ dataDir })
+    registerTestCleanup(() => database.close())
 
     expect(database.path).toBe(path.join(dataDir, "agent-server.db"))
 
@@ -333,28 +310,25 @@ describe("openDatabase", () => {
       .get()?.journal_mode
 
     expect(journalMode).toBe("wal")
-
-    database.close()
   })
 
   test("reuses an existing database file in the data dir", async () => {
-    const dataDir = await createTempDataDir()
+    const dataDir = await bootTestDirectory()
     const first = openDatabase({ dataDir })
-    first.close()
+    registerTestCleanup(() => first.close())
 
     const second = openDatabase({ dataDir })
 
+    registerTestCleanup(() => second.close())
+
     expect(migrationCount(second.sqlite)).toBe(currentMigrationCount)
-    second.close()
   })
 
   test("throws when the data dir cannot be created", async () => {
-    const parentDir = await createTempDataDir()
+    const parentDir = await bootTestDirectory()
     const blockedPath = path.join(parentDir, "blocked")
     await writeFile(blockedPath, "not a directory")
 
-    expect(() =>
-      openDatabase({ dataDir: path.join(blockedPath, "nested") }),
-    ).toThrow()
+    expect(() => openDatabase({ dataDir: path.join(blockedPath, "nested") })).toThrow()
   })
 })
