@@ -7,7 +7,7 @@ import {
   buildRootNotAllowedProblem,
   buildRootPathValidationProblem,
 } from "./filesystem.browse.problems"
-import { listFilesystemDirectories } from "./list.filesystem.directories"
+import { listDirectories } from "./filesystem.list.directories"
 
 const sendProblem = (
   reply: { status: (code: number) => { type: (type: string) => { send: (body: unknown) => unknown } } },
@@ -21,7 +21,7 @@ export const registerFilesystemBrowseRoutes = (
 ) => {
   app.get("/v1/filesystem/directories", async (request, reply) => {
     const query = ListFilesystemDirectoriesQuerySchema.parse(request.query)
-    const result = listFilesystemDirectories({
+    const result = listDirectories({
       root: query.root,
       allowedRoots: getAllowedRoots(),
     })

@@ -1,5 +1,5 @@
 import { CreateWorkspaceBody, Workspace } from "contracts/http/workspace"
-import { isPathUnderAllowedRoot } from "./workspace.is.path.under.allowed.root"
+import { isDescendantOf } from "../filesystem/filesystem.is.descendant.of"
 import { CanonicalizePath, GetAllowedRoots, InsertWorkspace } from "./workspace.ports"
 import { WorkspaceRepositoryError } from "./workspace.errors"
 
@@ -27,10 +27,10 @@ export const makeRegisterWorkspace =
       }
 
       const isAllowed = allowedRoots.some((allowedRoot) =>
-        isPathUnderAllowedRoot({
-          allowedRoot,
+        isDescendantOf({
+          path: allowedRoot,
           candidatePath: canonicalizeResult.canonicalPath,
-        })
+        }),
       )
       if (!isAllowed) {
         return { ok: false, error: { kind: "outside_allowed_root" } }

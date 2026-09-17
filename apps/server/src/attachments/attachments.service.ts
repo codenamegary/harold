@@ -7,7 +7,7 @@ import {
   AttachmentReference,
   BLOCKED_ATTACHMENT_EXTENSIONS,
 } from "contracts/http/attachments"
-import { isPathUnderAllowedRoot } from "../workspace/workspace.is.path.under.allowed.root"
+import { isDescendantOf } from "../filesystem/filesystem.is.descendant.of"
 import { ensureAttachmentsDir, ensureGitignoreEntry } from "./gitignore"
 
 const ATTACHMENT_ID_PREFIX = "att_"
@@ -113,7 +113,7 @@ export const createAttachmentsService = (
   } | null> => {
     const attachmentsRoot = await ensureAttachmentsDir(workspacePath)
     const resolved = path.resolve(reference.path)
-    if (!isPathUnderAllowedRoot({ allowedRoot: attachmentsRoot, candidatePath: resolved })) {
+    if (!isDescendantOf({ path: attachmentsRoot, candidatePath: resolved })) {
       return null
     }
     try {
@@ -138,7 +138,7 @@ export const createAttachmentsService = (
     const attachmentsRoot = await ensureAttachmentsDir(params.workspacePath)
     const filePath = path.join(attachmentsRoot, params.attachmentId)
     const resolved = path.resolve(filePath)
-    if (!isPathUnderAllowedRoot({ allowedRoot: attachmentsRoot, candidatePath: resolved })) {
+    if (!isDescendantOf({ path: attachmentsRoot, candidatePath: resolved })) {
       return false
     }
     try {

@@ -47,16 +47,7 @@ export type ListWorkspaces = (query: {
   q?: string
   state?: Workspace["state"]
 }) =>
-  | {
-      ok: true
-      value: {
-        items: Workspace[]
-        limit: number
-        nextCursor?: string
-        previousCursor?: string
-        count: number
-      }
-    }
+  | { ok: true; value: { items: Workspace[]; limit: number; nextCursor?: string; previousCursor?: string; count: number } }
   | { ok: false; error: { kind: "invalid_cursor" } }
 
 export type UpdateWorkspaceName = (input: { id: string; name: string }) =>

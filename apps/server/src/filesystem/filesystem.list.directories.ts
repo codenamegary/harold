@@ -1,7 +1,7 @@
 import { readdirSync, realpathSync, statSync } from "node:fs"
 import path from "node:path"
 import { canonicalizePath } from "./filesystem.canonicalize.path"
-import { isPathUnderAllowedRoot } from "../workspace/workspace.is.path.under.allowed.root"
+import { isDescendantOf } from "./filesystem.is.descendant.of"
 import { FilesystemPathError } from "./filesystem.errors"
 
 export type FilesystemDirectoryItem = {
@@ -14,7 +14,7 @@ export type ListFilesystemDirectoriesResult =
   | { ok: false; error: { kind: "not_allowed" } }
   | { ok: false; error: { kind: "path"; error: FilesystemPathError } }
 
-export const listFilesystemDirectories = (params: {
+export const listDirectories = (params: {
   root: string
   allowedRoots: readonly string[]
 }): ListFilesystemDirectoriesResult => {
@@ -51,8 +51,8 @@ export const listFilesystemDirectories = (params: {
     }
 
     if (
-      !isPathUnderAllowedRoot({
-        allowedRoot: canonicalizeResult.canonicalPath,
+      !isDescendantOf({
+        path: canonicalizeResult.canonicalPath,
         candidatePath: resolved,
       })
     ) {
