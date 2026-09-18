@@ -4,6 +4,8 @@ import {
   RuntimeSettingsSchema,
   UpdateRuntimeSettingsBody,
 } from "contracts/http/runtime-settings"
+import { Workspace } from "contracts/http/workspace"
+import { FilesystemPathError } from "../filesystem/filesystem.errors"
 import { DeleteWorkspace, ListAllWorkspaces } from "../workspace/workspace.ports"
 import { findWorkspacesAffectedByRootRemoval } from "./find.workspaces.affected.by.root.removal"
 import { UpdateRuntimeSettingsError } from "./runtime-settings.errors"
@@ -41,6 +43,83 @@ export type UpdateRuntimeSettingsDeps = Readonly<{
   onLogLevelChanged?: OnLogLevelChanged
 }>
 
+type CanonicalRootsResult =
+  | { ok: true; canonicalRoots: string[] }
+  | { ok: false; error: FilesystemPathError; index: number }
+
+type ReconcileRootsResult =
+  | { ok: true }
+  | { ok: false; error: UpdateRuntimeSettingsError }
+
+const canonicalizeRoots =
+  (canonicalizePath: CanonicalizePath, roots: readonly string[]): CanonicalRootsResult =>
+    roots.reduce<CanonicalRootsResult>(
+      (acc, root, index) => {
+        if (!acc.ok) return acc
+
+        const result = canonicalizePath(root)
+        if (!result.ok) {
+          return { ok: false, error: result.error, index }
+        }
+
+        return {
+          ok: true,
+          canonicalRoots: [... new Set([...acc.canonicalRoots, result.canonicalPath])]
+        }
+      }, { ok: true, canonicalRoots: [] })
+
+const affectedWorkspacesDetail = (count: number): string =>
+  `${count} workspace${count === 1 ? "" : "s"} must be unregistered before this root can be removed`
+
+const deleteAffectedWorkspaces = async (
+  deps: UpdateRuntimeSettingsDeps,
+  affected: ReadonlyArray<Workspace>,
+): Promise<ReconcileRootsResult> =>
+  affected.reduce(
+    async (outcome, workspace) => {
+      const prior = await outcome
+      if (!prior.ok) return prior
+
+      const deleted = await deps.deleteWorkspace({
+        workspaceId: workspace.id,
+        force: true,
+      })
+
+      return deleted.ok || deleted.error.kind !== "not_found"
+        ? { ok: true as const }
+        : { ok: false as const, error: { kind: "workspace_not_found" as const } }
+    },
+    Promise.resolve<ReconcileRootsResult>({ ok: true }),
+  )
+
+const reconcileRootRemoval = async (
+  deps: UpdateRuntimeSettingsDeps,
+  params: {
+    previousRoots: readonly string[]
+    nextRoots: readonly string[] | undefined
+    force: boolean
+  },
+): Promise<ReconcileRootsResult> => {
+  if (params.nextRoots === undefined) return { ok: true }
+
+  const affected = findWorkspacesAffectedByRootRemoval({
+    workspaces: deps.listAllWorkspaces(),
+    previousRoots: params.previousRoots,
+    nextRoots: params.nextRoots,
+  })
+
+  if (affected.length === 0) return { ok: true }
+
+  if (params.force) return deleteAffectedWorkspaces(deps, affected)
+
+  return {
+    ok: false, error: {
+      kind: "allowed_root_has_workspaces",
+      detail: affectedWorkspacesDetail(affected.length)
+    }
+  }
+}
+
 const mergeRuntimeSettings = (
   previous: RuntimeSettings,
   body: UpdateRuntimeSettingsBody,
@@ -63,70 +142,46 @@ const mergeRuntimeSettings = (
 
 export const makeUpdateRuntimeSettings =
   (deps: UpdateRuntimeSettingsDeps): UpdateRuntimeSettings =>
-  async (command) => {
-    const { body, force } = command
-    const previous = deps.getSettings()
+    async (command) => {
+      const { body, force } = command
+      const previous = deps.getSettings()
 
-    let resolvedBody = body
-    if (body.allowedRoots !== undefined) {
-      const canonicalRoots: string[] = []
-      for (const [index, root] of body.allowedRoots.entries()) {
-        const canonicalizeResult = deps.canonicalizePath(root)
-        if (!canonicalizeResult.ok) {
-          return {
-            ok: false,
-            error: {
-              kind: "invalid_allowed_root",
-              error: canonicalizeResult.error,
-              index,
-            },
-          }
-        }
-
-        if (!canonicalRoots.includes(canonicalizeResult.canonicalPath)) {
-          canonicalRoots.push(canonicalizeResult.canonicalPath)
-        }
-      }
-
-      const affected = findWorkspacesAffectedByRootRemoval({
-        workspaces: deps.listAllWorkspaces(),
-        previousRoots: previous.allowedRoots,
-        nextRoots: canonicalRoots,
-      })
-
-      if (affected.length > 0 && !force) {
-        const detail = `${affected.length} workspace${affected.length === 1 ? "" : "s"} must be unregistered before this root can be removed`
+      const canonical =
+        body.allowedRoots === undefined
+          ? { ok: true as const, canonicalRoots: undefined }
+          : canonicalizeRoots(deps.canonicalizePath, body.allowedRoots)
+      if (!canonical.ok) {
         return {
           ok: false,
-          error: { kind: "allowed_root_has_workspaces", detail },
-        }
-      }
-
-      if (affected.length > 0 && force) {
-        for (const workspace of affected) {
-          const deleted = await deps.deleteWorkspace({
-            workspaceId: workspace.id,
-            force: true,
-          })
-
-          if (!deleted.ok && deleted.error.kind === "not_found") {
-            return { ok: false, error: { kind: "workspace_not_found" } }
+          error: {
+            kind: "invalid_allowed_root",
+            error: canonical.error,
+            index: canonical.index,
           }
         }
       }
 
-      resolvedBody = { ...body, allowedRoots: canonicalRoots }
+      const reconciled = await reconcileRootRemoval(deps, {
+        previousRoots: previous.allowedRoots,
+        nextRoots: canonical.canonicalRoots,
+        force,
+      })
+      if (!reconciled.ok) return reconciled
+
+      const resolvedBody: UpdateRuntimeSettingsBody =
+        canonical.canonicalRoots === undefined
+          ? body
+          : { ...body, allowedRoots: canonical.canonicalRoots }
+
+      const next = deps.saveSettings(
+        RuntimeSettingsSchema.parse(mergeRuntimeSettings(previous, resolvedBody)),
+      )
+
+      const logLevelChanged =
+        body.logLevel !== undefined && body.logLevel !== previous.logLevel
+      if (logLevelChanged) {
+        deps.onLogLevelChanged?.(next.logLevel)
+      }
+
+      return { ok: true, value: { settings: next, logLevelChanged } }
     }
-
-    const next = deps.saveSettings(
-      RuntimeSettingsSchema.parse(mergeRuntimeSettings(previous, resolvedBody)),
-    )
-
-    const logLevelChanged =
-      body.logLevel !== undefined && body.logLevel !== previous.logLevel
-    if (logLevelChanged) {
-      deps.onLogLevelChanged?.(next.logLevel)
-    }
-
-    return { ok: true, value: { settings: next, logLevelChanged } }
-  }
