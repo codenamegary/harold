@@ -30,8 +30,8 @@ const makeWorkspace = (overrides?: Partial<Workspace>): Workspace => ({
 
 type DepsOverrides = {
   settings?: RuntimeSettings
-  canonicalRoots?: string[]
-  canonicalizeError?: { error: FilesystemPathError; index: number }
+  canonicalizeError?: { path: string; error: FilesystemPathError }
+  canonicalPathByIdentity?: boolean
   workspaces?: ReadonlyArray<Workspace>
   deleteResults?: ReadonlyArray<"ok" | "not_found" | "active_sessions">
   savedSettings?: RuntimeSettings
@@ -49,11 +49,12 @@ const makeDeps = (overrides: DepsOverrides = {}) => {
       saved.push(next)
       return overrides.savedSettings ?? next
     },
-    canonicalizeAllowedRoots: (roots: readonly string[]) => {
-      if (overrides.canonicalizeError !== undefined) {
-        return { ok: false as const, ...overrides.canonicalizeError }
+    canonicalizePath: (inputPath: string) => {
+      const failure = overrides.canonicalizeError
+      if (failure !== undefined && inputPath === failure.path) {
+        return { ok: false as const, error: failure.error }
       }
-      return { ok: true as const, canonicalRoots: overrides.canonicalRoots ?? [...roots] }
+      return { ok: true as const, canonicalPath: inputPath }
     },
     listAllWorkspaces: () => overrides.workspaces ?? [],
     deleteWorkspace: async (command: { workspaceId: string }) => {
@@ -91,7 +92,7 @@ const run = async (
 describe("makeUpdateRuntimeSettings", () => {
   test("returns invalid_allowed_root when a root cannot be canonicalized", async () => {
     const { deps, saved } = makeDeps({
-      canonicalizeError: { error: { kind: "missing" }, index: 1 },
+      canonicalizeError: { path: "/srv/roots/gone", error: { kind: "missing" } },
     })
 
     const result = await run(deps, {
@@ -109,9 +110,19 @@ describe("makeUpdateRuntimeSettings", () => {
     expect(saved).toEqual([])
   })
 
+  test("dedupes roots that canonicalize to the same path", async () => {
+    const { deps, saved } = makeDeps()
+
+    const result = await run(deps, {
+      allowedRoots: ["/srv/roots/one", "/srv/roots/one"],
+    })
+
+    expect(result.ok).toBe(true)
+    expect(saved[0]?.allowedRoots).toEqual(["/srv/roots/one"])
+  })
+
   test("returns allowed_root_has_workspaces when removed roots still cover workspaces", async () => {
     const { deps, saved, deletedWorkspaceIds } = makeDeps({
-      canonicalRoots: ["/srv/roots/other"],
       workspaces: [makeWorkspace()],
     })
 
@@ -133,7 +144,6 @@ describe("makeUpdateRuntimeSettings", () => {
 
   test("uses plural detail for multiple affected workspaces", async () => {
     const { deps } = makeDeps({
-      canonicalRoots: ["/srv/roots/other"],
       workspaces: [makeWorkspace(), makeWorkspace({ id: "ws_2" })],
     })
 
@@ -153,7 +163,6 @@ describe("makeUpdateRuntimeSettings", () => {
 
   test("force deletes affected workspaces and saves merged settings", async () => {
     const { deps, saved, deletedWorkspaceIds } = makeDeps({
-      canonicalRoots: ["/srv/roots/other"],
       workspaces: [makeWorkspace()],
     })
 
@@ -180,7 +189,6 @@ describe("makeUpdateRuntimeSettings", () => {
 
   test("returns workspace_not_found when a forced delete misses", async () => {
     const { deps, saved } = makeDeps({
-      canonicalRoots: ["/srv/roots/other"],
       workspaces: [makeWorkspace()],
       deleteResults: ["not_found"],
     })
@@ -200,7 +208,6 @@ describe("makeUpdateRuntimeSettings", () => {
 
   test("keeps deleting when a forced delete reports active sessions", async () => {
     const { deps, saved, deletedWorkspaceIds } = makeDeps({
-      canonicalRoots: ["/srv/roots/other"],
       workspaces: [makeWorkspace()],
       deleteResults: ["active_sessions"],
     })

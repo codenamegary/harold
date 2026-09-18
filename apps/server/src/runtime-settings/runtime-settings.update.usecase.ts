@@ -8,7 +8,7 @@ import { DeleteWorkspace, ListAllWorkspaces } from "../workspace/workspace.ports
 import { findWorkspacesAffectedByRootRemoval } from "./find.workspaces.affected.by.root.removal"
 import { UpdateRuntimeSettingsError } from "./runtime-settings.errors"
 import {
-  CanonicalizeAllowedRoots,
+  CanonicalizePath,
   GetRuntimeSettings,
   OnLogLevelChanged,
   SaveRuntimeSettings,
@@ -35,7 +35,7 @@ export type UpdateRuntimeSettings = (
 export type UpdateRuntimeSettingsDeps = Readonly<{
   getSettings: GetRuntimeSettings
   saveSettings: SaveRuntimeSettings
-  canonicalizeAllowedRoots: CanonicalizeAllowedRoots
+  canonicalizePath: CanonicalizePath
   listAllWorkspaces: ListAllWorkspaces
   deleteWorkspace: DeleteWorkspace
   onLogLevelChanged?: OnLogLevelChanged
@@ -69,22 +69,29 @@ export const makeUpdateRuntimeSettings =
 
     let resolvedBody = body
     if (body.allowedRoots !== undefined) {
-      const canonicalizeResult = deps.canonicalizeAllowedRoots(body.allowedRoots)
-      if (!canonicalizeResult.ok) {
-        return {
-          ok: false,
-          error: {
-            kind: "invalid_allowed_root",
-            error: canonicalizeResult.error,
-            index: canonicalizeResult.index,
-          },
+      const canonicalRoots: string[] = []
+      for (const [index, root] of body.allowedRoots.entries()) {
+        const canonicalizeResult = deps.canonicalizePath(root)
+        if (!canonicalizeResult.ok) {
+          return {
+            ok: false,
+            error: {
+              kind: "invalid_allowed_root",
+              error: canonicalizeResult.error,
+              index,
+            },
+          }
+        }
+
+        if (!canonicalRoots.includes(canonicalizeResult.canonicalPath)) {
+          canonicalRoots.push(canonicalizeResult.canonicalPath)
         }
       }
 
       const affected = findWorkspacesAffectedByRootRemoval({
         workspaces: deps.listAllWorkspaces(),
         previousRoots: previous.allowedRoots,
-        nextRoots: canonicalizeResult.canonicalRoots,
+        nextRoots: canonicalRoots,
       })
 
       if (affected.length > 0 && !force) {
@@ -108,7 +115,7 @@ export const makeUpdateRuntimeSettings =
         }
       }
 
-      resolvedBody = { ...body, allowedRoots: canonicalizeResult.canonicalRoots }
+      resolvedBody = { ...body, allowedRoots: canonicalRoots }
     }
 
     const next = deps.saveSettings(
