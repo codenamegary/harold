@@ -10,7 +10,8 @@ import {
 } from "./test.harness"
 import Fastify from "fastify"
 import { createAcpSupervisor } from "../acp/supervisor/supervisor"
-import { createAgentSettingsRepository } from "../agent-settings/agent-settings-repository"
+import { AcpSupervisor } from "../acp/supervisor/models"
+import { assembleAgentSettingsSlice } from "../agent-settings/agent.settings.assembly"
 import { seedWorkspace } from "./test.app"
 
 test("boots an isolated Agent Server with a working Device API", async () => {
@@ -29,10 +30,22 @@ test("cleanup stops ACP before apps, keeps SQLite open for app hooks, and awaits
     config: { port: 4321 },
     registerTestRoutes: true,
     setup: ({ database, runtime }) => {
+      const supervisorRef: { current: AcpSupervisor | null } = { current: null }
+      const agentSettings = assembleAgentSettingsSlice({
+        database,
+        acpSupervisor: () => {
+          const supervisor = supervisorRef.current
+          if (supervisor === null) {
+            throw new Error("supervisor is not ready")
+          }
+          return supervisor
+        },
+      })
       const supervisor = createAcpSupervisor({
-        agentSettingsRepository: createAgentSettingsRepository(database),
+        agentSettingsRepository: agentSettings,
         serverVersion: runtime.version,
       })
+      supervisorRef.current = supervisor
       return {
         acpSupervisor: {
           ...supervisor,

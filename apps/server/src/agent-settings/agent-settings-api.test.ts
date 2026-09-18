@@ -17,7 +17,7 @@ import {
   ValidateExecutablePathFn,
   validateExecutablePath,
 } from "../agent-settings/validate-agent-path"
-import { FetchRegistryFn } from "../agent-settings/agent-settings-repository"
+import { FetchRegistryFn } from "../agent-settings/agent.settings.ports"
 import { spawnFakeAcp, SpawnFakeAcpOptions } from "test-support/spawn"
 import { SpawnAgentProcessFn } from "../acp/supervisor/spawn.agent.process"
 import { acceptTestExecutablePath } from "../test-support/test.app"
@@ -891,11 +891,18 @@ describe("custom agent enable and spawn snapshot", () => {
       expect(enabled.args).toEqual(["acp"])
       expect(enabled.present).toBe(true)
 
-      const { createAgentSettingsRepository } = await import("./agent-settings-repository")
-      const repository = createAgentSettingsRepository(database, {
+      const { assembleAgentSettingsSlice } = await import("./agent.settings.assembly")
+      const agentSettings = assembleAgentSettingsSlice({
+        database,
         validateExecutablePathFn: acceptTestExecutablePath,
+        acpSupervisor: () => {
+          throw new Error("supervisor not used in this test")
+        },
+        authBroker: () => {
+          throw new Error("auth broker not used in this test")
+        },
       })
-      const snapshot = repository.getSpawnSnapshot(created.id)
+      const snapshot = agentSettings.getSpawnSnapshot(created.id)
       expect(snapshot).toEqual({
         kind: "binary",
         binaryName: customPath,
