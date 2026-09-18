@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { settingsFileName } from "./repository"
+import { settingsFileName } from "./runtime-settings.file.adapters"
 
 const tempDirs: string[] = []
 const serverRoot = path.resolve(import.meta.dir, "../..")

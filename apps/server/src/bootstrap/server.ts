@@ -14,11 +14,11 @@ import { registerStatusRoutes } from "../status/routes"
 import { createAgentSettingsRepository } from "../agent-settings/agent-settings-repository"
 import { registerAgentSettingsRoutes } from "../agent-settings/agent-settings-routes"
 import {
-  createRuntimeSettingsRepository,
-  RuntimeSettingsRepository,
+  makeRuntimeSettingsFileStore,
+  RuntimeSettingsFileStore,
   seedDefaultsFromConfig,
-} from "../runtime-settings/repository"
-import { registerRuntimeSettingsRoutes } from "../runtime-settings/routes"
+} from "../runtime-settings/runtime-settings.file.adapters"
+import { assembleRuntimeSettingsSlice } from "../runtime-settings/runtime-settings.assembly"
 import { AppliedRuntimeSettingsHolder } from "../runtime-settings/applied.runtime.settings"
 import { assembleWorkspaceSlice } from "../workspace/workspace.assembly"
 import { registerFilesystemBrowseRoutes } from "../filesystem/routes"
@@ -89,7 +89,7 @@ export type CreateServerOptions = {
   wsAuthFrameTimeoutMs?: number
   logStream?: Writable
   logLevel?: LogLevel
-  runtimeSettingsRepository?: RuntimeSettingsRepository
+  runtimeSettingsStore?: RuntimeSettingsFileStore
   appliedRuntimeSettings?: AppliedRuntimeSettingsHolder
   envBindOverrides?: EnvBindOverrides
 }
@@ -144,7 +144,7 @@ export const createServer = async ({
   wsAuthFrameTimeoutMs,
   logStream,
   logLevel,
-  runtimeSettingsRepository: providedRuntimeSettingsRepository,
+  runtimeSettingsStore: providedRuntimeSettingsStore,
   appliedRuntimeSettings,
   envBindOverrides,
 }: CreateServerOptions) => {
@@ -173,9 +173,9 @@ export const createServer = async ({
     },
   })
 
-  const runtimeSettingsRepository =
-    providedRuntimeSettingsRepository ??
-    createRuntimeSettingsRepository({
+  const runtimeSettingsStore =
+    providedRuntimeSettingsStore ??
+    makeRuntimeSettingsFileStore({
       dataDir: config.dataDir,
       seedDefaults: seedDefaultsFromConfig(config),
     })
@@ -184,7 +184,7 @@ export const createServer = async ({
     database,
     loopbackEndpoint: `http://${config.host}:${config.port}`,
     getAdvertisedEndpointSettings: () => {
-      const settings = runtimeSettingsRepository.get()
+      const settings = runtimeSettingsStore.get()
       return {
         advertisedUrl: settings.advertisedUrl,
         advertisedUrlEnabled: settings.advertisedUrlEnabled,
@@ -196,7 +196,7 @@ export const createServer = async ({
   registerAuthMiddleware(app, {
     findDeviceByCredentialHash: device.findDeviceByCredentialHash,
     touchDeviceLastSeen: device.touchDeviceLastSeen,
-    getTrustedProxies: () => runtimeSettingsRepository.get().trustedProxies,
+    getTrustedProxies: () => runtimeSettingsStore.get().trustedProxies,
     isLoopbackRequest,
   })
 
@@ -209,7 +209,7 @@ export const createServer = async ({
     registryUrl,
   })
   const archivedAcpSessions = createArchivedAcpSessionsStore(database)
-  const getAllowedRoots = () => runtimeSettingsRepository.get().allowedRoots
+  const getAllowedRoots = () => runtimeSettingsStore.get().allowedRoots
 
   const sessionHubRef: { current: SessionHub | null } = { current: null }
   const cwdCache = createSessionCwdCache()
@@ -326,7 +326,7 @@ export const createServer = async ({
     findDeviceByCredentialHash: device.findDeviceByCredentialHash,
     touchDeviceLastSeen: device.touchDeviceLastSeen,
     sessionHub,
-    getTrustedProxies: () => runtimeSettingsRepository.get().trustedProxies,
+    getTrustedProxies: () => runtimeSettingsStore.get().trustedProxies,
     isLoopbackRequest,
     wsAuthFrameTimeoutMs,
   })
@@ -350,15 +350,17 @@ export const createServer = async ({
   registerAttachmentRoutes(app, workspace.findById, attachmentsService)
   registerAgentSettingsRoutes(app, agentSettingsRepository, acpSupervisor, authBroker)
   registerAgentAuthRoutes(app, authBroker, agentExists)
-  registerRuntimeSettingsRoutes(app, runtimeSettingsRepository, {
+  const runtimeSettings = assembleRuntimeSettingsSlice({
+    store: runtimeSettingsStore,
+    listAllWorkspaces: workspace.listAll,
+    deleteWorkspace: workspace.deleteWorkspace,
     onLogLevelChanged: (nextLevel) => {
       app.log.level = nextLevel
     },
-    listAllWorkspaces: workspace.listAll,
-    deleteWorkspace: workspace.deleteWorkspace,
     appliedRuntimeSettings,
     envBindOverrides,
   })
+  runtimeSettings.registerRoutes(app)
   registerSessionRoutes(
     app,
     agentSettingsRepository,
@@ -370,7 +372,7 @@ export const createServer = async ({
   )
 
   const connectionTestService = createConnectionTestService({
-    runtimeSettingsRepository,
+    getAdvertisedUrl: () => runtimeSettings.get().advertisedUrl,
     deviceProvisioning: device,
   })
   registerConnectionTestRoutes(app, connectionTestService)
@@ -385,6 +387,6 @@ export const createServer = async ({
     app,
     acpSupervisor,
     runtimeStatusService,
-    runtimeSettingsRepository,
+    runtimeSettingsStore,
   }
 }

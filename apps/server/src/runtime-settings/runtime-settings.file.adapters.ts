@@ -1,28 +1,27 @@
 import {
-  normalizeAdvertisedUrl,
   RuntimeSettings,
   RuntimeSettingsSchema,
-  UpdateRuntimeSettingsBody,
 } from "contracts/http/runtime-settings"
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import YAML from "yaml"
 import { ZodError } from "zod"
 import { Config } from "../config/config"
+import { GetRuntimeSettings, SaveRuntimeSettings } from "./runtime-settings.ports"
 
 export const settingsFileName = "settings.yml"
 
-export type RuntimeSettingsRepository = {
-  get: () => RuntimeSettings
-  update: (body: UpdateRuntimeSettingsBody) => RuntimeSettings
-}
+export type RuntimeSettingsFileStore = Readonly<{
+  get: GetRuntimeSettings
+  save: SaveRuntimeSettings
+}>
 
-export type CreateRuntimeSettingsRepositoryOptions = {
+export type MakeRuntimeSettingsFileStoreOptions = {
   dataDir: string
   seedDefaults?: RuntimeSettings
 }
 
-const fallbackSeedDefaults = RuntimeSettingsSchema.parse({
+const fallbackSeedDefaults: RuntimeSettings = RuntimeSettingsSchema.parse({
   bindHost: "127.0.0.1",
   bindPort: 3847,
   logLevel: "info",
@@ -104,34 +103,18 @@ const loadOrSeed = (params: {
   return parseSettingsDocument({ filePath, raw })
 }
 
-export const createRuntimeSettingsRepository = (
-  options: CreateRuntimeSettingsRepositoryOptions,
-): RuntimeSettingsRepository => {
+export const makeRuntimeSettingsFileStore = (
+  options: MakeRuntimeSettingsFileStoreOptions,
+): RuntimeSettingsFileStore => {
   const seedDefaults = options.seedDefaults ?? fallbackSeedDefaults
   const filePath = settingsPathFor(options.dataDir)
   const cache: { settings: RuntimeSettings } = {
     settings: loadOrSeed({ filePath, seedDefaults }),
   }
 
-  const get = (): RuntimeSettings => cache.settings
+  const get: GetRuntimeSettings = () => cache.settings
 
-  const update = (body: UpdateRuntimeSettingsBody): RuntimeSettings => {
-    const current = get()
-    const advertisedUrl = normalizeAdvertisedUrl(body.advertisedUrl)
-
-    const next = RuntimeSettingsSchema.parse({
-      advertisedUrl:
-        advertisedUrl === undefined ? current.advertisedUrl : advertisedUrl,
-      advertisedUrlEnabled:
-        body.advertisedUrlEnabled ?? current.advertisedUrlEnabled,
-      trustedProxies: body.trustedProxies ?? current.trustedProxies,
-      bindHost: body.bindHost ?? current.bindHost,
-      bindPort: body.bindPort ?? current.bindPort,
-      logLevel: body.logLevel ?? current.logLevel,
-      logPath: body.logPath === undefined ? current.logPath : body.logPath,
-      allowedRoots: body.allowedRoots ?? current.allowedRoots,
-    })
-
+  const save: SaveRuntimeSettings = (next) => {
     writeSettingsAtomic({ filePath, settings: next })
     cache.settings = next
 
@@ -140,7 +123,7 @@ export const createRuntimeSettingsRepository = (
 
   return {
     get,
-    update,
+    save,
   }
 }
 

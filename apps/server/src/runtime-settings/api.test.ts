@@ -14,27 +14,27 @@ import { readEnvBindOverrides } from "../config/env.bind.overrides"
 import { bootTestApp, bootTestDirectory } from "../test-support/test.harness"
 import { createAppliedRuntimeSettingsHolder } from "./applied.runtime.settings"
 import {
-  createRuntimeSettingsRepository,
+  makeRuntimeSettingsFileStore,
   seedDefaultsFromConfig,
   settingsFileName,
-} from "./repository"
+} from "./runtime-settings.file.adapters"
 import { buildAppliedRuntimeSettings } from "./resolve.runtime.settings.state"
 
 const createTestApp = (options?: { envBindOverrides?: ReturnType<typeof readEnvBindOverrides> }) =>
   bootTestApp({
     setup: ({ config }) => {
       const envBindOverrides = options?.envBindOverrides ?? readEnvBindOverrides({})
-      const runtimeSettingsRepository = createRuntimeSettingsRepository({
+      const runtimeSettingsStore = makeRuntimeSettingsFileStore({
         dataDir: config.dataDir,
       })
-      const persisted = runtimeSettingsRepository.get()
+      const persisted = runtimeSettingsStore.get()
       const appliedRuntimeSettings = createAppliedRuntimeSettingsHolder(
         buildAppliedRuntimeSettings({ persisted, envOverrides: envBindOverrides }),
       )
       const applied = appliedRuntimeSettings.get()
       return {
         config: { ...config, host: applied.bindHost, port: applied.bindPort },
-        runtimeSettingsRepository,
+        runtimeSettingsStore,
         appliedRuntimeSettings,
         envBindOverrides,
       }
@@ -308,12 +308,12 @@ describe("runtime settings durability", () => {
       AGENT_SERVER_PORT: "4123",
       AGENT_SERVER_DATA_DIR: dataDir,
     })
-    const repository = createRuntimeSettingsRepository({
+    const store = makeRuntimeSettingsFileStore({
       dataDir: config.dataDir,
       seedDefaults: seedDefaultsFromConfig(config),
     })
 
-    expect(repository.get().bindPort).toBe(4123)
+    expect(store.get().bindPort).toBe(4123)
     const fileRaw = await readFile(path.join(dataDir, settingsFileName), "utf8")
     expect(fileRaw).toContain("bindPort: 4123")
   })
