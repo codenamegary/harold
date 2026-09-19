@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test"
-import { execSync } from "node:child_process"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -9,62 +8,27 @@ import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
-
-const hasCliLogin = (): boolean => {
-  try {
-    const output = execSync("agent status", {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    })
-    return output.includes("Logged in")
-  } catch {
-    return false
-  }
-}
-
-const hasCursorAuth = (): boolean =>
-  Boolean(process.env.CURSOR_API_KEY ?? process.env.CURSOR_AUTH_TOKEN) || hasCliLogin()
-
-const resolveAgentPath = (): string | undefined => {
-  try {
-    return execSync("which agent", { encoding: "utf8" }).trim()
-  } catch {
-    return undefined
-  }
-}
-
-const resolveOpenCodePath = (): string | undefined => {
-  try {
-    return execSync("which opencode", { encoding: "utf8" }).trim()
-  } catch {
-    const homePath = path.join(os.homedir(), ".opencode", "bin", "opencode")
-    try {
-      execSync(`test -x ${homePath}`, { stdio: "ignore" })
-      return homePath
-    } catch {
-      return undefined
-    }
-  }
-}
+import {
+  hasCursorAuth,
+  resolveCursorAgentPath,
+  resolveOpenCodePath,
+  smokeRunRequested,
+} from "../test-support/smoke.gate"
 
 const shouldRunSmoke =
-  process.env.AGENT_SERVER_RUN_CURSOR_SMOKE === "1" &&
-  hasCursorAuth() &&
-  resolveAgentPath() !== undefined
+  smokeRunRequested() && hasCursorAuth() && resolveCursorAgentPath() !== undefined
 
-const shouldRunOpenCodeSmoke =
-  process.env.AGENT_SERVER_RUN_CURSOR_SMOKE === "1" && resolveOpenCodePath() !== undefined
+const shouldRunOpenCodeSmoke = smokeRunRequested() && resolveOpenCodePath() !== undefined
 
 describe("ACP catalog session/list smoke", () => {
   test.skipIf(!shouldRunSmoke)("Cursor enable + GET /v1/sessions lists ACP rows", async () => {
     const dataDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-catalog-cursor-smoke-"))
-    const detectedPath = resolveAgentPath()
+    const detectedPath = resolveCursorAgentPath()
     if (detectedPath === undefined) {
       throw new Error("agent binary missing")
     }
 
-    const whichFn: WhichFn = (binaryName) =>
-      binaryName === "agent" ? detectedPath : undefined
+    const whichFn: WhichFn = (binaryName) => (binaryName === "agent" ? detectedPath : undefined)
 
     const config = parseConfig({
       AGENT_SERVER_HOST: "127.0.0.1",

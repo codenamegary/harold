@@ -27,7 +27,7 @@
     "typecheck": "bun run --filter '*' typecheck",
     "check": "bun run lint && bun run typecheck && bun run test",
     "test:coverage": "bun run --filter server test:coverage && bun run --filter web test:coverage",
-    "test:smoke": "AGENT_SERVER_RUN_CURSOR_SMOKE=1 bun --filter server test src/smoke",
+    "test:smoke": "AGENT_SERVER_RUN_SMOKE=1 bun --filter server test:smoke",
     "db:generate": "bun run --filter server db:generate",
     "catalog:codegen": "bun run --filter server catalog:codegen",
     "build:release": "bun run --filter web build && bun run --filter server build:release",

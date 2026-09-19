@@ -12,36 +12,17 @@ import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { allowWorkspaceRoots } from "../test-support/test.app"
+import {
+  hasCursorAuth,
+  resolveCursorAgentPath,
+  smokeRunRequested,
+} from "../test-support/smoke.gate"
 
 const SUBSCRIBE_TIMEOUT_MS = 30_000
 const PROMPT_DEADLINE_MS = 120_000
 
-const hasCliLogin = (): boolean => {
-  try {
-    const output = execSync("agent status", {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    })
-    return output.includes("Logged in")
-  } catch {
-    return false
-  }
-}
-
-const hasCursorAuth = (): boolean =>
-  Boolean(process.env.CURSOR_API_KEY ?? process.env.CURSOR_AUTH_TOKEN) || hasCliLogin()
-
-const hasAgentBinary = (): boolean => {
-  try {
-    execSync("which agent", { stdio: "ignore" })
-    return true
-  } catch {
-    return false
-  }
-}
-
 const shouldRunSmoke =
-  process.env.AGENT_SERVER_RUN_CURSOR_SMOKE === "1" && hasCursorAuth() && hasAgentBinary()
+  smokeRunRequested() && hasCursorAuth() && resolveCursorAgentPath() !== undefined
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256)
@@ -111,18 +92,6 @@ const createSolidPng = (size: number, rgb: [number, number, number]): Uint8Array
     offset += part.length
   }
   return out
-}
-
-const allowWorkspaceRoots = async (
-  app: Awaited<ReturnType<typeof createServer>>["app"],
-  roots: string[],
-) => {
-  const response = await app.inject({
-    method: "PATCH",
-    url: "/v1/settings/runtime",
-    payload: { allowedRoots: roots },
-  })
-  expect(response.statusCode).toBe(200)
 }
 
 const MULTIPART_BOUNDARY = "----agentserverattachmentsmoke"
