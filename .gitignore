@@ -8,3 +8,5 @@ coverage/
 .argent/
 connect-tunnel.sh
 .agent-server/attachments/
+apps/server/.generated/
+apps/server/release/

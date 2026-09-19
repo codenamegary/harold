@@ -1,0 +1,21 @@
+# Conventional Commits check. release-please cuts releases from these subjects,
+# so malformed ones must not land on main.
+commit_msg=$(head -n 1 "$1")
+
+pattern='^(feat|fix|build|ci|chore|docs|perf|refactor|revert|test)(\([^)]+\))?!?: .+'
+
+if echo "$commit_msg" | grep -qE "$pattern"; then
+  exit 0
+fi
+
+case "$commit_msg" in
+  "Merge "* | "Revert "*)
+    exit 0
+    ;;
+esac
+
+echo "commit subject does not follow Conventional Commits:" >&2
+echo "  $commit_msg" >&2
+echo "expected: type(scope)?: subject" >&2
+echo "types: feat fix build ci chore docs perf refactor revert test" >&2
+exit 1

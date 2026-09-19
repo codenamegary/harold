@@ -1,0 +1,43 @@
+name: release-binaries
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Compile binaries
+        run: bun run build:release
+
+      - name: Generate checksums
+        working-directory: apps/server/release
+        run: sha256sum agent-server-* > SHA256SUMS
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            apps/server/release/agent-server-* \
+            apps/server/release/SHA256SUMS \
+            --clobber \
+            --repo "$GITHUB_REPOSITORY"

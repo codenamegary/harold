@@ -19,10 +19,11 @@ export type DbExecutor = DrizzleDb | TransactionExecutor
 
 export type OpenDatabaseOptions = {
   dataDir: string
+  migrationsFolder?: string
 }
 
 const databaseFileName = "agent-server.db"
-const migrationsFolder = path.join(import.meta.dir, "drizzle")
+const defaultMigrationsFolder = path.join(import.meta.dir, "drizzle")
 
 export const openDatabase = (options: OpenDatabaseOptions): AgentDatabase => {
   mkdirSync(options.dataDir, { recursive: true })
@@ -36,7 +37,9 @@ export const openDatabase = (options: OpenDatabaseOptions): AgentDatabase => {
   const db = drizzle({ client: sqlite, schema })
 
   try {
-    migrate(db, { migrationsFolder })
+    migrate(db, {
+      migrationsFolder: options.migrationsFolder ?? defaultMigrationsFolder,
+    })
   } catch (error: unknown) {
     sqlite.close()
     console.error({ err: error }, "database migration failed")

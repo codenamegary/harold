@@ -55,6 +55,17 @@ const httpTarget = (req: Request) => {
 
 const wsTarget = (req: Request) => httpTarget(req).replace(/^http/, "ws")
 
+// Reserved codes (1005 no-status, 1006 abnormal, 1015 tls) describe how a
+// socket closed but are invalid to send on the wire. Forward them as a
+// code-less close instead of throwing InvalidAccessError.
+const closeCodeToSend = (code: number): number | undefined => {
+  if (code === 1005 || code === 1006 || code === 1015) {
+    return undefined
+  }
+  const valid = (code >= 1000 && code <= 1014) || (code >= 3000 && code <= 4999)
+  return valid ? code : undefined
+}
+
 const forwardHeaders = (req: Request): Record<string, string> => {
   const headers: Record<string, string> = {}
   const cookie = req.headers.get("cookie")
@@ -85,7 +96,12 @@ const websocket: Bun.WebSocketHandler<ProxyData> = {
       ws.send(event.data)
     })
     upstream.addEventListener("close", (event) => {
-      ws.close(event.code, event.reason)
+      const code = closeCodeToSend(event.code)
+      if (code === undefined) {
+        ws.close()
+        return
+      }
+      ws.close(code, event.reason)
     })
     upstream.addEventListener("error", () => {
       ws.close()
@@ -103,7 +119,17 @@ const websocket: Bun.WebSocketHandler<ProxyData> = {
     state.queue.push(message)
   },
   close(ws, code, reason) {
-    connections.get(ws)?.upstream?.close(code, reason)
+    const sendCode = closeCodeToSend(code)
+    const upstream = connections.get(ws)?.upstream
+    if (upstream === null || upstream === undefined) {
+      connections.delete(ws)
+      return
+    }
+    if (sendCode === undefined) {
+      upstream.close()
+    } else {
+      upstream.close(sendCode, reason)
+    }
     connections.delete(ws)
   },
 }
