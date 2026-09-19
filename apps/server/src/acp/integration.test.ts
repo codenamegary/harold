@@ -2,9 +2,8 @@ import { describe, expect, test } from "bun:test"
 import { StatusSchema } from "contracts/http/status"
 import { spawnFakeAcp } from "test-support/spawn"
 import { bootTestApp } from "../test-support/test.harness"
-import { acceptTestExecutablePath } from "../test-support/test.app"
 import { SpawnedAgentProcess } from "./supervisor/spawn.agent.process"
-import { createAgentSettingsRepository } from "../agent-settings/agent-settings-repository"
+import { makeUpdateAgentSettingsRow } from "../agent-settings/agent.settings.sqlite.adapters"
 import {
   inventoryAdvertisesResumable,
   inventoryAdvertisesSessionClose,
@@ -159,14 +158,10 @@ describe("ACP supervisor integration", () => {
       spawnAgentProcessFn,
       config: { host: "127.0.0.1", port: 3848 },
       setup: ({ database }) => {
-        const seedRepository = createAgentSettingsRepository(database, {
-          validateExecutablePathFn: acceptTestExecutablePath,
-        })
-        const seeded = seedRepository.update({
+        makeUpdateAgentSettingsRow(database)({
           agentId: "cursor",
-          body: { enabled: true, path: "/fake/agent" },
+          patch: { enabled: true, path: "/fake/agent" },
         })
-        expect(seeded.ok).toBe(true)
       },
     })
 

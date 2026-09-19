@@ -17,7 +17,6 @@ import {
   isAcpStartError,
 } from "../acp/supervisor/models"
 import { agentAdvertisesSessionList } from "../session/session.acp.ready"
-import { AgentSettingsRepository } from "./agent-settings-repository"
 import { wireAgentCapabilities } from "./capabilities.wire"
 import {
   buildAgentCannotDeleteProblem,
@@ -31,7 +30,26 @@ import {
   buildAgentPathNotFoundProblem,
   buildAgentRegistryFetchFailedProblem,
   buildAgentSessionListUnsupportedProblem,
-} from "./agent-settings-problems"
+} from "./agent.settings.problems"
+import { ApplyImportedAgents } from "./agent.settings.import.apply.usecase"
+import { CreateCustomAgent } from "./agent.settings.create.custom.usecase"
+import { DetectAgentPath } from "./agent.settings.detect.path.usecase"
+import { DetectImportableAgents } from "./agent.settings.import.detect.usecase"
+import { ListAgentSettings } from "./agent.settings.list.usecase"
+import { RemoveAgent } from "./agent.settings.remove.usecase"
+import { UpdateAgentSettings } from "./agent.settings.update.usecase"
+
+export type RegisterAgentSettingsRoutesOptions = Readonly<{
+  list: ListAgentSettings
+  createCustomAgent: CreateCustomAgent
+  detectImportableAgents: DetectImportableAgents
+  applyImportedAgents: ApplyImportedAgents
+  detectAgentPath: DetectAgentPath
+  updateAgentSettings: UpdateAgentSettings
+  removeAgent: RemoveAgent
+  acpSupervisor: AcpSupervisor
+  authBroker: AuthBroker
+}>
 
 const sendProblem = (
   reply: {
@@ -48,10 +66,10 @@ const acpStartFailureReason = (error: unknown): string =>
 
 export const registerAgentSettingsRoutes = (
   app: FastifyInstance,
-  repository: AgentSettingsRepository,
-  acpSupervisor: AcpSupervisor,
-  authBroker: AuthBroker,
+  options: RegisterAgentSettingsRoutesOptions,
 ) => {
+  const { acpSupervisor, authBroker } = options
+
   const toWireAgent = async (item: AgentSettings): Promise<AgentSettings> => {
     const state = acpSupervisor.getAgentRuntimeState(item.id)
     const authSummary = await authBroker.getSummary(item.id)
@@ -73,13 +91,14 @@ export const registerAgentSettingsRoutes = (
       items: await Promise.all(items.map(toWireAgent)),
     })
   }
+
   app.get("/v1/settings/agents", async (_request, reply) => {
-    return reply.status(200).send(await toWireCollection(repository.list()))
+    return reply.status(200).send(await toWireCollection(options.list()))
   })
 
   app.post("/v1/settings/agents", async (request, reply) => {
     CreateCustomAgentBodySchema.parse(request.body ?? {})
-    const result = repository.createCustom()
+    const result = options.createCustomAgent()
 
     if (!result.ok) {
       return sendProblem(reply, 404, buildAgentNotFoundProblem())
@@ -89,7 +108,7 @@ export const registerAgentSettingsRoutes = (
   })
 
   app.post("/v1/settings/agents/import/detect", async (_request, reply) => {
-    const result = await repository.importDetect()
+    const result = await options.detectImportableAgents()
 
     if (!result.ok) {
       return sendProblem(reply, 502, buildAgentRegistryFetchFailedProblem())
@@ -100,7 +119,7 @@ export const registerAgentSettingsRoutes = (
 
   app.post("/v1/settings/agents/import/apply", async (request, reply) => {
     const body = ImportApplyBodySchema.parse(request.body)
-    const result = repository.importApply(body)
+    const result = options.applyImportedAgents(body)
 
     if (!result.ok) {
       if (result.error.kind === "path_invalid") {
@@ -114,7 +133,7 @@ export const registerAgentSettingsRoutes = (
 
   app.post("/v1/settings/agents/:agentId/detect-path", async (request, reply) => {
     const agentId = AgentIdSchema.parse((request.params as { agentId: string }).agentId)
-    const result = repository.detectPath(agentId)
+    const result = options.detectAgentPath(agentId)
 
     if (!result.ok) {
       if (result.error.kind === "path_not_found") {
@@ -131,7 +150,7 @@ export const registerAgentSettingsRoutes = (
   app.post("/v1/settings/agents/:agentId/actions", async (request, reply) => {
     const agentId = AgentIdSchema.parse((request.params as { agentId: string }).agentId)
     const action = AgentActionBodySchema.parse(request.body)
-    const settings = repository.list().find((item) => item.id === agentId)
+    const settings = options.list().find((item) => item.id === agentId)
 
     if (settings === undefined) {
       return sendProblem(reply, 404, buildAgentNotFoundProblem())
@@ -163,7 +182,7 @@ export const registerAgentSettingsRoutes = (
           return sendProblem(reply, 409, buildAgentSessionListUnsupportedProblem())
         }
 
-        const next = repository.list().find((item) => item.id === agentId)
+        const next = options.list().find((item) => item.id === agentId)
         if (next === undefined) {
           return sendProblem(reply, 404, buildAgentNotFoundProblem())
         }
@@ -176,7 +195,7 @@ export const registerAgentSettingsRoutes = (
   app.patch("/v1/settings/agents/:agentId", async (request, reply) => {
     const agentId = AgentIdSchema.parse((request.params as { agentId: string }).agentId)
     const body = UpdateAgentSettingsBodySchema.parse(request.body)
-    const result = repository.update({ agentId, body })
+    const result = options.updateAgentSettings({ agentId, body })
 
     if (!result.ok) {
       if (result.error.kind === "cannot_enable") {
@@ -210,13 +229,13 @@ export const registerAgentSettingsRoutes = (
       } catch (error: unknown) {
         const reason = acpStartFailureReason(error)
         app.log.warn({ agentId, reason }, "ACP agent start failed")
-        repository.update({ agentId, body: { enabled: false } })
+        options.updateAgentSettings({ agentId, body: { enabled: false } })
         await acpSupervisor.handleAgentDisabled(agentId)
         return sendProblem(reply, 409, buildAgentCannotEnableProblem(reason))
       }
 
       if (!agentAdvertisesSessionList(acpSupervisor, agentId)) {
-        repository.update({ agentId, body: { enabled: false } })
+        options.updateAgentSettings({ agentId, body: { enabled: false } })
         await acpSupervisor.handleAgentDisabled(agentId)
         return sendProblem(reply, 409, buildAgentSessionListUnsupportedProblem())
       }
@@ -226,7 +245,7 @@ export const registerAgentSettingsRoutes = (
       await acpSupervisor.handleAgentDisabled(agentId)
     }
 
-    const next = repository.list().find((item) => item.id === result.value.id)
+    const next = options.list().find((item) => item.id === result.value.id)
     if (next === undefined) {
       return sendProblem(reply, 404, buildAgentNotFoundProblem())
     }
@@ -236,7 +255,7 @@ export const registerAgentSettingsRoutes = (
 
   app.delete("/v1/settings/agents/:agentId", async (request, reply) => {
     const agentId = AgentIdSchema.parse((request.params as { agentId: string }).agentId)
-    const result = repository.remove(agentId)
+    const result = options.removeAgent(agentId)
 
     if (!result.ok) {
       if (result.error.kind === "cannot_delete") {

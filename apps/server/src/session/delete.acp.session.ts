@@ -1,6 +1,6 @@
 import { AgentId } from "contracts/http/agent-settings"
 import { AcpSupervisor } from "../acp/supervisor/models"
-import { AgentSettingsRepository } from "../agent-settings/agent-settings-repository"
+import { AgentSettingsSlice } from "../agent-settings/agent.settings.assembly"
 import { ArchivedAcpSessionsStore } from "./archived.acp.sessions.store"
 import { CommandsCache } from "./hub/commands.cache"
 import { ensureSupervisorReady, agentAdvertisesSessionClose } from "./session.acp.ready"
@@ -17,7 +17,7 @@ export type DeleteAcpSessionResult =
 export const deleteAcpSession = async (params: {
   agentId: AgentId
   sessionId: string
-  agentSettingsRepository: AgentSettingsRepository
+  agentSettingsRepository: Pick<AgentSettingsSlice, "list">
   acpSupervisor: AcpSupervisor
   archivedAcpSessions: ArchivedAcpSessionsStore
   commandsCache: CommandsCache

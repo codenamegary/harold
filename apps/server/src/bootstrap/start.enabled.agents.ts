@@ -1,6 +1,6 @@
 import { AgentId } from "contracts/http/agent-settings"
 import { AcpSupervisor } from "../acp/supervisor/models"
-import { AgentSettingsRepository } from "../agent-settings/agent-settings-repository"
+import { AgentSettingsSlice } from "../agent-settings/agent.settings.assembly"
 
 export type StartEnabledAgentsLog = {
   info: (obj: object, msg: string) => void
@@ -12,7 +12,7 @@ export type StartEnabledAgentResult =
   | { agentId: AgentId; ok: false; error: unknown }
 
 export const startEnabledAgents = async (
-  agentSettingsRepository: Pick<AgentSettingsRepository, "list">,
+  agentSettingsRepository: Pick<AgentSettingsSlice, "list">,
   acpSupervisor: Pick<AcpSupervisor, "start">,
   log: StartEnabledAgentsLog,
 ): Promise<ReadonlyArray<StartEnabledAgentResult>> => {

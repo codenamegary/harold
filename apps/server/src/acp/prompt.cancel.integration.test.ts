@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import { spawnFakeAcp } from "test-support/spawn"
-import { createAgentSettingsRepository } from "../agent-settings/agent-settings-repository"
+import { assembleAgentSettingsSlice } from "../agent-settings/agent.settings.assembly"
 import { acceptTestExecutablePath } from "../test-support/test.app"
 import { bootTestApp } from "../test-support/test.harness"
 import { createAcpSupervisor } from "./supervisor/supervisor"
+import { AcpSupervisor } from "./supervisor/models"
 import { SpawnedAgentProcess } from "./supervisor/spawn.agent.process"
 
 const waitFor = async (predicate: () => boolean, timeoutMs = 1000) => {
@@ -25,8 +26,17 @@ describe("ACP prompt, update, and cancel integration", () => {
       const { app, acpSupervisor } = await bootTestApp({
         config: { host: "127.0.0.1", port: 3849 },
         setup: ({ database, runtime }) => {
-          const agentSettingsRepository = createAgentSettingsRepository(database, {
+          const supervisorRef: { current: AcpSupervisor | null } = { current: null }
+          const agentSettings = assembleAgentSettingsSlice({
+            database,
             validateExecutablePathFn: acceptTestExecutablePath,
+            acpSupervisor: () => {
+              const supervisor = supervisorRef.current
+              if (supervisor === null) {
+                throw new Error("supervisor is not ready")
+              }
+              return supervisor
+            },
           })
           const spawnAgentProcessFn = (): SpawnedAgentProcess => {
             const fake = spawnFakeAcp({
@@ -42,15 +52,17 @@ describe("ACP prompt, update, and cancel integration", () => {
               waitForExit: () => fake.process.exited,
             }
           }
-          return {
-            acpSupervisor: createAcpSupervisor({
-              agentSettingsRepository,
+          const acpSupervisor = createAcpSupervisor({
+              agentSettingsRepository: agentSettings,
               serverVersion: runtime.version,
               onSessionUpdate: (input) => {
                 sessionUpdates.push(input)
               },
               spawnAgentProcessFn,
-            }),
+            })
+          supervisorRef.current = acpSupervisor
+          return {
+            acpSupervisor,
           }
         },
       })

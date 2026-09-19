@@ -11,8 +11,7 @@ import { EnvBindOverrides } from "../config/env.bind.overrides"
 import { AgentDatabase } from "../persistence/database"
 import { Runtime } from "../runtime/runtime"
 import { registerStatusRoutes } from "../status/routes"
-import { createAgentSettingsRepository } from "../agent-settings/agent-settings-repository"
-import { registerAgentSettingsRoutes } from "../agent-settings/agent-settings-routes"
+import { assembleAgentSettingsSlice } from "../agent-settings/agent.settings.assembly"
 import {
   makeRuntimeSettingsFileStore,
   RuntimeSettingsFileStore,
@@ -32,7 +31,7 @@ import { registerConnectionTestRoutes } from "../connection-test/routes"
 import { createRuntimeStatusService } from "../runtime/status.service"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
-import { createAuthBroker } from "../agent/auth/broker"
+import { createAuthBroker, AuthBroker } from "../agent/auth/broker"
 import { registerAgentAuthRoutes } from "../agent/auth/routes"
 import { createSupervisorAuthHooks } from "../agent/auth/supervisor.hooks"
 import { createAcpSupervisor } from "../acp/supervisor/supervisor"
@@ -56,7 +55,7 @@ import {
 import { createCommandsCache } from "../session/hub/commands.cache"
 import { registerAuthMiddleware } from "../auth/middleware"
 import { redactPairingCodeInUrl } from "../device/device.redact.pairing.code.in.url"
-import { FetchRegistryFn } from "../agent-settings/agent-settings-repository"
+import { FetchRegistryFn } from "../agent-settings/agent.settings.ports"
 import { startEnabledAgents } from "./start.enabled.agents"
 
 const TestBodySchema = z.object({
@@ -202,11 +201,23 @@ export const createServer = async ({
 
   const attachmentsService = createAttachmentsService()
 
-  const agentSettingsRepository = createAgentSettingsRepository(database, {
+  const acpSupervisorRef: { current: AcpSupervisor } = { current: null! }
+  const authBrokerRef: { current: AuthBroker | null } = { current: null }
+
+  const agentSettings = assembleAgentSettingsSlice({
+    database,
     whichFn,
     validateExecutablePathFn,
     fetchRegistryFn,
     registryUrl,
+    acpSupervisor: () => acpSupervisorRef.current,
+    authBroker: () => {
+      const broker = authBrokerRef.current
+      if (broker === null) {
+        throw new Error("auth broker is not ready")
+      }
+      return broker
+    },
   })
   const archivedAcpSessions = createArchivedAcpSessionsStore(database)
   const getAllowedRoots = () => runtimeSettingsStore.get().allowedRoots
@@ -215,19 +226,18 @@ export const createServer = async ({
   const cwdCache = createSessionCwdCache()
   const commandsCache = createCommandsCache()
 
-  const agentExists = (agentId: string) => agentSettingsRepository.hasAgentId(agentId)
-
-  const acpSupervisorRef: { current: AcpSupervisor } = { current: null! }
+  const agentExists = (agentId: string) => agentSettings.hasAgentId(agentId)
 
   const authBroker = createAuthBroker({
     agentExists,
     requestRespawn: async (agentId) => acpSupervisorRef.current.respawn(agentId),
   })
+  authBrokerRef.current = authBroker
 
   acpSupervisorRef.current =
     providedAcpSupervisor ??
     createAcpSupervisor({
-      agentSettingsRepository,
+      agentSettingsRepository: agentSettings,
       serverVersion: runtime.version,
       spawnAgentProcessFn: spawnFn,
       authHooks: createSupervisorAuthHooks({
@@ -348,7 +358,7 @@ export const createServer = async ({
   workspace.registerRoutes(app)
   registerFilesystemBrowseRoutes(app, getAllowedRoots)
   registerAttachmentRoutes(app, workspace.findById, attachmentsService)
-  registerAgentSettingsRoutes(app, agentSettingsRepository, acpSupervisor, authBroker)
+  agentSettings.registerRoutes(app)
   registerAgentAuthRoutes(app, authBroker, agentExists)
   const runtimeSettings = assembleRuntimeSettingsSlice({
     store: runtimeSettingsStore,
@@ -363,7 +373,7 @@ export const createServer = async ({
   runtimeSettings.registerRoutes(app)
   registerSessionRoutes(
     app,
-    agentSettingsRepository,
+    agentSettings,
     acpSupervisor,
     cwdCache,
     commandsCache,
@@ -381,7 +391,7 @@ export const createServer = async ({
     registerTestRoutes(app)
   }
 
-  await startEnabledAgents(agentSettingsRepository, acpSupervisor, app.log)
+  await startEnabledAgents(agentSettings, acpSupervisor, app.log)
 
   return {
     app,

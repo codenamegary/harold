@@ -13,7 +13,7 @@ import {
 import { FastifyInstance } from "fastify"
 import { AcpSupervisor } from "../acp/supervisor/models"
 import { AuthBroker } from "../agent/auth/broker"
-import { AgentSettingsRepository } from "../agent-settings/agent-settings-repository"
+import { AgentSettingsSlice } from "../agent-settings/agent.settings.assembly"
 import { CommandsCache } from "./hub/commands.cache"
 import { SessionCwdCache } from "./hub/hub"
 import { ArchivedAcpSessionsStore } from "./archived.acp.sessions.store"
@@ -41,7 +41,7 @@ const sendProblem = (
 
 export const registerSessionRoutes = (
   app: FastifyInstance,
-  agentSettingsRepository: AgentSettingsRepository,
+  agentSettingsRepository: Pick<AgentSettingsSlice, "list">,
   acpSupervisor: AcpSupervisor,
   cwdCache: SessionCwdCache,
   commandsCache: CommandsCache,
