@@ -25,7 +25,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.2
 
       - name: Setup LCOV
         uses: hrishikesh-kadam/setup-lcov@v1
@@ -35,6 +35,9 @@ jobs:
 
       - name: Lint and typecheck
         run: bun run lint && bun run typecheck
+
+      - name: Build web app
+        run: bun run --filter web build
 
       - name: Test with coverage
         id: coverage

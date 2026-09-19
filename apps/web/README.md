@@ -1,32 +1,24 @@
-# React + TypeScript + Vite
+# web
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Operator console for Agent Server. Bun is the only dev entry: `bun run dev`
+from the repo root starts the API (`apps/server`) and this app together.
 
-Currently, two official plugins are available:
+## Scripts
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- `bun run dev` — Bun full-stack dev server with HMR on
+  `http://127.0.0.1:5173`. Proxies `/v1` (HTTP and WebSocket) to the API on
+  `127.0.0.1:3847`.
+- `bun run build` — typecheck, then bundle to `dist/` as plain static files.
+- `bun run typecheck` — `tsc -b` over the app, node, and test projects.
+- `bun run test` — `bun test` with happy-dom.
+- `bun run check` — lint, typecheck, and test.
 
-## React Compiler
+## Tooling
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+- Tailwind v4 compiles through `bun-plugin-tailwind`, wired in `bunfig.toml`
+  under `[serve.static]`. The CSS-first `@import "tailwindcss"` entry is
+  `src/index.css`.
+- `dev.ts` is the dev server: HTML routes, the `/v1` proxy, and the
+  wait-for-API warning.
+- `build.ts` is the production bundler: `Bun.build` with the Tailwind plugin,
+  minified, output to `dist/`.
