@@ -36,11 +36,20 @@ jobs:
 
       - name: Install OpenCode CLI
         run: |
-          curl -fsSL https://opencode.ai/install | bash
+          curl -fsSL https://opencode.ai/install | bash -s -- -v 1.18.31
           echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
 
       - name: Run smoke tests
         env:
           AGENT_SERVER_RUN_SMOKE: "1"
           OPENCODE_SMOKE_MODEL: opencode/mimo-v2.5-free
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         run: bun run test:smoke
+
+      - name: Upload opencode logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencode-logs
+          path: ~/.local/share/opencode/log/
+          if-no-files-found: ignore

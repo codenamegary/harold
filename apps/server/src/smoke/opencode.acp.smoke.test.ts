@@ -13,16 +13,47 @@ import {
   drainPrompt,
   failWithLogs,
   openStreamClient,
+  readLogsBody,
 } from "../test-support/session.stream.smoke"
 import { resolveOpenCodePath, smokeRunRequested } from "../test-support/smoke.gate"
 
 const OPENCODE_SMOKE_TIMEOUT_MS = 180_000
 const SUBSCRIBE_TIMEOUT_MS = 30_000
 const PROMPT_TIMEOUT_MS = 90_000
+const SESSION_CREATE_TIMEOUT_MS = 60_000
+const SESSION_DELETE_TIMEOUT_MS = 30_000
 
 const FREE_MODEL = process.env.OPENCODE_SMOKE_MODEL ?? "opencode/mimo-v2.5-free"
 
 const shouldRunSmoke = smokeRunRequested() && resolveOpenCodePath() !== undefined
+
+type SmokeServerApp = Awaited<ReturnType<typeof createServer>>["app"]
+
+const injectWithTimeout = async (
+  app: SmokeServerApp,
+  options: { method: string; url: string; payload?: unknown },
+  timeoutMs: number,
+  label: string,
+): Promise<{ statusCode: number; body: string }> => {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
+      timeoutMs,
+    )
+  })
+  try {
+    return await Promise.race([app.inject(options), timeout])
+  } catch (error: unknown) {
+    const reason = error instanceof Error ? error.message : "request failed"
+    const logs = await readLogsBody(app)
+    throw new Error(`${reason}\nserver logs:\n${logs}`)
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer)
+    }
+  }
+}
 
 describe("opencode ACP smoke", () => {
   test.skipIf(!shouldRunSmoke)(
@@ -37,6 +68,9 @@ describe("opencode ACP smoke", () => {
         $schema: "https://opencode.ai/config.json",
         model: FREE_MODEL,
       })
+      if (process.env.OPENCODE_API_KEY === "") {
+        delete process.env.OPENCODE_API_KEY
+      }
 
       const detectedPath = resolveOpenCodePath()
       if (detectedPath === undefined) {
@@ -77,11 +111,16 @@ describe("opencode ACP smoke", () => {
         })
         expect(workspaceResponse.statusCode).toBe(201)
 
-        const sessionResponse = await app.inject({
-          method: "POST",
-          url: "/v1/sessions",
-          payload: { agentId: "opencode", cwd: workspaceDir },
-        })
+        const sessionResponse = await injectWithTimeout(
+          app,
+          {
+            method: "POST",
+            url: "/v1/sessions",
+            payload: { agentId: "opencode", cwd: workspaceDir },
+          },
+          SESSION_CREATE_TIMEOUT_MS,
+          "POST /v1/sessions",
+        )
         expect(sessionResponse.statusCode).toBe(201)
         const session = CreateSessionResponseSchema.parse(JSON.parse(sessionResponse.body))
 
@@ -133,10 +172,15 @@ describe("opencode ACP smoke", () => {
           await client.close()
         }
 
-        const deleteResponse = await app.inject({
-          method: "DELETE",
-          url: `/v1/sessions/${encodeURIComponent(session.sessionId)}?agentId=opencode`,
-        })
+        const deleteResponse = await injectWithTimeout(
+          app,
+          {
+            method: "DELETE",
+            url: `/v1/sessions/${encodeURIComponent(session.sessionId)}?agentId=opencode`,
+          },
+          SESSION_DELETE_TIMEOUT_MS,
+          "DELETE /v1/sessions",
+        )
         expect([204, 409]).toContain(deleteResponse.statusCode)
       } finally {
         await acpSupervisor.stop()
