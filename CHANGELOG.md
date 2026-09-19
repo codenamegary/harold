@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/codenamegary/agent-server/compare/v0.2.0...v0.2.1) (2026-09-19)
+
+
+### CI
+
+* **release:** use RELEASE_PAT for release-please and support manual binary uploads ([ab2cce6](https://github.com/codenamegary/agent-server/commit/ab2cce60fca1469437025b9d7042214d2c210b75))
+
 ## [0.2.0](https://github.com/codenamegary/agent-server/compare/v0.1.0...v0.2.0) (2026-09-19)
 
 
