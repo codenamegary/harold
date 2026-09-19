@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test"
-import { execSync } from "node:child_process"
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -15,30 +14,36 @@ import {
   failWithLogs,
   openStreamClient,
 } from "../test-support/session.stream.smoke"
-import { allowWorkspaceRoots } from "../test-support/test.app"
-import {
-  hasCursorAuth,
-  resolveCursorAgentPath,
-  smokeRunRequested,
-} from "../test-support/smoke.gate"
+import { resolveOpenCodePath, smokeRunRequested } from "../test-support/smoke.gate"
 
-const CURSOR_SMOKE_TIMEOUT_MS = 180_000
+const OPENCODE_SMOKE_TIMEOUT_MS = 180_000
 const SUBSCRIBE_TIMEOUT_MS = 30_000
 const PROMPT_TIMEOUT_MS = 90_000
 
-const shouldRunSmoke =
-  smokeRunRequested() && hasCursorAuth() && resolveCursorAgentPath() !== undefined
+const FREE_MODEL = process.env.OPENCODE_SMOKE_MODEL ?? "opencode/mimo-v2.5-free"
 
-describe("cursor ACP smoke", () => {
+const shouldRunSmoke = smokeRunRequested() && resolveOpenCodePath() !== undefined
+
+describe("opencode ACP smoke", () => {
   test.skipIf(!shouldRunSmoke)(
-    "creates a Cursor session, lists it, then completes a stream prompt",
+    "creates an OpenCode session, lists it, then completes a stream prompt on a free model",
     async () => {
-      const dataDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-cursor-smoke-"))
+      const dataDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-opencode-smoke-"))
       const workspaceDir = path.join(dataDir, "smoke-project")
       await mkdir(workspaceDir)
 
-      const detectedPath = execSync("which agent", { encoding: "utf8" }).trim()
-      const whichFn: WhichFn = (binaryName) => (binaryName === "agent" ? detectedPath : undefined)
+      const previousConfigContent = process.env.OPENCODE_CONFIG_CONTENT
+      process.env.OPENCODE_CONFIG_CONTENT = JSON.stringify({
+        $schema: "https://opencode.ai/config.json",
+        model: FREE_MODEL,
+      })
+
+      const detectedPath = resolveOpenCodePath()
+      if (detectedPath === undefined) {
+        throw new Error("opencode binary missing")
+      }
+      const whichFn: WhichFn = (binaryName) =>
+        binaryName === "opencode" ? detectedPath : undefined
 
       const config = parseConfig({
         AGENT_SERVER_HOST: "127.0.0.1",
@@ -53,12 +58,17 @@ describe("cursor ACP smoke", () => {
       try {
         const enableResponse = await app.inject({
           method: "PATCH",
-          url: "/v1/settings/agents/cursor",
+          url: "/v1/settings/agents/opencode",
           payload: { enabled: true, path: detectedPath },
         })
         expect(enableResponse.statusCode).toBe(200)
 
-        await allowWorkspaceRoots(app, [dataDir])
+        const allowResponse = await app.inject({
+          method: "PATCH",
+          url: "/v1/settings/runtime",
+          payload: { allowedRoots: [dataDir] },
+        })
+        expect(allowResponse.statusCode).toBe(200)
 
         const workspaceResponse = await app.inject({
           method: "POST",
@@ -70,7 +80,7 @@ describe("cursor ACP smoke", () => {
         const sessionResponse = await app.inject({
           method: "POST",
           url: "/v1/sessions",
-          payload: { agentId: "cursor", cwd: workspaceDir },
+          payload: { agentId: "opencode", cwd: workspaceDir },
         })
         expect(sessionResponse.statusCode).toBe(201)
         const session = CreateSessionResponseSchema.parse(JSON.parse(sessionResponse.body))
@@ -87,7 +97,7 @@ describe("cursor ACP smoke", () => {
         try {
           client.send({
             type: "subscribe",
-            agentId: "cursor",
+            agentId: "opencode",
             sessionId: session.sessionId,
           })
 
@@ -100,13 +110,13 @@ describe("cursor ACP smoke", () => {
           }
           expect(subscribed).toMatchObject({
             type: "subscribed",
-            agentId: "cursor",
+            agentId: "opencode",
             sessionId: session.sessionId,
           })
 
           client.send({
             type: "prompt",
-            agentId: "cursor",
+            agentId: "opencode",
             sessionId: session.sessionId,
             text: "Reply with the single word pong and nothing else.",
           })
@@ -125,7 +135,7 @@ describe("cursor ACP smoke", () => {
 
         const deleteResponse = await app.inject({
           method: "DELETE",
-          url: `/v1/sessions/${encodeURIComponent(session.sessionId)}?agentId=cursor`,
+          url: `/v1/sessions/${encodeURIComponent(session.sessionId)}?agentId=opencode`,
         })
         expect([204, 409]).toContain(deleteResponse.statusCode)
       } finally {
@@ -133,8 +143,13 @@ describe("cursor ACP smoke", () => {
         await app.close()
         database.close()
         await rm(dataDir, { recursive: true, force: true })
+        if (previousConfigContent === undefined) {
+          delete process.env.OPENCODE_CONFIG_CONTENT
+        } else {
+          process.env.OPENCODE_CONFIG_CONTENT = previousConfigContent
+        }
       }
     },
-    CURSOR_SMOKE_TIMEOUT_MS,
+    OPENCODE_SMOKE_TIMEOUT_MS,
   )
 })
