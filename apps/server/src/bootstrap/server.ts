@@ -46,12 +46,10 @@ import { createLogBuffer } from "../logs/log.buffer"
 import { createLogSinkStream } from "../logs/log.sink.stream"
 import { createLoggedAgentSpawn } from "../logs/logged.agent.spawn"
 import { registerLogRoutes } from "../logs/routes"
+import { ConsoleAsset } from "../console/console.assets"
+import { registerConsoleRoutes } from "../console/console.routes"
 import { createAcpHubPromptSession } from "../session/hub/acp.hub.prompt"
-import {
-  createSessionCwdCache,
-  createSessionHub,
-  SessionHub,
-} from "../session/hub/hub"
+import { createSessionCwdCache, createSessionHub, SessionHub } from "../session/hub/hub"
 import { createCommandsCache } from "../session/hub/commands.cache"
 import { registerAuthMiddleware } from "../auth/middleware"
 import { redactPairingCodeInUrl } from "../device/device.redact.pairing.code.in.url"
@@ -91,6 +89,7 @@ export type CreateServerOptions = {
   runtimeSettingsStore?: RuntimeSettingsFileStore
   appliedRuntimeSettings?: AppliedRuntimeSettingsHolder
   envBindOverrides?: EnvBindOverrides
+  consoleAssets?: ReadonlyArray<ConsoleAsset>
 }
 
 const loggerRedactPaths = [
@@ -146,6 +145,7 @@ export const createServer = async ({
   runtimeSettingsStore: providedRuntimeSettingsStore,
   appliedRuntimeSettings,
   envBindOverrides,
+  consoleAssets,
 }: CreateServerOptions) => {
   const logBuffer = createLogBuffer()
   const logSink = createLogSinkStream({
@@ -289,9 +289,7 @@ export const createServer = async ({
     promptSession: createAcpHubPromptSession({
       startPrompt: (params) => acpSupervisor.startPromptAcpSession(params),
       resolveAttachment: async ({ sessionId, reference }) => {
-        const workspaceRoot = acpSupervisor
-          .getSessionBindingRegistry()
-          .getWorkspaceRoot(sessionId)
+        const workspaceRoot = acpSupervisor.getSessionBindingRegistry().getWorkspaceRoot(sessionId)
         if (workspaceRoot === undefined) {
           return null
         }
@@ -312,9 +310,7 @@ export const createServer = async ({
       const cancelled = await acpSupervisor.cancelAcpSession({
         acpSessionId: sessionId,
       })
-      return cancelled.ok
-        ? { ok: true }
-        : { ok: false, reason: cancelled.reason }
+      return cancelled.ok ? { ok: true } : { ok: false, reason: cancelled.reason }
     },
     authHooks: {
       ensureReadyForPrompt: async (agentId) => {
@@ -390,6 +386,8 @@ export const createServer = async ({
   if (withTestRoutes) {
     registerTestRoutes(app)
   }
+
+  registerConsoleRoutes(app, { assets: consoleAssets ?? [] })
 
   await startEnabledAgents(agentSettings, acpSupervisor, app.log)
 
