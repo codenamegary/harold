@@ -1,8 +1,13 @@
-import { SetConfigOptionBodySchema } from "contracts/http/config.options"
+import {
+  SetConfigOptionBodySchema,
+  SetConfigOptionParamsSchema,
+  SetConfigOptionQuerySchema,
+} from "contracts/http/config.options"
 import { PROBLEM_TYPES, ValidationProblemSchema } from "contracts/http/error"
 import {
   CreateSessionBodySchema,
   CreateSessionResponseSchema,
+  DeleteSessionParamsSchema,
   DeleteSessionQuerySchema,
   ListSessionsQuerySchema,
   SessionCollectionSchema,
@@ -10,13 +15,16 @@ import {
 import { FastifyInstance } from "fastify"
 import { AcpSupervisor } from "../acp/supervisor/models"
 import { AuthBroker } from "../agent/auth/broker"
-import { AgentSettingsSlice } from "../agent-settings/agent.settings.assembly"
-import { CommandsCache } from "./hub/commands.cache"
-import { SessionCwdCache } from "./hub/hub"
-import { ArchivedAcpSessionsStore } from "./archived.acp.sessions.store"
-import { SetConfigOptionQuerySchema } from "./config.options.query"
-import { deleteAcpSession } from "./delete.acp.session"
-import { ensureSupervisorReady, agentAdvertisesSessionList } from "./session.acp.ready"
+import { agentAdvertisesSessionClose, agentAdvertisesSessionList } from "./session.acp.ready"
+import { makeDeleteAcpSession } from "./session.delete.acp.session.usecase"
+import { makeResolveAgentGate, AgentGateError } from "./session.resolve.agent.gate.usecase"
+import {
+  ArchivedAcpSessionsStore,
+  CommandsCache,
+  EnsureSupervisorReady,
+  FindAgentSettings,
+  SessionCwdCache,
+} from "./session.ports"
 import {
   buildAcpUnavailableProblem,
   buildAgentDisabledProblem,
@@ -36,35 +44,51 @@ const sendProblem = (
   problem: unknown,
 ) => reply.status(status).type("application/problem+json").send(problem)
 
-export const registerSessionRoutes = (
-  app: FastifyInstance,
-  agentSettingsRepository: Pick<AgentSettingsSlice, "list">,
-  acpSupervisor: AcpSupervisor,
-  cwdCache: SessionCwdCache,
-  commandsCache: CommandsCache,
-  archivedAcpSessions: ArchivedAcpSessionsStore,
-  authBroker?: AuthBroker,
-) => {
+export type SessionRouteDeps = Readonly<{
+  acpSupervisor: AcpSupervisor
+  findAgentSettings: FindAgentSettings
+  ensureSupervisorReady: EnsureSupervisorReady
+  cwdCache: SessionCwdCache
+  commandsCache: CommandsCache
+  archivedAcpSessions: ArchivedAcpSessionsStore
+  authBroker?: AuthBroker
+}>
+
+export const registerSessionRoutes = (app: FastifyInstance, deps: SessionRouteDeps) => {
+  const resolveAgentGate = makeResolveAgentGate({
+    findAgentSettings: deps.findAgentSettings,
+  })
+  const deleteAcpSession = makeDeleteAcpSession({
+    archivedAcpSessions: deps.archivedAcpSessions,
+    commandsCache: deps.commandsCache,
+    ensureSupervisorReady: deps.ensureSupervisorReady,
+    advertisesSessionClose: (agentId) => agentAdvertisesSessionClose(deps.acpSupervisor, agentId),
+    closeAcpSession: (input) => deps.acpSupervisor.closeAcpSession(input),
+  })
+
+  const sendAgentGateProblem = (
+    reply: Parameters<typeof sendProblem>[0],
+    error: AgentGateError,
+  ) => {
+    switch (error.kind) {
+      case "AGENT_NOT_FOUND":
+        return sendProblem(reply, 404, buildAgentNotFoundProblem())
+      case "AGENT_UNAVAILABLE":
+        return sendProblem(reply, 409, buildAgentUnavailableProblem())
+      case "AGENT_DISABLED":
+        return sendProblem(reply, 409, buildAgentDisabledProblem())
+    }
+  }
+
   app.post("/v1/sessions", async (request, reply) => {
     const body = CreateSessionBodySchema.parse(request.body)
 
-    const agentSettings = agentSettingsRepository
-      .list()
-      .find((settings) => settings.id === body.agentId)
-
-    if (agentSettings === undefined) {
-      return sendProblem(reply, 404, buildAgentNotFoundProblem())
+    const gate = await resolveAgentGate({ agentId: body.agentId })
+    if (!gate.ok) {
+      return sendAgentGateProblem(reply, gate.error)
     }
 
-    if (!agentSettings.available) {
-      return sendProblem(reply, 409, buildAgentUnavailableProblem())
-    }
-
-    if (!agentSettings.enabled) {
-      return sendProblem(reply, 409, buildAgentDisabledProblem())
-    }
-
-    const supervisorReady = await ensureSupervisorReady(acpSupervisor, body.agentId)
+    const supervisorReady = await deps.ensureSupervisorReady(body.agentId)
     if (!supervisorReady.ok) {
       app.log.warn(
         { agentId: body.agentId, reason: supervisorReady.reason },
@@ -73,7 +97,7 @@ export const registerSessionRoutes = (
       return sendProblem(reply, 409, buildAcpUnavailableProblem(supervisorReady.reason))
     }
 
-    if (!agentAdvertisesSessionList(acpSupervisor, body.agentId)) {
+    if (!agentAdvertisesSessionList(deps.acpSupervisor, body.agentId)) {
       return sendProblem(
         reply,
         409,
@@ -81,20 +105,20 @@ export const registerSessionRoutes = (
       )
     }
 
-    const acpResult = await acpSupervisor.createSession({
+    const acpResult = await deps.acpSupervisor.createSession({
       agentId: body.agentId,
       cwd: body.cwd,
     })
 
     if (!acpResult.ok) {
-      if (acpResult.authRequired === true && authBroker !== undefined) {
-        await authBroker.ensureSessionFromChallenge(body.agentId)
+      if (acpResult.authRequired === true && deps.authBroker !== undefined) {
+        await deps.authBroker.ensureSessionFromChallenge(body.agentId)
         return sendProblem(reply, 409, buildAuthRequiredProblem())
       }
       return sendProblem(reply, 409, buildAcpUnavailableProblem(acpResult.reason))
     }
 
-    cwdCache.remember({
+    deps.cwdCache.remember({
       agentId: body.agentId,
       sessionId: acpResult.acpSessionId,
       cwd: body.cwd,
@@ -115,7 +139,7 @@ export const registerSessionRoutes = (
 
   app.get("/v1/sessions", async (request, reply) => {
     const query = ListSessionsQuerySchema.parse(request.query)
-    const listed = await acpSupervisor.listAcpSessions(
+    const listed = await deps.acpSupervisor.listAcpSessions(
       query.cwd === undefined ? undefined : { cwd: query.cwd },
     )
 
@@ -123,7 +147,7 @@ export const registerSessionRoutes = (
       app.log.warn(
         {
           reason: listed.reason,
-          agentIds: [...acpSupervisor.getRunningAgentIds()],
+          agentIds: [...deps.acpSupervisor.getRunningAgentIds()],
         },
         "ACP session/list failed",
       )
@@ -132,14 +156,14 @@ export const registerSessionRoutes = (
 
     const visible = listed.sessions.filter(
       (session) =>
-        !archivedAcpSessions.isArchived({
+        !deps.archivedAcpSessions.isArchived({
           agentId: session.agentId,
           sessionId: session.sessionId,
         }),
     )
 
     visible.forEach((session) => {
-      cwdCache.remember({
+      deps.cwdCache.remember({
         agentId: session.agentId,
         sessionId: session.sessionId,
         cwd: session.cwd,
@@ -154,30 +178,16 @@ export const registerSessionRoutes = (
   })
 
   app.put("/v1/sessions/:sessionId/config-options/:configId", async (request, reply) => {
-    const { sessionId, configId } = request.params as {
-      sessionId: string
-      configId: string
-    }
+    const params = SetConfigOptionParamsSchema.parse(request.params)
     const body = SetConfigOptionBodySchema.parse(request.body)
     const query = SetConfigOptionQuerySchema.parse(request.query)
 
-    const agentSettings = agentSettingsRepository
-      .list()
-      .find((settings) => settings.id === query.agentId)
-
-    if (agentSettings === undefined) {
-      return sendProblem(reply, 404, buildAgentNotFoundProblem())
+    const gate = await resolveAgentGate({ agentId: query.agentId })
+    if (!gate.ok) {
+      return sendAgentGateProblem(reply, gate.error)
     }
 
-    if (!agentSettings.available) {
-      return sendProblem(reply, 409, buildAgentUnavailableProblem())
-    }
-
-    if (!agentSettings.enabled) {
-      return sendProblem(reply, 409, buildAgentDisabledProblem())
-    }
-
-    const supervisorReady = await ensureSupervisorReady(acpSupervisor, query.agentId)
+    const supervisorReady = await deps.ensureSupervisorReady(query.agentId)
     if (!supervisorReady.ok) {
       app.log.warn(
         { agentId: query.agentId, reason: supervisorReady.reason },
@@ -186,14 +196,14 @@ export const registerSessionRoutes = (
       return sendProblem(reply, 409, buildAcpUnavailableProblem(supervisorReady.reason))
     }
 
-    if (cwdCache.get({ agentId: query.agentId, sessionId }) === undefined) {
+    if (deps.cwdCache.get({ agentId: query.agentId, sessionId: params.sessionId }) === undefined) {
       return sendProblem(reply, 404, buildSessionNotFoundProblem())
     }
 
-    const result = await acpSupervisor.setConfigOption({
+    const result = await deps.acpSupervisor.setConfigOption({
       agentId: query.agentId,
-      sessionId,
-      configId,
+      sessionId: params.sessionId,
+      configId: params.configId,
       value: body.value,
     })
 
@@ -221,35 +231,20 @@ export const registerSessionRoutes = (
   })
 
   app.delete("/v1/sessions/:sessionId", async (request, reply) => {
-    const { sessionId } = request.params as { sessionId: string }
+    const params = DeleteSessionParamsSchema.parse(request.params)
     const query = DeleteSessionQuerySchema.parse(request.query)
+
+    const gate = await resolveAgentGate({ agentId: query.agentId })
+    if (!gate.ok) {
+      return sendAgentGateProblem(reply, gate.error)
+    }
 
     const result = await deleteAcpSession({
       agentId: query.agentId,
-      sessionId,
-      agentSettingsRepository,
-      acpSupervisor,
-      archivedAcpSessions,
-      commandsCache,
+      sessionId: params.sessionId,
     })
 
     if (!result.ok) {
-      const agentSettings = agentSettingsRepository
-        .list()
-        .find((settings) => settings.id === query.agentId)
-
-      if (agentSettings === undefined) {
-        return sendProblem(reply, 404, buildAgentNotFoundProblem())
-      }
-
-      if (!agentSettings.available) {
-        return sendProblem(reply, 409, buildAgentUnavailableProblem())
-      }
-
-      if (!agentSettings.enabled) {
-        return sendProblem(reply, 409, buildAgentDisabledProblem())
-      }
-
       return sendProblem(reply, 409, buildAcpUnavailableProblem(result.reason))
     }
 

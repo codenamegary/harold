@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { AgentIdSchema } from "./agent-settings"
 
 export const ConfigOptionValueSchema = z.strictObject({
   value: z.string(),
@@ -41,12 +42,7 @@ export type BooleanOption = z.infer<typeof BooleanOptionSchema>
 export type ConfigOption = z.infer<typeof ConfigOptionSchema>
 export type SessionConfig = z.infer<typeof SessionConfigSchema>
 
-export type ConfigCategory =
-  | "model"
-  | "mode"
-  | "model_config"
-  | "thought_level"
-  | "other"
+export type ConfigCategory = "model" | "mode" | "model_config" | "thought_level" | "other"
 
 const RESERVED_CATEGORIES: ReadonlyArray<string> = [
   "model",
@@ -60,13 +56,10 @@ export const categoryOf = (option: ConfigOption): ConfigCategory => {
   if (category === undefined || category === null || category.startsWith("_")) {
     return "other"
   }
-  return RESERVED_CATEGORIES.includes(category)
-    ? (category as ConfigCategory)
-    : "other"
+  return RESERVED_CATEGORIES.includes(category) ? (category as ConfigCategory) : "other"
 }
 
-export const isModelOption = (option: ConfigOption): boolean =>
-  categoryOf(option) === "model"
+export const isModelOption = (option: ConfigOption): boolean => categoryOf(option) === "model"
 
 export const SET_CONFIG_OPTIONS_PATH = "/v1/sessions/:sessionId/config-options/:configId"
 
@@ -78,3 +71,16 @@ export const SetConfigOptionBodySchema = z.strictObject({
 })
 
 export type SetConfigOptionBody = z.infer<typeof SetConfigOptionBodySchema>
+
+export const SetConfigOptionParamsSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  configId: z.string().min(1),
+})
+
+export type SetConfigOptionParams = z.infer<typeof SetConfigOptionParamsSchema>
+
+export const SetConfigOptionQuerySchema = z.strictObject({
+  agentId: AgentIdSchema,
+})
+
+export type SetConfigOptionQuery = z.infer<typeof SetConfigOptionQuerySchema>

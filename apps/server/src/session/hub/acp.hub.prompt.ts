@@ -1,6 +1,6 @@
 import { AcpSessionPromptStartResult } from "../../acp/supervisor/models"
 import { AttachmentKind, AttachmentReference } from "contracts/http/attachments"
-import { SessionHubPromptSession } from "./hub"
+import { SessionHubPromptSession } from "../session.ports"
 
 export type ResolvedAttachment = {
   reference: AttachmentReference

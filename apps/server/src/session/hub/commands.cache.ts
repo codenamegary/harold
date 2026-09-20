@@ -1,18 +1,6 @@
 import { AgentId } from "contracts/http/agent-settings"
 import { AvailableCommandsUpdate } from "./commands.available"
-
-export type CommandsCache = {
-  remember: (params: {
-    agentId: AgentId
-    sessionId: string
-    update: AvailableCommandsUpdate
-  }) => void
-  get: (params: {
-    agentId: AgentId
-    sessionId: string
-  }) => AvailableCommandsUpdate | undefined
-  forget: (params: { agentId: AgentId; sessionId: string }) => void
-}
+import { CommandsCache } from "../session.ports"
 
 const cacheKey = (agentId: AgentId, sessionId: string): string =>
   `${agentId}:${sessionId}`

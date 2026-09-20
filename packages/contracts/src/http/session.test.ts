@@ -5,6 +5,7 @@ import {
   CreateSessionBodySchema,
   CreateSessionResponseSchema,
   DeleteSessionQuerySchema,
+  DeleteSessionParamsSchema,
   ListSessionsQuerySchema,
   PromptSessionBodySchema,
   PromptSessionResponseSchema,
@@ -289,6 +290,24 @@ describe("DeleteSessionQuerySchema", () => {
 
   test("rejects empty agentId", () => {
     expect(() => DeleteSessionQuerySchema.parse({ agentId: "" })).toThrow()
+  })
+})
+
+describe("DeleteSessionParamsSchema", () => {
+  test("accepts a non-empty sessionId", () => {
+    expect(DeleteSessionParamsSchema.parse({ sessionId: "acp-1" })).toEqual({
+      sessionId: "acp-1",
+    })
+  })
+
+  test("rejects empty sessionId", () => {
+    expect(() => DeleteSessionParamsSchema.parse({ sessionId: "" })).toThrow()
+  })
+
+  test("rejects extra keys", () => {
+    expect(() =>
+      DeleteSessionParamsSchema.parse({ sessionId: "acp-1", agentId: "cursor" }),
+    ).toThrow()
   })
 })
 

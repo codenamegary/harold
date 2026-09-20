@@ -5,6 +5,8 @@ import {
   SessionConfigSchema,
   setConfigOptionPath,
   SetConfigOptionBodySchema,
+  SetConfigOptionParamsSchema,
+  SetConfigOptionQuerySchema,
 } from "./config.options"
 
 describe("config option contracts", () => {
@@ -144,6 +146,24 @@ describe("config option contracts", () => {
     expect(SetConfigOptionBodySchema.parse({ value: true })).toEqual({ value: true })
     expect(() => SetConfigOptionBodySchema.parse({ value: 3 })).toThrow()
     expect(() => SetConfigOptionBodySchema.parse({ other: true })).toThrow()
+  })
+
+  test("set config option params require session and config ids", () => {
+    expect(
+      SetConfigOptionParamsSchema.parse({ sessionId: "sess-1", configId: "model" }),
+    ).toEqual({ sessionId: "sess-1", configId: "model" })
+    expect(() => SetConfigOptionParamsSchema.parse({ sessionId: "" })).toThrow()
+    expect(() =>
+      SetConfigOptionParamsSchema.parse({ sessionId: "sess-1", extra: true }),
+    ).toThrow()
+  })
+
+  test("set config option query requires an agent id", () => {
+    expect(SetConfigOptionQuerySchema.parse({ agentId: "cursor" })).toEqual({
+      agentId: "cursor",
+    })
+    expect(() => SetConfigOptionQuerySchema.parse({})).toThrow()
+    expect(() => SetConfigOptionQuerySchema.parse({ agentId: "" })).toThrow()
   })
 
   test("set config option path encodes session and config ids", () => {

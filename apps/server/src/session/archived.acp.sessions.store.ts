@@ -1,19 +1,13 @@
-import { AgentId, AgentIdSchema } from "contracts/http/agent-settings"
+import { AgentIdSchema } from "contracts/http/agent-settings"
 import { AgentDatabase } from "../persistence/database"
 import { archivedAcpSessions } from "../persistence/schema/archived.acp.sessions"
-
-export type ArchivedAcpSessionKey = {
-  agentId: AgentId
-  sessionId: string
-}
+import {
+  ArchivedAcpSessionKey,
+  ArchivedAcpSessionsStore,
+} from "./session.ports"
 
 const archiveKey = (params: ArchivedAcpSessionKey): string =>
   `${params.agentId}\0${params.sessionId}`
-
-export type ArchivedAcpSessionsStore = {
-  isArchived: (params: ArchivedAcpSessionKey) => boolean
-  archive: (params: ArchivedAcpSessionKey) => void
-}
 
 export const createArchivedAcpSessionsStore = (
   database: AgentDatabase,

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createTurnId } from "./create.turn.id"
+import { createTurnId } from "./session.create.turn.id"
 
 describe("createTurnId", () => {
   test("returns turn_ prefixed ULIDs", () => {

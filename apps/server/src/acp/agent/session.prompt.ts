@@ -1,4 +1,4 @@
-import { createTurnId } from "../../session/create.turn.id"
+import { createTurnId } from "../../session/session.create.turn.id"
 import { isAcpAuthRequiredError } from "../auth.required"
 import { sanitizeAcpRejection } from "../sanitize.error"
 import { AcpSessionPromptResult } from "../supervisor/models"

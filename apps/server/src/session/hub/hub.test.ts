@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { createSessionCwdCache, createSessionHub, SessionStreamSink } from "./hub"
+import { makePromptAuthGate } from "../session.prompt.auth.gate.usecase"
 import { createCommandsCache } from "./commands.cache"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
 
@@ -189,12 +190,13 @@ describe("session hub", () => {
       loadSession: async () => ({ ok: true }),
       promptSession: async () => ({ ok: true }),
       cancelSession: async () => ({ ok: true }),
-      authHooks: {
+      promptGate: makePromptAuthGate({
+        promptSession: async () => ({ ok: true }),
         ensureReadyForPrompt: async () => ({ ok: false }),
         ensureSessionFromChallenge: async () => {
           challenges += 1
         },
-      },
+      }),
     })
 
     const a = collectSink()
@@ -247,18 +249,19 @@ describe("session hub", () => {
     const hub = createSessionHub({
       cwdCache,
       loadSession: async () => ({ ok: true }),
-      promptSession: async () => ({
-        ok: false,
-        reason: "Authentication required",
-        authRequired: true,
-      }),
+      promptSession: async () => ({ ok: true }),
       cancelSession: async () => ({ ok: true }),
-      authHooks: {
+      promptGate: makePromptAuthGate({
+        promptSession: async () => ({
+          ok: false,
+          reason: "Authentication required",
+          authRequired: true,
+        }),
         ensureReadyForPrompt: async () => ({ ok: true }),
         ensureSessionFromChallenge: async () => {
           challenges += 1
         },
-      },
+      }),
     })
 
     const a = collectSink()
