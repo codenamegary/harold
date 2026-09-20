@@ -1,8 +1,13 @@
-import { AttachmentKindSchema, MAX_ATTACHMENT_BYTES, AttachmentKind } from "contracts/http/attachments"
+import {
+  AttachmentDescriptorSchema,
+  AttachmentKind,
+  AttachmentKindSchema,
+  MAX_ATTACHMENT_BYTES,
+} from "contracts/http/attachments"
 import { FastifyInstance } from "fastify"
 import { MultipartFile } from "@fastify/multipart"
 import { FindWorkspaceById } from "../workspace/workspace.ports"
-import { AttachmentsService } from "./attachments.service"
+import { DeleteAttachment, SaveAttachment } from "./attachments.ports"
 import {
   buildAttachmentNotFoundProblem,
   buildAttachmentTooLargeProblem,
@@ -28,14 +33,16 @@ const parseKindField = (value: unknown): AttachmentKind | undefined => {
   return parsed.success ? parsed.data : undefined
 }
 
-export const registerAttachmentRoutes = (
-  app: FastifyInstance,
-  findWorkspaceById: FindWorkspaceById,
-  attachmentsService: AttachmentsService,
-) => {
+export type AttachmentsRouteDeps = Readonly<{
+  findWorkspaceById: FindWorkspaceById
+  saveAttachment: SaveAttachment
+  deleteAttachment: DeleteAttachment
+}>
+
+export const registerAttachmentRoutes = (app: FastifyInstance, deps: AttachmentsRouteDeps) => {
   app.post("/v1/workspaces/:workspaceId/attachments", async (request, reply) => {
     const { workspaceId } = request.params as { workspaceId: string }
-    const workspaceResult = findWorkspaceById({ id: workspaceId })
+    const workspaceResult = deps.findWorkspaceById({ id: workspaceId })
 
     if (!workspaceResult.ok) {
       return sendProblem(reply, 404, buildWorkspaceNotFoundProblem())
@@ -54,20 +61,14 @@ export const registerAttachmentRoutes = (
     }
 
     if (file === undefined) {
-      return sendProblem(
-        reply,
-        415,
-        buildAttachmentTypeRejectedProblem("Missing file part"),
-      )
+      return sendProblem(reply, 415, buildAttachmentTypeRejectedProblem("Missing file part"))
     }
 
     if (file.file.truncated) {
       return sendProblem(
         reply,
         413,
-        buildAttachmentTooLargeProblem(
-          `Attachment exceeds ${MAX_ATTACHMENT_BYTES} bytes`,
-        ),
+        buildAttachmentTooLargeProblem(`Attachment exceeds ${MAX_ATTACHMENT_BYTES} bytes`),
       )
     }
 
@@ -87,20 +88,18 @@ export const registerAttachmentRoutes = (
       return sendProblem(
         reply,
         413,
-        buildAttachmentTooLargeProblem(
-          `Attachment exceeds ${MAX_ATTACHMENT_BYTES} bytes`,
-        ),
+        buildAttachmentTooLargeProblem(`Attachment exceeds ${MAX_ATTACHMENT_BYTES} bytes`),
       )
     }
 
-    const kindField = parseKindField(file.fields.kind)
+    const kind = parseKindField(file.fields.kind)
 
-    const saved = await attachmentsService.saveAttachment({
+    const saved = await deps.saveAttachment({
       workspaceId,
       workspacePath: workspace.path,
       fileName: file.filename,
       mimeType,
-      kind: kindField,
+      kind,
       bytes,
     })
 
@@ -109,14 +108,14 @@ export const registerAttachmentRoutes = (
         reply,
         415,
         buildAttachmentTypeRejectedProblem(
-          saved.reason === "blocked-extension"
+          saved.error.kind === "blocked_extension"
             ? "Executable file types are not accepted"
             : "File name is required",
         ),
       )
     }
 
-    return reply.status(201).send(saved.descriptor)
+    return reply.status(201).send(AttachmentDescriptorSchema.parse(saved.value))
   })
 
   app.delete("/v1/workspaces/:workspaceId/attachments/:attachmentId", async (request, reply) => {
@@ -124,18 +123,18 @@ export const registerAttachmentRoutes = (
       workspaceId: string
       attachmentId: string
     }
-    const workspaceResult = findWorkspaceById({ id: workspaceId })
+    const workspaceResult = deps.findWorkspaceById({ id: workspaceId })
 
     if (!workspaceResult.ok) {
       return sendProblem(reply, 404, buildWorkspaceNotFoundProblem())
     }
 
-    const deleted = await attachmentsService.deleteAttachment({
+    const deleted = await deps.deleteAttachment({
       workspacePath: workspaceResult.value.path,
       attachmentId,
     })
 
-    if (!deleted) {
+    if (!deleted.ok) {
       return sendProblem(reply, 404, buildAttachmentNotFoundProblem())
     }
 
