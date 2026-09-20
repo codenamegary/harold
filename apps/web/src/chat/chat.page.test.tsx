@@ -1,16 +1,20 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { defaultAuthSummary } from "../test/agent.settings.fixtures"
-import { waitFor } from "@testing-library/react"
+import { act, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router"
 import { AgentSettingsCollectionSchema } from "contracts/http/agent-settings"
-import { SessionCollectionSchema } from "contracts/http/session"
+import { CreateSessionResponseSchema, SessionCollectionSchema } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
 import { requestUrl } from "../test/request.url"
 import { FakeSocket, installFakeWebSocket } from "../test/fake.websocket"
 import { ChatPage } from "../shell/pages/ChatPage"
-import { clearChatTestSelection, openNewSessionModal, confirmNewSessionModal } from "./select.combobox.option"
+import {
+  clearChatTestSelection,
+  openNewSessionModal,
+  confirmNewSessionModal,
+} from "./select.combobox.option"
 
 const workspaceCollection = WorkspaceCollectionSchema.parse({
   items: [
@@ -59,8 +63,26 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
   ],
 })
 
-const emptySessions = SessionCollectionSchema.parse({
-  items: [],
+const createdSession = CreateSessionResponseSchema.parse({
+  agentId: "cursor",
+  sessionId: "sess_01JFC8C7E77NQCFH0RF9Z22JHH",
+  cwd: "/home/operator/agent-server",
+  title: "Explain auth",
+  updatedAt: "2026-07-24T12:00:00.000Z",
+  configOptions: [],
+})
+
+// The catalog reflects created sessions, as the live host does.
+const sessionsList = SessionCollectionSchema.parse({
+  items: [
+    {
+      agentId: createdSession.agentId,
+      sessionId: createdSession.sessionId,
+      cwd: createdSession.cwd,
+      title: createdSession.title,
+      updatedAt: createdSession.updatedAt,
+    },
+  ],
 })
 
 const originalFetch = globalThis.fetch
@@ -73,8 +95,18 @@ describe("ChatPage", () => {
     clearChatTestSelection()
     sockets.length = 0
     restoreWebSocket.current = installFakeWebSocket(sockets)
-    globalThis.fetch = mock((input: RequestInfo | URL) => {
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/sessions" && method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify(createdSession), {
+            status: 201,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
 
       if (url.startsWith("/v1/workspaces")) {
         return Promise.resolve(
@@ -96,7 +128,7 @@ describe("ChatPage", () => {
 
       if (url.startsWith("/v1/sessions")) {
         return Promise.resolve(
-          new Response(JSON.stringify(emptySessions), {
+          new Response(JSON.stringify(sessionsList), {
             status: 200,
             headers: { "Content-Type": "application/json" },
           }),
@@ -127,7 +159,9 @@ describe("ChatPage", () => {
     await waitFor(() => {
       expect(getByRole("heading", { level: 3, name: "Chat with an agent" })).toBeInTheDocument()
     })
-    expect(getByText("Send a prompt directly to an agent without leaving the console.")).toBeInTheDocument()
+    expect(
+      getByText("Send a prompt directly to an agent without leaving the console."),
+    ).toBeInTheDocument()
   })
 
   test("session picker lists recent sessions without All sessions or New session", async () => {
@@ -150,8 +184,9 @@ describe("ChatPage", () => {
     await user.keyboard("{Escape}")
   })
 
-  test("new session modal enables composer after workspace and agent are chosen", async () => {
-    const { getByRole } = renderChatPage()
+  test("new session modal creates the session and the composer enables once subscribed", async () => {
+    const fetchMock = globalThis.fetch as ReturnType<typeof mock>
+    const { getByRole, queryByRole } = renderChatPage()
 
     await waitFor(() => {
       expect(getByRole("button", { name: "Session" })).not.toBeDisabled()
@@ -164,17 +199,37 @@ describe("ChatPage", () => {
     })
 
     await confirmNewSessionModal(
-      { getByRole },
+      { getByRole, queryByRole },
       { workspaceName: "agent-server", agentName: "Cursor" },
     )
 
-    await waitFor(() => {
-      expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute(
-      "aria-disabled",
+    const create = fetchMock.mock.calls.find(
+      ([input, init]) =>
+        requestUrl(input) === "/v1/sessions" &&
+        (init as RequestInit | undefined)?.method === "POST",
     )
+    expect(create).toBeDefined()
+
+    await waitFor(() => {
+      expect(sockets.some((socket) => socket.url.includes("/v1/sessions/stream"))).toBe(true)
     })
-    expect(getByRole("button", { name: "Send message" })).toBeDisabled()
-    expect(getByRole("button", { name: "Session" })).toHaveTextContent("New session")
+    act(() => {
+      sockets
+        .find((socket) => socket.url.includes("/v1/sessions/stream"))
+        ?.dispatch(
+          "message",
+          JSON.stringify({
+            type: "subscribed",
+            agentId: createdSession.agentId,
+            sessionId: createdSession.sessionId,
+          }),
+        )
+    })
+
+    await waitFor(() => {
+      expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute("aria-disabled")
+    })
+    expect(getByRole("button", { name: "Session" })).toHaveTextContent("Explain auth")
     expect(getByRole("main").ownerDocument.body).toHaveTextContent("agent-server · Cursor")
   })
 

@@ -11,14 +11,25 @@ import { enableAgent, seedBoundSession, seedWorkspace } from "../test-support/te
 import { bootTestApp } from "../test-support/test.harness"
 
 describe("POST /v1/sessions catalog create", () => {
-  test("returns 201 with ACP catalog row", async () => {
+  test("returns 201 with ACP catalog row and session config options", async () => {
     const whichFn: WhichFn = (binaryName) =>
       binaryName === "agent" ? "/usr/local/bin/agent" : undefined
+    const configOptions = [
+      {
+        id: "model",
+        name: "Model",
+        category: "model",
+        type: "select",
+        currentValue: "grok-4.5",
+        options: [{ value: "grok-4.5", name: "Cursor Grok 4.5" }],
+      },
+    ]
     const { app } = await bootTestApp({
       whichFn,
       fakeAcpOptions: {
         capabilities: { loadSession: true, sessionClose: true, sessionList: true },
         sessionNewSessionId: "catalog-http-1",
+        configOptions,
       },
     })
     await enableAgent(app, "cursor", whichFn)
@@ -37,6 +48,7 @@ describe("POST /v1/sessions catalog create", () => {
       cwd: "/tmp/project",
       title: "catalog-http-1",
     })
+    expect(body.configOptions).toEqual(configOptions)
   })
 
   test("returns 404 for unknown agent id", async () => {

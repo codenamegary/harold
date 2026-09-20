@@ -3,10 +3,7 @@ import { defaultAuthSummary } from "../test/agent.settings.fixtures"
 import { act, fireEvent, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router"
 import { AgentSettingsCollectionSchema } from "contracts/http/agent-settings"
-import {
-  CreateSessionResponseSchema,
-  SessionCollectionSchema,
-} from "contracts/http/session"
+import { CreateSessionResponseSchema, SessionCollectionSchema } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
 import { requestUrl } from "../test/request.url"
@@ -55,10 +52,19 @@ const createdSession = CreateSessionResponseSchema.parse({
   cwd: workspacePath,
   title: "Explain auth",
   updatedAt: "2026-07-24T12:00:00.000Z",
+  configOptions: [],
 })
 
+const createdSessionRow = {
+  agentId: createdSession.agentId,
+  sessionId: createdSession.sessionId,
+  cwd: createdSession.cwd,
+  title: createdSession.title,
+  updatedAt: createdSession.updatedAt,
+}
+
 const sessionsList = SessionCollectionSchema.parse({
-  items: [createdSession],
+  items: [createdSessionRow],
 })
 
 const originalFetch = globalThis.fetch
@@ -145,9 +151,28 @@ describe("Session stream reconnect rebuild", () => {
   const gatewaySockets = () =>
     sockets.filter((socket) => socket.url.includes("/v1/sessions/stream"))
 
+  // Confirming a new session creates it; the composer unlocks once the
+  // gateway subscribes to the created session.
+  const startSubscribedSession = async (queries: Parameters<typeof startNewSession>[0]) => {
+    await startNewSession(queries)
+    await waitFor(() => {
+      expect(gatewaySockets().length).toBeGreaterThan(0)
+    })
+    act(() => {
+      gatewaySockets()[0]?.dispatch(
+        "message",
+        JSON.stringify({
+          type: "subscribed",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+        }),
+      )
+    })
+  }
+
   test("close reopens the gateway stream and rebuilds from ACP replay", async () => {
-    const { getByRole, getByText, queryByText } = renderChat()
-    await startNewSession({ getByRole })
+    const { getByRole, getByText, queryByText, queryByRole } = renderChat()
+    await startSubscribedSession({ getByRole, queryByRole })
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {
@@ -223,14 +248,12 @@ describe("Session stream reconnect rebuild", () => {
       expect(getByRole("region", { name: "Chat transcript" })).toHaveTextContent("Auth uses JWT")
     })
     expect(queryByText("stale")).not.toBeInTheDocument()
-    expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute(
-      "aria-disabled",
-    )
+    expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute("aria-disabled")
   })
 
   test("error reopens the gateway stream", async () => {
-    const { getByRole } = renderChat()
-    await startNewSession({ getByRole })
+    const { getByRole, queryByRole } = renderChat()
+    await startSubscribedSession({ getByRole, queryByRole })
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {

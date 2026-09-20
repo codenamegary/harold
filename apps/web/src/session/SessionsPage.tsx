@@ -7,18 +7,15 @@ import { Button } from "../design-system/Button"
 import { ConfirmDeleteIconButton } from "../design-system/ConfirmDeleteIconButton"
 import { TextInput } from "../design-system/TextInput"
 import { NewSessionModal } from "../chat/header/NewSessionModal"
-import {
-  readChatSelection,
-  writeChatSelection,
-} from "../chat/selection/persist"
+import { readChatSelection, writeChatSelection } from "../chat/selection/persist"
 import { useAgentSettingsQuery } from "../agent-settings/use.agent.settings.query"
 import { useWorkspacesInfiniteQuery } from "../workspace/use.workspaces.infinite.query"
 import { catalogSessionKey } from "./catalog.session.key"
 import { filterSessionsByTitle } from "./session.list.helpers"
-import { useCreateSessionMutation } from "./use.create.session.mutation"
 import { useDeleteSessionsMutation } from "./use.delete.session.mutation"
 import { isSessionDeleteError } from "./delete.session"
 import { useSessionsQuery } from "./use.sessions.query"
+import { useStartNewSession } from "./use.start.new.session"
 
 const targetKey = (target: SessionDeleteTarget) =>
   catalogSessionKey({
@@ -32,10 +29,7 @@ const clearSelectionIfDeleted = (deleted: SessionDeleteTarget) => {
     return
   }
 
-  if (
-    deleted.sessionId !== selection.sessionId ||
-    deleted.agentId !== selection.agentId
-  ) {
+  if (deleted.sessionId !== selection.sessionId || deleted.agentId !== selection.agentId) {
     return
   }
 
@@ -57,9 +51,7 @@ const formatUpdatedAt = (value: string): string => {
 export const SessionsPage: React.FC = () => {
   const navigate = useNavigate()
   const [search, setSearch] = useState("")
-  const [selectedKeys, setSelectedKeys] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  )
+  const [selectedKeys, setSelectedKeys] = useState<ReadonlySet<string>>(() => new Set())
   const [bulkConfirming, setBulkConfirming] = useState(false)
   const [deleteProgress, setDeleteProgress] = useState<{
     done: number
@@ -72,21 +64,18 @@ export const SessionsPage: React.FC = () => {
   const sessionsQuery = useSessionsQuery()
   const workspacesQuery = useWorkspacesInfiniteQuery({})
   const agentsQuery = useAgentSettingsQuery()
-  const createSessionMutation = useCreateSessionMutation()
   const deleteSessionsMutation = useDeleteSessionsMutation()
+  const newSession = useStartNewSession({
+    onCreated: () => {
+      void navigate("/chat")
+    },
+  })
 
   const deleting = deleteSessionsMutation.isPending
-  const workspaces =
-    workspacesQuery.data?.pages.flatMap((page) => page.items) ?? []
+  const workspaces = workspacesQuery.data?.pages.flatMap((page) => page.items) ?? []
   const agents = agentsQuery.data?.items ?? []
-  const sessions = useMemo(
-    () => sessionsQuery.data?.items ?? [],
-    [sessionsQuery.data?.items],
-  )
-  const visibleSessions = useMemo(
-    () => filterSessionsByTitle(sessions, search),
-    [sessions, search],
-  )
+  const sessions = useMemo(() => sessionsQuery.data?.items ?? [], [sessionsQuery.data?.items])
+  const visibleSessions = useMemo(() => filterSessionsByTitle(sessions, search), [sessions, search])
 
   const selectedTargets = useMemo((): SessionDeleteTarget[] => {
     return visibleSessions
@@ -155,11 +144,7 @@ export const SessionsPage: React.FC = () => {
     })
   }
 
-  const handleJoin = (session: {
-    agentId: string
-    sessionId: string
-    cwd: string
-  }) => {
+  const handleJoin = (session: { agentId: string; sessionId: string; cwd: string }) => {
     if (deleting) {
       return
     }
@@ -169,8 +154,7 @@ export const SessionsPage: React.FC = () => {
       return
     }
 
-    const workspaceId =
-      workspaces.find((workspace) => workspace.path === session.cwd)?.id ?? ""
+    const workspaceId = workspaces.find((workspace) => workspace.path === session.cwd)?.id ?? ""
     writeChatSelection({
       workspaceId,
       agentId: parsedAgent.data,
@@ -245,34 +229,8 @@ export const SessionsPage: React.FC = () => {
     )
   }
 
-  const handleStartNewSession = (selection: {
-    workspaceId: string
-    agentId: AgentId
-  }) => {
-    const workspace = workspaces.find(
-      (item) => item.id === selection.workspaceId,
-    )
-    if (workspace === undefined) {
-      setError("Workspace not found")
-      return
-    }
-
-    createSessionMutation.mutate(
-      { agentId: selection.agentId, cwd: workspace.path },
-      {
-        onSuccess: (created) => {
-          writeChatSelection({
-            workspaceId: selection.workspaceId,
-            agentId: selection.agentId,
-            sessionId: created.sessionId,
-          })
-          void navigate("/chat")
-        },
-        onError: (err) => {
-          setError(err.message)
-        },
-      },
-    )
+  const handleStartNewSession = (selection: { workspaceId: string; agentId: AgentId }) => {
+    newSession.start(selection)
   }
 
   return (
@@ -307,11 +265,7 @@ export const SessionsPage: React.FC = () => {
                       ? `Deleting ${deleteProgress.done}/${deleteProgress.total}…`
                       : `Confirm delete ${selectedTargets.length}`}
                   </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={stopBulkDelete}
-                  >
+                  <Button variant="secondary" size="sm" onClick={stopBulkDelete}>
                     Cancel
                   </Button>
                 </>
@@ -335,10 +289,7 @@ export const SessionsPage: React.FC = () => {
           ) : null}
         </div>
 
-        <Button
-          variant="primary"
-          onClick={() => setIsNewSessionModalOpen(true)}
-        >
+        <Button variant="primary" onClick={() => setIsNewSessionModalOpen(true)}>
           New session
         </Button>
       </header>
@@ -351,11 +302,7 @@ export const SessionsPage: React.FC = () => {
             Failed to load sessions.
           </p>
         ) : (
-          <table
-            className="w-full border-collapse text-left"
-            role="table"
-            aria-label="Sessions"
-          >
+          <table className="w-full border-collapse text-left" role="table" aria-label="Sessions">
             <thead className="sticky top-0 z-10 bg-panel">
               <tr className="border-b border-line-soft">
                 <th scope="col" className="w-10 px-5 py-3">
@@ -400,10 +347,7 @@ export const SessionsPage: React.FC = () => {
             <tbody>
               {visibleSessions.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={6}
-                    className="px-5 py-8 text-sm text-dim"
-                  >
+                  <td colSpan={6} className="px-5 py-8 text-sm text-dim">
                     No sessions match.
                   </td>
                 </tr>
@@ -487,9 +431,10 @@ export const SessionsPage: React.FC = () => {
       <NewSessionModal
         open={isNewSessionModalOpen}
         agents={agents}
+        pending={newSession.creating}
+        error={newSession.error}
         onClose={() => setIsNewSessionModalOpen(false)}
         onConfirm={(selection) => {
-          setIsNewSessionModalOpen(false)
           handleStartNewSession(selection)
         }}
       />

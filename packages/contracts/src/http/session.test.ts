@@ -42,9 +42,9 @@ describe("SessionSchema", () => {
   })
 
   test("accepts open agent ids including registry-ahead", () => {
-    expect(
-      SessionSchema.parse({ ...validSession, agentId: "not-a-catalog-agent" }).agentId,
-    ).toBe("not-a-catalog-agent")
+    expect(SessionSchema.parse({ ...validSession, agentId: "not-a-catalog-agent" }).agentId).toBe(
+      "not-a-catalog-agent",
+    )
   })
 
   test("rejects empty agent id", () => {
@@ -119,8 +119,54 @@ describe("CreateSessionResponseSchema", () => {
     updatedAt: "2026-08-11T12:00:00.000Z",
   } as const
 
-  test("accepts an ACP catalog session row", () => {
-    expect(CreateSessionResponseSchema.parse(catalogSession)).toEqual(catalogSession)
+  const modelOption = {
+    id: "model",
+    name: "Model",
+    category: "model",
+    type: "select",
+    currentValue: "grok-4.5",
+    options: [
+      { value: "grok-4.5", name: "Cursor Grok 4.5" },
+      { value: "default", name: "Auto" },
+    ],
+  } as const
+
+  test("accepts configOptions from the ACP session/new response", () => {
+    const response = {
+      ...catalogSession,
+      configOptions: [
+        modelOption,
+        {
+          id: "model_config",
+          name: "Model config",
+          category: "model_config",
+          type: "boolean",
+          currentValue: false,
+        },
+      ],
+    }
+
+    expect(CreateSessionResponseSchema.parse(response)).toEqual(response)
+  })
+
+  test("accepts an empty configOptions list", () => {
+    expect(CreateSessionResponseSchema.parse({ ...catalogSession, configOptions: [] })).toEqual({
+      ...catalogSession,
+      configOptions: [],
+    })
+  })
+
+  test("rejects a create response without configOptions", () => {
+    expect(() => CreateSessionResponseSchema.parse(catalogSession)).toThrow()
+  })
+
+  test("rejects malformed configOptions", () => {
+    expect(() =>
+      CreateSessionResponseSchema.parse({
+        ...catalogSession,
+        configOptions: [{ type: "slider" }],
+      }),
+    ).toThrow()
   })
 
   test("rejects legacy turnId create response", () => {
@@ -132,7 +178,6 @@ describe("CreateSessionResponseSchema", () => {
     ).toThrow()
   })
 })
-
 
 describe("UpdateSessionBodySchema", () => {
   test("accepts a valid update body", () => {
@@ -146,9 +191,7 @@ describe("UpdateSessionBodySchema", () => {
   })
 
   test("rejects name over 120 characters", () => {
-    expect(() =>
-      UpdateSessionBodySchema.parse({ name: "a".repeat(121) }),
-    ).toThrow()
+    expect(() => UpdateSessionBodySchema.parse({ name: "a".repeat(121) })).toThrow()
   })
 
   test("rejects workspaceId on update", () => {
@@ -267,9 +310,7 @@ describe("PromptSessionBodySchema", () => {
   })
 
   test("rejects text over 32768 characters", () => {
-    expect(() =>
-      PromptSessionBodySchema.parse({ text: "a".repeat(32_769) }),
-    ).toThrow()
+    expect(() => PromptSessionBodySchema.parse({ text: "a".repeat(32_769) })).toThrow()
   })
 
   test("rejects missing text", () => {
@@ -298,9 +339,7 @@ describe("PromptSessionResponseSchema", () => {
   })
 
   test("rejects invalid turnId", () => {
-    expect(() =>
-      PromptSessionResponseSchema.parse({ turnId: "not-a-turn-id" }),
-    ).toThrow()
+    expect(() => PromptSessionResponseSchema.parse({ turnId: "not-a-turn-id" })).toThrow()
   })
 
   test("rejects extra fields", () => {
@@ -319,9 +358,7 @@ describe("CancelSessionBodySchema", () => {
   })
 
   test("rejects extra fields", () => {
-    expect(() =>
-      CancelSessionBodySchema.parse({ turnId: validTurnId }),
-    ).toThrow()
+    expect(() => CancelSessionBodySchema.parse({ turnId: validTurnId })).toThrow()
   })
 })
 
@@ -337,9 +374,7 @@ describe("CancelSessionResponseSchema", () => {
   })
 
   test("rejects invalid turnId", () => {
-    expect(() =>
-      CancelSessionResponseSchema.parse({ turnId: "not-a-turn-id" }),
-    ).toThrow()
+    expect(() => CancelSessionResponseSchema.parse({ turnId: "not-a-turn-id" })).toThrow()
   })
 
   test("rejects extra fields", () => {
