@@ -13,7 +13,7 @@ import {
   SessionCollectionSchema,
 } from "contracts/http/session"
 import { FastifyInstance } from "fastify"
-import { AcpSupervisor } from "../acp/supervisor/models"
+import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
 import { AuthBroker } from "../agent/auth/broker"
 import { agentAdvertisesSessionClose, agentAdvertisesSessionList } from "./session.acp.ready"
 import { makeDeleteAcpSession } from "./session.delete.acp.session.usecase"

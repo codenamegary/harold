@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { StatusSchema } from "contracts/http/status"
 import { spawnFakeAcp } from "test-support/spawn"
 import { bootTestApp } from "../test-support/test.harness"
-import { SpawnedAgentProcess } from "./supervisor/spawn.agent.process"
+import { SpawnedAgentProcess } from "./supervisor/models"
 import { makeUpdateAgentSettingsRow } from "../agent-settings/agent.settings.sqlite.adapters"
 import {
   inventoryAdvertisesResumable,

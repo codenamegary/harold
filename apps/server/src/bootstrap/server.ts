@@ -33,15 +33,15 @@ import { createAuthBroker, AuthBroker } from "../agent/auth/broker"
 import { registerAgentAuthRoutes } from "../agent/auth/routes"
 import { createSupervisorAuthHooks } from "../agent/auth/supervisor.hooks"
 import { createAcpSupervisor } from "../acp/supervisor/supervisor"
-import { AcpSupervisor } from "../acp/supervisor/models"
+import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
 import {
   inventoryAdvertisesEmbeddedContext,
   inventoryAdvertisesPromptImage,
 } from "../acp/agent/inventory"
-import { SpawnAgentProcessFn } from "../acp/supervisor/spawn.agent.process"
+import { SpawnAgentProcessFn } from "../acp/supervisor/supervisor.ports"
+import { spawnAgentProcess } from "../acp/supervisor/supervisor.process.adapters"
 import { registerSessionStreamRoutes } from "../session/session.stream.routes"
 import { assembleLogsSlice } from "../logs/logs.assembly"
-import { spawnAgentProcess } from "../acp/supervisor/spawn.agent.process"
 import { ConsoleAsset } from "../console/console.assets"
 import { registerConsoleRoutes } from "../console/console.routes"
 import { createAcpHubPromptSession } from "../session/hub/acp.hub.prompt"

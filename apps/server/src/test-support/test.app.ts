@@ -4,7 +4,7 @@ import { createServer } from "../bootstrap/server"
 import { AgentId } from "contracts/http/agent-settings"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
-import { AcpSupervisor } from "../acp/supervisor/models"
+import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
 import { makeEnsureSupervisorReady } from "../session/session.acp.ready"
 
 type TestServerApp = Awaited<ReturnType<typeof createServer>>["app"]

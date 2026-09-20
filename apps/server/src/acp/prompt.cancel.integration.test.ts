@@ -4,8 +4,8 @@ import { assembleAgentSettingsSlice } from "../agent-settings/agent.settings.ass
 import { acceptTestExecutablePath } from "../test-support/test.app"
 import { bootTestApp } from "../test-support/test.harness"
 import { createAcpSupervisor } from "./supervisor/supervisor"
-import { AcpSupervisor } from "./supervisor/models"
-import { SpawnedAgentProcess } from "./supervisor/spawn.agent.process"
+import { AcpSupervisor } from "./supervisor/supervisor.ports"
+import { SpawnedAgentProcess } from "./supervisor/models"
 
 const waitFor = async (predicate: () => boolean, timeoutMs = 1000) => {
   const startedAt = Date.now()
@@ -53,13 +53,13 @@ describe("ACP prompt, update, and cancel integration", () => {
             }
           }
           const acpSupervisor = createAcpSupervisor({
-              agentSettingsRepository: agentSettings,
-              serverVersion: runtime.version,
-              onSessionUpdate: (input) => {
-                sessionUpdates.push(input)
-              },
-              spawnAgentProcessFn,
-            })
+            agentSettingsRepository: agentSettings,
+            serverVersion: runtime.version,
+            onSessionUpdate: (input) => {
+              sessionUpdates.push(input)
+            },
+            spawnAgentProcessFn,
+          })
           supervisorRef.current = acpSupervisor
           return {
             acpSupervisor,

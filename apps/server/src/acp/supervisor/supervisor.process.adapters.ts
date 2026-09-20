@@ -1,17 +1,5 @@
 import { AgentProfile } from "../agent-profile"
-
-export type SpawnedAgentProcess = {
-  stdin: { write: (chunk: string) => void | number | Promise<void | number> }
-  stdout: ReadableStream<Uint8Array>
-  kill: () => void
-  waitForExit: () => Promise<number | null>
-}
-
-export type SpawnAgentProcessFn = (input: {
-  profile: AgentProfile
-  executablePath: string
-  args: readonly string[]
-}) => SpawnedAgentProcess
+import { SpawnedAgentProcess } from "./models"
 
 export type SpawnAgentProcessParams = {
   profile: AgentProfile
@@ -61,6 +49,7 @@ const drainAgentStderr = async (
   }
 }
 
+/** Default `SpawnAgentProcessFn`: spawns the agent child via `Bun.spawn`. */
 export const spawnAgentProcess = (params: SpawnAgentProcessParams): SpawnedAgentProcess => {
   const { executablePath, args, onStderrLine } = params
   const cmd = buildAgentSpawnCommand(executablePath, args)

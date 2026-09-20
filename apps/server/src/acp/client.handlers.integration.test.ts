@@ -4,15 +4,13 @@ import os from "node:os"
 import path from "node:path"
 import { spawnFakeAcp } from "test-support/spawn"
 import { createAcpSupervisor } from "./supervisor/supervisor"
-import { SpawnedAgentProcess } from "./supervisor/spawn.agent.process"
+import { SpawnedAgentProcess } from "./supervisor/models"
 
 const tempDirs: string[] = []
 const fakeProcesses: Array<{ kill: () => void }> = []
 
 const createRepository = (agentId: "cursor" | "opencode" = "cursor") => ({
-  list: () => [
-    { id: agentId, enabled: true, path: "/fake/agent", args: ["acp"] },
-  ],
+  list: () => [{ id: agentId, enabled: true, path: "/fake/agent", args: ["acp"] }],
 })
 
 const createTempWorkspace = async () => {
@@ -21,11 +19,12 @@ const createTempWorkspace = async () => {
   return dir
 }
 
-const parseJsonRpcLine = (line: string) => JSON.parse(line.trim()) as {
-  id?: number
-  result?: unknown
-  error?: { code: number; message: string }
-}
+const parseJsonRpcLine = (line: string) =>
+  JSON.parse(line.trim()) as {
+    id?: number
+    result?: unknown
+    error?: { code: number; message: string }
+  }
 
 const waitForResponse = async (responses: string[], id: number, timeoutMs = 5000) => {
   const started = Date.now()
@@ -195,7 +194,7 @@ describe("ACP client handlers integration", () => {
       workspaceRoot: workspace,
     })
 
-    const createResponse = await waitForResponse(responses, 1003) as {
+    const createResponse = (await waitForResponse(responses, 1003)) as {
       id: number
       result: { terminalId: string }
     }

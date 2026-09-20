@@ -12,7 +12,7 @@ import {
   UpdateAgentSettingsBodySchema,
 } from "contracts/http/agent-settings"
 import { AuthBroker } from "../agent/auth/broker"
-import { AcpSupervisor } from "../acp/supervisor/models"
+import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
 import { agentAdvertisesSessionList } from "../session/session.acp.ready"
 import { wireAgentCapabilities } from "./capabilities.wire"
 import {

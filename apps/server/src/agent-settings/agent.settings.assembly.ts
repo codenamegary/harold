@@ -1,12 +1,10 @@
 import { FastifyInstance } from "fastify"
 import { AgentDatabase } from "../persistence/database"
 import { ensureCatalogAgentSettingsRows } from "../acp/catalog/ensure.catalog.agent.settings"
-import {
-  probePresence,
-} from "../acp/catalog/probe.presence"
+import { probePresence } from "../acp/catalog/probe.presence"
 import { PresenceProbeContext } from "../acp/catalog/agent.profile.override"
 import { AuthBroker } from "../agent/auth/broker"
-import { AcpSupervisor } from "../acp/supervisor/models"
+import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
 import {
   makeDeleteAgentSettingsRow,
   makeFindAgentSettingsRow,
@@ -17,10 +15,7 @@ import {
 import { makeAgentSettingsView } from "./agent.settings.view"
 import { makeListAgentSettings, ListAgentSettings } from "./agent.settings.list.usecase"
 import { makeHasAgentId, HasAgentId } from "./agent.settings.has.agent.id.usecase"
-import {
-  makeGetSpawnSnapshot,
-  GetSpawnSnapshot,
-} from "./agent.settings.get.spawn.snapshot.usecase"
+import { makeGetSpawnSnapshot, GetSpawnSnapshot } from "./agent.settings.get.spawn.snapshot.usecase"
 import { makeDetectAgentPath } from "./agent.settings.detect.path.usecase"
 import { makeCreateCustomAgent, CreateCustomAgent } from "./agent.settings.create.custom.usecase"
 import { makeUpdateAgentSettings } from "./agent.settings.update.usecase"
@@ -28,16 +23,9 @@ import { makeRemoveAgent } from "./agent.settings.remove.usecase"
 import { makeDetectImportableAgents } from "./agent.settings.import.detect.usecase"
 import { makeApplyImportedAgents } from "./agent.settings.import.apply.usecase"
 import { registerAgentSettingsRoutes } from "./agent.settings.routes"
-import {
-  defaultAcpRegistryUrl,
-  FetchRegistryFn,
-  ProbeAgentPresence,
-} from "./agent.settings.ports"
+import { defaultAcpRegistryUrl, FetchRegistryFn, ProbeAgentPresence } from "./agent.settings.ports"
 import { WhichFn } from "./resolve-agent-path"
-import {
-  validateExecutablePath,
-  ValidateExecutablePathFn,
-} from "./validate-agent-path"
+import { validateExecutablePath, ValidateExecutablePathFn } from "./validate-agent-path"
 
 export type AssembleAgentSettingsSliceDeps = Readonly<{
   database: AgentDatabase

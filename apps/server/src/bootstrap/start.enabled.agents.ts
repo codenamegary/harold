@@ -1,5 +1,5 @@
 import { AgentId } from "contracts/http/agent-settings"
-import { AcpSupervisor } from "../acp/supervisor/models"
+import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
 import { AgentSettingsSlice } from "../agent-settings/agent.settings.assembly"
 
 export type StartEnabledAgentsLog = {
