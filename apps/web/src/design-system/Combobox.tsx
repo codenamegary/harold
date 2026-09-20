@@ -60,21 +60,15 @@ type OptionRowProps = {
   deletingOptionValue: string | null
 }
 
-const OptionRow: React.FC<OptionRowProps> = ({
-  option,
-  onDeleteOption,
-  deletingOptionValue,
-}) => {
+const OptionRow: React.FC<OptionRowProps> = ({ option, onDeleteOption, deletingOptionValue }) => {
   if (option.presentation === "button") {
     return (
       <span className="flex w-full flex-col gap-1">
-        <span className="flex w-full items-center justify-center rounded-[7px] border border-line-strong bg-panel-2 px-3.5 py-2 text-sm font-semibold text-body group-data-focus/option:border-line-hover-strong group-data-focus/option:bg-hover-surface-strong group-data-focus/option:text-white">
+        <span className="flex w-full items-center justify-center rounded-md border border-line-strong bg-panel-2 px-3.5 py-2 text-sm font-semibold text-body group-data-focus/option:border-line-hover-strong group-data-focus/option:bg-panel-elevated group-data-focus/option:text-white">
           {option.label}
         </span>
         {option.description !== undefined ? (
-          <span className="block text-center font-mono text-2xs text-dim">
-            {option.description}
-          </span>
+          <span className="block text-center font-mono text-xs text-dim">{option.description}</span>
         ) : null}
       </span>
     )
@@ -157,7 +151,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
 
   if (variant === "title") {
     const displayLabel = selected?.label ?? placeholder
-    const titleShellClassName = `relative min-w-[180px] max-w-full ${
+    const titleShellClassName = `relative min-w-45 max-w-full ${
       disabled ? "cursor-not-allowed opacity-50" : ""
     }`
 
@@ -189,11 +183,11 @@ export const Combobox: React.FC<ComboboxProps> = ({
                 aria-hidden
                 className="grid size-8 shrink-0 place-items-center rounded text-dim"
               >
-                <ChevronDown className="size-5 stroke-[2.25]" />
+                <ChevronDown className="size-5 stroke-2" />
               </span>
             </ListboxButton>
 
-            <ListboxOptions className="absolute top-full left-0 z-50 mt-1.5 max-h-60 min-w-[280px] w-max overflow-auto rounded-md border border-line bg-panel-elevated py-1.5 shadow-lg empty:invisible">
+            <ListboxOptions className="absolute top-full left-0 z-50 mt-1.5 max-h-60 min-w-70 w-max overflow-auto rounded-md border border-line bg-panel-elevated py-1.5 shadow-lg empty:invisible">
               {options.length === 0 ? (
                 <div className="px-3.5 py-2.5 text-sm text-dim">{emptyMessage}</div>
               ) : (
@@ -249,7 +243,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
       >
         <div className={shellClassName}>
           {label !== undefined ? (
-            <span className="mb-1.5 block font-mono text-2xs text-label">{label}</span>
+            <span className="mb-1.5 block font-mono text-xs text-muted">{label}</span>
           ) : null}
           <div className="flex items-center gap-1.5">
             <ComboboxInput

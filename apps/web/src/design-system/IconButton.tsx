@@ -19,7 +19,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
       type="button"
       disabled={disabled}
       aria-disabled={ariaDisabled}
-      className={`grid size-[34px] place-items-center rounded-[7px] border border-line bg-surface text-icon cursor-pointer hover:border-line-hover hover:bg-hover-surface hover:text-slate-200 ${disabledClasses} ${className}`}
+      className={`grid size-8.5 place-items-center rounded-md border border-line bg-surface text-body-soft cursor-pointer hover:border-line-hover hover:bg-hover-surface hover:text-input ${disabledClasses} ${className}`}
       {...props}
     >
       {children}

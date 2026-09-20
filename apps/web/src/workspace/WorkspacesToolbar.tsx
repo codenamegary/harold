@@ -37,8 +37,8 @@ export const WorkspacesToolbar: React.FC = () => {
   }
 
   return (
-    <div className="mb-[14px] flex justify-between gap-2 max-[640px]:gap-2">
-      <label className="flex h-9 w-[260px] max-[640px]:min-w-0 max-[640px]:flex-1 items-center gap-2 rounded-[7px] border border-line bg-[#0c0f14] px-[11px] text-dim">
+    <div className="mb-3.5 flex justify-between gap-2 max-[640px]:gap-2">
+      <label className="flex h-9 w-65 max-[640px]:min-w-0 max-[640px]:flex-1 items-center gap-2 rounded-md border border-line bg-metric-to px-3 text-dim">
         <Search aria-hidden className="size-4" />
         <TextInput
           aria-label="Search workspaces"
@@ -52,7 +52,7 @@ export const WorkspacesToolbar: React.FC = () => {
       </label>
       <div
         aria-label="Workspace status filters"
-        className="rounded-[7px] border border-line bg-[#0d1015] p-[3px]"
+        className="rounded-md border border-line bg-panel p-1"
         role="group"
       >
         {filterOptions.map((option) => {
@@ -64,10 +64,8 @@ export const WorkspacesToolbar: React.FC = () => {
               type="button"
               aria-pressed={isActive}
               onClick={() => setStateFilter(option.value)}
-              className={`min-h-7 rounded-[5px] border-0 px-3 text-xs ${
-                isActive
-                  ? "bg-[#1b2029] text-[#c5ccd5]"
-                  : "bg-transparent text-dim"
+              className={`min-h-7 rounded-sm border-0 px-3 text-xs ${
+                isActive ? "bg-nav-active-ring text-input" : "bg-transparent text-dim"
               }`}
             >
               {option.label}

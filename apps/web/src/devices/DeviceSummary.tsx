@@ -30,18 +30,16 @@ export const DeviceSummary: React.FC<DeviceSummaryProps> = ({ devices, isLoading
     : `${onlineCount} ${pluralizeDevice(onlineCount)} online`
 
   return (
-    <div className="mb-[13px] grid grid-cols-[1.5fr_1fr] overflow-hidden rounded-lg border border-line-soft bg-panel max-[820px]:grid-cols-1">
-      <div className="flex min-h-[65px] items-center gap-[9px] border-r border-line-soft px-[17px] text-sm max-[820px]:border-r-0 max-[820px]:border-b">
+    <div className="mb-3.5 grid grid-cols-[1.5fr_1fr] overflow-hidden rounded-lg border border-line-soft bg-panel max-[820px]:grid-cols-1">
+      <div className="flex min-h-16.5 items-center gap-2.5 border-r border-line-soft px-4 text-sm max-[820px]:border-r-0 max-[820px]:border-b">
         <span
           aria-hidden
-          className={`inline-block size-[7px] shrink-0 rounded-full ${onlineCount > 0 ? "bg-lime" : "bg-offline"}`}
+          className={`inline-block size-2 shrink-0 rounded-full ${onlineCount > 0 ? "bg-lime" : "bg-offline"}`}
         />
         <strong>{onlineLabel}</strong>
-        <small className="text-xs text-dim">
-          of {devices.length} paired
-        </small>
+        <small className="text-xs text-dim">of {devices.length} paired</small>
       </div>
-      <div className="flex min-h-[65px] flex-col items-start justify-center gap-[5px] px-[17px] text-sm">
+      <div className="flex min-h-16.5 flex-col items-start justify-center gap-1.5 px-4 text-sm">
         <span className="text-xs text-dim">Last new pairing</span>
         <strong>{isLoading ? "Loading…" : lastPairingLabel}</strong>
       </div>

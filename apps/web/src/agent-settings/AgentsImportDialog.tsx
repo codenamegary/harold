@@ -29,7 +29,9 @@ export const AgentsImportDialog: React.FC<AgentsImportDialogProps> = ({
 
     setSelectedIds(
       new Set(
-        candidates.filter((candidate) => !candidate.alreadyEnabled).map((candidate) => candidate.id),
+        candidates
+          .filter((candidate) => !candidate.alreadyEnabled)
+          .map((candidate) => candidate.id),
       ),
     )
   }, [open, candidates])
@@ -85,12 +87,12 @@ export const AgentsImportDialog: React.FC<AgentsImportDialogProps> = ({
         </>
       }
     >
-      <p className="m-0 mb-4 text-sm text-muted">
+      <p className="m-0 mb-4 text-base text-muted">
         Present agents from the live registry. Nothing is enabled until you confirm.
       </p>
 
       {candidates.length === 0 ? (
-        <p className="m-0 text-sm text-muted">No present agents found to import.</p>
+        <p className="m-0 text-base text-muted">No present agents found to import.</p>
       ) : (
         <div className="grid gap-3">
           <div className="flex items-center justify-between gap-3">
@@ -102,9 +104,7 @@ export const AgentsImportDialog: React.FC<AgentsImportDialogProps> = ({
             >
               {allSelected ? "Clear all" : "Select all"}
             </button>
-            <span className="font-mono text-2xs text-dim">
-              {selectedIds.size} selected
-            </span>
+            <span className="font-mono text-xs text-dim">{selectedIds.size} selected</span>
           </div>
 
           <ul className="m-0 max-h-72 list-none overflow-y-auto p-0">
@@ -126,8 +126,8 @@ export const AgentsImportDialog: React.FC<AgentsImportDialogProps> = ({
                     onChange={() => toggleOne(candidate.id)}
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold">{candidate.displayName}</div>
-                    <div className="font-mono text-2xs text-dim">{candidate.id}</div>
+                    <div className="text-base font-semibold">{candidate.displayName}</div>
+                    <div className="font-mono text-xs text-dim">{candidate.id}</div>
                     {candidate.alreadyEnabled ? (
                       <div className="mt-1 text-xs text-muted">Already enabled</div>
                     ) : null}
@@ -143,7 +143,7 @@ export const AgentsImportDialog: React.FC<AgentsImportDialogProps> = ({
       )}
 
       {errorMessage ? (
-        <p className="m-0 mt-3 text-sm text-red-400" role="alert">
+        <p className="m-0 mt-3 text-base text-danger" role="alert">
           {errorMessage}
         </p>
       ) : null}

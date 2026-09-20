@@ -11,7 +11,7 @@ type DetailRowProps = {
 
 const DetailRow: React.FC<DetailRowProps> = ({ label, value }) => (
   <div className="flex items-center justify-between gap-4 border-t border-line-soft py-3.5 first:border-t-0 first:pt-0">
-    <span className="text-sm text-muted">{label}</span>
+    <span className="text-base text-muted">{label}</span>
     <code className="font-mono text-xs text-body">{value}</code>
   </div>
 )
@@ -21,7 +21,7 @@ export const ServerDetailsPanel: React.FC = () => {
   const details = serverDetailsDisplayByPhase(connection)
 
   return (
-    <Panel aria-label="Server details" className="p-[22px]">
+    <Panel aria-label="Server details" className="p-5.5">
       <h3 className="m-0 mb-1 text-lg font-semibold">Server details</h3>
       <DetailRow label="ACP endpoint" value={details.endpoint} />
       <DetailRow label="Runtime version" value={details.runtimeVersion} />

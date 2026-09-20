@@ -1,27 +1,16 @@
 import React from "react"
-import {
-  CaretRange,
-  Plugin,
-  rangeTouches,
-  Token,
-} from "../../design-system/prompt.input.model"
+import { CaretRange, Plugin, rangeTouches, Token } from "../../design-system/prompt.input.model"
 import { AvailableCommand } from "../live/commands.available"
 import { CommandMenu } from "./CommandMenu"
 import { commandQuery, filterCommands } from "./commands.filter"
-import {
-  chatTokenKind,
-  looksComplete,
-  matchCommand,
-  matchMention,
-} from "./token.match"
+import { chatTokenKind, looksComplete, matchCommand, matchMention } from "./token.match"
 
 const MENTION_CHIP_CHARS = 8
 
-const commandChipClass =
-  "cursor-text rounded-[3px] bg-hover-surface px-0.5 text-lime"
+const commandChipClass = "cursor-text rounded-sm bg-hover-surface px-0.5 text-lime"
 
 const mentionChipClass =
-  "cursor-text rounded-[3px] border border-line-soft bg-hover-surface px-0.5 text-violet"
+  "cursor-text rounded-sm border border-line-soft bg-hover-surface px-0.5 text-violet"
 
 const mentionLabel = (value: string): string => {
   if (value.length <= MENTION_CHIP_CHARS) {
@@ -41,8 +30,7 @@ type PaintChipParams = {
 }
 
 const paintChip = (params: PaintChipParams): React.ReactNode => {
-  const { token, selection, raw, chars, className, collapsedText, title } =
-    params
+  const { token, selection, raw, chars, className, collapsedText, title } = params
   if (!looksComplete(token, raw)) {
     return chars
   }
@@ -50,11 +38,7 @@ const paintChip = (params: PaintChipParams): React.ReactNode => {
     return <span className={className}>{chars}</span>
   }
   return (
-    <span
-      data-token-start={token.start}
-      className={className}
-      title={title}
-    >
+    <span data-token-start={token.start} className={className} title={title}>
       {collapsedText}
     </span>
   )
@@ -65,9 +49,7 @@ const textPlugin: Plugin = {
   render: ({ chars }) => chars,
 }
 
-const createCommandPlugin = (
-  commands: ReadonlyArray<AvailableCommand>,
-): Plugin => ({
+const createCommandPlugin = (commands: ReadonlyArray<AvailableCommand>): Plugin => ({
   kind: chatTokenKind.command,
   match: matchCommand,
   render: ({ token, selection, raw, chars }) =>

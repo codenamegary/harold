@@ -8,6 +8,6 @@ describe("FieldLabel", () => {
 
     const label = getByText("Workspace name")
     expect(label).toHaveAttribute("for", "workspace-name")
-    expect(label).toHaveClass("text-label")
+    expect(label).toHaveClass("text-muted")
   })
 })

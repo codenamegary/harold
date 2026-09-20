@@ -2,10 +2,10 @@ import React from "react"
 import { SquareTerminal } from "lucide-react"
 
 export const WelcomeMessage: React.FC = () => (
-  <div className="mx-auto my-[70px] max-w-[430px] text-center max-[820px]:my-10">
+  <div className="mx-auto my-17.5 max-w-107.5 text-center max-[820px]:my-10">
     <div
       aria-hidden
-      className="mx-auto mb-[15px] grid size-[42px] place-items-center rounded-[10px] border border-[#2b333f] bg-[#14181f] text-lime"
+      className="mx-auto mb-4 grid size-10.5 place-items-center rounded-lg border border-line-input bg-surface-raised text-lime"
     >
       <SquareTerminal className="size-5" />
     </div>

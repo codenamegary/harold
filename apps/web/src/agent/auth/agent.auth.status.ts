@@ -9,7 +9,7 @@ export const agentAuthStatusLabels: Record<AgentAuthStatus, string> = {
 
 export const agentAuthStatusTextClassName: Record<AgentAuthStatus, string> = {
   unknown: "text-dim",
-  needs_auth: "text-amber-200",
+  needs_auth: "text-amber",
   authenticated: "text-lime",
-  error: "text-red-400",
+  error: "text-danger",
 }

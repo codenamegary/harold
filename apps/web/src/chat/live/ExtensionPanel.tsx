@@ -21,11 +21,7 @@ const encodeParams = (params: unknown): string => {
   }
 }
 
-export const ExtensionPanel: React.FC<ExtensionPanelProps> = ({
-  request,
-  onReply,
-  onSkip,
-}) => {
+export const ExtensionPanel: React.FC<ExtensionPanelProps> = ({ request, onReply, onSkip }) => {
   const [resultText, setResultText] = useState("{}")
   const [parseError, setParseError] = useState<string | null>(null)
 
@@ -40,11 +36,11 @@ export const ExtensionPanel: React.FC<ExtensionPanelProps> = ({
   }
 
   return (
-    <div className="mb-3 rounded-[9px] border border-[#3a3220] bg-[#17130d] px-4 py-3">
-      <p className="mb-2 text-sm text-body">
+    <div className="mb-3 rounded-lg border border-amber/25 bg-amber/5 px-4 py-3">
+      <p className="mb-2 text-base text-body">
         Agent request <span className="font-mono text-body-soft">{request.method}</span>
       </p>
-      <pre className="mb-3 max-h-40 overflow-auto rounded-md border border-[#4a4030] bg-[#0a0d12] px-3 py-2 font-mono text-2xs text-dim">
+      <pre className="mb-3 max-h-40 overflow-auto rounded-md border border-amber/35 bg-surface-deep px-3 py-2 font-mono text-xs text-dim">
         {encodeParams(request.params)}
       </pre>
       <label className="mb-2 block text-xs text-dim">
@@ -57,12 +53,10 @@ export const ExtensionPanel: React.FC<ExtensionPanelProps> = ({
             setParseError(null)
           }}
           rows={3}
-          className="mt-1 block w-full rounded-md border border-[#4a4030] bg-[#0a0d12] px-3 py-2 font-mono text-xs text-body outline-none"
+          className="mt-1 block w-full rounded-md border border-amber/35 bg-surface-deep px-3 py-2 font-mono text-xs text-body outline-none"
         />
       </label>
-      {parseError !== null ? (
-        <p className="mb-2 text-xs text-danger">{parseError}</p>
-      ) : null}
+      {parseError !== null ? <p className="mb-2 text-xs text-danger">{parseError}</p> : null}
       <div className="flex flex-wrap gap-2">
         <Button type="button" onClick={handleReply}>
           Send reply

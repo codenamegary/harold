@@ -7,7 +7,7 @@ describe("IconButton", () => {
     const { getByRole } = render(<IconButton aria-label="Settings">⚙</IconButton>)
 
     const button = getByRole("button", { name: "Settings" })
-    expect(button).toHaveClass("size-[34px]")
+    expect(button).toHaveClass("size-8.5")
     expect(button).toHaveClass("border-line")
   })
 

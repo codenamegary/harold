@@ -94,11 +94,11 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
         </>
       }
     >
-      <p className="m-0 mb-4 text-sm text-body-soft">
+      <p className="m-0 mb-4 text-base text-body-soft">
         Choose a workspace and agent to start the session.
       </p>
       {error !== null && error !== "" ? (
-        <p className="m-0 mb-4 text-sm text-danger" role="alert">
+        <p className="m-0 mb-4 text-base text-danger" role="alert">
           {error}
         </p>
       ) : null}

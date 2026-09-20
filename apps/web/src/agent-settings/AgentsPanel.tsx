@@ -33,9 +33,7 @@ export const AgentsPanel: React.FC = () => {
   const applyImportMutation = useApplyAgentImportMutation()
   const agents = agentSettingsQuery.data?.items ?? []
   const controlsDisabled =
-    connection.phase === "unreachable" ||
-    agentSettingsQuery.isLoading ||
-    agentSettingsQuery.isError
+    connection.phase === "unreachable" || agentSettingsQuery.isLoading || agentSettingsQuery.isError
 
   const [searchQuery, setSearchQuery] = useState("")
   const [importOpen, setImportOpen] = useState(false)
@@ -56,7 +54,7 @@ export const AgentsPanel: React.FC = () => {
       },
       onError: (error) => {
         const message = isAgentImportDetectError(error)
-          ? error.problem.detail ?? error.message
+          ? (error.problem.detail ?? error.message)
           : "Could not detect agents from the live registry."
         setImportError(message)
       },
@@ -92,7 +90,7 @@ export const AgentsPanel: React.FC = () => {
         },
         onError: (error) => {
           const message = isAgentImportApplyError(error)
-            ? error.problem.detail ?? error.message
+            ? (error.problem.detail ?? error.message)
             : "Could not enable selected agents."
           setImportError(message)
         },
@@ -109,7 +107,7 @@ export const AgentsPanel: React.FC = () => {
       },
       onError: (error) => {
         const message = isCreateCustomAgentError(error)
-          ? error.problem.detail ?? error.message
+          ? (error.problem.detail ?? error.message)
           : "Could not create a custom agent."
         setCreateError(message)
       },
@@ -117,18 +115,16 @@ export const AgentsPanel: React.FC = () => {
   }
 
   return (
-    <Panel className="mb-[25px] p-[22px]">
-      <div className="mb-[22px] flex flex-wrap items-center justify-between gap-4">
+    <Panel className="mb-6.5 p-5.5">
+      <div className="mb-5.5 flex flex-wrap items-center justify-between gap-4">
         <h3 className="m-0 text-lg font-semibold">Agents</h3>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             aria-label="Refresh agents"
             aria-busy={agentSettingsQuery.isFetching ? "true" : undefined}
-            disabled={
-              connection.phase === "unreachable" || agentSettingsQuery.isFetching
-            }
-            className="grid size-8 shrink-0 place-items-center rounded-[7px] border border-line-strong bg-panel-2 text-dim transition-colors hover:border-line-hover-strong hover:bg-hover-surface-strong hover:text-lime cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={connection.phase === "unreachable" || agentSettingsQuery.isFetching}
+            className="grid size-8 shrink-0 place-items-center rounded-md border border-line-strong bg-panel-2 text-dim transition-colors hover:border-line-hover-strong hover:bg-panel-elevated hover:text-lime cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => {
               void agentSettingsQuery.refetch()
             }}
@@ -159,19 +155,19 @@ export const AgentsPanel: React.FC = () => {
       </div>
 
       {agentSettingsQuery.isError ? (
-        <p className="m-0 mb-3.5 text-sm text-red-400" role="alert">
+        <p className="m-0 mb-3.5 text-base text-danger" role="alert">
           Could not load agent settings.
         </p>
       ) : null}
 
       {createError ? (
-        <p className="m-0 mb-3.5 text-sm text-red-400" role="alert">
+        <p className="m-0 mb-3.5 text-base text-danger" role="alert">
           {createError}
         </p>
       ) : null}
 
       {importError && !importOpen ? (
-        <p className="m-0 mb-3.5 text-sm text-red-400" role="alert">
+        <p className="m-0 mb-3.5 text-base text-danger" role="alert">
           {importError}
         </p>
       ) : null}

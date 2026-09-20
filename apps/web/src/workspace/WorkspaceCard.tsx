@@ -40,11 +40,7 @@ export const WorkspaceCard: React.FC<WorkspaceCardProps> = ({ workspace }) => {
 
   return (
     <>
-      <Panel
-        aria-label={`${workspace.name} workspace`}
-        className="p-4"
-        role="article"
-      >
+      <Panel aria-label={`${workspace.name} workspace`} className="p-4" role="article">
         <div className="mb-2 flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <StatusDot
@@ -66,7 +62,7 @@ export const WorkspaceCard: React.FC<WorkspaceCardProps> = ({ workspace }) => {
             <button
               type="button"
               aria-label={`Unregister ${workspace.name}`}
-              className="flex size-5 shrink-0 items-center justify-center self-center rounded text-base leading-none text-dim hover:text-red-400"
+              className="flex size-5 shrink-0 items-center justify-center self-center rounded text-base leading-none text-dim hover:text-danger"
               onClick={() => setIsUnregisterModalOpen(true)}
             >
               <X aria-hidden className="size-3.5" />

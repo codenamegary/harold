@@ -28,16 +28,12 @@ export const WorkspaceCardGrid: React.FC<WorkspaceCardGridProps> = ({
   onLoadMore,
 }) => {
   if (isLoading) {
-    return (
-      <Panel className="col-span-full p-8 text-sm text-[#697381]">
-        Loading workspaces…
-      </Panel>
-    )
+    return <Panel className="col-span-full p-8 text-base text-muted">Loading workspaces…</Panel>
   }
 
   if (isError) {
     return (
-      <Panel className="col-span-full p-8 text-sm text-red-400" role="alert">
+      <Panel className="col-span-full p-8 text-base text-danger" role="alert">
         Could not load workspaces.
       </Panel>
     )
@@ -45,7 +41,7 @@ export const WorkspaceCardGrid: React.FC<WorkspaceCardGridProps> = ({
 
   if (workspaces.length === 0) {
     return (
-      <Panel className="col-span-full p-8 text-sm text-[#697381]">
+      <Panel className="col-span-full p-8 text-base text-muted">
         {hasActiveFilters
           ? "No workspaces match your search or filters."
           : "No workspaces registered yet."}
@@ -61,7 +57,7 @@ export const WorkspaceCardGrid: React.FC<WorkspaceCardGridProps> = ({
         ))}
       </div>
       <div className="mt-4 flex items-center justify-between gap-3">
-        <p className="m-0 text-sm text-dim">
+        <p className="m-0 text-base text-dim">
           {totalCount === undefined
             ? `${loadedCount} workspaces`
             : `${loadedCount} of ${totalCount} workspaces`}

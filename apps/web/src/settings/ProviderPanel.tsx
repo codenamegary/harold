@@ -1,10 +1,6 @@
 import React, { useState } from "react"
 import { CircleHelp, Save, Trash2 } from "lucide-react"
-import {
-  ActionField,
-  ActionTextInput,
-  FieldActionButton,
-} from "../design-system/ActionTextInput"
+import { ActionField, ActionTextInput, FieldActionButton } from "../design-system/ActionTextInput"
 import { Button } from "../design-system/Button"
 import { Modal } from "../design-system/Modal"
 import { Panel } from "../design-system/Panel"
@@ -52,11 +48,11 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
 }) => (
   <section
     aria-disabled={disabled ? "true" : undefined}
-    className={`rounded-[9px] border p-5 ${disabled ? "border-line-soft bg-[#0a0c10] opacity-55" : "border-lime/35 bg-[linear-gradient(145deg,rgba(182,243,107,0.04),#0b0e13)]"}`}
+    className={`rounded-lg border p-5 ${disabled ? "border-line-soft bg-surface-deep opacity-55" : "border-lime/35 bg-[linear-gradient(145deg,color-mix(in_srgb,var(--color-lime)_4%,transparent),var(--color-surface-deep))]"}`}
   >
     <div className="mb-3.5 flex items-center justify-between gap-3">
       <div className="flex min-w-0 items-center gap-2.5">
-        <span className="grid size-9 shrink-0 place-items-center rounded-[7px] border border-line bg-panel-2 text-muted">
+        <span className="grid size-9 shrink-0 place-items-center rounded-md border border-line bg-panel-2 text-muted">
           {icon}
         </span>
         <h4 className="m-0 text-base font-semibold">{title}</h4>
@@ -103,7 +99,7 @@ const RemoveRootModal: React.FC<RemoveRootModalProps> = ({
           Cancel
         </Button>
         <Button
-          className="border-red-500/40 bg-red-500/15 text-red-300 hover:border-red-400 hover:bg-red-500/25 hover:text-red-200"
+          className="border-danger/40 bg-danger/15 text-danger hover:border-danger/60 hover:bg-danger/25 hover:text-danger/90"
           disabled={pending}
           onClick={onConfirm}
         >
@@ -112,12 +108,12 @@ const RemoveRootModal: React.FC<RemoveRootModalProps> = ({
       </>
     }
   >
-    <p className="m-0 text-sm text-body-soft">
-      Removing <code className="text-[#b8c0cb]">{rootPath}</code> unregisters workspaces under
-      this root. Workspace files are not deleted.
+    <p className="m-0 text-base text-body-soft">
+      Removing <code className="text-body">{rootPath}</code> unregisters workspaces under this root.
+      Workspace files are not deleted.
     </p>
     {errorMessage ? (
-      <p className="mt-4 text-sm text-red-400" role="alert">
+      <p className="mt-4 text-base text-danger" role="alert">
         {errorMessage}
       </p>
     ) : null}
@@ -156,9 +152,7 @@ const LocalFilesystemProviderCard: React.FC = () => {
       setDraftPath("")
     } catch (error: unknown) {
       setFormError(
-        isRuntimeSettingsUpdateError(error)
-          ? error.message
-          : "Could not add allowed root.",
+        isRuntimeSettingsUpdateError(error) ? error.message : "Could not add allowed root.",
       )
     }
   }
@@ -167,22 +161,15 @@ const LocalFilesystemProviderCard: React.FC = () => {
     setRemoveError(undefined)
 
     try {
-      await saveRoots(
-        allowedRoots.filter((allowedRoot) => allowedRoot !== root),
-      )
+      await saveRoots(allowedRoots.filter((allowedRoot) => allowedRoot !== root))
     } catch (error: unknown) {
-      if (
-        isRuntimeSettingsUpdateError(error) &&
-        error.problem?.forceDeleteAvailable === true
-      ) {
+      if (isRuntimeSettingsUpdateError(error) && error.problem?.forceDeleteAvailable === true) {
         setConfirmRemoveRoot(root)
         return
       }
 
       setRemoveError(
-        isRuntimeSettingsUpdateError(error)
-          ? error.message
-          : "Could not remove allowed root.",
+        isRuntimeSettingsUpdateError(error) ? error.message : "Could not remove allowed root.",
       )
     }
   }
@@ -202,9 +189,7 @@ const LocalFilesystemProviderCard: React.FC = () => {
       setConfirmRemoveRoot(undefined)
     } catch (error: unknown) {
       setRemoveError(
-        isRuntimeSettingsUpdateError(error)
-          ? error.message
-          : "Could not remove allowed root.",
+        isRuntimeSettingsUpdateError(error) ? error.message : "Could not remove allowed root.",
       )
     }
   }
@@ -301,12 +286,10 @@ const LocalFilesystemProviderCard: React.FC = () => {
 }
 
 export const ProviderPanel: React.FC = () => (
-  <Panel className="mb-[25px] p-[22px]">
-    <div className="mb-[22px]">
+  <Panel className="mb-6.5 p-5.5">
+    <div className="mb-5.5">
       <h3 className="m-0 text-lg font-semibold">Workspace provider</h3>
-      <p className="m-0 mt-2 max-w-2xl text-sm text-muted">
-        Control where workspaces live.
-      </p>
+      <p className="m-0 mt-2 max-w-2xl text-base text-muted">Control where workspaces live.</p>
     </div>
 
     <div className="grid gap-3.5 lg:grid-cols-3">
@@ -325,10 +308,10 @@ export const ProviderPanel: React.FC = () => (
         }
       >
         <div className="mt-4 flex flex-wrap gap-2">
-          <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
+          <span className="rounded-sm border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-xs text-dim">
             Repository sync
           </span>
-          <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
+          <span className="rounded-sm border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-xs text-dim">
             Pull request context
           </span>
         </div>
@@ -347,10 +330,10 @@ export const ProviderPanel: React.FC = () => (
         }
       >
         <div className="mt-4 flex flex-wrap gap-2">
-          <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
+          <span className="rounded-sm border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-xs text-dim">
             Project sync
           </span>
-          <span className="rounded-[5px] border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-2xs text-dim">
+          <span className="rounded-sm border border-line-soft bg-panel-elevated px-2 py-1 font-mono text-xs text-dim">
             Merge request context
           </span>
         </div>

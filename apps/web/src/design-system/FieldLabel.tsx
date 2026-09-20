@@ -4,15 +4,8 @@ type FieldLabelProps = {
   children: ReactNode
 } & ComponentPropsWithoutRef<"label">
 
-export const FieldLabel: React.FC<FieldLabelProps> = ({
-  children,
-  className = "",
-  ...props
-}) => (
-  <label
-    className={`mt-[17px] mb-[7px] block text-2xs text-label ${className}`}
-    {...props}
-  >
+export const FieldLabel: React.FC<FieldLabelProps> = ({ children, className = "", ...props }) => (
+  <label className={`mt-4.5 mb-2 block text-xs text-muted ${className}`} {...props}>
     {children}
   </label>
 )

@@ -44,31 +44,29 @@ export const AppShell: React.FC = () => {
     connection.phase === "online"
       ? `${connection.status.bindAddress}:${connection.status.port}`
       : null
-  const sidebarVersion =
-    connection.phase === "online" ? connection.status.version : "—"
+  const sidebarVersion = connection.phase === "online" ? connection.status.version : "—"
 
   const toggleSidebar = () => setSidebarOpen((open) => !open)
-  const isImmersivePage =
-    pathname === "/chat" || pathname === "/sessions" || pathname === "/logs"
+  const isImmersivePage = pathname === "/chat" || pathname === "/sessions" || pathname === "/logs"
 
   return (
     <div className="min-h-screen">
       <div
         id="toast-region"
-        className="fixed right-[18px] bottom-[18px] z-[100] flex flex-col gap-2"
+        className="fixed right-4.5 bottom-4.5 z-50 flex flex-col gap-2"
         aria-live="polite"
       />
 
       <aside
         aria-label="Sidebar"
         data-sidebar-open={sidebarOpen ? "true" : "false"}
-        className={`fixed inset-y-0 left-0 z-40 flex w-[224px] flex-col border-r border-line-soft bg-[#0a0c10] px-3.5 pt-[22px] pb-4 transition-transform duration-[220ms] ease-out max-[820px]:shadow-[12px_0_50px_rgba(0,0,0,0.4)] max-[820px]:-translate-x-full ${sidebarOpen ? "max-[820px]:translate-x-0" : ""}`}
+        className={`fixed inset-y-0 left-0 z-40 flex w-56 flex-col border-r border-line-soft bg-surface-deep px-3.5 pt-5.5 pb-4 transition-transform duration-200 ease-out max-[820px]:shadow-drawer max-[820px]:-translate-x-full ${sidebarOpen ? "max-[820px]:translate-x-0" : ""}`}
       >
-        <div className="flex items-center gap-[11px] px-2 pb-[26px]">
+        <div className="flex items-center gap-3 px-2 pb-6.5">
           <AppMark />
           <div>
             <div className="font-bold leading-tight tracking-tight">Agent Server</div>
-            <div className="mt-[3px] font-mono text-xs uppercase tracking-[0.08em] text-dim">
+            <div className="mt-1 font-mono text-xs uppercase tracking-widest text-dim">
               Operator console
             </div>
           </div>
@@ -90,16 +88,16 @@ export const AppShell: React.FC = () => {
         </nav>
 
         <div className="mt-auto">
-          <div className="mb-2 rounded-lg border border-line-soft bg-[#0d1015] p-[11px]">
-            <div className="flex items-center gap-[7px] text-2xs text-[#bbc2cc]">
+          <div className="mb-2 rounded-lg border border-line-soft bg-panel p-3">
+            <div className="flex items-center gap-2 text-xs text-body">
               <StatusDot variant={phaseChrome.sidebarDotVariant} />
               <span>Local instance</span>
               {phaseChrome.showLiveBadge ? (
-                <span className="ml-auto font-mono text-2xs text-lime">LIVE</span>
+                <span className="ml-auto font-mono text-xs text-lime">LIVE</span>
               ) : null}
             </div>
             {phaseChrome.showLiveBadge && instanceAddress ? (
-              <code className="mt-[7px] ml-3.5 block font-mono text-2xs text-dim">
+              <code className="mt-2 ml-3.5 block font-mono text-xs text-dim">
                 {instanceAddress}
               </code>
             ) : null}
@@ -110,7 +108,7 @@ export const AppShell: React.FC = () => {
           <SidebarNavLink to="/settings" subtle icon={<Settings className="size-4.5" />}>
             Settings
           </SidebarNavLink>
-          <div className="flex justify-between px-[9px] pt-[13px] font-mono text-2xs text-[#414955]">
+          <div className="flex justify-between px-2.5 pt-3.5 font-mono text-xs text-dim">
             <span>agent-server</span>
             <span>{sidebarVersion}</span>
           </div>
@@ -118,11 +116,11 @@ export const AppShell: React.FC = () => {
       </aside>
 
       <div
-        className={`flex flex-col ml-[224px] max-[820px]:ml-0 ${
+        className={`flex flex-col ml-56 max-[820px]:ml-0 ${
           isImmersivePage ? "h-svh overflow-hidden" : "min-h-screen"
         }`}
       >
-        <header className="sticky top-0 z-30 flex h-[73px] shrink-0 items-center justify-between border-b border-line-soft bg-[rgba(8,10,13,0.89)] px-[34px] backdrop-blur-[18px] max-[820px]:justify-start max-[820px]:px-[18px]">
+        <header className="sticky top-0 z-30 flex h-18.5 shrink-0 items-center justify-between border-b border-line-soft bg-ink/90 px-8.5 backdrop-blur-lg max-[820px]:justify-start max-[820px]:px-4.5">
           <IconButton
             aria-label="Toggle navigation"
             className="mr-3 hidden max-[820px]:grid"
@@ -131,14 +129,14 @@ export const AppShell: React.FC = () => {
             <Menu aria-hidden className="size-4.5" />
           </IconButton>
           <div>
-            <div className="font-mono text-2xs leading-tight tracking-[0.12em] text-[#667080]">
+            <div className="font-mono text-xs leading-tight tracking-widest text-nav">
               {eyebrow}
             </div>
-            <h1 className="m-0 mt-[3px] text-xl font-semibold tracking-tight">{title}</h1>
+            <h1 className="m-0 mt-1 text-xl font-semibold tracking-tight">{title}</h1>
           </div>
           <div className="flex items-center gap-2 max-[820px]:ml-auto">
             <div
-              className={`flex h-8 items-center gap-[7px] rounded-[7px] border px-2.5 text-xs max-[820px]:hidden ${
+              className={`flex h-8 items-center gap-2 rounded-md border px-2.5 text-xs max-[820px]:hidden ${
                 phaseChrome.topbarAlert
                   ? "border-danger/25 bg-danger/5 text-danger"
                   : "border-line text-muted"
@@ -156,7 +154,7 @@ export const AppShell: React.FC = () => {
             <Outlet />
           </div>
         ) : (
-          <div className="mx-auto max-w-[1550px] px-[35px] py-[35px] max-[820px]:px-[18px] max-[820px]:py-[25px] max-[640px]:px-[13px] max-[640px]:py-[22px]">
+          <div className="mx-auto max-w-387.5 px-9 py-9 max-[820px]:px-4.5 max-[820px]:py-6.5 max-[640px]:px-3.5 max-[640px]:py-5.5">
             <Outlet />
           </div>
         )}

@@ -70,15 +70,15 @@ export const AgentAuthPanel: React.FC<AgentAuthPanelProps> = ({
   }
 
   const shellClassName = compact
-    ? "rounded-[9px] border border-[#3a3220] bg-[#17130d] px-4 py-3"
-    : "rounded-[9px] border border-line-soft bg-panel-elevated px-3 py-3"
+    ? "rounded-lg border border-amber/25 bg-amber/5 px-4 py-3"
+    : "rounded-lg border border-line-soft bg-panel-elevated px-3 py-3"
 
   return (
     <div className={shellClassName} aria-label={`${agentName} auth`}>
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <p className="m-0 text-2xs font-medium tracking-wide text-label">Host login</p>
+        <p className="m-0 text-xs font-medium tracking-wide text-muted">Host login</p>
         {summary.error !== null && summary.error !== "" ? (
-          <p className="m-0 text-2xs text-red-400" role="alert">
+          <p className="m-0 text-xs text-danger" role="alert">
             {summary.error}
           </p>
         ) : null}
@@ -92,8 +92,7 @@ export const AgentAuthPanel: React.FC<AgentAuthPanelProps> = ({
               step={step}
               confirmDisabled={actionMutation.isPending}
               confirming={
-                actionMutation.isPending &&
-                actionMutation.variables?.action.type === "confirm"
+                actionMutation.isPending && actionMutation.variables?.action.type === "confirm"
               }
               onConfirm={handleConfirm}
             />
@@ -101,7 +100,7 @@ export const AgentAuthPanel: React.FC<AgentAuthPanelProps> = ({
           <button
             type="button"
             disabled={actionMutation.isPending}
-            className="w-fit text-2xs font-semibold text-body-soft hover:text-lime disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-fit text-xs font-semibold text-body-soft hover:text-lime disabled:cursor-not-allowed disabled:opacity-50"
             onClick={handleCancel}
           >
             Cancel
@@ -112,7 +111,7 @@ export const AgentAuthPanel: React.FC<AgentAuthPanelProps> = ({
           <button
             type="button"
             disabled={startMutation.isPending || sessionInFlight}
-            className="rounded-md border border-[#4a4030] bg-[#221c14] px-3 py-1.5 text-sm text-body hover:bg-[#2b2419] disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md border border-amber/35 bg-amber/10 px-3 py-1.5 text-sm text-body hover:bg-amber/15 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => startMutation.mutate(agentId)}
           >
             {startMutation.isPending ? "Starting…" : "Sign in"}
@@ -121,7 +120,7 @@ export const AgentAuthPanel: React.FC<AgentAuthPanelProps> = ({
       )}
 
       {errorMessage !== null ? (
-        <p className="m-0 mt-2 text-2xs text-red-400" role="alert">
+        <p className="m-0 mt-2 text-xs text-danger" role="alert">
           {errorMessage}
         </p>
       ) : null}

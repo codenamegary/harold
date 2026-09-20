@@ -136,14 +136,16 @@ export const ConnectionTestPanel: React.FC<ConnectionTestPanelProps> = ({
     <div>
       <div className="flex items-center gap-2.5 rounded-lg border border-line-soft bg-panel-2 px-3.5 py-3">
         <StatusDot variant={statusDotForSummary(result ?? undefined, isRunning)} />
-        <code className="min-w-0 flex-1 truncate font-mono text-base text-body">{advertisedUrl}</code>
-        <span className="text-2xs text-dim max-[640px]:hidden">External endpoint</span>
+        <code className="min-w-0 flex-1 truncate font-mono text-base text-body">
+          {advertisedUrl}
+        </code>
+        <span className="text-xs text-dim max-[640px]:hidden">External endpoint</span>
         <button
           type="button"
           aria-label={isRunning ? "Refreshing connection test" : "Refresh connection test"}
           disabled={isRunning}
           onClick={runTest}
-          className="inline-flex size-9 shrink-0 items-center justify-center rounded-[7px] border border-line-strong bg-panel-2 text-body cursor-pointer hover:bg-hover-surface-strong hover:border-line-hover-strong hover:text-white disabled:cursor-not-allowed"
+          className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-line-strong bg-panel-2 text-body cursor-pointer hover:bg-panel-elevated hover:border-line-hover-strong hover:text-white disabled:cursor-not-allowed"
         >
           <RefreshCw
             aria-hidden
@@ -163,7 +165,7 @@ export const ConnectionTestPanel: React.FC<ConnectionTestPanelProps> = ({
           return (
             <div
               key={checkId}
-              className="flex items-center gap-3 rounded-lg border border-line-soft bg-[#0b0e13] px-3.5 py-3"
+              className="flex items-center gap-3 rounded-lg border border-line-soft bg-surface-deep px-3.5 py-3"
             >
               <StatusDot
                 variant={
@@ -186,7 +188,7 @@ export const ConnectionTestPanel: React.FC<ConnectionTestPanelProps> = ({
                     : (check?.message ?? "Waiting to run…")}
                 </small>
               </div>
-              <em className="text-2xs text-dim not-italic">
+              <em className="text-xs text-dim not-italic">
                 {statusLabelForCheck(check?.status, isRunning && check === undefined)}
               </em>
             </div>

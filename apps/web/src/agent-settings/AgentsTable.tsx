@@ -27,11 +27,7 @@ type DeleteMutation = UseMutationResult<
   AgentId
 >
 
-type RespawnMutation = UseMutationResult<
-  Awaited<ReturnType<typeof respawnAgent>>,
-  Error,
-  AgentId
->
+type RespawnMutation = UseMutationResult<Awaited<ReturnType<typeof respawnAgent>>, Error, AgentId>
 
 type AgentsTableProps = {
   agents: readonly AgentSettings[]
@@ -65,22 +61,22 @@ export const AgentsTable: React.FC<AgentsTableProps> = ({
   const hasMore = remainingCount > 0
 
   return (
-    <div className="overflow-x-auto rounded-[9px] border border-line-soft">
+    <div className="overflow-x-auto rounded-lg border border-line-soft">
       <table className="w-full border-collapse text-left" role="table" aria-label="Agents">
         <thead>
-          <tr className="border-b border-line-soft bg-[#0a0c10]">
-            <th scope="col" className="px-3 py-2 text-2xs font-medium tracking-wide text-label">
+          <tr className="border-b border-line-soft bg-surface-deep">
+            <th scope="col" className="px-3 py-2 text-xs font-medium tracking-wide text-muted">
               Agent
             </th>
-            <th scope="col" className="px-3 py-2 text-2xs font-medium tracking-wide text-label">
+            <th scope="col" className="px-3 py-2 text-xs font-medium tracking-wide text-muted">
               Launch
             </th>
-            <th scope="col" className="px-3 py-2 text-2xs font-medium tracking-wide text-label">
+            <th scope="col" className="px-3 py-2 text-xs font-medium tracking-wide text-muted">
               Status
             </th>
             <th
               scope="col"
-              className="px-3 py-2 text-right text-2xs font-medium tracking-wide text-label"
+              className="px-3 py-2 text-right text-xs font-medium tracking-wide text-muted"
             >
               Enable
             </th>
@@ -104,7 +100,7 @@ export const AgentsTable: React.FC<AgentsTableProps> = ({
               <td colSpan={4} className="px-3 py-2.5 text-center">
                 <button
                   type="button"
-                  className="inline-flex min-h-6 items-center justify-center rounded-[7px] bg-transparent px-0 text-2xs font-semibold text-body-soft transition-opacity duration-300 ease-out hover:text-lime cursor-pointer"
+                  className="inline-flex min-h-6 items-center justify-center rounded-md bg-transparent px-0 text-xs font-semibold text-body-soft transition-opacity duration-300 ease-out hover:text-lime cursor-pointer"
                   aria-label={`Load more agents, ${remainingCount} remaining`}
                   onClick={() => setVisibleCount((count) => count + pageSize)}
                 >

@@ -26,9 +26,7 @@ const CapabilityEntryRow: React.FC<{
 }> = ({ entry, group }) => {
   const methodsLabel = formatAgentCapabilityMethodsLabel(entry.requiredBy)
   const pathClassName =
-    group === "missing"
-      ? "font-mono text-2xs text-amber-300"
-      : "font-mono text-2xs text-body"
+    group === "missing" ? "font-mono text-xs text-amber" : "font-mono text-xs text-body"
 
   return (
     <li className="min-w-0">
@@ -36,7 +34,7 @@ const CapabilityEntryRow: React.FC<{
         {entry.path}
       </p>
       {methodsLabel !== "" ? (
-        <p className="m-0 truncate text-2xs text-dim" title={methodsLabel}>
+        <p className="m-0 truncate text-xs text-dim" title={methodsLabel}>
           {methodsLabel}
         </p>
       ) : null}
@@ -49,11 +47,11 @@ const CapabilityGroupSection: React.FC<{
   entries: ReadonlyArray<AgentCapabilityInventoryEntry>
 }> = ({ group, entries }) => (
   <section aria-label={agentCapabilityGroupLabels[group]}>
-    <h4 className="m-0 mb-1.5 text-2xs font-medium tracking-wide text-label">
+    <h4 className="m-0 mb-1.5 text-xs font-medium tracking-wide text-muted">
       {agentCapabilityGroupLabels[group]}
     </h4>
     {entries.length === 0 ? (
-      <p className="m-0 text-2xs text-dim">None</p>
+      <p className="m-0 text-xs text-dim">None</p>
     ) : (
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
         {entries.map((entry) => (
@@ -71,14 +69,9 @@ export const AgentCapabilitiesPanel: React.FC<AgentCapabilitiesPanelProps> = ({
 }) => {
   if (capabilities === null) {
     return (
-      <div
-        aria-label={`${agentDisplayName} capabilities`}
-        className="min-w-0"
-      >
-        <p className="m-0 mb-1.5 text-2xs font-medium tracking-wide text-label">
-          Capabilities
-        </p>
-        <p className="m-0 text-2xs text-dim">{agentCapabilitiesEmptyMessage(state)}</p>
+      <div aria-label={`${agentDisplayName} capabilities`} className="min-w-0">
+        <p className="m-0 mb-1.5 text-xs font-medium tracking-wide text-muted">Capabilities</p>
+        <p className="m-0 text-xs text-dim">{agentCapabilitiesEmptyMessage(state)}</p>
       </div>
     )
   }
@@ -88,12 +81,10 @@ export const AgentCapabilitiesPanel: React.FC<AgentCapabilitiesPanelProps> = ({
 
   return (
     <div aria-label={`${agentDisplayName} capabilities`} className="min-w-0">
-      <p className="m-0 mb-1.5 text-2xs font-medium tracking-wide text-label">
-        Capabilities
-      </p>
+      <p className="m-0 mb-1.5 text-xs font-medium tracking-wide text-muted">Capabilities</p>
       {agentInfoLabel !== "" ? (
         <p
-          className="m-0 mb-3 font-mono text-2xs text-dim"
+          className="m-0 mb-3 font-mono text-xs text-dim"
           aria-label={`${agentDisplayName} agent info`}
         >
           {agentInfoLabel}
@@ -101,11 +92,7 @@ export const AgentCapabilitiesPanel: React.FC<AgentCapabilitiesPanelProps> = ({
       ) : null}
       <div className="flex flex-col gap-4">
         {agentCapabilityGroupOrder.map((group) => (
-          <CapabilityGroupSection
-            key={group}
-            group={group}
-            entries={groups[group]}
-          />
+          <CapabilityGroupSection key={group} group={group} entries={groups[group]} />
         ))}
       </div>
     </div>

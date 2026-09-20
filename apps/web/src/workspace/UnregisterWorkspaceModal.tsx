@@ -56,7 +56,7 @@ export const UnregisterWorkspaceModal: React.FC<UnregisterWorkspaceModalProps> =
             Cancel
           </Button>
           <Button
-            className="border-red-500/40 bg-red-500/15 text-red-300 hover:border-red-400 hover:bg-red-500/25 hover:text-red-200"
+            className="border-danger/40 bg-danger/15 text-danger hover:border-danger/60 hover:bg-danger/25 hover:text-danger/90"
             disabled={deleteWorkspaceMutation.isPending}
             onClick={handleUnregister}
           >
@@ -65,11 +65,11 @@ export const UnregisterWorkspaceModal: React.FC<UnregisterWorkspaceModalProps> =
         </>
       }
     >
-      <p className="m-0 text-sm text-body-soft">
+      <p className="m-0 text-base text-body-soft">
         This removes Agent Server metadata for this workspace. Workspace files are not deleted.
       </p>
       {errorMessage ? (
-        <p className="mt-4 text-sm text-red-400" role="alert">
+        <p className="mt-4 text-base text-danger" role="alert">
           {errorMessage}
         </p>
       ) : null}

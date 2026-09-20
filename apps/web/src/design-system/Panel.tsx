@@ -6,7 +6,7 @@ type PanelProps = {
 
 export const Panel: React.FC<PanelProps> = ({ children, className = "", ...props }) => (
   <section
-    className={`overflow-hidden rounded-[9px] border border-line-soft bg-panel ${className}`}
+    className={`overflow-hidden rounded-lg border border-line-soft bg-panel ${className}`}
     {...props}
   >
     {children}

@@ -10,14 +10,14 @@ type StatusPillProps = {
 } & ComponentPropsWithoutRef<"span">
 
 const variantClasses: Record<StatusPillVariant, string> = {
-  default: "border border-transparent bg-panel-elevated text-pill",
+  default: "border border-transparent bg-panel-elevated text-body-soft",
   success: "border border-lime/13 bg-lime/10 text-lime",
   violet: "border border-violet/16 bg-violet/12 text-violet-soft",
 }
 
 const sizeClasses: Record<StatusPillSize, string> = {
-  sm: "h-5 rounded-[5px] px-2 text-2xs",
-  md: "h-[34px] rounded-[7px] px-3 text-xs",
+  sm: "h-5 rounded-sm px-2 text-xs",
+  md: "h-8.5 rounded-md px-3 text-xs",
 }
 
 export const StatusPill: React.FC<StatusPillProps> = ({
