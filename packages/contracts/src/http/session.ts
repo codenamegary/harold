@@ -2,6 +2,7 @@ import { z } from "zod"
 import { AttachmentReferenceSchema, MAX_ATTACHMENTS_PER_PROMPT } from "./attachments"
 import { TurnIdSchema } from "../events/primitives"
 import { AgentId, AgentIdSchema } from "./agent-settings"
+import { SessionConfigSchema } from "./config.options"
 import { IdSchema, TimestampSchema } from "./primitives"
 
 export const SESSIONS_PATH = "/v1/sessions" as const
@@ -9,10 +10,8 @@ export const SESSIONS_PATH = "/v1/sessions" as const
 export const sessionPath = (sessionId: string) =>
   `${SESSIONS_PATH}/${encodeURIComponent(sessionId)}`
 
-export const deleteSessionPath = (
-  sessionId: string,
-  query: { agentId: AgentId },
-) => `${sessionPath(sessionId)}?agentId=${encodeURIComponent(query.agentId)}`
+export const deleteSessionPath = (sessionId: string, query: { agentId: AgentId }) =>
+  `${sessionPath(sessionId)}?agentId=${encodeURIComponent(query.agentId)}`
 
 export const SessionStateSchema = z.enum([
   "starting",
@@ -51,7 +50,13 @@ export const CreateSessionBodySchema = z.strictObject({
   cwd: z.string().min(1),
 })
 
-export const CreateSessionResponseSchema = AcpSessionSchema
+/**
+ * The 201 create response: the catalog row plus the config options the agent
+ * returned from ACP session/new, relayed verbatim.
+ */
+export const CreateSessionResponseSchema = AcpSessionSchema.extend({
+  configOptions: SessionConfigSchema,
+})
 
 export const UpdateSessionBodySchema = z.strictObject({
   name: z.string().min(1).max(120),
@@ -76,10 +81,7 @@ export const SessionDeleteTargetSchema = z.strictObject({
 
 export const PromptSessionBodySchema = z.strictObject({
   text: z.string().min(1).max(32_768),
-  attachments: z
-    .array(AttachmentReferenceSchema)
-    .max(MAX_ATTACHMENTS_PER_PROMPT)
-    .optional(),
+  attachments: z.array(AttachmentReferenceSchema).max(MAX_ATTACHMENTS_PER_PROMPT).optional(),
 })
 
 export const PromptSessionResponseSchema = z.strictObject({

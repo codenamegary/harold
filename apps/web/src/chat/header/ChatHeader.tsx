@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router"
 import { useAtomValue, useSetAtom } from "jotai"
 import { AcpSession } from "contracts/http/session"
-import { AgentId } from "contracts/http/agent-settings"
 import { Button } from "../../design-system/Button"
 import { Combobox, ComboboxOptionItem } from "../../design-system/Combobox"
 import { StatusDot } from "../../design-system/StatusDot"
@@ -10,6 +9,7 @@ import { catalogSessionKey, parseCatalogSessionKey } from "../../session/catalog
 import { recentSessions, RECENT_SESSIONS_LIMIT } from "../../session/session.list.helpers"
 import { useAgentSettingsQuery } from "../../agent-settings/use.agent.settings.query"
 import { useSessionsQuery } from "../../session/use.sessions.query"
+import { useStartNewSession } from "../../session/use.start.new.session"
 import { useWorkspacesInfiniteQuery } from "../../workspace/use.workspaces.infinite.query"
 import { sessionStateAtom } from "../live/atoms"
 import { selectSessionAtom } from "../selection/actions"
@@ -26,6 +26,9 @@ export const ChatHeader: React.FC = () => {
   const transcriptSessionState = useAtomValue(sessionStateAtom)
   const selectSession = useSetAtom(selectSessionAtom)
   const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false)
+  const newSession = useStartNewSession({
+    onCreated: () => setIsNewSessionModalOpen(false),
+  })
 
   const workspacesQuery = useWorkspacesInfiniteQuery({})
   const agentsQuery = useAgentSettingsQuery()
@@ -36,8 +39,7 @@ export const ChatHeader: React.FC = () => {
   const sessions = sessionsQuery.data?.items ?? emptySessions
 
   const selectedSession = sessions.find(
-    (session) =>
-      session.sessionId === selection.sessionId && session.agentId === selection.agentId,
+    (session) => session.sessionId === selection.sessionId && session.agentId === selection.agentId,
   )
   const selectedSessionState = resolveEffectiveSessionState({
     sessionId: selection.sessionId,
@@ -66,9 +68,7 @@ export const ChatHeader: React.FC = () => {
         })
 
   const readyForNewSession =
-    selection.sessionId === "" &&
-    selection.workspaceId !== "" &&
-    selection.agentId !== ""
+    selection.sessionId === "" && selection.workspaceId !== "" && selection.agentId !== ""
 
   const sessionOptions = useMemo((): ComboboxOptionItem[] => {
     const recent = recentSessions(sessions)
@@ -123,17 +123,14 @@ export const ChatHeader: React.FC = () => {
     (selection.agentId === "" ? null : selection.agentId)
 
   const contextSubtitle =
-    workspaceName !== null && agentName !== null
-      ? `${workspaceName} · ${agentName}`
-      : null
+    workspaceName !== null && agentName !== null ? `${workspaceName} · ${agentName}` : null
 
   const selectedStatusDotVariant =
     selectedSessionState === null ? null : sessionStatusDotVariant(selectedSessionState)
 
   const handleJoinSession = (next: { agentId: string; sessionId: string }) => {
     const nextSession = sessions.find(
-      (session) =>
-        session.sessionId === next.sessionId && session.agentId === next.agentId,
+      (session) => session.sessionId === next.sessionId && session.agentId === next.agentId,
     )
     if (nextSession === undefined) {
       return
@@ -145,17 +142,6 @@ export const ChatHeader: React.FC = () => {
       workspaceId: nextWorkspaceId,
       agentId: nextSession.agentId,
       sessionId: nextSession.sessionId,
-    })
-  }
-
-  const handleStartNewSession = (next: {
-    workspaceId: string
-    agentId: AgentId
-  }) => {
-    selectSession({
-      workspaceId: next.workspaceId,
-      agentId: next.agentId,
-      sessionId: "",
     })
   }
 
@@ -203,10 +189,7 @@ export const ChatHeader: React.FC = () => {
           >
             All sessions
           </Button>
-          <Button
-            variant="primary"
-            onClick={() => setIsNewSessionModalOpen(true)}
-          >
+          <Button variant="primary" onClick={() => setIsNewSessionModalOpen(true)}>
             New session
           </Button>
         </div>
@@ -214,10 +197,11 @@ export const ChatHeader: React.FC = () => {
       <NewSessionModal
         open={isNewSessionModalOpen}
         agents={agents}
+        pending={newSession.creating}
+        error={newSession.error}
         onClose={() => setIsNewSessionModalOpen(false)}
         onConfirm={(next) => {
-          setIsNewSessionModalOpen(false)
-          handleStartNewSession(next)
+          newSession.start(next)
         }}
       />
     </>

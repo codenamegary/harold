@@ -1,8 +1,5 @@
 import { SetConfigOptionBodySchema } from "contracts/http/config.options"
-import {
-  PROBLEM_TYPES,
-  ValidationProblemSchema,
-} from "contracts/http/error"
+import { PROBLEM_TYPES, ValidationProblemSchema } from "contracts/http/error"
 import {
   CreateSessionBodySchema,
   CreateSessionResponseSchema,
@@ -111,6 +108,7 @@ export const registerSessionRoutes = (
         cwd: body.cwd,
         title: acpResult.acpSessionId,
         updatedAt,
+        configOptions: acpResult.configOptions,
       }),
     )
   })

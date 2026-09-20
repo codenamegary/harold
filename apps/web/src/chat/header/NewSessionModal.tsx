@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import { AgentId } from "contracts/http/agent-settings"
 import { Workspace } from "contracts/http/workspace"
 import { Button } from "../../design-system/Button"
@@ -12,6 +12,10 @@ const WORKSPACE_SEARCH_DEBOUNCE_MS = 250
 type NewSessionModalProps = {
   open: boolean
   agents: ReadonlyArray<{ id: AgentId; displayName: string; enabled: boolean }>
+  /** Creating the ACP session after confirm; confirm stays disabled. */
+  pending?: boolean
+  /** Creation failure detail, shown inside the modal so it can be retried. */
+  error?: string | null
   onClose: () => void
   onConfirm: (selection: { workspaceId: string; agentId: AgentId }) => void
 }
@@ -19,6 +23,8 @@ type NewSessionModalProps = {
 export const NewSessionModal: React.FC<NewSessionModalProps> = ({
   open,
   agents,
+  pending = false,
+  error = null,
   onClose,
   onConfirm,
 }) => {
@@ -26,17 +32,13 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
   const [agentId, setAgentId] = useState("")
   const [workspaceQuery, setWorkspaceQuery] = useState("")
 
-  const debouncedWorkspaceQuery = useDebouncedValue(
-    workspaceQuery,
-    WORKSPACE_SEARCH_DEBOUNCE_MS,
-  )
+  const debouncedWorkspaceQuery = useDebouncedValue(workspaceQuery, WORKSPACE_SEARCH_DEBOUNCE_MS)
   const workspacesQuery = useWorkspacesInfiniteQuery({
     q: debouncedWorkspaceQuery.trim() === "" ? undefined : debouncedWorkspaceQuery.trim(),
   })
 
   const workspaceOptions = useMemo((): ComboboxOptionItem[] => {
-    const workspaces =
-      workspacesQuery.data?.pages.flatMap((page) => page.items) ?? []
+    const workspaces = workspacesQuery.data?.pages.flatMap((page) => page.items) ?? []
     return workspaces.map((workspace: Workspace) => ({
       value: workspace.id,
       label: workspace.name,
@@ -55,21 +57,25 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
 
   const canConfirm = workspaceId !== "" && agentId !== ""
 
+  // Reset once the modal is gone, so a retry after failure keeps the
+  // selections but a fresh open starts clean.
+  useEffect(() => {
+    if (!open) {
+      setWorkspaceId("")
+      setAgentId("")
+      setWorkspaceQuery("")
+    }
+  }, [open])
+
   const handleClose = () => {
-    setWorkspaceId("")
-    setAgentId("")
-    setWorkspaceQuery("")
     onClose()
   }
 
   const handleConfirm = () => {
-    if (workspaceId === "" || agentId === "") {
+    if (workspaceId === "" || agentId === "" || pending) {
       return
     }
     onConfirm({ workspaceId, agentId })
-    setWorkspaceId("")
-    setAgentId("")
-    setWorkspaceQuery("")
   }
 
   return (
@@ -82,15 +88,20 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
           <Button variant="secondary" onClick={handleClose}>
             Cancel
           </Button>
-          <Button disabled={!canConfirm} onClick={handleConfirm}>
-            Continue
+          <Button disabled={!canConfirm || pending} onClick={handleConfirm}>
+            {pending ? "Creating…" : "Continue"}
           </Button>
         </>
       }
     >
       <p className="m-0 mb-4 text-sm text-body-soft">
-        Choose a workspace and agent, then send a prompt to start the session.
+        Choose a workspace and agent to start the session.
       </p>
+      {error !== null && error !== "" ? (
+        <p className="m-0 mb-4 text-sm text-danger" role="alert">
+          {error}
+        </p>
+      ) : null}
       <div className="flex flex-col gap-4">
         <Combobox
           label="Workspace"
@@ -101,9 +112,7 @@ export const NewSessionModal: React.FC<NewSessionModalProps> = ({
           filter="external"
           onQueryChange={setWorkspaceQuery}
           placeholder="Select workspace…"
-          emptyMessage={
-            workspaceQuery.trim() === "" ? "No workspaces" : "No matches"
-          }
+          emptyMessage={workspaceQuery.trim() === "" ? "No workspaces" : "No matches"}
         />
         <Combobox
           label="Agent"

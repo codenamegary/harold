@@ -3,10 +3,7 @@ import { defaultAuthSummary } from "../test/agent.settings.fixtures"
 import { act, fireEvent, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router"
 import { AgentSettingsCollectionSchema } from "contracts/http/agent-settings"
-import {
-  CreateSessionResponseSchema,
-  SessionCollectionSchema,
-} from "contracts/http/session"
+import { CreateSessionResponseSchema, SessionCollectionSchema } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { renderWithProviders } from "../query/render.with.providers"
 import { requestUrl } from "../test/request.url"
@@ -61,10 +58,19 @@ const createdSession = CreateSessionResponseSchema.parse({
   cwd: workspacePath,
   title: "Explain auth",
   updatedAt: "2026-07-24T12:00:00.000Z",
+  configOptions: [],
 })
 
+const createdSessionRow = {
+  agentId: createdSession.agentId,
+  sessionId: createdSession.sessionId,
+  cwd: createdSession.cwd,
+  title: createdSession.title,
+  updatedAt: createdSession.updatedAt,
+}
+
 const sessionsList = SessionCollectionSchema.parse({
-  items: [createdSession],
+  items: [createdSessionRow],
 })
 
 const originalFetch = globalThis.fetch
@@ -135,6 +141,25 @@ describe("Chat session flow", () => {
       </MemoryRouter>,
     )
 
+  // Confirming a new session creates it; the composer unlocks once the
+  // gateway subscribes to the created session.
+  const startSubscribedSession = async (queries: Parameters<typeof startNewSession>[0]) => {
+    await startNewSession(queries)
+    await waitFor(() => {
+      expect(gatewaySocket()).toBeDefined()
+    })
+    act(() => {
+      gatewaySocket()?.dispatch(
+        "message",
+        JSON.stringify({
+          type: "subscribed",
+          agentId: createdSession.agentId,
+          sessionId: createdSession.sessionId,
+        }),
+      )
+    })
+  }
+
   const typeAndSend = async (
     getByRole: ReturnType<typeof renderChat>["getByRole"],
     text: string,
@@ -155,13 +180,12 @@ describe("Chat session flow", () => {
     fireEvent.click(getByRole("button", { name: "Send message" }))
   }
 
-  const gatewaySocket = () =>
-    sockets.find((socket) => socket.url.includes("/v1/sessions/stream"))
+  const gatewaySocket = () => sockets.find((socket) => socket.url.includes("/v1/sessions/stream"))
 
   test("create-with-prompt subscribes on the gateway stream and renders ACP updates", async () => {
     const fetchMock = globalThis.fetch as ReturnType<typeof mock>
-    const { getByRole } = renderChat()
-    await startNewSession({ getByRole })
+    const { getByRole, queryByRole } = renderChat()
+    await startSubscribedSession({ getByRole, queryByRole })
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {
@@ -197,9 +221,7 @@ describe("Chat session flow", () => {
     })
 
     await waitFor(() => {
-      expect(sentStreamMessages(socket).some((message) => message.type === "subscribe")).toBe(
-        true,
-      )
+      expect(sentStreamMessages(socket).some((message) => message.type === "subscribe")).toBe(true)
       expect(sentStreamMessages(socket).some((message) => message.type === "prompt")).toBe(true)
     })
 
@@ -241,8 +263,8 @@ describe("Chat session flow", () => {
   })
 
   test("cancel and a later prompt go on the gateway stream", async () => {
-    const { getByRole } = renderChat()
-    await startNewSession({ getByRole })
+    const { getByRole, queryByRole } = renderChat()
+    await startSubscribedSession({ getByRole, queryByRole })
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {
@@ -296,8 +318,8 @@ describe("Chat session flow", () => {
   })
 
   test("switch clears transcript then load replay fills it", async () => {
-    const { getByRole, getByText, queryByText } = renderChat()
-    await startNewSession({ getByRole })
+    const { getByRole, getByText, queryByText, queryByRole } = renderChat()
+    await startSubscribedSession({ getByRole, queryByRole })
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {
@@ -334,7 +356,7 @@ describe("Chat session flow", () => {
 
     await openNewSessionModal({ getByRole })
     await confirmNewSessionModal(
-      { getByRole },
+      { getByRole, queryByRole },
       { workspaceName: "agent-server", agentName: "Cursor" },
     )
     await joinSessionByName({ getByRole }, createdSession.title)
@@ -390,8 +412,8 @@ describe("Chat session flow", () => {
   })
 
   test("permission reply goes on the gateway stream", async () => {
-    const { getByRole } = renderChat()
-    await startNewSession({ getByRole })
+    const { getByRole, queryByRole } = renderChat()
+    await startSubscribedSession({ getByRole, queryByRole })
     await typeAndSend(getByRole, "Explain auth")
 
     await waitFor(() => {

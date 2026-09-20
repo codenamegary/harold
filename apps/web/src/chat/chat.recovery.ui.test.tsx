@@ -4,7 +4,7 @@ import { act, fireEvent, waitFor } from "@testing-library/react"
 import { createStore } from "jotai"
 import { MemoryRouter } from "react-router"
 import { AgentSettingsCollectionSchema } from "contracts/http/agent-settings"
-import { SessionCollectionSchema } from "contracts/http/session"
+import { CreateSessionResponseSchema, SessionCollectionSchema } from "contracts/http/session"
 import { WorkspaceCollectionSchema } from "contracts/http/workspace"
 import { createTestQueryClient } from "../query/create.test.query.client"
 import { renderWithProviders } from "../query/render.with.providers"
@@ -52,6 +52,15 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
 
 const workspacePath = "/home/operator/agent-server"
 
+const createdSession = CreateSessionResponseSchema.parse({
+  agentId: "cursor",
+  sessionId: "sess_01JFC8C7E77NQCFH0RF9Z22JHH",
+  cwd: workspacePath,
+  title: "Explain auth",
+  updatedAt: "2026-07-24T12:00:00.000Z",
+  configOptions: [],
+})
+
 const idleSession = {
   agentId: "cursor" as const,
   sessionId: "sess_01IDLE00000000000000001",
@@ -82,8 +91,18 @@ describe("Chat recovery UI", () => {
     clearChatTestSelection()
     sockets.length = 0
     restoreWebSocket.current = installFakeWebSocket(sockets)
-    globalThis.fetch = mock((input: RequestInfo | URL) => {
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+
+      if (url === "/v1/sessions" && method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify(createdSession), {
+            status: 201,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+      }
 
       if (url.startsWith("/v1/workspaces")) {
         return Promise.resolve(
@@ -145,13 +164,15 @@ describe("Chat recovery UI", () => {
     })
   }
 
-  test("new session keeps composer enabled with workspace and agent", async () => {
-    const { getByRole } = renderChat()
-    await startNewSession({ getByRole })
+  test("new session composer enables once the created session is subscribed", async () => {
+    const { getByRole, queryByRole } = renderChat()
+    await startNewSession({ getByRole, queryByRole })
     await waitFor(() => {
-      expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute(
-        "aria-disabled",
-      )
+      expect(gatewaySocket()).toBeDefined()
+    })
+    subscribe(createdSession)
+    await waitFor(() => {
+      expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute("aria-disabled")
     })
   })
 
@@ -161,9 +182,7 @@ describe("Chat recovery UI", () => {
     subscribe(idleSession)
 
     await waitFor(() => {
-      expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute(
-        "aria-disabled",
-      )
+      expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute("aria-disabled")
     })
     expect(getByLabelText("online status")).toBeInTheDocument()
   })
@@ -174,9 +193,7 @@ describe("Chat recovery UI", () => {
     subscribe(idleSession)
 
     await waitFor(() => {
-      expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute(
-        "aria-disabled",
-      )
+      expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute("aria-disabled")
     })
 
     act(() => {
@@ -198,9 +215,7 @@ describe("Chat recovery UI", () => {
     })
 
     // A command list is not a turn. The session stays idle.
-    expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute(
-      "aria-disabled",
-    )
+    expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute("aria-disabled")
     expect(queryByRole("button", { name: "Cancel turn" })).toBeNull()
 
     const field = getByRole("textbox", { name: "Chat message" })
@@ -208,9 +223,7 @@ describe("Chat recovery UI", () => {
     fireEvent.keyDown(field, { key: "/" })
 
     await waitFor(() => {
-      expect(
-        getByRole("list", { name: "Available commands" }),
-      ).toBeInTheDocument()
+      expect(getByRole("list", { name: "Available commands" })).toBeInTheDocument()
     })
     expect(getByText("/plan")).toBeInTheDocument()
     expect(getByText("/review")).toBeInTheDocument()
@@ -235,9 +248,7 @@ describe("Chat recovery UI", () => {
     subscribe(idleSession)
 
     await waitFor(() => {
-      expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute(
-        "aria-disabled",
-      )
+      expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute("aria-disabled")
     })
 
     act(() => {
@@ -255,10 +266,7 @@ describe("Chat recovery UI", () => {
     await waitFor(() => {
       expect(getByRole("button", { name: "Cancel turn" })).toBeInTheDocument()
     })
-    expect(getByRole("textbox", { name: "Chat message" })).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    )
+    expect(getByRole("textbox", { name: "Chat message" })).toHaveAttribute("aria-disabled", "true")
   })
 
   test("running session disables composer and shows cancel without blocked copy", async () => {
@@ -267,9 +275,7 @@ describe("Chat recovery UI", () => {
     subscribe(runningSession)
 
     await waitFor(() => {
-      expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute(
-        "aria-disabled",
-      )
+      expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute("aria-disabled")
     })
 
     const field = getByRole("textbox", { name: "Chat message" })
@@ -299,10 +305,7 @@ describe("Chat recovery UI", () => {
         getByText("Session reconnecting. Prompts unlock when it is idle again."),
       ).toBeInTheDocument()
     })
-    expect(getByRole("textbox", { name: "Chat message" })).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    )
+    expect(getByRole("textbox", { name: "Chat message" })).toHaveAttribute("aria-disabled", "true")
   })
 
   test("error session disables composer with terminal copy", async () => {
@@ -327,10 +330,7 @@ describe("Chat recovery UI", () => {
         getByText("Session ended with an error. Start a new session to continue."),
       ).toBeInTheDocument()
     })
-    expect(getByRole("textbox", { name: "Chat message" })).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    )
+    expect(getByRole("textbox", { name: "Chat message" })).toHaveAttribute("aria-disabled", "true")
   })
 
   test("console has no resume control", async () => {

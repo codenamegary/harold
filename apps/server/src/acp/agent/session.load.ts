@@ -37,8 +37,7 @@ export const createSessionLoadHandler = (): AgentMethodHandler<"session/load"> =
     const { acpSessionId, workspaceCwd, sessionId, workspaceId } = params
 
     const existingBinding = context.sessionBindings.getBinding(acpSessionId)
-    const wasLive =
-      existingBinding !== undefined && existingBinding.phase === "live"
+    const wasLive = existingBinding !== undefined && existingBinding.phase === "live"
 
     if (!context.supportsCapability(sessionLoadRequires)) {
       return { ok: false, reason: "Agent does not support session/load" }
@@ -105,6 +104,17 @@ export const createSessionLoadHandler = (): AgentMethodHandler<"session/load"> =
     } catch (error: unknown) {
       context.sessionBindings.unbind({ acpSessionId })
       if (wasLive) {
+        // The agent cannot serve this session right now (cursor, for one, does
+        // not persist a session until its first prompt). Keep the live binding
+        // so the session stays usable, but make the failed load visible.
+        console.warn(
+          {
+            agentId: context.agentId,
+            acpSessionId,
+            err: error,
+          },
+          "session/load failed for a live session; continuing without replay",
+        )
         context.sessionBindings.bind({
           acpSessionId,
           sessionId,
