@@ -1,6 +1,5 @@
-import { sanitizeAcpRejection } from "../sanitize.error"
-import { isAcpJsonRpcError } from "../transport/json-rpc-error"
-import { AcpOperationContext } from "../transport/json-rpc-transport"
+import { sanitizeFailureReason } from "../sanitize.failure.reason"
+import { AcpOperationContext } from "../transport/json.rpc.transport"
 import { AgentMethodTable } from "./method.table"
 import {
   ANY_AGENT,
@@ -17,18 +16,6 @@ export const sessionCloseDeclaration: AgentMethodDeclaration = {
   method: sessionCloseMethod,
   requires: sessionCloseRequires,
   transportKind: "request",
-}
-
-const sanitizeCloseFailureReason = (error: unknown, fallback: string): string => {
-  if (isAcpJsonRpcError(error)) {
-    return sanitizeAcpRejection({
-      message: error.message,
-      data: error.data,
-    })
-  }
-
-  const message = error instanceof Error ? error.message : fallback
-  return sanitizeAcpRejection({ message })
 }
 
 export const createSessionCloseHandler = (): AgentMethodHandler<"session/close"> => {
@@ -65,7 +52,7 @@ export const createSessionCloseHandler = (): AgentMethodHandler<"session/close">
     } catch (error: unknown) {
       return {
         ok: false,
-        reason: sanitizeCloseFailureReason(error, "session/close failed"),
+        reason: sanitizeFailureReason(error, "session/close failed"),
       }
     }
   }

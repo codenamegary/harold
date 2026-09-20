@@ -1,8 +1,7 @@
 import { SessionConfigSchema } from "contracts/http/config.options"
-import { sanitizeAcpRejection } from "../sanitize.error"
+import { sanitizeFailureReason } from "../sanitize.failure.reason"
 import { isAcpAuthRequiredError } from "../auth.required"
-import { isAcpJsonRpcError } from "../transport/json-rpc-error"
-import { AcpOperationContext } from "../transport/json-rpc-transport"
+import { AcpOperationContext } from "../transport/json.rpc.transport"
 import { AgentMethodTable } from "./method.table"
 import {
   ANY_AGENT,
@@ -21,18 +20,6 @@ export const sessionNewDeclaration: AgentMethodDeclaration = {
   method: sessionNewMethod,
   requires: sessionNewRequires,
   transportKind: sessionNewTransportKind,
-}
-
-const sanitizeNewFailureReason = (error: unknown, fallback: string): string => {
-  if (isAcpJsonRpcError(error)) {
-    return sanitizeAcpRejection({
-      message: error.message,
-      data: error.data,
-    })
-  }
-
-  const message = error instanceof Error ? error.message : fallback
-  return sanitizeAcpRejection({ message })
 }
 
 export const createSessionNewHandler = (): AgentMethodHandler<"session/new"> => {
@@ -95,7 +82,7 @@ export const createSessionNewHandler = (): AgentMethodHandler<"session/new"> => 
     } catch (error: unknown) {
       return {
         ok: false,
-        reason: sanitizeNewFailureReason(error, "session/new failed"),
+        reason: sanitizeFailureReason(error, "session/new failed"),
         ...(isAcpAuthRequiredError(error) ? { authRequired: true } : {}),
       }
     }

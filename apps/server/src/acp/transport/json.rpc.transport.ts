@@ -1,5 +1,5 @@
 import { SessionPhase } from "../client/session.phase"
-import { createAcpJsonRpcError, readSafeJsonRpcErrorData } from "./json-rpc-error"
+import { createAcpJsonRpcError, readSafeJsonRpcErrorData } from "./json.rpc.error"
 
 type PendingRequest = {
   resolve: (value: unknown) => void

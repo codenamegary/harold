@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises"
-import { createAcpJsonRpcError, AcpJsonRpcError } from "../../transport/json-rpc-error"
-import { SessionBindingRegistry } from "../session-binding-registry"
-import { resolvePathWithinWorkspace } from "../resolve-path-within-workspace"
+import { createAcpJsonRpcError, AcpJsonRpcError } from "../../transport/json.rpc.error"
+import { SessionBindingRegistry } from "../session.binding.registry"
+import { resolvePathWithinWorkspace } from "../resolve.path.within.workspace"
 
 export type AcpFsHandlersDeps = {
   sessionBindingRegistry: SessionBindingRegistry
@@ -70,7 +70,7 @@ export const createAcpFsHandlers = ({ sessionBindingRegistry }: AcpFsHandlersDep
       filePath: request.path,
     })
     if (!resolved.ok) {
-      throw createAcpError(resolved.message)
+      throw createAcpError(resolved.reason)
     }
 
     const content = await readFile(resolved.absolutePath, "utf8")
@@ -97,7 +97,7 @@ export const createAcpFsHandlers = ({ sessionBindingRegistry }: AcpFsHandlersDep
       filePath: request.path,
     })
     if (!resolved.ok) {
-      throw createAcpError(resolved.message)
+      throw createAcpError(resolved.reason)
     }
 
     await writeFile(resolved.absolutePath, request.content, "utf8")

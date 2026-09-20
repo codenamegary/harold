@@ -4,9 +4,9 @@ import { createAcpFsHandlers } from "./handlers/fs"
 import { createAcpPermissionHandler } from "./handlers/permission"
 import { createAcpTerminalHandlers } from "./handlers/terminal"
 import { ExtensionHandlers, resolveExtensionHandler } from "./extensions/types"
-import { isAcpJsonRpcError } from "../transport/json-rpc-error"
-import { JsonRpcTransport } from "../transport/json-rpc-transport"
-import { SessionBindingRegistry } from "./session-binding-registry"
+import { isAcpJsonRpcError } from "../transport/json.rpc.error"
+import { JsonRpcTransport } from "../transport/json.rpc.transport"
+import { SessionBindingRegistry } from "./session.binding.registry"
 
 export type RegisterAcpClientHandlersParams = {
   transport: JsonRpcTransport
@@ -113,7 +113,6 @@ export const createUnavailableRequestPermission =
     throw new Error("permission service unavailable")
   }
 
-export const createUnavailableRequestExtensionRpc =
-  (): RequestExtensionRpcFn => async () => {
-    throw new Error("extension request unavailable")
-  }
+export const createUnavailableRequestExtensionRpc = (): RequestExtensionRpcFn => async () => {
+  throw new Error("extension request unavailable")
+}

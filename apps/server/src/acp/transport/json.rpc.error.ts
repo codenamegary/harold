@@ -31,9 +31,7 @@ export const createAcpJsonRpcError = (
 }
 
 export const isAcpJsonRpcError = (error: unknown): error is Error & AcpJsonRpcError =>
-  error instanceof Error
-  && "code" in error
-  && typeof error.code === "number"
+  error instanceof Error && "code" in error && typeof error.code === "number"
 
 const isSafeJsonRpcErrorData = (value: unknown): boolean => {
   if (value === null) {
@@ -54,7 +52,7 @@ const isSafeJsonRpcErrorData = (value: unknown): boolean => {
   }
 
   return Object.values(value as Record<string, unknown>).every((entry) =>
-    isSafeJsonRpcErrorData(entry)
+    isSafeJsonRpcErrorData(entry),
   )
 }
 

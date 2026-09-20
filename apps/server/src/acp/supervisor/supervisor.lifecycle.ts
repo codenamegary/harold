@@ -8,9 +8,9 @@ import {
   registerAcpClientHandlers,
   createUnavailableRequestExtensionRpc,
   createUnavailableRequestPermission,
-} from "../client/register-handlers"
-import { SessionBindingRegistry } from "../client/session-binding-registry"
-import { createJsonRpcTransport, JsonRpcTransport } from "../transport/json-rpc-transport"
+} from "../client/register.handlers"
+import { SessionBindingRegistry } from "../client/session.binding.registry"
+import { createJsonRpcTransport, JsonRpcTransport } from "../transport/json.rpc.transport"
 import { spawnAgentProcess } from "./supervisor.process.adapters"
 import { sanitizeFailureReason } from "../sanitize.failure.reason"
 import {
@@ -47,6 +47,7 @@ export type CreateSupervisorLifecycleParams = {
   onSessionUpdate?: SessionUpdateHandler
   requestPermission?: RequestPermissionFn
   requestExtensionRpc?: RequestExtensionRpcFn
+  logUnknownExtension?: (method: string) => void
   onBeforeClearRuntime?: () => void
   onSupervisorReady?: () => void | Promise<void>
   restartBackoffMs?: ReadonlyArray<number>
@@ -101,6 +102,7 @@ export const createSupervisorLifecycle = ({
   onSessionUpdate = () => undefined,
   requestPermission = createUnavailableRequestPermission(),
   requestExtensionRpc = createUnavailableRequestExtensionRpc(),
+  logUnknownExtension,
   onBeforeClearRuntime = () => undefined,
   onSupervisorReady = () => undefined,
   restartBackoffMs = DEFAULT_ACP_RESTART_BACKOFF_MS,
@@ -227,6 +229,7 @@ export const createSupervisorLifecycle = ({
       agentId,
       sessionBindingRegistry,
       requestPermission,
+      logUnknownExtension,
       extensionHandlers: resolveExtensionHandlers(agentId, requestExtensionRpc),
     })
 

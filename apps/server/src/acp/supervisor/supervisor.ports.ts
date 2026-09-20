@@ -1,9 +1,9 @@
 import { AgentId, AgentSpawnSnapshot } from "contracts/http/agent-settings"
 import { SupervisorAuthHooks } from "../../agent/auth/supervisor.hooks"
 import { CapabilityInventory } from "../agent/inventory"
-import { AgentProfile } from "../agent-profile"
-import { JsonRpcTransport } from "../transport/json-rpc-transport"
-import { SessionBindingRegistry } from "../client/session-binding-registry"
+import { AgentProfile } from "../agent.profile"
+import { JsonRpcTransport } from "../transport/json.rpc.transport"
+import { SessionBindingRegistry } from "../client/session.binding.registry"
 import {
   AcpAgentRuntimeState,
   AcpListSessionsResult,
@@ -112,6 +112,8 @@ export type CreateAcpSupervisorParams = {
   onSessionDiscovered?: SessionDiscoveredHandler
   requestPermission?: RequestPermissionFn
   requestExtensionRpc?: RequestExtensionRpcFn
+  /** Called when an agent sends an extension method with no registered handler. */
+  logUnknownExtension?: (method: string) => void
   onBeforeClearRuntime?: () => void
   onSupervisorReady?: () => void | Promise<void>
   restartBackoffMs?: ReadonlyArray<number>

@@ -1,6 +1,6 @@
 import { SessionConfigSchema } from "contracts/http/config.options"
-import { sanitizeAcpRejection } from "../sanitize.error"
-import { isAcpJsonRpcError } from "../transport/json-rpc-error"
+import { sanitizeFailureReason } from "../sanitize.failure.reason"
+import { isAcpJsonRpcError } from "../transport/json.rpc.error"
 import {
   ANY_AGENT,
   AgentMethodDeclaration,
@@ -23,8 +23,8 @@ export const sessionSetConfigOptionDeclaration: AgentMethodDeclaration = {
 }
 
 const classifySetConfigOptionFailure = (error: unknown): AcpSetConfigOptionResult => {
+  const reason = sanitizeFailureReason(error, "session/set_config_option failed")
   if (isAcpJsonRpcError(error)) {
-    const reason = sanitizeAcpRejection({ message: error.message, data: error.data })
     if (error.code === -32601) {
       return { ok: false, kind: "unsupported", reason }
     }
@@ -32,51 +32,47 @@ const classifySetConfigOptionFailure = (error: unknown): AcpSetConfigOptionResul
       return { ok: false, kind: "invalid-option", reason }
     }
     if (
-      error.code === -32002
-      || /session .*not found/i.test(error.message)
-      || /unknown session/i.test(error.message)
+      error.code === -32002 ||
+      /session .*not found/i.test(error.message) ||
+      /unknown session/i.test(error.message)
     ) {
       return { ok: false, kind: "unknown-session", reason }
     }
     return { ok: false, kind: "error", reason }
   }
 
-  const message = error instanceof Error ? error.message : "session/set_config_option failed"
-  return {
-    ok: false,
-    kind: "error",
-    reason: sanitizeAcpRejection({ message }),
-  }
+  return { ok: false, kind: "error", reason }
 }
 
-export const createSessionSetConfigOptionHandler = (): AgentMethodHandler<"session/set_config_option"> => {
-  return async ({ params, context }) => {
-    const { acpSessionId, configId, value } = params
+export const createSessionSetConfigOptionHandler =
+  (): AgentMethodHandler<"session/set_config_option"> => {
+    return async ({ params, context }) => {
+      const { acpSessionId, configId, value } = params
 
-    try {
-      const result = await context.transport.request<{
-        configOptions?: unknown
-      }>(sessionSetConfigOptionMethod, {
-        sessionId: acpSessionId,
-        configId,
-        value,
-      })
+      try {
+        const result = await context.transport.request<{
+          configOptions?: unknown
+        }>(sessionSetConfigOptionMethod, {
+          sessionId: acpSessionId,
+          configId,
+          value,
+        })
 
-      const parsed = SessionConfigSchema.safeParse(result.configOptions)
-      if (!parsed.success) {
-        return {
-          ok: false,
-          kind: "error",
-          reason: "Agent returned an invalid config state",
+        const parsed = SessionConfigSchema.safeParse(result.configOptions)
+        if (!parsed.success) {
+          return {
+            ok: false,
+            kind: "error",
+            reason: "Agent returned an invalid config state",
+          }
         }
-      }
 
-      return { ok: true, configOptions: parsed.data }
-    } catch (error: unknown) {
-      return classifySetConfigOptionFailure(error)
+        return { ok: true, configOptions: parsed.data }
+      } catch (error: unknown) {
+        return classifySetConfigOptionFailure(error)
+      }
     }
   }
-}
 
 export const registerSessionSetConfigOptionHandler = (table: AgentMethodTable): void => {
   table.register({

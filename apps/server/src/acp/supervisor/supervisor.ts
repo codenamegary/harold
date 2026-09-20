@@ -1,13 +1,13 @@
 import { registerSessionCancelHandler } from "../agent/session.cancel"
 import { registerSessionCloseHandler } from "../agent/session.close"
-import { registerSessionSetConfigOptionHandler } from "../agent/session.set_config_option"
+import { registerSessionSetConfigOptionHandler } from "../agent/session.set.config.option"
 import { registerSessionListHandler } from "../agent/session.list"
 import { registerSessionLoadHandler } from "../agent/session.load"
 import { registerSessionNewHandler } from "../agent/session.new"
 import { registerSessionPromptHandler } from "../agent/session.prompt"
 import { createAgentMethodTable } from "../agent/method.table"
 import { createSessionOwnership } from "../agent/session.ownership"
-import { createSessionBindingRegistry } from "../client/session-binding-registry"
+import { createSessionBindingRegistry } from "../client/session.binding.registry"
 import { AcpSupervisorStatus } from "./models"
 import { AcpSupervisor, CreateAcpSupervisorParams } from "./supervisor.ports"
 import { aggregateStatus } from "./supervisor.aggregate.status"
@@ -27,6 +27,7 @@ export const createAcpSupervisor = ({
   onSessionDiscovered,
   requestPermission,
   requestExtensionRpc,
+  logUnknownExtension,
   onBeforeClearRuntime,
   onSupervisorReady,
   restartBackoffMs,
@@ -54,6 +55,7 @@ export const createAcpSupervisor = ({
     onSessionUpdate,
     requestPermission,
     requestExtensionRpc,
+    logUnknownExtension,
     onBeforeClearRuntime,
     onSupervisorReady,
     restartBackoffMs,

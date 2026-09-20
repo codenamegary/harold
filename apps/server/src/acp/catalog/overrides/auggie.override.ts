@@ -1,4 +1,5 @@
-import { PresenceProbe, probeWhich, AgentProfileOverride } from "../agent.profile.override"
+import { probeWhich, AgentProfileOverride } from "../agent.profile.override"
+import { PresenceProbe } from "../catalog.ports"
 
 /**
  * Official ACP launch is `auggie --acp` (native CLI), not the registry npx package.

@@ -1,12 +1,14 @@
-import { createAcpJsonRpcError } from "../../transport/json-rpc-error"
+import { createAcpJsonRpcError } from "../../transport/json.rpc.error"
 
 export type ExtensionHandler = (params: unknown) => unknown
 
 export type ExtensionHandlers = Record<string, ExtensionHandler>
 
-export const createUnknownExtensionHandler = (method: string): ExtensionHandler => () => {
-  throw createAcpJsonRpcError(`unknown extension: ${method}`, -32601)
-}
+export const createUnknownExtensionHandler =
+  (method: string): ExtensionHandler =>
+  () => {
+    throw createAcpJsonRpcError(`unknown extension: ${method}`, -32601)
+  }
 
 export const resolveExtensionHandler = (params: {
   method: string

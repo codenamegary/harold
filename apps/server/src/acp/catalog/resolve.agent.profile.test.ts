@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { resolveAgentProfile } from "../agent-profile"
+import { resolveAgentProfile } from "../agent.profile"
 import { buildAgentSpawnCommand } from "../supervisor/supervisor.process.adapters"
 
 describe("resolveAgentProfile", () => {

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { resolvePathWithinWorkspace } from "./resolve-path-within-workspace"
+import { resolvePathWithinWorkspace } from "./resolve.path.within.workspace"
 
 describe("resolvePathWithinWorkspace", () => {
   test("allows paths inside the workspace root", async () => {
@@ -30,7 +30,7 @@ describe("resolvePathWithinWorkspace", () => {
       filePath: outside,
     })
 
-    expect(result).toEqual({ ok: false, message: "path outside workspace root" })
+    expect(result).toEqual({ ok: false, reason: "path outside workspace root" })
 
     await rm(workspace, { recursive: true, force: true })
     await rm(outside, { force: true })
@@ -44,7 +44,7 @@ describe("resolvePathWithinWorkspace", () => {
       filePath: "../escape.txt",
     })
 
-    expect(result).toEqual({ ok: false, message: "path outside workspace root" })
+    expect(result).toEqual({ ok: false, reason: "path outside workspace root" })
 
     await rm(workspace, { recursive: true, force: true })
   })

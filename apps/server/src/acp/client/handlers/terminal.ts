@@ -1,5 +1,5 @@
-import { createAcpJsonRpcError, AcpJsonRpcError } from "../../transport/json-rpc-error"
-import { SessionBindingRegistry } from "../session-binding-registry"
+import { createAcpJsonRpcError, AcpJsonRpcError } from "../../transport/json.rpc.error"
+import { SessionBindingRegistry } from "../session.binding.registry"
 
 export type AcpTerminalHandlersDeps = {
   sessionBindingRegistry: SessionBindingRegistry
@@ -118,15 +118,22 @@ const appendOutput = (state: TerminalState, chunk: string): string => {
 const buildShellCommand = (command: string, args?: string[]): string =>
   args && args.length > 0 ? [command, ...args].join(" ") : command
 
-const buildProcessEnv = (envEntries?: Array<{ name: string; value: string }>): Record<string, string> => {
+const buildProcessEnv = (
+  envEntries?: Array<{ name: string; value: string }>,
+): Record<string, string> => {
   const baseEnv = Object.fromEntries(
-    Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => entry[1] !== undefined,
+    ),
   )
 
-  return (envEntries ?? []).reduce<Record<string, string>>((env, entry) => ({
-    ...env,
-    [entry.name]: entry.value,
-  }), baseEnv)
+  return (envEntries ?? []).reduce<Record<string, string>>(
+    (env, entry) => ({
+      ...env,
+      [entry.name]: entry.value,
+    }),
+    baseEnv,
+  )
 }
 
 export const createAcpTerminalHandlers = ({
@@ -160,10 +167,7 @@ export const createAcpTerminalHandlers = ({
     return { ok: true, state }
   }
 
-  const attachOutputReaders = (
-    process: TerminalProcess,
-    onOutput: (chunk: string) => void,
-  ) => {
+  const attachOutputReaders = (process: TerminalProcess, onOutput: (chunk: string) => void) => {
     const readStream = async (stream: ReadableStream<Uint8Array>) => {
       const reader = stream.getReader()
       const decoder = new TextDecoder()
@@ -245,8 +249,9 @@ export const createAcpTerminalHandlers = ({
         throw terminal.error
       }
 
-      const truncated = terminal.state.outputByteLimit !== undefined
-        && new TextEncoder().encode(terminal.state.output).byteLength >= terminal.state.outputByteLimit
+      const truncated =
+        terminal.state.outputByteLimit !== undefined &&
+        new TextEncoder().encode(terminal.state.output).byteLength >= terminal.state.outputByteLimit
 
       return {
         output: terminal.state.output,

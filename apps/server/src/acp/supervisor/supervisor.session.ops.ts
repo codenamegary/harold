@@ -6,8 +6,8 @@ import {
 } from "../agent/inventory"
 import { AgentMethodTable } from "../agent/method.table"
 import { SessionOwnership } from "../agent/session.ownership"
-import { SessionBindingRegistry } from "../client/session-binding-registry"
-import { JsonRpcTransport } from "../transport/json-rpc-transport"
+import { SessionBindingRegistry } from "../client/session.binding.registry"
+import { JsonRpcTransport } from "../transport/json.rpc.transport"
 import { sanitizeFailureReason } from "../sanitize.failure.reason"
 import {
   AcpListSessionsResult,

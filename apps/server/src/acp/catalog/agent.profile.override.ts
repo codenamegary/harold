@@ -1,4 +1,5 @@
 import { WhichFn } from "../../agent-settings/resolve-agent-path"
+import { PresenceProbe } from "./catalog.ports"
 
 export type AcpClientCapabilities = {
   readonly fs: {
@@ -20,8 +21,6 @@ export type PresenceProbeResult = {
   readonly present: boolean
   readonly path: string | null
 }
-
-export type PresenceProbe = (ctx: PresenceProbeContext) => PresenceProbeResult
 
 export type AgentProfileOverride = {
   readonly command?: readonly string[]
@@ -53,10 +52,7 @@ export const probeEnvOrWhich = (
   return { present: path !== null, path }
 }
 
-export const probeWhich = (
-  ctx: PresenceProbeContext,
-  binaryName: string,
-): PresenceProbeResult => {
+export const probeWhich = (ctx: PresenceProbeContext, binaryName: string): PresenceProbeResult => {
   const path = ctx.which(binaryName) ?? null
   return { present: path !== null, path }
 }
