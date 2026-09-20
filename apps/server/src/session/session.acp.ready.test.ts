@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test"
 import { AgentId } from "contracts/http/agent-settings"
+import { AcpStartResult } from "../acp/supervisor/models"
 import { makeEnsureSupervisorReady } from "./session.acp.ready"
 
 const createSupervisorStub = (params: {
   running: ReadonlyArray<AgentId>
-  start?: (agentId: AgentId) => Promise<void>
+  start?: (agentId: AgentId) => Promise<AcpStartResult>
 }) => ({
   getRunningAgentIds: () => params.running,
-  start: params.start ?? (async () => undefined),
+  start: params.start ?? (async () => ({ ok: true as const })),
 })
 
 describe("makeEnsureSupervisorReady", () => {
@@ -21,13 +22,14 @@ describe("makeEnsureSupervisorReady", () => {
     expect(result).toEqual({ ok: true })
   })
 
-  test("returns sanitized start failure reason when start throws", async () => {
+  test("returns sanitized start failure reason when start reports a failure", async () => {
     const ensureSupervisorReady = makeEnsureSupervisorReady(
       createSupervisorStub({
         running: [],
-        start: async () => {
-          throw new Error("spawn exploded: Bearer secret-token-value")
-        },
+        start: async () => ({
+          ok: false as const,
+          reason: "spawn exploded: Bearer secret-token-value",
+        }),
       }),
     )
 
@@ -46,7 +48,7 @@ describe("makeEnsureSupervisorReady", () => {
     const ensureSupervisorReady = makeEnsureSupervisorReady(
       createSupervisorStub({
         running: [],
-        start: async () => undefined,
+        start: async () => ({ ok: true as const }),
       }),
     )
 

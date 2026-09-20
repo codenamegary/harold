@@ -13,10 +13,8 @@ import {
   StartAcpAgent,
 } from "./session.ports"
 
-export const isArchivedSession = (session: {
-  archivedAt: string | null
-  state: string
-}): boolean => session.archivedAt !== null || session.state === "archived"
+export const isArchivedSession = (session: { archivedAt: string | null; state: string }): boolean =>
+  session.archivedAt !== null || session.state === "archived"
 
 export type EnsureSupervisorReadyDeps = Readonly<{
   getRunningAgentIds: GetRunningAgentIds
@@ -30,36 +28,28 @@ export const makeEnsureSupervisorReady =
       return { ok: true }
     }
 
-    try {
-      await deps.start(agentId)
-      if (!deps.getRunningAgentIds().includes(agentId)) {
-        return { ok: false, reason: "ACP supervisor failed to become ready" }
-      }
-      return { ok: true }
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "ACP supervisor failed to start"
-      return {
-        ok: false,
-        reason: sanitizeAcpErrorMessage(message),
-      }
+    const startResult = await deps.start(agentId)
+    if (!startResult.ok) {
+      return { ok: false, reason: sanitizeAcpErrorMessage(startResult.reason) }
     }
+
+    if (!deps.getRunningAgentIds().includes(agentId)) {
+      return { ok: false, reason: "ACP supervisor failed to become ready" }
+    }
+    return { ok: true }
   }
 
 export const agentAdvertisesResumable = (
   acpSupervisor: Pick<AcpSupervisor, "getCapabilityInventory">,
   agentId: AgentId,
-): boolean =>
-  inventoryAdvertisesResumable(acpSupervisor.getCapabilityInventory(agentId))
+): boolean => inventoryAdvertisesResumable(acpSupervisor.getCapabilityInventory(agentId))
 
 export const agentAdvertisesSessionClose = (
   acpSupervisor: Pick<AcpSupervisor, "getCapabilityInventory">,
   agentId: AgentId,
-): boolean =>
-  inventoryAdvertisesSessionClose(acpSupervisor.getCapabilityInventory(agentId))
+): boolean => inventoryAdvertisesSessionClose(acpSupervisor.getCapabilityInventory(agentId))
 
 export const agentAdvertisesSessionList = (
   acpSupervisor: Pick<AcpSupervisor, "getCapabilityInventory">,
   agentId: AgentId,
-): boolean =>
-  inventoryAdvertisesSessionList(acpSupervisor.getCapabilityInventory(agentId))
+): boolean => inventoryAdvertisesSessionList(acpSupervisor.getCapabilityInventory(agentId))

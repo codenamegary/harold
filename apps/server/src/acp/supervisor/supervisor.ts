@@ -29,7 +29,7 @@ import {
   CloseWorkspaceSessionFailure,
   CloseWorkspaceSessionsResult,
   CreateAcpSupervisorParams,
-  createAcpStartError,
+  AcpStartResult,
   DEFAULT_ACP_RESTART_BACKOFF_MS,
   LiveWorkspaceSession,
 } from "./models"
@@ -225,12 +225,12 @@ export const createAcpSupervisor = ({
   const spawnAndInitialize = async (agentId: AgentId): Promise<void> => {
     const runtime = runtimes.get(agentId)
     if (runtime === undefined) {
-      throw createAcpStartError("ACP supervisor runtime is not available")
+      throw new Error("ACP supervisor runtime is not available")
     }
 
     const resolved = resolveStartConfig(agentSettingsRepository, agentId)
     if (!resolved.ok) {
-      throw createAcpStartError(resolved.reason)
+      throw new Error(resolved.reason)
     }
 
     const process = spawnAgentProcessFn({
@@ -365,14 +365,14 @@ export const createAcpSupervisor = ({
     beginBoundedRestart(agentId)
   }
 
-  const start = async (agentId: AgentId): Promise<void> => {
+  const start = async (agentId: AgentId): Promise<AcpStartResult> => {
     const existing = runtimes.get(agentId)
     if (existing?.state === "starting") {
-      throw createAcpStartError("ACP supervisor is already starting")
+      return { ok: false, reason: "ACP supervisor is already starting" }
     }
 
     if (existing?.state === "ready") {
-      return
+      return { ok: true }
     }
 
     if (existing !== undefined) {
@@ -381,7 +381,7 @@ export const createAcpSupervisor = ({
 
     const resolved = resolveStartConfig(agentSettingsRepository, agentId)
     if (!resolved.ok) {
-      throw createAcpStartError(resolved.reason)
+      return { ok: false, reason: resolved.reason }
     }
 
     const runtime = createEmptyRuntime(agentId)
@@ -393,8 +393,10 @@ export const createAcpSupervisor = ({
     } catch (error: unknown) {
       const reason = sanitizeFailureReason(error, "ACP supervisor failed to start")
       transitionToError(agentId, reason)
-      throw createAcpStartError(reason)
+      return { ok: false, reason }
     }
+
+    return { ok: true }
   }
 
   const handleAgentDisabled = async (agentId: AgentId): Promise<void> => {
@@ -404,9 +406,9 @@ export const createAcpSupervisor = ({
     await stopRuntime(agentId)
   }
 
-  const respawn = async (agentId: AgentId): Promise<void> => {
+  const respawn = async (agentId: AgentId): Promise<AcpStartResult> => {
     await stopRuntime(agentId)
-    await start(agentId)
+    return start(agentId)
   }
 
   const getAgentRuntimeState = (agentId: AgentId): AcpAgentRuntimeState => {
@@ -421,11 +423,8 @@ export const createAcpSupervisor = ({
       case "ready":
         return { status: runtime.state, error: null }
       case "error": {
-        const error = runtime.lastError
-        if (error === null) {
-          throw new Error("ACP error runtime is missing lastError")
-        }
-        return { status: "error", error }
+        // Both error transitions set lastError; the fallback only guards the invariant.
+        return { status: "error", error: runtime.lastError ?? "ACP supervisor failed to restart" }
       }
     }
   }

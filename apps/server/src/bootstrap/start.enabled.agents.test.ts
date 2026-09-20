@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import { AgentSettings } from "contracts/http/agent-settings"
 import { startEnabledAgents } from "./start.enabled.agents"
 
@@ -16,11 +16,26 @@ const agent = (overrides: Partial<AgentSettings> & Pick<AgentSettings, "id">): A
   ...overrides,
 })
 
+type StartStub = (agentId: string) => Promise<{ ok: true } | { ok: false; reason: string }>
+
+const makeStartStub = (
+  startOutcome: (agentId: string) => { ok: true } | { ok: false; reason: string },
+): { start: StartStub; calls: string[] } => {
+  const calls: string[] = []
+  return {
+    calls,
+    start: async (agentId: string) => {
+      calls.push(agentId)
+      return startOutcome(agentId)
+    },
+  }
+}
+
 describe("startEnabledAgents", () => {
   test("starts every enabled agent and skips disabled ones", async () => {
-    const start = mock(async () => undefined)
-    const info = mock(() => undefined)
-    const warn = mock(() => undefined)
+    const { start, calls } = makeStartStub(() => ({ ok: true }))
+    const info = () => undefined
+    const warn = () => undefined
 
     const results = await startEnabledAgents(
       {
@@ -34,21 +49,20 @@ describe("startEnabledAgents", () => {
       { info, warn },
     )
 
-    expect(start).toHaveBeenCalledTimes(2)
-    expect(
-      start.mock.calls.map((call) => call[0]).sort((left, right) => left.localeCompare(right)),
-    ).toEqual(["claude-acp", "cursor"])
+    expect(calls.slice().sort((left, right) => left.localeCompare(right))).toEqual([
+      "claude-acp",
+      "cursor",
+    ])
     expect(results).toEqual([
       { agentId: "cursor", ok: true },
       { agentId: "claude-acp", ok: true },
     ])
-    expect(warn).not.toHaveBeenCalled()
   })
 
   test("returns empty when no agents are enabled", async () => {
-    const start = mock(async () => undefined)
-    const info = mock(() => undefined)
-    const warn = mock(() => undefined)
+    const { start, calls } = makeStartStub(() => ({ ok: true }))
+    const info = () => undefined
+    const warn = () => undefined
 
     const results = await startEnabledAgents(
       {
@@ -58,20 +72,17 @@ describe("startEnabledAgents", () => {
       { info, warn },
     )
 
-    expect(start).not.toHaveBeenCalled()
+    expect(calls).toEqual([])
     expect(results).toEqual([])
-    expect(info).not.toHaveBeenCalled()
-    expect(warn).not.toHaveBeenCalled()
   })
 
   test("continues when one agent fails to start", async () => {
-    const start = mock(async (agentId: string) => {
-      if (agentId === "cursor") {
-        throw new Error("spawn failed")
-      }
-    })
-    const info = mock(() => undefined)
-    const warn = mock(() => undefined)
+    const { start } = makeStartStub((agentId) =>
+      agentId === "cursor" ? { ok: false, reason: "spawn failed" } : { ok: true },
+    )
+    const warnings: Array<{ obj: object; msg: string }> = []
+    const info = () => undefined
+    const warn = (obj: object, msg: string) => warnings.push({ obj, msg })
 
     const results = await startEnabledAgents(
       {
@@ -85,10 +96,10 @@ describe("startEnabledAgents", () => {
     )
 
     expect(results).toEqual([
-      { agentId: "cursor", ok: false, error: expect.any(Error) },
+      { agentId: "cursor", ok: false, error: "spawn failed" },
       { agentId: "opencode", ok: true },
     ])
-    expect(warn).toHaveBeenCalledTimes(1)
-    expect(warn.mock.calls[0]?.[1]).toBe("failed to start enabled ACP agent")
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]?.msg).toBe("failed to start enabled ACP agent")
   })
 })

@@ -1,5 +1,6 @@
 import { AgentId, AgentSettings } from "contracts/http/agent-settings"
 import { AttachmentReference } from "contracts/http/attachments"
+import { AcpStartResult } from "../acp/supervisor/models"
 import { AvailableCommandsUpdate } from "./hub/commands.available"
 
 /**
@@ -13,7 +14,7 @@ export type FindAgentSettings = (agentId: AgentId) => AgentSettings | undefined
 // ACP supervisor lifecycle
 export type GetRunningAgentIds = () => ReadonlyArray<AgentId>
 
-export type StartAcpAgent = (agentId: AgentId) => Promise<void>
+export type StartAcpAgent = (agentId: AgentId) => Promise<AcpStartResult>
 
 export type EnsureSupervisorReadyResult = { ok: true } | { ok: false; reason: string }
 

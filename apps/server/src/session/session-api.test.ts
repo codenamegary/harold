@@ -86,9 +86,10 @@ describe("POST /v1/sessions catalog create", () => {
       binaryName === "agent" ? "/usr/local/bin/agent" : undefined
     const { app, acpSupervisor } = await bootTestApp({
       whichFn,
-      startAcpAgentFn: async () => {
-        throw new Error("spawn exploded: Bearer secret-token-value")
-      },
+      startAcpAgentFn: async () => ({
+        ok: false as const,
+        reason: "spawn exploded: Bearer secret-token-value",
+      }),
       fakeAcpOptions: {
         capabilities: { loadSession: true, sessionClose: true, sessionList: true },
       },
