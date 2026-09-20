@@ -1,4 +1,4 @@
-import { CanonicalizePathResult } from "../filesystem/filesystem.canonicalize.path"
+import { CanonicalizePathResult } from "../filesystem/filesystem.ports"
 import { Workspace } from "contracts/http/workspace"
 import { WorkspaceRepositoryError } from "./workspace.errors"
 

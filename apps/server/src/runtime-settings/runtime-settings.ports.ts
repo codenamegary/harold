@@ -1,5 +1,5 @@
 import { LogLevel, RuntimeSettings } from "contracts/http/runtime-settings"
-import { CanonicalizePathResult } from "../filesystem/filesystem.canonicalize.path"
+import { CanonicalizePathResult } from "../filesystem/filesystem.ports"
 
 export type GetRuntimeSettings = () => RuntimeSettings
 

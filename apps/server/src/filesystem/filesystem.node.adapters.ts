@@ -1,16 +1,11 @@
 import { accessSync, constants, realpathSync, statSync } from "node:fs"
+import { readdir, realpath, stat } from "node:fs/promises"
 import path from "node:path"
 import { expandHomePath } from "./filesystem.expand.home.path"
 import { isMissingFilesystemError, isPermissionFilesystemError } from "./filesystem.errors"
-import { FilesystemPathError } from "./filesystem.errors"
+import { CanonicalizePath, ReadDirectoryEntries, StatPath } from "./filesystem.ports"
 
-export type CanonicalizePathResult =
-  | { ok: true; canonicalPath: string }
-  | { ok: false; error: FilesystemPathError }
-
-export const canonicalizePath = (
-  inputPath: string,
-): CanonicalizePathResult => {
+export const makeCanonicalizePath = (): CanonicalizePath => (inputPath) => {
   const expanded = expandHomePath(inputPath)
   const resolved = path.resolve(expanded)
 
@@ -57,4 +52,19 @@ export const canonicalizePath = (
   }
 
   return { ok: true, canonicalPath: realpathResult.canonicalPath }
+}
+
+export const makeReadDirectoryEntries = (): ReadDirectoryEntries => async (dirPath) => {
+  const entries = await readdir(dirPath, { withFileTypes: true })
+  return entries.map((entry) => ({ name: entry.name }))
+}
+
+export const makeStatPath = (): StatPath => async (inputPath) => {
+  try {
+    const canonicalPath = await realpath(inputPath)
+    const stats = await stat(canonicalPath)
+    return { ok: true, canonicalPath, isDirectory: stats.isDirectory() }
+  } catch {
+    return { ok: false }
+  }
 }

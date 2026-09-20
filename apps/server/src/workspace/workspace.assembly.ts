@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify"
 import { AgentDatabase } from "../persistence/database"
-import { canonicalizePath } from "../filesystem/filesystem.canonicalize.path"
+import { makeCanonicalizePath } from "../filesystem/filesystem.node.adapters"
 import { makeDeleteWorkspace } from "./workspace.delete.usecase"
 import { makeRegisterWorkspace } from "./workspace.register.usecase"
 import { registerWorkspaceRoutes } from "./workspace.routes"
@@ -45,7 +45,7 @@ export const assembleWorkspaceSlice = (deps: AssembleWorkspaceSliceDeps): Worksp
   const updateWorkspaceName = makeUpdateWorkspaceName(deps.database)
   const deleteWorkspaceRow = makeDeleteWorkspaceRow(deps.database)
   const registerWorkspace = makeRegisterWorkspace({
-    canonicalizePath,
+    canonicalizePath: makeCanonicalizePath(),
     getAllowedRoots: deps.getAllowedRoots,
     insertWorkspace,
   })

@@ -1,5 +1,5 @@
 import { FastifyInstance } from "fastify"
-import { canonicalizePath } from "../filesystem/filesystem.canonicalize.path"
+import { makeCanonicalizePath } from "../filesystem/filesystem.node.adapters"
 import { EnvBindOverrides } from "../config/env.bind.overrides"
 import { DeleteWorkspace, ListAllWorkspaces } from "../workspace/workspace.ports"
 import { AppliedRuntimeSettingsHolder } from "./applied.runtime.settings"
@@ -28,7 +28,7 @@ export const assembleRuntimeSettingsSlice = (
   const updateRuntimeSettings = makeUpdateRuntimeSettings({
     getSettings: deps.store.get,
     saveSettings: deps.store.save,
-    canonicalizePath,
+    canonicalizePath: makeCanonicalizePath(),
     listAllWorkspaces: deps.listAllWorkspaces,
     deleteWorkspace: deps.deleteWorkspace,
     onLogLevelChanged: deps.onLogLevelChanged,
