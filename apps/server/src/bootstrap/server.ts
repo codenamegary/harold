@@ -41,10 +41,8 @@ import {
 } from "../acp/agent/inventory"
 import { SpawnAgentProcessFn } from "../acp/supervisor/spawn.agent.process"
 import { registerSessionStreamRoutes } from "../session/stream.routes"
-import { createLogBuffer } from "../logs/log.buffer"
-import { createLogSinkStream } from "../logs/log.sink.stream"
-import { createLoggedAgentSpawn } from "../logs/logged.agent.spawn"
-import { registerLogRoutes } from "../logs/routes"
+import { assembleLogsSlice } from "../logs/logs.assembly"
+import { spawnAgentProcess } from "../acp/supervisor/spawn.agent.process"
 import { ConsoleAsset } from "../console/console.assets"
 import { registerConsoleRoutes } from "../console/console.routes"
 import { createAcpHubPromptSession } from "../session/hub/acp.hub.prompt"
@@ -146,15 +144,11 @@ export const createServer = async ({
   envBindOverrides,
   consoleAssets,
 }: CreateServerOptions) => {
-  const logBuffer = createLogBuffer()
-  const logSink = createLogSinkStream({
-    buffer: logBuffer,
-    downstream: logStream,
-  })
+  const logs = assembleLogsSlice({ downstream: logStream, spawnAgentProcess })
   const app = Fastify({
-    logger: buildLoggerOptions({ logStream: logSink, logLevel }),
+    logger: buildLoggerOptions({ logStream: logs.logSink, logLevel }),
   })
-  const spawnFn = spawnAgentProcessFn ?? createLoggedAgentSpawn(logBuffer)
+  const spawnFn = spawnAgentProcessFn ?? logs.spawnAgentProcessFn
 
   registerErrorHandler(app)
 
@@ -346,7 +340,7 @@ export const createServer = async ({
   })
 
   registerStatusRoutes(app, runtime, config, acpSupervisor)
-  registerLogRoutes(app, logBuffer)
+  logs.registerRoutes(app)
   const runtimeStatusService = createRuntimeStatusService({
     runtime,
   })

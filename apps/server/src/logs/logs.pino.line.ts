@@ -1,5 +1,5 @@
 import { LogLevel } from "contracts/http/runtime-settings"
-import { LogRecordInput } from "./log.buffer"
+import { LogRecordInput } from "./logs.models"
 
 const pinoLevelByNumber: Record<number, LogLevel> = {
   10: "trace",
