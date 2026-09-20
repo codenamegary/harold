@@ -74,6 +74,10 @@ export const DeleteSessionQuerySchema = z.strictObject({
   agentId: AgentIdSchema,
 })
 
+export const DeleteSessionParamsSchema = z.strictObject({
+  sessionId: z.string().min(1),
+})
+
 export const SessionDeleteTargetSchema = z.strictObject({
   agentId: AgentIdSchema,
   sessionId: z.string().min(1),
@@ -103,6 +107,7 @@ export type UpdateSessionBody = z.infer<typeof UpdateSessionBodySchema>
 export type SessionCollection = z.infer<typeof SessionCollectionSchema>
 export type ListSessionsQuery = z.infer<typeof ListSessionsQuerySchema>
 export type DeleteSessionQuery = z.infer<typeof DeleteSessionQuerySchema>
+export type DeleteSessionParams = z.infer<typeof DeleteSessionParamsSchema>
 export type SessionDeleteTarget = z.infer<typeof SessionDeleteTargetSchema>
 export type PromptSessionBody = z.infer<typeof PromptSessionBodySchema>
 export type PromptSessionResponse = z.infer<typeof PromptSessionResponseSchema>

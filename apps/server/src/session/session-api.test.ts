@@ -86,6 +86,9 @@ describe("POST /v1/sessions catalog create", () => {
       binaryName === "agent" ? "/usr/local/bin/agent" : undefined
     const { app, acpSupervisor } = await bootTestApp({
       whichFn,
+      startAcpAgentFn: async () => {
+        throw new Error("spawn exploded: Bearer secret-token-value")
+      },
       fakeAcpOptions: {
         capabilities: { loadSession: true, sessionClose: true, sessionList: true },
       },
@@ -93,28 +96,19 @@ describe("POST /v1/sessions catalog create", () => {
     await enableAgent(app, "cursor", whichFn)
     await acpSupervisor.stop()
 
-    const originalStart = acpSupervisor.start.bind(acpSupervisor)
-    acpSupervisor.start = async () => {
-      throw new Error("spawn exploded: Bearer secret-token-value")
-    }
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { agentId: "cursor", cwd: "/tmp/project" },
+    })
+    const body = ConflictProblemSchema.parse(JSON.parse(response.body))
 
-    try {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v1/sessions",
-        payload: { agentId: "cursor", cwd: "/tmp/project" },
-      })
-      const body = ConflictProblemSchema.parse(JSON.parse(response.body))
-
-      expect(response.statusCode).toBe(409)
-      expect(body.type).toBe(PROBLEM_TYPES.conflict)
-      expect(body.title).toBe("ACP unavailable")
-      expect(body.detail).toContain("spawn exploded")
-      expect(body.detail).not.toContain("secret-token-value")
-      expect(body.detail).toContain("[redacted]")
-    } finally {
-      acpSupervisor.start = originalStart
-    }
+    expect(response.statusCode).toBe(409)
+    expect(body.type).toBe(PROBLEM_TYPES.conflict)
+    expect(body.title).toBe("ACP unavailable")
+    expect(body.detail).toContain("spawn exploded")
+    expect(body.detail).not.toContain("secret-token-value")
+    expect(body.detail).toContain("[redacted]")
   })
 
   test("returns 400 for empty cwd", async () => {

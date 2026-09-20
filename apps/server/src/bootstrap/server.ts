@@ -22,7 +22,7 @@ import { AppliedRuntimeSettingsHolder } from "../runtime-settings/applied.runtim
 import { assembleWorkspaceSlice } from "../workspace/workspace.assembly"
 import { registerFilesystemBrowseRoutes } from "../filesystem/routes"
 import { assembleAttachmentsSlice } from "../attachments/attachments.assembly"
-import { registerSessionRoutes } from "../session/routes"
+import { registerSessionRoutes } from "../session/session.routes"
 import { createArchivedAcpSessionsStore } from "../session/archived.acp.sessions.store"
 import { assembleDeviceSlice } from "../device/device.assembly"
 import { assembleConnectionTestSlice } from "../connection-test/connection-test.assembly"
@@ -39,7 +39,7 @@ import {
   inventoryAdvertisesPromptImage,
 } from "../acp/agent/inventory"
 import { SpawnAgentProcessFn } from "../acp/supervisor/spawn.agent.process"
-import { registerSessionStreamRoutes } from "../session/stream.routes"
+import { registerSessionStreamRoutes } from "../session/session.stream.routes"
 import { assembleLogsSlice } from "../logs/logs.assembly"
 import { spawnAgentProcess } from "../acp/supervisor/spawn.agent.process"
 import { ConsoleAsset } from "../console/console.assets"
@@ -47,6 +47,9 @@ import { registerConsoleRoutes } from "../console/console.routes"
 import { createAcpHubPromptSession } from "../session/hub/acp.hub.prompt"
 import { createSessionCwdCache, createSessionHub, SessionHub } from "../session/hub/hub"
 import { createCommandsCache } from "../session/hub/commands.cache"
+import { makeEnsureSupervisorReady } from "../session/session.acp.ready"
+import { makePromptAuthGate } from "../session/session.prompt.auth.gate.usecase"
+import { StartAcpAgent } from "../session/session.ports"
 import { registerAuthMiddleware } from "../auth/middleware"
 import { redactPairingCodeInUrl } from "../device/device.redact.pairing.code.in.url"
 import { FetchRegistryFn } from "../agent-settings/agent.settings.ports"
@@ -78,6 +81,8 @@ export type CreateServerOptions = {
   registryUrl?: string
   acpSupervisor?: AcpSupervisor
   spawnAgentProcessFn?: SpawnAgentProcessFn
+  /** Test seam: replaces the supervisor's agent start used by session routes. */
+  startAcpAgentFn?: StartAcpAgent
   isLoopbackRequest?: (request: FastifyRequest) => boolean
   wsAuthFrameTimeoutMs?: number
   logStream?: Writable
@@ -134,6 +139,7 @@ export const createServer = async ({
   registryUrl,
   acpSupervisor: providedAcpSupervisor,
   spawnAgentProcessFn,
+  startAcpAgentFn,
   isLoopbackRequest,
   wsAuthFrameTimeoutMs,
   logStream,
@@ -269,6 +275,11 @@ export const createServer = async ({
 
   const acpSupervisor = acpSupervisorRef.current
 
+  const ensureSupervisorReady = makeEnsureSupervisorReady({
+    getRunningAgentIds: () => acpSupervisor.getRunningAgentIds(),
+    start: startAcpAgentFn ?? ((agentId) => acpSupervisor.start(agentId)),
+  })
+
   const workspace = assembleWorkspaceSlice({
     database,
     getAllowedRoots,
@@ -280,6 +291,27 @@ export const createServer = async ({
     findWorkspaceById: workspace.findById,
   })
 
+  const promptSession = createAcpHubPromptSession({
+    startPrompt: (params) => acpSupervisor.startPromptAcpSession(params),
+    resolveAttachment: async ({ sessionId, reference }) => {
+      const workspaceRoot = acpSupervisor.getSessionBindingRegistry().getWorkspaceRoot(sessionId)
+      if (workspaceRoot === undefined) {
+        return null
+      }
+      return attachments.loadAttachment({
+        workspacePath: workspaceRoot,
+        reference,
+      })
+    },
+    advertisesPromptCapability: ({ agentId, kind }) => {
+      const inventory = acpSupervisor.getCapabilityInventory(agentId)
+      if (kind === "image") {
+        return inventoryAdvertisesPromptImage(inventory)
+      }
+      return inventoryAdvertisesEmbeddedContext(inventory)
+    },
+  })
+
   const sessionHub = createSessionHub({
     cwdCache,
     commandsCache,
@@ -287,33 +319,15 @@ export const createServer = async ({
       const loaded = await acpSupervisor.loadSession({ agentId, sessionId, cwd })
       return loaded.ok ? { ok: true } : { ok: false, reason: loaded.reason }
     },
-    promptSession: createAcpHubPromptSession({
-      startPrompt: (params) => acpSupervisor.startPromptAcpSession(params),
-      resolveAttachment: async ({ sessionId, reference }) => {
-        const workspaceRoot = acpSupervisor.getSessionBindingRegistry().getWorkspaceRoot(sessionId)
-        if (workspaceRoot === undefined) {
-          return null
-        }
-        return attachments.loadAttachment({
-          workspacePath: workspaceRoot,
-          reference,
-        })
-      },
-      advertisesPromptCapability: ({ agentId, kind }) => {
-        const inventory = acpSupervisor.getCapabilityInventory(agentId)
-        if (kind === "image") {
-          return inventoryAdvertisesPromptImage(inventory)
-        }
-        return inventoryAdvertisesEmbeddedContext(inventory)
-      },
-    }),
+    promptSession,
     cancelSession: async ({ sessionId }) => {
       const cancelled = await acpSupervisor.cancelAcpSession({
         acpSessionId: sessionId,
       })
       return cancelled.ok ? { ok: true } : { ok: false, reason: cancelled.reason }
     },
-    authHooks: {
+    promptGate: makePromptAuthGate({
+      promptSession,
       ensureReadyForPrompt: async (agentId) => {
         const ready = await authBroker.ensureReadyForPrompt(agentId)
         return ready.ok ? { ok: true } : { ok: false }
@@ -321,7 +335,7 @@ export const createServer = async ({
       ensureSessionFromChallenge: async (agentId) => {
         await authBroker.ensureSessionFromChallenge(agentId)
       },
-    },
+    }),
   })
   sessionHubRef.current = sessionHub
 
@@ -361,15 +375,16 @@ export const createServer = async ({
     envBindOverrides,
   })
   runtimeSettings.registerRoutes(app)
-  registerSessionRoutes(
-    app,
-    agentSettings,
+  registerSessionRoutes(app, {
     acpSupervisor,
+    findAgentSettings: (agentId) =>
+      agentSettings.list().find((settings) => settings.id === agentId),
+    ensureSupervisorReady,
     cwdCache,
     commandsCache,
     archivedAcpSessions,
     authBroker,
-  )
+  })
 
   const connectionTest = assembleConnectionTestSlice({
     getAdvertisedUrl: () => runtimeSettings.get().advertisedUrl,

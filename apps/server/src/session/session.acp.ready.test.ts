@@ -1,36 +1,37 @@
 import { describe, expect, test } from "bun:test"
 import { AgentId } from "contracts/http/agent-settings"
-import { AcpSupervisor } from "../acp/supervisor/models"
-import { ensureSupervisorReady } from "./session.acp.ready"
+import { makeEnsureSupervisorReady } from "./session.acp.ready"
 
 const createSupervisorStub = (params: {
   running: ReadonlyArray<AgentId>
   start?: (agentId: AgentId) => Promise<void>
-}): Pick<AcpSupervisor, "getRunningAgentIds" | "start"> => ({
+}) => ({
   getRunningAgentIds: () => params.running,
   start: params.start ?? (async () => undefined),
 })
 
-describe("ensureSupervisorReady", () => {
+describe("makeEnsureSupervisorReady", () => {
   test("returns ok when the agent is already running", async () => {
-    const result = await ensureSupervisorReady(
+    const ensureSupervisorReady = makeEnsureSupervisorReady(
       createSupervisorStub({ running: ["cursor"] }),
-      "cursor",
     )
+
+    const result = await ensureSupervisorReady("cursor")
 
     expect(result).toEqual({ ok: true })
   })
 
   test("returns sanitized start failure reason when start throws", async () => {
-    const result = await ensureSupervisorReady(
+    const ensureSupervisorReady = makeEnsureSupervisorReady(
       createSupervisorStub({
         running: [],
         start: async () => {
           throw new Error("spawn exploded: Bearer secret-token-value")
         },
       }),
-      "cursor",
     )
+
+    const result = await ensureSupervisorReady("cursor")
 
     expect(result.ok).toBe(false)
     if (result.ok) {
@@ -42,13 +43,14 @@ describe("ensureSupervisorReady", () => {
   })
 
   test("returns a clear reason when start finishes without a ready agent", async () => {
-    const result = await ensureSupervisorReady(
+    const ensureSupervisorReady = makeEnsureSupervisorReady(
       createSupervisorStub({
         running: [],
         start: async () => undefined,
       }),
-      "cursor",
     )
+
+    const result = await ensureSupervisorReady("cursor")
 
     expect(result).toEqual({
       ok: false,

@@ -5,7 +5,15 @@ import { SessionConfig } from "contracts/http/config.options"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
 import { AUTH_GATED_PROMPT_MESSAGE } from "../../acp/auth.required"
 import { parseAvailableCommandsUpdate } from "./commands.available"
-import { CommandsCache, createCommandsCache } from "./commands.cache"
+import { createCommandsCache } from "./commands.cache"
+import { makePromptAuthGate, PromptAuthGate } from "../session.prompt.auth.gate.usecase"
+import {
+  CommandsCache,
+  SessionCwdCache,
+  SessionHubCancelSession,
+  SessionHubLoadSession,
+  SessionHubPromptSession,
+} from "../session.ports"
 
 export type SessionKey = `${AgentId}:${string}`
 
@@ -22,37 +30,11 @@ export type SessionHubSubscriber = {
   sessionKey: SessionKey | null
 }
 
-export type SessionHubLoadSession = (params: {
-  agentId: AgentId
-  sessionId: string
-  cwd: string
-}) => Promise<{ ok: true } | { ok: false; reason: string }>
+export type BeginClientRpcError = { readonly kind: "missing_method" }
 
-export type SessionHubPromptSession = (params: {
-  agentId: AgentId
-  sessionId: string
-  text: string
-  attachments?: ReadonlyArray<AttachmentReference>
-}) => Promise<
-  { ok: true } | { ok: false; reason: string; authRequired?: boolean }
->
-
-export type SessionHubCancelSession = (params: {
-  agentId: AgentId
-  sessionId: string
-}) => Promise<{ ok: true } | { ok: false; reason: string }>
-
-export type SessionCwdCache = {
-  remember: (params: { agentId: AgentId; sessionId: string; cwd: string }) => void
-  get: (params: { agentId: AgentId; sessionId: string }) => string | undefined
-}
-
-export type SessionHubAuthHooks = {
-  ensureReadyForPrompt: (
-    agentId: AgentId,
-  ) => Promise<{ ok: true } | { ok: false }>
-  ensureSessionFromChallenge: (agentId: AgentId) => Promise<void>
-}
+export type BeginClientRpcResult =
+  | { readonly ok: true; readonly value: unknown }
+  | { readonly ok: false; readonly error: BeginClientRpcError }
 
 export type PendingClientRpc = {
   readonly requestId: string
@@ -72,7 +54,8 @@ export type CreateSessionHubParams = {
   promptSession: SessionHubPromptSession
   cancelSession: SessionHubCancelSession
   createRequestId?: () => string
-  authHooks?: SessionHubAuthHooks
+  /** Overrides the default auth-free prompt gate composed from promptSession. */
+  promptGate?: PromptAuthGate
 }
 
 export type SessionHub = {
@@ -95,25 +78,14 @@ export type SessionHub = {
     text: string
     attachments?: ReadonlyArray<AttachmentReference>
   }) => Promise<void>
-  cancel: (params: {
-    subscriberId: string
-    agentId: AgentId
-    sessionId: string
-  }) => Promise<void>
-  handleSessionUpdate: (params: {
-    agentId: AgentId
-    sessionId: string
-    update: unknown
-  }) => void
+  cancel: (params: { subscriberId: string; agentId: AgentId; sessionId: string }) => Promise<void>
+  handleSessionUpdate: (params: { agentId: AgentId; sessionId: string; update: unknown }) => void
   handleSessionConfig: (params: {
     agentId: AgentId
     sessionId: string
     configOptions: SessionConfig
   }) => void
-  broadcastAuthSessionUpdated: (params: {
-    agentId: AgentId
-    auth: AgentAuth
-  }) => void
+  broadcastAuthSessionUpdated: (params: { agentId: AgentId; auth: AgentAuth }) => void
   requestPermission: (params: {
     agentId: AgentId
     sessionId: string
@@ -125,14 +97,8 @@ export type SessionHub = {
     method: string
     params: unknown
   }) => Promise<unknown>
-  resolvePermissionReply: (params: {
-    requestId: string
-    optionId: string
-  }) => void
-  resolveExtensionReply: (params: {
-    requestId: string
-    result: unknown
-  }) => void
+  resolvePermissionReply: (params: { requestId: string; optionId: string }) => void
+  resolveExtensionReply: (params: { requestId: string; result: unknown }) => void
 }
 
 export const createSessionCwdCache = (): SessionCwdCache => {
@@ -153,12 +119,13 @@ export const createSessionHub = ({
   promptSession,
   cancelSession,
   createRequestId = () => crypto.randomUUID(),
-  authHooks,
+  promptGate,
 }: CreateSessionHubParams): SessionHub => {
   const subscribers = new Map<string, SessionHubSubscriber>()
   const subscribersBySession = new Map<SessionKey, Set<string>>()
   const replayTargetBySession = new Map<SessionKey, string>()
   const pendingById = new Map<string, PendingClientRpc>()
+  const runGatedPrompt = promptGate ?? makePromptAuthGate({ promptSession })
 
   const sendError = (
     subscriber: SessionHubSubscriber,
@@ -168,9 +135,7 @@ export const createSessionHub = ({
     subscriber.sink.send({
       type: "error",
       message,
-      ...(ref === undefined
-        ? {}
-        : { agentId: ref.agentId, sessionId: ref.sessionId }),
+      ...(ref === undefined ? {} : { agentId: ref.agentId, sessionId: ref.sessionId }),
     })
   }
 
@@ -352,18 +317,20 @@ export const createSessionHub = ({
     kind: "permission" | "extension"
     method?: string
     requestParams: unknown
-  }): Promise<unknown> => {
-    const requestId = createRequestId()
+  }): Promise<BeginClientRpcResult> => {
     const key = sessionKey(params.agentId, params.sessionId)
 
-    return new Promise((resolve, reject) => {
-      if (params.kind === "extension") {
-        const method = params.method
-        if (method === undefined || method.length === 0) {
-          reject(new Error("extension request missing method"))
-          return
-        }
+    if (params.kind === "extension") {
+      const method = params.method
+      if (method === undefined || method.length === 0) {
+        return Promise.resolve({
+          ok: false,
+          error: { kind: "missing_method" },
+        })
+      }
 
+      const requestId = createRequestId()
+      return new Promise((resolve) => {
         const pending: PendingClientRpc = {
           requestId,
           agentId: params.agentId,
@@ -371,7 +338,7 @@ export const createSessionHub = ({
           kind: "extension",
           method,
           params: params.requestParams,
-          resolve,
+          resolve: (result) => resolve({ ok: true, value: result }),
           settled: false,
         }
         pendingById.set(requestId, pending)
@@ -383,9 +350,11 @@ export const createSessionHub = ({
           sessionId: params.sessionId,
           params: params.requestParams,
         })
-        return
-      }
+      })
+    }
 
+    const requestId = createRequestId()
+    return new Promise((resolve) => {
       const pending: PendingClientRpc = {
         requestId,
         agentId: params.agentId,
@@ -393,7 +362,7 @@ export const createSessionHub = ({
         kind: "permission",
         method: params.method,
         params: params.requestParams,
-        resolve,
+        resolve: (result) => resolve({ ok: true, value: result }),
         settled: false,
       }
       pendingById.set(requestId, pending)
@@ -405,6 +374,17 @@ export const createSessionHub = ({
         params: params.requestParams,
       })
     })
+  }
+
+  const awaitClientRpc = async (
+    begun: Promise<BeginClientRpcResult>,
+    missingMethodMessage: string,
+  ): Promise<unknown> => {
+    const result = await begun
+    if (!result.ok) {
+      throw new Error(missingMethodMessage)
+    }
+    return result.value
   }
 
   const settlePending = (requestId: string, result: unknown) => {
@@ -440,18 +420,7 @@ export const createSessionHub = ({
         return
       }
 
-      if (authHooks !== undefined) {
-        const ready = await authHooks.ensureReadyForPrompt(params.agentId)
-        if (!ready.ok) {
-          sendError(subscriber, AUTH_GATED_PROMPT_MESSAGE, {
-            agentId: params.agentId,
-            sessionId: params.sessionId,
-          })
-          return
-        }
-      }
-
-      const result = await promptSession({
+      const result = await runGatedPrompt({
         agentId: params.agentId,
         sessionId: params.sessionId,
         text: params.text,
@@ -460,8 +429,7 @@ export const createSessionHub = ({
           : {}),
       })
       if (!result.ok) {
-        if (result.authRequired === true && authHooks !== undefined) {
-          await authHooks.ensureSessionFromChallenge(params.agentId)
+        if (result.error.kind === "AUTH_GATED") {
           sendError(subscriber, AUTH_GATED_PROMPT_MESSAGE, {
             agentId: params.agentId,
             sessionId: params.sessionId,
@@ -469,7 +437,7 @@ export const createSessionHub = ({
           return
         }
 
-        sendError(subscriber, result.reason, {
+        sendError(subscriber, result.error.reason, {
           agentId: params.agentId,
           sessionId: params.sessionId,
         })
@@ -535,20 +503,26 @@ export const createSessionHub = ({
       })
     },
     requestPermission: ({ agentId, sessionId, params }) =>
-      beginClientRpc({
-        agentId,
-        sessionId,
-        kind: "permission",
-        requestParams: params,
-      }),
+      awaitClientRpc(
+        beginClientRpc({
+          agentId,
+          sessionId,
+          kind: "permission",
+          requestParams: params,
+        }),
+        "permission request failed to start",
+      ),
     requestExtensionRpc: ({ agentId, sessionId, method, params }) =>
-      beginClientRpc({
-        agentId,
-        sessionId,
-        kind: "extension",
-        method,
-        requestParams: params,
-      }),
+      awaitClientRpc(
+        beginClientRpc({
+          agentId,
+          sessionId,
+          kind: "extension",
+          method,
+          requestParams: params,
+        }),
+        "extension request missing method",
+      ),
     resolvePermissionReply: ({ requestId, optionId }) => {
       settlePending(requestId, {
         outcome: {

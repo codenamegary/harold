@@ -5,7 +5,7 @@ import { AgentId } from "contracts/http/agent-settings"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
 import { AcpSupervisor } from "../acp/supervisor/models"
-import { ensureSupervisorReady } from "../session/session.acp.ready"
+import { makeEnsureSupervisorReady } from "../session/session.acp.ready"
 
 type TestServerApp = Awaited<ReturnType<typeof createServer>>["app"]
 
@@ -67,7 +67,10 @@ export const seedBoundSession = async (params: {
   workspacePath: string
   agentId: AgentId
 }): Promise<{ sessionId: string; acpSessionId: string }> => {
-  const ready = await ensureSupervisorReady(params.acpSupervisor, params.agentId)
+  const ready = await makeEnsureSupervisorReady({
+    getRunningAgentIds: params.acpSupervisor.getRunningAgentIds,
+    start: (agentId) => params.acpSupervisor.start(agentId),
+  })(params.agentId)
   if (!ready.ok) {
     throw new Error(`ACP supervisor failed to start for seeded session: ${ready.reason}`)
   }
