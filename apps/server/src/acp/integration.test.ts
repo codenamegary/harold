@@ -66,7 +66,10 @@ describe("ACP supervisor integration", () => {
       config: { host: "127.0.0.1", port: 3848 },
     })
 
-    expect(acpSupervisor.start("cursor")).rejects.toThrow()
+    expect(await acpSupervisor.start("cursor")).toEqual({
+      ok: false,
+      reason: "Agent is not enabled",
+    })
 
     const statusResponse = await app.inject({ method: "GET", url: "/v1/status" })
     const status = StatusSchema.parse(JSON.parse(statusResponse.body))

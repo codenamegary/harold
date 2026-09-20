@@ -226,7 +226,12 @@ export const createServer = async ({
 
   const authBroker = createAuthBroker({
     agentExists,
-    requestRespawn: async (agentId) => acpSupervisorRef.current.respawn(agentId),
+    requestRespawn: async (agentId) => {
+      const result = await acpSupervisorRef.current.respawn(agentId)
+      if (!result.ok) {
+        throw new Error(result.reason)
+      }
+    },
   })
   authBrokerRef.current = authBroker
 
@@ -238,7 +243,12 @@ export const createServer = async ({
       spawnAgentProcessFn: spawnFn,
       authHooks: createSupervisorAuthHooks({
         authBroker,
-        requestRespawn: async (agentId) => acpSupervisorRef.current.respawn(agentId),
+        requestRespawn: async (agentId) => {
+          const result = await acpSupervisorRef.current.respawn(agentId)
+          if (!result.ok) {
+            throw new Error(result.reason)
+          }
+        },
       }),
       onSessionUpdate: ({ agentId, acpSessionId, update }) => {
         sessionHubRef.current?.handleSessionUpdate({

@@ -37,9 +37,7 @@ export type SessionConfigHandler = (input: {
   configOptions: SessionConfig
 }) => void
 
-export type AcpSessionCloseResult =
-  | { ok: true }
-  | { ok: false; reason: string }
+export type AcpSessionCloseResult = { ok: true } | { ok: false; reason: string }
 
 export type AcpSessionPromptResult =
   | { ok: true; result: unknown }
@@ -49,9 +47,7 @@ export type AcpSessionPromptStartResult =
   | { ok: true; turnId: string; completion: Promise<AcpSessionPromptResult> }
   | { ok: false; reason: string; authRequired?: boolean }
 
-export type AcpSessionCancelResult =
-  | { ok: true }
-  | { ok: false; reason: string }
+export type AcpSessionCancelResult = { ok: true } | { ok: false; reason: string }
 
 export type SessionUpdateHandler = (input: {
   agentId: AgentId
@@ -113,10 +109,10 @@ export type AcpSupervisor = {
   getTransport: (agentId?: AgentId) => JsonRpcTransport | null
   getSessionBindingRegistry: () => SessionBindingRegistry
   listLiveByWorkspaceRoot: (workspaceRoot: string) => ReadonlyArray<LiveWorkspaceSession>
-  start: (agentId: AgentId) => Promise<void>
+  start: (agentId: AgentId) => Promise<AcpStartResult>
   stop: () => Promise<void>
   handleAgentDisabled: (agentId: AgentId) => Promise<void>
-  respawn: (agentId: AgentId) => Promise<void>
+  respawn: (agentId: AgentId) => Promise<AcpStartResult>
   listAcpSessions: (params?: { cwd?: string }) => Promise<AcpListSessionsResult>
   createAcpSession: (params: {
     agentId?: AgentId
@@ -124,10 +120,7 @@ export type AcpSupervisor = {
     sessionId: string
     workspaceId: string
   }) => Promise<AcpSessionOperationResult>
-  createSession: (params: {
-    agentId: AgentId
-    cwd: string
-  }) => Promise<AcpSessionOperationResult>
+  createSession: (params: { agentId: AgentId; cwd: string }) => Promise<AcpSessionOperationResult>
   setConfigOption: (params: {
     agentId: AgentId
     sessionId: string
@@ -161,9 +154,7 @@ export type AcpSupervisor = {
   closeWorkspaceSessions: (params: {
     sessions: ReadonlyArray<LiveWorkspaceSession>
   }) => Promise<CloseWorkspaceSessionsResult>
-  unbindWorkspaceSessions: (params: {
-    sessions: ReadonlyArray<LiveWorkspaceSession>
-  }) => void
+  unbindWorkspaceSessions: (params: { sessions: ReadonlyArray<LiveWorkspaceSession> }) => void
 }
 
 export type AgentSettingsReader = {
@@ -199,13 +190,4 @@ export type CreateAcpSupervisorParams = {
   authHooks?: SupervisorAuthHooks
 }
 
-export type AcpStartError = Error & { readonly name: "AcpStartError" }
-
-export const createAcpStartError = (message: string): AcpStartError => {
-  const error = new Error(message) as AcpStartError
-  error.name = "AcpStartError"
-  return error
-}
-
-export const isAcpStartError = (error: unknown): error is AcpStartError =>
-  error instanceof Error && error.name === "AcpStartError"
+export type AcpStartResult = { ok: true } | { ok: false; reason: string }

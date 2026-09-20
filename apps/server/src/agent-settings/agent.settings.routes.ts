@@ -12,10 +12,7 @@ import {
   UpdateAgentSettingsBodySchema,
 } from "contracts/http/agent-settings"
 import { AuthBroker } from "../agent/auth/broker"
-import {
-  AcpSupervisor,
-  isAcpStartError,
-} from "../acp/supervisor/models"
+import { AcpSupervisor } from "../acp/supervisor/models"
 import { agentAdvertisesSessionList } from "../session/session.acp.ready"
 import { wireAgentCapabilities } from "./capabilities.wire"
 import {
@@ -61,9 +58,6 @@ const sendProblem = (
   problem: unknown,
 ) => reply.status(status).type("application/problem+json").send(problem)
 
-const acpStartFailureReason = (error: unknown): string =>
-  isAcpStartError(error) ? error.message : "ACP supervisor failed to start"
-
 export const registerAgentSettingsRoutes = (
   app: FastifyInstance,
   options: RegisterAgentSettingsRoutesOptions,
@@ -76,10 +70,7 @@ export const registerAgentSettingsRoutes = (
     return AgentSettingsSchema.parse({
       ...item,
       state,
-      capabilities: wireAgentCapabilities(
-        state,
-        acpSupervisor.getCapabilityInventory(item.id),
-      ),
+      capabilities: wireAgentCapabilities(state, acpSupervisor.getCapabilityInventory(item.id)),
       authSummary,
     })
   }
@@ -142,9 +133,7 @@ export const registerAgentSettingsRoutes = (
       return sendProblem(reply, 404, buildAgentNotFoundProblem())
     }
 
-    return reply.status(200).send(
-      DetectAgentPathResponseSchema.parse(result.value),
-    )
+    return reply.status(200).send(DetectAgentPathResponseSchema.parse(result.value))
   })
 
   app.post("/v1/settings/agents/:agentId/actions", async (request, reply) => {
@@ -157,21 +146,15 @@ export const registerAgentSettingsRoutes = (
     }
 
     if (!settings.enabled) {
-      return sendProblem(
-        reply,
-        409,
-        buildAgentCannotRespawnProblem("Agent is not enabled"),
-      )
+      return sendProblem(reply, 409, buildAgentCannotRespawnProblem("Agent is not enabled"))
     }
 
     switch (action.type) {
       case "respawn": {
-        try {
-          await acpSupervisor.respawn(agentId)
-        } catch (error: unknown) {
-          const reason = acpStartFailureReason(error)
-          app.log.warn({ agentId, reason }, "ACP agent respawn failed")
-          return sendProblem(reply, 409, buildAgentCannotRespawnProblem(reason))
+        const startResult = await acpSupervisor.respawn(agentId)
+        if (!startResult.ok) {
+          app.log.warn({ agentId, reason: startResult.reason }, "ACP agent respawn failed")
+          return sendProblem(reply, 409, buildAgentCannotRespawnProblem(startResult.reason))
         }
 
         if (!agentAdvertisesSessionList(acpSupervisor, agentId)) {
@@ -224,14 +207,12 @@ export const registerAgentSettingsRoutes = (
     }
 
     if ("enabled" in body && body.enabled) {
-      try {
-        await acpSupervisor.start(agentId)
-      } catch (error: unknown) {
-        const reason = acpStartFailureReason(error)
-        app.log.warn({ agentId, reason }, "ACP agent start failed")
+      const startResult = await acpSupervisor.start(agentId)
+      if (!startResult.ok) {
+        app.log.warn({ agentId, reason: startResult.reason }, "ACP agent start failed")
         options.updateAgentSettings({ agentId, body: { enabled: false } })
         await acpSupervisor.handleAgentDisabled(agentId)
-        return sendProblem(reply, 409, buildAgentCannotEnableProblem(reason))
+        return sendProblem(reply, 409, buildAgentCannotEnableProblem(startResult.reason))
       }
 
       if (!agentAdvertisesSessionList(acpSupervisor, agentId)) {

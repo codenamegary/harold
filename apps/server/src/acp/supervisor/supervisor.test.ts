@@ -115,7 +115,7 @@ describe("createAcpSupervisor", () => {
     expect(supervisor.getCapabilityInventory("cursor")).toBeNull()
   })
 
-  test("rejects start when the agent is disabled or missing a path", async () => {
+  test("returns a failed result when the agent is disabled or missing a path", async () => {
     const supervisor = createAcpSupervisor({
       agentSettingsRepository: createRepository([
         { id: "cursor", enabled: false, path: "/bin/agent" },
@@ -124,7 +124,10 @@ describe("createAcpSupervisor", () => {
     })
     supervisors.push(supervisor)
 
-    expect(supervisor.start("cursor")).rejects.toThrow("Agent is not enabled")
+    expect(await supervisor.start("cursor")).toEqual({
+      ok: false,
+      reason: "Agent is not enabled",
+    })
     expect(supervisor.getStatus().state).toBe("stopped")
 
     const missingPath = createAcpSupervisor({
@@ -133,7 +136,10 @@ describe("createAcpSupervisor", () => {
     })
     supervisors.push(missingPath)
 
-    expect(missingPath.start("cursor")).rejects.toThrow("Agent executable path is not configured")
+    expect(await missingPath.start("cursor")).toEqual({
+      ok: false,
+      reason: "Agent executable path is not configured",
+    })
     expect(missingPath.getStatus().state).toBe("stopped")
   })
 
@@ -275,7 +281,10 @@ describe("createAcpSupervisor", () => {
     })
     supervisors.push(supervisor)
 
-    expect(supervisor.start("cursor")).rejects.toThrow("initialize failed")
+    expect(await supervisor.start("cursor")).toEqual({
+      ok: false,
+      reason: "initialize failed",
+    })
     expect(supervisor.getStatus().state).toBe("error")
     expect(supervisor.getAgentRuntimeState("cursor")).toEqual({
       status: "error",

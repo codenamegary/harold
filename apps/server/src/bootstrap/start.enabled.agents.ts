@@ -9,7 +9,7 @@ export type StartEnabledAgentsLog = {
 
 export type StartEnabledAgentResult =
   | { agentId: AgentId; ok: true }
-  | { agentId: AgentId; ok: false; error: unknown }
+  | { agentId: AgentId; ok: false; error: string }
 
 export const startEnabledAgents = async (
   agentSettingsRepository: Pick<AgentSettingsSlice, "list">,
@@ -29,12 +29,10 @@ export const startEnabledAgents = async (
 
   const results = await Promise.all(
     enabledIds.map(async (agentId): Promise<StartEnabledAgentResult> => {
-      try {
-        await acpSupervisor.start(agentId)
-        return { agentId, ok: true }
-      } catch (error: unknown) {
-        return { agentId, ok: false, error }
-      }
+      const startResult = await acpSupervisor.start(agentId)
+      return startResult.ok
+        ? { agentId, ok: true }
+        : { agentId, ok: false, error: startResult.reason }
     }),
   )
 
@@ -44,10 +42,7 @@ export const startEnabledAgents = async (
       return
     }
 
-    log.warn(
-      { agentId: result.agentId, err: result.error },
-      "failed to start enabled ACP agent",
-    )
+    log.warn({ agentId: result.agentId, err: result.error }, "failed to start enabled ACP agent")
   })
 
   return results
