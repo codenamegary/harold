@@ -1,13 +1,10 @@
-import {
-  CONNECTION_TEST_PATH,
-  ConnectionTestResponseSchema,
-} from "contracts/http/connection-test"
+import { CONNECTION_TEST_PATH, ConnectionTestResponseSchema } from "contracts/http/connection-test"
 import { FastifyInstance } from "fastify"
-import { ConnectionTestService } from "./connection.test.service"
+import { RunConnectionTest } from "./connection-test.run.usecase"
 import {
   buildConnectionTestFailedProblem,
   buildMissingAdvertisedUrlProblem,
-} from "./problems"
+} from "./connection-test.problems"
 
 const sendProblem = (
   reply: {
@@ -21,10 +18,10 @@ const sendProblem = (
 
 export const registerConnectionTestRoutes = (
   app: FastifyInstance,
-  service: ConnectionTestService,
+  runConnectionTest: RunConnectionTest,
 ) => {
   app.post(CONNECTION_TEST_PATH, async (_request, reply) => {
-    const result = await service.run()
+    const result = await runConnectionTest()
 
     if (!result.ok) {
       if (result.error.kind === "missing_advertised_url") {

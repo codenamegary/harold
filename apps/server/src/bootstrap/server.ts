@@ -25,8 +25,7 @@ import { assembleAttachmentsSlice } from "../attachments/attachments.assembly"
 import { registerSessionRoutes } from "../session/routes"
 import { createArchivedAcpSessionsStore } from "../session/archived.acp.sessions.store"
 import { assembleDeviceSlice } from "../device/device.assembly"
-import { createConnectionTestService } from "../connection-test/connection.test.service"
-import { registerConnectionTestRoutes } from "../connection-test/routes"
+import { assembleConnectionTestSlice } from "../connection-test/connection-test.assembly"
 import { createRuntimeStatusService } from "../runtime/status.service"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn } from "../agent-settings/validate-agent-path"
@@ -378,11 +377,11 @@ export const createServer = async ({
     authBroker,
   )
 
-  const connectionTestService = createConnectionTestService({
+  const connectionTest = assembleConnectionTestSlice({
     getAdvertisedUrl: () => runtimeSettings.get().advertisedUrl,
     deviceProvisioning: device,
   })
-  registerConnectionTestRoutes(app, connectionTestService)
+  connectionTest.registerRoutes(app)
 
   if (withTestRoutes) {
     registerTestRoutes(app)

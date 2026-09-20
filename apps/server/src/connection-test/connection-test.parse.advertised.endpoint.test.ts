@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { parseAdvertisedEndpoint } from "./parse.advertised.endpoint"
+import { parseAdvertisedEndpoint } from "./connection-test.parse.advertised.endpoint"
 
 describe("parseAdvertisedEndpoint", () => {
   test("defaults port 443", () => {

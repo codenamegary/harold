@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test"
 import { CONNECTION_TEST_PATH, ConnectionTestResponseSchema } from "contracts/http/connection-test"
 import { DEVICES_PATH } from "contracts/http/device"
 import { ValidationProblemSchema } from "contracts/http/error"
-import { createConnectionTestService } from "./connection.test.service"
-import { registerConnectionTestRoutes } from "./routes"
+import { makeRunConnectionTest } from "./connection-test.run.usecase"
+import { registerConnectionTestRoutes } from "./connection-test.routes"
 import { bootTestApp, bootTestDatabase, registerTestApp } from "../test-support/test.harness"
 import {
   makeRuntimeSettingsFileStore,
@@ -47,7 +47,7 @@ describe("connection test API", () => {
       database,
       loopbackEndpoint: `http://${config.host}:${config.port}`,
       getAdvertisedEndpointSettings: () => {
-          const settings = runtimeSettingsStore.get()
+        const settings = runtimeSettingsStore.get()
         return {
           advertisedUrl: settings.advertisedUrl,
           advertisedUrlEnabled: settings.advertisedUrlEnabled,
@@ -56,27 +56,25 @@ describe("connection test API", () => {
     })
 
     const advertisedUrl = "https://agents.example.com"
-    const connectionTestService = createConnectionTestService({
+    const runConnectionTest = makeRunConnectionTest({
       getAdvertisedUrl: () => runtimeSettingsStore.get().advertisedUrl,
       deviceProvisioning: device,
-      deps: {
-        lookupHost: async () => [{ address: "127.0.0.1", family: 4 }],
-        connectTcp: async () => undefined,
-        verifyTls: async () => ({
-          id: "tls",
-          status: "pass",
-          message: "TLS ok",
-        }),
-        fetchDeviceAuth: async () => ({
-          id: "device-auth",
-          status: "pass",
-          message: "Auth ok",
-        }),
-      },
+      lookupHost: async () => [{ address: "127.0.0.1", family: 4 }],
+      connectTcp: async () => undefined,
+      verifyTls: async () => ({
+        id: "tls",
+        status: "pass",
+        message: "TLS ok",
+      }),
+      fetchDeviceAuth: async () => ({
+        id: "device-auth",
+        status: "pass",
+        message: "Auth ok",
+      }),
     })
 
     const probeApp = registerTestApp(Fastify())
-    registerConnectionTestRoutes(probeApp, connectionTestService)
+    registerConnectionTestRoutes(probeApp, runConnectionTest)
 
     const listDevices = makeListDevices(database)
     const beforeDevices = listDevices({ limit: 100 })
@@ -126,7 +124,7 @@ describe("connection test API", () => {
       database,
       loopbackEndpoint: `http://${config.host}:${config.port}`,
       getAdvertisedEndpointSettings: () => {
-          const settings = runtimeSettingsStore.get()
+        const settings = runtimeSettingsStore.get()
         return {
           advertisedUrl: settings.advertisedUrl,
           advertisedUrlEnabled: settings.advertisedUrlEnabled,
@@ -134,29 +132,27 @@ describe("connection test API", () => {
       },
     })
 
-    const connectionTestService = createConnectionTestService({
+    const runConnectionTest = makeRunConnectionTest({
       getAdvertisedUrl: () => runtimeSettingsStore.get().advertisedUrl,
       deviceProvisioning: device,
-      deps: {
-        lookupHost: async () => {
-          throw new Error("ENOTFOUND agents.example.com")
-        },
-        connectTcp: async () => undefined,
-        verifyTls: async () => ({
-          id: "tls",
-          status: "fail",
-          message: "should not run",
-        }),
-        fetchDeviceAuth: async () => ({
-          id: "device-auth",
-          status: "fail",
-          message: "should not run",
-        }),
+      lookupHost: async () => {
+        throw new Error("ENOTFOUND agents.example.com")
       },
+      connectTcp: async () => undefined,
+      verifyTls: async () => ({
+        id: "tls",
+        status: "fail",
+        message: "should not run",
+      }),
+      fetchDeviceAuth: async () => ({
+        id: "device-auth",
+        status: "fail",
+        message: "should not run",
+      }),
     })
 
     const probeApp = registerTestApp(Fastify())
-    registerConnectionTestRoutes(probeApp, connectionTestService)
+    registerConnectionTestRoutes(probeApp, runConnectionTest)
 
     const response = await probeApp.inject({
       method: "POST",
@@ -190,7 +186,7 @@ describe("connection test API", () => {
       database,
       loopbackEndpoint: `http://${config.host}:${config.port}`,
       getAdvertisedEndpointSettings: () => {
-          const settings = runtimeSettingsStore.get()
+        const settings = runtimeSettingsStore.get()
         return {
           advertisedUrl: settings.advertisedUrl,
           advertisedUrlEnabled: settings.advertisedUrlEnabled,
@@ -198,27 +194,25 @@ describe("connection test API", () => {
       },
     })
 
-    const connectionTestService = createConnectionTestService({
+    const runConnectionTest = makeRunConnectionTest({
       getAdvertisedUrl: () => runtimeSettingsStore.get().advertisedUrl,
       deviceProvisioning: device,
-      deps: {
-        lookupHost: async () => [{ address: "127.0.0.1", family: 4 }],
-        connectTcp: async () => undefined,
-        verifyTls: async () => ({
-          id: "tls",
-          status: "warn",
-          message: "Certificate is self-signed",
-        }),
-        fetchDeviceAuth: async () => ({
-          id: "device-auth",
-          status: "pass",
-          message: "Auth ok",
-        }),
-      },
+      lookupHost: async () => [{ address: "127.0.0.1", family: 4 }],
+      connectTcp: async () => undefined,
+      verifyTls: async () => ({
+        id: "tls",
+        status: "warn",
+        message: "Certificate is self-signed",
+      }),
+      fetchDeviceAuth: async () => ({
+        id: "device-auth",
+        status: "pass",
+        message: "Auth ok",
+      }),
     })
 
     const probeApp = registerTestApp(Fastify())
-    registerConnectionTestRoutes(probeApp, connectionTestService)
+    registerConnectionTestRoutes(probeApp, runConnectionTest)
 
     const response = await probeApp.inject({
       method: "POST",
@@ -251,7 +245,7 @@ describe("connection test API", () => {
       database,
       loopbackEndpoint: `http://${config.host}:${config.port}`,
       getAdvertisedEndpointSettings: () => {
-          const settings = runtimeSettingsStore.get()
+        const settings = runtimeSettingsStore.get()
         return {
           advertisedUrl: settings.advertisedUrl,
           advertisedUrlEnabled: settings.advertisedUrlEnabled,
@@ -260,30 +254,28 @@ describe("connection test API", () => {
     })
 
     let requestedUrl = ""
-    const connectionTestService = createConnectionTestService({
+    const runConnectionTest = makeRunConnectionTest({
       getAdvertisedUrl: () => runtimeSettingsStore.get().advertisedUrl,
       deviceProvisioning: device,
-      deps: {
-        lookupHost: async () => [{ address: "127.0.0.1", family: 4 }],
-        connectTcp: async () => undefined,
-        verifyTls: async () => ({
-          id: "tls",
+      lookupHost: async () => [{ address: "127.0.0.1", family: 4 }],
+      connectTcp: async () => undefined,
+      verifyTls: async () => ({
+        id: "tls",
+        status: "pass",
+        message: "TLS ok",
+      }),
+      fetchDeviceAuth: async (params) => {
+        requestedUrl = params.url
+        return {
+          id: "device-auth",
           status: "pass",
-          message: "TLS ok",
-        }),
-        fetchDeviceAuth: async (params) => {
-          requestedUrl = params.url
-          return {
-            id: "device-auth",
-            status: "pass",
-            message: "Auth ok",
-          }
-        },
+          message: "Auth ok",
+        }
       },
     })
 
     const probeApp = registerTestApp(Fastify())
-    registerConnectionTestRoutes(probeApp, connectionTestService)
+    registerConnectionTestRoutes(probeApp, runConnectionTest)
 
     await probeApp.inject({
       method: "POST",

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { computeConnectionGates } from "./compute.connection.gates"
+import { computeConnectionGates } from "./connection-test.compute.connection.gates"
 
 describe("computeConnectionGates", () => {
   test("requires all pass for canContinue", () => {
