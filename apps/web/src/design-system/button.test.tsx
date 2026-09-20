@@ -53,7 +53,7 @@ describe("Button", () => {
     const button = getByRole("button", { name: "Confirm" })
     expect(button).toHaveClass("h-6")
     expect(button).toHaveClass("min-h-6")
-    expect(button).toHaveClass("text-2xs")
+    expect(button).toHaveClass("text-xs")
   })
 
   test("disabled button is not interactive", () => {

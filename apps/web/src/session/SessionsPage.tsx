@@ -235,9 +235,9 @@ export const SessionsPage: React.FC = () => {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-panel">
-      <header className="flex min-h-[64px] shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line-soft px-5 max-[820px]:p-[13px]">
+      <header className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line-soft px-5 max-[820px]:p-3.5">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
-          <label className="flex h-9 w-[280px] max-w-full items-center gap-2 rounded-[7px] border border-line bg-[#0c0f14] px-[11px] text-dim">
+          <label className="flex h-9 w-70 max-w-full items-center gap-2 rounded-md border border-line bg-metric-to px-3 text-dim">
             <Search aria-hidden className="size-4" />
             <TextInput
               aria-label="Search sessions"
@@ -283,7 +283,7 @@ export const SessionsPage: React.FC = () => {
           ) : null}
 
           {error !== null ? (
-            <p className="m-0 text-sm text-danger" role="alert">
+            <p className="m-0 text-base text-danger" role="alert">
               {error}
             </p>
           ) : null}
@@ -294,11 +294,11 @@ export const SessionsPage: React.FC = () => {
         </Button>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-color:#252b34_transparent]">
+      <div className="min-h-0 flex-1 scroll-area overflow-y-auto">
         {sessionsQuery.isLoading ? (
-          <p className="m-0 px-5 py-6 text-sm text-dim">Loading sessions…</p>
+          <p className="m-0 px-5 py-6 text-base text-dim">Loading sessions…</p>
         ) : sessionsQuery.isError ? (
-          <p className="m-0 px-5 py-6 text-sm text-danger" role="alert">
+          <p className="m-0 px-5 py-6 text-base text-danger" role="alert">
             Failed to load sessions.
           </p>
         ) : (
@@ -317,25 +317,25 @@ export const SessionsPage: React.FC = () => {
                 </th>
                 <th
                   scope="col"
-                  className="px-3 py-3 font-mono text-2xs font-medium tracking-wide text-label"
+                  className="px-3 py-3 font-mono text-xs font-medium tracking-wide text-muted"
                 >
                   Title
                 </th>
                 <th
                   scope="col"
-                  className="px-3 py-3 font-mono text-2xs font-medium tracking-wide text-label max-[820px]:hidden"
+                  className="px-3 py-3 font-mono text-xs font-medium tracking-wide text-muted max-[820px]:hidden"
                 >
                   Agent
                 </th>
                 <th
                   scope="col"
-                  className="px-3 py-3 font-mono text-2xs font-medium tracking-wide text-label max-[820px]:hidden"
+                  className="px-3 py-3 font-mono text-xs font-medium tracking-wide text-muted max-[820px]:hidden"
                 >
                   Path
                 </th>
                 <th
                   scope="col"
-                  className="px-3 py-3 font-mono text-2xs font-medium tracking-wide text-label max-[640px]:hidden"
+                  className="px-3 py-3 font-mono text-xs font-medium tracking-wide text-muted max-[640px]:hidden"
                 >
                   Updated
                 </th>
@@ -347,7 +347,7 @@ export const SessionsPage: React.FC = () => {
             <tbody>
               {visibleSessions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-sm text-dim">
+                  <td colSpan={6} className="px-5 py-8 text-base text-dim">
                     No sessions match.
                   </td>
                 </tr>
@@ -387,7 +387,7 @@ export const SessionsPage: React.FC = () => {
                           disabled={deleting}
                           onClick={() => handleJoin(session)}
                         >
-                          <span className="block truncate text-sm font-medium text-white">
+                          <span className="block truncate text-base font-medium text-white">
                             {session.title}
                           </span>
                           <span className="mt-0.5 block truncate font-mono text-xs text-dim min-[821px]:hidden">
@@ -398,7 +398,7 @@ export const SessionsPage: React.FC = () => {
                       <td className="px-3 py-3 align-middle font-mono text-xs text-dim max-[820px]:hidden">
                         {session.agentId}
                       </td>
-                      <td className="max-w-[28rem] truncate px-3 py-3 align-middle font-mono text-xs text-dim max-[820px]:hidden">
+                      <td className="max-w-md truncate px-3 py-3 align-middle font-mono text-xs text-dim max-[820px]:hidden">
                         {session.cwd}
                       </td>
                       <td className="whitespace-nowrap px-3 py-3 align-middle text-xs text-body-soft max-[640px]:hidden">

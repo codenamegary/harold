@@ -8,7 +8,7 @@ export const SettingsView: React.FC = () => (
   <>
     <ProviderPanel />
     <AgentsPanel />
-    <div className="grid gap-[25px] lg:grid-cols-2">
+    <div className="grid gap-6.5 lg:grid-cols-2">
       <RuntimePanel />
       <ServerDetailsPanel />
     </div>

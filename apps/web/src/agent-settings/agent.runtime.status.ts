@@ -9,7 +9,7 @@ export const agentRuntimeStatusLabels: Record<AgentRuntimeState["status"], strin
 
 export const agentRuntimeStatusChipClassName: Record<AgentRuntimeState["status"], string> = {
   stopped: "border-line-soft text-dim",
-  starting: "border-amber-400/40 text-amber-200",
+  starting: "border-amber/40 text-amber",
   ready: "border-lime/40 text-lime",
-  error: "border-red-400/40 text-red-400",
+  error: "border-danger/40 text-danger",
 }

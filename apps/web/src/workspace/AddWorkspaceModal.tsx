@@ -40,8 +40,7 @@ export const AddWorkspaceModal: React.FC<AddWorkspaceModalProps> = ({ open, onCl
     () => runtimeSettingsQuery.data?.settings.allowedRoots ?? [],
     [runtimeSettingsQuery.data?.settings.allowedRoots],
   )
-  const hasNoRoots =
-    runtimeSettingsQuery.isSuccess && allowedRoots.length === 0
+  const hasNoRoots = runtimeSettingsQuery.isSuccess && allowedRoots.length === 0
 
   const rootOptions = useMemo((): ComboboxOptionItem[] => {
     return allowedRoots.map((allowedRoot) => ({
@@ -141,11 +140,7 @@ export const AddWorkspaceModal: React.FC<AddWorkspaceModalProps> = ({ open, onCl
           <Button variant="secondary" onClick={handleClose}>
             Cancel
           </Button>
-          <Button
-            disabled={!canSubmit}
-            form="add-workspace-form"
-            type="submit"
-          >
+          <Button disabled={!canSubmit} form="add-workspace-form" type="submit">
             Add workspace
           </Button>
         </>
@@ -153,7 +148,7 @@ export const AddWorkspaceModal: React.FC<AddWorkspaceModalProps> = ({ open, onCl
     >
       <form id="add-workspace-form" onSubmit={handleSubmit}>
         {hasNoRoots ? (
-          <p className="m-0 mb-4 text-sm text-body-soft" role="status">
+          <p className="m-0 mb-4 text-base text-body-soft" role="status">
             Add an allowed root in{" "}
             <Link className="text-lime underline" to="/settings" onClick={handleClose}>
               Settings
@@ -192,13 +187,15 @@ export const AddWorkspaceModal: React.FC<AddWorkspaceModalProps> = ({ open, onCl
             onChange={handleFolderChange}
             options={folderOptions}
             placeholder="Select folder…"
-            disabled={hasNoRoots || root === "" || directoriesQuery.isPending || directoriesQuery.isError}
+            disabled={
+              hasNoRoots || root === "" || directoriesQuery.isPending || directoriesQuery.isError
+            }
             emptyMessage={folderEmptyMessage}
           />
         </div>
 
         {errorMessage ? (
-          <p className="mt-4 text-sm text-red-400" role="alert">
+          <p className="mt-4 text-base text-danger" role="alert">
             {errorMessage}
           </p>
         ) : null}

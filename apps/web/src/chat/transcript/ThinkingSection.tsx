@@ -6,7 +6,7 @@ type ThinkingSectionProps = {
 
 export const ThinkingSection: React.FC<ThinkingSectionProps> = ({ text }) => {
   return (
-    <details className="group rounded-md border border-line-soft bg-[#0d1117] open:bg-[#0f141b]">
+    <details className="group rounded-md border border-line-soft bg-panel open:bg-panel-2">
       <summary className="cursor-pointer list-none px-3 py-2 marker:content-none [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2">
           <span
@@ -15,9 +15,7 @@ export const ThinkingSection: React.FC<ThinkingSectionProps> = ({ text }) => {
           >
             ▸
           </span>
-          <span className="font-mono text-base tracking-[0.06em] text-dim">
-            Thinking
-          </span>
+          <span className="font-mono text-base tracking-wider text-dim">Thinking</span>
         </span>
       </summary>
       <div className="border-t border-line-soft px-3 py-2 text-base leading-relaxed text-body whitespace-pre-wrap">

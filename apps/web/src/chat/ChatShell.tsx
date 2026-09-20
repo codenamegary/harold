@@ -4,10 +4,7 @@ import { AgentIdSchema } from "contracts/http/agent-settings"
 import { AgentAuthPanel } from "../agent/auth/AgentAuthPanel"
 import { useAgentAuthQuery } from "../agent/auth/use.agent.auth"
 import { useAgentSettingsQuery } from "../agent-settings/use.agent.settings.query"
-import {
-  supportsFileAttachments,
-  supportsImageAttachments,
-} from "./composer/capabilities"
+import { supportsFileAttachments, supportsImageAttachments } from "./composer/capabilities"
 import { ChatComposer, ChatComposerConfig } from "./composer/ChatComposer"
 import { ChatHeader } from "./header/ChatHeader"
 import { streamAuthAtom, transcriptAtom } from "./live/atoms"
@@ -34,16 +31,17 @@ export const ChatShell: React.FC = () => {
   useChatResume()
   const stream = useChatStream()
   const chatAttachments = useChatAttachments({ workspaceId: selection.workspaceId })
-  const { send, cancel, running, composerEnabled, blockedMessage } =
-    useChatPrompt(stream, chatAttachments)
-  const { permission, extension, replyToPermission, replyToExtension } =
-    useLiveReplies(stream)
+  const { send, cancel, running, composerEnabled, blockedMessage } = useChatPrompt(
+    stream,
+    chatAttachments,
+  )
+  const { permission, extension, replyToPermission, replyToExtension } = useLiveReplies(stream)
   const sessionConfig = useSessionConfig()
 
   const composerConfig: ChatComposerConfig | undefined =
-    sessionConfig.model === undefined
-    && sessionConfig.mode === undefined
-    && sessionConfig.thinking === undefined
+    sessionConfig.model === undefined &&
+    sessionConfig.mode === undefined &&
+    sessionConfig.thinking === undefined
       ? undefined
       : {
           ...(sessionConfig.model === undefined ? {} : { model: sessionConfig.model }),
@@ -95,7 +93,7 @@ export const ChatShell: React.FC = () => {
       </div>
       <div
         ref={transcriptScrollRef}
-        className="min-h-0 flex-1 overflow-y-auto px-[max(25px,calc((100%-800px)/2))] py-[25px] [scrollbar-color:#252b34_transparent] max-[820px]:px-[13px] max-[820px]:py-[18px]"
+        className="min-h-0 flex-1 scroll-area overflow-y-auto px-[max(25px,calc((100%-800px)/2))] py-6.5 max-[820px]:px-3.5 max-[820px]:py-4.5"
       >
         {showWelcome ? (
           <WelcomeMessage />
@@ -127,8 +125,8 @@ export const ChatShell: React.FC = () => {
                 error: agentAuth.error,
                 activeSessionId: agentAuth.session.sessionId,
                 canLogout:
-                  agents.find((agent) => agent.id === selection.agentId)?.authSummary
-                    .canLogout ?? false,
+                  agents.find((agent) => agent.id === selection.agentId)?.authSummary.canLogout ??
+                  false,
               }}
               auth={agentAuth}
               compact

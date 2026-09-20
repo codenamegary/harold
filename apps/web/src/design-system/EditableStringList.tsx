@@ -29,7 +29,7 @@ type EditableStringListProps = {
 const createRowId = (): string => crypto.randomUUID()
 
 const rowControlClassName =
-  "grid size-8 shrink-0 place-items-center rounded-[7px] border border-line bg-surface text-icon hover:border-line-hover hover:bg-hover-surface hover:text-slate-200 disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50"
+  "grid size-8 shrink-0 place-items-center rounded-md border border-line bg-surface text-body-soft hover:border-line-hover hover:bg-hover-surface hover:text-input disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50"
 
 type RowFieldsProps = {
   index: number
@@ -186,8 +186,7 @@ export const EditableStringList: React.FC<EditableStringListProps> = ({
     })
   }, [value.length])
 
-  const resolvedIds =
-    itemIds.length === value.length ? itemIds : syncItemIds(itemIds, value.length)
+  const resolvedIds = itemIds.length === value.length ? itemIds : syncItemIds(itemIds, value.length)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -288,7 +287,7 @@ export const EditableStringList: React.FC<EditableStringListProps> = ({
         type="button"
         disabled={disabled}
         aria-label={`Add ${ariaLabel} item`}
-        className="inline-flex min-h-6 w-fit items-center gap-1 rounded-[7px] bg-transparent px-0 text-2xs font-semibold text-body-soft transition-opacity duration-300 ease-out hover:text-lime cursor-pointer disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50"
+        className="inline-flex min-h-6 w-fit items-center gap-1 rounded-md bg-transparent px-0 text-xs font-semibold text-body-soft transition-opacity duration-300 ease-out hover:text-lime cursor-pointer disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50"
         onClick={handleAdd}
       >
         <Plus aria-hidden className="size-3" strokeWidth={2} />

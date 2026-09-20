@@ -22,7 +22,7 @@ const sourceLabel = (source: LogSource, agentId: string | undefined): string =>
   agentId === undefined ? source : `${source}/${agentId}`
 
 const selectWrapClassName =
-  "block min-w-[9.5rem] rounded-md border border-line-input bg-surface-deep px-[11px] py-2"
+  "block min-w-38 rounded-md border border-line-input bg-surface-deep px-3 py-2"
 const selectClassName =
   "block w-full appearance-none border-0 bg-transparent text-sm text-input outline-0"
 
@@ -52,7 +52,7 @@ export const LogsView: React.FC = () => {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-1 text-2xs text-label">
+        <div className="flex flex-col gap-1 text-xs text-muted">
           <label htmlFor="log-source">Source</label>
           <span className={selectWrapClassName}>
             <select
@@ -72,7 +72,7 @@ export const LogsView: React.FC = () => {
             </select>
           </span>
         </div>
-        <div className="flex flex-col gap-1 text-2xs text-label">
+        <div className="flex flex-col gap-1 text-xs text-muted">
           <label htmlFor="log-min-level">Minimum level</label>
           <span className={selectWrapClassName}>
             <select
@@ -116,23 +116,21 @@ export const LogsView: React.FC = () => {
       </div>
 
       {logsQuery.isError ? (
-        <Panel className="p-8 text-sm text-danger" role="alert">
+        <Panel className="p-8 text-base text-danger" role="alert">
           Could not load logs.
         </Panel>
       ) : null}
 
       {clearLogsMutation.isError ? (
-        <p className="m-0 text-sm text-danger" role="alert">
+        <p className="m-0 text-base text-danger" role="alert">
           Could not clear logs.
         </p>
       ) : null}
 
-      {logsQuery.isLoading ? (
-        <Panel className="p-8 text-sm text-dim">Loading logs…</Panel>
-      ) : null}
+      {logsQuery.isLoading ? <Panel className="p-8 text-base text-dim">Loading logs…</Panel> : null}
 
       {!logsQuery.isLoading && !logsQuery.isError && lines.length === 0 ? (
-        <Panel className="p-8 text-sm text-dim">No log lines in this process yet.</Panel>
+        <Panel className="p-8 text-base text-dim">No log lines in this process yet.</Panel>
       ) : null}
 
       {!logsQuery.isLoading && !logsQuery.isError && lines.length > 0 ? (
@@ -141,17 +139,13 @@ export const LogsView: React.FC = () => {
             {lines.map((line) => (
               <li
                 key={line.id}
-                className="grid grid-cols-[minmax(7rem,auto)_3.5rem_minmax(5rem,auto)_minmax(0,1fr)] gap-3 border-b border-line-soft px-[17px] py-2.5 font-mono text-xs last:border-b-0 max-[820px]:grid-cols-1"
+                className="grid grid-cols-[minmax(7rem,auto)_3.5rem_minmax(5rem,auto)_minmax(0,1fr)] gap-3 border-b border-line-soft px-4 py-2.5 font-mono text-xs last:border-b-0 max-[820px]:grid-cols-1"
               >
                 <time className="text-dim" dateTime={line.ts}>
                   {formatLogTime(line.ts)}
                 </time>
-                <span className={logLevelClassByLevel[line.level]}>
-                  {line.level.toUpperCase()}
-                </span>
-                <span className="text-muted">
-                  {sourceLabel(line.source, line.agentId)}
-                </span>
+                <span className={logLevelClassByLevel[line.level]}>{line.level.toUpperCase()}</span>
+                <span className="text-muted">{sourceLabel(line.source, line.agentId)}</span>
                 <span className="min-w-0 whitespace-pre-wrap break-words text-body">
                   {line.message}
                 </span>

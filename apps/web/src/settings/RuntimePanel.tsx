@@ -1,15 +1,12 @@
 import React, { useEffect, useState } from "react"
 import { Save, Trash2 } from "lucide-react"
 import { HttpsAbsoluteUrlSchema, logLevels } from "contracts/http/runtime-settings"
-import {
-  ActionField,
-  ActionTextInput,
-  FieldActionButton,
-} from "../design-system/ActionTextInput"
+import { ActionField, ActionTextInput, FieldActionButton } from "../design-system/ActionTextInput"
 import { Button } from "../design-system/Button"
 import { FieldLabel } from "../design-system/FieldLabel"
 import { Panel } from "../design-system/Panel"
 import { TextInput } from "../design-system/TextInput"
+import { toggleClassName } from "../design-system/toggle.classes"
 import {
   advertisedUrlFromHost,
   hostFromAdvertisedUrl,
@@ -47,17 +44,15 @@ export const RuntimePanel: React.FC = () => {
     setPortDraft(String(settings.bindPort))
     setLogPathDraft(settings.logPath ?? "")
     setCloudProxyDraft(
-      settings.advertisedUrl !== null
-        ? hostFromAdvertisedUrl(settings.advertisedUrl)
-        : "",
+      settings.advertisedUrl !== null ? hostFromAdvertisedUrl(settings.advertisedUrl) : "",
     )
   }, [settings])
 
   if (runtimeSettingsQuery.isError || view === undefined || settings === undefined) {
     return (
-      <Panel className="p-[22px]">
+      <Panel className="p-5.5">
         <h3 className="m-0 mb-1 text-lg font-semibold">Runtime</h3>
-        <p className="m-0 text-sm text-danger" role="alert">
+        <p className="m-0 text-base text-danger" role="alert">
           Could not load runtime settings.
         </p>
       </Panel>
@@ -90,9 +85,7 @@ export const RuntimePanel: React.FC = () => {
       })
     } catch (error: unknown) {
       setCloudProxyError(
-        isRuntimeSettingsUpdateError(error)
-          ? error.message
-          : "Could not save cloud proxy.",
+        isRuntimeSettingsUpdateError(error) ? error.message : "Could not save cloud proxy.",
       )
     }
   }
@@ -109,9 +102,7 @@ export const RuntimePanel: React.FC = () => {
       setCloudProxyDraft("")
     } catch (error: unknown) {
       setCloudProxyError(
-        isRuntimeSettingsUpdateError(error)
-          ? error.message
-          : "Could not clear cloud proxy.",
+        isRuntimeSettingsUpdateError(error) ? error.message : "Could not clear cloud proxy.",
       )
     }
   }
@@ -127,9 +118,7 @@ export const RuntimePanel: React.FC = () => {
       })
     } catch (error: unknown) {
       setCloudProxyError(
-        isRuntimeSettingsUpdateError(error)
-          ? error.message
-          : "Could not update cloud proxy state.",
+        isRuntimeSettingsUpdateError(error) ? error.message : "Could not update cloud proxy state.",
       )
     }
   }
@@ -154,9 +143,7 @@ export const RuntimePanel: React.FC = () => {
       setProxyDraft("")
     } catch (error: unknown) {
       setProxyError(
-        isRuntimeSettingsUpdateError(error)
-          ? error.message
-          : "Could not add trusted proxy.",
+        isRuntimeSettingsUpdateError(error) ? error.message : "Could not add trusted proxy.",
       )
     }
   }
@@ -168,9 +155,7 @@ export const RuntimePanel: React.FC = () => {
       await saveTrustedProxies(settings.trustedProxies.filter((entry) => entry !== proxy))
     } catch (error: unknown) {
       setProxyError(
-        isRuntimeSettingsUpdateError(error)
-          ? error.message
-          : "Could not remove trusted proxy.",
+        isRuntimeSettingsUpdateError(error) ? error.message : "Could not remove trusted proxy.",
       )
     }
   }
@@ -200,9 +185,7 @@ export const RuntimePanel: React.FC = () => {
       })
     } catch (error: unknown) {
       setPortError(
-        isRuntimeSettingsUpdateError(error)
-          ? error.message
-          : "Could not save bind port.",
+        isRuntimeSettingsUpdateError(error) ? error.message : "Could not save bind port.",
       )
     }
   }
@@ -216,17 +199,15 @@ export const RuntimePanel: React.FC = () => {
       })
     } catch (error: unknown) {
       setLogPathError(
-        isRuntimeSettingsUpdateError(error)
-          ? error.message
-          : "Could not save log path.",
+        isRuntimeSettingsUpdateError(error) ? error.message : "Could not save log path.",
       )
     }
   }
 
   return (
-    <Panel className="p-[22px]">
+    <Panel className="p-5.5">
       <h3 className="m-0 mb-1 text-lg font-semibold">Runtime</h3>
-      <p className="m-0 mb-5 text-sm text-muted">
+      <p className="m-0 mb-5 text-base text-muted">
         Server process settings. Bind and log path changes need a restart.
       </p>
 
@@ -264,10 +245,7 @@ export const RuntimePanel: React.FC = () => {
         {settings.advertisedUrl !== null ? (
           <div className="mt-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <label
-                htmlFor="runtime-cloud-proxy"
-                className="text-xs text-body cursor-pointer"
-              >
+              <label htmlFor="runtime-cloud-proxy" className="text-xs text-body cursor-pointer">
                 Enable cloud proxy for pairing
               </label>
               <input
@@ -279,7 +257,7 @@ export const RuntimePanel: React.FC = () => {
                 onChange={() => {
                   void handleToggleCloudProxy()
                 }}
-                className="relative h-[17px] w-[31px] shrink-0 cursor-pointer appearance-none rounded-[10px] bg-[#252c36] transition after:absolute after:left-[2px] after:top-[2px] after:size-[13px] after:rounded-full after:bg-[#727c89] after:transition-all after:content-[''] checked:bg-lime checked:after:left-[16px] checked:after:bg-lime-ink disabled:cursor-not-allowed disabled:opacity-50"
+                className={toggleClassName}
               />
             </div>
             <div>
@@ -296,9 +274,7 @@ export const RuntimePanel: React.FC = () => {
               </Button>
             </div>
             <div className="mt-4 border-t border-line-soft pt-3">
-              <p className="m-0 mb-2 font-mono text-2xs tracking-[0.12em] text-dim">
-                CONNECTION TEST
-              </p>
+              <p className="m-0 mb-2 font-mono text-xs tracking-widest text-dim">CONNECTION TEST</p>
               <ConnectionTestPanel advertisedUrl={settings.advertisedUrl} />
             </div>
           </div>
@@ -307,12 +283,12 @@ export const RuntimePanel: React.FC = () => {
 
       {view.restartRequired ? (
         <div
-          className="mb-5 rounded-[7px] border border-amber-500/35 bg-amber-500/10 px-3.5 py-3 text-sm text-amber-100"
+          className="mb-5 rounded-md border border-amber/40 bg-amber/10 px-3.5 py-3 text-base text-amber"
           role="status"
         >
           Restart the server process to apply bind or log path changes.
           {view.overrides.bindPort === "env" || view.overrides.bindHost === "env" ? (
-            <span className="mt-1 block text-xs text-amber-100/80">
+            <span className="mt-1 block text-xs text-amber/80">
               Effective listen values come from environment variables until restart.
             </span>
           ) : null}
@@ -321,7 +297,7 @@ export const RuntimePanel: React.FC = () => {
 
       <section className="border-t border-line-soft py-4 first:border-t-0 first:pt-0">
         <FieldLabel htmlFor="runtime-log-level">Log level</FieldLabel>
-        <label className="block rounded-md border border-line-input bg-surface-deep px-[11px] py-2">
+        <label className="block rounded-md border border-line-input bg-surface-deep px-3 py-2">
           <select
             id="runtime-log-level"
             aria-label="Log level"
@@ -418,14 +394,12 @@ export const RuntimePanel: React.FC = () => {
         <FieldLabel htmlFor="runtime-bind-port">Bind port</FieldLabel>
         {bindPortEnvOverride ? (
           <p className="m-0 mb-2 text-xs text-muted">
-            Effective port{" "}
-            <code className="text-body-soft">{view.effective.bindPort}</code> comes from{" "}
-            <code className="text-body-soft">AGENT_SERVER_PORT</code>. Stored value below.
+            Effective port <code className="text-body-soft">{view.effective.bindPort}</code> comes
+            from <code className="text-body-soft">AGENT_SERVER_PORT</code>. Stored value below.
           </p>
         ) : (
           <p className="m-0 mb-2 text-xs text-muted">
-            Effective port{" "}
-            <code className="text-body-soft">{view.effective.bindPort}</code>.
+            Effective port <code className="text-body-soft">{view.effective.bindPort}</code>.
           </p>
         )}
         <ActionTextInput

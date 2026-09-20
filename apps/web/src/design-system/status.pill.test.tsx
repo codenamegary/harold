@@ -31,7 +31,7 @@ describe("StatusPill", () => {
       </StatusPill>,
     )
 
-    expect(getByText("Online")).toHaveClass("h-[34px]")
+    expect(getByText("Online")).toHaveClass("h-8.5")
     expect(getByText("Online")).toHaveClass("items-center")
     expect(getByText("Online")).toHaveClass("justify-center")
   })

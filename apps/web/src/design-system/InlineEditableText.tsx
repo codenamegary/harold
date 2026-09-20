@@ -115,7 +115,7 @@ export const InlineEditableText: React.FC<InlineEditableTextProps> = ({
           </div>
         </form>
         {error ? (
-          <p className="mt-2 text-xs text-red-400" role="alert">
+          <p className="mt-2 text-xs text-danger" role="alert">
             {error}
           </p>
         ) : null}

@@ -7,19 +7,15 @@ type StatusDotProps = {
 } & ComponentPropsWithoutRef<"span">
 
 const variantClasses: Record<StatusDotVariant, string> = {
-  online: "bg-lime shadow-[0_0_9px] shadow-lime/40",
+  online: "bg-lime shadow-glow shadow-lime/40",
   warning: "bg-amber",
-  offline: "bg-danger shadow-[0_0_9px] shadow-danger/40",
+  offline: "bg-danger shadow-glow shadow-danger/40",
 }
 
-export const StatusDot: React.FC<StatusDotProps> = ({
-  variant,
-  className = "",
-  ...props
-}) => (
+export const StatusDot: React.FC<StatusDotProps> = ({ variant, className = "", ...props }) => (
   <span
     aria-label={`${variant} status`}
-    className={`inline-block size-[7px] shrink-0 rounded-full ${variantClasses[variant]} ${className}`}
+    className={`inline-block size-2 shrink-0 rounded-full ${variantClasses[variant]} ${className}`}
     {...props}
   />
 )

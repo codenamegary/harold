@@ -29,8 +29,8 @@ export const ToolCallGroup: React.FC<ToolCallGroupProps> = ({ tools }) => {
       : toolCallLabel(tools.length)
 
   return (
-    <details className="group/tool-group rounded-md border border-line-soft bg-[#0d1117] open:bg-[#0f141b]">
-      <summary className="cursor-pointer list-none px-3 py-2 font-mono text-base text-[#8b949e] marker:content-none [&::-webkit-details-marker]:hidden">
+    <details className="group/tool-group rounded-md border border-line-soft bg-panel open:bg-panel-2">
+      <summary className="cursor-pointer list-none px-3 py-2 font-mono text-base text-muted marker:content-none [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2">
           <span
             aria-hidden
@@ -44,8 +44,8 @@ export const ToolCallGroup: React.FC<ToolCallGroupProps> = ({ tools }) => {
       <ul className="m-0 flex list-none flex-col gap-1.5 border-t border-line-soft px-2 py-2">
         {tools.map((tool) => (
           <li key={tool.toolCallId}>
-            <details className="group/tool-item rounded border border-line-soft/80 bg-[#0b0f14]">
-              <summary className="cursor-pointer list-none px-2.5 py-1.5 font-mono text-base text-[#8b949e] marker:content-none [&::-webkit-details-marker]:hidden">
+            <details className="group/tool-item rounded border border-line-soft/80 bg-surface-deep">
+              <summary className="cursor-pointer list-none px-2.5 py-1.5 font-mono text-base text-muted marker:content-none [&::-webkit-details-marker]:hidden">
                 <span className="inline-flex min-w-0 items-start gap-2">
                   <span
                     aria-hidden

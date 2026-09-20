@@ -11,7 +11,7 @@ describe("MetricCard", () => {
     )
 
     const card = getByText("Active sessions").parentElement
-    expect(card).toHaveClass("min-h-[155px]")
+    expect(card).toHaveClass("min-h-39")
     expect(card).toHaveClass("border-line-soft")
   })
 

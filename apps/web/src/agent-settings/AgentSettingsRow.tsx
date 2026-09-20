@@ -8,19 +8,14 @@ import { Button } from "../design-system/Button"
 import { ConfirmDeleteIconButton } from "../design-system/ConfirmDeleteIconButton"
 import { EditableStringList } from "../design-system/EditableStringList"
 import { TextInput } from "../design-system/TextInput"
-import {
-  AgentLaunchFormSchema,
-  AgentLaunchFormValues,
-} from "./agent.launch.form.schema"
+import { toggleClassName } from "../design-system/toggle.classes"
+import { AgentLaunchFormSchema, AgentLaunchFormValues } from "./agent.launch.form.schema"
 import {
   agentPathDetectErrorMessage,
   agentRespawnErrorMessage,
   agentSettingsUpdateErrorMessage,
 } from "./agent.settings.mutation.error.message"
-import {
-  agentRuntimeStatusChipClassName,
-  agentRuntimeStatusLabels,
-} from "./agent.runtime.status"
+import { agentRuntimeStatusChipClassName, agentRuntimeStatusLabels } from "./agent.runtime.status"
 import { AgentAuthBadge } from "../agent/auth/AgentAuthBadge"
 import { AgentSettingsAuthSection } from "../agent/auth/AgentSettingsAuthSection"
 import { deleteAgentSettings } from "./delete.agent.settings"
@@ -33,7 +28,7 @@ import { respawnAgent } from "./respawn.agent"
 import { updateAgentSettings } from "./update.agent.settings"
 
 const textLinkClassName =
-  "inline-flex min-h-6 items-center justify-center gap-1 rounded-[7px] bg-transparent px-0 text-2xs font-semibold whitespace-nowrap text-body-soft transition-opacity duration-300 ease-out hover:text-lime cursor-pointer disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50"
+  "inline-flex min-h-6 items-center justify-center gap-1 rounded-md bg-transparent px-0 text-xs font-semibold whitespace-nowrap text-body-soft transition-opacity duration-300 ease-out hover:text-lime cursor-pointer disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50"
 
 const DetectSuccessCheck: React.FC<{ onAnimationEnd: () => void }> = ({ onAnimationEnd }) => (
   <svg
@@ -42,15 +37,9 @@ const DetectSuccessCheck: React.FC<{ onAnimationEnd: () => void }> = ({ onAnimat
     className="size-3 shrink-0 text-lime animate-detect-path-check"
     onAnimationEnd={onAnimationEnd}
   >
-    <path
-      fill="currentColor"
-      d="M6.2 11.1 3.4 8.3l-1 1 3.8 3.8 7.4-7.4-1-1z"
-    />
+    <path fill="currentColor" d="M6.2 11.1 3.4 8.3l-1 1 3.8 3.8 7.4-7.4-1-1z" />
   </svg>
 )
-
-const toggleClassName =
-  "relative h-[17px] w-[31px] shrink-0 cursor-pointer appearance-none rounded-[10px] bg-[#252c36] transition after:absolute after:left-[2px] after:top-[2px] after:size-[13px] after:rounded-full after:bg-[#727c89] after:transition-all after:content-[''] checked:bg-lime checked:after:left-[16px] checked:after:bg-lime-ink disabled:cursor-not-allowed disabled:opacity-50"
 
 const truncateMiddle = (value: string, maxLength: number): string => {
   if (value.length <= maxLength) {
@@ -102,11 +91,7 @@ type DeleteMutation = UseMutationResult<
   AgentId
 >
 
-type RespawnMutation = UseMutationResult<
-  Awaited<ReturnType<typeof respawnAgent>>,
-  Error,
-  AgentId
->
+type RespawnMutation = UseMutationResult<Awaited<ReturnType<typeof respawnAgent>>, Error, AgentId>
 
 type AgentSettingsRowProps = {
   agent: AgentSettings
@@ -161,8 +146,7 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
   const commandPreview = formatLaunchCommandPreview(pathValue, argsValue)
 
   const isComingSoon = !agent.available
-  const isDeleting =
-    deleteMutation.isPending && deleteMutation.variables === agent.id
+  const isDeleting = deleteMutation.isPending && deleteMutation.variables === agent.id
   const rowDisabled = controlsDisabled || isComingSoon || isDeleting
   const formControlsDisabled = rowDisabled || updateMutation.isPending
   const toggleDisabled = rowDisabled || updateMutation.isPending
@@ -185,11 +169,9 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
 
   const runtimeError = respawnError !== "" ? respawnError : (agent.state.error ?? "")
 
-  const isDetecting =
-    detectMutation.isPending && detectMutation.variables === agent.id
+  const isDetecting = detectMutation.isPending && detectMutation.variables === agent.id
 
-  const isRespawning =
-    respawnMutation.isPending && respawnMutation.variables === agent.id
+  const isRespawning = respawnMutation.isPending && respawnMutation.variables === agent.id
 
   useEffect(() => {
     if (updateErrorForAgent !== "" || detectError !== "" || runtimeError !== "") {
@@ -329,7 +311,7 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
                 aria-label={`Rename ${agent.displayName}`}
                 value={nameDraft}
                 disabled={formControlsDisabled}
-                className="min-w-0 flex-1 text-sm font-semibold"
+                className="min-w-0 flex-1 text-base font-semibold"
                 autoFocus
                 onChange={(event) => setNameDraft(event.target.value)}
                 onInput={(event) => setNameDraft(event.currentTarget.value)}
@@ -362,22 +344,22 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
               </button>
             )}
             {isCustom ? (
-              <span className="shrink-0 rounded-[4px] border border-line-soft px-1 py-px font-mono text-2xs text-dim">
+              <span className="shrink-0 rounded-sm border border-line-soft px-1 py-px font-mono text-xs text-dim">
                 custom
               </span>
             ) : null}
             {agent.present ? (
-              <span className="shrink-0 rounded-[4px] border border-lime/40 px-1 py-px font-mono text-2xs text-lime">
+              <span className="shrink-0 rounded-sm border border-lime/40 px-1 py-px font-mono text-xs text-lime">
                 present
               </span>
             ) : null}
             {agent.popular ? (
-              <span className="shrink-0 rounded-[4px] border border-line-soft px-1 py-px font-mono text-2xs text-dim">
+              <span className="shrink-0 rounded-sm border border-line-soft px-1 py-px font-mono text-xs text-dim">
                 popular
               </span>
             ) : null}
             {isComingSoon ? (
-              <span className="shrink-0 rounded-[4px] border border-line-soft bg-panel-elevated px-1 py-px font-mono text-2xs text-dim">
+              <span className="shrink-0 rounded-sm border border-line-soft bg-panel-elevated px-1 py-px font-mono text-xs text-dim">
                 Coming soon
               </span>
             ) : null}
@@ -386,8 +368,12 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
         <td className="px-3 py-2 align-middle">
           <span
             aria-label={`${agent.displayName} launch summary`}
-            className="block truncate font-mono text-2xs text-dim"
-            title={agent.path === null ? undefined : `${agent.path}${agent.args.length > 0 ? ` ${agent.args.join(" ")}` : ""}`}
+            className="block truncate font-mono text-xs text-dim"
+            title={
+              agent.path === null
+                ? undefined
+                : `${agent.path}${agent.args.length > 0 ? ` ${agent.args.join(" ")}` : ""}`
+            }
           >
             {launchSummary}
           </span>
@@ -397,7 +383,7 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <span
                 aria-label={`${agent.displayName} runtime status`}
-                className={`w-fit shrink-0 rounded-[4px] border px-1 py-px font-mono text-2xs ${agentRuntimeStatusChipClassName[agent.state.status]}`}
+                className={`w-fit shrink-0 rounded-sm border px-1 py-px font-mono text-xs ${agentRuntimeStatusChipClassName[agent.state.status]}`}
               >
                 {agentRuntimeStatusLabels[agent.state.status]}
               </span>
@@ -405,7 +391,7 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
             </div>
             {runtimeError !== "" ? (
               <p
-                className="m-0 max-w-56 truncate text-2xs text-red-400"
+                className="m-0 max-w-56 truncate text-xs text-danger"
                 role="alert"
                 title={runtimeError}
               >
@@ -463,7 +449,7 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
           aria-busy={isDeleting ? "true" : undefined}
           className={`border-b border-line-soft last:border-b-0 transition-opacity duration-200 ${isComingSoon || isDeleting ? "opacity-55" : ""} ${isDeleting ? "pointer-events-none" : ""}`}
         >
-          <td colSpan={4} className="bg-[#0a0c10] px-3 py-3">
+          <td colSpan={4} className="bg-surface-deep px-3 py-3">
             <AgentSettingsAuthSection
               agentId={agent.id}
               agentName={agent.displayName}
@@ -473,129 +459,129 @@ export const AgentSettingsRow: React.FC<AgentSettingsRowProps> = ({
             <div className="grid grid-cols-1 gap-6 p-4 md:grid-cols-2">
               <div className="flex min-w-0 flex-col gap-4">
                 <div className="min-w-0">
-                  <p className="m-0 mb-1.5 text-2xs font-medium tracking-wide text-label">Path</p>
-                <Controller
-                  name="path"
-                  control={control}
-                  render={({ field }) => (
-                    <TextInput
-                      id={`${agent.id}-path`}
-                      aria-label={`${agent.displayName} executable path`}
-                      placeholder="Executable path"
-                      disabled={formControlsDisabled}
-                      className="text-xs"
-                      name={field.name}
-                      ref={field.ref}
-                      value={field.value}
-                      onBlur={field.onBlur}
-                      onChange={(event) => {
-                        field.onChange(event.target.value)
-                        if (updateMutation.isError) {
-                          updateMutation.reset()
-                        }
-                      }}
-                      onInput={(event) => {
-                        field.onChange(event.currentTarget.value)
-                        if (updateMutation.isError) {
-                          updateMutation.reset()
-                        }
-                      }}
-                    />
-                  )}
-                />
-                {pathFieldError ? (
-                  <p className="m-0 mt-1 text-2xs text-red-400" role="alert">
-                    {pathFieldError}
-                  </p>
-                ) : null}
-                {formError ? (
-                  <p className="m-0 mt-1 text-2xs text-red-400" role="alert">
-                    {formError}
-                  </p>
-                ) : null}
-                {detectError ? (
-                  <p className="m-0 mt-1 text-2xs text-red-400" role="alert">
-                    {detectError}
-                  </p>
-                ) : null}
-                <div className="mt-1 flex items-center gap-2">
-                  <span className="inline-flex min-h-6 items-center gap-1.5">
-                    <button
-                      type="button"
-                      className={`${textLinkClassName}${isDetecting ? " pointer-events-none opacity-20" : ""}`}
-                      disabled={rowDisabled || isDetecting}
-                      aria-busy={isDetecting}
-                      onClick={handleDetectPath}
-                    >
-                      Detect path
-                    </button>
-                    {detectSuccessVisible ? (
-                      <DetectSuccessCheck onAnimationEnd={() => setDetectSuccessVisible(false)} />
-                    ) : null}
-                  </span>
-                </div>
-                </div>
-
-                <div className="min-w-0">
-                  <p className="m-0 mb-1.5 text-2xs font-medium tracking-wide text-label">Args</p>
-                <Controller
-                  name="args"
-                  control={control}
-                  render={({ field }) => (
-                    <EditableStringList
-                      value={field.value}
-                      onChange={(next) => {
-                        setValue("args", next, { shouldDirty: true, shouldValidate: true })
-                        if (updateMutation.isError) {
-                          updateMutation.reset()
-                        }
-                      }}
-                      disabled={formControlsDisabled}
-                      sortable
-                      aria-label={`${agent.displayName} args`}
-                    />
-                  )}
-                />
-                {showNpxYesWarning ? (
-                  <p
-                    className="m-0 mt-1.5 flex items-start gap-1.5 text-2xs text-amber-200"
-                    role="status"
-                  >
-                    <TriangleAlert
-                      aria-hidden
-                      className="mt-px size-3.5 shrink-0 text-amber-400"
-                      strokeWidth={2}
-                    />
-                    <span>
-                      Agents without -y may run in interactive mode and block spawning.{" "}
-                      <button
-                        type="button"
-                        className={textLinkClassName}
+                  <p className="m-0 mb-1.5 text-xs font-medium tracking-wide text-muted">Path</p>
+                  <Controller
+                    name="path"
+                    control={control}
+                    render={({ field }) => (
+                      <TextInput
+                        id={`${agent.id}-path`}
+                        aria-label={`${agent.displayName} executable path`}
+                        placeholder="Executable path"
                         disabled={formControlsDisabled}
-                        onClick={() => {
-                          setValue("args", insertNpxYesFlag(argsValue), {
-                            shouldDirty: true,
-                            shouldValidate: true,
-                          })
+                        className="text-xs"
+                        name={field.name}
+                        ref={field.ref}
+                        value={field.value}
+                        onBlur={field.onBlur}
+                        onChange={(event) => {
+                          field.onChange(event.target.value)
                           if (updateMutation.isError) {
                             updateMutation.reset()
                           }
                         }}
+                        onInput={(event) => {
+                          field.onChange(event.currentTarget.value)
+                          if (updateMutation.isError) {
+                            updateMutation.reset()
+                          }
+                        }}
+                      />
+                    )}
+                  />
+                  {pathFieldError ? (
+                    <p className="m-0 mt-1 text-xs text-danger" role="alert">
+                      {pathFieldError}
+                    </p>
+                  ) : null}
+                  {formError ? (
+                    <p className="m-0 mt-1 text-xs text-danger" role="alert">
+                      {formError}
+                    </p>
+                  ) : null}
+                  {detectError ? (
+                    <p className="m-0 mt-1 text-xs text-danger" role="alert">
+                      {detectError}
+                    </p>
+                  ) : null}
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="inline-flex min-h-6 items-center gap-1.5">
+                      <button
+                        type="button"
+                        className={`${textLinkClassName}${isDetecting ? " pointer-events-none opacity-20" : ""}`}
+                        disabled={rowDisabled || isDetecting}
+                        aria-busy={isDetecting}
+                        onClick={handleDetectPath}
                       >
-                        Add -y
+                        Detect path
                       </button>
+                      {detectSuccessVisible ? (
+                        <DetectSuccessCheck onAnimationEnd={() => setDetectSuccessVisible(false)} />
+                      ) : null}
                     </span>
-                  </p>
-                ) : null}
-                <div className="mt-2.5 min-w-0">
-                  <p className="m-0 mb-1 text-2xs font-medium tracking-wide text-label">Command</p>
-                  <pre
-                    aria-label={`${agent.displayName} command preview`}
-                    className="m-0 overflow-x-auto whitespace-pre-wrap break-all font-mono text-2xs text-dim"
-                  >
-                    {commandPreview === "" ? "—" : commandPreview}
-                  </pre>
+                  </div>
                 </div>
+
+                <div className="min-w-0">
+                  <p className="m-0 mb-1.5 text-xs font-medium tracking-wide text-muted">Args</p>
+                  <Controller
+                    name="args"
+                    control={control}
+                    render={({ field }) => (
+                      <EditableStringList
+                        value={field.value}
+                        onChange={(next) => {
+                          setValue("args", next, { shouldDirty: true, shouldValidate: true })
+                          if (updateMutation.isError) {
+                            updateMutation.reset()
+                          }
+                        }}
+                        disabled={formControlsDisabled}
+                        sortable
+                        aria-label={`${agent.displayName} args`}
+                      />
+                    )}
+                  />
+                  {showNpxYesWarning ? (
+                    <p
+                      className="m-0 mt-1.5 flex items-start gap-1.5 text-xs text-amber"
+                      role="status"
+                    >
+                      <TriangleAlert
+                        aria-hidden
+                        className="mt-px size-3.5 shrink-0 text-amber"
+                        strokeWidth={2}
+                      />
+                      <span>
+                        Agents without -y may run in interactive mode and block spawning.{" "}
+                        <button
+                          type="button"
+                          className={textLinkClassName}
+                          disabled={formControlsDisabled}
+                          onClick={() => {
+                            setValue("args", insertNpxYesFlag(argsValue), {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            })
+                            if (updateMutation.isError) {
+                              updateMutation.reset()
+                            }
+                          }}
+                        >
+                          Add -y
+                        </button>
+                      </span>
+                    </p>
+                  ) : null}
+                  <div className="mt-2.5 min-w-0">
+                    <p className="m-0 mb-1 text-xs font-medium tracking-wide text-muted">Command</p>
+                    <pre
+                      aria-label={`${agent.displayName} command preview`}
+                      className="m-0 overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs text-dim"
+                    >
+                      {commandPreview === "" ? "—" : commandPreview}
+                    </pre>
+                  </div>
                 </div>
 
                 {isDirty ? (

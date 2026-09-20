@@ -43,6 +43,7 @@
     "bun-types": "^1.3.1",
     "happy-dom": "^20.11.1",
     "oxlint": "catalog:",
+    "oxlint-tailwindcss": "^1.12.0",
     "typescript": "catalog:"
   }
 }

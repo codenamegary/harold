@@ -40,14 +40,14 @@ export const SessionConfigRow: React.FC<SessionConfigRowProps> = ({
         aria-hidden
       >
         <span className="truncate">provider/model</span>
-        <span className="w-[50px] truncate">mode</span>
+        <span className="w-12.5 truncate">mode</span>
         <span className="truncate">thinking</span>
       </div>
     )
   }
 
   return (
-    <div className="pointer-events-auto flex min-w-0 items-center gap-2.5 text-[#77818e]">
+    <div className="pointer-events-auto flex min-w-0 items-center gap-2.5 text-muted">
       {model !== undefined ? (
         <ModelPicker option={model} onPick={onModelPick} saving={saving} disabled={disabled} />
       ) : null}

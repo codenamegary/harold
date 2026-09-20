@@ -84,8 +84,7 @@ export const ModelPopover: React.FC<ModelPopoverProps> = ({
         ? options
         : options.filter(
             (item) =>
-              item.name.toLowerCase().includes(needle)
-              || item.value.toLowerCase().includes(needle),
+              item.name.toLowerCase().includes(needle) || item.value.toLowerCase().includes(needle),
           )
 
     // Always surface the currently selected option at the top of the list,
@@ -137,9 +136,9 @@ export const ModelPopover: React.FC<ModelPopoverProps> = ({
     if (event.key === "Enter") {
       event.preventDefault()
       const target =
-        filtered[effectiveHighlight]
-        ?? (currentIndex >= 0 ? filtered[currentIndex] : undefined)
-        ?? filtered[0]
+        filtered[effectiveHighlight] ??
+        (currentIndex >= 0 ? filtered[currentIndex] : undefined) ??
+        filtered[0]
       if (target !== undefined) {
         pick(target.value)
       }
@@ -148,7 +147,7 @@ export const ModelPopover: React.FC<ModelPopoverProps> = ({
 
   return (
     <div
-      className={`absolute bottom-full left-0 z-30 mb-2 rounded-lg border border-line-modal bg-panel-elevated p-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.45)] ${className}`}
+      className={`absolute bottom-full left-0 z-30 mb-2 rounded-lg border border-line-modal bg-panel-elevated p-1.5 shadow-popover ${className}`}
       onKeyDown={handleKeyDown}
     >
       <div className="mb-1 flex items-center justify-end">
@@ -180,7 +179,7 @@ export const ModelPopover: React.FC<ModelPopoverProps> = ({
         role="listbox"
         aria-label="Model options"
         tabIndex={-1}
-        className="max-h-[280px] overflow-y-auto"
+        className="max-h-70 overflow-y-auto"
       >
         {filtered.map((item, index) => {
           const isCurrent = item.value === currentValue
@@ -202,9 +201,9 @@ export const ModelPopover: React.FC<ModelPopoverProps> = ({
               >
                 <span className="w-full truncate font-mono">{item.name}</span>
                 {typeof item.description === "string" ? (
-                  <span className="w-full truncate text-2xs text-dim">{item.description}</span>
+                  <span className="w-full truncate text-xs text-dim">{item.description}</span>
                 ) : (
-                  <span className="w-full truncate text-2xs text-dim">{item.value}</span>
+                  <span className="w-full truncate text-xs text-dim">{item.value}</span>
                 )}
               </button>
             </li>

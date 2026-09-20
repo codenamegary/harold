@@ -168,7 +168,7 @@ export const ConfirmDeleteIconButton: React.FC<ConfirmDeleteIconButtonProps> = (
           className={`${styles.trashIcon} shrink-0 animate-spin text-danger`}
           strokeWidth={1.75}
         />
-        <span className="text-2xs font-semibold text-danger">{pendingLabel}</span>
+        <span className="text-xs font-semibold text-danger">{pendingLabel}</span>
       </div>
     </div>
   )

@@ -34,36 +34,28 @@ const formatLastSeen = (device: Device): string =>
     : formatRelativeLastUsed(device.lastSeenAt, device.pairedAt, Date.now())
 
 const actionIconButtonClassName =
-  "text-danger hover:border-danger/30 hover:bg-danger/5 hover:text-[#ff9a94]"
+  "text-danger hover:border-danger/30 hover:bg-danger/5 hover:text-danger"
 
-export const DeviceTable: React.FC<DeviceTableProps> = ({
-  devices,
-  isLoading,
-  isError,
-}) => {
+export const DeviceTable: React.FC<DeviceTableProps> = ({ devices, isLoading, isError }) => {
   const revokeDeviceMutation = useRevokeDeviceMutation()
   const deleteDeviceMutation = useDeleteDeviceMutation()
 
   if (isLoading) {
-    return (
-      <Panel className="p-8 text-sm text-dim">
-        Loading devices…
-      </Panel>
-    )
+    return <Panel className="p-8 text-base text-dim">Loading devices…</Panel>
   }
 
   if (isError) {
     return (
-      <Panel className="p-8 text-sm text-danger" role="alert">
+      <Panel className="p-8 text-base text-danger" role="alert">
         Could not load devices.
       </Panel>
     )
   }
 
   return (
-    <Panel className="table-panel">
+    <Panel>
       <div
-        className="grid min-h-[38px] grid-cols-[minmax(180px,1.7fr)_0.8fr_0.8fr_6.5rem_5.5rem] items-center gap-3 border-b border-line-soft px-[17px] font-mono text-2xs text-dim max-[820px]:hidden"
+        className="grid min-h-9.5 grid-cols-[minmax(180px,1.7fr)_0.8fr_0.8fr_6.5rem_5.5rem] items-center gap-3 border-b border-line-soft px-4 font-mono text-xs text-dim max-[820px]:hidden"
         role="row"
       >
         {tableHeaders.map((header) => (
@@ -73,26 +65,24 @@ export const DeviceTable: React.FC<DeviceTableProps> = ({
         ))}
       </div>
       {devices.length === 0 ? (
-        <div className="p-8 text-sm text-dim">No paired devices yet.</div>
+        <div className="p-8 text-base text-dim">No paired devices yet.</div>
       ) : (
         devices.map((device) => {
           const isRevoking =
-            revokeDeviceMutation.isPending &&
-            revokeDeviceMutation.variables === device.id
+            revokeDeviceMutation.isPending && revokeDeviceMutation.variables === device.id
           const isDeleting =
-            deleteDeviceMutation.isPending &&
-            deleteDeviceMutation.variables === device.id
+            deleteDeviceMutation.isPending && deleteDeviceMutation.variables === device.id
           const isRevoked = device.state === "revoked"
 
           return (
             <div
               key={device.id}
-              className="grid min-h-[58px] grid-cols-[minmax(180px,1.7fr)_0.8fr_0.8fr_6.5rem_5.5rem] items-center gap-3 border-b border-line-soft px-[17px] text-sm last:border-b-0 max-[820px]:grid-cols-1 max-[820px]:items-start max-[820px]:py-4"
+              className="grid min-h-14.5 grid-cols-[minmax(180px,1.7fr)_0.8fr_0.8fr_6.5rem_5.5rem] items-center gap-3 border-b border-line-soft px-4 text-sm last:border-b-0 max-[820px]:grid-cols-1 max-[820px]:items-start max-[820px]:py-4"
               role="row"
             >
               <div>
                 <strong className="block text-body">{device.name}</strong>
-                <small className="mt-1 block font-mono text-2xs text-dim">{device.id}</small>
+                <small className="mt-1 block font-mono text-xs text-dim">{device.id}</small>
               </div>
               <span className="text-body-soft">{formatLastSeen(device)}</span>
               <span className="text-body-soft">{device.platform ?? "—"}</span>

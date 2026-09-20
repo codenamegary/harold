@@ -13,10 +13,7 @@ type ChatTranscriptProps = {
   hasPendingPermission?: boolean
 }
 
-const rowKey = (
-  row: Exclude<TranscriptRow, { kind: "tool" }>,
-  index: number,
-): string => {
+const rowKey = (row: Exclude<TranscriptRow, { kind: "tool" }>, index: number): string => {
   switch (row.kind) {
     case "user":
     case "thinking":
@@ -43,7 +40,7 @@ export const ChatTranscript: React.FC<ChatTranscriptProps> = ({
 
   return (
     <div
-      className="mx-auto flex w-full max-w-[800px] flex-col gap-3"
+      className="mx-auto flex w-full max-w-200 flex-col gap-3"
       aria-label="Chat transcript"
       role="region"
     >
@@ -63,7 +60,7 @@ export const ChatTranscript: React.FC<ChatTranscriptProps> = ({
           return (
             <div
               key={rowKey(row, index)}
-              className="rounded-lg border border-line bg-[#12161b] px-3.5 py-3 text-base text-body"
+              className="rounded-lg border border-line bg-panel-2 px-3.5 py-3 text-base text-body"
             >
               {row.text}
               {row.attachments !== undefined && row.attachments.length > 0 ? (
@@ -79,7 +76,7 @@ export const ChatTranscript: React.FC<ChatTranscriptProps> = ({
                     ) : (
                       <span
                         key={`${row.turnId}-${attachmentIndex}`}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-line bg-[#181d25] px-2 py-1 font-mono text-2xs text-body-soft"
+                        className="inline-flex items-center gap-1.5 rounded-md border border-line bg-panel-elevated px-2 py-1 font-mono text-xs text-body-soft"
                       >
                         {attachment.name}
                       </span>
@@ -102,10 +99,7 @@ export const ChatTranscript: React.FC<ChatTranscriptProps> = ({
         )
       })}
       {activity !== null ? (
-        <ActivityStatusLine
-          label={activity.label}
-          subtitle={activity.subtitle}
-        />
+        <ActivityStatusLine label={activity.label} subtitle={activity.subtitle} />
       ) : null}
     </div>
   )
