@@ -21,8 +21,7 @@ import { assembleRuntimeSettingsSlice } from "../runtime-settings/runtime-settin
 import { AppliedRuntimeSettingsHolder } from "../runtime-settings/applied.runtime.settings"
 import { assembleWorkspaceSlice } from "../workspace/workspace.assembly"
 import { registerFilesystemBrowseRoutes } from "../filesystem/routes"
-import { createAttachmentsService } from "../attachments/attachments.service"
-import { registerAttachmentRoutes } from "../attachments/routes"
+import { assembleAttachmentsSlice } from "../attachments/attachments.assembly"
 import { registerSessionRoutes } from "../session/routes"
 import { createArchivedAcpSessionsStore } from "../session/archived.acp.sessions.store"
 import { assembleDeviceSlice } from "../device/device.assembly"
@@ -199,8 +198,6 @@ export const createServer = async ({
     isLoopbackRequest,
   })
 
-  const attachmentsService = createAttachmentsService()
-
   const acpSupervisorRef: { current: AcpSupervisor } = { current: null! }
   const authBrokerRef: { current: AuthBroker | null } = { current: null }
 
@@ -279,6 +276,17 @@ export const createServer = async ({
 
   const acpSupervisor = acpSupervisorRef.current
 
+  const workspace = assembleWorkspaceSlice({
+    database,
+    getAllowedRoots,
+    listLiveByWorkspaceRoot: acpSupervisor.listLiveByWorkspaceRoot,
+    closeWorkspaceSessions: acpSupervisor.closeWorkspaceSessions,
+    unbindWorkspaceSessions: acpSupervisor.unbindWorkspaceSessions,
+  })
+  const attachments = assembleAttachmentsSlice({
+    findWorkspaceById: workspace.findById,
+  })
+
   const sessionHub = createSessionHub({
     cwdCache,
     commandsCache,
@@ -293,7 +301,7 @@ export const createServer = async ({
         if (workspaceRoot === undefined) {
           return null
         }
-        return attachmentsService.loadAttachment({
+        return attachments.loadAttachment({
           workspacePath: workspaceRoot,
           reference,
         })
@@ -339,13 +347,6 @@ export const createServer = async ({
 
   registerStatusRoutes(app, runtime, config, acpSupervisor)
   registerLogRoutes(app, logBuffer)
-  const workspace = assembleWorkspaceSlice({
-    database,
-    getAllowedRoots,
-    listLiveByWorkspaceRoot: acpSupervisor.listLiveByWorkspaceRoot,
-    closeWorkspaceSessions: acpSupervisor.closeWorkspaceSessions,
-    unbindWorkspaceSessions: acpSupervisor.unbindWorkspaceSessions,
-  })
   const runtimeStatusService = createRuntimeStatusService({
     runtime,
   })
@@ -353,7 +354,7 @@ export const createServer = async ({
 
   workspace.registerRoutes(app)
   registerFilesystemBrowseRoutes(app, getAllowedRoots)
-  registerAttachmentRoutes(app, workspace.findById, attachmentsService)
+  attachments.registerRoutes(app)
   agentSettings.registerRoutes(app)
   registerAgentAuthRoutes(app, authBroker, agentExists)
   const runtimeSettings = assembleRuntimeSettingsSlice({

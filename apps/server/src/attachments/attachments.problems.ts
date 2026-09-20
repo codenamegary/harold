@@ -1,16 +1,25 @@
 import {
+  NotFoundProblemSchema,
   PayloadTooLargeProblemSchema,
+  PROBLEM_TYPES,
   UnsupportedMediaTypeProblemSchema,
 } from "contracts/http/error"
 
-export { buildWorkspaceNotFoundProblem } from "../session/session.problems"
+export const buildWorkspaceNotFoundProblem = (detail = "Unknown workspace id") =>
+  NotFoundProblemSchema.parse({
+    type: PROBLEM_TYPES.notFound,
+    title: "Workspace not found",
+    status: 404,
+    detail,
+  })
 
-export const buildAttachmentNotFoundProblem = (detail = "Unknown attachment") => ({
-  type: "https://agent-server.local/problems/not-found",
-  title: "Attachment not found",
-  status: 404,
-  detail,
-})
+export const buildAttachmentNotFoundProblem = (detail = "Unknown attachment") =>
+  NotFoundProblemSchema.parse({
+    type: PROBLEM_TYPES.notFound,
+    title: "Attachment not found",
+    status: 404,
+    detail,
+  })
 
 export const buildAttachmentTooLargeProblem = (detail: string) =>
   PayloadTooLargeProblemSchema.parse({
