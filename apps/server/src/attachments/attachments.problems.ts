@@ -3,7 +3,22 @@ import {
   PayloadTooLargeProblemSchema,
   PROBLEM_TYPES,
   UnsupportedMediaTypeProblemSchema,
+  ValidationProblemSchema,
 } from "contracts/http/error"
+import { ZodError } from "zod"
+import { zodIssueToCode, zodPathToPointer } from "../error/zod.problem"
+
+export const buildAttachmentParamsProblem = (error: ZodError) =>
+  ValidationProblemSchema.parse({
+    type: PROBLEM_TYPES.validationError,
+    title: "Request validation failed",
+    status: 400,
+    code: "validation.request.invalid",
+    errors: error.issues.map((issue) => ({
+      pointer: zodPathToPointer(issue.path),
+      code: zodIssueToCode(issue),
+    })),
+  })
 
 export const buildWorkspaceNotFoundProblem = (detail = "Unknown workspace id") =>
   NotFoundProblemSchema.parse({

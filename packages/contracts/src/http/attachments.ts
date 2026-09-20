@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { IdSchema } from "./primitives"
 
 export const AttachmentKindSchema = z.enum(["image", "file"])
 
@@ -42,6 +43,16 @@ export const BLOCKED_ATTACHMENT_EXTENSIONS = [
 
 export const attachmentsFolderName = ".agent-server/attachments"
 
+export const AttachmentWorkspaceIdParamsSchema = z.strictObject({
+  workspaceId: IdSchema,
+})
+
+export const AttachmentDeleteParamsSchema = AttachmentWorkspaceIdParamsSchema.extend({
+  attachmentId: IdSchema,
+})
+
 export type AttachmentKind = z.infer<typeof AttachmentKindSchema>
 export type AttachmentDescriptor = z.infer<typeof AttachmentDescriptorSchema>
 export type AttachmentReference = z.infer<typeof AttachmentReferenceSchema>
+export type AttachmentWorkspaceIdParams = z.infer<typeof AttachmentWorkspaceIdParamsSchema>
+export type AttachmentDeleteParams = z.infer<typeof AttachmentDeleteParamsSchema>

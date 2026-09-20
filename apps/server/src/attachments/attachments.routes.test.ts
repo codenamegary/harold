@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { AttachmentDescriptorSchema } from "contracts/http/attachments"
+import { ValidationProblemSchema } from "contracts/http/error"
 import { bootTestApp, TestApp } from "../test-support/test.harness"
 import { allowWorkspaceRoots } from "../test-support/test.app"
 
@@ -126,6 +127,21 @@ describe("POST /v1/workspaces/:workspaceId/attachments", () => {
     expect(response.statusCode).toBe(404)
   })
 
+  test("returns 400 when the workspaceId param is empty", async () => {
+    const { app } = await bootTestApp()
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/workspaces//attachments",
+      payload: Buffer.alloc(0),
+      headers: { "content-type": "multipart/form-data" },
+    })
+
+    const body = ValidationProblemSchema.parse(JSON.parse(response.body))
+    expect(response.statusCode).toBe(400)
+    expect(body.errors[0]?.pointer).toBe("#/workspaceId")
+  })
+
   test("returns 415 for executable extensions", async () => {
     const { app, dataDir } = await bootTestApp()
     const { workspaceId } = await createWorkspace(app, dataDir)
@@ -158,6 +174,20 @@ describe("DELETE /v1/workspaces/:workspaceId/attachments/:attachmentId", () => {
 
     expect(response.statusCode).toBe(204)
     expect(readFile(descriptor.path)).rejects.toThrow()
+  })
+
+  test("returns 400 when the attachmentId param is empty", async () => {
+    const { app, dataDir } = await bootTestApp()
+    const { workspaceId } = await createWorkspace(app, dataDir)
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: `/v1/workspaces/${workspaceId}/attachments/`,
+    })
+
+    const body = ValidationProblemSchema.parse(JSON.parse(response.body))
+    expect(response.statusCode).toBe(400)
+    expect(body.errors[0]?.pointer).toBe("#/attachmentId")
   })
 
   test("returns 404 for an unknown attachment id", async () => {

@@ -1,7 +1,9 @@
 import {
   AttachmentDescriptorSchema,
+  AttachmentDeleteParamsSchema,
   AttachmentKind,
   AttachmentKindSchema,
+  AttachmentWorkspaceIdParamsSchema,
   MAX_ATTACHMENT_BYTES,
 } from "contracts/http/attachments"
 import { FastifyInstance } from "fastify"
@@ -10,6 +12,7 @@ import { FindWorkspaceById } from "../workspace/workspace.ports"
 import { DeleteAttachment, SaveAttachment } from "./attachments.ports"
 import {
   buildAttachmentNotFoundProblem,
+  buildAttachmentParamsProblem,
   buildAttachmentTooLargeProblem,
   buildAttachmentTypeRejectedProblem,
   buildWorkspaceNotFoundProblem,
@@ -41,7 +44,11 @@ export type AttachmentsRouteDeps = Readonly<{
 
 export const registerAttachmentRoutes = (app: FastifyInstance, deps: AttachmentsRouteDeps) => {
   app.post("/v1/workspaces/:workspaceId/attachments", async (request, reply) => {
-    const { workspaceId } = request.params as { workspaceId: string }
+    const params = AttachmentWorkspaceIdParamsSchema.safeParse(request.params)
+    if (!params.success) {
+      return sendProblem(reply, 400, buildAttachmentParamsProblem(params.error))
+    }
+    const { workspaceId } = params.data
     const workspaceResult = deps.findWorkspaceById({ id: workspaceId })
 
     if (!workspaceResult.ok) {
@@ -119,10 +126,11 @@ export const registerAttachmentRoutes = (app: FastifyInstance, deps: Attachments
   })
 
   app.delete("/v1/workspaces/:workspaceId/attachments/:attachmentId", async (request, reply) => {
-    const { workspaceId, attachmentId } = request.params as {
-      workspaceId: string
-      attachmentId: string
+    const params = AttachmentDeleteParamsSchema.safeParse(request.params)
+    if (!params.success) {
+      return sendProblem(reply, 400, buildAttachmentParamsProblem(params.error))
     }
+    const { workspaceId, attachmentId } = params.data
     const workspaceResult = deps.findWorkspaceById({ id: workspaceId })
 
     if (!workspaceResult.ok) {
