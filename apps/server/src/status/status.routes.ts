@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify"
 import { Config } from "../config/config"
 import { Runtime } from "../runtime/runtime"
-import { AcpSupervisor } from "../acp/supervisor/models"
+import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
 import { makeGetStatus } from "./status.get.usecase"
 
 export const registerStatusRoutes = (

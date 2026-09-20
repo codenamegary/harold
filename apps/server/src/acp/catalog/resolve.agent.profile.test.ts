@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { resolveAgentProfile } from "../agent-profile"
-import { buildAgentSpawnCommand } from "../supervisor/spawn.agent.process"
+import { buildAgentSpawnCommand } from "../supervisor/supervisor.process.adapters"
 
 describe("resolveAgentProfile", () => {
   test("preserves cursor product override command and auth", () => {

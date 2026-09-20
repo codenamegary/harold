@@ -10,7 +10,7 @@ import {
 } from "./test.harness"
 import Fastify from "fastify"
 import { createAcpSupervisor } from "../acp/supervisor/supervisor"
-import { AcpSupervisor } from "../acp/supervisor/models"
+import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
 import { assembleAgentSettingsSlice } from "../agent-settings/agent.settings.assembly"
 import { seedWorkspace } from "./test.app"
 

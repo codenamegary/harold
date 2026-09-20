@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Writable } from "node:stream"
-import { SpawnedAgentProcess } from "../acp/supervisor/spawn.agent.process"
+import { SpawnedAgentProcess } from "../acp/supervisor/models"
 import { LogRecordInput } from "./logs.models"
 import { createLogSinkStream, createLoggedAgentSpawn } from "./logs.stream.adapters"
 

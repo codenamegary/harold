@@ -12,7 +12,7 @@ import { createSupervisorAuthHooks } from "../../agent/auth/supervisor.hooks"
 import { createAcpJsonRpcError } from "../transport/json-rpc-error"
 import { createAcpSupervisor } from "./supervisor"
 import { JsonRpcTransport } from "../transport/json-rpc-transport"
-import { SpawnedAgentProcess } from "./spawn.agent.process"
+import { SpawnedAgentProcess } from "./models"
 
 const createMockTransport = () => {
   const handlers = new Map<string, (params: unknown) => unknown>()

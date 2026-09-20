@@ -6,7 +6,8 @@ import { createServer, CreateServerOptions } from "../bootstrap/server"
 import { Config, ConfigSchema, parseConfig } from "../config/config"
 import { AgentDatabase, openDatabase } from "../persistence/database"
 import { createRuntime, Runtime } from "../runtime/runtime"
-import { SpawnAgentProcessFn, SpawnedAgentProcess } from "../acp/supervisor/spawn.agent.process"
+import { SpawnAgentProcessFn } from "../acp/supervisor/supervisor.ports"
+import { SpawnedAgentProcess } from "../acp/supervisor/models"
 import { acceptTestExecutablePath } from "./test.app"
 
 type Cleanup = () => void | Promise<unknown>

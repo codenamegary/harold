@@ -1,6 +1,4 @@
 import { AgentId } from "contracts/http/agent-settings"
-import os from "node:os"
-import { AdapterAuthContext } from "../../agent/auth/adapters/adapter"
 import { sanitizeFailureReason } from "../sanitize.failure.reason"
 import { buildCapabilityInventory, CapabilityInventory } from "../agent/inventory"
 import { agentMethodDeclarations } from "../agent/method.declarations"
@@ -8,7 +6,6 @@ import { createAgentMethodTable } from "../agent/method.table"
 import { registerSessionCancelHandler } from "../agent/session.cancel"
 import { registerSessionCloseHandler } from "../agent/session.close"
 import { registerSessionSetConfigOptionHandler } from "../agent/session.set_config_option"
-import { AcpSetConfigOptionResult } from "../supervisor/models"
 import { registerSessionListHandler } from "../agent/session.list"
 import { registerSessionLoadHandler } from "../agent/session.load"
 import { registerSessionNewHandler } from "../agent/session.new"
@@ -22,17 +19,19 @@ import {
   AcpSessionOperationResult,
   AcpSessionPromptResult,
   AcpSessionPromptStartResult,
-  AcpSupervisor,
+  AcpSetConfigOptionResult,
   AcpSupervisorState,
   AcpSupervisorStatus,
   AcpAgentRuntimeState,
   CloseWorkspaceSessionFailure,
   CloseWorkspaceSessionsResult,
-  CreateAcpSupervisorParams,
   AcpStartResult,
   DEFAULT_ACP_RESTART_BACKOFF_MS,
   LiveWorkspaceSession,
+  SpawnedAgentProcess,
 } from "./models"
+import { AcpSupervisor, CreateAcpSupervisorParams } from "./supervisor.ports"
+import { buildAdapterAuthContext } from "./supervisor.auth.context"
 import { aggregateStatus } from "./supervisor.aggregate.status"
 import { resolveStartConfig } from "./supervisor.resolve.start.config"
 import { createJsonRpcTransport, JsonRpcTransport } from "../transport/json-rpc-transport"
@@ -43,7 +42,7 @@ import {
 } from "../client/register-handlers"
 import { resolveExtensionHandlers } from "../client/extensions/extension.handlers"
 import { createSessionBindingRegistry } from "../client/session-binding-registry"
-import { spawnAgentProcess, SpawnedAgentProcess } from "./spawn.agent.process"
+import { spawnAgentProcess } from "./supervisor.process.adapters"
 import {
   inventoryAdvertisesSessionClose,
   inventoryAdvertisesSessionList,
@@ -61,16 +60,6 @@ type SupervisorRuntime = {
   acceptUnexpectedExit: boolean
   restartGeneration: number
 }
-
-const buildAdapterAuthContext = (
-  agentId: AgentId,
-  initializeResult?: unknown,
-): AdapterAuthContext => ({
-  agentId,
-  hostIdentity: { id: "default" },
-  hostMachineName: os.hostname(),
-  initializeResult,
-})
 
 const monitorProcessExit = async (
   runtimes: Map<AgentId, SupervisorRuntime>,

@@ -19,7 +19,7 @@ import {
 } from "../agent-settings/validate-agent-path"
 import { FetchRegistryFn } from "../agent-settings/agent.settings.ports"
 import { spawnFakeAcp, SpawnFakeAcpOptions } from "test-support/spawn"
-import { SpawnAgentProcessFn } from "../acp/supervisor/spawn.agent.process"
+import { SpawnAgentProcessFn } from "../acp/supervisor/supervisor.ports"
 import { acceptTestExecutablePath } from "../test-support/test.app"
 import { bootTestApp } from "../test-support/test.harness"
 
