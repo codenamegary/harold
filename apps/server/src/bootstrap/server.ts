@@ -10,7 +10,7 @@ import { Config } from "../config/config"
 import { EnvBindOverrides } from "../config/env.bind.overrides"
 import { AgentDatabase } from "../persistence/database"
 import { Runtime } from "../runtime/runtime"
-import { registerStatusRoutes } from "../status/routes"
+import { registerStatusRoutes } from "../status/status.routes"
 import { assembleAgentSettingsSlice } from "../agent-settings/agent.settings.assembly"
 import {
   makeRuntimeSettingsFileStore,
