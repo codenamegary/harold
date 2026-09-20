@@ -1,8 +1,7 @@
 import { AgentId } from "contracts/http/agent-settings"
 import os from "node:os"
-import { resolveAgentProfile } from "../agent-profile"
 import { AdapterAuthContext } from "../../agent/auth/adapters/adapter"
-import { sanitizeAcpRejection } from "../sanitize.error"
+import { sanitizeFailureReason } from "../sanitize.failure.reason"
 import { buildCapabilityInventory, CapabilityInventory } from "../agent/inventory"
 import { agentMethodDeclarations } from "../agent/method.declarations"
 import { createAgentMethodTable } from "../agent/method.table"
@@ -16,7 +15,6 @@ import { registerSessionNewHandler } from "../agent/session.new"
 import { registerSessionPromptHandler } from "../agent/session.prompt"
 import { createSessionOwnership } from "../agent/session.ownership"
 import {
-  AgentSettingsReader,
   AcpSession,
   AcpListSessionsResult,
   AcpSessionCloseResult,
@@ -35,9 +33,14 @@ import {
   DEFAULT_ACP_RESTART_BACKOFF_MS,
   LiveWorkspaceSession,
 } from "./models"
-import { isAcpJsonRpcError } from "../transport/json-rpc-error"
+import { aggregateStatus } from "./supervisor.aggregate.status"
+import { resolveStartConfig } from "./supervisor.resolve.start.config"
 import { createJsonRpcTransport, JsonRpcTransport } from "../transport/json-rpc-transport"
-import { registerAcpClientHandlers, createUnavailableRequestExtensionRpc, createUnavailableRequestPermission } from "../client/register-handlers"
+import {
+  registerAcpClientHandlers,
+  createUnavailableRequestExtensionRpc,
+  createUnavailableRequestPermission,
+} from "../client/register-handlers"
 import { resolveExtensionHandlers } from "../client/extensions/extension.handlers"
 import { createSessionBindingRegistry } from "../client/session-binding-registry"
 import { spawnAgentProcess, SpawnedAgentProcess } from "./spawn.agent.process"
@@ -68,45 +71,6 @@ const buildAdapterAuthContext = (
   hostMachineName: os.hostname(),
   initializeResult,
 })
-
-const sanitizeFailureReason = (error: unknown, fallback: string): string => {
-  if (isAcpJsonRpcError(error)) {
-    return sanitizeAcpRejection({
-      message: error.message,
-      data: error.data,
-    })
-  }
-
-  const message = error instanceof Error ? error.message : fallback
-  return sanitizeAcpRejection({ message })
-}
-
-const resolveStartConfig = (
-  repository: AgentSettingsReader,
-  agentId: AgentId,
-) => {
-  const spawnSnapshot = repository.getSpawnSnapshot?.(agentId) ?? null
-  const profile = resolveAgentProfile(agentId, spawnSnapshot)
-  if (!profile) {
-    return { ok: false as const, reason: "Agent profile is not available" }
-  }
-
-  const settings = repository.list().find((agent) => agent.id === agentId)
-  if (!settings?.enabled) {
-    return { ok: false as const, reason: "Agent is not enabled" }
-  }
-
-  if (!settings.path) {
-    return { ok: false as const, reason: "Agent executable path is not configured" }
-  }
-
-  return {
-    ok: true as const,
-    profile,
-    executablePath: settings.path,
-    args: settings.args,
-  }
-}
 
 const monitorProcessExit = async (
   runtimes: Map<AgentId, SupervisorRuntime>,
@@ -139,27 +103,6 @@ const createEmptyRuntime = (agentId: AgentId): SupervisorRuntime => ({
   acceptUnexpectedExit: false,
   restartGeneration: 0,
 })
-
-const aggregateStatus = (
-  runtimes: Map<AgentId, SupervisorRuntime>,
-  activeSessions: number,
-): AcpSupervisorStatus => {
-  if (runtimes.size === 0) {
-    return { state: "stopped", activeSessions }
-  }
-
-  const states = [...runtimes.values()].map((runtime) => runtime.state)
-  if (states.some((state) => state === "ready")) {
-    return { state: "ready", activeSessions }
-  }
-  if (states.some((state) => state === "starting")) {
-    return { state: "starting", activeSessions }
-  }
-  if (states.some((state) => state === "error")) {
-    return { state: "error", activeSessions }
-  }
-  return { state: "stopped", activeSessions }
-}
 
 export const createAcpSupervisor = ({
   agentSettingsRepository,
@@ -656,9 +599,7 @@ export const createAcpSupervisor = ({
     return result
   }
 
-  const listAcpSessions = async (params?: {
-    cwd?: string
-  }): Promise<AcpListSessionsResult> => {
+  const listAcpSessions = async (params?: { cwd?: string }): Promise<AcpListSessionsResult> => {
     const readyRuntimes = [...runtimes.values()].filter(
       (runtime) =>
         runtime.state === "ready" &&
@@ -946,9 +887,7 @@ export const createAcpSupervisor = ({
     })
   }
 
-  const listLiveByWorkspaceRoot = (
-    workspaceRoot: string,
-  ): ReadonlyArray<LiveWorkspaceSession> =>
+  const listLiveByWorkspaceRoot = (workspaceRoot: string): ReadonlyArray<LiveWorkspaceSession> =>
     sessionBindingRegistry.listByWorkspaceRoot(workspaceRoot).flatMap((binding) => {
       const agentId = sessionOwnership.ownerOf(binding.acpSessionId)
       if (agentId === undefined) {
@@ -959,15 +898,17 @@ export const createAcpSupervisor = ({
 
   return {
     getStatus: (): AcpSupervisorStatus =>
-      aggregateStatus(runtimes, sessionBindingRegistry.count()),
+      aggregateStatus(
+        [...runtimes.values()].map((runtime) => runtime.state),
+        sessionBindingRegistry.count(),
+      ),
     getAgentRuntimeState,
     getRunningAgentId: () => resolveReadyAgentId(),
     getRunningAgentIds: () =>
       [...runtimes.values()]
         .filter((runtime) => runtime.state === "ready")
         .map((runtime) => runtime.agentId),
-    getCapabilityInventory: (agentId) =>
-      getReadyRuntime(agentId)?.capabilityInventory ?? null,
+    getCapabilityInventory: (agentId) => getReadyRuntime(agentId)?.capabilityInventory ?? null,
     getTransport: (agentId) => {
       const resolvedAgentId = resolveReadyAgentId(agentId)
       if (resolvedAgentId === null) {
