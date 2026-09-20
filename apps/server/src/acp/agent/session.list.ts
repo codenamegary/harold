@@ -1,5 +1,4 @@
-import { sanitizeAcpRejection } from "../sanitize.error"
-import { isAcpJsonRpcError } from "../transport/json-rpc-error"
+import { sanitizeFailureReason } from "../sanitize.failure.reason"
 import { AcpSession } from "../supervisor/models"
 import { AgentMethodTable } from "./method.table"
 import {
@@ -21,7 +20,9 @@ export const sessionListDeclaration: AgentMethodDeclaration = {
 
 const nowIso = (): string => new Date().toISOString()
 
-const parseListedSessions = (result: unknown): ReadonlyArray<{
+const parseListedSessions = (
+  result: unknown,
+): ReadonlyArray<{
   sessionId: string
   cwd: string
   title: string
@@ -54,18 +55,6 @@ const parseListedSessions = (result: unknown): ReadonlyArray<{
       },
     ]
   })
-}
-
-const sanitizeListFailureReason = (error: unknown, fallback: string): string => {
-  if (isAcpJsonRpcError(error)) {
-    return sanitizeAcpRejection({
-      message: error.message,
-      data: error.data,
-    })
-  }
-
-  const message = error instanceof Error ? error.message : fallback
-  return sanitizeAcpRejection({ message })
 }
 
 export const createSessionListHandler = (): AgentMethodHandler<"session/list"> => {
@@ -112,7 +101,7 @@ export const createSessionListHandler = (): AgentMethodHandler<"session/list"> =
     } catch (error: unknown) {
       return {
         ok: false,
-        reason: sanitizeListFailureReason(error, "session/list failed"),
+        reason: sanitizeFailureReason(error, "session/list failed"),
       }
     }
   }

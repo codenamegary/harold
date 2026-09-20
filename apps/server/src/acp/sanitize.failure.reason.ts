@@ -1,5 +1,5 @@
 import { sanitizeAcpRejection } from "./sanitize.error"
-import { isAcpJsonRpcError } from "./transport/json-rpc-error"
+import { isAcpJsonRpcError } from "./transport/json.rpc.error"
 
 /**
  * Shared across the supervisor and the per-method ACP handlers: turn any

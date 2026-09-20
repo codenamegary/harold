@@ -1,4 +1,4 @@
-import { AgentProfile } from "../agent-profile"
+import { AgentProfile } from "../agent.profile"
 import { SpawnedAgentProcess } from "./models"
 
 export type SpawnAgentProcessParams = {

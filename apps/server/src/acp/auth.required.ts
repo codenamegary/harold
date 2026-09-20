@@ -1,4 +1,4 @@
-import { isAcpJsonRpcError } from "./transport/json-rpc-error"
+import { isAcpJsonRpcError } from "./transport/json.rpc.error"
 
 /** ACP ErrorCode: Authentication required */
 export const ACP_AUTH_REQUIRED_CODE = -32000
@@ -16,17 +16,14 @@ export const isAcpAuthRequiredError = (error: unknown): boolean => {
   }
 
   const normalized = error.message.trim().toLowerCase().replace(/_/g, " ")
-  return (
-    normalized.includes("authentication required")
-    || normalized.includes("auth required")
-  )
+  return normalized.includes("authentication required") || normalized.includes("auth required")
 }
 
 export const isAuthRequiredFailureReason = (reason: string): boolean => {
   const normalized = reason.trim().toLowerCase().replace(/_/g, " ")
   return (
-    normalized.includes("authentication required")
-    || normalized.includes("auth required")
-    || reason === AUTH_GATED_PROMPT_MESSAGE
+    normalized.includes("authentication required") ||
+    normalized.includes("auth required") ||
+    reason === AUTH_GATED_PROMPT_MESSAGE
   )
 }

@@ -1,5 +1,4 @@
-import { sanitizeAcpRejection } from "../sanitize.error"
-import { isAcpJsonRpcError } from "../transport/json-rpc-error"
+import { sanitizeFailureReason } from "../sanitize.failure.reason"
 import { AgentMethodTable } from "./method.table"
 import { requireBoundSession } from "./session.binding.guards"
 import {
@@ -21,18 +20,6 @@ export const sessionCancelDeclaration: AgentMethodDeclaration = {
   transportKind: sessionCancelTransportKind,
 }
 
-const sanitizeCancelFailureReason = (error: unknown, fallback: string): string => {
-  if (isAcpJsonRpcError(error)) {
-    return sanitizeAcpRejection({
-      message: error.message,
-      data: error.data,
-    })
-  }
-
-  const message = error instanceof Error ? error.message : fallback
-  return sanitizeAcpRejection({ message })
-}
-
 export const createSessionCancelHandler = (): AgentMethodHandler<"session/cancel"> => {
   return async ({ params, context }) => {
     const { acpSessionId } = params
@@ -48,7 +35,7 @@ export const createSessionCancelHandler = (): AgentMethodHandler<"session/cancel
     } catch (error: unknown) {
       return {
         ok: false,
-        reason: sanitizeCancelFailureReason(error, "session/cancel failed"),
+        reason: sanitizeFailureReason(error, "session/cancel failed"),
       }
     }
   }

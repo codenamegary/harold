@@ -1,5 +1,5 @@
 import { AgentId } from "contracts/http/agent-settings"
-import { readAcpSessionId } from "../read.acp.session.id"
+import { readAcpSessionId } from "../session.id.reader"
 
 export type CreateAcpPermissionHandlerParams = {
   agentId: AgentId
@@ -34,8 +34,7 @@ export const createAcpPermissionHandler = ({
       })
       input.respond(result)
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "permission request failed"
+      const message = error instanceof Error ? error.message : "permission request failed"
       input.respondError(-32000, message)
     }
   },

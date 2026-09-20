@@ -1,6 +1,6 @@
 import { AgentId } from "contracts/http/agent-settings"
 import { KnownCapabilityPath } from "./capabilities"
-import { SessionBindingRegistry } from "../client/session-binding-registry"
+import { SessionBindingRegistry } from "../client/session.binding.registry"
 import {
   AcpListSessionsResult,
   AcpSessionCancelResult,
@@ -10,7 +10,7 @@ import {
   AcpSetConfigOptionResult,
   SessionDiscoveredHandler,
 } from "../supervisor/models"
-import { JsonRpcTransport } from "../transport/json-rpc-transport"
+import { JsonRpcTransport } from "../transport/json.rpc.transport"
 import { SessionOwnership } from "./session.ownership"
 
 export const ANY_AGENT = "*"
@@ -67,7 +67,7 @@ export type AgentMethodSignatures = {
     result: AcpSessionOperationResult
   }
   "session/prompt": {
-    params: { acpSessionId: string, prompt: unknown }
+    params: { acpSessionId: string; prompt: unknown }
     result: AcpSessionPromptStartResult
   }
   "session/cancel": {

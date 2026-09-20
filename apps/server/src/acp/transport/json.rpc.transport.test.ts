@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { isAcpJsonRpcError, readSafeJsonRpcErrorData } from "./json-rpc-error"
-import { createJsonRpcTransport } from "./json-rpc-transport"
+import { isAcpJsonRpcError, readSafeJsonRpcErrorData } from "./json.rpc.error"
+import { createJsonRpcTransport } from "./json.rpc.transport"
 
 describe("createJsonRpcTransport", () => {
   test("sends notifications without id and does not wait for a response", async () => {

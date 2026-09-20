@@ -1,5 +1,5 @@
 import { AgentId } from "contracts/http/agent-settings"
-import { AgentProfile, resolveAgentProfile } from "../agent-profile"
+import { AgentProfile, resolveAgentProfile } from "../agent.profile"
 import { AgentSettingsReader } from "./supervisor.ports"
 
 export type ResolvedStartConfig =

@@ -4,7 +4,7 @@ import {
   isAcpAuthRequiredError,
   isAuthRequiredFailureReason,
 } from "./auth.required"
-import { createAcpJsonRpcError } from "./transport/json-rpc-error"
+import { createAcpJsonRpcError } from "./transport/json.rpc.error"
 
 describe("isAcpAuthRequiredError", () => {
   test("detects ACP authentication required code", () => {
@@ -20,12 +20,8 @@ describe("isAcpAuthRequiredError", () => {
   })
 
   test("rejects unrelated errors", () => {
-    expect(isAcpAuthRequiredError(createAcpJsonRpcError("boom", -32001))).toBe(
-      false,
-    )
-    expect(isAcpAuthRequiredError(new Error("session/prompt failed"))).toBe(
-      false,
-    )
+    expect(isAcpAuthRequiredError(createAcpJsonRpcError("boom", -32001))).toBe(false)
+    expect(isAcpAuthRequiredError(new Error("session/prompt failed"))).toBe(false)
   })
 })
 

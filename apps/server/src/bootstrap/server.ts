@@ -241,6 +241,7 @@ export const createServer = async ({
       agentSettingsRepository: agentSettings,
       serverVersion: runtime.version,
       spawnAgentProcessFn: spawnFn,
+      logUnknownExtension: (method) => app.log.warn({ method }, "unknown ACP extension"),
       authHooks: createSupervisorAuthHooks({
         authBroker,
         requestRespawn: async (agentId) => {

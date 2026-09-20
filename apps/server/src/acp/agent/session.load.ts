@@ -1,7 +1,6 @@
 import { SessionConfigSchema } from "contracts/http/config.options"
-import { sanitizeAcpRejection } from "../sanitize.error"
-import { isAcpJsonRpcError } from "../transport/json-rpc-error"
-import { AcpOperationContext } from "../transport/json-rpc-transport"
+import { sanitizeFailureReason } from "../sanitize.failure.reason"
+import { AcpOperationContext } from "../transport/json.rpc.transport"
 import { AgentMethodTable } from "./method.table"
 import {
   ANY_AGENT,
@@ -18,18 +17,6 @@ export const sessionLoadDeclaration: AgentMethodDeclaration = {
   method: sessionLoadMethod,
   requires: sessionLoadRequires,
   transportKind: "request",
-}
-
-const sanitizeLoadFailureReason = (error: unknown, fallback: string): string => {
-  if (isAcpJsonRpcError(error)) {
-    return sanitizeAcpRejection({
-      message: error.message,
-      data: error.data,
-    })
-  }
-
-  const message = error instanceof Error ? error.message : fallback
-  return sanitizeAcpRejection({ message })
 }
 
 export const createSessionLoadHandler = (): AgentMethodHandler<"session/load"> => {
@@ -126,7 +113,7 @@ export const createSessionLoadHandler = (): AgentMethodHandler<"session/load"> =
       }
       return {
         ok: false,
-        reason: sanitizeLoadFailureReason(error, "session/load failed"),
+        reason: sanitizeFailureReason(error, "session/load failed"),
       }
     }
   }

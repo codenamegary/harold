@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify"
 import { AgentDatabase } from "../persistence/database"
-import { ensureCatalogAgentSettingsRows } from "../acp/catalog/ensure.catalog.agent.settings"
+import { ensureCatalogAgentSettingsRows } from "../acp/catalog/catalog.sqlite.adapters"
 import { probePresence } from "../acp/catalog/probe.presence"
 import { PresenceProbeContext } from "../acp/catalog/agent.profile.override"
 import { AuthBroker } from "../agent/auth/broker"

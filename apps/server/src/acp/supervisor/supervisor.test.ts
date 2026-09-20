@@ -9,9 +9,9 @@ import {
 import { createAuthBroker } from "../../agent/auth/broker"
 import { createDefaultAuthAdapter } from "../../agent/auth/adapters/default.adapter"
 import { createSupervisorAuthHooks } from "../../agent/auth/supervisor.hooks"
-import { createAcpJsonRpcError } from "../transport/json-rpc-error"
+import { createAcpJsonRpcError } from "../transport/json.rpc.error"
 import { createAcpSupervisor } from "./supervisor"
-import { JsonRpcTransport } from "../transport/json-rpc-transport"
+import { JsonRpcTransport } from "../transport/json.rpc.transport"
 import { SpawnedAgentProcess } from "./models"
 
 const createMockTransport = () => {

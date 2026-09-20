@@ -1,7 +1,7 @@
 import { AgentId } from "contracts/http/agent-settings"
 import { RequestExtensionRpcFn } from "../../supervisor/models"
-import { createAcpJsonRpcError } from "../../transport/json-rpc-error"
-import { readAcpSessionId } from "../read.acp.session.id"
+import { createAcpJsonRpcError } from "../../transport/json.rpc.error"
+import { readAcpSessionId } from "../session.id.reader"
 import { ExtensionHandlers } from "./types"
 
 export const createCursorExtensionHandlers = (

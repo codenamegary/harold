@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createAcpJsonRpcError } from "./transport/json-rpc-error"
+import { createAcpJsonRpcError } from "./transport/json.rpc.error"
 import { sanitizeFailureReason } from "./sanitize.failure.reason"
 
 describe("sanitizeFailureReason", () => {
