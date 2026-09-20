@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { parsePinoLine } from "./parse.pino.line"
+import { parsePinoLine } from "./logs.pino.line"
 
 describe("parsePinoLine", () => {
   test("maps a pino info line with agentId and reason", () => {
