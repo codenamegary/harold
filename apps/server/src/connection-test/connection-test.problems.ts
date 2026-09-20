@@ -1,8 +1,4 @@
-import {
-  InternalProblemSchema,
-  PROBLEM_TYPES,
-  ValidationProblemSchema,
-} from "contracts/http/error"
+import { InternalProblemSchema, PROBLEM_TYPES, ValidationProblemSchema } from "contracts/http/error"
 
 export const buildMissingAdvertisedUrlProblem = () =>
   ValidationProblemSchema.parse({
@@ -13,9 +9,7 @@ export const buildMissingAdvertisedUrlProblem = () =>
     errors: [{ pointer: "#/advertisedUrl", code: "validation.settings.advertised_url.required" }],
   })
 
-export const buildConnectionTestFailedProblem = (
-  detail = "Connection test could not complete",
-) =>
+export const buildConnectionTestFailedProblem = (detail = "Connection test could not complete") =>
   InternalProblemSchema.parse({
     type: PROBLEM_TYPES.internalError,
     title: "Connection test failed",
