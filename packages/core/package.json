@@ -1,0 +1,29 @@
+{
+  "name": "core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./status/models": "./src/status/status.models.ts",
+    "./status/ports": "./src/status/status.ports.ts",
+    "./status/get.usecase": "./src/status/status.get.usecase.ts",
+    "./daemon-state/models": "./src/daemon-state/daemon.state.models.ts",
+    "./daemon-state/ports": "./src/daemon-state/daemon.state.ports.ts",
+    "./daemon-state/node.adapters": "./src/daemon-state/daemon.state.node.adapters.ts",
+    "./daemon-state/read.live.usecase": "./src/daemon-state/daemon.state.read.live.usecase.ts"
+  },
+  "scripts": {
+    "lint": "oxlint --deny-warnings",
+    "typecheck": "tsc -b tsconfig.app.json --noEmit",
+    "test": "NODE_ENV=test bun test --parallel=4 --timeout 20000"
+  },
+  "dependencies": {
+    "contracts": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "bun-types": "^1.3.1",
+    "oxlint": "catalog:",
+    "typescript": "catalog:"
+  }
+}

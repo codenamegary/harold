@@ -25,7 +25,8 @@
     "fastify": "catalog:",
     "ulid": "^3.0.2",
     "yaml": "^2.9.0",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "core": "workspace:*"
   },
   "devDependencies": {
     "@types/ws": "^8.18.1",
@@ -34,5 +35,10 @@
     "oxlint": "catalog:",
     "test-support": "workspace:*",
     "typescript": "catalog:"
+  },
+  "exports": {
+    "./bootstrap": "./src/bootstrap/run.server.ts",
+    "./config": "./src/config/config.ts",
+    "./database": "./src/persistence/database.ts"
   }
 }
