@@ -3,6 +3,7 @@ import { Config } from "../config/config"
 import { AgentDatabase } from "../persistence/database"
 import { RuntimeStatusService } from "../runtime/status.service"
 import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
+import { DaemonStateWriter } from "../status/daemon.state.writer"
 
 export const listen = async (
   app: FastifyInstance,
@@ -18,12 +19,14 @@ type RunShutdownParams = {
   database: AgentDatabase
   acpSupervisor: AcpSupervisor
   runtimeStatusService: RuntimeStatusService
+  daemonStateWriter?: DaemonStateWriter
   signal?: NodeJS.Signals
   exit?: (code: number) => never
 }
 
 export const runShutdown = async (params: RunShutdownParams): Promise<void> => {
   params.app.log.info({ signal: params.signal }, "shutting down")
+  params.daemonStateWriter?.stop()
   params.runtimeStatusService.persistShuttingDown()
   await params.acpSupervisor.stop()
   await params.app.close()
@@ -33,12 +36,17 @@ export const runShutdown = async (params: RunShutdownParams): Promise<void> => {
   exit(0)
 }
 
+type RegisterShutdownOptions = {
+  signals?: ReadonlyArray<NodeJS.Signals>
+  daemonStateWriter?: DaemonStateWriter
+}
+
 export const registerShutdown = (
   app: FastifyInstance,
   database: AgentDatabase,
   acpSupervisor: AcpSupervisor,
   runtimeStatusService: RuntimeStatusService,
-  signals: ReadonlyArray<NodeJS.Signals> = ["SIGINT", "SIGTERM"],
+  options: RegisterShutdownOptions = {},
 ) => {
   const shutdown = async (signal: NodeJS.Signals) => {
     await runShutdown({
@@ -46,9 +54,12 @@ export const registerShutdown = (
       database,
       acpSupervisor,
       runtimeStatusService,
+      daemonStateWriter: options.daemonStateWriter,
       signal,
     })
   }
+
+  const signals = options.signals ?? ["SIGINT", "SIGTERM"]
 
   signals.forEach((signal) => {
     process.once(signal, () => {

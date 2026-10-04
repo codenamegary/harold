@@ -1,5 +1,5 @@
 import { HaroldState } from "contracts/http/status"
-import { AcpSupervisorStatus } from "../acp/supervisor/models"
+import { AcpStatus } from "./status.models"
 
 export type GetServerVersion = () => string
 
@@ -9,4 +9,4 @@ export type GetServerStartedAt = () => string
 
 export type GetBindPort = () => number
 
-export type GetAcpStatus = () => AcpSupervisorStatus
+export type GetAcpStatus = () => AcpStatus

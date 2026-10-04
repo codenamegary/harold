@@ -13,6 +13,9 @@ import {
 import { buildAppliedRuntimeSettings } from "../runtime-settings/resolve.runtime.settings.state"
 import { createRuntime } from "../runtime/runtime"
 import { ConsoleAsset } from "../console/console.assets"
+import { daemonStateFilePath, makeDaemonStateFileStore } from "core/daemon-state/node.adapters"
+import { composeServerGetStatus } from "../status/status.adapters"
+import { startDaemonStateWriter } from "../status/daemon.state.writer"
 
 export type RunServerOptions = {
   consoleAssets?: ReadonlyArray<ConsoleAsset>
@@ -55,10 +58,16 @@ export const runServer = async (options: RunServerOptions = {}) => {
     consoleAssets: options.consoleAssets,
   })
 
-  registerShutdown(app, database, acpSupervisor, runtimeStatusService)
   await listen(app, config, runtimeStatusService)
   app.log.info(
     { host: config.host, port: config.port, dataDir: config.dataDir },
     "harold listening",
   )
+
+  const daemonStateWriter = startDaemonStateWriter({
+    getStatus: composeServerGetStatus({ app, runtime, config, acpSupervisor }),
+    writeDaemonState: makeDaemonStateFileStore({ path: daemonStateFilePath(config.dataDir) }).write,
+    pid: process.pid,
+  })
+  registerShutdown(app, database, acpSupervisor, runtimeStatusService, { daemonStateWriter })
 }

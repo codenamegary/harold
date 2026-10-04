@@ -25,11 +25,13 @@ export type OpenDatabaseOptions = {
 const databaseFileName = "harold.db"
 const defaultMigrationsFolder = path.join(import.meta.dir, "drizzle")
 
+export const databasePath = (dataDir: string): string => path.join(dataDir, databaseFileName)
+
 export const openDatabase = (options: OpenDatabaseOptions): AgentDatabase => {
   mkdirSync(options.dataDir, { recursive: true })
 
-  const databasePath = path.join(options.dataDir, databaseFileName)
-  const sqlite = new Database(databasePath)
+  const resolvedPath = databasePath(options.dataDir)
+  const sqlite = new Database(resolvedPath)
 
   sqlite.run("PRAGMA journal_mode = WAL")
   sqlite.run("PRAGMA foreign_keys = ON")
@@ -49,7 +51,7 @@ export const openDatabase = (options: OpenDatabaseOptions): AgentDatabase => {
   return {
     db,
     sqlite,
-    path: databasePath,
+    path: resolvedPath,
     close: () => {
       sqlite.close()
     },
