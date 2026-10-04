@@ -38,7 +38,7 @@ export const buildAttachmentNotFoundProblem = (detail = "Unknown attachment") =>
 
 export const buildAttachmentTooLargeProblem = (detail: string) =>
   PayloadTooLargeProblemSchema.parse({
-    type: "https://agent-server.local/problems/payload-too-large",
+    type: "https://harold.local/problems/payload-too-large",
     title: "Attachment too large",
     status: 413,
     detail,
@@ -46,7 +46,7 @@ export const buildAttachmentTooLargeProblem = (detail: string) =>
 
 export const buildAttachmentTypeRejectedProblem = (detail: string) =>
   UnsupportedMediaTypeProblemSchema.parse({
-    type: "https://agent-server.local/problems/unsupported-media-type",
+    type: "https://harold.local/problems/unsupported-media-type",
     title: "Attachment type rejected",
     status: 415,
     detail,

@@ -3,25 +3,18 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import YAML from "yaml"
-import {
-  makeRuntimeSettingsFileStore,
-  settingsFileName,
-} from "./runtime-settings.file.adapters"
+import { makeRuntimeSettingsFileStore, settingsFileName } from "./runtime-settings.file.adapters"
 
 const tempDirs: string[] = []
 
 const createTempDataDir = async () => {
-  const dir = await mkdtemp(
-    path.join(os.tmpdir(), "agent-server-runtime-settings-store-"),
-  )
+  const dir = await mkdtemp(path.join(os.tmpdir(), "harold-runtime-settings-store-"))
   tempDirs.push(dir)
   return dir
 }
 
 afterEach(async () => {
-  await Promise.all(
-    tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
-  )
+  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
 describe("makeRuntimeSettingsFileStore", () => {
@@ -71,9 +64,7 @@ describe("makeRuntimeSettingsFileStore", () => {
     const filePath = path.join(dataDir, settingsFileName)
     await writeFile(filePath, "bindPort: [\n", "utf8")
 
-    expect(() => makeRuntimeSettingsFileStore({ dataDir })).toThrow(
-      /Invalid settings\.yml/,
-    )
+    expect(() => makeRuntimeSettingsFileStore({ dataDir })).toThrow(/Invalid settings\.yml/)
   })
 
   test("refuses to load invalid schema", async () => {
@@ -94,9 +85,7 @@ describe("makeRuntimeSettingsFileStore", () => {
       "utf8",
     )
 
-    expect(() => makeRuntimeSettingsFileStore({ dataDir })).toThrow(
-      /Invalid settings\.yml/,
-    )
+    expect(() => makeRuntimeSettingsFileStore({ dataDir })).toThrow(/Invalid settings\.yml/)
   })
 
   test("ignores hand edits until a new store loads", async () => {
@@ -154,9 +143,7 @@ describe("makeRuntimeSettingsFileStore", () => {
     expect(withUrl.logLevel).toBe("warn")
     expect(store.get().logLevel).toBe("warn")
 
-    const parsed = YAML.parse(
-      await readFile(path.join(dataDir, settingsFileName), "utf8"),
-    )
+    const parsed = YAML.parse(await readFile(path.join(dataDir, settingsFileName), "utf8"))
     expect(parsed).toEqual(withUrl)
   })
 

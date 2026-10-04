@@ -15,8 +15,8 @@ const workspaceCollection = WorkspaceCollectionSchema.parse({
   items: [
     {
       id: "ws_01",
-      name: "agent-server",
-      path: "/home/operator/agent-server",
+      name: "harold",
+      path: "/home/operator/harold",
       state: "available",
       createdAt: "2026-07-24T12:00:00.000Z",
       lastUsedAt: "2026-07-24T12:05:00.000Z",
@@ -49,7 +49,7 @@ const sessionsList = SessionCollectionSchema.parse({
     {
       agentId: "cursor",
       sessionId: "sess_01JFC8C7E77NQCFH0RF9Z22JHH",
-      cwd: "/home/operator/agent-server",
+      cwd: "/home/operator/harold",
       title: "Explain auth",
       updatedAt: "2026-07-24T12:00:00.000Z",
     },

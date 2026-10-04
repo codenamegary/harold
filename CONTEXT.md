@@ -1,6 +1,6 @@
-# Agent Server
+# Harold
 
-Agent Server is a local host process. It speaks HTTP and WebSocket to operator
+Harold is a local host process. It speaks HTTP and WebSocket to operator
 clients through the Device API, and ACP over stdio to agent child processes.
 This is the canonical language for docs, contracts, and UI copy.
 
@@ -8,13 +8,15 @@ This is the canonical language for docs, contracts, and UI copy.
 
 ### Product and topology
 
-**Agent Server**:
+**Harold**:
 The product name for the host process and its device-facing API. One install,
-one host OS identity in v1.
-_Avoid_: the server, backend
+one host OS identity in v1. The package is `@codenamegary/harold`, the CLI
+binary is `harold`, and the data dir is `~/.harold`.
+_Avoid_: Agent Server, agent-server, harold (as a product name), the server,
+backend
 
 **Host**:
-The machine and process that run Agent Server, acting as the ACP client toward
+The machine and process that run Harold, acting as the ACP client toward
 agent processes. Loopback requests with no device credential authenticate as
 the **host principal**.
 _Avoid_: host (for the web UI)

@@ -1,7 +1,7 @@
 import { z } from "zod"
 import { PairingCodeValueSchema } from "../http/pairing-code"
 
-export const PAIRING_QR_SCHEME = "agent-server" as const
+export const PAIRING_QR_SCHEME = "harold" as const
 export const PAIRING_QR_HOST = "pair" as const
 export const PAIRING_QR_VERSION = 1 as const
 
@@ -29,8 +29,9 @@ export const pairingQrParseError = (message: string): Error => {
 const EndpointSchema = z.url()
 
 const encodeComponent = (value: string): string =>
-  encodeURIComponent(value).replace(/[!'()*]/g, (character) =>
-    `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  encodeURIComponent(value).replace(
+    /[!'()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
   )
 
 const decodeComponent = (value: string): string => {

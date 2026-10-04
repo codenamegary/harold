@@ -1,7 +1,7 @@
 # Session stream frames: tolerant unknown types, terminal malformed
 
 Status: Accepted  
-Related: [ADR-0000 Agent Server](0000-agent-server.md), [CONTEXT.md](../../CONTEXT.md)
+Related: [ADR-0000 Harold](0000-harold.md), [CONTEXT.md](../../CONTEXT.md)
 
 The Session Stream is the only Device API surface where the host can push a
 shape a client build has never seen. Android ships independently of the
@@ -24,7 +24,7 @@ required fields is a terminal Protocol Error.
 5. Additive evolution of the Session Stream happens through new frame `type`
    values. Changing the meaning of an existing Frame in place is a breaking
    change and needs a new type.
-6. HTTP payloads stay strict (`AgentServerJson`). Requests are answered in
+6. HTTP payloads stay strict (`HaroldJson`). Requests are answered in
    lockstep with the server release, so unknown keys there are drift.
 7. Payloads the client interprets selectively (`update`, `session_config`
    `configOptions`, permission `params`) stay opaque on the wire. Their

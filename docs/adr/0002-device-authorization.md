@@ -36,13 +36,13 @@ Identity answers "who is this?" Authorization in Milestone 2 answers only
 
 ## Considered options
 
-| Option | Verdict | Why |
-|--------|---------|-----|
-| Flat full-operator | **Selected** | Product boundary for MS2. Every paired device is a full operator. One revoke path. |
-| OAuth scopes ([RFC 6749 §3.3][rfc6749]) | Deferred | Useful when tokens must be narrower than full account power. No multi-privilege product need yet. |
-| RBAC (admin / operator / viewer) | Deferred | Needs users, roles, and UI. Out of MS2 roadmap scope. |
-| Audience-restricted tokens ([RFC 9700][rfc9700]) | Deferred | Important when one credential could hit many resource servers. Agent Server is one server. |
-| Capability tokens (macaroons / attenuable creds) | Rejected for MS2 | Powerful for delegated caveats. Heavy for a local single-operator product. |
+| Option                                           | Verdict          | Why                                                                                               |
+| ------------------------------------------------ | ---------------- | ------------------------------------------------------------------------------------------------- |
+| Flat full-operator                               | **Selected**     | Product boundary for MS2. Every paired device is a full operator. One revoke path.                |
+| OAuth scopes ([RFC 6749 §3.3][rfc6749])          | Deferred         | Useful when tokens must be narrower than full account power. No multi-privilege product need yet. |
+| RBAC (admin / operator / viewer)                 | Deferred         | Needs users, roles, and UI. Out of MS2 roadmap scope.                                             |
+| Audience-restricted tokens ([RFC 9700][rfc9700]) | Deferred         | Important when one credential could hit many resource servers. Harold is one server.              |
+| Capability tokens (macaroons / attenuable creds) | Rejected for MS2 | Powerful for delegated caveats. Heavy for a local single-operator product.                        |
 
 ## Consequences
 

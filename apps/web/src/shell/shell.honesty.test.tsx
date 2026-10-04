@@ -59,7 +59,9 @@ const renderShellRoute = (path: string) =>
     initialEntries: [path],
   })
 
-const waitForShellReady = async (getByRole: ReturnType<typeof renderWithProviders>["getByRole"]) => {
+const waitForShellReady = async (
+  getByRole: ReturnType<typeof renderWithProviders>["getByRole"],
+) => {
   await waitFor(() => {
     expect(getByRole("main")).toBeInTheDocument()
   })
@@ -334,9 +336,9 @@ describe("shell honesty", () => {
       const listCollection = WorkspaceCollectionSchema.parse({
         items: [
           {
-            id: "ws-agent-server",
-            name: "agent-server",
-            path: "/home/operator/agent-server",
+            id: "ws-harold",
+            name: "harold",
+            path: "/home/operator/harold",
             state: "available",
             createdAt: "2026-07-24T12:00:00.000Z",
             lastUsedAt: "2026-07-24T12:05:00.000Z",
@@ -370,7 +372,7 @@ describe("shell honesty", () => {
       await waitForShellReady(getByRole)
 
       await waitFor(() => {
-        expect(getByRole("button", { name: "Unregister agent-server" })).toBeInTheDocument()
+        expect(getByRole("button", { name: "Unregister harold" })).toBeInTheDocument()
       })
     })
   })

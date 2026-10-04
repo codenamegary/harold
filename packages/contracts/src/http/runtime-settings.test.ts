@@ -64,7 +64,7 @@ describe("RuntimeSettingsSchema", () => {
       advertisedUrl: "https://agents.example.com",
       trustedProxies: ["10.0.0.0/8", "::1"],
       logLevel: "debug",
-      logPath: "/var/log/agent-server.log",
+      logPath: "/var/log/harold.log",
       allowedRoots: ["/home/ops/projects"],
     }
 
@@ -110,33 +110,31 @@ describe("RuntimeSettingsSchema", () => {
 
 describe("UpdateRuntimeSettingsBodySchema", () => {
   test("accepts partial patch", () => {
-    expect(
-      UpdateRuntimeSettingsBodySchema.parse({ logLevel: "warn" }),
-    ).toEqual({ logLevel: "warn" })
+    expect(UpdateRuntimeSettingsBodySchema.parse({ logLevel: "warn" })).toEqual({
+      logLevel: "warn",
+    })
   })
 
   test("accepts advertisedUrlEnabled patch", () => {
-    expect(
-      UpdateRuntimeSettingsBodySchema.parse({ advertisedUrlEnabled: false }),
-    ).toEqual({ advertisedUrlEnabled: false })
+    expect(UpdateRuntimeSettingsBodySchema.parse({ advertisedUrlEnabled: false })).toEqual({
+      advertisedUrlEnabled: false,
+    })
   })
 
   test("accepts empty string to clear advertised URL", () => {
-    expect(
-      UpdateRuntimeSettingsBodySchema.parse({ advertisedUrl: "" }),
-    ).toEqual({ advertisedUrl: "" })
+    expect(UpdateRuntimeSettingsBodySchema.parse({ advertisedUrl: "" })).toEqual({
+      advertisedUrl: "",
+    })
   })
 
   test("accepts null advertised URL", () => {
-    expect(
-      UpdateRuntimeSettingsBodySchema.parse({ advertisedUrl: null }),
-    ).toEqual({ advertisedUrl: null })
+    expect(UpdateRuntimeSettingsBodySchema.parse({ advertisedUrl: null })).toEqual({
+      advertisedUrl: null,
+    })
   })
 
   test("rejects unknown fields", () => {
-    expect(() =>
-      UpdateRuntimeSettingsBodySchema.parse({ unknown: true }),
-    ).toThrow()
+    expect(() => UpdateRuntimeSettingsBodySchema.parse({ unknown: true })).toThrow()
   })
 })
 

@@ -20,8 +20,8 @@ const workspaceCollection = WorkspaceCollectionSchema.parse({
   items: [
     {
       id: "ws_01",
-      name: "agent-server",
-      path: "/home/operator/agent-server",
+      name: "harold",
+      path: "/home/operator/harold",
       state: "available",
       createdAt: "2026-07-24T12:00:00.000Z",
       lastUsedAt: "2026-07-24T12:05:00.000Z",
@@ -66,7 +66,7 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
 const createdSession = CreateSessionResponseSchema.parse({
   agentId: "cursor",
   sessionId: "sess_01JFC8C7E77NQCFH0RF9Z22JHH",
-  cwd: "/home/operator/agent-server",
+  cwd: "/home/operator/harold",
   title: "Explain auth",
   updatedAt: "2026-07-24T12:00:00.000Z",
   configOptions: [],
@@ -200,7 +200,7 @@ describe("ChatPage", () => {
 
     await confirmNewSessionModal(
       { getByRole, queryByRole },
-      { workspaceName: "agent-server", agentName: "Cursor" },
+      { workspaceName: "harold", agentName: "Cursor" },
     )
 
     const create = fetchMock.mock.calls.find(
@@ -230,7 +230,7 @@ describe("ChatPage", () => {
       expect(getByRole("textbox", { name: "Chat message" })).not.toHaveAttribute("aria-disabled")
     })
     expect(getByRole("button", { name: "Session" })).toHaveTextContent("Explain auth")
-    expect(getByRole("main").ownerDocument.body).toHaveTextContent("agent-server · Cursor")
+    expect(getByRole("main").ownerDocument.body).toHaveTextContent("harold · Cursor")
   })
 
   test("prototype slash menu, prompt chips, and attach are gone", async () => {

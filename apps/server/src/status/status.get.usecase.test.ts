@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { AgentServerState } from "contracts/http/status"
+import { HaroldState } from "contracts/http/status"
 import { GetStatusDeps, makeGetStatus } from "./status.get.usecase"
 
 const makeDeps = (overrides: Partial<GetStatusDeps> = {}): GetStatusDeps => ({
@@ -26,7 +26,7 @@ describe("makeGetStatus", () => {
   })
 
   test("reads live runtime and ACP state on every call", () => {
-    let state: AgentServerState = "starting"
+    let state: HaroldState = "starting"
     let activeSessions = 0
     const getStatus = makeGetStatus(
       makeDeps({

@@ -22,7 +22,7 @@ const shouldRunOpenCodeSmoke = smokeRunRequested() && resolveOpenCodePath() !== 
 
 describe("ACP catalog session/list smoke", () => {
   test.skipIf(!shouldRunSmoke)("Cursor enable + GET /v1/sessions lists ACP rows", async () => {
-    const dataDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-catalog-cursor-smoke-"))
+    const dataDir = await mkdtemp(path.join(os.tmpdir(), "harold-catalog-cursor-smoke-"))
     const detectedPath = resolveCursorAgentPath()
     if (detectedPath === undefined) {
       throw new Error("agent binary missing")
@@ -31,9 +31,9 @@ describe("ACP catalog session/list smoke", () => {
     const whichFn: WhichFn = (binaryName) => (binaryName === "agent" ? detectedPath : undefined)
 
     const config = parseConfig({
-      AGENT_SERVER_HOST: "127.0.0.1",
-      AGENT_SERVER_PORT: "0",
-      AGENT_SERVER_DATA_DIR: dataDir,
+      HAROLD_HOST: "127.0.0.1",
+      HAROLD_PORT: "0",
+      HAROLD_DATA_DIR: dataDir,
     })
     const database = openDatabase({ dataDir: config.dataDir })
     const runtime = createRuntime("0.1.0")
@@ -67,7 +67,7 @@ describe("ACP catalog session/list smoke", () => {
   test.skipIf(!shouldRunOpenCodeSmoke)(
     "OpenCode enable + GET /v1/sessions returns a catalog (empty list is fine)",
     async () => {
-      const dataDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-catalog-opencode-smoke-"))
+      const dataDir = await mkdtemp(path.join(os.tmpdir(), "harold-catalog-opencode-smoke-"))
       const detectedPath = resolveOpenCodePath()
       if (detectedPath === undefined) {
         throw new Error("opencode binary missing")
@@ -77,9 +77,9 @@ describe("ACP catalog session/list smoke", () => {
         binaryName === "opencode" ? detectedPath : undefined
 
       const config = parseConfig({
-        AGENT_SERVER_HOST: "127.0.0.1",
-        AGENT_SERVER_PORT: "0",
-        AGENT_SERVER_DATA_DIR: dataDir,
+        HAROLD_HOST: "127.0.0.1",
+        HAROLD_PORT: "0",
+        HAROLD_DATA_DIR: dataDir,
       })
       const database = openDatabase({ dataDir: config.dataDir })
       const runtime = createRuntime("0.1.0")

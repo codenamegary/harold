@@ -6,7 +6,7 @@ import { extractMigrationFiles } from "./src/persistence/migrations/migrations.e
 import { embeddedMigrationEntries } from "./.generated/migrations.generated"
 import { consoleAssetEntries } from "./.generated/console.assets.generated"
 
-const migrationsDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-migrations-"))
+const migrationsDir = await mkdtemp(path.join(os.tmpdir(), "harold-migrations-"))
 await extractMigrationFiles(
   embeddedMigrationEntries.map((entry) => ({
     name: entry.name,

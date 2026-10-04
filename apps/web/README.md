@@ -1,6 +1,6 @@
 # web
 
-Operator console for Agent Server. Bun is the only dev entry: `bun run dev`
+Operator console for Harold. Bun is the only dev entry: `bun run dev`
 from the repo root starts the API (`apps/server`) and this app together.
 
 ## Scripts

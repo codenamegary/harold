@@ -3,7 +3,7 @@ import path from "node:path"
 import { makeSaveAttachment } from "./attachments.save.usecase"
 
 const workspacePath = "/projects/app"
-const attachmentsRoot = path.join(workspacePath, ".agent-server", "attachments")
+const attachmentsRoot = path.join(workspacePath, ".harold", "attachments")
 
 const command = {
   workspaceId: "ws_1",

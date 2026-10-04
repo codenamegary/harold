@@ -3,7 +3,7 @@ import path from "node:path"
 import { makeLoadAttachment } from "./attachments.load.usecase"
 
 const workspacePath = "/projects/app"
-const attachmentsRoot = path.join(workspacePath, ".agent-server", "attachments")
+const attachmentsRoot = path.join(workspacePath, ".harold", "attachments")
 
 const reference = {
   kind: "image",

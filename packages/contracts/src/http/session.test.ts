@@ -20,7 +20,7 @@ const validTurnId = "turn_01JFC8C7E77NQCFH0RF9Z22JHH"
 
 const validSession = {
   id: "session-auth",
-  workspaceId: "ws-agent-server",
+  workspaceId: "ws-harold",
   agentId: "cursor",
   name: "Auth flow",
   state: "idle",
@@ -104,7 +104,7 @@ describe("CreateSessionBodySchema", () => {
       CreateSessionBodySchema.parse({
         agentId: "cursor",
         cwd: "/tmp/project",
-        workspaceId: "ws-agent-server",
+        workspaceId: "ws-harold",
         text: "Explain the auth flow",
       }),
     ).toThrow()
@@ -199,7 +199,7 @@ describe("UpdateSessionBodySchema", () => {
     expect(() =>
       UpdateSessionBodySchema.parse({
         name: "Renamed session",
-        workspaceId: "ws-agent-server",
+        workspaceId: "ws-harold",
       }),
     ).toThrow()
   })
@@ -232,7 +232,7 @@ describe("ListSessionsQuerySchema", () => {
   test("rejects legacy workspaceId pagination fields", () => {
     expect(() =>
       ListSessionsQuerySchema.parse({
-        workspaceId: "ws-agent-server",
+        workspaceId: "ws-harold",
         limit: 100,
         cursor: "session_02",
         search: "auth",

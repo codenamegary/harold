@@ -14,7 +14,7 @@ import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
 import { assembleAgentSettingsSlice } from "../agent-settings/agent.settings.assembly"
 import { seedWorkspace } from "./test.app"
 
-test("boots an isolated Agent Server with a working Device API", async () => {
+test("boots an isolated Harold with a working Device API", async () => {
   const first = await bootTestApp()
   const second = await bootTestApp()
   expect(first.dataDir).not.toBe(second.dataDir)

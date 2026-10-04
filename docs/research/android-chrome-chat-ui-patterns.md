@@ -5,7 +5,7 @@ Checked: 2026-08-10
 Scope: Material Design 3 and Android Compose patterns for top bar
 navigation, overflow vs FAB, sheets vs dialogs, session color, and slash
 commands in a chat composer. Tied to native Android (Jetpack Compose)
-agent-server feedback.
+harold feedback.
 
 Primary sources only. Product slash-command UX cites Discord and Slack
 first-party docs. Those are product conventions, not Material.
@@ -285,28 +285,28 @@ spec covers it. Prefer Discord/Slack docs as the primary cited models.
 
 ## Where to browse templates and inspiration
 
-| Source | Why | URL |
-| --- | --- | --- |
-| Material 3 site | Component guidelines and specs | https://m3.material.io/components |
-| Material Catalog (Compose) | Live component catalog, same samples as API docs, theme picker | https://cs.android.com/androidx/platform/frameworks/support/+/androidx-main:compose/integration-tests/material-catalog |
-| Play: Material Catalog | Installable catalog app | listed from [compose-samples README](https://github.com/android/compose-samples) |
-| Jetchat | Official chat UI sample (composer, conversation, M3) | https://github.com/android/compose-samples/tree/main/Jetchat |
-| Reply | M3 theming, adaptive layout, selection color roles | via [Material Design 3 in Compose](https://developer.android.com/develop/ui/compose/designsystems/material3) and [compose-samples](https://github.com/android/compose-samples) |
-| Now in Android | Full M3 app + architecture reference | https://github.com/android/nowinandroid |
-| NiA design case study | Figma / design files | https://goo.gle/nia-figma (also PDF under NiA `docs/`) |
-| Material Theme Builder | Tone roles and Compose export for "less green" chrome | https://github.com/material-foundation/material-theme-builder |
-| Android Compose component guides | App bars, FAB, sheets, menus, dialogs | https://developer.android.com/develop/ui/compose/components |
+| Source                           | Why                                                            | URL                                                                                                                                                                            |
+| -------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Material 3 site                  | Component guidelines and specs                                 | https://m3.material.io/components                                                                                                                                              |
+| Material Catalog (Compose)       | Live component catalog, same samples as API docs, theme picker | https://cs.android.com/androidx/platform/frameworks/support/+/androidx-main:compose/integration-tests/material-catalog                                                         |
+| Play: Material Catalog           | Installable catalog app                                        | listed from [compose-samples README](https://github.com/android/compose-samples)                                                                                               |
+| Jetchat                          | Official chat UI sample (composer, conversation, M3)           | https://github.com/android/compose-samples/tree/main/Jetchat                                                                                                                   |
+| Reply                            | M3 theming, adaptive layout, selection color roles             | via [Material Design 3 in Compose](https://developer.android.com/develop/ui/compose/designsystems/material3) and [compose-samples](https://github.com/android/compose-samples) |
+| Now in Android                   | Full M3 app + architecture reference                           | https://github.com/android/nowinandroid                                                                                                                                        |
+| NiA design case study            | Figma / design files                                           | https://goo.gle/nia-figma (also PDF under NiA `docs/`)                                                                                                                         |
+| Material Theme Builder           | Tone roles and Compose export for "less green" chrome          | https://github.com/material-foundation/material-theme-builder                                                                                                                  |
+| Android Compose component guides | App bars, FAB, sheets, menus, dialogs                          | https://developer.android.com/develop/ui/compose/components                                                                                                                    |
 
 ## Mapping feedback to patterns
 
-| Feedback | Adopt | Avoid |
-| --- | --- | --- |
-| Dislikes text Back | `navigationIcon` + auto-mirrored ArrowBack | TextButton labeled Back in the bar |
-| Dislikes text More | `MoreVert` + `DropdownMenu`, or promote true primary to FAB / FAB menu | Text "More" dropdown trigger |
-| Wants FAB for actions | One primary FAB or FAB menu of related actions | FAB as catch-all for every secondary item |
-| Session nav less green | Remap selection chrome to secondary/surface containers | Changing whole brand away from green |
-| Remove modals | Inline `/` picker, menus, standard sheets, full-screen destinations | Modal sheet/dialog for routine skill pick |
-| Slash skills in composer | Discord/Slack-style `/` autocomplete on the text field | Modal-only skills browser with no composer trigger |
+| Feedback                 | Adopt                                                                  | Avoid                                              |
+| ------------------------ | ---------------------------------------------------------------------- | -------------------------------------------------- |
+| Dislikes text Back       | `navigationIcon` + auto-mirrored ArrowBack                             | TextButton labeled Back in the bar                 |
+| Dislikes text More       | `MoreVert` + `DropdownMenu`, or promote true primary to FAB / FAB menu | Text "More" dropdown trigger                       |
+| Wants FAB for actions    | One primary FAB or FAB menu of related actions                         | FAB as catch-all for every secondary item          |
+| Session nav less green   | Remap selection chrome to secondary/surface containers                 | Changing whole brand away from green               |
+| Remove modals            | Inline `/` picker, menus, standard sheets, full-screen destinations    | Modal sheet/dialog for routine skill pick          |
+| Slash skills in composer | Discord/Slack-style `/` autocomplete on the text field                 | Modal-only skills browser with no composer trigger |
 
 ## Source limits
 

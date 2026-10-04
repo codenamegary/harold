@@ -27,7 +27,7 @@ transfer convenience, not a separate protocol.
    equivalent slow hash, because code entropy is far below 112 bits
    ([NIST SP 800-63B-4][nist-authn], [OWASP Password Storage][owasp-password]).
 7. QR encodes the versioned custom URI
-   `agent-server://pair?v=1&endpoint=<encoded absolute URL>&code=<XXX-XXX>` for
+   `harold://pair?v=1&endpoint=<encoded absolute URL>&code=<XXX-XXX>` for
    optical transfer. Scanning must not invent a second trust model
    ([NIST binding local OOB][nist-events]).
 8. Do not implement RFC 8628 Device Authorization Grant as the Milestone 2
@@ -39,13 +39,13 @@ transfer convenience, not a separate protocol.
 starts OAuth, the user approves on another device at an authorization server,
 and the constrained device polls for user tokens.
 
-| Aspect | RFC 8628 | Agent Server pairing |
-|--------|----------|----------------------|
-| Who starts | Constrained device | Host operator (already trusted) |
-| Who approves | Resource owner at AS | Host, by creating the code |
-| What issues | OAuth access / refresh tokens | Opaque device credential |
-| Account model | User account at AS | Single local operator server |
-| Polling | Required (`device_code`) | Not required. Client claims once. |
+| Aspect        | RFC 8628                      | Harold pairing                    |
+| ------------- | ----------------------------- | --------------------------------- |
+| Who starts    | Constrained device            | Host operator (already trusted)   |
+| Who approves  | Resource owner at AS          | Host, by creating the code        |
+| What issues   | OAuth access / refresh tokens | Opaque device credential          |
+| Account model | User account at AS            | Single local operator server      |
+| Polling       | Required (`device_code`)      | Not required. Client claims once. |
 
 Borrow RFC 8628 hygiene for human codes. Do not take on an authorization server,
 token endpoint, or refresh-token lifecycle in Milestone 2. Day-to-day API auth
@@ -63,14 +63,14 @@ Device Grant), record that as a new ADR. Do not silently reshape
 
 ## Considered options
 
-| Option | Verdict | Why |
-|--------|---------|-----|
-| Operator-issued binding code + claim API | **Selected** | Matches product trust direction. Host grants membership. Client receives durable credential. |
-| OAuth 2.0 Device Authorization Grant ([RFC 8628][rfc8628]) | Rejected for MS2 | Wrong initiator and account model. Full AS stack for no MS2 gain. |
-| Pre-shared long API key pasted by hand | Rejected | No short TTL. Easy to copy forever. Weak operator UX for revoke-and-repair. |
-| Public-key device attestation / mTLS enroll | Deferred | Stronger bind. Needs PKI and remote threat model. |
-| QR-only pairing with no typed code | Rejected as sole path | QR is optional convenience. Typed code remains the protocol. |
-| Email / SMS delivery of codes | Rejected | NIST forbids insecure channels for binding codes ([nist-events]). Local transfer only. |
+| Option                                                     | Verdict               | Why                                                                                          |
+| ---------------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------- |
+| Operator-issued binding code + claim API                   | **Selected**          | Matches product trust direction. Host grants membership. Client receives durable credential. |
+| OAuth 2.0 Device Authorization Grant ([RFC 8628][rfc8628]) | Rejected for MS2      | Wrong initiator and account model. Full AS stack for no MS2 gain.                            |
+| Pre-shared long API key pasted by hand                     | Rejected              | No short TTL. Easy to copy forever. Weak operator UX for revoke-and-repair.                  |
+| Public-key device attestation / mTLS enroll                | Deferred              | Stronger bind. Needs PKI and remote threat model.                                            |
+| QR-only pairing with no typed code                         | Rejected as sole path | QR is optional convenience. Typed code remains the protocol.                                 |
+| Email / SMS delivery of codes                              | Rejected              | NIST forbids insecure channels for binding codes ([nist-events]). Local transfer only.       |
 
 ## Entropy and compensating controls
 
@@ -92,13 +92,13 @@ reachable off-machine (Milestone 3).
 
 - Pairing create stays a host-operator action. Unauthenticated clients cannot mint
   codes.
-- Claim endpoint is the brute-force surface. Agent Server does not add claim
+- Claim endpoint is the brute-force surface. Harold does not add claim
   rate limits for this product. Do not introduce per-code, per-source, or global
   claim throttling without a new ADR.
 - Connect wizard QR encodes the versioned custom URI
-  `agent-server://pair?v=1&endpoint=<encoded absolute URL>&code=<XXX-XXX>`.
+  `harold://pair?v=1&endpoint=<encoded absolute URL>&code=<XXX-XXX>`.
   Shared format and parse helpers live in `packages/contracts`. Claim still
-  posts the code string to Agent Server.
+  posts the code string to Harold.
 - A future move to RFC 8628 would be a new decision, not a silent reshape of
   `/v1/pairing-codes`.
 

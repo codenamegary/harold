@@ -5,9 +5,9 @@ import { fetchWorkspaces } from "./fetch.workspaces"
 const validCollection = WorkspaceCollectionSchema.parse({
   items: [
     {
-      id: "ws-agent-server",
-      name: "agent-server",
-      path: "/home/operator/agent-server",
+      id: "ws-harold",
+      name: "harold",
+      path: "/home/operator/harold",
       state: "available",
       createdAt: "2026-07-24T12:00:00.000Z",
       lastUsedAt: "2026-07-24T12:05:00.000Z",

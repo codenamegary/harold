@@ -92,12 +92,12 @@ jobs:
           zip_path="${stamp}.zip"
           (cd coverage/html && zip -qr "../../${zip_path}" .)
           export LOCAL_PATH="${zip_path}"
-          export REMOTE_PATH="agent-server/coverage"
+          export REMOTE_PATH="harold/coverage"
           bash .github/scripts/upload-to-fs.sh
           base="${FS_URL:-https://fs.codenamegary.com}"
           base="${base%/}"
           {
             echo "## Coverage on fs"
             echo ""
-            echo "Extracted report: [\`agent-server/coverage/${stamp}/\`](${base}/agent-server/coverage/${stamp}/)"
+            echo "Extracted report: [\`harold/coverage/${stamp}/\`](${base}/harold/coverage/${stamp}/)"
           } >> "$GITHUB_STEP_SUMMARY"

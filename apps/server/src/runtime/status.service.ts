@@ -1,4 +1,4 @@
-import { AgentServerState } from "contracts/http/status"
+import { HaroldState } from "contracts/http/status"
 import { Runtime } from "./runtime"
 
 type RuntimeStatusServiceContext = {
@@ -6,7 +6,7 @@ type RuntimeStatusServiceContext = {
 }
 
 export const createRuntimeStatusService = (context: RuntimeStatusServiceContext) => {
-  const persist = (state: AgentServerState): void => {
+  const persist = (state: HaroldState): void => {
     context.runtime.setState(state)
   }
 

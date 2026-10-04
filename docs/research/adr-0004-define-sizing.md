@@ -8,25 +8,25 @@ projects. Primary sources only: this repo (code, ADRs, contracts, tests, PRs).
 
 ## Verdict
 
-| Question | Answer |
-| --- | --- |
-| AuthBroker / agent-auth wire / HostBrowser shipped? | **No.** Spec only in ADR-0004. Target paths do not exist on disk. |
-| Supervisor `authenticate` today? | **Yes.** Always calls ACP `authenticate` with catalog `authMethodId` after `initialize`. |
-| Claude impact | Enable/start fails when the agent rejects fantasy method ids (e.g. `claude-acp` → "Method not implemented"), then settings rolls back `enabled`. |
-| Peer sizing | Device auth/pairing shipped as a **multi-PR epic** (~0.5–2.3k additions per PR). Single focused PRs stayed issue-sized. |
-| ADR-0004 overall | **Project.** Candidate slices below: **8 issue-shaped**, **5 project-shaped**. |
+| Question                                            | Answer                                                                                                                                           |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| AuthBroker / agent-auth wire / HostBrowser shipped? | **No.** Spec only in ADR-0004. Target paths do not exist on disk.                                                                                |
+| Supervisor `authenticate` today?                    | **Yes.** Always calls ACP `authenticate` with catalog `authMethodId` after `initialize`.                                                         |
+| Claude impact                                       | Enable/start fails when the agent rejects fantasy method ids (e.g. `claude-acp` → "Method not implemented"), then settings rolls back `enabled`. |
+| Peer sizing                                         | Device auth/pairing shipped as a **multi-PR epic** (~0.5–2.3k additions per PR). Single focused PRs stayed issue-sized.                          |
+| ADR-0004 overall                                    | **Project.** Candidate slices below: **8 issue-shaped**, **5 project-shaped**.                                                                   |
 
 ## 1. Does AuthBroker / adapter / HostBrowser / agent-auth wire exist?
 
 **No implementation.** Only the accepted ADR and glossary links.
 
-| Target (ADR-0004) | On disk today? |
-| --- | --- |
-| `packages/contracts/src/http/agent-auth.ts` | Missing |
-| `apps/server/src/agent/auth/` (broker, adapters, routes) | Missing |
-| `apps/server/src/browser/` (HostBrowser) | Missing |
-| `apps/web/src/agent/auth/` | Missing |
-| `apps/web/src/browser/HostBrowserSettings.tsx` | Missing |
+| Target (ADR-0004)                                        | On disk today? |
+| -------------------------------------------------------- | -------------- |
+| `packages/contracts/src/http/agent-auth.ts`              | Missing        |
+| `apps/server/src/agent/auth/` (broker, adapters, routes) | Missing        |
+| `apps/server/src/browser/` (HostBrowser)                 | Missing        |
+| `apps/web/src/agent/auth/`                               | Missing        |
+| `apps/web/src/browser/HostBrowserSettings.tsx`           | Missing        |
 
 What **does** exist and must not be confused with agent auth:
 
@@ -106,16 +106,16 @@ Tests still expect authenticate on every start (`supervisor.test.ts`: “runs in
 
 Device authentication + pairing was an epic of issue-sized and larger PRs, not one merge.
 
-| PR | Title | Additions / files (approx) | Role |
-| --- | --- | --- | --- |
-| #159 | Device contracts + persistence (AGE-5) | ~1220 / 14 | Contracts + DB |
-| #161 | Pairing codes + credential issuance (AGE-6) | ~804 / 13 | Server device slice |
-| #162 | Device authn/authz middleware (AGE-7) | ~1111 / 19 | `apps/server/src/auth/*` |
-| #163 | Device registry + presence (AGE-8) | ~1249 / 19 | Registry + events (then-era) |
-| #164 | Device revocation (AGE-9) | ~496 / 10 | Focused follow-on |
-| #165 | Devices console slice (AGE-10) | ~1379 / 27 | Web UI + queries |
-| #166 | Second-client journey (AGE-11) | ~594 / 14 | Hardening |
-| #177 | Android pair + credential (AGE-23) | ~2301 / 35 | Android pairing |
+| PR   | Title                                       | Additions / files (approx) | Role                         |
+| ---- | ------------------------------------------- | -------------------------- | ---------------------------- |
+| #159 | Device contracts + persistence (AGE-5)      | ~1220 / 14                 | Contracts + DB               |
+| #161 | Pairing codes + credential issuance (AGE-6) | ~804 / 13                  | Server device slice          |
+| #162 | Device authn/authz middleware (AGE-7)       | ~1111 / 19                 | `apps/server/src/auth/*`     |
+| #163 | Device registry + presence (AGE-8)          | ~1249 / 19                 | Registry + events (then-era) |
+| #164 | Device revocation (AGE-9)                   | ~496 / 10                  | Focused follow-on            |
+| #165 | Devices console slice (AGE-10)              | ~1379 / 27                 | Web UI + queries             |
+| #166 | Second-client journey (AGE-11)              | ~594 / 14                  | Hardening                    |
+| #177 | Android pair + credential (AGE-23)          | ~2301 / 35                 | Android pairing              |
 
 Current module weight (order of magnitude, including tests):
 
@@ -134,21 +134,21 @@ ADR-0004 matches the device-auth **project** shape overall. Individual slices ca
 
 Heuristic: issue = shippable alone with narrow acceptance; project = multiple modules/surfaces or open design (live fan-out, real browser, Claude host-cred + UI).
 
-| # | Slice | Shape | Evidence line |
-| --- | --- | --- | --- |
-| 1 | **Stop catalog authenticate on start** (ADR “Slice 0”; stub/no-op auth path) | **Issue** | Single seam: `supervisor.ts` authenticate block; ADR says Slice 0 can stub broker and still fix Claude spawn. |
-| 2 | **Wire: `agent-auth.ts`** (AgentAuth, summary, steps, actions) | **Issue** | New contracts file + tests only; peer #159 contracts files (`device.ts` / `pairing-code.ts` scale). |
-| 3 | **Auth broker core** (`broker`, `session`, `status`, `registry`, HTTP `routes` / `problems`) | **Project** | New `apps/server/src/agent/auth/*` directory tree; session vocabulary + single-flight + secrets rules; peer pairing/service epic (#161–#163). |
-| 4 | **Adapter interface + default adapter** | **Issue** | `adapters/adapter.ts` + `default.adapter.ts` (+ tests); bounded once broker exists; ACP best-effort mapping only. |
-| 5 | **Claude adapter** (probe / host-cred / optional browser flows) | **Project** | `claude.adapter.ts` plus HostBrowser and/or host token install; ADR calls Claude the first custom adapter and ties it to HB/token paths. |
-| 6 | **HostBrowser stub** (status `missing`, Host settings status) | **Issue** | `apps/server/src/browser/{service,stub,routes}` + small Host settings surface; ADR allows v1 stub. |
-| 7 | **HostBrowser real install/automation** | **Project** | Install/status/context/fill; ADR optional capability with product install UX and per-session context. |
-| 8 | **Embed `AgentAuthSummary` on agent settings** | **Issue** | Edit `agent-settings.ts` + list/get mapping; ADR touch list is narrow. |
-| 9 | **Supervisor hooks** (`clientAuthCapabilities`, `onStart`, `observeInitialize`, respawn) | **Issue** | `supervisor.hooks.ts` + edits to `supervisor.ts`; depends on 1 + 3–4; acceptance is start/probe seam only. |
-| 10 | **Session glue** (`ensureReadyForPrompt`, `auth_required` → `ensureSessionFromChallenge`) | **Issue** | Edits under `apps/server/src/session/`; needs broker; no full Sign-in UI required for API/hub behavior. |
-| 11 | **Web AgentAuth console** (panel, step views, hooks, fetch helpers) | **Project** | New `apps/web/src/agent/auth/*`; closed step vocabulary UI; peer Devices console #165 (~27 files). |
-| 12 | **Live `auth_session_updated` fan-out** | **Project** | Broker `subscribe` + device delivery; `/v1/events` gone; session stream has no auth types; multi-device sync is greenfield. |
-| 13 | **Logout + completionPolicy reconnect** | **Issue** | `broker.logout` + supervisor respawn; conflict-while-in-flight; follows broker without full browser/UI. |
+| #   | Slice                                                                                        | Shape       | Evidence line                                                                                                                                 |
+| --- | -------------------------------------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Stop catalog authenticate on start** (ADR “Slice 0”; stub/no-op auth path)                 | **Issue**   | Single seam: `supervisor.ts` authenticate block; ADR says Slice 0 can stub broker and still fix Claude spawn.                                 |
+| 2   | **Wire: `agent-auth.ts`** (AgentAuth, summary, steps, actions)                               | **Issue**   | New contracts file + tests only; peer #159 contracts files (`device.ts` / `pairing-code.ts` scale).                                           |
+| 3   | **Auth broker core** (`broker`, `session`, `status`, `registry`, HTTP `routes` / `problems`) | **Project** | New `apps/server/src/agent/auth/*` directory tree; session vocabulary + single-flight + secrets rules; peer pairing/service epic (#161–#163). |
+| 4   | **Adapter interface + default adapter**                                                      | **Issue**   | `adapters/adapter.ts` + `default.adapter.ts` (+ tests); bounded once broker exists; ACP best-effort mapping only.                             |
+| 5   | **Claude adapter** (probe / host-cred / optional browser flows)                              | **Project** | `claude.adapter.ts` plus HostBrowser and/or host token install; ADR calls Claude the first custom adapter and ties it to HB/token paths.      |
+| 6   | **HostBrowser stub** (status `missing`, Host settings status)                                | **Issue**   | `apps/server/src/browser/{service,stub,routes}` + small Host settings surface; ADR allows v1 stub.                                            |
+| 7   | **HostBrowser real install/automation**                                                      | **Project** | Install/status/context/fill; ADR optional capability with product install UX and per-session context.                                         |
+| 8   | **Embed `AgentAuthSummary` on agent settings**                                               | **Issue**   | Edit `agent-settings.ts` + list/get mapping; ADR touch list is narrow.                                                                        |
+| 9   | **Supervisor hooks** (`clientAuthCapabilities`, `onStart`, `observeInitialize`, respawn)     | **Issue**   | `supervisor.hooks.ts` + edits to `supervisor.ts`; depends on 1 + 3–4; acceptance is start/probe seam only.                                    |
+| 10  | **Session glue** (`ensureReadyForPrompt`, `auth_required` → `ensureSessionFromChallenge`)    | **Issue**   | Edits under `apps/server/src/session/`; needs broker; no full Sign-in UI required for API/hub behavior.                                       |
+| 11  | **Web AgentAuth console** (panel, step views, hooks, fetch helpers)                          | **Project** | New `apps/web/src/agent/auth/*`; closed step vocabulary UI; peer Devices console #165 (~27 files).                                            |
+| 12  | **Live `auth_session_updated` fan-out**                                                      | **Project** | Broker `subscribe` + device delivery; `/v1/events` gone; session stream has no auth types; multi-device sync is greenfield.                   |
+| 13  | **Logout + completionPolicy reconnect**                                                      | **Issue**   | `broker.logout` + supervisor respawn; conflict-while-in-flight; follows broker without full browser/UI.                                       |
 
 ### Classification counts
 
@@ -160,7 +160,7 @@ Suggested filing: treat **ADR-0004 as one project** (or epic) with issue childre
 ## Sources
 
 - `docs/adr/0004-agent-auth-broker.md` — decision, target tree, type sketch, Slice 0 note, Claude “Method not implemented”
-- `docs/adr/0000-agent-server.md` — glossary: Host capability, agent-auth session vs ACP session
+- `docs/adr/0000-harold.md` — glossary: Host capability, agent-auth session vs ACP session
 - `apps/server/src/acp/supervisor/supervisor.ts` — `authenticate` with `authMethodId`
 - `apps/server/src/acp/supervisor/supervisor.test.ts` — initialize + authenticate expectation
 - `apps/server/src/agent-settings/agent-settings-routes.ts` — enable → `start`, rollback on failure

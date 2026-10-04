@@ -70,5 +70,5 @@ jobs:
           cp apps/android/app/build/outputs/apk/debug/app-debug.apk \
             "staged/${stamp}-debug-app.apk"
           export LOCAL_PATH=staged
-          export REMOTE_PATH=agent-server/apk
+          export REMOTE_PATH=harold/apk
           bash .github/scripts/upload-to-fs.sh

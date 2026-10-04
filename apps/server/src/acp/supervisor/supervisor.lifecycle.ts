@@ -254,7 +254,7 @@ export const createSupervisorLifecycle = ({
       clientCapabilities: authAdapter
         ? authAdapter.clientAuthCapabilities(authContext)
         : resolved.profile.clientCapabilities,
-      clientInfo: { name: "agent-server", version: serverVersion },
+      clientInfo: { name: "harold", version: serverVersion },
     })
 
     runtime.capabilityInventory = buildCapabilityInventory({

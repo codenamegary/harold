@@ -41,7 +41,7 @@ export const BLOCKED_ATTACHMENT_EXTENSIONS = [
   ".com",
 ] as const
 
-export const attachmentsFolderName = ".agent-server/attachments"
+export const attachmentsFolderName = ".harold/attachments"
 
 export const AttachmentWorkspaceIdParamsSchema = z.strictObject({
   workspaceId: IdSchema,

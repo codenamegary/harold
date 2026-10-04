@@ -7,11 +7,11 @@
         <activity
             android:name=".debug.AuthFixtureActivity"
             android:exported="true"
-            android:theme="@style/Theme.AgentServer" />
+            android:theme="@style/Theme.Harold" />
         <activity
             android:name=".debug.VoiceFixtureActivity"
             android:exported="true"
-            android:theme="@style/Theme.AgentServer" />
+            android:theme="@style/Theme.Harold" />
     </application>
 
 </manifest>

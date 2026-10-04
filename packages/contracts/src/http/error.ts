@@ -1,16 +1,15 @@
 import { z } from "zod"
 
 export const PROBLEM_TYPES = {
-  validationError: "https://agent-server.local/problems/validation-error",
-  internalError: "https://agent-server.local/problems/internal-error",
-  notFound: "https://agent-server.local/problems/not-found",
-  conflict: "https://agent-server.local/problems/conflict",
-  unauthorized: "https://agent-server.local/problems/unauthorized",
-  workspaceActiveSessions: "https://agent-server.local/problems/workspace-has-active-sessions",
-  allowedRootHasWorkspaces:
-    "https://agent-server.local/problems/allowed-root-has-workspaces",
-  payloadTooLarge: "https://agent-server.local/problems/payload-too-large",
-  unsupportedMediaType: "https://agent-server.local/problems/unsupported-media-type",
+  validationError: "https://harold.local/problems/validation-error",
+  internalError: "https://harold.local/problems/internal-error",
+  notFound: "https://harold.local/problems/not-found",
+  conflict: "https://harold.local/problems/conflict",
+  unauthorized: "https://harold.local/problems/unauthorized",
+  workspaceActiveSessions: "https://harold.local/problems/workspace-has-active-sessions",
+  allowedRootHasWorkspaces: "https://harold.local/problems/allowed-root-has-workspaces",
+  payloadTooLarge: "https://harold.local/problems/payload-too-large",
+  unsupportedMediaType: "https://harold.local/problems/unsupported-media-type",
 } as const
 
 export const ProblemErrorSchema = z.strictObject({
@@ -96,10 +95,6 @@ export type InternalProblem = z.infer<typeof InternalProblemSchema>
 export type NotFoundProblem = z.infer<typeof NotFoundProblemSchema>
 export type ConflictProblem = z.infer<typeof ConflictProblemSchema>
 export type UnauthorizedProblem = z.infer<typeof UnauthorizedProblemSchema>
-export type WorkspaceActiveSessionsProblem = z.infer<
-  typeof WorkspaceActiveSessionsProblemSchema
->
-export type AllowedRootHasWorkspacesProblem = z.infer<
-  typeof AllowedRootHasWorkspacesProblemSchema
->
+export type WorkspaceActiveSessionsProblem = z.infer<typeof WorkspaceActiveSessionsProblemSchema>
+export type AllowedRootHasWorkspacesProblem = z.infer<typeof AllowedRootHasWorkspacesProblemSchema>
 export type ProblemDetails = z.infer<typeof ProblemDetailsSchema>

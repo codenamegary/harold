@@ -21,7 +21,7 @@ describe("extract migration files", () => {
   })
 
   const boot = async (files: ReadonlyArray<EmbeddedMigrationFile>) => {
-    targetDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-migrations-test-"))
+    targetDir = await mkdtemp(path.join(os.tmpdir(), "harold-migrations-test-"))
     await extractMigrationFiles(files, targetDir)
   }
 
@@ -44,7 +44,7 @@ describe("extract migration files", () => {
   })
 
   test("overwrites existing files on re-extraction", async () => {
-    targetDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-migrations-test-"))
+    targetDir = await mkdtemp(path.join(os.tmpdir(), "harold-migrations-test-"))
     const target = path.join(targetDir, "0000_create_table.sql")
     await writeFile(target, "stale")
 

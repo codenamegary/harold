@@ -1,6 +1,6 @@
-# Agent Server Android
+# Harold Android
 
-Native Jetpack Compose app for the Agent Server operator workflow.
+Native Jetpack Compose app for the Harold operator workflow.
 
 ## Prerequisites
 

@@ -11,7 +11,7 @@ plugins {
 }
 
 android {
-    namespace = "server.agent.android"
+    namespace = "harold.android"
     compileSdk {
         version = release(37) {
             minorApiLevel = 0
@@ -19,7 +19,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "server.agent.android"
+        applicationId = "harold.android"
         minSdk = 30
         targetSdk = 36
         versionCode = 1

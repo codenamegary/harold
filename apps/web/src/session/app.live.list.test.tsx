@@ -30,8 +30,8 @@ const workspaceCollection = WorkspaceCollectionSchema.parse({
   items: [
     {
       id: "ws_01",
-      name: "agent-server",
-      path: "/home/operator/agent-server",
+      name: "harold",
+      path: "/home/operator/harold",
       state: "available",
       createdAt: "2026-07-24T12:00:00.000Z",
       lastUsedAt: "2026-07-24T12:05:00.000Z",
@@ -59,7 +59,7 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
   ],
 })
 
-const workspacePath = "/home/operator/agent-server"
+const workspacePath = "/home/operator/harold"
 
 const selectedSession = {
   agentId: "cursor" as const,
@@ -121,10 +121,13 @@ describe("App live session list", () => {
 
       if (url.startsWith("/v1/sessions")) {
         return Promise.resolve(
-          new Response(JSON.stringify(SessionCollectionSchema.parse({ items: sessionItems.current })), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
+          new Response(
+            JSON.stringify(SessionCollectionSchema.parse({ items: sessionItems.current })),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
         )
       }
 
@@ -146,8 +149,8 @@ describe("App live session list", () => {
 
     await joinSessionByName({ getByRole }, selectedSession.title)
 
-    const getsBeforeOpen = fetchMock.mock.calls.filter(
-      ([input]) => requestUrl(input).startsWith("/v1/sessions"),
+    const getsBeforeOpen = fetchMock.mock.calls.filter(([input]) =>
+      requestUrl(input).startsWith("/v1/sessions"),
     ).length
 
     sessionItems.current = [selectedSession]
@@ -161,7 +164,9 @@ describe("App live session list", () => {
     })
 
     await waitFor(() => {
-      expect(queryByRole("option", { name: new RegExp(otherSession.title) })).not.toBeInTheDocument()
+      expect(
+        queryByRole("option", { name: new RegExp(otherSession.title) }),
+      ).not.toBeInTheDocument()
     })
     expect(getByRole("option", { name: new RegExp(selectedSession.title) })).toBeInTheDocument()
   })
@@ -178,8 +183,8 @@ describe("App live session list", () => {
       ).toBe(true)
     })
 
-    const getsBeforeFocus = fetchMock.mock.calls.filter(
-      ([input]) => requestUrl(input).startsWith("/v1/sessions"),
+    const getsBeforeFocus = fetchMock.mock.calls.filter(([input]) =>
+      requestUrl(input).startsWith("/v1/sessions"),
     ).length
 
     window.dispatchEvent(new Event("focus"))

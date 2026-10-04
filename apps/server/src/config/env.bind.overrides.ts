@@ -9,17 +9,15 @@ export type EnvBindOverrides = {
   bindPort?: number
 }
 
-export const readEnvBindOverrides = (
-  env: Record<string, string | undefined>,
-): EnvBindOverrides => {
+export const readEnvBindOverrides = (env: Record<string, string | undefined>): EnvBindOverrides => {
   const overrides: EnvBindOverrides = {}
 
-  if (env.AGENT_SERVER_HOST !== undefined) {
-    overrides.bindHost = EnvBindHostSchema.parse(env.AGENT_SERVER_HOST)
+  if (env.HAROLD_HOST !== undefined) {
+    overrides.bindHost = EnvBindHostSchema.parse(env.HAROLD_HOST)
   }
 
-  if (env.AGENT_SERVER_PORT !== undefined) {
-    overrides.bindPort = EnvBindPortSchema.parse(env.AGENT_SERVER_PORT)
+  if (env.HAROLD_PORT !== undefined) {
+    overrides.bindPort = EnvBindPortSchema.parse(env.HAROLD_PORT)
   }
 
   return overrides

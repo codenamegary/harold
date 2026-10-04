@@ -41,7 +41,7 @@ jobs:
 
       - name: Run smoke tests
         env:
-          AGENT_SERVER_RUN_SMOKE: "1"
+          HAROLD_RUN_SMOKE: "1"
           OPENCODE_SMOKE_MODEL: opencode/mimo-v2.5-free
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         run: bun run test:smoke

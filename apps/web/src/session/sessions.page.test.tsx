@@ -10,18 +10,15 @@ import { renderWithProviders } from "../query/render.with.providers"
 import { requestUrl } from "../test/request.url"
 import { FakeSocket, installFakeWebSocket } from "../test/fake.websocket"
 import { AppRoutes } from "../shell/AppRouter"
-import {
-  clearChatTestSelection,
-  openSessionOptions,
-} from "../chat/select.combobox.option"
+import { clearChatTestSelection, openSessionOptions } from "../chat/select.combobox.option"
 import { readChatSelection } from "../chat/selection/persist"
 
 const workspaceCollection = WorkspaceCollectionSchema.parse({
   items: [
     {
       id: "ws_01",
-      name: "agent-server",
-      path: "/home/operator/agent-server",
+      name: "harold",
+      path: "/home/operator/harold",
       state: "available",
       createdAt: "2026-07-24T12:00:00.000Z",
       lastUsedAt: "2026-07-24T12:05:00.000Z",
@@ -52,7 +49,7 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
 const olderSession = {
   agentId: "cursor" as const,
   sessionId: "sess_old",
-  cwd: "/home/operator/agent-server",
+  cwd: "/home/operator/harold",
   title: "Older session",
   updatedAt: "2026-07-20T12:00:00.000Z",
 }
@@ -60,7 +57,7 @@ const olderSession = {
 const listedSession = {
   agentId: "cursor" as const,
   sessionId: "sess_01JFC8C7E77NQCFH0RF9Z22JHH",
-  cwd: "/home/operator/agent-server",
+  cwd: "/home/operator/harold",
   title: "Explain auth",
   updatedAt: "2026-07-24T12:00:00.000Z",
 }
@@ -102,9 +99,7 @@ describe("Sessions page and hybrid picker", () => {
 
       if (method === "DELETE" && url.startsWith("/v1/sessions/")) {
         deletedUrls.push(url)
-        const sessionId = decodeURIComponent(
-          url.slice("/v1/sessions/".length).split("?")[0] ?? "",
-        )
+        const sessionId = decodeURIComponent(url.slice("/v1/sessions/".length).split("?")[0] ?? "")
         items = items.filter((item) => item.sessionId !== sessionId)
         return Promise.resolve(new Response(null, { status: 204 }))
       }
@@ -146,9 +141,7 @@ describe("Sessions page and hybrid picker", () => {
     expect(queryByRole("option", { name: /See all sessions/ })).not.toBeInTheDocument()
     expect(queryByRole("option", { name: /All sessions/ })).not.toBeInTheDocument()
     expect(queryByRole("option", { name: /New session/ })).not.toBeInTheDocument()
-    expect(
-      queryByRole("button", { name: `Delete ${listedSession.title}` }),
-    ).not.toBeInTheDocument()
+    expect(queryByRole("button", { name: `Delete ${listedSession.title}` })).not.toBeInTheDocument()
     await user.keyboard("{Escape}")
 
     await user.click(getByRole("button", { name: "All sessions" }))
@@ -227,7 +220,7 @@ describe("Sessions page and hybrid picker", () => {
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              type: "https://agent-server.local/problems/conflict",
+              type: "https://harold.local/problems/conflict",
               title: "Conflict",
               status: 409,
               detail: "Agent is unavailable",
@@ -242,13 +235,10 @@ describe("Sessions page and hybrid picker", () => {
 
       if (url.startsWith("/v1/sessions")) {
         return Promise.resolve(
-          new Response(
-            JSON.stringify(SessionCollectionSchema.parse({ items })),
-            {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            },
-          ),
+          new Response(JSON.stringify(SessionCollectionSchema.parse({ items })), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
         )
       }
 
@@ -311,9 +301,7 @@ describe("Sessions page and hybrid picker", () => {
 
       if (method === "DELETE" && url.startsWith("/v1/sessions/")) {
         deletedUrls.push(url)
-        const sessionId = decodeURIComponent(
-          url.slice("/v1/sessions/".length).split("?")[0] ?? "",
-        )
+        const sessionId = decodeURIComponent(url.slice("/v1/sessions/".length).split("?")[0] ?? "")
 
         if (!firstDeleteStarted) {
           firstDeleteStarted = true
@@ -334,13 +322,10 @@ describe("Sessions page and hybrid picker", () => {
 
       if (url.startsWith("/v1/sessions")) {
         return Promise.resolve(
-          new Response(
-            JSON.stringify(SessionCollectionSchema.parse({ items })),
-            {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            },
-          ),
+          new Response(JSON.stringify(SessionCollectionSchema.parse({ items })), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
         )
       }
 
@@ -392,9 +377,7 @@ describe("Sessions page and hybrid picker", () => {
 
     await user.click(getByRole("button", { name: "Open Explain auth" }))
     await waitFor(() => {
-      expect(getByRole("button", { name: "Session" })).toHaveTextContent(
-        listedSession.title,
-      )
+      expect(getByRole("button", { name: "Session" })).toHaveTextContent(listedSession.title)
     })
     expect(readChatSelection()?.sessionId).toBe(listedSession.sessionId)
   })

@@ -22,7 +22,7 @@ export type OpenDatabaseOptions = {
   migrationsFolder?: string
 }
 
-const databaseFileName = "agent-server.db"
+const databaseFileName = "harold.db"
 const defaultMigrationsFolder = path.join(import.meta.dir, "drizzle")
 
 export const openDatabase = (options: OpenDatabaseOptions): AgentDatabase => {

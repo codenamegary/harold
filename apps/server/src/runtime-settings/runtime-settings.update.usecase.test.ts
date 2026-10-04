@@ -134,8 +134,7 @@ describe("makeUpdateRuntimeSettings", () => {
       ok: false,
       error: {
         kind: "allowed_root_has_workspaces",
-        detail:
-          "1 workspace must be unregistered before this root can be removed",
+        detail: "1 workspace must be unregistered before this root can be removed",
       },
     })
     expect(deletedWorkspaceIds).toEqual([])
@@ -155,8 +154,7 @@ describe("makeUpdateRuntimeSettings", () => {
       ok: false,
       error: {
         kind: "allowed_root_has_workspaces",
-        detail:
-          "2 workspaces must be unregistered before this root can be removed",
+        detail: "2 workspaces must be unregistered before this root can be removed",
       },
     })
   })
@@ -166,11 +164,7 @@ describe("makeUpdateRuntimeSettings", () => {
       workspaces: [makeWorkspace()],
     })
 
-    const result = await run(
-      deps,
-      { allowedRoots: ["/srv/roots/other"], logLevel: "debug" },
-      true,
-    )
+    const result = await run(deps, { allowedRoots: ["/srv/roots/other"], logLevel: "debug" }, true)
 
     expect(result).toEqual({
       ok: true,
@@ -193,11 +187,7 @@ describe("makeUpdateRuntimeSettings", () => {
       deleteResults: ["not_found"],
     })
 
-    const result = await run(
-      deps,
-      { allowedRoots: ["/srv/roots/other"] },
-      true,
-    )
+    const result = await run(deps, { allowedRoots: ["/srv/roots/other"] }, true)
 
     expect(result).toEqual({
       ok: false,
@@ -212,11 +202,7 @@ describe("makeUpdateRuntimeSettings", () => {
       deleteResults: ["active_sessions"],
     })
 
-    const result = await run(
-      deps,
-      { allowedRoots: ["/srv/roots/other"] },
-      true,
-    )
+    const result = await run(deps, { allowedRoots: ["/srv/roots/other"] }, true)
 
     expect(result.ok).toBe(true)
     expect(deletedWorkspaceIds).toEqual(["ws_1"])
@@ -248,7 +234,7 @@ describe("makeUpdateRuntimeSettings", () => {
 
   test("clears advertisedUrl with empty string and logPath with null", async () => {
     const { deps, saved } = makeDeps({
-      settings: { ...previousSettings, logPath: "/var/log/agent-server.log" },
+      settings: { ...previousSettings, logPath: "/var/log/harold.log" },
     })
 
     const result = await run(deps, {

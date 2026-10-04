@@ -14,7 +14,7 @@ const createRepository = (agentId: "cursor" | "opencode" = "cursor") => ({
 })
 
 const createTempWorkspace = async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-acp-workspace-"))
+  const dir = await mkdtemp(path.join(os.tmpdir(), "harold-acp-workspace-"))
   tempDirs.push(dir)
   return dir
 }

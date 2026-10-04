@@ -3,22 +3,22 @@
 Checked: 2026-08-20
 
 Scope: what is possible today for slash commands, tool/command discovery, and
-skills in Agent Server chat (web + Android). Grounded in this repo, official ACP
+skills in Harold chat (web + Android). Grounded in this repo, official ACP
 docs, and Cursor ACP docs. Not secondary blogs.
 
 ## Verdict
 
-| Surface | Slash / commands | Tool discovery | Skills |
-| --- | --- | --- | --- |
-| ACP protocol | Agents **may** advertise slash commands via `available_commands_update` | No client-facing tool catalog. Tools show up as `tool_call` updates. MCP servers are supplied by the ACP **client** on `session/new` | No ACP "skills" type in the schema |
-| Agent Server (gateway) | Opaque `session/update` fan-out. Prompt is plain text. No command catalog API | Forwards `tool_call` / `tool_call_update`. Always creates sessions with `mcpServers: []`. Capabilities cache is load/close/list only | No skills HTTP. Catalog note: one agent spawn flag `--experimental-skills` |
-| Web chat | No slash UI. Prototype menu removed | Renders tool rows from stream. Ignores `available_commands_update` | None |
-| Android chat | Local `/` stub autocomplete only. No server binding | Same as web for transcript tools | Stub names only (`stub-skill`). Explicitly no skills HTTP |
+| Surface          | Slash / commands                                                              | Tool discovery                                                                                                                       | Skills                                                                     |
+| ---------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| ACP protocol     | Agents **may** advertise slash commands via `available_commands_update`       | No client-facing tool catalog. Tools show up as `tool_call` updates. MCP servers are supplied by the ACP **client** on `session/new` | No ACP "skills" type in the schema                                         |
+| Harold (gateway) | Opaque `session/update` fan-out. Prompt is plain text. No command catalog API | Forwards `tool_call` / `tool_call_update`. Always creates sessions with `mcpServers: []`. Capabilities cache is load/close/list only | No skills HTTP. Catalog note: one agent spawn flag `--experimental-skills` |
+| Web chat         | No slash UI. Prototype menu removed                                           | Renders tool rows from stream. Ignores `available_commands_update`                                                                   | None                                                                       |
+| Android chat     | Local `/` stub autocomplete only. No server binding                           | Same as web for transcript tools                                                                                                     | Stub names only (`stub-skill`). Explicitly no skills HTTP                  |
 
 ## Architecture (how discovery would fit)
 
 ```
-Web / Android  --REST/WS gateway-->  Agent Server  --stdio ACP-->  Agent process
+Web / Android  --REST/WS gateway-->  Harold  --stdio ACP-->  Agent process
                  prompt: { text }                  session/prompt [{ type: text }]
                  session_update (opaque)           session/update (...)
 ```
@@ -36,7 +36,7 @@ lines 50–55, 16–21).
 2. **Slash command menus** (protocol-ready, client not wired): handle
    `available_commands_update` and drive a `/` picker from that list.
 3. **MCP tool catalogs** (not exposed to chat UIs): ACP lets the **client**
-   attach MCP servers on `session/new`. Agent Server always passes `[]`. Cursor
+   attach MCP servers on `session/new`. Harold always passes `[]`. Cursor
    ACP can also load project/user `.cursor/mcp.json` when the agent process
    starts in that cwd ([Cursor ACP](https://cursor.com/docs/cli/acp)). Chat
    clients do not list MCP tools over REST/WS today.
@@ -101,12 +101,12 @@ Primary: [Cursor CLI ACP](https://cursor.com/docs/cli/acp)
 - Docs sample client only handles `agent_message_chunk` for streaming. It does
   not demonstrate `available_commands_update`.
 
-Agent Server Cursor profile: `agent acp`, `cursor_login`, fs + terminal client
+Harold Cursor profile: `agent acp`, `cursor_login`, fs + terminal client
 caps
 ([`apps/server/src/acp/catalog/overrides/cursor.override.ts`](../../apps/server/src/acp/catalog/overrides/cursor.override.ts)
 lines 3–13).
 
-## What Agent Server implements today
+## What Harold implements today
 
 ### Session / prompt path
 
@@ -178,7 +178,7 @@ test for ignored `session_info_update` in
 
 ### Removed prototype slash menu
 
-Commit `3f81079` (*Remove prototype chat and shell chrome*, #157) deleted:
+Commit `3f81079` (_Remove prototype chat and shell chrome_, #157) deleted:
 
 - `apps/web/src/chat/SlashMenu.tsx`
 - `PromptChips.tsx`
@@ -205,8 +205,8 @@ lines 9–22).
 
 Linear project **Android chat chrome & composer** states out of scope: "Real
 skills catalog or server binding"
-([project](https://linear.app/agent-server/project/android-chat-chrome-and-composer-486c76e83f0a)).
-Issue [AGE-46](https://linear.app/agent-server/issue/AGE-46/composer-icon-send-and-slash-stub-host)
+([project](https://linear.app/harold/project/android-chat-chrome-and-composer-486c76e83f0a)).
+Issue [AGE-46](https://linear.app/harold/issue/AGE-46/composer-icon-send-and-slash-stub-host)
 (Done): icon send + stub `/` host, no skills API.
 
 UX research target (Discord/Slack-style `/` autocomplete, skills later):
@@ -221,10 +221,10 @@ lines 40–80).
 
 ### Voice input (do not overlap)
 
-| Piece | Status | Source |
-| --- | --- | --- |
-| `SpeechRecognizer` engine, mute cycles, start-over, `RECORD_AUDIO` | Done ([AGE-58](https://linear.app/agent-server/issue/AGE-58/android-chat-voice-dictation-recognition-and-session-state)) | `SpeechRecognitionClient.kt`, `VoiceDictationController.kt`, ViewModel wiring |
-| Mic button + full-screen overlay UI | In Review ([AGE-59](https://linear.app/agent-server/issue/AGE-59/android-chat-voice-dictation-full-screen-overlay-ui), PR #215) | Not wired on `ChatScreen` / `AppNavHost` in this tree at check time |
+| Piece                                                              | Status                                                                                                                    | Source                                                                        |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `SpeechRecognizer` engine, mute cycles, start-over, `RECORD_AUDIO` | Done ([AGE-58](https://linear.app/harold/issue/AGE-58/android-chat-voice-dictation-recognition-and-session-state))        | `SpeechRecognitionClient.kt`, `VoiceDictationController.kt`, ViewModel wiring |
+| Mic button + full-screen overlay UI                                | In Review ([AGE-59](https://linear.app/harold/issue/AGE-59/android-chat-voice-dictation-full-screen-overlay-ui), PR #215) | Not wired on `ChatScreen` / `AppNavHost` in this tree at check time           |
 
 Voice fills the **composer draft** then the operator still taps Send. Separate
 from slash discovery.
@@ -248,12 +248,12 @@ slash commands or tool discovery.
 
 - Host spawns ACP agents, unions `session/list`, fans out `session/update`
 - Pass-through `session/prompt` / cancel
-- Web + Android both use the same gateway protocol ([AGE-50](https://linear.app/agent-server/issue/AGE-50/web-talks-to-the-gateway),
-  [AGE-51](https://linear.app/agent-server/issue/AGE-51/android-talks-to-the-gateway))
+- Web + Android both use the same gateway protocol ([AGE-50](https://linear.app/harold/issue/AGE-50/web-talks-to-the-gateway),
+  [AGE-51](https://linear.app/harold/issue/AGE-51/android-talks-to-the-gateway))
 - Contracts: Zod at HTTP/WS edges. Live transcript is ACP update fan-out
 - Does **not** define a skills or command-menu contract beyond opaque updates
 
-Project: [ACP session gateway](https://linear.app/agent-server/project/acp-session-gateway-492819e1e1b8)
+Project: [ACP session gateway](https://linear.app/harold/project/acp-session-gateway-492819e1e1b8)
 
 ## What is possible vs not possible today
 
@@ -275,7 +275,7 @@ Project: [ACP session gateway](https://linear.app/agent-server/project/acp-sessi
 3. Binding the `/` picker to ACP `availableCommands`.
 4. Skills catalog HTTP or shared web/Android skills API.
 5. Chat clients configuring MCP servers for the session (`mcpServers` always
-   empty from Agent Server).
+   empty from Harold).
 6. Exposing full `agentCapabilities` (prompt/MCP) to clients.
 
 ### Natural next seams (inferred from sources, not committed)

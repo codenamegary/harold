@@ -23,7 +23,7 @@ const migrationCount = (sqlite: Database) =>
     ?.count
 
 const createMs1Database = async (dataDir: string) => {
-  const databasePath = path.join(dataDir, "agent-server.db")
+  const databasePath = path.join(dataDir, "harold.db")
   const sqlite = new Database(databasePath)
   sqlite.run("PRAGMA foreign_keys = ON")
   sqlite.run(`
@@ -248,7 +248,7 @@ describe("drizzle migrations", () => {
     const dataDir = await bootTestDirectory()
     await createMs1Database(dataDir)
 
-    const before = new Database(path.join(dataDir, "agent-server.db"))
+    const before = new Database(path.join(dataDir, "harold.db"))
 
     registerTestCleanup(() => before.close())
     expect(migrationCount(before)).toBe(ms1MigrationCount)
@@ -298,12 +298,12 @@ describe("drizzle migrations", () => {
 })
 
 describe("openDatabase", () => {
-  test("creates data dir, opens agent-server.db, and enables WAL", async () => {
+  test("creates data dir, opens harold.db, and enables WAL", async () => {
     const dataDir = await bootTestDirectory()
     const database = openDatabase({ dataDir })
     registerTestCleanup(() => database.close())
 
-    expect(database.path).toBe(path.join(dataDir, "agent-server.db"))
+    expect(database.path).toBe(path.join(dataDir, "harold.db"))
 
     const journalMode = database.sqlite
       .query<{ journal_mode: string }, []>("PRAGMA journal_mode")

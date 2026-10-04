@@ -8,7 +8,7 @@ const tempDirs: string[] = []
 const serverRoot = path.resolve(import.meta.dir, "../..")
 
 const createTempDataDir = async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-corrupt-boot-"))
+  const dir = await mkdtemp(path.join(os.tmpdir(), "harold-corrupt-boot-"))
   tempDirs.push(dir)
   return dir
 }
@@ -20,19 +20,15 @@ afterEach(async () => {
 describe("server boot with invalid settings.yml", () => {
   test("exits non-zero when settings.yml is corrupt", async () => {
     const dataDir = await createTempDataDir()
-    await writeFile(
-      path.join(dataDir, settingsFileName),
-      "{ not: valid: yaml [[[\n",
-      "utf8",
-    )
+    await writeFile(path.join(dataDir, settingsFileName), "{ not: valid: yaml [[[\n", "utf8")
 
     const proc = Bun.spawn(["bun", "run", "src/main.ts"], {
       cwd: serverRoot,
       env: {
         ...process.env,
-        AGENT_SERVER_HOST: "127.0.0.1",
-        AGENT_SERVER_PORT: "0",
-        AGENT_SERVER_DATA_DIR: dataDir,
+        HAROLD_HOST: "127.0.0.1",
+        HAROLD_PORT: "0",
+        HAROLD_DATA_DIR: dataDir,
       },
       stdout: "pipe",
       stderr: "pipe",

@@ -8,9 +8,9 @@ import {
 } from "./workspace"
 
 const validWorkspace = {
-  id: "ws-agent-server",
-  name: "agent-server",
-  path: "/home/operator/agent-server",
+  id: "ws-harold",
+  name: "harold",
+  path: "/home/operator/harold",
   state: "available",
   createdAt: "2026-07-24T12:00:00.000Z",
   lastUsedAt: "2026-07-24T12:05:00.000Z",
@@ -22,9 +22,7 @@ describe("WorkspaceSchema", () => {
   })
 
   test("rejects prototype agent count fields", () => {
-    expect(() =>
-      WorkspaceSchema.parse({ ...validWorkspace, agentCount: 1 }),
-    ).toThrow()
+    expect(() => WorkspaceSchema.parse({ ...validWorkspace, agentCount: 1 })).toThrow()
   })
 
   test("rejects prototype additionalDirectories", () => {
@@ -39,7 +37,7 @@ describe("WorkspaceSchema", () => {
 
 describe("CreateWorkspaceBodySchema", () => {
   test("accepts a valid create body", () => {
-    const body = { name: "agent-server", path: "/home/operator/agent-server" }
+    const body = { name: "harold", path: "/home/operator/harold" }
 
     expect(CreateWorkspaceBodySchema.parse(body)).toEqual(body)
   })
@@ -48,7 +46,7 @@ describe("CreateWorkspaceBodySchema", () => {
     expect(() =>
       CreateWorkspaceBodySchema.parse({
         name: "",
-        path: "/home/operator/agent-server",
+        path: "/home/operator/harold",
       }),
     ).toThrow()
   })
@@ -57,7 +55,7 @@ describe("CreateWorkspaceBodySchema", () => {
     expect(() =>
       CreateWorkspaceBodySchema.parse({
         name: "a".repeat(81),
-        path: "/home/operator/agent-server",
+        path: "/home/operator/harold",
       }),
     ).toThrow()
   })
@@ -65,8 +63,8 @@ describe("CreateWorkspaceBodySchema", () => {
   test("rejects prototype state field", () => {
     expect(() =>
       CreateWorkspaceBodySchema.parse({
-        name: "agent-server",
-        path: "/home/operator/agent-server",
+        name: "harold",
+        path: "/home/operator/harold",
         state: "available",
       }),
     ).toThrow()
@@ -84,7 +82,7 @@ describe("UpdateWorkspaceBodySchema", () => {
     expect(() =>
       UpdateWorkspaceBodySchema.parse({
         name: "renamed",
-        path: "/home/operator/agent-server",
+        path: "/home/operator/harold",
       }),
     ).toThrow()
   })
@@ -102,9 +100,7 @@ describe("ListWorkspacesQuerySchema", () => {
   })
 
   test("accepts search and state filters", () => {
-    expect(
-      ListWorkspacesQuerySchema.parse({ q: "agent", state: "available" }),
-    ).toEqual({
+    expect(ListWorkspacesQuerySchema.parse({ q: "agent", state: "available" })).toEqual({
       limit: 100,
       q: "agent",
       state: "available",

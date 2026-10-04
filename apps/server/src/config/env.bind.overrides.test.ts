@@ -7,20 +7,16 @@ describe("readEnvBindOverrides", () => {
   })
 
   test("reads loopback host override", () => {
-    expect(
-      readEnvBindOverrides({ AGENT_SERVER_HOST: "127.0.0.1" }),
-    ).toEqual({ bindHost: "127.0.0.1" })
+    expect(readEnvBindOverrides({ HAROLD_HOST: "127.0.0.1" })).toEqual({ bindHost: "127.0.0.1" })
   })
 
   test("reads port override", () => {
-    expect(readEnvBindOverrides({ AGENT_SERVER_PORT: "4123" })).toEqual({
+    expect(readEnvBindOverrides({ HAROLD_PORT: "4123" })).toEqual({
       bindPort: 4123,
     })
   })
 
   test("rejects non-loopback host", () => {
-    expect(() =>
-      readEnvBindOverrides({ AGENT_SERVER_HOST: "0.0.0.0" }),
-    ).toThrow()
+    expect(() => readEnvBindOverrides({ HAROLD_HOST: "0.0.0.0" })).toThrow()
   })
 })

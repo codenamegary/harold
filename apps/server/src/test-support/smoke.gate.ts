@@ -3,7 +3,7 @@ import os from "node:os"
 import path from "node:path"
 
 export const smokeRunRequested = (): boolean =>
-  process.env.AGENT_SERVER_RUN_SMOKE === "1" || process.env.AGENT_SERVER_RUN_CURSOR_SMOKE === "1"
+  process.env.HAROLD_RUN_SMOKE === "1" || process.env.HAROLD_RUN_CURSOR_SMOKE === "1"
 
 export const hasCursorAuth = (): boolean => {
   if (process.env.CURSOR_API_KEY ?? process.env.CURSOR_AUTH_TOKEN) {

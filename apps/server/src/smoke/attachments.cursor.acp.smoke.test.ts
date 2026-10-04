@@ -300,7 +300,7 @@ describe("cursor attachment smoke", () => {
   test.skipIf(!shouldRunSmoke)(
     "uploads an image, sends it with a prompt, and the agent sees it",
     async () => {
-      const dataDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-att-smoke-"))
+      const dataDir = await mkdtemp(path.join(os.tmpdir(), "harold-att-smoke-"))
       const workspaceDir = path.join(dataDir, "smoke-project")
       await mkdir(workspaceDir)
 
@@ -308,9 +308,9 @@ describe("cursor attachment smoke", () => {
       const whichFn: WhichFn = (binaryName) => (binaryName === "agent" ? detectedPath : undefined)
 
       const config = parseConfig({
-        AGENT_SERVER_HOST: "127.0.0.1",
-        AGENT_SERVER_PORT: "0",
-        AGENT_SERVER_DATA_DIR: dataDir,
+        HAROLD_HOST: "127.0.0.1",
+        HAROLD_PORT: "0",
+        HAROLD_DATA_DIR: dataDir,
       })
       const database = openDatabase({ dataDir: config.dataDir })
       const runtime = createRuntime("0.1.0")
@@ -348,9 +348,9 @@ describe("cursor attachment smoke", () => {
         const uploadResponse = await uploadImage(app, workspaceId, "red-square.png", png)
         expect(uploadResponse.statusCode).toBe(201)
         const descriptor = AttachmentDescriptorSchema.parse(JSON.parse(uploadResponse.body))
-        expect(
-          descriptor.path.startsWith(path.join(workspaceDir, ".agent-server", "attachments")),
-        ).toBe(true)
+        expect(descriptor.path.startsWith(path.join(workspaceDir, ".harold", "attachments"))).toBe(
+          true,
+        )
 
         const client = await openStreamClient(boundStreamUrl(app))
         try {

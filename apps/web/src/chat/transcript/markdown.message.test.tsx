@@ -35,9 +35,7 @@ describe("MarkdownMessage", () => {
 
   test("opens links in a new tab without an external-link confirmation", () => {
     const { getByRole, queryByText } = render(
-      <MarkdownMessage
-        text="[Repo](https://github.com/codenamegary/agent-server)"
-      />,
+      <MarkdownMessage text="[Repo](https://github.com/codenamegary/harold)" />,
     )
 
     const link = getByRole("link", { name: "Repo" })
@@ -48,9 +46,7 @@ describe("MarkdownMessage", () => {
     })
 
     expect(queryByText("Open external link?")).not.toBeInTheDocument()
-    expect(
-      queryByText("You're about to visit an external website."),
-    ).not.toBeInTheDocument()
+    expect(queryByText("You're about to visit an external website.")).not.toBeInTheDocument()
   })
 })
 

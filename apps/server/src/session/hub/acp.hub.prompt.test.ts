@@ -186,7 +186,7 @@ describe("createAcpHubPromptSession with attachments", () => {
     kind: "image" as const,
     name: "shot.png",
     mimeType: "image/png",
-    path: "/tmp/ws/.agent-server/attachments/att_1.png",
+    path: "/tmp/ws/.harold/attachments/att_1.png",
   }
 
   test("maps an image attachment to an ACP image content block with base64 data", async () => {
@@ -239,7 +239,7 @@ describe("createAcpHubPromptSession with attachments", () => {
             kind: "file",
             name: "notes.md",
             mimeType: "text/markdown",
-            path: "/tmp/ws/.agent-server/attachments/att_2.md",
+            path: "/tmp/ws/.harold/attachments/att_2.md",
           },
         ],
       }),
@@ -249,7 +249,7 @@ describe("createAcpHubPromptSession with attachments", () => {
       { type: "text", text: "read" },
       {
         type: "resource_link",
-        uri: "file:///tmp/ws/.agent-server/attachments/att_2.md",
+        uri: "file:///tmp/ws/.harold/attachments/att_2.md",
         name: "notes.md",
       },
     ])
