@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "agent-server-android"
+rootProject.name = "harold-android"
 include(":app")

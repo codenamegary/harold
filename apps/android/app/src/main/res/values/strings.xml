@@ -1,11 +1,11 @@
 <resources>
-    <string name="app_name">Agent Server</string>
-    <string name="shell_title">Agent Server</string>
+    <string name="app_name">Harold</string>
+    <string name="shell_title">Harold</string>
     <string name="shell_status_not_paired">Not paired</string>
     <string name="pair_action">Pair</string>
-    <string name="pair_content_description">Pair with Agent Server</string>
+    <string name="pair_content_description">Pair with Harold</string>
     <string name="retry_action">Retry</string>
-    <string name="retry_content_description">Retry connecting to Agent Server</string>
+    <string name="retry_content_description">Retry connecting to Harold</string>
     <string name="pairing_title">Pair device</string>
     <string name="pairing_back">Back</string>
     <string name="pairing_back_content_description">Go back from pairing</string>
@@ -14,14 +14,14 @@
     <string name="pairing_use_scanner">Use scanner</string>
     <string name="pairing_use_scanner_content_description">Scan pairing QR code</string>
     <string name="pairing_scanner_content_description">QR code scanner for pairing</string>
-    <string name="pairing_endpoint_label">Agent Server endpoint</string>
+    <string name="pairing_endpoint_label">Harold endpoint</string>
     <string name="pairing_code_label">Pairing code</string>
     <string name="pairing_submit">Claim pairing code</string>
     <string name="pairing_submit_content_description">Claim pairing code</string>
     <string name="pairing_claiming">Claiming pairing code…</string>
     <string name="pairing_camera_permission_required">Camera permission is required to scan pairing QR codes.</string>
     <string name="active_sessions_channel_name">Active sessions</string>
-    <string name="active_sessions_channel_description">Shows while Agent Server sessions are actively running</string>
+    <string name="active_sessions_channel_description">Shows while Harold sessions are actively running</string>
     <string name="notification_permission_title">Notifications required</string>
     <string name="notification_permission_body">Active sessions cannot stay live in the background without notifications.</string>
     <string name="notification_permission_open_settings">Open system settings</string>
@@ -83,7 +83,7 @@
     <string name="shell_status_label">STATUS</string>
     <string name="shell_connection_label">CONNECTION</string>
     <string name="shell_workspaces_label">WORKSPACES</string>
-    <string name="shell_pair_hint">Scan a pairing QR from your Agent Server host, or enter the endpoint and code manually.</string>
+    <string name="shell_pair_hint">Scan a pairing QR from your Harold host, or enter the endpoint and code manually.</string>
     <string name="shell_repair_hint">Re-pair if this device lost access, or you want to connect to a different host.</string>
     <string name="permission_option_content_description">Permission option: %1$s</string>
     <string name="agent_auth_host_login">Host login</string>
