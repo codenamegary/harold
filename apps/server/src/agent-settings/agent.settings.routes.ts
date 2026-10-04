@@ -28,13 +28,13 @@ import {
   buildAgentRegistryFetchFailedProblem,
   buildAgentSessionListUnsupportedProblem,
 } from "./agent.settings.problems"
-import { ApplyImportedAgents } from "./agent.settings.import.apply.usecase"
-import { CreateCustomAgent } from "./agent.settings.create.custom.usecase"
-import { DetectAgentPath } from "./agent.settings.detect.path.usecase"
-import { DetectImportableAgents } from "./agent.settings.import.detect.usecase"
-import { ListAgentSettings } from "./agent.settings.list.usecase"
-import { RemoveAgent } from "./agent.settings.remove.usecase"
-import { UpdateAgentSettings } from "./agent.settings.update.usecase"
+import { ApplyImportedAgents } from "core/agent-settings/import.apply.usecase"
+import { CreateCustomAgent } from "core/agent-settings/create.custom.usecase"
+import { DetectAgentPath } from "core/agent-settings/detect.path.usecase"
+import { DetectImportableAgents } from "core/agent-settings/import.detect.usecase"
+import { ListAgentSettings } from "core/agent-settings/list.usecase"
+import { RemoveAgent } from "core/agent-settings/remove.usecase"
+import { UpdateAgentSettings } from "core/agent-settings/update.usecase"
 
 export type RegisterAgentSettingsRoutesOptions = Readonly<{
   list: ListAgentSettings

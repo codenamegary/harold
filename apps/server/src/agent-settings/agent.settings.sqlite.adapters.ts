@@ -8,7 +8,7 @@ import {
   InsertAgentSettingsRow,
   ListAgentSettingsRows,
   UpdateAgentSettingsRow,
-} from "./agent.settings.ports"
+} from "core/agent-settings/ports"
 
 type DrizzleAgentSettingsRow = typeof agentSettings.$inferSelect
 
@@ -52,18 +52,11 @@ export const makeUpdateAgentSettingsRow =
       set.agentId = nextAgentId
     }
 
-    database.db
-      .update(agentSettings)
-      .set(set)
-      .where(eq(agentSettings.agentId, agentId))
-      .run()
+    database.db.update(agentSettings).set(set).where(eq(agentSettings.agentId, agentId)).run()
   }
 
 export const makeDeleteAgentSettingsRow =
   (database: AgentDatabase): DeleteAgentSettingsRow =>
   (agentId) => {
-    database.db
-      .delete(agentSettings)
-      .where(eq(agentSettings.agentId, agentId))
-      .run()
+    database.db.delete(agentSettings).where(eq(agentSettings.agentId, agentId)).run()
   }

@@ -5,7 +5,7 @@ import {
   SessionCollectionSchema,
   deleteSessionPath,
 } from "contracts/http/session"
-import { WhichFn } from "../agent-settings/resolve-agent-path"
+import { WhichFn } from "core/agent-settings/resolve-agent-path"
 import { enableAgent } from "../test-support/test.app"
 import { bootTestApp } from "../test-support/test.harness"
 

@@ -6,7 +6,7 @@ import {
   ValidationProblemSchema,
 } from "contracts/http/error"
 import { CreateSessionResponseSchema, SessionCollectionSchema } from "contracts/http/session"
-import { WhichFn } from "../agent-settings/resolve-agent-path"
+import { WhichFn } from "core/agent-settings/resolve-agent-path"
 import { enableAgent, seedBoundSession, seedWorkspace } from "../test-support/test.app"
 import { bootTestApp } from "../test-support/test.harness"
 

@@ -1,7 +1,10 @@
 import { AgentId, AgentSpawnSnapshot } from "contracts/http/agent-settings"
-import { AcpClientCapabilities, defaultClientCapabilities } from "./catalog/agent.profile.override"
-import { catalogAgentsById } from "./catalog/generated/catalog.agents.generated"
-import { productAgentOverridesById } from "./catalog/overrides/product.overrides"
+import {
+  AcpClientCapabilities,
+  defaultClientCapabilities,
+} from "core/agent-catalog/profile.override"
+import { catalogAgentsById } from "core/agent-catalog/generated"
+import { productAgentOverridesById } from "core/agent-catalog/overrides"
 
 export type { AcpClientCapabilities }
 

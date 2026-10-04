@@ -6,7 +6,7 @@ import {
   SessionStreamServerMessageSchema,
 } from "contracts/http/session.stream"
 import { WebSocket } from "ws"
-import { WhichFn } from "../agent-settings/resolve-agent-path"
+import { WhichFn } from "core/agent-settings/resolve-agent-path"
 import { Config } from "../config/config"
 import { eventDataText } from "../test/event.data.text"
 import { enableAgent } from "../test-support/test.app"

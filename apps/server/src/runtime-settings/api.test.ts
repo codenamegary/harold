@@ -8,7 +8,7 @@ import {
   UpdateRuntimeSettingsResponseSchema,
 } from "contracts/http/runtime-settings"
 import YAML from "yaml"
-import { catalogAgentIds } from "../acp/catalog/generated/catalog.agents.generated"
+import { catalogAgentIds } from "core/agent-catalog/generated"
 import { parseConfig } from "../config/config"
 import { readEnvBindOverrides } from "../config/env.bind.overrides"
 import { bootTestApp, bootTestDirectory } from "../test-support/test.harness"

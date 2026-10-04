@@ -3,7 +3,7 @@ import { Database } from "bun:sqlite"
 import { createHash } from "node:crypto"
 import { readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
-import { catalogAgentIds } from "../acp/catalog/generated/catalog.agents.generated"
+import { catalogAgentIds } from "core/agent-catalog/generated"
 import { openDatabase } from "./database"
 import { bootTestDirectory, registerTestCleanup } from "../test-support/test.harness"
 const migrationsFolder = path.join(import.meta.dir, "drizzle")
