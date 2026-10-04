@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify"
+import { CreateWorkspaceBody } from "contracts/http/workspace"
 import { makeDeleteWorkspace } from "core/workspace/delete.usecase"
-import { makeRegisterWorkspace } from "core/workspace/register.usecase"
+import { makeRegisterWorkspace, RegisterWorkspaceResult } from "core/workspace/register.usecase"
 import {
   CloseWorkspaceSessions,
   DeleteWorkspace,
@@ -32,6 +33,7 @@ export type AssembleWorkspaceSliceDeps = Readonly<{
 
 export type WorkspaceSlice = Readonly<{
   registerRoutes: (app: FastifyInstance) => void
+  registerWorkspace: (body: CreateWorkspaceBody) => RegisterWorkspaceResult
   findById: FindWorkspaceById
   listAll: ListAllWorkspaces
   deleteWorkspace: DeleteWorkspace
@@ -67,6 +69,7 @@ export const assembleWorkspaceSlice = (deps: AssembleWorkspaceSliceDeps): Worksp
         deleteWorkspace,
       })
     },
+    registerWorkspace,
     findById: findWorkspaceById,
     listAll: listAllWorkspaces,
     deleteWorkspace,

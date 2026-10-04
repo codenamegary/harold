@@ -42,6 +42,8 @@
     "./agent-settings/sqlite-adapters": "./src/agent-settings/agent.settings.sqlite.adapters.ts",
     "./agent-settings/catalog.sqlite.adapters": "./src/acp/catalog/catalog.sqlite.adapters.ts",
     "./device": "./src/device/device.assembly.ts",
-    "./runtime-settings": "./src/runtime-settings/runtime-settings.file.adapters.ts"
+    "./runtime-settings": "./src/runtime-settings/runtime-settings.file.adapters.ts",
+    "./filesystem": "./src/filesystem/filesystem.node.adapters.ts",
+    "./workspace": "./src/workspace/workspace.assembly.ts"
   }
 }
