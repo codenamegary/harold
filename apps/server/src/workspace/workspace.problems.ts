@@ -6,7 +6,7 @@ import {
   WorkspaceActiveSessionsProblemSchema,
 } from "contracts/http/error"
 import { sanitizeAcpErrorMessage } from "../acp/sanitize.error"
-import { FilesystemPathError } from "../filesystem/filesystem.errors"
+import { FilesystemPathError } from "core/filesystem/errors"
 
 const pathErrorCodes: Record<FilesystemPathError["kind"], string> = {
   missing: "validation.field.path.missing",

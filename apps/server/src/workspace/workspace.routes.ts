@@ -8,13 +8,13 @@ import {
   WorkspaceSchema,
 } from "contracts/http/workspace"
 import { FastifyInstance } from "fastify"
-import { RegisterWorkspaceResult } from "./workspace.register.usecase"
+import { RegisterWorkspaceResult } from "core/workspace/register.usecase"
 import {
   DeleteWorkspace,
   FindWorkspaceById,
   ListWorkspaces,
   UpdateWorkspaceName,
-} from "./workspace.ports"
+} from "core/workspace/ports"
 import {
   buildConflictProblem,
   buildInvalidCursorProblem,
@@ -25,7 +25,9 @@ import {
 } from "./workspace.problems"
 
 const sendProblem = (
-  reply: { status: (code: number) => { type: (type: string) => { send: (body: unknown) => unknown } } },
+  reply: {
+    status: (code: number) => { type: (type: string) => { send: (body: unknown) => unknown } }
+  },
   status: number,
   problem: unknown,
 ) => reply.status(status).type("application/problem+json").send(problem)

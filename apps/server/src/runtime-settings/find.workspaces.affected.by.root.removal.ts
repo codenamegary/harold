@@ -1,14 +1,12 @@
 import { Workspace } from "contracts/http/workspace"
-import { isDescendantOf } from "../filesystem/filesystem.is.descendant.of"
+import { isDescendantOf } from "core/filesystem/is.descendant.of"
 
 export const findWorkspacesAffectedByRootRemoval = (params: {
   workspaces: readonly Workspace[]
   previousRoots: readonly string[]
   nextRoots: readonly string[]
 }): Workspace[] => {
-  const removedRoots = params.previousRoots.filter(
-    (root) => !params.nextRoots.includes(root),
-  )
+  const removedRoots = params.previousRoots.filter((root) => !params.nextRoots.includes(root))
 
   if (removedRoots.length === 0) {
     return []

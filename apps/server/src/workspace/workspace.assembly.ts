@@ -1,8 +1,17 @@
 import { FastifyInstance } from "fastify"
+import { makeDeleteWorkspace } from "core/workspace/delete.usecase"
+import { makeRegisterWorkspace } from "core/workspace/register.usecase"
+import {
+  CloseWorkspaceSessions,
+  DeleteWorkspace,
+  FindWorkspaceById,
+  GetAllowedRoots,
+  ListAllWorkspaces,
+  ListLiveByWorkspaceRoot,
+  UnbindWorkspaceSessions,
+} from "core/workspace/ports"
 import { AgentDatabase } from "../persistence/database"
 import { makeCanonicalizePath } from "../filesystem/filesystem.node.adapters"
-import { makeDeleteWorkspace } from "./workspace.delete.usecase"
-import { makeRegisterWorkspace } from "./workspace.register.usecase"
 import { registerWorkspaceRoutes } from "./workspace.routes"
 import {
   makeDeleteWorkspaceRow,
@@ -12,15 +21,6 @@ import {
   makeListWorkspaces,
   makeUpdateWorkspaceName,
 } from "./workspace.sqlite.adapters"
-import {
-  CloseWorkspaceSessions,
-  DeleteWorkspace,
-  FindWorkspaceById,
-  GetAllowedRoots,
-  ListAllWorkspaces,
-  ListLiveByWorkspaceRoot,
-  UnbindWorkspaceSessions,
-} from "./workspace.ports"
 
 export type AssembleWorkspaceSliceDeps = Readonly<{
   database: AgentDatabase

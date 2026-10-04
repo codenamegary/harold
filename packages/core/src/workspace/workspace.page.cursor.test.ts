@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import {
-  decodeWorkspacePageCursor,
-  encodeWorkspacePageCursor,
-} from "./workspace.page.cursor"
+import { decodeWorkspacePageCursor, encodeWorkspacePageCursor } from "./workspace.page.cursor"
 
 describe("workspace page cursor", () => {
   test("round-trips after edge", () => {

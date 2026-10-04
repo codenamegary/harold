@@ -5,7 +5,7 @@ import { chmod, mkdir, rm } from "node:fs/promises"
 import path from "node:path"
 import { AgentDatabase } from "../persistence/database"
 import { workspaces } from "../persistence/schema/workspaces"
-import { encodeWorkspacePageCursor } from "./workspace.page.cursor"
+import { encodeWorkspacePageCursor } from "core/workspace/page.cursor"
 import { bootTestDatabase } from "../test-support/test.harness"
 import {
   makeDeleteWorkspaceRow,

@@ -1,7 +1,7 @@
 import os from "node:os"
 import path from "node:path"
 import { z } from "zod"
-import { expandHomePath } from "../filesystem/filesystem.expand.home.path"
+import { expandHomePath } from "core/filesystem/expand.home.path"
 
 export const ConfigSchema = z.object({
   host: z.literal("127.0.0.1"),

@@ -1,4 +1,4 @@
-import { FilesystemPathError } from "../filesystem/filesystem.errors"
+import { FilesystemPathError } from "core/filesystem/errors"
 
 export type UpdateRuntimeSettingsError =
   | {

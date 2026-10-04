@@ -2,10 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { Workspace } from "contracts/http/workspace"
 import { makeRegisterWorkspace } from "./workspace.register.usecase"
 
-const storedWorkspace = (input: {
-  name: string
-  canonicalPath: string
-}): Workspace => ({
+const storedWorkspace = (input: { name: string; canonicalPath: string }): Workspace => ({
   id: "ws_01J0000000000000000000000",
   name: input.name,
   path: input.canonicalPath,

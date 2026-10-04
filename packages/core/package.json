@@ -39,7 +39,17 @@
     "./device/create.pairing.code.usecase": "./src/device/device.create.pairing.code.usecase.ts",
     "./device/claim.pairing.code.usecase": "./src/device/device.claim.pairing.code.usecase.ts",
     "./device/revoke.device.usecase": "./src/device/device.revoke.device.usecase.ts",
-    "./device/create.probe.device.usecase": "./src/device/device.create.probe.device.usecase.ts"
+    "./device/create.probe.device.usecase": "./src/device/device.create.probe.device.usecase.ts",
+    "./filesystem/errors": "./src/filesystem/filesystem.errors.ts",
+    "./filesystem/ports": "./src/filesystem/filesystem.ports.ts",
+    "./filesystem/is.descendant.of": "./src/filesystem/filesystem.is.descendant.of.ts",
+    "./filesystem/expand.home.path": "./src/filesystem/filesystem.expand.home.path.ts",
+    "./workspace/ports": "./src/workspace/workspace.ports.ts",
+    "./workspace/errors": "./src/workspace/workspace.errors.ts",
+    "./workspace/create.workspace.id": "./src/workspace/workspace.create.workspace.id.ts",
+    "./workspace/page.cursor": "./src/workspace/workspace.page.cursor.ts",
+    "./workspace/register.usecase": "./src/workspace/workspace.register.usecase.ts",
+    "./workspace/delete.usecase": "./src/workspace/workspace.delete.usecase.ts"
   },
   "scripts": {
     "lint": "oxlint --deny-warnings",
@@ -49,6 +59,7 @@
   },
   "dependencies": {
     "contracts": "workspace:*",
+    "ulid": "^3.0.2",
     "zod": "catalog:"
   },
   "devDependencies": {

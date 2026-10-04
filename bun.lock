@@ -112,6 +112,7 @@
       "version": "0.0.0",
       "dependencies": {
         "contracts": "workspace:*",
+        "ulid": "^3.0.2",
         "zod": "catalog:",
       },
       "devDependencies": {
