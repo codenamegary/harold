@@ -91,6 +91,12 @@ describe("openAgentCli", () => {
     const cli = openTempCli({})
 
     try {
+      cli.ensureCatalogRows()
+      const prior = cli.findRow("autohand")
+      if (prior === undefined) {
+        throw new Error("expected a seeded catalog row for autohand")
+      }
+
       const result = enableAgent(cli, "autohand")
 
       if (result.ok) {
@@ -98,9 +104,7 @@ describe("openAgentCli", () => {
       }
 
       expect(result.error.kind).toBe("path_auto_detect_failed")
-
-      const autohand = cli.list().find((item) => item.id === "autohand")
-      expect(autohand?.enabled).toBe(false)
+      expect(cli.findRow("autohand")).toEqual(prior)
     } finally {
       cli.close()
     }
@@ -124,8 +128,8 @@ describe("openAgentCli", () => {
       const output = renderAgentProbe(item)
 
       expect(output).toContain("/usr/local/bin/agent")
-      expect(output).toContain("stopped")
       expect(output).toContain("unknown")
+      expect(output).not.toContain("stopped")
     } finally {
       cli.close()
     }
