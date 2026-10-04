@@ -6,7 +6,7 @@ describe("InlineEditableText", () => {
   test("shows text cursor on the idle label", () => {
     const { getByRole } = render(
       <InlineEditableText
-        value="agent-server"
+        value="harold"
         onSave={() => {}}
         onCancel={() => {}}
         isSaving={false}
@@ -20,7 +20,7 @@ describe("InlineEditableText", () => {
   test("enters edit mode when title is clicked", () => {
     const { getByRole } = render(
       <InlineEditableText
-        value="agent-server"
+        value="harold"
         onSave={() => {}}
         onCancel={() => {}}
         isSaving={false}
@@ -30,7 +30,7 @@ describe("InlineEditableText", () => {
 
     fireEvent.click(getByRole("button", { name: "Rename workspace" }))
 
-    expect(getByRole("textbox", { name: "Rename workspace" })).toHaveValue("agent-server")
+    expect(getByRole("textbox", { name: "Rename workspace" })).toHaveValue("harold")
   })
 
   test("saves on Enter when value changed", async () => {
@@ -41,7 +41,7 @@ describe("InlineEditableText", () => {
 
     const { getByRole } = render(
       <InlineEditableText
-        value="agent-server"
+        value="harold"
         onSave={onSave}
         onCancel={() => {}}
         isSaving={false}
@@ -74,7 +74,7 @@ describe("InlineEditableText", () => {
 
     const { getByRole } = render(
       <InlineEditableText
-        value="agent-server"
+        value="harold"
         onSave={() => {}}
         onCancel={onCancel}
         isSaving={false}
@@ -100,7 +100,7 @@ describe("InlineEditableText", () => {
     const { getByRole, container } = render(
       <div>
         <InlineEditableText
-          value="agent-server"
+          value="harold"
           onSave={() => {}}
           onCancel={onCancel}
           isSaving={false}
@@ -117,7 +117,7 @@ describe("InlineEditableText", () => {
     fireEvent.blur(getByRole("textbox", { name: "Rename workspace" }))
 
     expect(state.cancelled).toBe(true)
-    expect(getByRole("button", { name: "Rename workspace" })).toHaveTextContent("agent-server")
+    expect(getByRole("button", { name: "Rename workspace" })).toHaveTextContent("harold")
     expect(container.querySelector("input")).not.toBeInTheDocument()
   })
 
@@ -129,7 +129,7 @@ describe("InlineEditableText", () => {
 
     const { getByRole } = render(
       <InlineEditableText
-        value="agent-server"
+        value="harold"
         onSave={() => {}}
         onCancel={onCancel}
         isSaving={false}

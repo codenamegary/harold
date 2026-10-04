@@ -152,14 +152,14 @@ describe("PATCH /v1/settings/runtime", () => {
     const response = await app.inject({
       method: "PATCH",
       url: "/v1/settings/runtime",
-      payload: { logPath: "/tmp/agent-server.log" },
+      payload: { logPath: "/tmp/harold.log" },
     })
 
     const body = UpdateRuntimeSettingsResponseSchema.parse(JSON.parse(response.body))
 
     expect(response.statusCode).toBe(200)
     expect(body.restartRequired).toBe(true)
-    expect(body.settings.logPath).toBe("/tmp/agent-server.log")
+    expect(body.settings.logPath).toBe("/tmp/harold.log")
   })
 
   test("clears advertised URL with null", async () => {
@@ -304,9 +304,9 @@ describe("runtime settings durability", () => {
   test("seeds missing settings.yml bind port from env config defaults", async () => {
     const dataDir = await bootTestDirectory()
     const config = parseConfig({
-      AGENT_SERVER_HOST: "127.0.0.1",
-      AGENT_SERVER_PORT: "4123",
-      AGENT_SERVER_DATA_DIR: dataDir,
+      HAROLD_HOST: "127.0.0.1",
+      HAROLD_PORT: "4123",
+      HAROLD_DATA_DIR: dataDir,
     })
     const store = makeRuntimeSettingsFileStore({
       dataDir: config.dataDir,

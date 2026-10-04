@@ -77,22 +77,14 @@ export const registerRuntimeSettingsRoutes = (
             }),
           )
         case "allowed_root_has_workspaces":
-          return sendProblem(
-            reply,
-            409,
-            buildAllowedRootHasWorkspacesProblem(result.error.detail),
-          )
+          return sendProblem(reply, 409, buildAllowedRootHasWorkspacesProblem(result.error.detail))
         case "workspace_not_found":
-          return sendProblem(
-            reply,
-            404,
-            {
-              type: "https://agent-server.local/problems/not-found",
-              title: "Workspace not found",
-              status: 404,
-              detail: "Unknown workspace id",
-            },
-          )
+          return sendProblem(reply, 404, {
+            type: "https://harold.local/problems/not-found",
+            title: "Workspace not found",
+            status: 404,
+            detail: "Unknown workspace id",
+          })
       }
     }
 

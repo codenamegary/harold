@@ -12,7 +12,7 @@ const main = async () => {
 
   for (const target of targets) {
     const extension = target.startsWith("windows-") ? ".exe" : ""
-    const outfile = path.join(outDir, `agent-server-${target}${extension}`)
+    const outfile = path.join(outDir, `harold-${target}${extension}`)
     console.log(`[server] compiling ${target}...`)
     await Bun.$`bun build --compile --target bun-${target} ${entrypoint} --outfile ${outfile}`
     console.log(`[server] wrote ${path.relative(serverRoot, outfile)}`)

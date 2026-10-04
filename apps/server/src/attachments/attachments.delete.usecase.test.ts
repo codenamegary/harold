@@ -3,7 +3,7 @@ import path from "node:path"
 import { makeDeleteAttachment } from "./attachments.delete.usecase"
 
 const workspacePath = "/projects/app"
-const attachmentsRoot = path.join(workspacePath, ".agent-server", "attachments")
+const attachmentsRoot = path.join(workspacePath, ".harold", "attachments")
 const attachmentId = "att_01JQ4KX7Q2M.png"
 
 const unreachable = (name: string) => () => {

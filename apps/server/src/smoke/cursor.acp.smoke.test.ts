@@ -33,7 +33,7 @@ describe("cursor ACP smoke", () => {
   test.skipIf(!shouldRunSmoke)(
     "creates a Cursor session, lists it, then completes a stream prompt",
     async () => {
-      const dataDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-cursor-smoke-"))
+      const dataDir = await mkdtemp(path.join(os.tmpdir(), "harold-cursor-smoke-"))
       const workspaceDir = path.join(dataDir, "smoke-project")
       await mkdir(workspaceDir)
 
@@ -41,9 +41,9 @@ describe("cursor ACP smoke", () => {
       const whichFn: WhichFn = (binaryName) => (binaryName === "agent" ? detectedPath : undefined)
 
       const config = parseConfig({
-        AGENT_SERVER_HOST: "127.0.0.1",
-        AGENT_SERVER_PORT: "0",
-        AGENT_SERVER_DATA_DIR: dataDir,
+        HAROLD_HOST: "127.0.0.1",
+        HAROLD_PORT: "0",
+        HAROLD_DATA_DIR: dataDir,
       })
       const database = openDatabase({ dataDir: config.dataDir })
       const runtime = createRuntime("0.1.0")

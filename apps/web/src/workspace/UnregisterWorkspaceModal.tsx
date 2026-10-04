@@ -66,7 +66,7 @@ export const UnregisterWorkspaceModal: React.FC<UnregisterWorkspaceModalProps> =
       }
     >
       <p className="m-0 text-base text-body-soft">
-        This removes Agent Server metadata for this workspace. Workspace files are not deleted.
+        This removes Harold metadata for this workspace. Workspace files are not deleted.
       </p>
       {errorMessage ? (
         <p className="mt-4 text-base text-danger" role="alert">

@@ -38,9 +38,7 @@ const defaultProbeDeps: CursorProbeDeps = {
   execFile: execFileAsync,
 }
 
-export const createCursorAuthAdapter = (
-  deps: CursorProbeDeps = defaultProbeDeps,
-): AuthAdapter => {
+export const createCursorAuthAdapter = (deps: CursorProbeDeps = defaultProbeDeps): AuthAdapter => {
   const fallback = createDefaultAuthAdapter()
 
   return {
@@ -50,16 +48,12 @@ export const createCursorAuthAdapter = (
       _meta: { parameterizedModelPicker: true },
     }),
     hostLoginInstructions: (ctx) =>
-      `Cursor is not signed in on this host (${ctx.hostMachineName}).\n\nOn the machine running Agent Server, open a terminal and run:\n  cursor-agent login\n\nWhen finished, tap I have logged in.`,
+      `Cursor is not signed in on this host (${ctx.hostMachineName}).\n\nOn the machine running Harold, open a terminal and run:\n  cursor-agent login\n\nWhen finished, tap I have logged in.`,
     probe: async (_ctx) => {
       try {
-        const { stdout } = await deps.execFile(
-          "cursor-agent",
-          ["status", "--format", "json"],
-          {
-            timeout: 10_000,
-          },
-        )
+        const { stdout } = await deps.execFile("cursor-agent", ["status", "--format", "json"], {
+          timeout: 10_000,
+        })
         const mapped = mapCursorAuthStatus(parseCursorAuthStatusJson(stdout.trim()))
         return {
           status: mapped.status,

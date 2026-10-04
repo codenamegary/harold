@@ -60,7 +60,7 @@ orchestrates UX and probes when an adapter can.
    - Probe `needs_auth` after confirm updates the summary but does not replace
      the reconnect + prompt check as the source of truth.
 10. Probe through the adapter when possible (for example `claude auth status
-    --json`, or Cursor `cursor-agent status --format json`). Cache summary.
+--json`, or Cursor `cursor-agent status --format json`). Cache summary.
     Refresh after enable, logout, confirm, and on demand (Agents list loads
     probe **enabled** agents, with a short TTL).
 11. **Logout** is `broker.logout(agentId)`. Any paired device may call it when
@@ -332,11 +332,7 @@ packages/contracts/src/http/agent-settings.ts
 ```ts
 type AgentId = string
 
-type AgentAuthStatus =
-  | "unknown"
-  | "needs_auth"
-  | "authenticated"
-  | "error"
+type AgentAuthStatus = "unknown" | "needs_auth" | "authenticated" | "error"
 
 /** Badge fields on GET /v1/settings/agents items */
 type AgentAuthSummary = {
@@ -346,11 +342,7 @@ type AgentAuthSummary = {
   canLogout: boolean
 }
 
-type AuthSessionStatus =
-  | "in_progress"
-  | "succeeded"
-  | "failed"
-  | "cancelled"
+type AuthSessionStatus = "in_progress" | "succeeded" | "failed" | "cancelled"
 
 /** v1 product UX uses this subset only */
 type AuthStepV1 =
@@ -376,9 +368,7 @@ type AuthStepV1 =
 type AuthStep = AuthStepV1
 
 /** v1 actions */
-type AuthSessionAction =
-  | { type: "confirm"; stepId: string }
-  | { type: "cancel" }
+type AuthSessionAction = { type: "confirm"; stepId: string } | { type: "cancel" }
 
 type AgentAuthSession = {
   sessionId: string
@@ -413,9 +403,7 @@ type AuthAdapter = {
   id: string
   matches: (agentId: AgentId) => boolean
 
-  clientAuthCapabilities: (
-    ctx: AdapterAuthContext,
-  ) => Record<string, unknown>
+  clientAuthCapabilities: (ctx: AdapterAuthContext) => Record<string, unknown>
 
   /** Shown in show_message; must name the host machine for remote devices */
   hostLoginInstructions: (ctx: AdapterAuthContext) => string
@@ -446,10 +434,7 @@ type AuthAdapter = {
     },
   ) => Promise<{ steps: AuthStepV1[] }>
 
-  abort: (
-    ctx: AdapterAuthContext,
-    input: { sessionId: string },
-  ) => Promise<void>
+  abort: (ctx: AdapterAuthContext, input: { sessionId: string }) => Promise<void>
 
   logout: (ctx: AdapterAuthContext) => Promise<void>
 }
@@ -460,7 +445,7 @@ Example Claude instructions (adapter-owned, not wire):
 ```text
 Claude is not signed in on this host.
 
-On the machine running Agent Server, open a terminal and run:
+On the machine running Harold, open a terminal and run:
   claude auth login
 
 When finished, tap I have logged in.
@@ -475,24 +460,18 @@ type AuthBroker = {
   getSummary: (agentId: AgentId) => Promise<AgentAuthSummary>
   get: (agentId: AgentId) => Promise<AgentAuth>
 
-  observeInitialize: (input: {
-    agentId: AgentId
-    initializeResult: unknown
-  }) => Promise<void>
+  observeInitialize: (input: { agentId: AgentId; initializeResult: unknown }) => Promise<void>
 
   /** Block prompts only when probe says needs_auth; allow unknown */
   ensureReadyForPrompt: (
     agentId: AgentId,
   ) => Promise<
-    | { ok: true }
-    | { ok: false; status: AgentAuthStatus; session: AgentAuthSession | null }
+    { ok: true } | { ok: false; status: AgentAuthStatus; session: AgentAuthSession | null }
   >
 
   startSession: (input: { agentId: AgentId }) => Promise<AgentAuthSession>
 
-  ensureSessionFromChallenge: (
-    agentId: AgentId,
-  ) => Promise<AgentAuthSession>
+  ensureSessionFromChallenge: (agentId: AgentId) => Promise<AgentAuthSession>
 
   applyAction: (input: {
     agentId: AgentId
@@ -502,12 +481,7 @@ type AuthBroker = {
 
   logout: (agentId: AgentId) => Promise<AgentAuthSummary>
 
-  subscribe: (
-    listener: (event: {
-      agentId: AgentId
-      auth: AgentAuth
-    }) => void,
-  ) => () => void
+  subscribe: (listener: (event: { agentId: AgentId; auth: AgentAuth }) => void) => () => void
 }
 ```
 
@@ -532,43 +506,43 @@ type SupervisorAuthHooks = {
 
 ### Sign-in UX (v1)
 
-| Option | Verdict | Why |
-|--------|---------|-----|
-| Single host-login flow for all agents | **Selected** | Matches how CLIs store creds. One client UX. Remote devices only orchestrate. |
-| Per-agent method picker + secret paste | Rejected for v1 | Broker becomes a password manager. Duplicates provider UIs. |
-| HostBrowser automation in v1 | Deferred | High cost; host CLI login is enough for local operator installs. |
-| ACP terminal auth in clients | Rejected | Bad on phones. Wrong abstraction for our device API. |
+| Option                                 | Verdict         | Why                                                                           |
+| -------------------------------------- | --------------- | ----------------------------------------------------------------------------- |
+| Single host-login flow for all agents  | **Selected**    | Matches how CLIs store creds. One client UX. Remote devices only orchestrate. |
+| Per-agent method picker + secret paste | Rejected for v1 | Broker becomes a password manager. Duplicates provider UIs.                   |
+| HostBrowser automation in v1           | Deferred        | High cost; host CLI login is enough for local operator installs.              |
+| ACP terminal auth in clients           | Rejected        | Bad on phones. Wrong abstraction for our device API.                          |
 
 ### Auth vs enable
 
-| Option | Verdict | Why |
-|--------|---------|-----|
-| Enable and auth separate | **Selected** | Host may already be logged in. Devices can Sign in later from chat. |
-| Enable requires auth first | Rejected | Blocks spawn/probe. Couples settings to provider login. |
-| Blind catalog `authMethodId` on start | Rejected | Broke Claude (`Method not implemented`). |
+| Option                                | Verdict      | Why                                                                 |
+| ------------------------------------- | ------------ | ------------------------------------------------------------------- |
+| Enable and auth separate              | **Selected** | Host may already be logged in. Devices can Sign in later from chat. |
+| Enable requires auth first            | Rejected     | Blocks spawn/probe. Couples settings to provider login.             |
+| Blind catalog `authMethodId` on start | Rejected     | Broke Claude (`Method not implemented`).                            |
 
 ### Verify after host login
 
-| Option | Verdict | Why |
-|--------|---------|-----|
-| Reconnect + next prompt is the truth; retry on `auth_required` | **Selected** | Probe may be `unknown`. Operators still get a clear loop. |
-| Block until probe is `authenticated` | Rejected | Many agents lack a probe CLI. False negatives strand users. |
-| Optimistic `authenticated` on confirm only | Rejected | Hides failures until unrelated errors surface. |
+| Option                                                         | Verdict      | Why                                                         |
+| -------------------------------------------------------------- | ------------ | ----------------------------------------------------------- |
+| Reconnect + next prompt is the truth; retry on `auth_required` | **Selected** | Probe may be `unknown`. Operators still get a clear loop.   |
+| Block until probe is `authenticated`                           | Rejected     | Many agents lack a probe CLI. False negatives strand users. |
+| Optimistic `authenticated` on confirm only                     | Rejected     | Hides failures until unrelated errors surface.              |
 
 ### Concurrency
 
-| Option | Verdict | Why |
-|--------|---------|-----|
+| Option                        | Verdict      | Why                                           |
+| ----------------------------- | ------------ | --------------------------------------------- |
 | One auth session per agent id | **Selected** | Host creds and login flows collide otherwise. |
-| One auth session per device | Rejected | Two phones fighting one host login. |
+| One auth session per device   | Rejected     | Two phones fighting one host login.           |
 
 ### Credentials
 
-| Option | Verdict | Why |
-|--------|---------|-----|
-| Single host OS identity | **Selected for v1** | Matches one operator install. |
-| Broker / SQLite as provider secret store | Rejected | Host CLI is the vault. |
-| API key paste in broker | Rejected for v1 | Defer to host env / CLI. |
+| Option                                   | Verdict             | Why                           |
+| ---------------------------------------- | ------------------- | ----------------------------- |
+| Single host OS identity                  | **Selected for v1** | Matches one operator install. |
+| Broker / SQLite as provider secret store | Rejected            | Host CLI is the vault.        |
+| API key paste in broker                  | Rejected for v1     | Defer to host env / CLI.      |
 
 ## Consequences
 

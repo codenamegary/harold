@@ -96,7 +96,7 @@ export const confirmNewSessionModal = async (
 export const startNewSession = async (
   queries: RoleQueries,
   params: { workspaceName: string; agentName: string } = {
-    workspaceName: "agent-server",
+    workspaceName: "harold",
     agentName: "Cursor",
   },
 ) => {

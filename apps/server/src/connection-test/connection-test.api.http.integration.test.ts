@@ -30,9 +30,9 @@ describe("connection test API", () => {
   test("POST returns classified checks and revokes probe device on pass path", async () => {
     const { database, dataDir } = await bootTestDatabase()
     const config = parseConfig({
-      AGENT_SERVER_HOST: "127.0.0.1",
-      AGENT_SERVER_PORT: "3847",
-      AGENT_SERVER_DATA_DIR: dataDir,
+      HAROLD_HOST: "127.0.0.1",
+      HAROLD_PORT: "3847",
+      HAROLD_DATA_DIR: dataDir,
     })
     const runtimeSettingsStore = makeRuntimeSettingsFileStore({
       dataDir,
@@ -107,9 +107,9 @@ describe("connection test API", () => {
   test("POST classifies DNS, TLS, and auth failures", async () => {
     const { database, dataDir } = await bootTestDatabase()
     const config = parseConfig({
-      AGENT_SERVER_HOST: "127.0.0.1",
-      AGENT_SERVER_PORT: "3847",
-      AGENT_SERVER_DATA_DIR: dataDir,
+      HAROLD_HOST: "127.0.0.1",
+      HAROLD_PORT: "3847",
+      HAROLD_DATA_DIR: dataDir,
     })
     const runtimeSettingsStore = makeRuntimeSettingsFileStore({
       dataDir,
@@ -169,9 +169,9 @@ describe("connection test API", () => {
   test("POST warns on self-signed TLS and allows continue anyway when auth passes", async () => {
     const { database, dataDir } = await bootTestDatabase()
     const config = parseConfig({
-      AGENT_SERVER_HOST: "127.0.0.1",
-      AGENT_SERVER_PORT: "3847",
-      AGENT_SERVER_DATA_DIR: dataDir,
+      HAROLD_HOST: "127.0.0.1",
+      HAROLD_PORT: "3847",
+      HAROLD_DATA_DIR: dataDir,
     })
     const runtimeSettingsStore = makeRuntimeSettingsFileStore({
       dataDir,
@@ -228,9 +228,9 @@ describe("connection test API", () => {
   test("device auth probe targets devices collection path", async () => {
     const { database, dataDir } = await bootTestDatabase()
     const config = parseConfig({
-      AGENT_SERVER_HOST: "127.0.0.1",
-      AGENT_SERVER_PORT: "3847",
-      AGENT_SERVER_DATA_DIR: dataDir,
+      HAROLD_HOST: "127.0.0.1",
+      HAROLD_PORT: "3847",
+      HAROLD_DATA_DIR: dataDir,
     })
     const runtimeSettingsStore = makeRuntimeSettingsFileStore({
       dataDir,

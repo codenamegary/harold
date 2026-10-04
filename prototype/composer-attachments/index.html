@@ -1016,7 +1016,7 @@
   <span class="d-item">pickers: system (OS dialog · Photo Picker · SAF)</span>
   <span class="d-item">image blocks: base64 data (ACP v1, verified vs Cursor)</span>
   <span class="d-item">uploads: start at selection; send waits for stragglers</span>
-  <span class="d-item">storage: &lt;workspace&gt;/.agent-server/attachments · gitignore appended if present, never created</span>
+  <span class="d-item">storage: &lt;workspace&gt;/.harold/attachments · gitignore appended if present, never created</span>
   <span class="d-item">prompt carries { id, kind } refs — never bytes</span>
   <span class="d-item">drawer: read-only history — ACP has no resource removal</span>
 </div>
@@ -1114,7 +1114,7 @@
         custom browser, no storage permissions.
       </p>
       <div class="phone" id="phone">
-        <div class="phone-status"><span>9:41</span><span>agent-server · claude-code</span></div>
+        <div class="phone-status"><span>9:41</span><span>harold · claude-code</span></div>
         <div class="phone-screen">
           <div class="fake-bubble agent">I can read files from the workspace. Attach anything you'd like me to look at.</div>
           <div class="fake-bubble user">Here's the failing log</div>
@@ -1207,7 +1207,7 @@
     <code>slow uploads</code> to watch the states, and <code>random failures</code> for retry.
   </p>
   <ol class="flow-steps">
-    <li>Pick or paste → <code>POST /v1/workspaces/{workspaceId}/attachments</code> fires per file, in parallel. Server stores under <code>.agent-server/attachments/</code> and appends that path to an existing <code>.gitignore</code> (skipped when none exists — never created).</li>
+    <li>Pick or paste → <code>POST /v1/workspaces/{workspaceId}/attachments</code> fires per file, in parallel. Server stores under <code>.harold/attachments/</code> and appends that path to an existing <code>.gitignore</code> (skipped when none exists — never created).</li>
     <li>Chip shows upload progress → lime check when the descriptor lands. Failure shows retry (a fresh POST; ids are never reused).</li>
     <li>Removing a ready chip fires <code>DELETE</code> for its id. Removing mid-upload just cancels.</li>
     <li>Send: the client waits only for in-flight stragglers, then posts the prompt carrying <code>{ id, kind }</code> references — bytes are never re-sent with the prompt.</li>
@@ -1254,7 +1254,7 @@ kind  string  optional   "image" | "file"   <span class="c"># server infers from
   <span class="k">"mimeType"</span>: "image/png",
   <span class="k">"kind"</span>: "image",
   <span class="k">"size"</span>: 419430,
-  <span class="k">"path"</span>: "/home/dev/proj/.agent-server/attachments/att_01JQ4KX7Q2M.png"
+  <span class="k">"path"</span>: "/home/dev/proj/.harold/attachments/att_01JQ4KX7Q2M.png"
 }
 
 413 ProblemDetails   file exceeds size cap (20 MB)
@@ -1262,10 +1262,10 @@ kind  string  optional   "image" | "file"   <span class="c"># server infers from
 404 ProblemDetails   workspace not found</pre>
     <p style="margin:0" id="gitignore-rule">
       Workspace-scoped so it works before a session exists (first prompt creates the session).
-      Files land under <code>&lt;workspace&gt;/.agent-server/attachments/</code> so agents read
+      Files land under <code>&lt;workspace&gt;/.harold/attachments/</code> so agents read
       them without <code>additionalDirectories</code> grants. On <b>every</b> upload the server
       checks the workspace root for a <code>.gitignore</code>: present → append
-      <code>.agent-server/attachments/</code> if missing (idempotent, no duplicates); absent →
+      <code>.harold/attachments/</code> if missing (idempotent, no duplicates); absent →
       skip entirely. The server never creates a <code>.gitignore</code>.
     </p>
   </div>
@@ -1367,7 +1367,7 @@ kind  string  optional   "image" | "file"   <span class="c"># server infers from
       <rect x="50" y="10" width="140" height="26" rx="6" fill="#181d25" stroke="#242a35"/>
       <text x="120" y="27" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11" fill="#c4cad3">Client composer</text>
       <rect x="320" y="10" width="140" height="26" rx="6" fill="#181d25" stroke="#242a35"/>
-      <text x="390" y="27" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11" fill="#c4cad3">agent-server</text>
+      <text x="390" y="27" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11" fill="#c4cad3">harold</text>
       <rect x="590" y="10" width="140" height="26" rx="6" fill="#181d25" stroke="#242a35"/>
       <text x="660" y="27" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11" fill="#c4cad3">Agent (ACP)</text>
       <!-- lifelines -->

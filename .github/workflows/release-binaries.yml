@@ -42,14 +42,14 @@ jobs:
 
       - name: Generate checksums
         working-directory: apps/server/release
-        run: sha256sum agent-server-* > SHA256SUMS
+        run: sha256sum harold-* > SHA256SUMS
 
       - name: Upload release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ steps.tag.outputs.tag }}" \
-            apps/server/release/agent-server-* \
+            apps/server/release/harold-* \
             apps/server/release/SHA256SUMS \
             --clobber \
             --repo "$GITHUB_REPOSITORY"

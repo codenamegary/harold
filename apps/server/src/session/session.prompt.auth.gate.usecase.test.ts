@@ -9,7 +9,7 @@ const attachment: AttachmentReference = {
   kind: "file",
   name: "notes.md",
   mimeType: "text/markdown",
-  path: "/tmp/ws/.agent-server/attachments/att_1.md",
+  path: "/tmp/ws/.harold/attachments/att_1.md",
 }
 
 const okPrompt = () => async () => ({ ok: true as const })

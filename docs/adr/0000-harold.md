@@ -1,4 +1,4 @@
-# Agent Server: terms and topology
+# Harold: terms and topology
 
 Status: Draft  
 Related: [ADR-0001 Device authentication](0001-device-authentication.md),
@@ -7,7 +7,7 @@ Related: [ADR-0001 Device authentication](0001-device-authentication.md),
 [ADR-0004 Agent auth broker](0004-agent-auth-broker.md),
 [ADR-0005 Session stream frames](0005-session-stream-frames.md)
 
-Agent Server is a local host process. It speaks HTTP and WebSocket to operator
+Harold is a local host process. It speaks HTTP and WebSocket to operator
 clients. It speaks ACP to agent child processes. This ADR records the topology
 and the naming boundaries for that split. The shared words live in
 [CONTEXT.md](../../CONTEXT.md). Later ADRs decide auth, pairing, and agent
@@ -15,7 +15,7 @@ login. This one only names the map.
 
 ## Decision
 
-1. Treat **Agent Server** as the product name for the host process and its
+1. Treat **Harold** as the product name for the host process and its
    device-facing API. One install. One host OS identity in v1.
 2. Use [CONTEXT.md](../../CONTEXT.md) as the canonical glossary in docs,
    contracts, and UI copy. Prefer a qualified phrase when a bare word collides
@@ -25,6 +25,19 @@ login. This one only names the map.
 4. Draw the topology as three bands: clients, host process, ACP agents. Do not
    draw provider login UI on devices as a direct ACP path
    ([ADR-0004](0004-agent-auth-broker.md)).
+
+## Naming map
+
+| Layer                  | Name                   |
+| ---------------------- | ---------------------- |
+| Product                | **Harold**             |
+| Package                | `@codenamegary/harold` |
+| CLI binary             | `harold`               |
+| Runtime role           | **host**               |
+| QR scheme              | `harold://pair?v=1`    |
+| Data dir               | `~/.harold`            |
+| Env prefix             | `HAROLD_*`             |
+| Android application id | `harold.android`       |
 
 ## Glossary
 
@@ -40,7 +53,7 @@ flowchart TB
     Android[Paired device<br/>Android / remote clients]
   end
 
-  subgraph host [Host — Agent Server process]
+  subgraph host [Host — Harold process]
     API[Device API<br/>HTTP + WS /v1]
     Auth[Authn / authz<br/>host or device principal]
     Workspaces[Workspaces]
@@ -126,13 +139,13 @@ sequenceDiagram
 
 ## Boundaries we keep sharp
 
-| Do | Do not |
-|----|--------|
-| Call the HTTP/WS surface the **Device API** | Call it "the ACP API" |
-| Say **host** for the process and loopback principal | Call the web UI "the host" |
-| Say **operator console** for the web UI | Say "admin panel" or "dashboard" in product copy |
-| Qualify **capability** (ACP agent / ACP client / host) | Use bare "capability" for authz |
-| Say **session** for ACP chat | Reuse "session" alone for device auth or agent login |
+| Do                                                     | Do not                                               |
+| ------------------------------------------------------ | ---------------------------------------------------- |
+| Call the HTTP/WS surface the **Device API**            | Call it "the ACP API"                                |
+| Say **host** for the process and loopback principal    | Call the web UI "the host"                           |
+| Say **operator console** for the web UI                | Say "admin panel" or "dashboard" in product copy     |
+| Qualify **capability** (ACP agent / ACP client / host) | Use bare "capability" for authz                      |
+| Say **session** for ACP chat                           | Reuse "session" alone for device auth or agent login |
 
 ## Consequences
 
@@ -149,6 +162,3 @@ sequenceDiagram
    API** (since the host console uses it too)?
 2. Should **Host** mean only the process, with **host principal** always spelled
    out for auth?
-3. Do we want **Agent Server** vs **agent-server** vs **host** called out as
-   three layers (product / package / runtime role)?
-

@@ -27,6 +27,6 @@ describe("startup with database", () => {
     })
 
     expect(connected).toBe(true)
-    expect(database.path).toBe(path.join(result.dataDir, "agent-server.db"))
+    expect(database.path).toBe(path.join(result.dataDir, "harold.db"))
   })
 })

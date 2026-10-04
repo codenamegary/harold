@@ -61,9 +61,7 @@ const mapProbeFromStdout = (stdout: string) => {
   } as const
 }
 
-export const createClaudeAuthAdapter = (
-  deps: ClaudeProbeDeps = defaultProbeDeps,
-): AuthAdapter => {
+export const createClaudeAuthAdapter = (deps: ClaudeProbeDeps = defaultProbeDeps): AuthAdapter => {
   const fallback = createDefaultAuthAdapter()
 
   return {
@@ -71,7 +69,7 @@ export const createClaudeAuthAdapter = (
     matches: (agentId) => CLAUDE_AGENT_IDS.has(agentId),
     clientAuthCapabilities: fallback.clientAuthCapabilities,
     hostLoginInstructions: (ctx) =>
-      `Claude is not signed in on this host (${ctx.hostMachineName}).\n\nOn the machine running Agent Server, open a terminal and run:\n  claude auth login\n\nWhen finished, tap I have logged in.`,
+      `Claude is not signed in on this host (${ctx.hostMachineName}).\n\nOn the machine running Harold, open a terminal and run:\n  claude auth login\n\nWhen finished, tap I have logged in.`,
     probe: async (_ctx) => {
       try {
         const { stdout } = await deps.execFile("claude", ["auth", "status", "--json"], {

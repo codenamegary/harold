@@ -5,6 +5,6 @@ export default defineConfig({
   schema: "./src/persistence/schema/**/*.ts",
   out: "./src/persistence/drizzle",
   dbCredentials: {
-    url: "file:./agent-server.db",
+    url: "file:./harold.db",
   },
 })

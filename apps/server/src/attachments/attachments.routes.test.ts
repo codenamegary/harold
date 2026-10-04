@@ -79,9 +79,7 @@ describe("POST /v1/workspaces/:workspaceId/attachments", () => {
     const descriptor = AttachmentDescriptorSchema.parse(JSON.parse(response.body))
     expect(descriptor.workspaceId).toBe(workspaceId)
     expect(descriptor.kind).toBe("image")
-    expect(
-      descriptor.path.startsWith(path.join(workspaceDir, ".agent-server", "attachments")),
-    ).toBe(true)
+    expect(descriptor.path.startsWith(path.join(workspaceDir, ".harold", "attachments"))).toBe(true)
     expect(readFile(descriptor.path)).resolves.toEqual(new Uint8Array([1, 2, 3, 4]))
   })
 
@@ -98,7 +96,7 @@ describe("POST /v1/workspaces/:workspaceId/attachments", () => {
 
     expect(response.statusCode).toBe(201)
     const gitignore = await readFile(path.join(workspaceDir, ".gitignore"), "utf8")
-    expect(gitignore).toBe("node_modules\n.agent-server/attachments/\n")
+    expect(gitignore).toBe("node_modules\n.harold/attachments/\n")
   })
 
   test("never creates a .gitignore when the workspace has none", async () => {

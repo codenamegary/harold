@@ -43,7 +43,7 @@ describe("makeCanonicalizePath", () => {
 
   test("follows symlinks to canonical path", async () => {
     const canonicalizePath = makeCanonicalizePath()
-    const base = await createTempDir("agent-server-canonical-")
+    const base = await createTempDir("harold-canonical-")
     const target = path.join(base, "target")
     const link = path.join(base, "link")
     await mkdir(target)
@@ -59,7 +59,7 @@ describe("makeCanonicalizePath", () => {
 
   test("rejects missing paths", () => {
     const canonicalizePath = makeCanonicalizePath()
-    const result = canonicalizePath("/tmp/agent-server-missing-path-xyz")
+    const result = canonicalizePath("/tmp/harold-missing-path-xyz")
 
     expect(result.ok).toBe(false)
     if (!result.ok) {
@@ -69,7 +69,7 @@ describe("makeCanonicalizePath", () => {
 
   test("rejects files", async () => {
     const canonicalizePath = makeCanonicalizePath()
-    const base = await createTempDir("agent-server-canonical-")
+    const base = await createTempDir("harold-canonical-")
     const filePath = path.join(base, "file.txt")
     await writeFile(filePath, "not a directory")
 
@@ -83,7 +83,7 @@ describe("makeCanonicalizePath", () => {
 
   test("rejects unreadable directories", async () => {
     const canonicalizePath = makeCanonicalizePath()
-    const base = await createTempDir("agent-server-canonical-")
+    const base = await createTempDir("harold-canonical-")
     const restricted = path.join(base, "restricted")
     await mkdir(restricted)
     await chmod(restricted, 0o000)
@@ -107,7 +107,7 @@ describe("makeCanonicalizePath", () => {
 describe("makeReadDirectoryEntries", () => {
   test("lists the names of entries in a directory", async () => {
     const readDirectoryEntries = makeReadDirectoryEntries()
-    const base = await createTempDir("agent-server-readdir-")
+    const base = await createTempDir("harold-readdir-")
     await mkdir(path.join(base, "child-dir"))
     await writeFile(path.join(base, "file.txt"), "hi")
 
@@ -121,7 +121,7 @@ describe("makeReadDirectoryEntries", () => {
 
     let failed = false
     try {
-      await readDirectoryEntries("/tmp/agent-server-missing-readdir-xyz")
+      await readDirectoryEntries("/tmp/harold-missing-readdir-xyz")
     } catch {
       failed = true
     }
@@ -133,7 +133,7 @@ describe("makeReadDirectoryEntries", () => {
 describe("makeStatPath", () => {
   test("resolves symlinks and reports directories", async () => {
     const statPath = makeStatPath()
-    const base = await createTempDir("agent-server-stat-")
+    const base = await createTempDir("harold-stat-")
     const target = path.join(base, "target")
     const link = path.join(base, "link")
     await mkdir(target)
@@ -146,7 +146,7 @@ describe("makeStatPath", () => {
 
   test("reports files as non-directories", async () => {
     const statPath = makeStatPath()
-    const base = await createTempDir("agent-server-stat-")
+    const base = await createTempDir("harold-stat-")
     const filePath = path.join(base, "file.txt")
     await writeFile(filePath, "hi")
 
@@ -158,7 +158,7 @@ describe("makeStatPath", () => {
   test("fails for missing paths", async () => {
     const statPath = makeStatPath()
 
-    const result = await statPath("/tmp/agent-server-missing-stat-xyz")
+    const result = await statPath("/tmp/harold-missing-stat-xyz")
 
     expect(result).toEqual({ ok: false })
   })

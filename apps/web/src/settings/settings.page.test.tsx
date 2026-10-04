@@ -41,10 +41,7 @@ const wrapRuntimeSettingsView = (
   effective: {
     bindHost: settings.bindHost,
     bindPort: options?.effectivePort ?? settings.bindPort,
-    logPath:
-      options?.effectiveLogPath === undefined
-        ? settings.logPath
-        : options.effectiveLogPath,
+    logPath: options?.effectiveLogPath === undefined ? settings.logPath : options.effectiveLogPath,
   },
   overrides: options?.overrides ?? {},
 })
@@ -97,7 +94,11 @@ describe("SettingsPage", () => {
               advertisedUrl: runtimeSettings.advertisedUrl ?? "https://agents.example.com",
               checkedAt: "2026-08-03T12:00:00.000Z",
               checks: [
-                { id: "dns", status: "pass", message: "Resolved agents.example.com and reached port 443" },
+                {
+                  id: "dns",
+                  status: "pass",
+                  message: "Resolved agents.example.com and reached port 443",
+                },
                 { id: "tls", status: "pass", message: "TLS certificate is valid" },
                 { id: "device-auth", status: "pass", message: "Bearer authentication succeeded" },
               ],
@@ -215,12 +216,12 @@ describe("SettingsPage", () => {
     })
 
     fireEvent.input(getByRole("textbox", { name: "Log path" }), {
-      target: { value: "/tmp/agent-server.log" },
+      target: { value: "/tmp/harold.log" },
     })
     fireEvent.click(getByRole("button", { name: "Save path" }))
 
     await waitFor(() => {
-      expect(patchBodies).toContainEqual({ logPath: "/tmp/agent-server.log" })
+      expect(patchBodies).toContainEqual({ logPath: "/tmp/harold.log" })
     })
   })
 
@@ -233,9 +234,9 @@ describe("SettingsPage", () => {
     fireEvent.click(getByRole("button", { name: "Save port" }))
 
     await waitFor(() => {
-      expect(
-        getByRole("status", { name: "" }),
-      ).toHaveTextContent("Restart the server process to apply bind or log path changes.")
+      expect(getByRole("status", { name: "" })).toHaveTextContent(
+        "Restart the server process to apply bind or log path changes.",
+      )
     })
   })
 

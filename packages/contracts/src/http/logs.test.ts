@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import {
-  ListLogsQuerySchema,
-  LogCollectionSchema,
-  LogRecordSchema,
-} from "./logs"
+import { ListLogsQuerySchema, LogCollectionSchema, LogRecordSchema } from "./logs"
 
 const validRecord = {
   id: "1",
@@ -23,21 +19,19 @@ describe("LogRecordSchema", () => {
         ts: "2026-08-17T20:00:01.000Z",
         level: "info",
         source: "server",
-        message: "agent server listening",
+        message: "harold listening",
       }),
     ).toEqual({
       id: "2",
       ts: "2026-08-17T20:00:01.000Z",
       level: "info",
       source: "server",
-      message: "agent server listening",
+      message: "harold listening",
     })
   })
 
   test("rejects unknown sources", () => {
-    expect(() =>
-      LogRecordSchema.parse({ ...validRecord, source: "syslog" }),
-    ).toThrow()
+    expect(() => LogRecordSchema.parse({ ...validRecord, source: "syslog" })).toThrow()
   })
 })
 

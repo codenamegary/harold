@@ -7,6 +7,6 @@ node_modules/
 coverage/
 .argent/
 connect-tunnel.sh
-.agent-server/attachments/
+.harold/attachments/
 apps/server/.generated/
 apps/server/release/

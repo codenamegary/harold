@@ -8,9 +8,9 @@ import { requestUrl } from "../test/request.url"
 import { WorkspacesPage } from "../shell/pages/WorkspacesPage"
 
 const validWorkspace = {
-  id: "ws-agent-server",
-  name: "agent-server",
-  path: "/home/operator/agent-server",
+  id: "ws-harold",
+  name: "harold",
+  path: "/home/operator/harold",
   state: "available",
   createdAt: "2026-07-24T12:00:00.000Z",
   lastUsedAt: "2026-07-24T12:05:00.000Z",
@@ -69,11 +69,7 @@ const requireEnabledCombobox = (dialog: HTMLElement, name: string): HTMLInputEle
   return input
 }
 
-const pickComboboxOption = async (
-  dialog: HTMLElement,
-  name: string,
-  optionLabel: string,
-) => {
+const pickComboboxOption = async (dialog: HTMLElement, name: string, optionLabel: string) => {
   const user = userEvent.setup()
   const input = requireEnabledCombobox(dialog, name)
   await user.click(input)
@@ -121,7 +117,9 @@ describe("WorkspacesPage", () => {
   test("renders page intro with description", async () => {
     const { getByText } = renderWorkspacesPage()
 
-    expect(getByText("Control which projects and agents are exposed through ACP.")).toBeInTheDocument()
+    expect(
+      getByText("Control which projects and agents are exposed through ACP."),
+    ).toBeInTheDocument()
 
     await waitFor(() => {
       expect(getByText("No workspaces registered yet.")).toBeInTheDocument()
@@ -147,12 +145,12 @@ describe("WorkspacesPage", () => {
     const { getByRole, getByText } = renderWorkspacesPage()
 
     await waitFor(() => {
-      expect(getByRole("article", { name: "agent-server workspace" })).toBeInTheDocument()
+      expect(getByRole("article", { name: "harold workspace" })).toBeInTheDocument()
     })
 
-    const card = getByRole("article", { name: "agent-server workspace" })
+    const card = getByRole("article", { name: "harold workspace" })
 
-    expect(within(card).getByText("/home/operator/agent-server")).toBeInTheDocument()
+    expect(within(card).getByText("/home/operator/harold")).toBeInTheDocument()
     expect(within(card).getByLabelText("Available")).toHaveClass("bg-lime")
     expect(getByText("1 of 1 workspaces")).toBeInTheDocument()
   })
@@ -224,9 +222,7 @@ describe("WorkspacesPage", () => {
     expect(within(dialog).queryAllByLabelText("Path")).toHaveLength(0)
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringMatching(/^\/v1\/settings\/runtime/),
-      )
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/^\/v1\/settings\/runtime/))
     })
     await waitFor(() => {
       requireEnabledCombobox(dialog, "Root")
@@ -348,7 +344,7 @@ describe("WorkspacesPage", () => {
     })
 
     await waitFor(() => {
-      expect(getByRole("article", { name: "agent-server workspace" })).toBeInTheDocument()
+      expect(getByRole("article", { name: "harold workspace" })).toBeInTheDocument()
     })
 
     fireEvent.change(getByRole("searchbox", { name: "Search workspaces" }), {
@@ -401,10 +397,10 @@ describe("WorkspacesPage", () => {
     })
 
     await waitFor(() => {
-      expect(getByRole("article", { name: "agent-server workspace" })).toBeInTheDocument()
+      expect(getByRole("article", { name: "harold workspace" })).toBeInTheDocument()
     })
 
-    const card = getByRole("article", { name: "agent-server workspace" })
+    const card = getByRole("article", { name: "harold workspace" })
     expect(within(card).getByLabelText("Missing")).toHaveClass("bg-amber")
   })
 
@@ -451,7 +447,7 @@ describe("WorkspacesPage", () => {
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
 
-      if (url === "/v1/workspaces/ws-agent-server" && init?.method === "PATCH") {
+      if (url === "/v1/workspaces/ws-harold" && init?.method === "PATCH") {
         return Promise.resolve(
           new Response(
             JSON.stringify({
@@ -483,11 +479,11 @@ describe("WorkspacesPage", () => {
     const { getByRole } = renderWorkspacesPage()
 
     await waitFor(() => {
-      expect(getByRole("article", { name: "agent-server workspace" })).toBeInTheDocument()
+      expect(getByRole("article", { name: "harold workspace" })).toBeInTheDocument()
     })
 
-    fireEvent.click(getByRole("button", { name: "Rename agent-server" }))
-    const renameInput = getByRole("textbox", { name: "Rename agent-server" })
+    fireEvent.click(getByRole("button", { name: "Rename harold" }))
+    const renameInput = getByRole("textbox", { name: "Rename harold" })
     fireEvent.change(renameInput, {
       target: { value: "Renamed Project" },
     })
@@ -500,7 +496,7 @@ describe("WorkspacesPage", () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/v1/workspaces/ws-agent-server",
+        "/v1/workspaces/ws-harold",
         expect.objectContaining({
           method: "PATCH",
           body: JSON.stringify({ name: "Renamed Project" }),
@@ -513,11 +509,11 @@ describe("WorkspacesPage", () => {
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
 
-      if (url === "/v1/workspaces/ws-agent-server" && init?.method === "PATCH") {
+      if (url === "/v1/workspaces/ws-harold" && init?.method === "PATCH") {
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              type: "https://agent-server.local/problems/not-found",
+              type: "https://harold.local/problems/not-found",
               title: "Workspace not found",
               detail: "Unknown workspace id.",
             }),
@@ -545,11 +541,11 @@ describe("WorkspacesPage", () => {
     const { getByRole } = renderWorkspacesPage()
 
     await waitFor(() => {
-      expect(getByRole("article", { name: "agent-server workspace" })).toBeInTheDocument()
+      expect(getByRole("article", { name: "harold workspace" })).toBeInTheDocument()
     })
 
-    fireEvent.click(getByRole("button", { name: "Rename agent-server" }))
-    const renameInput = getByRole("textbox", { name: "Rename agent-server" })
+    fireEvent.click(getByRole("button", { name: "Rename harold" }))
+    const renameInput = getByRole("textbox", { name: "Rename harold" })
     fireEvent.change(renameInput, {
       target: { value: "Missing Workspace" },
     })
@@ -575,7 +571,7 @@ describe("WorkspacesPage", () => {
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
 
-      if (url === "/v1/workspaces/ws-agent-server" && init?.method === "DELETE") {
+      if (url === "/v1/workspaces/ws-harold" && init?.method === "DELETE") {
         deleted.value = true
         return Promise.resolve(new Response(null, { status: 204 }))
       }
@@ -596,10 +592,10 @@ describe("WorkspacesPage", () => {
     const { getByRole, queryByRole } = renderWorkspacesPage()
 
     await waitFor(() => {
-      expect(getByRole("article", { name: "agent-server workspace" })).toBeInTheDocument()
+      expect(getByRole("article", { name: "harold workspace" })).toBeInTheDocument()
     })
 
-    fireEvent.click(getByRole("button", { name: "Unregister agent-server" }))
+    fireEvent.click(getByRole("button", { name: "Unregister harold" }))
     const dialog = getByRole("dialog")
     fireEvent.click(within(dialog).getByRole("button", { name: "Unregister" }))
 
@@ -608,7 +604,7 @@ describe("WorkspacesPage", () => {
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/v1/workspaces/ws-agent-server",
+      "/v1/workspaces/ws-harold",
       expect.objectContaining({
         method: "DELETE",
       }),
@@ -619,11 +615,11 @@ describe("WorkspacesPage", () => {
     const fetchMock = mock((input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input)
 
-      if (url === "/v1/workspaces/ws-agent-server" && init?.method === "DELETE") {
+      if (url === "/v1/workspaces/ws-harold" && init?.method === "DELETE") {
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              type: "https://agent-server.local/problems/not-found",
+              type: "https://harold.local/problems/not-found",
               title: "Workspace not found",
               detail: "Unknown workspace id.",
             }),
@@ -651,10 +647,10 @@ describe("WorkspacesPage", () => {
     const { getByRole } = renderWorkspacesPage()
 
     await waitFor(() => {
-      expect(getByRole("article", { name: "agent-server workspace" })).toBeInTheDocument()
+      expect(getByRole("article", { name: "harold workspace" })).toBeInTheDocument()
     })
 
-    fireEvent.click(getByRole("button", { name: "Unregister agent-server" }))
+    fireEvent.click(getByRole("button", { name: "Unregister harold" }))
     fireEvent.click(getByRole("button", { name: "Unregister" }))
 
     await waitFor(() => {

@@ -59,6 +59,6 @@ export const runServer = async (options: RunServerOptions = {}) => {
   await listen(app, config, runtimeStatusService)
   app.log.info(
     { host: config.host, port: config.port, dataDir: config.dataDir },
-    "agent server listening",
+    "harold listening",
   )
 }

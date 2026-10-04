@@ -13,7 +13,7 @@ import {
 const tempDirs: string[] = []
 
 const createTempWorkspace = async (options: { gitignore?: string } = {}) => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "agent-server-att-"))
+  const dir = await mkdtemp(path.join(os.tmpdir(), "harold-att-"))
   tempDirs.push(dir)
   if (options.gitignore !== undefined) {
     await writeFile(path.join(dir, ".gitignore"), options.gitignore, "utf8")
@@ -32,7 +32,7 @@ describe("ensureAttachmentsDir", () => {
 
     const dir = await ensureAttachmentsDir(workspace)
 
-    expect(dir).toBe(path.join(workspace, ".agent-server", "attachments"))
+    expect(dir).toBe(path.join(workspace, ".harold", "attachments"))
     expect((await stat(dir)).isDirectory()).toBe(true)
   })
 })
@@ -82,18 +82,18 @@ describe("ensureGitignoreEntry", () => {
     await makeEnsureGitignoreEntry()(workspace)
 
     const content = await readFile(path.join(workspace, ".gitignore"), "utf8")
-    expect(content).toBe("node_modules\n.agent-server/attachments/\n")
+    expect(content).toBe("node_modules\n.harold/attachments/\n")
   })
 
   test("is idempotent when the entry already exists", async () => {
     const workspace = await createTempWorkspace({
-      gitignore: "node_modules\n.agent-server/attachments/\n",
+      gitignore: "node_modules\n.harold/attachments/\n",
     })
 
     await makeEnsureGitignoreEntry()(workspace)
 
     const content = await readFile(path.join(workspace, ".gitignore"), "utf8")
-    expect(content).toBe("node_modules\n.agent-server/attachments/\n")
+    expect(content).toBe("node_modules\n.harold/attachments/\n")
   })
 
   test("skips without creating a .gitignore when none exists", async () => {
@@ -110,6 +110,6 @@ describe("ensureGitignoreEntry", () => {
     await makeEnsureGitignoreEntry()(workspace)
 
     const content = await readFile(path.join(workspace, ".gitignore"), "utf8")
-    expect(content).toBe("node_modules\n.agent-server/attachments/\n")
+    expect(content).toBe("node_modules\n.harold/attachments/\n")
   })
 })

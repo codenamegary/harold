@@ -71,7 +71,7 @@ describe("DELETE /v1/workspaces/:id cascade", () => {
     const problem = WorkspaceActiveSessionsProblemSchema.parse(JSON.parse(deleteResponse.body))
     expect(deleteResponse.statusCode).toBe(409)
     expect(problem.forceDeleteAvailable).toBe(true)
-    expect(problem.type).toBe("https://agent-server.local/problems/workspace-has-active-sessions")
+    expect(problem.type).toBe("https://harold.local/problems/workspace-has-active-sessions")
 
     const forceDeleteResponse = await app.inject({
       method: "DELETE",

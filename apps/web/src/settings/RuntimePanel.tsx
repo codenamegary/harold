@@ -395,7 +395,7 @@ export const RuntimePanel: React.FC = () => {
         {bindPortEnvOverride ? (
           <p className="m-0 mb-2 text-xs text-muted">
             Effective port <code className="text-body-soft">{view.effective.bindPort}</code> comes
-            from <code className="text-body-soft">AGENT_SERVER_PORT</code>. Stored value below.
+            from <code className="text-body-soft">HAROLD_PORT</code>. Stored value below.
           </p>
         ) : (
           <p className="m-0 mb-2 text-xs text-muted">
@@ -439,7 +439,7 @@ export const RuntimePanel: React.FC = () => {
           id="runtime-log-path"
           aria-label="Log path"
           value={logPathDraft}
-          placeholder="/var/log/agent-server.log"
+          placeholder="/var/log/harold.log"
           disabled={pending}
           onInput={(event) => {
             setLogPathDraft(event.currentTarget.value)

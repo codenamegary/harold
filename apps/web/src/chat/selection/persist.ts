@@ -4,7 +4,7 @@ export type ChatSelection = {
   sessionId: string
 }
 
-export const CHAT_SELECTION_STORAGE_KEY = "agent-server.chat.selection"
+export const CHAT_SELECTION_STORAGE_KEY = "harold.chat.selection"
 
 export const readChatSelection = (): ChatSelection | null => {
   const raw = window.localStorage.getItem(CHAT_SELECTION_STORAGE_KEY)

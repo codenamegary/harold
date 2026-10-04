@@ -2,7 +2,7 @@ import net from "node:net"
 import index from "./index.html"
 
 const apiHost = "127.0.0.1"
-const apiPort = Number(process.env.AGENT_SERVER_PORT ?? "3847")
+const apiPort = Number(process.env.HAROLD_PORT ?? "3847")
 const apiOrigin = `http://${apiHost}:${apiPort}`
 const webHost = "127.0.0.1"
 const webPort = 5173

@@ -65,7 +65,7 @@ export const AppShell: React.FC = () => {
         <div className="flex items-center gap-3 px-2 pb-6.5">
           <AppMark />
           <div>
-            <div className="font-bold leading-tight tracking-tight">Agent Server</div>
+            <div className="font-bold leading-tight tracking-tight">Harold</div>
             <div className="mt-1 font-mono text-xs uppercase tracking-widest text-dim">
               Operator console
             </div>
@@ -109,7 +109,7 @@ export const AppShell: React.FC = () => {
             Settings
           </SidebarNavLink>
           <div className="flex justify-between px-2.5 pt-3.5 font-mono text-xs text-dim">
-            <span>agent-server</span>
+            <span>harold</span>
             <span>{sidebarVersion}</span>
           </div>
         </div>

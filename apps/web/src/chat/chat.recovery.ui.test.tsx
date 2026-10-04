@@ -21,8 +21,8 @@ const workspaceCollection = WorkspaceCollectionSchema.parse({
   items: [
     {
       id: "ws_01",
-      name: "agent-server",
-      path: "/home/operator/agent-server",
+      name: "harold",
+      path: "/home/operator/harold",
       state: "available",
       createdAt: "2026-07-24T12:00:00.000Z",
       lastUsedAt: "2026-07-24T12:05:00.000Z",
@@ -50,7 +50,7 @@ const agentsCollection = AgentSettingsCollectionSchema.parse({
   ],
 })
 
-const workspacePath = "/home/operator/agent-server"
+const workspacePath = "/home/operator/harold"
 
 const createdSession = CreateSessionResponseSchema.parse({
   agentId: "cursor",

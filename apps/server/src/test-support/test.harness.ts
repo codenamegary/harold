@@ -95,7 +95,7 @@ const trackBoot = <T>(scope: Scope, boot: () => Promise<T>) => {
 export const bootTestDirectory = () => {
   const scope = createScope()
   return trackBoot(scope, async () => {
-    const dataDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-test-"))
+    const dataDir = await mkdtemp(path.join(os.tmpdir(), "harold-test-"))
     scope.actions.directory.add(() => rm(dataDir, { recursive: true, force: true }))
     return dataDir
   })
@@ -185,7 +185,7 @@ const bootAppInDirectory = (
 ): Promise<TestApp> => {
   return trackBoot(scope, async () => {
     const config = ConfigSchema.parse({
-      ...parseConfig({ AGENT_SERVER_PORT: "0", AGENT_SERVER_DATA_DIR: dataDir }),
+      ...parseConfig({ HAROLD_PORT: "0", HAROLD_DATA_DIR: dataDir }),
       ...options.config,
       dataDir,
     })
@@ -256,7 +256,7 @@ const bootAppInDirectory = (
 export const bootTestApp = (options: TestAppOptions = {}): Promise<TestApp> => {
   const scope = createScope()
   return trackBoot(scope, async () => {
-    const dataDir = await mkdtemp(path.join(os.tmpdir(), "agent-server-test-"))
+    const dataDir = await mkdtemp(path.join(os.tmpdir(), "harold-test-"))
     scope.actions.directory.add(() => rm(dataDir, { recursive: true, force: true }))
     return bootAppInDirectory(dataDir, options, scope)
   })

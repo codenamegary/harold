@@ -1,9 +1,12 @@
 {
-  "name": "agent-server",
+  "name": "@codenamegary/harold",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "packageManager": "bun@1.4.2",
+  "bin": {
+    "harold": "./apps/server/src/main.ts"
+  },
   "workspaces": {
     "packages": [
       "apps/*",
@@ -27,7 +30,7 @@
     "typecheck": "bun run --filter '*' typecheck",
     "check": "bun run lint && bun run typecheck && bun run test",
     "test:coverage": "bun run --filter server test:coverage && bun run --filter web test:coverage",
-    "test:smoke": "AGENT_SERVER_RUN_SMOKE=1 bun --filter server test:smoke",
+    "test:smoke": "HAROLD_RUN_SMOKE=1 bun --filter server test:smoke",
     "db:generate": "bun run --filter server db:generate",
     "catalog:codegen": "bun run --filter server catalog:codegen",
     "build:release": "bun run --filter web build && bun run --filter server build:release",

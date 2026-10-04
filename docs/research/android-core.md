@@ -41,16 +41,16 @@ dependency downgrades and one credential-encryption path.
 
 Use stable releases only:
 
-| Item | Baseline | Evidence |
-| --- | --- | --- |
-| Android Gradle Plugin | `9.3.1` | Latest non-preview version in [Google Maven metadata](https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/maven-metadata.xml). The 9.3 release requires Gradle 9.5.0 and JDK 17 ([AGP 9.3 release notes](https://developer.android.com/build/releases/agp-9-3-0-release-notes)). |
-| Gradle wrapper | `9.5.0` | AGP 9.3 minimum and default ([AGP 9.3 release notes](https://developer.android.com/build/releases/agp-9-3-0-release-notes)). |
-| Compose BOM | `2026.06.01` | Current release in [Google Maven metadata](https://dl.google.com/dl/android/maven2/androidx/compose/compose-bom/maven-metadata.xml). A BOM selects Compose versions tested together ([Compose BOM guide](https://developer.android.com/develop/ui/compose/bom)). |
-| Activity Compose | `1.13.0` | Current stable release ([Activity releases](https://developer.android.com/jetpack/androidx/releases/activity)). |
-| Lifecycle | `2.11.0` | Current stable release ([Lifecycle releases](https://developer.android.com/jetpack/androidx/releases/lifecycle)). |
-| Navigation Compose, if needed | `2.9.8` | Current stable release ([Navigation releases](https://developer.android.com/jetpack/androidx/releases/navigation)). |
-| OkHttp | `5.4.0` | Current release in [Maven Central metadata](https://repo.maven.apache.org/maven2/com/squareup/okhttp3/okhttp/maven-metadata.xml). |
-| Google code scanner, if selected | `16.1.0` | Version in the current setup guide ([Google code scanner](https://developers.google.com/ml-kit/vision/barcode-scanning/code-scanner)). |
+| Item                             | Baseline     | Evidence                                                                                                                                                                                                                                                                                            |
+| -------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Android Gradle Plugin            | `9.3.1`      | Latest non-preview version in [Google Maven metadata](https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/maven-metadata.xml). The 9.3 release requires Gradle 9.5.0 and JDK 17 ([AGP 9.3 release notes](https://developer.android.com/build/releases/agp-9-3-0-release-notes)). |
+| Gradle wrapper                   | `9.5.0`      | AGP 9.3 minimum and default ([AGP 9.3 release notes](https://developer.android.com/build/releases/agp-9-3-0-release-notes)).                                                                                                                                                                        |
+| Compose BOM                      | `2026.06.01` | Current release in [Google Maven metadata](https://dl.google.com/dl/android/maven2/androidx/compose/compose-bom/maven-metadata.xml). A BOM selects Compose versions tested together ([Compose BOM guide](https://developer.android.com/develop/ui/compose/bom)).                                    |
+| Activity Compose                 | `1.13.0`     | Current stable release ([Activity releases](https://developer.android.com/jetpack/androidx/releases/activity)).                                                                                                                                                                                     |
+| Lifecycle                        | `2.11.0`     | Current stable release ([Lifecycle releases](https://developer.android.com/jetpack/androidx/releases/lifecycle)).                                                                                                                                                                                   |
+| Navigation Compose, if needed    | `2.9.8`      | Current stable release ([Navigation releases](https://developer.android.com/jetpack/androidx/releases/navigation)).                                                                                                                                                                                 |
+| OkHttp                           | `5.4.0`      | Current release in [Maven Central metadata](https://repo.maven.apache.org/maven2/com/squareup/okhttp3/okhttp/maven-metadata.xml).                                                                                                                                                                   |
+| Google code scanner, if selected | `16.1.0`     | Version in the current setup guide ([Google code scanner](https://developers.google.com/ml-kit/vision/barcode-scanning/code-scanner)).                                                                                                                                                              |
 
 AGP 9 enables built-in Kotlin. Do not apply `org.jetbrains.kotlin.android`
 unless the project opts out
@@ -187,7 +187,7 @@ Default product behavior should be foreground-only live updates:
 Cached processes can be killed as needed, and `Application.onTerminate()` is
 never called on production Android devices
 ([process lifecycle](https://developer.android.com/guide/components/activities/process-lifecycle),
-[Application reference](https://developer.android.com/reference/android/app/Application#onTerminate())).
+[Application reference](<https://developer.android.com/reference/android/app/Application#onTerminate()>)).
 `SavedStateHandle` is for the small amount of UI state needed to recreate a
 screen. Durable application state belongs on disk
 ([saving UI state](https://developer.android.com/topic/libraries/architecture/saving-states)).
@@ -224,7 +224,7 @@ Define one versioned payload before Android implementation. A practical shape
 is:
 
 ```text
-agent-server://pair?v=1&endpoint=https%3A%2F%2Fhost.example&code=ABC-DEF
+harold://pair?v=1&endpoint=https%3A%2F%2Fhost.example&code=ABC-DEF
 ```
 
 Implement parsing as a pure function. Enforce a small input-size limit, exact

@@ -52,7 +52,7 @@ describe("bind and shutdown", () => {
     })
 
     expect(connected).toBe(true)
-    expect(result.database.path).toBe(path.join(result.dataDir, "agent-server.db"))
+    expect(result.database.path).toBe(path.join(result.dataDir, "harold.db"))
 
     await disposeTestResources()
 

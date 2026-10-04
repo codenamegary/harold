@@ -46,7 +46,10 @@ const seedStore = () => {
     agentId: "cursor",
     sessionId: "sess_01",
   })
-  store.set(sessionConfigBySessionAtom, new Map([["sess_01", [modelOption("m1"), modeOption("agent")]]]))
+  store.set(
+    sessionConfigBySessionAtom,
+    new Map([["sess_01", [modelOption("m1"), modeOption("agent")]]]),
+  )
   return store
 }
 
@@ -100,14 +103,20 @@ describe("useSessionConfig", () => {
 
   test("a failed PUT rolls the value back and surfaces the error detail", async () => {
     const store = seedStore()
-    const fetchMock = mock(async () => new Response(JSON.stringify({
-      type: "https://agent-server.local/problems/validation-error",
-      title: "Config option rejected",
-      status: 422,
-      detail: "Config option rejected",
-      code: "validation.configOption.invalid",
-      errors: [],
-    }), { status: 422 }))
+    const fetchMock = mock(
+      async () =>
+        new Response(
+          JSON.stringify({
+            type: "https://harold.local/problems/validation-error",
+            title: "Config option rejected",
+            status: 422,
+            detail: "Config option rejected",
+            code: "validation.configOption.invalid",
+            errors: [],
+          }),
+          { status: 422 },
+        ),
+    )
     globalThis.fetch = fetchMock
 
     const { result } = renderSessionConfigHook(store)
