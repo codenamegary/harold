@@ -1,15 +1,24 @@
 import { FastifyInstance } from "fastify"
+import { CreatePairingCodeBody } from "contracts/http/pairing-code"
 import { makeClaimPairingCode } from "core/device/claim.pairing.code.usecase"
-import { makeCreatePairingCode } from "core/device/create.pairing.code.usecase"
+import {
+  CreatePairingCodeResult,
+  makeCreatePairingCode,
+} from "core/device/create.pairing.code.usecase"
 import {
   CreateProbeDeviceResult,
   makeCreateProbeDevice,
 } from "core/device/create.probe.device.usecase"
-import { makeRevokeDevice } from "core/device/revoke.device.usecase"
-import { RevokeDeviceCommand, RevokeDeviceResult } from "core/device/revoke.device.usecase"
+import {
+  RevokeDeviceCommand,
+  RevokeDeviceResult,
+  makeRevokeDevice,
+} from "core/device/revoke.device.usecase"
 import {
   FindDeviceByCredentialHash,
   GetAdvertisedEndpointSettings,
+  GetPairingCodeById,
+  ListDevices,
   TouchDeviceLastSeen,
 } from "core/device/ports"
 import { AgentDatabase } from "../persistence/database"
@@ -38,6 +47,9 @@ export type AssembleDeviceSliceDeps = Readonly<{
 
 export type DeviceSlice = Readonly<{
   registerRoutes: (app: FastifyInstance) => void
+  createPairingCode: (body?: CreatePairingCodeBody) => Promise<CreatePairingCodeResult>
+  getPairingCodeById: GetPairingCodeById
+  listDevices: ListDevices
   findDeviceByCredentialHash: FindDeviceByCredentialHash
   touchDeviceLastSeen: TouchDeviceLastSeen
   createProbeDevice: () => CreateProbeDeviceResult
@@ -86,6 +98,9 @@ export const assembleDeviceSlice = (deps: AssembleDeviceSliceDeps): DeviceSlice 
         revokeDevice,
       })
     },
+    createPairingCode,
+    getPairingCodeById,
+    listDevices,
     findDeviceByCredentialHash,
     touchDeviceLastSeen,
     createProbeDevice,

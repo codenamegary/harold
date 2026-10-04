@@ -40,6 +40,8 @@
     "./config": "./src/config/config.ts",
     "./database": "./src/persistence/database.ts",
     "./agent-settings/sqlite-adapters": "./src/agent-settings/agent.settings.sqlite.adapters.ts",
-    "./agent-settings/catalog.sqlite.adapters": "./src/acp/catalog/catalog.sqlite.adapters.ts"
+    "./agent-settings/catalog.sqlite.adapters": "./src/acp/catalog/catalog.sqlite.adapters.ts",
+    "./device": "./src/device/device.assembly.ts",
+    "./runtime-settings": "./src/runtime-settings/runtime-settings.file.adapters.ts"
   }
 }

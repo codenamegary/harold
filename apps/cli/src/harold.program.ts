@@ -1,6 +1,8 @@
 import { Command } from "commander"
 import packageJson from "../package.json"
 import { makeAgentCommand } from "./agent.command"
+import { makeDeviceCommand } from "./device.command"
+import { makePairCommand } from "./pair.command"
 import { makeServeCommand } from "./serve.command"
 import { makeStatusCommand } from "./status.command"
 
@@ -14,6 +16,8 @@ export const makeHaroldProgram = (): Command => {
   program.addCommand(makeServeCommand())
   program.addCommand(makeStatusCommand())
   program.addCommand(makeAgentCommand())
+  program.addCommand(makePairCommand())
+  program.addCommand(makeDeviceCommand())
 
   return program
 }
