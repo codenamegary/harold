@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { catalogAgentIds } from "../acp/catalog/generated/catalog.agents.generated"
+import { catalogAgentIds } from "core/agent-catalog/generated"
 import {
   ConflictProblemSchema,
   InternalProblemSchema,
@@ -12,12 +12,12 @@ import {
   DetectAgentPathResponseSchema,
   ImportDetectResponseSchema,
 } from "contracts/http/agent-settings"
-import { WhichFn } from "../agent-settings/resolve-agent-path"
+import { WhichFn } from "core/agent-settings/resolve-agent-path"
 import {
   ValidateExecutablePathFn,
   validateExecutablePath,
-} from "../agent-settings/validate-agent-path"
-import { FetchRegistryFn } from "../agent-settings/agent.settings.ports"
+} from "core/agent-settings/validate-agent-path"
+import { FetchRegistryFn } from "core/agent-settings/ports"
 import { spawnFakeAcp, SpawnFakeAcpOptions } from "test-support/spawn"
 import { SpawnAgentProcessFn } from "../acp/supervisor/supervisor.ports"
 import { acceptTestExecutablePath } from "../test-support/test.app"

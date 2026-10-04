@@ -10,12 +10,34 @@
     "./daemon-state/models": "./src/daemon-state/daemon.state.models.ts",
     "./daemon-state/ports": "./src/daemon-state/daemon.state.ports.ts",
     "./daemon-state/node.adapters": "./src/daemon-state/daemon.state.node.adapters.ts",
-    "./daemon-state/read.live.usecase": "./src/daemon-state/daemon.state.read.live.usecase.ts"
+    "./daemon-state/read.live.usecase": "./src/daemon-state/daemon.state.read.live.usecase.ts",
+    "./agent-settings/ports": "./src/agent-settings/agent.settings.ports.ts",
+    "./agent-settings/errors": "./src/agent-settings/agent.settings.errors.ts",
+    "./agent-settings/view": "./src/agent-settings/agent.settings.view.ts",
+    "./agent-settings/list.usecase": "./src/agent-settings/agent.settings.list.usecase.ts",
+    "./agent-settings/update.usecase": "./src/agent-settings/agent.settings.update.usecase.ts",
+    "./agent-settings/detect.path.usecase": "./src/agent-settings/agent.settings.detect.path.usecase.ts",
+    "./agent-settings/has.agent.id.usecase": "./src/agent-settings/agent.settings.has.agent.id.usecase.ts",
+    "./agent-settings/get.spawn.snapshot.usecase": "./src/agent-settings/agent.settings.get.spawn.snapshot.usecase.ts",
+    "./agent-settings/create.custom.usecase": "./src/agent-settings/agent.settings.create.custom.usecase.ts",
+    "./agent-settings/remove.usecase": "./src/agent-settings/agent.settings.remove.usecase.ts",
+    "./agent-settings/import.detect.usecase": "./src/agent-settings/agent.settings.import.detect.usecase.ts",
+    "./agent-settings/import.apply.usecase": "./src/agent-settings/agent.settings.import.apply.usecase.ts",
+    "./agent-settings/resolve-agent-path": "./src/agent-settings/resolve-agent-path.ts",
+    "./agent-settings/validate-agent-path": "./src/agent-settings/validate-agent-path.ts",
+    "./agent-catalog/profile.override": "./src/agent-catalog/agent.profile.override.ts",
+    "./agent-catalog/ports": "./src/agent-catalog/catalog.ports.ts",
+    "./agent-catalog/popular.allowlist": "./src/agent-catalog/popular.allowlist.ts",
+    "./agent-catalog/probe.presence": "./src/agent-catalog/probe.presence.ts",
+    "./agent-catalog/registry.schema": "./src/agent-catalog/registry.schema.ts",
+    "./agent-catalog/generated": "./src/agent-catalog/generated/catalog.agents.generated.ts",
+    "./agent-catalog/overrides": "./src/agent-catalog/overrides/product.overrides.ts"
   },
   "scripts": {
     "lint": "oxlint --deny-warnings",
     "typecheck": "tsc -b tsconfig.app.json --noEmit",
-    "test": "NODE_ENV=test bun test --parallel=4 --timeout 20000"
+    "test": "NODE_ENV=test bun test --parallel=4 --timeout 20000",
+    "catalog:codegen": "bun run src/agent-catalog/catalog.codegen.cli.ts"
   },
   "dependencies": {
     "contracts": "workspace:*",

@@ -1,8 +1,8 @@
 import { FastifyInstance } from "fastify"
 import { AgentDatabase } from "../persistence/database"
 import { ensureCatalogAgentSettingsRows } from "../acp/catalog/catalog.sqlite.adapters"
-import { probePresence } from "../acp/catalog/probe.presence"
-import { PresenceProbeContext } from "../acp/catalog/agent.profile.override"
+import { probePresence } from "core/agent-catalog/probe.presence"
+import { PresenceProbeContext } from "core/agent-catalog/profile.override"
 import { AuthBroker } from "../agent/auth/broker"
 import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
 import {
@@ -12,20 +12,30 @@ import {
   makeListAgentSettingsRows,
   makeUpdateAgentSettingsRow,
 } from "./agent.settings.sqlite.adapters"
-import { makeAgentSettingsView } from "./agent.settings.view"
-import { makeListAgentSettings, ListAgentSettings } from "./agent.settings.list.usecase"
-import { makeHasAgentId, HasAgentId } from "./agent.settings.has.agent.id.usecase"
-import { makeGetSpawnSnapshot, GetSpawnSnapshot } from "./agent.settings.get.spawn.snapshot.usecase"
-import { makeDetectAgentPath } from "./agent.settings.detect.path.usecase"
-import { makeCreateCustomAgent, CreateCustomAgent } from "./agent.settings.create.custom.usecase"
-import { makeUpdateAgentSettings } from "./agent.settings.update.usecase"
-import { makeRemoveAgent } from "./agent.settings.remove.usecase"
-import { makeDetectImportableAgents } from "./agent.settings.import.detect.usecase"
-import { makeApplyImportedAgents } from "./agent.settings.import.apply.usecase"
+import { makeAgentSettingsView } from "core/agent-settings/view"
+import { makeListAgentSettings, ListAgentSettings } from "core/agent-settings/list.usecase"
+import { makeHasAgentId, HasAgentId } from "core/agent-settings/has.agent.id.usecase"
+import {
+  makeGetSpawnSnapshot,
+  GetSpawnSnapshot,
+} from "core/agent-settings/get.spawn.snapshot.usecase"
+import { makeDetectAgentPath } from "core/agent-settings/detect.path.usecase"
+import { makeCreateCustomAgent, CreateCustomAgent } from "core/agent-settings/create.custom.usecase"
+import { makeUpdateAgentSettings } from "core/agent-settings/update.usecase"
+import { makeRemoveAgent } from "core/agent-settings/remove.usecase"
+import { makeDetectImportableAgents } from "core/agent-settings/import.detect.usecase"
+import { makeApplyImportedAgents } from "core/agent-settings/import.apply.usecase"
 import { registerAgentSettingsRoutes } from "./agent.settings.routes"
-import { defaultAcpRegistryUrl, FetchRegistryFn, ProbeAgentPresence } from "./agent.settings.ports"
-import { WhichFn } from "./resolve-agent-path"
-import { validateExecutablePath, ValidateExecutablePathFn } from "./validate-agent-path"
+import {
+  defaultAcpRegistryUrl,
+  FetchRegistryFn,
+  ProbeAgentPresence,
+} from "core/agent-settings/ports"
+import { WhichFn } from "core/agent-settings/resolve-agent-path"
+import {
+  validateExecutablePath,
+  ValidateExecutablePathFn,
+} from "core/agent-settings/validate-agent-path"
 
 export type AssembleAgentSettingsSliceDeps = Readonly<{
   database: AgentDatabase

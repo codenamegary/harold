@@ -22,7 +22,7 @@ Pin registry snapshot, codegen catalog, report diff.
 
 ```bash
 curl -fsSL https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json \
-  -o apps/server/src/acp/catalog/registry.snapshot.json
+  -o packages/core/src/agent-catalog/registry.snapshot.json
 ```
 
 2. Regenerate catalog outputs:
@@ -34,26 +34,26 @@ bun run catalog:codegen
 Writes:
 
 - `packages/contracts/src/http/agent.id.generated.ts`
-- `apps/server/src/acp/catalog/generated/catalog.agents.generated.ts`
-- `apps/server/src/acp/catalog/generated/agent.overrides.generated.ts`
+- `packages/core/src/agent-catalog/generated/catalog.agents.generated.ts`
+- `packages/core/src/agent-catalog/generated/agent.overrides.generated.ts`
 
 3. Report the diff:
 
 ```bash
 git diff --stat -- \
-  apps/server/src/acp/catalog/registry.snapshot.json \
+  packages/core/src/agent-catalog/registry.snapshot.json \
   packages/contracts/src/http/agent.id.generated.ts \
-  apps/server/src/acp/catalog/generated/
+  packages/core/src/agent-catalog/generated/
 git diff -- \
   packages/contracts/src/http/agent.id.generated.ts \
-  apps/server/src/acp/catalog/generated/catalog.agents.generated.ts
+  packages/core/src/agent-catalog/generated/catalog.agents.generated.ts
 ```
 
 4. Keep product overrides. Do not edit generated files by hand.
 
-- Cursor override: `apps/server/src/acp/catalog/overrides/cursor.override.ts`
-- Product override map: `apps/server/src/acp/catalog/overrides/product.overrides.ts`
-- Popular allowlist: `apps/server/src/acp/catalog/popular.allowlist.ts`
+- Cursor override: `packages/core/src/agent-catalog/overrides/cursor.override.ts`
+- Product override map: `packages/core/src/agent-catalog/overrides/product.overrides.ts`
+- Popular allowlist: `packages/core/src/agent-catalog/popular.allowlist.ts`
 
 5. If popular allowlist ids are missing from the new snapshot, update the allowlist.
 

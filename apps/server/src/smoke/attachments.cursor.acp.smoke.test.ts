@@ -10,7 +10,7 @@ import { createServer } from "../bootstrap/server"
 import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
-import { WhichFn } from "../agent-settings/resolve-agent-path"
+import { WhichFn } from "core/agent-settings/resolve-agent-path"
 import { allowWorkspaceRoots } from "../test-support/test.app"
 import {
   hasCursorAuth,

@@ -12,7 +12,6 @@
     "test:smoke": "NODE_ENV=test bun test --parallel=1 --timeout 240000 src/smoke",
     "test:coverage": "NODE_ENV=test bun test --parallel=4 --timeout 20000 --coverage --coverage-reporter=lcov --coverage-dir=../../coverage/server",
     "db:generate": "sh -c 'test -n \"$1\" || { echo \"Usage: bun run db:generate <migration_name>\"; exit 1; }; bun --bun drizzle-kit generate --name=$1' --",
-    "catalog:codegen": "bun run src/acp/catalog/catalog.codegen.cli.ts",
     "codegen:console": "bun run src/console/console.assets.codegen.cli.ts",
     "codegen:migrations": "bun run src/persistence/migrations/migrations.codegen.cli.ts",
     "build:release": "bun run codegen:console && bun run codegen:migrations && bun run src/bootstrap/compile.binaries.cli.ts"
@@ -39,6 +38,8 @@
   "exports": {
     "./bootstrap": "./src/bootstrap/run.server.ts",
     "./config": "./src/config/config.ts",
-    "./database": "./src/persistence/database.ts"
+    "./database": "./src/persistence/database.ts",
+    "./agent-settings/sqlite-adapters": "./src/agent-settings/agent.settings.sqlite.adapters.ts",
+    "./agent-settings/catalog.sqlite.adapters": "./src/acp/catalog/catalog.sqlite.adapters.ts"
   }
 }

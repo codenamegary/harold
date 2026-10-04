@@ -1,6 +1,6 @@
 import { AgentDatabase } from "../../persistence/database"
 import { agentSettings } from "../../persistence/schema/agent-settings"
-import { catalogAgentIds } from "./generated/catalog.agents.generated"
+import { catalogAgentIds } from "core/agent-catalog/generated"
 
 const nowIso = () => new Date().toISOString()
 

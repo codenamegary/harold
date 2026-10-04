@@ -7,7 +7,7 @@
   "trailingComma": "all",
   "sortPackageJson": false,
   "ignorePatterns": [
-    "apps/server/src/acp/catalog/generated",
+    "packages/core/src/agent-catalog/generated",
     "bun.lock",
     "skills-lock.json",
     ".agents",
