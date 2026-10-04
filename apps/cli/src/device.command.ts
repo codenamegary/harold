@@ -55,7 +55,9 @@ export const makeDeviceCommand = (): Command => {
 
   command
     .command("list")
-    .description("list paired devices")
+    // Presence (online/offline) is tracked only in daemon process memory, so a
+    // CLI process lists devices that are online in a running daemon as offline.
+    .description("list paired devices (online state is only known to the daemon)")
     .action(() =>
       withDeviceCommandContext((context) => {
         const result = context.slice.listDevices({ limit: 200 })

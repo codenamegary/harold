@@ -43,6 +43,7 @@ describe("renderPairingJson", () => {
       qrUri: "harold://pair?v=1&endpoint=http%3A%2F%2F127.0.0.1%3A3847&code=R7K-4MP",
     })
 
+    expect(text).not.toContain("\n")
     expect(JSON.parse(text)).toEqual({
       id: "pair_1",
       code: "R7K-4MP",

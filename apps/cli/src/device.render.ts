@@ -44,18 +44,18 @@ export const renderDeviceList = (params: {
     Math.max(label.length, ...rows.map((row) => row[index].length)),
   )
 
-  const renderRow = (cells: readonly string[]): string =>
-    cells
-      .map((cell, index) => (index === cells.length - 1 ? cell : cell.padEnd(widths[index])))
-      .join("  ")
+  const renderRow = (cells: readonly string[]): string => cells.join("  ")
+
+  const padCells = (cells: readonly string[]): string[] =>
+    cells.map((cell, index) => (index === cells.length - 1 ? cell : cell.padEnd(widths[index])))
 
   const lines = [
-    colors.dim(renderRow(header)),
+    colors.dim(renderRow(padCells(header))),
     ...rows.map((row, index) => {
       const device = devices[index]
-      const colored = [...row]
-      colored[stateColumn] = stateColor[device.state](device.state)
-      return renderRow(colored)
+      const padded = padCells(row)
+      padded[stateColumn] = stateColor[device.state](padded[stateColumn])
+      return renderRow(padded)
     }),
     "",
     colors.dim(deviceCount(devices.length)),

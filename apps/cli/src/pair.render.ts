@@ -32,16 +32,12 @@ export const renderPairingJson = (params: {
   pairing: CreatePairingCodeResponse
   qrUri: string
 }): string =>
-  JSON.stringify(
-    {
-      id: params.pairing.id,
-      code: params.pairing.code,
-      endpoint: params.pairing.endpoint,
-      state: params.pairing.state,
-      createdAt: params.pairing.createdAt,
-      expiresAt: params.pairing.expiresAt,
-      qrUri: params.qrUri,
-    },
-    null,
-    2,
-  )
+  JSON.stringify({
+    id: params.pairing.id,
+    code: params.pairing.code,
+    endpoint: params.pairing.endpoint,
+    state: params.pairing.state,
+    createdAt: params.pairing.createdAt,
+    expiresAt: params.pairing.expiresAt,
+    qrUri: params.qrUri,
+  })

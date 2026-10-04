@@ -116,7 +116,11 @@ export const executePair = async (
   )
 
   if (!created.ok) {
-    deps.writeErr(renderDeviceError(created.error))
+    if (options.json) {
+      deps.writeErr(JSON.stringify({ state: created.error.kind }))
+    } else {
+      deps.writeErr(renderDeviceError(created.error))
+    }
     return 1
   }
 
@@ -177,7 +181,7 @@ export const makePairCommand = (): Command => {
   command
     .option("--endpoint <endpoint>", "pairing endpoint (loopback or advertised)")
     .option("--no-wait", "print the code and exit without waiting for a device")
-    .option("--json", "emit machine-readable JSON")
+    .option("--json", "emit newline-delimited JSON (one object per line)")
 
   command.action(async (options: { endpoint?: string; wait: boolean; json: boolean }) => {
     await withPairCommandContext(async (context) => {

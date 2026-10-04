@@ -137,6 +137,7 @@ describe("executePair", () => {
     expect(exitCode).toBe(0)
     expect(harness.qrCalls).toEqual([])
     expect(harness.out).toHaveLength(1)
+    expect(harness.out[0]).not.toContain("\n")
     expect(JSON.parse(harness.out[0])).toEqual({
       id: "pair_1",
       code: "R7K-4MP",
@@ -159,6 +160,19 @@ describe("executePair", () => {
 
     expect(exitCode).toBe(0)
     expect(harness.out).toHaveLength(2)
+    for (const line of harness.out) {
+      expect(line).not.toContain("\n")
+      expect(() => JSON.parse(line)).not.toThrow()
+    }
+    expect(JSON.parse(harness.out[0])).toEqual({
+      id: "pair_1",
+      code: "R7K-4MP",
+      endpoint: "http://127.0.0.1:3847",
+      state: "active",
+      createdAt: "2026-10-04T17:10:00.000Z",
+      expiresAt: "2026-10-04T17:20:00.000Z",
+      qrUri: "harold://pair?v=1&endpoint=http%3A%2F%2F127.0.0.1%3A3847&code=R7K-4MP",
+    })
     expect(JSON.parse(harness.out[1])).toEqual({
       state: "claimed",
       pairingCodeId: "pair_1",
@@ -178,6 +192,25 @@ describe("executePair", () => {
 
     expect(exitCode).toBe(1)
     expect(harness.err.join("\n")).toContain("Advertised endpoint is not available")
+  })
+
+  test("--json emits a machine-readable create failure", async () => {
+    const harness = makeHarness({
+      createResult: { ok: false, error: { kind: "advertised_endpoint_unavailable" } },
+    })
+
+    const exitCode = await executePair(harness.deps, {
+      endpoint: "advertised",
+      wait: false,
+      json: true,
+    })
+
+    expect(exitCode).toBe(1)
+    expect(harness.err).toHaveLength(1)
+    expect(harness.err[0]).not.toContain("\n")
+    expect(JSON.parse(harness.err[0])).toEqual({
+      state: "advertised_endpoint_unavailable",
+    })
   })
 
   test("reports a wait failure when the code expires", async () => {

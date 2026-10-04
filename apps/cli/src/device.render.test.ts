@@ -75,6 +75,23 @@ describe("renderDeviceList", () => {
     expect(calls).toContain("red:revoked")
     expect(calls).not.toContain("green:offline")
   })
+
+  test("pads the plain state before coloring so ANSI escapes keep columns aligned", () => {
+    const markerColors = {
+      green: (text: string) => `<g>${text}</g>`,
+      yellow: (text: string) => `<y>${text}</y>`,
+      red: (text: string) => `<r>${text}</r>`,
+      dim: (text: string) => text,
+    }
+
+    const output = renderDeviceList({
+      devices: [aDevice({ state: "online" }), aDevice({ state: "offline" })],
+      colors: markerColors,
+    })
+
+    expect(output).toContain("<g>online </g>")
+    expect(output).toContain("<y>offline</y>")
+  })
 })
 
 describe("renderDeviceRevoked", () => {
