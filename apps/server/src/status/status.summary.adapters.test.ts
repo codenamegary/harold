@@ -67,7 +67,7 @@ describe("composeStatusSummaryPorts", () => {
       env: {},
     })
 
-    expect(ports.getAgentSummary()).toEqual({ enabled: 1, needsAuth: 0 })
+    expect(ports.getAgentSummary()).toEqual({ enabled: 1, needsAuth: null })
     expect(ports.getWorkspaceCount()).toBe(2)
   })
 

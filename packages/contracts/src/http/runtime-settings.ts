@@ -2,14 +2,7 @@ import { z } from "zod"
 
 export const RUNTIME_SETTINGS_PATH = "/v1/settings/runtime" as const
 
-export const logLevels = [
-  "fatal",
-  "error",
-  "warn",
-  "info",
-  "debug",
-  "trace",
-] as const
+export const logLevels = ["fatal", "error", "warn", "info", "debug", "trace"] as const
 
 export const LogLevelSchema = z.enum(logLevels)
 
@@ -149,14 +142,15 @@ export const RuntimeSettingsSchema = z.strictObject({
   bindHost: z.literal("127.0.0.1"),
   bindPort: z.number().int().nonnegative().max(65535),
   logLevel: LogLevelSchema,
+  // `null` means the daemon writes to the default log file under the data dir
+  // (`harold.log`), not to stdout; the CLI tails that same file with
+  // `harold logs` (ADR-0006). A non-null value is an explicit log file path.
   logPath: z.string().min(1).nullable(),
   allowedRoots: z.array(z.string().min(1)),
 })
 
 export const UpdateRuntimeSettingsBodySchema = z.strictObject({
-  advertisedUrl: z
-    .union([HttpsAbsoluteUrlSchema, z.null(), z.literal("")])
-    .optional(),
+  advertisedUrl: z.union([HttpsAbsoluteUrlSchema, z.null(), z.literal("")]).optional(),
   advertisedUrlEnabled: z.boolean().optional(),
   trustedProxies: z.array(TrustedProxySchema).optional(),
   bindHost: z.literal("127.0.0.1").optional(),
@@ -197,9 +191,7 @@ export const PatchRuntimeSettingsQuerySchema = z.strictObject({
 
 export type RuntimeSettings = z.infer<typeof RuntimeSettingsSchema>
 export type UpdateRuntimeSettingsBody = z.infer<typeof UpdateRuntimeSettingsBodySchema>
-export type RuntimeSettingsOverrideSource = z.infer<
-  typeof RuntimeSettingsOverrideSourceSchema
->
+export type RuntimeSettingsOverrideSource = z.infer<typeof RuntimeSettingsOverrideSourceSchema>
 export type RuntimeSettingsOverrides = z.infer<typeof RuntimeSettingsOverridesSchema>
 export type RuntimeSettingsEffective = z.infer<typeof RuntimeSettingsEffectiveSchema>
 export type RuntimeSettingsView = z.infer<typeof RuntimeSettingsViewSchema>

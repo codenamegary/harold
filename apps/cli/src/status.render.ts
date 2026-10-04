@@ -34,12 +34,17 @@ const formatAdvertisedEndpoint = (endpoint: { url: string | null; enabled: boole
   return endpoint.enabled ? endpoint.url : `${endpoint.url} (disabled)`
 }
 
+const formatAgentSummary = (agents: StatusSummary["agents"]): string => {
+  const needsAuth = agents.needsAuth === null ? "unknown" : `${agents.needsAuth}`
+  return `${agents.enabled} enabled, ${needsAuth} needs auth`
+}
+
 export const renderStatusSummary = (summary: StatusSummary): string =>
   renderRows([
     ["data dir", summary.dataDir],
     ["local api", `http://${summary.localApi.host}:${summary.localApi.port}`],
     ["advertised endpoint", formatAdvertisedEndpoint(summary.advertisedEndpoint)],
-    ["agents", `${summary.agents.enabled} enabled, ${summary.agents.needsAuth} needs auth`],
+    ["agents", formatAgentSummary(summary.agents)],
     ["workspaces", String(summary.workspaces)],
   ])
 

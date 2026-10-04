@@ -62,6 +62,16 @@ describe("renderStatusSummary", () => {
 
     expect(output).toContain("https://harold.example.com (disabled)")
   })
+
+  test("renders unknown needs-auth instead of a definitive zero", () => {
+    const output = renderStatusSummary({
+      ...summary,
+      agents: { enabled: 2, needsAuth: null },
+    })
+
+    expect(output).toContain("2 enabled, unknown needs auth")
+    expect(output).not.toContain("0 needs auth")
+  })
 })
 
 describe("renderStatus", () => {

@@ -10,10 +10,19 @@ import {
 /**
  * Derives the agent summary from the agent-settings view. Only enabled
  * agents can need auth: a disabled agent is not running and cannot hold an
- * in-flight login.
+ * in-flight login. When any enabled agent has an unknown auth status, the
+ * needs-auth count is reported as `null` instead of a misleading `0`.
  */
 export const summarizeAgents = (items: readonly AgentSummaryItem[]): AgentSummary => {
   const enabledItems = items.filter((item) => item.enabled)
+
+  if (enabledItems.length === 0) {
+    return { enabled: 0, needsAuth: 0 }
+  }
+
+  if (enabledItems.some((item) => item.authSummary.status === "unknown")) {
+    return { enabled: enabledItems.length, needsAuth: null }
+  }
 
   return {
     enabled: enabledItems.length,

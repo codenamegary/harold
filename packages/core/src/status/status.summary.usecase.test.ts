@@ -11,19 +11,34 @@ const summary: StatusSummary = {
 }
 
 describe("summarizeAgents", () => {
-  test("counts enabled agents and enabled agents that need auth", () => {
+  test("counts enabled agents and enabled agents that need auth when auth is known", () => {
     const output = summarizeAgents([
       { enabled: true, authSummary: { status: "needs_auth" } },
       { enabled: true, authSummary: { status: "authenticated" } },
       { enabled: false, authSummary: { status: "needs_auth" } },
-      { enabled: true, authSummary: { status: "unknown" } },
+      { enabled: true, authSummary: { status: "error" } },
     ])
 
     expect(output).toEqual({ enabled: 3, needsAuth: 1 })
   })
 
+  test("reports needs-auth as unknown when any enabled agent has unknown auth", () => {
+    const output = summarizeAgents([
+      { enabled: true, authSummary: { status: "needs_auth" } },
+      { enabled: true, authSummary: { status: "unknown" } },
+    ])
+
+    expect(output).toEqual({ enabled: 2, needsAuth: null })
+  })
+
   test("ignores needs-auth on disabled agents", () => {
     const output = summarizeAgents([{ enabled: false, authSummary: { status: "needs_auth" } }])
+
+    expect(output).toEqual({ enabled: 0, needsAuth: 0 })
+  })
+
+  test("ignores unknown auth on disabled agents", () => {
+    const output = summarizeAgents([{ enabled: false, authSummary: { status: "unknown" } }])
 
     expect(output).toEqual({ enabled: 0, needsAuth: 0 })
   })

@@ -1,7 +1,4 @@
-import {
-  RuntimeSettings,
-  RuntimeSettingsSchema,
-} from "contracts/http/runtime-settings"
+import { RuntimeSettings, RuntimeSettingsSchema } from "contracts/http/runtime-settings"
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import YAML from "yaml"
@@ -32,19 +29,12 @@ const fallbackSeedDefaults: RuntimeSettings = RuntimeSettingsSchema.parse({
   allowedRoots: [],
 })
 
-const settingsPathFor = (dataDir: string): string =>
-  path.join(dataDir, settingsFileName)
+const settingsPathFor = (dataDir: string): string => path.join(dataDir, settingsFileName)
 
-const formatLoadError = (params: {
-  filePath: string
-  cause: unknown
-}): Error => {
+const formatLoadError = (params: { filePath: string; cause: unknown }): Error => {
   const { filePath, cause } = params
   if (cause instanceof ZodError) {
-    return new Error(
-      `Invalid settings.yml at ${filePath}: schema validation failed`,
-      { cause },
-    )
+    return new Error(`Invalid settings.yml at ${filePath}: schema validation failed`, { cause })
   }
   if (cause instanceof Error) {
     return new Error(`Invalid settings.yml at ${filePath}: ${cause.message}`, {
@@ -54,10 +44,7 @@ const formatLoadError = (params: {
   return new Error(`Invalid settings.yml at ${filePath}`)
 }
 
-const parseSettingsDocument = (params: {
-  filePath: string
-  raw: string
-}): RuntimeSettings => {
+const parseSettingsDocument = (params: { filePath: string; raw: string }): RuntimeSettings => {
   const { filePath, raw } = params
   const parsed: unknown = (() => {
     try {
@@ -74,13 +61,9 @@ const parseSettingsDocument = (params: {
   }
 }
 
-const serializeSettings = (settings: RuntimeSettings): string =>
-  YAML.stringify(settings)
+const serializeSettings = (settings: RuntimeSettings): string => YAML.stringify(settings)
 
-const writeSettingsAtomic = (params: {
-  filePath: string
-  settings: RuntimeSettings
-}) => {
+const writeSettingsAtomic = (params: { filePath: string; settings: RuntimeSettings }) => {
   const { filePath, settings } = params
   const content = serializeSettings(settings)
   const tempPath = `${filePath}.${process.pid}.tmp`
@@ -132,6 +115,7 @@ export const seedDefaultsFromConfig = (config: Config): RuntimeSettings =>
     bindHost: config.host,
     bindPort: config.port,
     logLevel: "info",
+    // null selects the default log file under the data dir, not stdout.
     logPath: null,
     advertisedUrl: null,
     advertisedUrlEnabled: true,
