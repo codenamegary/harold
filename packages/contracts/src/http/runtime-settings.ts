@@ -135,8 +135,72 @@ export const HttpsAbsoluteUrlSchema = z
     { message: "must be an absolute https URL" },
   )
 
+export const isLoopbackHostname = (hostname: string): boolean =>
+  hostname === "localhost" ||
+  hostname === "::1" ||
+  (isIpv4Address(hostname) && hostname.split(".")[0] === "127")
+
+export const isHttpLoopbackUrl = (value: string): boolean => {
+  if (!value.startsWith("http://")) {
+    return false
+  }
+
+  const withoutScheme = value.slice("http://".length)
+  if (withoutScheme.length === 0 || /[\s<>"{}|\\^`]/.test(withoutScheme)) {
+    return false
+  }
+
+  const authority = withoutScheme.split(/[/?#]/, 2)[0] ?? ""
+  if (authority.length === 0) {
+    return false
+  }
+
+  if (authority.startsWith("[")) {
+    if (!authority.includes("]")) {
+      return false
+    }
+    const closing = authority.indexOf("]")
+    const host = authority.slice(1, closing)
+    const rest = authority.slice(closing + 1)
+    if (!isIpv6Address(host)) {
+      return false
+    }
+    if (rest !== "" && !/^:\d{1,5}$/.test(rest)) {
+      return false
+    }
+    return isLoopbackHostname(host)
+  }
+
+  const hostPort = authority.split(":")
+  if (hostPort.length > 2) {
+    return false
+  }
+
+  const host = hostPort[0] ?? ""
+  const port = hostPort[1]
+  if (host.length === 0 || host.includes("[") || host.includes("]")) {
+    return false
+  }
+  if (port !== undefined && !/^\d{1,5}$/.test(port)) {
+    return false
+  }
+
+  return isLoopbackHostname(host)
+}
+
+/**
+ * Reachability rule (#313): a non-loopback advertised endpoint must be https,
+ * while http stays allowed on loopback hosts for local development.
+ */
+export const AdvertisedUrlSchema = z
+  .string()
+  .min(1)
+  .refine((value) => HttpsAbsoluteUrlSchema.safeParse(value).success || isHttpLoopbackUrl(value), {
+    message: "must be an absolute https URL, or an http URL on a loopback host",
+  })
+
 export const RuntimeSettingsSchema = z.strictObject({
-  advertisedUrl: HttpsAbsoluteUrlSchema.nullable(),
+  advertisedUrl: AdvertisedUrlSchema.nullable(),
   advertisedUrlEnabled: z.boolean().default(true),
   trustedProxies: z.array(TrustedProxySchema),
   bindHost: z.literal("127.0.0.1"),
@@ -150,7 +214,7 @@ export const RuntimeSettingsSchema = z.strictObject({
 })
 
 export const UpdateRuntimeSettingsBodySchema = z.strictObject({
-  advertisedUrl: z.union([HttpsAbsoluteUrlSchema, z.null(), z.literal("")]).optional(),
+  advertisedUrl: z.union([AdvertisedUrlSchema, z.null(), z.literal("")]).optional(),
   advertisedUrlEnabled: z.boolean().optional(),
   trustedProxies: z.array(TrustedProxySchema).optional(),
   bindHost: z.literal("127.0.0.1").optional(),
