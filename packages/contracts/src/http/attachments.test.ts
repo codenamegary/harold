@@ -14,7 +14,7 @@ const descriptor = {
   mimeType: "image/png",
   kind: "image",
   size: 419430,
-  path: "/home/dev/proj/.agent-server/attachments/att_01JQ4KX7Q2M.png",
+  path: "/home/dev/proj/.harold/attachments/att_01JQ4KX7Q2M.png",
 }
 
 describe("AttachmentDescriptorSchema", () => {
@@ -23,15 +23,13 @@ describe("AttachmentDescriptorSchema", () => {
   })
 
   test("rejects unknown kind", () => {
-    expect(
-      AttachmentDescriptorSchema.safeParse({ ...descriptor, kind: "video" }).success,
-    ).toBe(false)
+    expect(AttachmentDescriptorSchema.safeParse({ ...descriptor, kind: "video" }).success).toBe(
+      false,
+    )
   })
 
   test("rejects negative size", () => {
-    expect(AttachmentDescriptorSchema.safeParse({ ...descriptor, size: -1 }).success).toBe(
-      false,
-    )
+    expect(AttachmentDescriptorSchema.safeParse({ ...descriptor, size: -1 }).success).toBe(false)
   })
 })
 
@@ -78,6 +76,6 @@ describe("limits", () => {
   })
 
   test("storage folder is dot-prefixed inside the workspace", () => {
-    expect(attachmentsFolderName).toBe(".agent-server/attachments")
+    expect(attachmentsFolderName).toBe(".harold/attachments")
   })
 })

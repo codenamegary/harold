@@ -1,15 +1,15 @@
-import { AgentServerState } from "contracts/http/status"
+import { HaroldState } from "contracts/http/status"
 
 export type Runtime = {
   readonly version: string
   readonly startedAt: string
-  getState: () => AgentServerState
-  setState: (state: AgentServerState) => void
+  getState: () => HaroldState
+  setState: (state: HaroldState) => void
 }
 
 export const createRuntime = (version: string): Runtime => {
   const startedAt = new Date().toISOString()
-  const stateCell = { value: "starting" as AgentServerState }
+  const stateCell = { value: "starting" as HaroldState }
 
   return {
     version,

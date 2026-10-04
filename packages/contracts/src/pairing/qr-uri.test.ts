@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import {
-  formatPairingQrUri,
-  parsePairingQrUri,
-} from "./qr-uri"
+import { formatPairingQrUri, parsePairingQrUri } from "./qr-uri"
 
 describe("formatPairingQrUri", () => {
   test("builds the versioned custom URI", () => {
@@ -11,9 +8,7 @@ describe("formatPairingQrUri", () => {
       code: "R7K-4MP",
     })
 
-    expect(uri).toBe(
-      "agent-server://pair?v=1&endpoint=https%3A%2F%2Fagent.example.com&code=R7K-4MP",
-    )
+    expect(uri).toBe("harold://pair?v=1&endpoint=https%3A%2F%2Fagent.example.com&code=R7K-4MP")
   })
 
   test("rejects invalid codes", () => {
@@ -41,29 +36,25 @@ describe("parsePairingQrUri", () => {
   })
 
   test("rejects unsupported versions", () => {
-    const uri =
-      "agent-server://pair?v=2&endpoint=https%3A%2F%2Fagent.example.com&code=R7K-4MP"
+    const uri = "harold://pair?v=2&endpoint=https%3A%2F%2Fagent.example.com&code=R7K-4MP"
 
     expect(() => parsePairingQrUri(uri)).toThrow(/Unsupported pairing URI version/)
   })
 
   test("rejects duplicate required fields", () => {
-    const uri =
-      "agent-server://pair?v=1&v=1&endpoint=https%3A%2F%2Fagent.example.com&code=R7K-4MP"
+    const uri = "harold://pair?v=1&v=1&endpoint=https%3A%2F%2Fagent.example.com&code=R7K-4MP"
 
     expect(() => parsePairingQrUri(uri)).toThrow(/Duplicate v parameter/)
   })
 
   test("rejects invalid codes", () => {
-    const uri =
-      "agent-server://pair?v=1&endpoint=https%3A%2F%2Fagent.example.com&code=bad"
+    const uri = "harold://pair?v=1&endpoint=https%3A%2F%2Fagent.example.com&code=bad"
 
     expect(() => parsePairingQrUri(uri)).toThrow()
   })
 
   test("rejects invalid endpoints", () => {
-    const uri =
-      "agent-server://pair?v=1&endpoint=not-a-url&code=R7K-4MP"
+    const uri = "harold://pair?v=1&endpoint=not-a-url&code=R7K-4MP"
 
     expect(() => parsePairingQrUri(uri)).toThrow()
   })
@@ -85,9 +76,7 @@ describe("parsePairingQrUri", () => {
       code: "R7K-4MP",
     })
 
-    expect(() =>
-      parsePairingQrUri(uri, { rejectCleartext: true }),
-    ).toThrow(/Cleartext endpoint/)
+    expect(() => parsePairingQrUri(uri, { rejectCleartext: true })).toThrow(/Cleartext endpoint/)
   })
 
   test("allows cleartext endpoints by default", () => {

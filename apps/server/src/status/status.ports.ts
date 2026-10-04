@@ -1,9 +1,9 @@
-import { AgentServerState } from "contracts/http/status"
+import { HaroldState } from "contracts/http/status"
 import { AcpSupervisorStatus } from "../acp/supervisor/models"
 
 export type GetServerVersion = () => string
 
-export type GetServerState = () => AgentServerState
+export type GetServerState = () => HaroldState
 
 export type GetServerStartedAt = () => string
 

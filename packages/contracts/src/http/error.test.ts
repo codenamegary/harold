@@ -9,19 +9,11 @@ import {
 } from "./error"
 
 describe("PROBLEM_TYPES", () => {
-  test("uses agent-server.local problem type URLs", () => {
-    expect(PROBLEM_TYPES.validationError).toBe(
-      "https://agent-server.local/problems/validation-error",
-    )
-    expect(PROBLEM_TYPES.internalError).toBe(
-      "https://agent-server.local/problems/internal-error",
-    )
-    expect(PROBLEM_TYPES.notFound).toBe(
-      "https://agent-server.local/problems/not-found",
-    )
-    expect(PROBLEM_TYPES.conflict).toBe(
-      "https://agent-server.local/problems/conflict",
-    )
+  test("uses harold.local problem type URLs", () => {
+    expect(PROBLEM_TYPES.validationError).toBe("https://harold.local/problems/validation-error")
+    expect(PROBLEM_TYPES.internalError).toBe("https://harold.local/problems/internal-error")
+    expect(PROBLEM_TYPES.notFound).toBe("https://harold.local/problems/not-found")
+    expect(PROBLEM_TYPES.conflict).toBe("https://harold.local/problems/conflict")
   })
 })
 
@@ -36,10 +28,10 @@ describe("ValidationProblemSchema", () => {
         { pointer: "#/name", code: "validation.field.required" },
         { pointer: "#/path", code: "validation.field.path.absolute" },
       ],
-    };
+    }
 
-    expect(ValidationProblemSchema.parse(problem)).toEqual(problem);
-  });
+    expect(ValidationProblemSchema.parse(problem)).toEqual(problem)
+  })
 
   test("rejects human-readable detail strings on field errors", () => {
     expect(() =>
@@ -49,8 +41,8 @@ describe("ValidationProblemSchema", () => {
         code: "validation.request.invalid",
         errors: [{ pointer: "#/name", detail: "Required" }],
       }),
-    ).toThrow();
-  });
+    ).toThrow()
+  })
 
   test("rejects validation problems without errors", () => {
     expect(() =>
@@ -60,8 +52,8 @@ describe("ValidationProblemSchema", () => {
         code: "validation.request.invalid",
         errors: [],
       }),
-    ).toThrow();
-  });
+    ).toThrow()
+  })
 
   test("rejects legacy error envelope shape", () => {
     expect(() =>
@@ -71,9 +63,9 @@ describe("ValidationProblemSchema", () => {
           message: "Request body is invalid",
         },
       }),
-    ).toThrow();
-  });
-});
+    ).toThrow()
+  })
+})
 
 describe("InternalProblemSchema", () => {
   test("accepts a problem with human-readable detail", () => {
