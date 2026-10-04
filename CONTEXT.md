@@ -26,6 +26,12 @@ The web UI operators use to run the host. Usually bound to loopback and
 authenticated as the host principal.
 _Avoid_: admin panel, dashboard
 
+**Setup wizard**:
+The re-runnable `harold setup` flow that configures agents, a workspace,
+reachability, and pairing. A fresh install runs it automatically the first
+time the daemon is served interactively.
+_Avoid_: onboarding, installer
+
 **Device**:
 A paired client that holds a durable opaque credential and acts as a full
 operator alongside the host console. Devices never speak ACP and never hold

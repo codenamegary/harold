@@ -1,6 +1,10 @@
 import { FastifyInstance } from "fastify"
 import { CreatePairingCodeBody } from "contracts/http/pairing-code"
-import { makeClaimPairingCode } from "core/device/claim.pairing.code.usecase"
+import {
+  ClaimPairingCodeCommand,
+  ClaimPairingCodeResult,
+  makeClaimPairingCode,
+} from "core/device/claim.pairing.code.usecase"
 import {
   CreatePairingCodeResult,
   makeCreatePairingCode,
@@ -48,6 +52,7 @@ export type AssembleDeviceSliceDeps = Readonly<{
 export type DeviceSlice = Readonly<{
   registerRoutes: (app: FastifyInstance) => void
   createPairingCode: (body?: CreatePairingCodeBody) => Promise<CreatePairingCodeResult>
+  claimPairingCode: (command: ClaimPairingCodeCommand) => Promise<ClaimPairingCodeResult>
   getPairingCodeById: GetPairingCodeById
   listDevices: ListDevices
   findDeviceByCredentialHash: FindDeviceByCredentialHash
@@ -99,6 +104,7 @@ export const assembleDeviceSlice = (deps: AssembleDeviceSliceDeps): DeviceSlice 
       })
     },
     createPairingCode,
+    claimPairingCode,
     getPairingCodeById,
     listDevices,
     findDeviceByCredentialHash,
