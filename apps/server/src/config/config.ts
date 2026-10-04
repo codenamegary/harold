@@ -11,21 +11,21 @@ export const ConfigSchema = z.object({
 
 export type Config = z.infer<typeof ConfigSchema>
 
-const defaultDataDir = path.join(os.homedir(), ".agent-server")
+const defaultDataDir = path.join(os.homedir(), ".harold")
 
 const EnvSchema = z.object({
-  AGENT_SERVER_HOST: z.literal("127.0.0.1").default("127.0.0.1"),
-  AGENT_SERVER_PORT: z.coerce.number().int().nonnegative().default(3847),
-  AGENT_SERVER_DATA_DIR: z.string().min(1).optional(),
+  HAROLD_HOST: z.literal("127.0.0.1").default("127.0.0.1"),
+  HAROLD_PORT: z.coerce.number().int().nonnegative().default(3847),
+  HAROLD_DATA_DIR: z.string().min(1).optional(),
 })
 
 export const parseConfig = (env: Record<string, string | undefined>): Config => {
   const parsed = EnvSchema.parse(env)
-  const dataDir = expandHomePath(parsed.AGENT_SERVER_DATA_DIR ?? defaultDataDir)
+  const dataDir = expandHomePath(parsed.HAROLD_DATA_DIR ?? defaultDataDir)
 
   return ConfigSchema.parse({
-    host: parsed.AGENT_SERVER_HOST,
-    port: parsed.AGENT_SERVER_PORT,
+    host: parsed.HAROLD_HOST,
+    port: parsed.HAROLD_PORT,
     dataDir,
   })
 }
