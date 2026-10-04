@@ -32,6 +32,10 @@ the CLI reads it, and no host HTTP route is involved.
    server adapters into a core use case. The device edge keeps
    `GET /v1/status` because Android verifies reachability against it
    (#320).
+8. The daemon writes logs to a file under `<dataDir>` (default `harold.log`)
+   or the operator-configured `logPath`. `harold logs` tails that file
+   through core's tail slice. A null `logPath` selects the default file, not
+   stdout.
 
 ## Why not the alternatives
 
@@ -62,6 +66,9 @@ the CLI reads it, and no host HTTP route is involved.
 ## Consequences
 
 - The daemon is the single writer of the state file. Readers never block it.
+- `harold serve` runs in the foreground and tees the default log file to
+  stdout, so the terminal keeps printing while `harold logs` still has a file
+  to tail. An explicit `logPath` writes only to that file.
 - `harold serve` while a daemon runs exits 1 with a warning from the same
   state file.
 - The CLI opens the SQLite database for CRUD batches. WAL mode allows one

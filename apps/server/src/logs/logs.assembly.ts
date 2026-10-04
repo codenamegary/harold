@@ -1,8 +1,8 @@
 import { FastifyInstance } from "fastify"
 import { Writable } from "node:stream"
 import { SpawnAgentProcessFn } from "../acp/supervisor/supervisor.ports"
-import { makeInMemoryLogStore } from "./logs.buffer.adapters"
-import { makeQueryLogs } from "./logs.query.usecase"
+import { makeInMemoryLogStore } from "core/logs/buffer.adapters"
+import { makeQueryLogs } from "core/logs/query.usecase"
 import { registerLogRoutes } from "./logs.routes"
 import { createLoggedAgentSpawn, createLogSinkStream } from "./logs.stream.adapters"
 

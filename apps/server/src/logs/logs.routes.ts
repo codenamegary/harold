@@ -1,6 +1,6 @@
 import { ListLogsQuerySchema, LogCollectionSchema, LOGS_PATH } from "contracts/http/logs"
 import { FastifyInstance } from "fastify"
-import { ClearLogs, QueryLogs } from "./logs.ports"
+import { ClearLogs, QueryLogs } from "core/logs/ports"
 
 export type RegisterLogRoutesDeps = Readonly<{
   queryLogs: QueryLogs

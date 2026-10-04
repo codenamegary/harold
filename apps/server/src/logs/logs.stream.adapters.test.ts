@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Writable } from "node:stream"
 import { SpawnedAgentProcess } from "../acp/supervisor/models"
-import { LogRecordInput } from "./logs.models"
+import { LogRecordInput } from "core/logs/models"
 import { createLogSinkStream, createLoggedAgentSpawn } from "./logs.stream.adapters"
 
 const fakeAgentProcess = (): SpawnedAgentProcess => ({
