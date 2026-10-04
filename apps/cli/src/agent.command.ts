@@ -5,6 +5,7 @@ import { probePresence } from "core/agent-catalog/probe.presence"
 import { PresenceProbeContext } from "core/agent-catalog/profile.override"
 import { AgentSettingsResult } from "core/agent-settings/errors"
 import { makeListAgentSettings, ListAgentSettings } from "core/agent-settings/list.usecase"
+import { AgentSettingsRow, FindAgentSettingsRow } from "core/agent-settings/ports"
 import { makeAgentSettingsView } from "core/agent-settings/view"
 import { makeUpdateAgentSettings, UpdateAgentSettings } from "core/agent-settings/update.usecase"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
@@ -38,6 +39,8 @@ export type AgentCliDeps = Readonly<{
 export type AgentCli = Readonly<{
   list: ListAgentSettings
   update: UpdateAgentSettings
+  findRow: FindAgentSettingsRow
+  restoreRow: (row: AgentSettingsRow) => void
   ensureCatalogRows: () => void
   close: () => void
 }>
@@ -68,6 +71,18 @@ export const openAgentCli = (deps: AgentCliDeps): AgentCli => {
       whichFn,
       validatePath,
     }),
+    findRow,
+    restoreRow: (row) =>
+      updateRow({
+        agentId: row.agentId,
+        patch: {
+          enabled: row.enabled,
+          path: row.path,
+          args: row.args,
+          spawnSnapshot: row.spawnSnapshot,
+          updatedAt: row.updatedAt,
+        },
+      }),
     ensureCatalogRows: () => ensureCatalogAgentSettingsRows(database),
     close: database.close,
   }
@@ -75,10 +90,15 @@ export const openAgentCli = (deps: AgentCliDeps): AgentCli => {
 
 export const enableAgent = (cli: AgentCli, agentId: string): AgentSettingsResult<AgentSettings> => {
   cli.ensureCatalogRows()
+  const prior = cli.findRow(agentId)
   const result = cli.update({ agentId, body: { enabled: true } })
 
   if (!result.ok && result.error.kind === "path_auto_detect_failed") {
-    cli.update({ agentId, body: { enabled: false } })
+    if (prior !== undefined) {
+      cli.restoreRow(prior)
+    } else {
+      cli.update({ agentId, body: { enabled: false } })
+    }
   }
 
   return result

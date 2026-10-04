@@ -21,7 +21,7 @@ const listColumns = (): Column[] => [
 
 const probeColumns = (): Column[] => [
   { label: "path", value: (item) => dash(item.path) },
-  { label: "runtime", value: (item) => item.state.status },
+  { label: "runtime", value: () => "unknown" },
 ]
 
 const renderTable = (columns: readonly Column[], items: readonly AgentSettings[]): string => {
@@ -55,13 +55,10 @@ const probeFields = (item: AgentSettings): Array<[string, string]> => {
     ["path", dash(item.path)],
     ["enabled", yesNo(item.enabled)],
     ["available", yesNo(item.available)],
-    ["runtime", item.state.status],
+    ["runtime", "unknown"],
     ["auth", item.authSummary.status],
   ]
 
-  if (item.state.error !== null) {
-    fields.push(["runtime error", item.state.error])
-  }
   if (item.authSummary.error !== null) {
     fields.push(["auth error", item.authSummary.error])
   }
