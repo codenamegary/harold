@@ -8,9 +8,7 @@ export const makeHaroldProgram = (): Command => {
 
   program
     .name("harold")
-    .description(
-      "Hark! The Harold Agents Sing. Harold keeps the host: agents, workspace, and reachability.",
-    )
+    .description("Hark! The Harold Agents Sing - Access your agents on Android from anywhere.")
     .version(packageJson.version)
   program.addCommand(makeServeCommand())
   program.addCommand(makeStatusCommand())
