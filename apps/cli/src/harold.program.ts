@@ -5,18 +5,24 @@ import { makeConnectCommand } from "./connect.command"
 import { makeDeviceCommand } from "./device.command"
 import { makeLogsCommand } from "./logs.command"
 import { makePairCommand } from "./pair.command"
-import { makeServeCommand } from "./serve.command"
+import { ServeDeps, makeServeCommand } from "./serve.command"
+import { makeSetupCommand } from "./setup.command"
 import { makeStatusCommand } from "./status.command"
 import { makeWorkspaceCommand } from "./workspace.command"
 
-export const makeHaroldProgram = (): Command => {
+export type HaroldProgramDeps = Readonly<{
+  serve?: Partial<ServeDeps>
+}>
+
+export const makeHaroldProgram = (deps: HaroldProgramDeps = {}): Command => {
   const program = new Command()
 
   program
     .name("harold")
     .description("Hark! The Harold Agents Sing - Access your agents on Android from anywhere.")
     .version(packageJson.version)
-  program.addCommand(makeServeCommand())
+  program.addCommand(makeServeCommand(deps.serve), { isDefault: true })
+  program.addCommand(makeSetupCommand())
   program.addCommand(makeStatusCommand())
   program.addCommand(makeAgentCommand())
   program.addCommand(makePairCommand())

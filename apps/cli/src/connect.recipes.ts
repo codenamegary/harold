@@ -26,6 +26,7 @@ export type RecipeDetection = Readonly<{
 
 export type ConnectRecipe = Readonly<{
   readonly id: RecipeId
+  readonly label: string
   readonly detect: (deps: Readonly<{ which: WhichLookup }>) => RecipeDetection
   readonly guide: (deps: Readonly<{ detection: RecipeDetection; writeLine: WriteLine }>) => void
 }>
@@ -178,11 +179,13 @@ const guideCustom = (deps: { detection: RecipeDetection; writeLine: WriteLine })
 export const connectRecipes: readonly ConnectRecipe[] = [
   {
     id: "reverse-proxy",
+    label: "Reverse proxy (Caddy, Traefik, nginx)",
     detect: (deps) => detectBinaries(deps.which, ["caddy", "traefik", "nginx"]),
     guide: guideReverseProxy,
   },
   {
     id: "tailscale",
+    label: "Tailscale (serve or Funnel)",
     detect: (deps) =>
       deps.which("tailscale")
         ? { available: true, detail: "tailscale CLI found" }
@@ -194,6 +197,7 @@ export const connectRecipes: readonly ConnectRecipe[] = [
   },
   {
     id: "ssh-reverse",
+    label: "SSH reverse tunnel",
     detect: (deps) =>
       deps.which("ssh")
         ? { available: true, detail: "ssh found" }
@@ -202,6 +206,7 @@ export const connectRecipes: readonly ConnectRecipe[] = [
   },
   {
     id: "cloudflared",
+    label: "Cloudflare Tunnel",
     detect: (deps) =>
       deps.which("cloudflared")
         ? { available: true, detail: "cloudflared found" }
@@ -214,6 +219,7 @@ export const connectRecipes: readonly ConnectRecipe[] = [
   },
   {
     id: "ngrok",
+    label: "ngrok",
     detect: (deps) =>
       deps.which("ngrok")
         ? { available: true, detail: "ngrok found" }
@@ -225,6 +231,7 @@ export const connectRecipes: readonly ConnectRecipe[] = [
   },
   {
     id: "custom",
+    label: "I already have an endpoint",
     detect: () => ({ available: true, detail: "operator-supplied endpoint" }),
     guide: guideCustom,
   },

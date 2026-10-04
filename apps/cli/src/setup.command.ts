@@ -1,0 +1,283 @@
+import path from "node:path"
+import {
+  cancel as clackCancel,
+  confirm as clackConfirm,
+  intro as clackIntro,
+  isCancel as clackIsCancel,
+  log as clackLog,
+  multiselect as clackMultiselect,
+  note as clackNote,
+  outro as clackOutro,
+  select as clackSelect,
+  text as clackText,
+} from "@clack/prompts"
+import { Command } from "commander"
+import pc from "picocolors"
+import { expandHomePath } from "core/filesystem/expand.home.path"
+import { isDescendantOf } from "core/filesystem/is.descendant.of"
+import {
+  daemonStateFilePath,
+  makeDaemonStateFileStore,
+  makeNodeProcessAlive,
+} from "core/daemon-state/node.adapters"
+import { makeReadLiveDaemonState } from "core/daemon-state/read.live.usecase"
+import { makeNodeFetchStatusEndpoint } from "core/reachability/node.adapters"
+import { parseConfig } from "server/config"
+import { openDatabase } from "server/database"
+import { assembleDeviceSlice } from "server/device"
+import { makeCanonicalizePath } from "server/filesystem"
+import { makeRuntimeSettingsFileStore, seedDefaultsFromConfig } from "server/runtime-settings"
+import { makeUpdateRuntimeSettings } from "server/runtime-settings/update.usecase"
+import { assembleWorkspaceSlice } from "server/workspace"
+import { disableAgent, enableAgent, openAgentCli } from "./agent.command"
+import { ConnectDeps, runConnect } from "./connect.command"
+import { connectRecipes } from "./connect.recipes"
+import { PairActionDeps, executePair } from "./pair.command"
+import { renderTerminalQr } from "./pair.qr"
+import { SetupOptions, SetupPrompts, SetupWizardDeps, runSetupWizard } from "./setup.wizard"
+import { defaultWorkspaceName } from "./workspace.command"
+
+export type SetupCommandDeps = Readonly<{
+  isInteractive: () => boolean
+  prompts: SetupPrompts
+  cwd: () => string
+  writeOut: (line: string) => void
+  writeErr: (line: string) => void
+}>
+
+export const makeClackPrompts = (): SetupPrompts => ({
+  intro: (message) => clackIntro(message),
+  outro: (message) => clackOutro(message),
+  note: (message, title) => clackNote(message, title),
+  info: (message) => clackLog.info(message),
+  warn: (message) => clackLog.warn(message),
+  step: (message) => clackLog.step(message),
+  multiselect: (options) =>
+    clackMultiselect<string>({
+      message: options.message,
+      options: options.options.map((option) => ({
+        value: option.value,
+        label: option.label,
+        hint: option.hint,
+      })),
+      initialValues: [...options.initialValues],
+    }),
+  text: (options) =>
+    clackText({
+      message: options.message,
+      placeholder: options.placeholder,
+      defaultValue: options.defaultValue,
+    }),
+  select: (options) =>
+    clackSelect<string>({
+      message: options.message,
+      options: options.options.map((option) => ({
+        value: option.value,
+        label: option.label,
+        hint: option.hint,
+      })),
+      initialValue: options.initialValue,
+    }),
+  confirm: (options) =>
+    clackConfirm({ message: options.message, initialValue: options.initialValue }),
+  isCancel: (value): value is symbol => clackIsCancel(value),
+  cancel: (message) => clackCancel(message),
+})
+
+const defaultSetupCommandDeps = (): SetupCommandDeps => ({
+  isInteractive: () => process.stdin.isTTY === true && process.stdout.isTTY === true,
+  prompts: makeClackPrompts(),
+  cwd: () => process.cwd(),
+  writeOut: (line) => console.log(line),
+  writeErr: (line) => console.error(line),
+})
+
+export const makeSetupCommandDeps = (
+  overrides: Partial<SetupCommandDeps> = {},
+): SetupCommandDeps => ({ ...defaultSetupCommandDeps(), ...overrides })
+
+export const parseAgentIds = (raw: string | undefined): readonly string[] | undefined => {
+  if (raw === undefined) {
+    return undefined
+  }
+
+  const ids = raw
+    .split(",")
+    .map((id) => id.trim())
+    .filter((id) => id !== "")
+
+  return [...new Set(ids)]
+}
+
+/**
+ * Composes the agent, workspace, reachability, and pairing batches into one
+ * interactive flow. All ports come from the same CLI contexts the individual
+ * commands use, so flags and prompts converge on one code path per step.
+ */
+export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): Promise<number> => {
+  const config = parseConfig(process.env)
+  const dataDir = config.dataDir
+  const cwd = deps.cwd()
+  const database = openDatabase({ dataDir })
+  const settingsStore = makeRuntimeSettingsFileStore({
+    dataDir,
+    seedDefaults: seedDefaultsFromConfig(config),
+  })
+  const agentCli = openAgentCli({ dataDir })
+  const readLiveDaemonState = makeReadLiveDaemonState({
+    readDaemonState: makeDaemonStateFileStore({
+      path: daemonStateFilePath(dataDir),
+    }).read,
+    isProcessAlive: makeNodeProcessAlive(),
+  })
+
+  try {
+    agentCli.ensureCatalogRows()
+    const workspaceSlice = assembleWorkspaceSlice({
+      database,
+      getAllowedRoots: () => settingsStore.get().allowedRoots,
+      listLiveByWorkspaceRoot: () => [],
+      closeWorkspaceSessions: async () => ({ failures: [] }),
+      unbindWorkspaceSessions: () => undefined,
+    })
+    const updateRuntimeSettings = makeUpdateRuntimeSettings({
+      getSettings: settingsStore.get,
+      saveSettings: settingsStore.save,
+      canonicalizePath: makeCanonicalizePath(),
+      listAllWorkspaces: workspaceSlice.listAll,
+      deleteWorkspace: workspaceSlice.deleteWorkspace,
+    })
+
+    const which = (binary: string): boolean => Bun.which(binary) !== null
+    const writeLine = (line: string): void => deps.writeOut(line)
+
+    const connectDeps: ConnectDeps = {
+      fetchStatus: makeNodeFetchStatusEndpoint(),
+      makeSettingsStore: () => settingsStore,
+      which,
+      writeLine,
+      colors: pc,
+    }
+
+    // The device slice shares the wizard's settings store so the pairing
+    // step sees an advertised URL persisted earlier in the same run.
+    const deviceSlice = assembleDeviceSlice({
+      database,
+      loopbackEndpoint: `http://${config.host}:${config.port}`,
+      getAdvertisedEndpointSettings: () => {
+        const settings = settingsStore.get()
+        return {
+          advertisedUrl: settings.advertisedUrl,
+          advertisedUrlEnabled: settings.advertisedUrlEnabled,
+        }
+      },
+    })
+
+    const pairDeps: PairActionDeps = {
+      createPairingCode: deviceSlice.createPairingCode,
+      getPairingCodeById: deviceSlice.getPairingCodeById,
+      renderTerminalQr,
+      colors: { bold: pc.bold, dim: pc.dim },
+      writeOut: deps.writeOut,
+      writeErr: deps.writeErr,
+      now: () => new Date(),
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    }
+
+    const wizardDeps: SetupWizardDeps = {
+      dataDir,
+      cwd,
+      interactive: deps.isInteractive(),
+      prompts: deps.prompts,
+      colors: { red: pc.red, yellow: pc.yellow },
+      writeLine,
+      agents: {
+        list: () => agentCli.list(),
+        enable: (agentId) => enableAgent(agentCli, agentId),
+        disable: (agentId) => disableAgent(agentCli, agentId),
+      },
+      workspaces: {
+        list: () => workspaceSlice.listAll(),
+        register: async (workspacePath) => {
+          const absolutePath = path.resolve(cwd, expandHomePath(workspacePath))
+          const roots = settingsStore.get().allowedRoots
+          const allowed = roots.some((root) =>
+            isDescendantOf({ path: root, candidatePath: absolutePath }),
+          )
+
+          if (!allowed) {
+            const updated = await updateRuntimeSettings({
+              body: { allowedRoots: [...roots, absolutePath] },
+              force: false,
+            })
+            if (!updated.ok) {
+              return { ok: false, error: { kind: "outside_allowed_root" } }
+            }
+          }
+
+          return workspaceSlice.registerWorkspace({
+            name: defaultWorkspaceName(workspacePath),
+            path: workspacePath,
+          })
+        },
+      },
+      recipes: connectRecipes.map((recipe) => {
+        const detection = recipe.detect({ which })
+        return {
+          id: recipe.id,
+          label: recipe.label,
+          hint: detection.detail,
+          guide: () => recipe.guide({ detection, writeLine }),
+        }
+      }),
+      reachability: {
+        verifyAndPersist: async (advertisedUrl) =>
+          (await runConnect({ options: { advertisedUrl }, dataDir, deps: connectDeps })) === 0,
+      },
+      isDaemonRunning: () => readLiveDaemonState().ok,
+      pair: async () =>
+        (await executePair(pairDeps, { endpoint: undefined, wait: true, json: false })) === 0,
+    }
+
+    return await runSetupWizard(wizardDeps, options)
+  } finally {
+    database.close()
+    agentCli.close()
+  }
+}
+
+const setupOptionsFrom = (options: {
+  agents?: string
+  workspace?: string
+  advertisedUrl?: string
+  pair: boolean
+}): SetupOptions => ({
+  agents: parseAgentIds(options.agents),
+  workspace: options.workspace,
+  advertisedUrl: options.advertisedUrl,
+  pair: options.pair,
+})
+
+export const makeSetupCommand = (overrides: Partial<SetupCommandDeps> = {}): Command => {
+  const command = new Command("setup")
+  command.description("configure agents, a workspace, reachability, and pairing")
+  command
+    .option("--agents <ids>", "comma-separated agent ids to enable")
+    .option("--workspace <path>", "workspace directory to register")
+    .option("--advertised-url <url>", "advertised endpoint URL devices pair against")
+    .option("--no-pair", "skip the pairing step")
+
+  command.action(
+    async (options: {
+      agents?: string
+      workspace?: string
+      advertisedUrl?: string
+      pair: boolean
+    }) => {
+      const deps: SetupCommandDeps = makeSetupCommandDeps(overrides)
+      process.exitCode = await runSetup(setupOptionsFrom(options), deps)
+    },
+  )
+
+  return command
+}

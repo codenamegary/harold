@@ -70,7 +70,7 @@ const withWorkspaceCommandContext = async (
   }
 }
 
-const defaultWorkspaceName = (workspacePath: string): string =>
+export const defaultWorkspaceName = (workspacePath: string): string =>
   basename(path.resolve(expandHomePath(workspacePath)))
 
 const reportError = (message: string): void => {
