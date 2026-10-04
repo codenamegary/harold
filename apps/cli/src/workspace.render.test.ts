@@ -5,6 +5,8 @@ import {
   renderAmbiguousWorkspaceReference,
   renderRegisterWorkspaceError,
   renderWorkspaceAdded,
+  renderWorkspaceDaemonRunningDeleteGuard,
+  renderWorkspaceDaemonSessionsNotClosed,
   renderWorkspaceList,
   renderWorkspaceReferenceNotFound,
   renderWorkspaceRemoved,
@@ -120,6 +122,23 @@ describe("renderWorkspaceRemoved", () => {
     const output = renderWorkspaceRemoved(workspace())
 
     expect(output).toBe("Removed workspace harold (/srv/harold).")
+  })
+})
+
+describe("renderWorkspaceDaemonRunningDeleteGuard", () => {
+  test("explains the daemon guard and points at --force", () => {
+    const output = renderWorkspaceDaemonRunningDeleteGuard()
+
+    expect(output).toContain("daemon is running")
+    expect(output).toContain("--force")
+  })
+})
+
+describe("renderWorkspaceDaemonSessionsNotClosed", () => {
+  test("reports that daemon-held sessions were not closed", () => {
+    const output = renderWorkspaceDaemonSessionsNotClosed()
+
+    expect(output).toContain("not closed")
   })
 })
 

@@ -69,6 +69,12 @@ export const renderWorkspaceAdded = (workspace: Workspace): string =>
 export const renderWorkspaceRemoved = (workspace: Workspace): string =>
   `Removed workspace ${workspace.name} (${workspace.path}).`
 
+export const renderWorkspaceDaemonRunningDeleteGuard = (): string =>
+  "The daemon is running and may hold active sessions for this workspace. Pass --force to remove it without closing those sessions."
+
+export const renderWorkspaceDaemonSessionsNotClosed = (): string =>
+  "Daemon-held sessions were not closed."
+
 const pathErrorMessages: Record<
   Extract<WorkspaceRepositoryError, { kind: "path" }>["error"]["kind"],
   (path: string) => string

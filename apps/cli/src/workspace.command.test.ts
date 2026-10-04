@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { parseConfig } from "server/config"
@@ -31,11 +31,35 @@ const workspaceIdFrom = (output: string): string => {
   return match[0]
 }
 
+const writeLiveDaemonState = async (dataDir: string): Promise<void> => {
+  const now = new Date().toISOString()
+  await writeFile(
+    path.join(dataDir, "daemon-state.json"),
+    JSON.stringify({
+      pid: process.pid,
+      writtenAt: now,
+      status: {
+        version: "0.1.0",
+        state: "online",
+        bindAddress: "127.0.0.1",
+        port: 3847,
+        startedAt: now,
+        acp: { state: "ready", activeSessions: 1 },
+      },
+    }),
+  )
+}
+
+const removeDaemonState = async (dataDir: string): Promise<void> => {
+  await rm(path.join(dataDir, "daemon-state.json"), { force: true })
+}
+
 describe("harold workspace", () => {
   let dataDir = ""
   let projectDir = ""
   let customDir = ""
   let thirdDir = ""
+  let guardDir = ""
   let thirdId = ""
   let previousDataDir: string | undefined
 
@@ -50,9 +74,11 @@ describe("harold workspace", () => {
     projectDir = path.join(canonicalRoot, "project")
     customDir = path.join(canonicalRoot, "custom")
     thirdDir = path.join(canonicalRoot, "third")
+    guardDir = path.join(canonicalRoot, "guard")
     await mkdir(projectDir)
     await mkdir(customDir)
     await mkdir(thirdDir)
+    await mkdir(guardDir)
 
     const config = parseConfig({ HAROLD_DATA_DIR: dataDir })
     const settingsStore = makeRuntimeSettingsFileStore({
@@ -168,5 +194,65 @@ describe("harold workspace", () => {
 
     expect(exitCode).toBe(1)
     expect(output).toContain('No workspace matches "nope".')
+  })
+
+  test("remove refuses while a live daemon is running without --force", async () => {
+    await writeLiveDaemonState(dataDir)
+    await runCommand(["add", guardDir])
+
+    const { output, exitCode } = await runCommand(["remove", guardDir])
+
+    expect(exitCode).toBe(1)
+    expect(output).toContain("daemon is running")
+    expect(output).toContain("--force")
+
+    const { output: listOutput } = await runCommand(["list"])
+    expect(listOutput).toContain(guardDir)
+
+    await removeDaemonState(dataDir)
+    const cleanup = await runCommand(["remove", guardDir])
+    expect(cleanup.exitCode).toBe(0)
+  })
+
+  test("remove with --force deletes while a live daemon is running and warns sessions were not closed", async () => {
+    await writeLiveDaemonState(dataDir)
+    await runCommand(["add", guardDir])
+
+    const { output, exitCode } = await runCommand(["remove", guardDir, "--force"])
+
+    expect(exitCode).toBe(0)
+    expect(output).toContain(`Removed workspace guard (${guardDir}).`)
+    expect(output).toContain("not closed")
+
+    const { output: listOutput } = await runCommand(["list"])
+    expect(listOutput).toBe("No workspaces registered yet.")
+
+    await removeDaemonState(dataDir)
+  })
+
+  test("remove deletes without --force when no live daemon is running", async () => {
+    await runCommand(["add", guardDir])
+
+    const { output, exitCode } = await runCommand(["remove", guardDir])
+
+    expect(exitCode).toBe(0)
+    expect(output).toBe(`Removed workspace guard (${guardDir}).`)
+    expect(output).not.toContain("not closed")
+
+    const { output: listOutput } = await runCommand(["list"])
+    expect(listOutput).toBe("No workspaces registered yet.")
+  })
+
+  test("remove with --force still deletes when no live daemon is running", async () => {
+    await runCommand(["add", guardDir])
+
+    const { output, exitCode } = await runCommand(["remove", guardDir, "--force"])
+
+    expect(exitCode).toBe(0)
+    expect(output).toBe(`Removed workspace guard (${guardDir}).`)
+    expect(output).not.toContain("not closed")
+
+    const { output: listOutput } = await runCommand(["list"])
+    expect(listOutput).toBe("No workspaces registered yet.")
   })
 })
