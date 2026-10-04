@@ -1,9 +1,9 @@
 import { accessSync, constants, realpathSync, statSync } from "node:fs"
 import { readdir, realpath, stat } from "node:fs/promises"
 import path from "node:path"
-import { expandHomePath } from "./filesystem.expand.home.path"
-import { isMissingFilesystemError, isPermissionFilesystemError } from "./filesystem.errors"
-import { CanonicalizePath, ReadDirectoryEntries, StatPath } from "./filesystem.ports"
+import { expandHomePath } from "core/filesystem/expand.home.path"
+import { isMissingFilesystemError, isPermissionFilesystemError } from "core/filesystem/errors"
+import { CanonicalizePath, ReadDirectoryEntries, StatPath } from "core/filesystem/ports"
 
 export const makeCanonicalizePath = (): CanonicalizePath => (inputPath) => {
   const expanded = expandHomePath(inputPath)

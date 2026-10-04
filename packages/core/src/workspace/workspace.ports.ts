@@ -11,16 +11,17 @@ export type InsertWorkspaceInput = {
   canonicalPath: string
 }
 
-export type InsertWorkspace = (input: InsertWorkspaceInput) =>
-  | { ok: true; value: Workspace } | { ok: false; error: { kind: "duplicate_path" } }
+export type InsertWorkspace = (
+  input: InsertWorkspaceInput,
+) => { ok: true; value: Workspace } | { ok: false; error: { kind: "duplicate_path" } }
 
-export type FindWorkspaceById = (input: { id: string }) =>
-  | { ok: true; value: Workspace }
-  | { ok: false; error: WorkspaceRepositoryError }
+export type FindWorkspaceById = (input: {
+  id: string
+}) => { ok: true; value: Workspace } | { ok: false; error: WorkspaceRepositoryError }
 
-export type DeleteWorkspaceRow = (input: { id: string }) =>
-  | { ok: true; value: void }
-  | { ok: false; error: WorkspaceRepositoryError }
+export type DeleteWorkspaceRow = (input: {
+  id: string
+}) => { ok: true; value: void } | { ok: false; error: WorkspaceRepositoryError }
 
 export type DeleteWorkspaceCommand = Readonly<{
   workspaceId: string
@@ -35,9 +36,7 @@ export type DeleteWorkspaceResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly error: DeleteWorkspaceError }
 
-export type DeleteWorkspace = (
-  command: DeleteWorkspaceCommand,
-) => Promise<DeleteWorkspaceResult>
+export type DeleteWorkspace = (command: DeleteWorkspaceCommand) => Promise<DeleteWorkspaceResult>
 
 export type ListAllWorkspaces = () => ReadonlyArray<Workspace>
 
@@ -47,12 +46,22 @@ export type ListWorkspaces = (query: {
   q?: string
   state?: Workspace["state"]
 }) =>
-  | { ok: true; value: { items: Workspace[]; limit: number; nextCursor?: string; previousCursor?: string; count: number } }
+  | {
+      ok: true
+      value: {
+        items: Workspace[]
+        limit: number
+        nextCursor?: string
+        previousCursor?: string
+        count: number
+      }
+    }
   | { ok: false; error: { kind: "invalid_cursor" } }
 
-export type UpdateWorkspaceName = (input: { id: string; name: string }) =>
-  | { ok: true; value: Workspace }
-  | { ok: false; error: WorkspaceRepositoryError }
+export type UpdateWorkspaceName = (input: {
+  id: string
+  name: string
+}) => { ok: true; value: Workspace } | { ok: false; error: WorkspaceRepositoryError }
 
 export type WorkspaceLiveSession = Readonly<{
   acpSessionId: string
@@ -64,9 +73,7 @@ export type CloseWorkspaceSessionFailure = Readonly<{
   reason: string
 }>
 
-export type ListLiveByWorkspaceRoot = (
-  workspaceRoot: string,
-) => ReadonlyArray<WorkspaceLiveSession>
+export type ListLiveByWorkspaceRoot = (workspaceRoot: string) => ReadonlyArray<WorkspaceLiveSession>
 
 export type CloseWorkspaceSessions = (params: {
   sessions: ReadonlyArray<WorkspaceLiveSession>

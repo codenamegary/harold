@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Workspace } from "contracts/http/workspace"
 import { RuntimeSettings } from "contracts/http/runtime-settings"
-import { FilesystemPathError } from "../filesystem/filesystem.errors"
+import { FilesystemPathError } from "core/filesystem/errors"
 import {
   makeUpdateRuntimeSettings,
   UpdateRuntimeSettingsCommand,

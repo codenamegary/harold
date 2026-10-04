@@ -8,7 +8,7 @@ import {
 } from "contracts/http/attachments"
 import { FastifyInstance } from "fastify"
 import { MultipartFile } from "@fastify/multipart"
-import { FindWorkspaceById } from "../workspace/workspace.ports"
+import { FindWorkspaceById } from "core/workspace/ports"
 import { DeleteAttachment, SaveAttachment } from "./attachments.ports"
 import {
   buildAttachmentNotFoundProblem,

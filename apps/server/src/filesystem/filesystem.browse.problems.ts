@@ -1,5 +1,5 @@
 import { PROBLEM_TYPES, ValidationProblemSchema } from "contracts/http/error"
-import { FilesystemPathError } from "./filesystem.errors"
+import { FilesystemPathError } from "core/filesystem/errors"
 
 const rootPathErrorCodes: Record<FilesystemPathError["kind"], string> = {
   missing: "validation.field.root.missing",

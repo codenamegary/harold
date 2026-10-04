@@ -1,5 +1,5 @@
 import path from "node:path"
-import { isDescendantOf } from "../filesystem/filesystem.is.descendant.of"
+import { isDescendantOf } from "core/filesystem/is.descendant.of"
 import { EnsureAttachmentsDir, LoadAttachment, ReadAttachmentBytes } from "./attachments.ports"
 
 export type LoadAttachmentDeps = Readonly<{

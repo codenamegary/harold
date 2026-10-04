@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify"
 import { makeCanonicalizePath } from "../filesystem/filesystem.node.adapters"
 import { EnvBindOverrides } from "../config/env.bind.overrides"
-import { DeleteWorkspace, ListAllWorkspaces } from "../workspace/workspace.ports"
+import { DeleteWorkspace, ListAllWorkspaces } from "core/workspace/ports"
 import { AppliedRuntimeSettingsHolder } from "./applied.runtime.settings"
 import { registerRuntimeSettingsRoutes } from "./runtime-settings.routes"
 import { RuntimeSettingsFileStore } from "./runtime-settings.file.adapters"

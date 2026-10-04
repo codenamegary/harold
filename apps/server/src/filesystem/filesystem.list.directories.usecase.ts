@@ -1,7 +1,7 @@
 import path from "node:path"
-import { FilesystemPathError } from "./filesystem.errors"
-import { isDescendantOf } from "./filesystem.is.descendant.of"
-import { CanonicalizePath, ReadDirectoryEntries, StatPath } from "./filesystem.ports"
+import { FilesystemPathError } from "core/filesystem/errors"
+import { isDescendantOf } from "core/filesystem/is.descendant.of"
+import { CanonicalizePath, ReadDirectoryEntries, StatPath } from "core/filesystem/ports"
 
 export type FilesystemDirectoryItem = {
   name: string

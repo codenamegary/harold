@@ -5,6 +5,7 @@ import { makeDeviceCommand } from "./device.command"
 import { makePairCommand } from "./pair.command"
 import { makeServeCommand } from "./serve.command"
 import { makeStatusCommand } from "./status.command"
+import { makeWorkspaceCommand } from "./workspace.command"
 
 export const makeHaroldProgram = (): Command => {
   const program = new Command()
@@ -18,6 +19,7 @@ export const makeHaroldProgram = (): Command => {
   program.addCommand(makeAgentCommand())
   program.addCommand(makePairCommand())
   program.addCommand(makeDeviceCommand())
+  program.addCommand(makeWorkspaceCommand())
 
   return program
 }

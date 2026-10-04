@@ -78,7 +78,9 @@ describe("delete workspace", () => {
       findWorkspaceById: () => ({ ok: true, value: storedWorkspace }),
       listLiveByWorkspaceRoot: () => [liveSession],
       closeWorkspaceSessions: async () => ({
-        failures: [{ acpSessionId: liveSession.acpSessionId, reason: "ACP supervisor is not ready" }],
+        failures: [
+          { acpSessionId: liveSession.acpSessionId, reason: "ACP supervisor is not ready" },
+        ],
       }),
       unbindWorkspaceSessions: () => {
         throw new Error("unbindWorkspaceSessions should not run when force is false")

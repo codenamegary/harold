@@ -39,9 +39,7 @@ export const makeDeleteWorkspace =
     }
 
     if (closeResult.failures.length > 0) {
-      const failedIds = new Set(
-        closeResult.failures.map((failure) => failure.acpSessionId),
-      )
+      const failedIds = new Set(closeResult.failures.map((failure) => failure.acpSessionId))
       deps.unbindWorkspaceSessions({
         sessions: liveSessions.filter((session) => failedIds.has(session.acpSessionId)),
       })

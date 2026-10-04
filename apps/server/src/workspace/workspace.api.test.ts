@@ -8,7 +8,7 @@ import {
 } from "contracts/http/error"
 import { WorkspaceCollectionSchema, WorkspaceSchema } from "contracts/http/workspace"
 import { bootTestApp } from "../test-support/test.harness"
-import { encodeWorkspacePageCursor } from "./workspace.page.cursor"
+import { encodeWorkspacePageCursor } from "core/workspace/page.cursor"
 
 type TestServerApp = Awaited<ReturnType<typeof bootTestApp>>["app"]
 

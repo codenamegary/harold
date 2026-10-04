@@ -1,5 +1,5 @@
 import { FastifyInstance } from "fastify"
-import { FindWorkspaceById } from "../workspace/workspace.ports"
+import { FindWorkspaceById } from "core/workspace/ports"
 import { createAttachmentId } from "./attachments.create.id"
 import { makeDeleteAttachment } from "./attachments.delete.usecase"
 import {
