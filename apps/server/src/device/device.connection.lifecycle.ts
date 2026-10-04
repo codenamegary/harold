@@ -1,4 +1,4 @@
-import { TouchDeviceLastSeen } from "./device.ports"
+import { TouchDeviceLastSeen } from "core/device/ports"
 
 type TouchDeviceLastSeenParams = {
   touchDeviceLastSeen: TouchDeviceLastSeen
@@ -6,9 +6,7 @@ type TouchDeviceLastSeenParams = {
   occurredAt?: string
 }
 
-export type TouchDeviceLastSeenResult =
-  | { ok: true }
-  | { ok: false; reason: "closed_database" }
+export type TouchDeviceLastSeenResult = { ok: true } | { ok: false; reason: "closed_database" }
 
 const nowIso = (): string => new Date().toISOString()
 

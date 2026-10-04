@@ -51,7 +51,7 @@ import { makeEnsureSupervisorReady } from "../session/session.acp.ready"
 import { makePromptAuthGate } from "../session/session.prompt.auth.gate.usecase"
 import { StartAcpAgent } from "../session/session.ports"
 import { registerAuthMiddleware } from "../auth/middleware"
-import { redactPairingCodeInUrl } from "../device/device.redact.pairing.code.in.url"
+import { redactPairingCodeInUrl } from "core/device/redact.pairing.code.in.url"
 import { FetchRegistryFn } from "core/agent-settings/ports"
 import { startEnabledAgents } from "./start.enabled.agents"
 

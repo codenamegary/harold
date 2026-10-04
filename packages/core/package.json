@@ -31,7 +31,15 @@
     "./agent-catalog/probe.presence": "./src/agent-catalog/probe.presence.ts",
     "./agent-catalog/registry.schema": "./src/agent-catalog/registry.schema.ts",
     "./agent-catalog/generated": "./src/agent-catalog/generated/catalog.agents.generated.ts",
-    "./agent-catalog/overrides": "./src/agent-catalog/overrides/product.overrides.ts"
+    "./agent-catalog/overrides": "./src/agent-catalog/overrides/product.overrides.ts",
+    "./device/ports": "./src/device/device.ports.ts",
+    "./device/errors": "./src/device/device.errors.ts",
+    "./device/hash.credential": "./src/device/device.hash.credential.ts",
+    "./device/redact.pairing.code.in.url": "./src/device/device.redact.pairing.code.in.url.ts",
+    "./device/create.pairing.code.usecase": "./src/device/device.create.pairing.code.usecase.ts",
+    "./device/claim.pairing.code.usecase": "./src/device/device.claim.pairing.code.usecase.ts",
+    "./device/revoke.device.usecase": "./src/device/device.revoke.device.usecase.ts",
+    "./device/create.probe.device.usecase": "./src/device/device.create.probe.device.usecase.ts"
   },
   "scripts": {
     "lint": "oxlint --deny-warnings",

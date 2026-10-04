@@ -1,6 +1,6 @@
 import { ConnectionCheckResult } from "contracts/http/connection-test"
-import { CreateProbeDeviceResult } from "../device/device.create.probe.device.usecase"
-import { RevokeDeviceCommand, RevokeDeviceResult } from "../device/device.revoke.device.usecase"
+import { CreateProbeDeviceResult } from "core/device/create.probe.device.usecase"
+import { RevokeDeviceCommand, RevokeDeviceResult } from "core/device/revoke.device.usecase"
 
 export type LookupAddress = Readonly<{ address: string; family: number }>
 

@@ -1,22 +1,19 @@
 import { FastifyInstance } from "fastify"
-import { AgentDatabase } from "../persistence/database"
-import { makeClaimPairingCode } from "./device.claim.pairing.code.usecase"
-import { makeCreatePairingCode } from "./device.create.pairing.code.usecase"
+import { makeClaimPairingCode } from "core/device/claim.pairing.code.usecase"
+import { makeCreatePairingCode } from "core/device/create.pairing.code.usecase"
 import {
   CreateProbeDeviceResult,
   makeCreateProbeDevice,
-} from "./device.create.probe.device.usecase"
-import {
-  makeRevokeDevice,
-  RevokeDeviceCommand,
-  RevokeDeviceResult,
-} from "./device.revoke.device.usecase"
-import { registerDeviceRoutes } from "./device.routes"
+} from "core/device/create.probe.device.usecase"
+import { makeRevokeDevice } from "core/device/revoke.device.usecase"
+import { RevokeDeviceCommand, RevokeDeviceResult } from "core/device/revoke.device.usecase"
 import {
   FindDeviceByCredentialHash,
   GetAdvertisedEndpointSettings,
   TouchDeviceLastSeen,
-} from "./device.ports"
+} from "core/device/ports"
+import { AgentDatabase } from "../persistence/database"
+import { registerDeviceRoutes } from "./device.routes"
 import { closeDeviceConnections } from "./device.presence"
 import {
   makeClaimPairingCodeRow,

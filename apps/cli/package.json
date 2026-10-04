@@ -19,10 +19,12 @@
     "contracts": "workspace:*",
     "core": "workspace:*",
     "picocolors": "^1.1.1",
+    "qrcode": "^1.5.4",
     "server": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.6",
     "bun-types": "^1.3.1",
     "oxlint": "catalog:",
     "typescript": "catalog:"

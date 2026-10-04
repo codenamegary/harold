@@ -1,8 +1,4 @@
-import {
-  CloseDeviceConnections,
-  RevokeDeviceRow,
-  RevokeDeviceRowResult,
-} from "./device.ports"
+import { CloseDeviceConnections, RevokeDeviceRow, RevokeDeviceRowResult } from "./device.ports"
 
 export type RevokeDeviceCommand = Readonly<{
   deviceId: string

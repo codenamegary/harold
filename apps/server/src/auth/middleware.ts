@@ -1,8 +1,5 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
-import {
-  FindDeviceByCredentialHash,
-  TouchDeviceLastSeen,
-} from "../device/device.ports"
+import { FindDeviceByCredentialHash, TouchDeviceLastSeen } from "core/device/ports"
 import { authenticate } from "./authenticate"
 import { authorizeActiveFullOperator } from "./authorize"
 import { isHostPrincipalRequest } from "./request.origin"
@@ -49,14 +46,10 @@ const touchDeviceLastSeenForPrincipal = (params: {
   })
 }
 
-export const registerAuthMiddleware = (
-  app: FastifyInstance,
-  deps: AuthMiddlewareDeps,
-) => {
+export const registerAuthMiddleware = (app: FastifyInstance, deps: AuthMiddlewareDeps) => {
   const resolveHostPrincipal =
     deps.isLoopbackRequest ??
-    ((request: FastifyRequest) =>
-      isHostPrincipalRequest(request, deps.getTrustedProxies?.() ?? []))
+    ((request: FastifyRequest) => isHostPrincipalRequest(request, deps.getTrustedProxies?.() ?? []))
 
   // preValidation so auth runs before route handshake / auto-resume work.
   app.addHook("preValidation", async (request, reply) => {
@@ -74,10 +67,12 @@ export const registerAuthMiddleware = (
     setRequestPrincipal(request, authResult.principal)
 
     const rejectPresentedInvalid =
-      authResult.credentialPresented &&
-      authResult.principal.kind === "unauthenticated"
+      authResult.credentialPresented && authResult.principal.kind === "unauthenticated"
 
-    if (isOpenRoute({ method: request.method, routerPath }) || routerPath === SESSIONS_STREAM_PATH) {
+    if (
+      isOpenRoute({ method: request.method, routerPath }) ||
+      routerPath === SESSIONS_STREAM_PATH
+    ) {
       if (rejectPresentedInvalid) {
         return sendUnauthorized(reply)
       }
