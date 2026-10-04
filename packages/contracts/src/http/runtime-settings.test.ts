@@ -41,6 +41,30 @@ describe("isIpOrCidr", () => {
 })
 
 describe("RuntimeSettingsSchema", () => {
+  test("accepts loopback http advertised URL", () => {
+    const settings = {
+      ...validSettings,
+      advertisedUrl: "http://127.0.0.1:3847",
+    }
+
+    expect(RuntimeSettingsSchema.parse(settings)).toEqual(settings)
+  })
+
+  test("accepts http advertised URL on localhost and IPv6 loopback", () => {
+    expect(
+      RuntimeSettingsSchema.safeParse({
+        ...validSettings,
+        advertisedUrl: "http://localhost:3847",
+      }).success,
+    ).toBe(true)
+    expect(
+      RuntimeSettingsSchema.safeParse({
+        ...validSettings,
+        advertisedUrl: "http://[::1]:3847",
+      }).success,
+    ).toBe(true)
+  })
+
   test("accepts seeded defaults", () => {
     expect(RuntimeSettingsSchema.parse(validSettings)).toEqual(validSettings)
   })
@@ -78,6 +102,24 @@ describe("RuntimeSettingsSchema", () => {
         advertisedUrl: "http://agents.example.com",
       }),
     ).toThrow()
+  })
+
+  test("rejects http advertised URL on a non-loopback local address", () => {
+    expect(
+      RuntimeSettingsSchema.safeParse({
+        ...validSettings,
+        advertisedUrl: "http://192.168.1.10:3847",
+      }).success,
+    ).toBe(false)
+  })
+
+  test("rejects malformed loopback http advertised URL", () => {
+    expect(
+      RuntimeSettingsSchema.safeParse({
+        ...validSettings,
+        advertisedUrl: "http://127.0.0.1:notaport",
+      }).success,
+    ).toBe(false)
   })
 
   test("rejects malformed https advertised URL", () => {
@@ -131,6 +173,22 @@ describe("UpdateRuntimeSettingsBodySchema", () => {
     expect(UpdateRuntimeSettingsBodySchema.parse({ advertisedUrl: null })).toEqual({
       advertisedUrl: null,
     })
+  })
+
+  test("accepts loopback http advertised URL patch", () => {
+    expect(
+      UpdateRuntimeSettingsBodySchema.parse({ advertisedUrl: "http://localhost:3847" }),
+    ).toEqual({
+      advertisedUrl: "http://localhost:3847",
+    })
+  })
+
+  test("rejects non-loopback http advertised URL patch", () => {
+    expect(
+      UpdateRuntimeSettingsBodySchema.safeParse({
+        advertisedUrl: "http://agents.example.com",
+      }).success,
+    ).toBe(false)
   })
 
   test("rejects unknown fields", () => {

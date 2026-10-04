@@ -45,6 +45,9 @@
     "./runtime-settings": "./src/runtime-settings/runtime-settings.file.adapters.ts",
     "./filesystem": "./src/filesystem/filesystem.node.adapters.ts",
     "./workspace": "./src/workspace/workspace.assembly.ts",
-    "./status-summary": "./src/status/status.summary.adapters.ts"
+    "./status-summary": "./src/status/status.summary.adapters.ts",
+    "./filesystem/node-adapters": "./src/filesystem/filesystem.node.adapters.ts",
+    "./runtime-settings/file-store": "./src/runtime-settings/runtime-settings.file.adapters.ts",
+    "./runtime-settings/update.usecase": "./src/runtime-settings/runtime-settings.update.usecase.ts"
   }
 }

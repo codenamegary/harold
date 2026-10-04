@@ -61,7 +61,11 @@
     "./logs/tail.models": "./src/logs/logs.tail.models.ts",
     "./logs/tail.ports": "./src/logs/logs.tail.ports.ts",
     "./logs/tail.usecase": "./src/logs/logs.tail.usecase.ts",
-    "./logs/tail.node.adapters": "./src/logs/logs.tail.node.adapters.ts"
+    "./logs/tail.node.adapters": "./src/logs/logs.tail.node.adapters.ts",
+    "./reachability/models": "./src/reachability/reachability.models.ts",
+    "./reachability/ports": "./src/reachability/reachability.ports.ts",
+    "./reachability/node.adapters": "./src/reachability/reachability.node.adapters.ts",
+    "./reachability/verify.usecase": "./src/reachability/reachability.verify.usecase.ts"
   },
   "scripts": {
     "lint": "oxlint --deny-warnings",
