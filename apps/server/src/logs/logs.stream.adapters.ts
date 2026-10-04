@@ -2,8 +2,8 @@ import { Writable } from "node:stream"
 import { SpawnAgentProcessFn } from "../acp/supervisor/supervisor.ports"
 import { SpawnAgentProcessParams } from "../acp/supervisor/supervisor.process.adapters"
 import { SpawnedAgentProcess } from "../acp/supervisor/models"
-import { AppendLog } from "./logs.ports"
-import { parsePinoLine } from "./logs.pino.line"
+import { AppendLog } from "core/logs/ports"
+import { parsePinoLine } from "core/logs/pino.line"
 
 export type CreateLogSinkStreamParams = Readonly<{
   appendLog: AppendLog

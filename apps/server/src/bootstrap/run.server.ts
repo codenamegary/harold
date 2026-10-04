@@ -14,6 +14,7 @@ import { buildAppliedRuntimeSettings } from "../runtime-settings/resolve.runtime
 import { createRuntime } from "../runtime/runtime"
 import { ConsoleAsset } from "../console/console.assets"
 import { daemonStateFilePath, makeDaemonStateFileStore } from "core/daemon-state/node.adapters"
+import { resolveDaemonLogPath } from "core/logs/tail.node.adapters"
 import { composeServerGetStatus } from "../status/status.adapters"
 import { startDaemonStateWriter } from "../status/daemon.state.writer"
 
@@ -43,8 +44,12 @@ export const runServer = async (options: RunServerOptions = {}) => {
     port: applied.bindPort,
     dataDir: envConfig.dataDir,
   })
-  const logStream =
-    applied.logPath === null ? process.stdout : createWriteStream(applied.logPath, { flags: "a" })
+  // The daemon always logs to a file so `harold logs` can tail it from
+  // outside the daemon process (ADR-0006). A null logPath means the default
+  // file under the data dir, not stdout.
+  const logStream = createWriteStream(resolveDaemonLogPath(applied.logPath, envConfig.dataDir), {
+    flags: "a",
+  })
   const runtime = createRuntime(packageJson.version)
   const { app, acpSupervisor, runtimeStatusService } = await createServer({
     config,

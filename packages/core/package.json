@@ -7,6 +7,9 @@
     "./status/models": "./src/status/status.models.ts",
     "./status/ports": "./src/status/status.ports.ts",
     "./status/get.usecase": "./src/status/status.get.usecase.ts",
+    "./status/summary.models": "./src/status/status.summary.models.ts",
+    "./status/summary.ports": "./src/status/status.summary.ports.ts",
+    "./status/summary.usecase": "./src/status/status.summary.usecase.ts",
     "./daemon-state/models": "./src/daemon-state/daemon.state.models.ts",
     "./daemon-state/ports": "./src/daemon-state/daemon.state.ports.ts",
     "./daemon-state/node.adapters": "./src/daemon-state/daemon.state.node.adapters.ts",
@@ -49,7 +52,16 @@
     "./workspace/create.workspace.id": "./src/workspace/workspace.create.workspace.id.ts",
     "./workspace/page.cursor": "./src/workspace/workspace.page.cursor.ts",
     "./workspace/register.usecase": "./src/workspace/workspace.register.usecase.ts",
-    "./workspace/delete.usecase": "./src/workspace/workspace.delete.usecase.ts"
+    "./workspace/delete.usecase": "./src/workspace/workspace.delete.usecase.ts",
+    "./logs/models": "./src/logs/logs.models.ts",
+    "./logs/ports": "./src/logs/logs.ports.ts",
+    "./logs/query.usecase": "./src/logs/logs.query.usecase.ts",
+    "./logs/pino.line": "./src/logs/logs.pino.line.ts",
+    "./logs/buffer.adapters": "./src/logs/logs.buffer.adapters.ts",
+    "./logs/tail.models": "./src/logs/logs.tail.models.ts",
+    "./logs/tail.ports": "./src/logs/logs.tail.ports.ts",
+    "./logs/tail.usecase": "./src/logs/logs.tail.usecase.ts",
+    "./logs/tail.node.adapters": "./src/logs/logs.tail.node.adapters.ts"
   },
   "scripts": {
     "lint": "oxlint --deny-warnings",
