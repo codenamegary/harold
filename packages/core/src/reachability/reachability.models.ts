@@ -24,10 +24,15 @@ export type VerifyAdvertisedEndpointResult =
 /**
  * Android verifies reachability against `GET /v1/status` (ADR-0006), so the
  * advertised endpoint is verified through the same path. A path prefix on the
- * advertised URL is kept and the trailing slash collapsed.
+ * advertised URL is kept and the trailing slash collapsed. Query and fragment
+ * suffixes are not part of the endpoint base, so they are dropped before the
+ * status path is appended.
  */
-export const statusUrlFor = (advertisedUrl: string): string =>
-  `${advertisedUrl.replace(/\/+$/, "")}/v1/status`
+export const statusUrlFor = (advertisedUrl: string): string => {
+  const queryOrFragment = advertisedUrl.search(/[?#]/)
+  const base = queryOrFragment === -1 ? advertisedUrl : advertisedUrl.slice(0, queryOrFragment)
+  return `${base.replace(/\/+$/, "")}/v1/status`
+}
 
 export type ParsedStatusDocument =
   | { readonly ok: true; readonly status: Status }

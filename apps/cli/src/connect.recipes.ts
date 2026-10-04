@@ -27,7 +27,7 @@ export type RecipeDetection = Readonly<{
 export type ConnectRecipe = Readonly<{
   readonly id: RecipeId
   readonly detect: (deps: Readonly<{ which: WhichLookup }>) => RecipeDetection
-  readonly guide: (deps: Readonly<{ which: WhichLookup; writeLine: WriteLine }>) => void
+  readonly guide: (deps: Readonly<{ detection: RecipeDetection; writeLine: WriteLine }>) => void
 }>
 
 const localHaroldAddress = "127.0.0.1:3847"
@@ -45,9 +45,8 @@ const detectBinaries = (which: WhichLookup, binaries: readonly string[]): Recipe
     : { available: false, detail: `none of ${binaries.join(", ")} found on PATH` }
 }
 
-const guideReverseProxy = (deps: { which: WhichLookup; writeLine: WriteLine }): void => {
-  const { which, writeLine } = deps
-  const detection = detectBinaries(which, ["caddy", "traefik", "nginx"])
+const guideReverseProxy = (deps: { detection: RecipeDetection; writeLine: WriteLine }): void => {
+  const { detection, writeLine } = deps
 
   writeLine("Reverse proxy: terminate TLS in front of Harold.")
   writeLine(`  Detection: ${detection.detail}.`)
@@ -94,16 +93,11 @@ const guideReverseProxy = (deps: { which: WhichLookup; writeLine: WriteLine }): 
   connectHint(writeLine, "https://harold.example.com")
 }
 
-const guideTailscale = (deps: { which: WhichLookup; writeLine: WriteLine }): void => {
-  const { which, writeLine } = deps
-  const available = which("tailscale")
+const guideTailscale = (deps: { detection: RecipeDetection; writeLine: WriteLine }): void => {
+  const { detection, writeLine } = deps
 
   writeLine("Tailscale: serve Harold over HTTPS on your tailnet, or publicly with Funnel.")
-  writeLine(
-    available
-      ? "  Detection: tailscale CLI found."
-      : "  Detection: tailscale CLI not found; install it from https://tailscale.com/download",
-  )
+  writeLine(`  Detection: ${detection.detail}.`)
   writeLine("")
   writeLine("Serve to your tailnet only:")
   writeLine("  tailscale serve --bg 3847")
@@ -115,16 +109,11 @@ const guideTailscale = (deps: { which: WhichLookup; writeLine: WriteLine }): voi
   connectHint(writeLine, "https://<machine>.<tailnet>.ts.net")
 }
 
-const guideSshReverse = (deps: { which: WhichLookup; writeLine: WriteLine }): void => {
-  const { which, writeLine } = deps
-  const available = which("ssh")
+const guideSshReverse = (deps: { detection: RecipeDetection; writeLine: WriteLine }): void => {
+  const { detection, writeLine } = deps
 
   writeLine("SSH reverse tunnel: forward a public host's port back to local Harold.")
-  writeLine(
-    available
-      ? "  Detection: ssh found."
-      : "  Detection: ssh not found; install an OpenSSH client first.",
-  )
+  writeLine(`  Detection: ${detection.detail}.`)
   writeLine("")
   writeLine("1. Confirm Harold is running locally:")
   writeLine("   curl -fsS http://127.0.0.1:3847/v1/status")
@@ -145,16 +134,11 @@ const guideSshReverse = (deps: { which: WhichLookup; writeLine: WriteLine }): vo
   connectHint(writeLine, "https://harold.example.com")
 }
 
-const guideCloudflared = (deps: { which: WhichLookup; writeLine: WriteLine }): void => {
-  const { which, writeLine } = deps
-  const available = which("cloudflared")
+const guideCloudflared = (deps: { detection: RecipeDetection; writeLine: WriteLine }): void => {
+  const { detection, writeLine } = deps
 
   writeLine("Cloudflare Tunnel (cloudflared).")
-  writeLine(
-    available
-      ? "  Detection: cloudflared found."
-      : "  Detection: cloudflared not found; install it from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/",
-  )
+  writeLine(`  Detection: ${detection.detail}.`)
   writeLine("")
   writeLine("Quick tunnel, no account needed (URL changes each run):")
   writeLine(`  cloudflared tunnel --url http://${localHaroldAddress}`)
@@ -169,16 +153,11 @@ const guideCloudflared = (deps: { which: WhichLookup; writeLine: WriteLine }): v
   connectHint(writeLine, "https://harold.example.com")
 }
 
-const guideNgrok = (deps: { which: WhichLookup; writeLine: WriteLine }): void => {
-  const { which, writeLine } = deps
-  const available = which("ngrok")
+const guideNgrok = (deps: { detection: RecipeDetection; writeLine: WriteLine }): void => {
+  const { detection, writeLine } = deps
 
   writeLine("ngrok.")
-  writeLine(
-    available
-      ? "  Detection: ngrok found."
-      : "  Detection: ngrok not found; install it from https://ngrok.com/download",
-  )
+  writeLine(`  Detection: ${detection.detail}.`)
   writeLine("")
   writeLine("  ngrok http 3847")
   writeLine("  # prints https://<random>.ngrok-free.app (changes each run on the free plan)")
@@ -186,10 +165,11 @@ const guideNgrok = (deps: { which: WhichLookup; writeLine: WriteLine }): void =>
   connectHint(writeLine, "https://<random>.ngrok-free.app")
 }
 
-const guideCustom = (deps: { writeLine: WriteLine }): void => {
-  const { writeLine } = deps
+const guideCustom = (deps: { detection: RecipeDetection; writeLine: WriteLine }): void => {
+  const { detection, writeLine } = deps
 
   writeLine("Custom: bring any endpoint that proxies to Harold.")
+  writeLine(`  Detection: ${detection.detail}.`)
   writeLine("  Non-loopback endpoints must be https; http is allowed on loopback hosts only.")
   writeLine("  Use --check to verify without persisting, then persist:")
   writeLine("  harold connect --advertised-url https://harold.example.com")
@@ -214,17 +194,33 @@ export const connectRecipes: readonly ConnectRecipe[] = [
   },
   {
     id: "ssh-reverse",
-    detect: (deps) => detectBinaries(deps.which, ["ssh"]),
+    detect: (deps) =>
+      deps.which("ssh")
+        ? { available: true, detail: "ssh found" }
+        : { available: false, detail: "ssh not found; install an OpenSSH client first" },
     guide: guideSshReverse,
   },
   {
     id: "cloudflared",
-    detect: (deps) => detectBinaries(deps.which, ["cloudflared"]),
+    detect: (deps) =>
+      deps.which("cloudflared")
+        ? { available: true, detail: "cloudflared found" }
+        : {
+            available: false,
+            detail:
+              "cloudflared not found; install it from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/",
+          },
     guide: guideCloudflared,
   },
   {
     id: "ngrok",
-    detect: (deps) => detectBinaries(deps.which, ["ngrok"]),
+    detect: (deps) =>
+      deps.which("ngrok")
+        ? { available: true, detail: "ngrok found" }
+        : {
+            available: false,
+            detail: "ngrok not found; install it from https://ngrok.com/download",
+          },
     guide: guideNgrok,
   },
   {

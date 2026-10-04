@@ -97,7 +97,7 @@ export const runConnect = async (params: {
     }
 
     deps.writeLine(`Recipe: ${recipe.id}`)
-    recipe.guide({ which: deps.which, writeLine: deps.writeLine })
+    recipe.guide({ detection: recipe.detect({ which: deps.which }), writeLine: deps.writeLine })
 
     if (options.advertisedUrl === undefined) {
       deps.writeLine("")

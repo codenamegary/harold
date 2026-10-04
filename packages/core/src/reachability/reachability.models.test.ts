@@ -22,4 +22,16 @@ describe("statusUrlFor", () => {
   test("keeps the loopback http scheme", () => {
     expect(statusUrlFor("http://127.0.0.1:3847")).toBe("http://127.0.0.1:3847/v1/status")
   })
+
+  test("drops a query suffix before appending the status path", () => {
+    expect(statusUrlFor("https://x.example/?a=1")).toBe("https://x.example/v1/status")
+    expect(statusUrlFor("https://x.example/harold?a=1")).toBe("https://x.example/harold/v1/status")
+  })
+
+  test("drops a fragment suffix before appending the status path", () => {
+    expect(statusUrlFor("https://x.example/#fragment")).toBe("https://x.example/v1/status")
+    expect(statusUrlFor("https://x.example/harold/?a=1#fragment")).toBe(
+      "https://x.example/harold/v1/status",
+    )
+  })
 })

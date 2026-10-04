@@ -18,6 +18,11 @@ const makeWhich =
   (binary) =>
     binaries.includes(binary)
 
+const detection = (available: boolean, detail: string): RecipeDetection => ({
+  available,
+  detail,
+})
+
 const output = (lines: readonly string[]): string => lines.join("\n")
 
 describe("connectRecipes", () => {
@@ -56,7 +61,10 @@ describe("reverse-proxy recipe", () => {
     if (recipe === undefined) throw new Error("reverse-proxy recipe missing")
     const { lines, writeLine } = collectLines()
 
-    recipe.guide({ which: makeWhich([]), writeLine })
+    recipe.guide({
+      detection: detection(false, "none of caddy, traefik, nginx found on PATH"),
+      writeLine,
+    })
 
     const text = output(lines)
     expect(text).toContain("Caddy")
@@ -70,7 +78,10 @@ describe("reverse-proxy recipe", () => {
     if (recipe === undefined) throw new Error("reverse-proxy recipe missing")
     const { lines, writeLine } = collectLines()
 
-    recipe.guide({ which: makeWhich([]), writeLine })
+    recipe.guide({
+      detection: detection(false, "none of caddy, traefik, nginx found on PATH"),
+      writeLine,
+    })
 
     expect(output(lines)).toContain("Upgrade")
   })
@@ -97,7 +108,7 @@ describe("tailscale recipe", () => {
     if (recipe === undefined) throw new Error("tailscale recipe missing")
     const { lines, writeLine } = collectLines()
 
-    recipe.guide({ which: makeWhich(["tailscale"]), writeLine })
+    recipe.guide({ detection: detection(true, "tailscale CLI found"), writeLine })
 
     const text = output(lines)
     expect(text).toContain("tailscale CLI found")
@@ -112,7 +123,13 @@ describe("tailscale recipe", () => {
     if (recipe === undefined) throw new Error("tailscale recipe missing")
     const { lines, writeLine } = collectLines()
 
-    recipe.guide({ which: makeWhich([]), writeLine })
+    recipe.guide({
+      detection: detection(
+        false,
+        "tailscale CLI not found; install it from https://tailscale.com/download",
+      ),
+      writeLine,
+    })
 
     expect(output(lines)).toContain("not found")
   })
@@ -132,7 +149,7 @@ describe("ssh-reverse recipe", () => {
     if (recipe === undefined) throw new Error("ssh-reverse recipe missing")
     const { lines, writeLine } = collectLines()
 
-    recipe.guide({ which: makeWhich(["ssh"]), writeLine })
+    recipe.guide({ detection: detection(true, "ssh found"), writeLine })
 
     const text = output(lines)
     expect(text).toContain("ssh -N")
@@ -157,7 +174,13 @@ describe("cloudflared recipe", () => {
     if (recipe === undefined) throw new Error("cloudflared recipe missing")
     const { lines, writeLine } = collectLines()
 
-    recipe.guide({ which: makeWhich([]), writeLine })
+    recipe.guide({
+      detection: detection(
+        false,
+        "cloudflared not found; install it from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/",
+      ),
+      writeLine,
+    })
 
     const text = output(lines)
     expect(text).toContain("cloudflared tunnel --url http://127.0.0.1:3847")
@@ -180,7 +203,10 @@ describe("ngrok recipe", () => {
     if (recipe === undefined) throw new Error("ngrok recipe missing")
     const { lines, writeLine } = collectLines()
 
-    recipe.guide({ which: makeWhich([]), writeLine })
+    recipe.guide({
+      detection: detection(false, "ngrok not found; install it from https://ngrok.com/download"),
+      writeLine,
+    })
 
     expect(output(lines)).toContain("ngrok http 3847")
   })
@@ -202,7 +228,7 @@ describe("custom recipe", () => {
     if (recipe === undefined) throw new Error("custom recipe missing")
     const { lines, writeLine } = collectLines()
 
-    recipe.guide({ which: makeWhich([]), writeLine })
+    recipe.guide({ detection: detection(true, "operator-supplied endpoint"), writeLine })
 
     const text = output(lines)
     expect(text).toContain("https")
