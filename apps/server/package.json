@@ -44,6 +44,7 @@
     "./device": "./src/device/device.assembly.ts",
     "./runtime-settings": "./src/runtime-settings/runtime-settings.file.adapters.ts",
     "./filesystem": "./src/filesystem/filesystem.node.adapters.ts",
-    "./workspace": "./src/workspace/workspace.assembly.ts"
+    "./workspace": "./src/workspace/workspace.assembly.ts",
+    "./status-summary": "./src/status/status.summary.adapters.ts"
   }
 }

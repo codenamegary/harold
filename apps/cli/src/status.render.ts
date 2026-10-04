@@ -1,10 +1,13 @@
 import { Status } from "contracts/http/status"
-import { DaemonNotRunning } from "core/daemon-state/read.live.usecase"
+import { DaemonNotRunning, ReadLiveDaemonStateResult } from "core/daemon-state/read.live.usecase"
+import { StatusSummary } from "core/status/summary.models"
 
 export type StatusColors = Readonly<{
   green: (text: string) => string
   yellow: (text: string) => string
   red: (text: string) => string
+  dim: (text: string) => string
+  bold: (text: string) => string
 }>
 
 const stateColor = (status: Status, colors: StatusColors): ((text: string) => string) => {
@@ -19,28 +22,26 @@ const stateColor = (status: Status, colors: StatusColors): ((text: string) => st
 
 const padLabel = (label: string, width: number): string => label.padEnd(width)
 
-export const renderDaemonStatus = (params: {
-  status: Status
-  pid: number
-  colors: StatusColors
-}): string => {
-  const { status, pid, colors } = params
-  const colorState = stateColor(status, colors)
-  const rows: Array<[string, string]> = [
-    ["version", status.version],
-    ["local api", `http://${status.bindAddress}:${status.port}`],
-    ["started", status.startedAt],
-    ["acp", `${status.acp.state}, ${status.acp.activeSessions} active session(s)`],
-  ]
+const renderRows = (rows: Array<[string, string]>): string => {
   const labelWidth = Math.max(...rows.map(([label]) => label.length))
-
-  const lines = [
-    `Harold daemon is ${colorState(status.state)} (pid ${pid})`,
-    "",
-    ...rows.map(([label, value]) => `  ${padLabel(label, labelWidth)}  ${value}`),
-  ]
-  return lines.join("\n")
+  return rows.map(([label, value]) => `  ${padLabel(label, labelWidth)}  ${value}`).join("\n")
 }
+
+const formatAdvertisedEndpoint = (endpoint: { url: string | null; enabled: boolean }): string => {
+  if (endpoint.url === null) {
+    return "disabled"
+  }
+  return endpoint.enabled ? endpoint.url : `${endpoint.url} (disabled)`
+}
+
+export const renderStatusSummary = (summary: StatusSummary): string =>
+  renderRows([
+    ["data dir", summary.dataDir],
+    ["local api", `http://${summary.localApi.host}:${summary.localApi.port}`],
+    ["advertised endpoint", formatAdvertisedEndpoint(summary.advertisedEndpoint)],
+    ["agents", `${summary.agents.enabled} enabled, ${summary.agents.needsAuth} needs auth`],
+    ["workspaces", String(summary.workspaces)],
+  ])
 
 export const renderDaemonNotRunning = (error: DaemonNotRunning): string => {
   if (error.kind === "process_not_alive") {
@@ -50,4 +51,39 @@ export const renderDaemonNotRunning = (error: DaemonNotRunning): string => {
     return `Harold state file is unreadable: ${error.detail}`
   }
   return "Harold is not running."
+}
+
+export type RenderStatusParams = Readonly<{
+  summary: StatusSummary
+  daemon: ReadLiveDaemonStateResult
+  colors: StatusColors
+}>
+
+export const renderStatus = (params: RenderStatusParams): string => {
+  const sections = [params.colors.bold("Harold"), "", renderStatusSummary(params.summary)]
+
+  if (params.daemon.ok) {
+    const { status, pid } = params.daemon.state
+    const colorState = stateColor(status, params.colors)
+    sections.push(
+      "",
+      params.colors.bold("Daemon"),
+      "",
+      renderRows([
+        ["status", `${colorState(status.state)} (pid ${pid})`],
+        ["version", status.version],
+        ["started", status.startedAt],
+        ["acp", `${status.acp.state}, ${status.acp.activeSessions} active session(s)`],
+      ]),
+    )
+  } else {
+    sections.push(
+      "",
+      params.colors.bold("Daemon"),
+      "",
+      `  ${params.colors.dim(renderDaemonNotRunning(params.daemon.error))}`,
+    )
+  }
+
+  return sections.join("\n")
 }

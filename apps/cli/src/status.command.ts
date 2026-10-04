@@ -6,12 +6,15 @@ import {
   makeNodeProcessAlive,
 } from "core/daemon-state/node.adapters"
 import { makeReadLiveDaemonState } from "core/daemon-state/read.live.usecase"
+import { makeGetStatusSummary } from "core/status/summary.usecase"
 import { parseConfig } from "server/config"
-import { renderDaemonNotRunning, renderDaemonStatus } from "./status.render"
+import { openDatabase } from "server/database"
+import { composeStatusSummaryPorts } from "server/status-summary"
+import { renderStatus } from "./status.render"
 
 export const makeStatusCommand = (): Command => {
   const command = new Command("status")
-  command.description("show the running daemon's live status")
+  command.description("show Harold's status summary and live daemon state")
 
   command.action(() => {
     const config = parseConfig(process.env)
@@ -21,24 +24,15 @@ export const makeStatusCommand = (): Command => {
       }).read,
       isProcessAlive: makeNodeProcessAlive(),
     })
-    const result = readLiveDaemonState()
+    const daemon = readLiveDaemonState()
 
-    if (!result.ok) {
-      console.log(pc.red(renderDaemonNotRunning(result.error)))
-      if (result.error.kind !== "unreadable_state_file") {
-        console.log(pc.dim(`Start it with: ${pc.bold("harold serve")}`))
-      }
-      process.exitCode = 1
-      return
+    const database = openDatabase({ dataDir: config.dataDir })
+    try {
+      const getStatusSummary = makeGetStatusSummary(composeStatusSummaryPorts({ database, config }))
+      console.log(renderStatus({ summary: getStatusSummary(), daemon, colors: pc }))
+    } finally {
+      database.close()
     }
-
-    console.log(
-      renderDaemonStatus({
-        status: result.state.status,
-        pid: result.state.pid,
-        colors: pc,
-      }),
-    )
   })
 
   return command
