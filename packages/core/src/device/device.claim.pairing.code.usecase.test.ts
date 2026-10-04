@@ -2,10 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { Device } from "contracts/http/device"
 import { makeClaimPairingCode } from "./device.claim.pairing.code.usecase"
 import { hashPairingCode } from "./device.hash.pairing.code"
-import {
-  ClaimPairingCodeRowInput,
-  PairingCodeSnapshot,
-} from "./device.ports"
+import { ClaimPairingCodeRowInput, PairingCodeSnapshot } from "./device.ports"
 
 const FUTURE = "2099-01-01T00:00:00.000Z"
 const PAST = "2000-01-01T00:00:00.000Z"
@@ -36,9 +33,7 @@ const rowForCode = async (
   overrides: Partial<PairingCodeSnapshot> = {},
 ): Promise<PairingCodeSnapshot> => aRow(await hashPairingCode(code), overrides)
 
-const makeDeps = (
-  overrides: Partial<Parameters<typeof makeClaimPairingCode>[0]> = {},
-) => ({
+const makeDeps = (overrides: Partial<Parameters<typeof makeClaimPairingCode>[0]> = {}) => ({
   markExpiredActiveBefore: () => {
     throw new Error("markExpiredActiveBefore should not be called")
   },
@@ -174,8 +169,7 @@ describe("claim pairing code use case", () => {
           ok: false,
           error: { kind: "pairing_code_race" as const },
         }),
-        getPairingCodeById: () =>
-          aRow("unused", { state: "claimed" }),
+        getPairingCodeById: () => aRow("unused", { state: "claimed" }),
       }),
     )
 

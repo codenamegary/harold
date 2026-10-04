@@ -6,13 +6,7 @@ import { devices } from "../persistence/schema/devices"
 import { pairingCodes } from "../persistence/schema/pairing-codes"
 import { createDeviceId } from "./device.create.id"
 import { createPairingId } from "./device.create.pairing.id"
-import { DeviceError } from "./device.errors"
-import { isDeviceOnline } from "./device.presence"
-import {
-  decodeDevicePageCursor,
-  DevicePageCursorPayload,
-  encodeDevicePageCursor,
-} from "./device.page.cursor"
+import { DeviceError } from "core/device/errors"
 import {
   ClaimPairingCodeRow,
   ClaimPairingCodeRowInput,
@@ -32,7 +26,13 @@ import {
   RevokeDeviceRow,
   RevokeDeviceRowInput,
   TouchDeviceLastSeen,
-} from "./device.ports"
+} from "core/device/ports"
+import { isDeviceOnline } from "./device.presence"
+import {
+  decodeDevicePageCursor,
+  DevicePageCursorPayload,
+  encodeDevicePageCursor,
+} from "./device.page.cursor"
 
 type DeviceRow = typeof devices.$inferSelect
 type PairingCodeRow = typeof pairingCodes.$inferSelect
@@ -127,9 +127,7 @@ export const makeMarkExpiredActiveBefore =
     database.db
       .update(pairingCodes)
       .set({ state: "expired" })
-      .where(
-        and(eq(pairingCodes.state, "active"), lte(pairingCodes.expiresAt, input.nowIso)),
-      )
+      .where(and(eq(pairingCodes.state, "active"), lte(pairingCodes.expiresAt, input.nowIso)))
       .run()
   }
 
@@ -146,77 +144,75 @@ export const makeMarkPairingCodeExpired =
 export const makeGetPairingCodeById =
   (database: AgentDatabase): GetPairingCodeById =>
   (id: string) => {
-    const row = database.db
-      .select()
-      .from(pairingCodes)
-      .where(eq(pairingCodes.id, id))
-      .get()
+    const row = database.db.select().from(pairingCodes).where(eq(pairingCodes.id, id)).get()
     return row === undefined ? undefined : rowToPairingCodeSnapshot(row)
   }
 
 export const makeClaimPairingCodeRow =
   (database: AgentDatabase): ClaimPairingCodeRow =>
   (input: ClaimPairingCodeRowInput) => {
-    return database.db.transaction((tx): { ok: true; value: Device } | { ok: false; error: DeviceError } => {
-      const deviceId = createDeviceId()
+    return database.db.transaction(
+      (tx): { ok: true; value: Device } | { ok: false; error: DeviceError } => {
+        const deviceId = createDeviceId()
 
-      const current = tx
-        .select()
-        .from(pairingCodes)
-        .where(
-          and(
-            eq(pairingCodes.id, input.pairingCodeId),
-            eq(pairingCodes.state, "active"),
-            gt(pairingCodes.expiresAt, input.pairedAt),
-          ),
-        )
-        .get()
+        const current = tx
+          .select()
+          .from(pairingCodes)
+          .where(
+            and(
+              eq(pairingCodes.id, input.pairingCodeId),
+              eq(pairingCodes.state, "active"),
+              gt(pairingCodes.expiresAt, input.pairedAt),
+            ),
+          )
+          .get()
 
-      if (current === undefined) {
-        return { ok: false, error: { kind: "pairing_code_race" } }
-      }
+        if (current === undefined) {
+          return { ok: false, error: { kind: "pairing_code_race" } }
+        }
 
-      tx.insert(devices)
-        .values({
-          id: deviceId,
-          name: input.name,
-          platform: input.platform,
-          credentialHash: input.credentialHash,
-          pairedAt: input.pairedAt,
-          lastSeenAt: input.pairedAt,
-          revokedAt: null,
-        })
-        .run()
+        tx.insert(devices)
+          .values({
+            id: deviceId,
+            name: input.name,
+            platform: input.platform,
+            credentialHash: input.credentialHash,
+            pairedAt: input.pairedAt,
+            lastSeenAt: input.pairedAt,
+            revokedAt: null,
+          })
+          .run()
 
-      const claimed = tx
-        .update(pairingCodes)
-        .set({
-          state: "claimed",
-          claimedAt: input.pairedAt,
-          deviceId,
-        })
-        .where(
-          and(
-            eq(pairingCodes.id, input.pairingCodeId),
-            eq(pairingCodes.state, "active"),
-            gt(pairingCodes.expiresAt, input.pairedAt),
-          ),
-        )
-        .returning({ id: pairingCodes.id })
-        .all()
+        const claimed = tx
+          .update(pairingCodes)
+          .set({
+            state: "claimed",
+            claimedAt: input.pairedAt,
+            deviceId,
+          })
+          .where(
+            and(
+              eq(pairingCodes.id, input.pairingCodeId),
+              eq(pairingCodes.state, "active"),
+              gt(pairingCodes.expiresAt, input.pairedAt),
+            ),
+          )
+          .returning({ id: pairingCodes.id })
+          .all()
 
-      if (claimed.length === 0) {
-        return { ok: false, error: { kind: "pairing_code_race" } }
-      }
+        if (claimed.length === 0) {
+          return { ok: false, error: { kind: "pairing_code_race" } }
+        }
 
-      const row = tx.select().from(devices).where(eq(devices.id, deviceId)).get()
+        const row = tx.select().from(devices).where(eq(devices.id, deviceId)).get()
 
-      if (row === undefined) {
-        return { ok: false, error: { kind: "pairing_code_race" } }
-      }
+        if (row === undefined) {
+          return { ok: false, error: { kind: "pairing_code_race" } }
+        }
 
-      return { ok: true, value: rowToDevice(row) }
-    })
+        return { ok: true, value: rowToDevice(row) }
+      },
+    )
   }
 
 export const makeInsertProbeDevice =
@@ -266,10 +262,7 @@ export const makeTouchDeviceLastSeen =
       .run()
   }
 
-const clearPairingCodeDeviceRefs = (
-  executor: DbExecutor,
-  deviceId: string,
-): void => {
+const clearPairingCodeDeviceRefs = (executor: DbExecutor, deviceId: string): void => {
   executor
     .update(pairingCodes)
     .set({ deviceId: null })
@@ -294,33 +287,35 @@ const deleteDeviceRow = (
 export const makeRevokeDeviceRow =
   (database: AgentDatabase): RevokeDeviceRow =>
   (input: RevokeDeviceRowInput) => {
-    return database.db.transaction((tx): { ok: true; value: { newlyRevoked: boolean } } | { ok: false; error: DeviceError } => {
-      const row = tx.select().from(devices).where(eq(devices.id, input.deviceId)).get()
+    return database.db.transaction(
+      (tx): { ok: true; value: { newlyRevoked: boolean } } | { ok: false; error: DeviceError } => {
+        const row = tx.select().from(devices).where(eq(devices.id, input.deviceId)).get()
 
-      if (row === undefined) {
-        return { ok: false, error: { kind: "device_not_found" } }
-      }
-
-      let newlyRevoked = false
-
-      if (row.revokedAt === null) {
-        tx.update(devices)
-          .set({ revokedAt: input.revokedAt })
-          .where(and(eq(devices.id, input.deviceId), isNull(devices.revokedAt)))
-          .run()
-        newlyRevoked = true
-      }
-
-      if (input.hardDelete) {
-        clearPairingCodeDeviceRefs(tx, input.deviceId)
-        const deleted = deleteDeviceRow(tx, input.deviceId)
-        if (!deleted.ok) {
-          return deleted
+        if (row === undefined) {
+          return { ok: false, error: { kind: "device_not_found" } }
         }
-      }
 
-      return { ok: true, value: { newlyRevoked } }
-    })
+        let newlyRevoked = false
+
+        if (row.revokedAt === null) {
+          tx.update(devices)
+            .set({ revokedAt: input.revokedAt })
+            .where(and(eq(devices.id, input.deviceId), isNull(devices.revokedAt)))
+            .run()
+          newlyRevoked = true
+        }
+
+        if (input.hardDelete) {
+          clearPairingCodeDeviceRefs(tx, input.deviceId)
+          const deleted = deleteDeviceRow(tx, input.deviceId)
+          if (!deleted.ok) {
+            return deleted
+          }
+        }
+
+        return { ok: true, value: { newlyRevoked } }
+      },
+    )
   }
 
 const getDeviceRowById = (database: AgentDatabase, id: string): DeviceRow | undefined =>
@@ -432,17 +427,11 @@ const listBackward = (
   return [...rows].sort((left, right) => compareDevices({ left, right }))
 }
 
-const matchesStateFilter = (
-  device: Device,
-  state: DeviceState | undefined,
-): boolean => state === undefined || device.state === state
+const matchesStateFilter = (device: Device, state: DeviceState | undefined): boolean =>
+  state === undefined || device.state === state
 
 const listAllRows = (database: AgentDatabase): DeviceRow[] =>
-  database.db
-    .select()
-    .from(devices)
-    .orderBy(desc(devices.pairedAt), asc(devices.id))
-    .all()
+  database.db.select().from(devices).orderBy(desc(devices.pairedAt), asc(devices.id)).all()
 
 const paginateFiltered = (
   filtered: Device[],
@@ -483,9 +472,7 @@ const paginateFiltered = (
           ? encodeDevicePageCursor({ id: last.id, edge: "after" })
           : undefined,
       previousCursor:
-        firstIndex > 0
-          ? encodeDevicePageCursor({ id: first.id, edge: "before" })
-          : undefined,
+        firstIndex > 0 ? encodeDevicePageCursor({ id: first.id, edge: "before" }) : undefined,
       count: filtered.length,
     },
   }
@@ -515,9 +502,7 @@ export const makeListDevices =
     }
 
     const cursorRow =
-      decodedCursor?.ok === true
-        ? getDeviceRowById(database, decodedCursor.value.id)
-        : undefined
+      decodedCursor?.ok === true ? getDeviceRowById(database, decodedCursor.value.id) : undefined
 
     if (decodedCursor?.ok === true && cursorRow === undefined) {
       return { ok: false, error: { kind: "invalid_cursor" } }

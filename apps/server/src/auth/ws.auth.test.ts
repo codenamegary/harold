@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { EventStreamAuthFrameSchema } from "contracts/events/stream.auth"
 import { WebSocket, WebSocketServer } from "ws"
-import { hashDeviceCredential } from "../device/device.hash.credential"
+import { hashDeviceCredential } from "core/device/hash.credential"
 import { waitForAuthFrame } from "./ws.auth"
 
 describe("EventStreamAuthFrameSchema", () => {
@@ -25,20 +25,16 @@ describe("waitForAuthFrame", () => {
     const credential = "devcred_ws_frame"
     const credentialHash = hashDeviceCredential(credential)
 
-    const resultPromise = new Promise<Awaited<ReturnType<typeof waitForAuthFrame>>>(
-      (resolve) => {
-        server.on("connection", (socket) => {
-          void waitForAuthFrame({
-            socket,
-            timeoutMs: 1_000,
-            lookupByCredentialHash: (hash) =>
-              hash === credentialHash
-                ? { id: "device_ws", revokedAt: null }
-                : undefined,
-          }).then(resolve)
-        })
-      },
-    )
+    const resultPromise = new Promise<Awaited<ReturnType<typeof waitForAuthFrame>>>((resolve) => {
+      server.on("connection", (socket) => {
+        void waitForAuthFrame({
+          socket,
+          timeoutMs: 1_000,
+          lookupByCredentialHash: (hash) =>
+            hash === credentialHash ? { id: "device_ws", revokedAt: null } : undefined,
+        }).then(resolve)
+      })
+    })
 
     const client = new WebSocket(`ws://127.0.0.1:${address.port}`)
     await new Promise<void>((resolve) => {
@@ -70,17 +66,15 @@ describe("waitForAuthFrame", () => {
       throw new Error("expected bound address")
     }
 
-    const resultPromise = new Promise<Awaited<ReturnType<typeof waitForAuthFrame>>>(
-      (resolve) => {
-        server.on("connection", (socket) => {
-          void waitForAuthFrame({
-            socket,
-            timeoutMs: 1_000,
-            lookupByCredentialHash: () => undefined,
-          }).then(resolve)
-        })
-      },
-    )
+    const resultPromise = new Promise<Awaited<ReturnType<typeof waitForAuthFrame>>>((resolve) => {
+      server.on("connection", (socket) => {
+        void waitForAuthFrame({
+          socket,
+          timeoutMs: 1_000,
+          lookupByCredentialHash: () => undefined,
+        }).then(resolve)
+      })
+    })
 
     const client = new WebSocket(`ws://127.0.0.1:${address.port}`)
     await new Promise<void>((resolve) => {

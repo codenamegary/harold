@@ -15,8 +15,7 @@ export type CreateProbeDeviceResult =
   | { ok: false; error: DeviceError }
 
 export const makeCreateProbeDevice =
-  (deps: CreateProbeDeviceDeps) =>
-  (): CreateProbeDeviceResult => {
+  (deps: CreateProbeDeviceDeps) => (): CreateProbeDeviceResult => {
     const credential = createDeviceCredential()
     const credentialHash = hashDeviceCredential(credential)
 

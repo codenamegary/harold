@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { hashDeviceCredential } from "../device/device.hash.credential"
+import { hashDeviceCredential } from "core/device/hash.credential"
 import { authenticate } from "./authenticate"
 import { authorizeActiveFullOperator } from "./authorize"
 import { parseAuthorizationHeader } from "./bearer"
@@ -105,9 +105,7 @@ describe("authenticate", () => {
 describe("authorizeActiveFullOperator", () => {
   test("host and device are operators", () => {
     expect(authorizeActiveFullOperator({ kind: "host" })).toBe(true)
-    expect(
-      authorizeActiveFullOperator({ kind: "device", deviceId: "device_1" }),
-    ).toBe(true)
+    expect(authorizeActiveFullOperator({ kind: "device", deviceId: "device_1" })).toBe(true)
   })
 
   test("unauthenticated is not an operator", () => {
@@ -127,18 +125,12 @@ describe("isLoopbackRequest", () => {
 describe("isOpenRoute", () => {
   test("status, claim, and test routes are open", () => {
     expect(isOpenRoute({ method: "GET", routerPath: "/v1/status" })).toBe(true)
-    expect(
-      isOpenRoute({ method: "POST", routerPath: "/v1/pairing-codes/:code/claim" }),
-    ).toBe(true)
-    expect(isOpenRoute({ method: "POST", routerPath: "/v1/_test/validate" })).toBe(
-      true,
-    )
+    expect(isOpenRoute({ method: "POST", routerPath: "/v1/pairing-codes/:code/claim" })).toBe(true)
+    expect(isOpenRoute({ method: "POST", routerPath: "/v1/_test/validate" })).toBe(true)
   })
 
   test("operator routes are not open", () => {
-    expect(isOpenRoute({ method: "POST", routerPath: "/v1/pairing-codes" })).toBe(
-      false,
-    )
+    expect(isOpenRoute({ method: "POST", routerPath: "/v1/pairing-codes" })).toBe(false)
     expect(isOpenRoute({ method: "GET", routerPath: "/v1/workspaces" })).toBe(false)
     expect(isOpenRoute({ method: "GET", routerPath: "/v1/sessions/stream" })).toBe(false)
   })

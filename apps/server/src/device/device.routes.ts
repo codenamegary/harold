@@ -23,17 +23,14 @@ import {
   buildPairingCodeNotFoundProblem,
   buildPairingCodeRevokedProblem,
 } from "./device.problems"
-import { DeviceError } from "./device.errors"
+import { DeviceError } from "core/device/errors"
 import {
   ClaimPairingCodeCommand,
   ClaimPairingCodeResult,
-} from "./device.claim.pairing.code.usecase"
-import { ListDevices } from "./device.ports"
-import { CreatePairingCodeResult } from "./device.create.pairing.code.usecase"
-import {
-  RevokeDeviceCommand,
-  RevokeDeviceResult,
-} from "./device.revoke.device.usecase"
+} from "core/device/claim.pairing.code.usecase"
+import { ListDevices } from "core/device/ports"
+import { CreatePairingCodeResult } from "core/device/create.pairing.code.usecase"
+import { RevokeDeviceCommand, RevokeDeviceResult } from "core/device/revoke.device.usecase"
 
 const sendProblem = (
   reply: {
@@ -78,10 +75,7 @@ const isDeviceError = (error: { kind: string }): error is DeviceError => {
   }
 }
 
-const sendErrorProblem = (
-  reply: Parameters<typeof sendProblem>[0],
-  error: { kind: string },
-) => {
+const sendErrorProblem = (reply: Parameters<typeof sendProblem>[0], error: { kind: string }) => {
   if (isDeviceError(error)) {
     const mapped = problemForError(error)
     return sendProblem(reply, mapped.status, mapped.problem)
@@ -107,9 +101,7 @@ export const registerDeviceRoutes = (app: FastifyInstance, deps: DeviceRouteDeps
       return sendErrorProblem(reply, result.error)
     }
 
-    return reply
-      .status(201)
-      .send(CreatePairingCodeResponseSchema.parse(result.value))
+    return reply.status(201).send(CreatePairingCodeResponseSchema.parse(result.value))
   })
 
   app.post(claimPairingCodePath(":code"), async (request, reply) => {
@@ -121,9 +113,7 @@ export const registerDeviceRoutes = (app: FastifyInstance, deps: DeviceRouteDeps
       return sendErrorProblem(reply, result.error)
     }
 
-    return reply
-      .status(201)
-      .send(ClaimPairingCodeResponseSchema.parse(result.value))
+    return reply.status(201).send(ClaimPairingCodeResponseSchema.parse(result.value))
   })
 
   app.get(DEVICES_PATH, async (request, reply) => {
@@ -134,15 +124,17 @@ export const registerDeviceRoutes = (app: FastifyInstance, deps: DeviceRouteDeps
       return sendProblem(reply, 400, buildInvalidCursorProblem())
     }
 
-    return reply.status(200).send(DeviceCollectionSchema.parse({
-      items: result.value.items,
-      page: {
-        limit: result.value.limit,
-        nextCursor: result.value.nextCursor,
-        previousCursor: result.value.previousCursor,
-        count: result.value.count,
-      },
-    }))
+    return reply.status(200).send(
+      DeviceCollectionSchema.parse({
+        items: result.value.items,
+        page: {
+          limit: result.value.limit,
+          nextCursor: result.value.nextCursor,
+          previousCursor: result.value.previousCursor,
+          count: result.value.count,
+        },
+      }),
+    )
   })
 
   app.delete(devicePath(":deviceId"), async (request, reply) => {

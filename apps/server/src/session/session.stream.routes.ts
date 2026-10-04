@@ -7,17 +7,11 @@ import {
 import { authorizeActiveFullOperator } from "../auth/authorize"
 import { getRequestPrincipal } from "../auth/middleware"
 import { isHostPrincipalRequest } from "../auth/request.origin"
-import {
-  DEFAULT_WS_AUTH_FRAME_TIMEOUT_MS,
-  waitForAuthFrame,
-} from "../auth/ws.auth"
+import { DEFAULT_WS_AUTH_FRAME_TIMEOUT_MS, waitForAuthFrame } from "../auth/ws.auth"
 import { hostPrincipal, Principal } from "../auth/principal"
 import { websocketRawDataText } from "../auth/websocket.raw.data.text"
 import { touchDeviceLastSeenTolerant } from "../device/device.connection.lifecycle"
-import {
-  FindDeviceByCredentialHash,
-  TouchDeviceLastSeen,
-} from "../device/device.ports"
+import { FindDeviceByCredentialHash, TouchDeviceLastSeen } from "core/device/ports"
 import { registerDevicePresence } from "../device/device.presence"
 import { SessionHub } from "./hub/hub"
 
@@ -207,8 +201,7 @@ export const registerSessionStreamRoutes = (
                   agentId: message.agentId,
                   sessionId: message.sessionId,
                   text: message.text,
-                  ...(message.attachments !== undefined &&
-                  message.attachments.length > 0
+                  ...(message.attachments !== undefined && message.attachments.length > 0
                     ? { attachments: message.attachments }
                     : {}),
                 })

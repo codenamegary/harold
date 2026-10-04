@@ -12,7 +12,7 @@ import { bootTestApp } from "../test-support/test.harness"
 import { devices } from "../persistence/schema/devices"
 import { AgentDatabase } from "../persistence/database"
 import { Config } from "../config/config"
-import { hashDeviceCredential } from "../device/device.hash.credential"
+import { hashDeviceCredential } from "core/device/hash.credential"
 import { BEARER_CHALLENGE } from "./problems"
 
 const patchTrustedProxies = async (httpBase: string, trustedProxies: string[]) => {

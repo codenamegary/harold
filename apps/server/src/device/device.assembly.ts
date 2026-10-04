@@ -1,22 +1,28 @@
 import { FastifyInstance } from "fastify"
-import { AgentDatabase } from "../persistence/database"
-import { makeClaimPairingCode } from "./device.claim.pairing.code.usecase"
-import { makeCreatePairingCode } from "./device.create.pairing.code.usecase"
+import { CreatePairingCodeBody } from "contracts/http/pairing-code"
+import { makeClaimPairingCode } from "core/device/claim.pairing.code.usecase"
+import {
+  CreatePairingCodeResult,
+  makeCreatePairingCode,
+} from "core/device/create.pairing.code.usecase"
 import {
   CreateProbeDeviceResult,
   makeCreateProbeDevice,
-} from "./device.create.probe.device.usecase"
+} from "core/device/create.probe.device.usecase"
 import {
-  makeRevokeDevice,
   RevokeDeviceCommand,
   RevokeDeviceResult,
-} from "./device.revoke.device.usecase"
-import { registerDeviceRoutes } from "./device.routes"
+  makeRevokeDevice,
+} from "core/device/revoke.device.usecase"
 import {
   FindDeviceByCredentialHash,
   GetAdvertisedEndpointSettings,
+  GetPairingCodeById,
+  ListDevices,
   TouchDeviceLastSeen,
-} from "./device.ports"
+} from "core/device/ports"
+import { AgentDatabase } from "../persistence/database"
+import { registerDeviceRoutes } from "./device.routes"
 import { closeDeviceConnections } from "./device.presence"
 import {
   makeClaimPairingCodeRow,
@@ -41,6 +47,9 @@ export type AssembleDeviceSliceDeps = Readonly<{
 
 export type DeviceSlice = Readonly<{
   registerRoutes: (app: FastifyInstance) => void
+  createPairingCode: (body?: CreatePairingCodeBody) => Promise<CreatePairingCodeResult>
+  getPairingCodeById: GetPairingCodeById
+  listDevices: ListDevices
   findDeviceByCredentialHash: FindDeviceByCredentialHash
   touchDeviceLastSeen: TouchDeviceLastSeen
   createProbeDevice: () => CreateProbeDeviceResult
@@ -89,6 +98,9 @@ export const assembleDeviceSlice = (deps: AssembleDeviceSliceDeps): DeviceSlice 
         revokeDevice,
       })
     },
+    createPairingCode,
+    getPairingCodeById,
+    listDevices,
     findDeviceByCredentialHash,
     touchDeviceLastSeen,
     createProbeDevice,

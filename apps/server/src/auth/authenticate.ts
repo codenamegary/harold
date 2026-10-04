@@ -1,11 +1,6 @@
-import { hashDeviceCredential } from "../device/device.hash.credential"
+import { hashDeviceCredential } from "core/device/hash.credential"
 import { parseAuthorizationHeader } from "./bearer"
-import {
-  devicePrincipal,
-  hostPrincipal,
-  Principal,
-  unauthenticatedPrincipal,
-} from "./principal"
+import { devicePrincipal, hostPrincipal, Principal, unauthenticatedPrincipal } from "./principal"
 
 export type DeviceCredentialLookup = {
   id: string

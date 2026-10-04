@@ -1,7 +1,4 @@
-import {
-  CreatePairingCodeBody,
-  CreatePairingCodeResponse,
-} from "contracts/http/pairing-code"
+import { CreatePairingCodeBody, CreatePairingCodeResponse } from "contracts/http/pairing-code"
 import { DeviceError } from "./device.errors"
 import {
   AdvertisedEndpointSettings,
@@ -30,16 +27,12 @@ const isAdvertisedAvailable = (
 
 export const makeCreatePairingCode =
   (deps: CreatePairingCodeDeps) =>
-  async (
-    body: CreatePairingCodeBody = {},
-  ): Promise<CreatePairingCodeResult> => {
+  async (body: CreatePairingCodeBody = {}): Promise<CreatePairingCodeResult> => {
     const issue = async (endpoint: string): Promise<CreatePairingCodeResult> => {
       const code = generatePairingCode()
       const codeHash = await hashPairingCode(code)
       const createdAt = new Date().toISOString()
-      const expiresAt = new Date(
-        Date.parse(createdAt) + PAIRING_CODE_TTL_MS,
-      ).toISOString()
+      const expiresAt = new Date(Date.parse(createdAt) + PAIRING_CODE_TTL_MS).toISOString()
 
       const inserted = deps.insertPairingCode({ codeHash, createdAt, expiresAt })
       if (!inserted.ok) {

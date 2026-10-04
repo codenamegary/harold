@@ -29,9 +29,9 @@ export type InsertPairingCodeInput = Readonly<{
   expiresAt: string
 }>
 
-export type InsertPairingCode = (input: InsertPairingCodeInput) =>
-  | { ok: true; value: InsertedPairingCode }
-  | { ok: false; error: DeviceError }
+export type InsertPairingCode = (
+  input: InsertPairingCodeInput,
+) => { ok: true; value: InsertedPairingCode } | { ok: false; error: DeviceError }
 
 export type ListActivePairingCodes = () => ReadonlyArray<PairingCodeSnapshot>
 
@@ -53,9 +53,9 @@ export type ClaimPairingCodeRowInput = Readonly<{
   pairedAt: string
 }>
 
-export type ClaimPairingCodeRow = (input: ClaimPairingCodeRowInput) =>
-  | { ok: true; value: Device }
-  | { ok: false; error: DeviceError }
+export type ClaimPairingCodeRow = (
+  input: ClaimPairingCodeRowInput,
+) => { ok: true; value: Device } | { ok: false; error: DeviceError }
 
 export type InsertProbeDeviceInput = Readonly<{
   name: string
@@ -64,9 +64,9 @@ export type InsertProbeDeviceInput = Readonly<{
   pairedAt: string
 }>
 
-export type InsertProbeDevice = (input: InsertProbeDeviceInput) =>
-  | { ok: true; value: Device }
-  | { ok: false; error: DeviceError }
+export type InsertProbeDevice = (
+  input: InsertProbeDeviceInput,
+) => { ok: true; value: Device } | { ok: false; error: DeviceError }
 
 export type DeviceCredentialLookup = Readonly<{
   id: string
@@ -77,10 +77,7 @@ export type FindDeviceByCredentialHash = (
   credentialHash: string,
 ) => DeviceCredentialLookup | undefined
 
-export type TouchDeviceLastSeen = (input: {
-  deviceId: string
-  lastSeenAt: string
-}) => void
+export type TouchDeviceLastSeen = (input: { deviceId: string; lastSeenAt: string }) => void
 
 export type RevokeDeviceRowInput = Readonly<{
   deviceId: string

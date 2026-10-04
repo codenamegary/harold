@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test"
-import { CreatePairingCodeResponseSchema, PairingCodeValueSchema } from "contracts/http/pairing-code"
+import {
+  CreatePairingCodeResponseSchema,
+  PairingCodeValueSchema,
+} from "contracts/http/pairing-code"
 import { verifyPairingCode } from "./device.hash.pairing.code"
 import { makeCreatePairingCode } from "./device.create.pairing.code.usecase"
 
 const LOOPBACK_ENDPOINT = "http://127.0.0.1:4919"
 
-const makeDeps = (
-  overrides: Partial<Parameters<typeof makeCreatePairingCode>[0]> = {},
-) => ({
+const makeDeps = (overrides: Partial<Parameters<typeof makeCreatePairingCode>[0]> = {}) => ({
   loopbackEndpoint: LOOPBACK_ENDPOINT,
   getAdvertisedEndpointSettings: () => ({
     advertisedUrl: "https://tunnel.example.com" as string | null,
@@ -50,9 +51,7 @@ describe("create pairing code use case", () => {
     expect(response.id).toMatch(/^pair_/)
     expect(PairingCodeValueSchema.safeParse(response.code).success).toBe(true)
     expect(await verifyPairingCode({ code: response.code, codeHash: insertedCodeHash })).toBe(true)
-    expect(
-      Date.parse(response.expiresAt) - Date.parse(response.createdAt),
-    ).toBe(10 * 60 * 1000)
+    expect(Date.parse(response.expiresAt) - Date.parse(response.createdAt)).toBe(10 * 60 * 1000)
   })
 
   test("uses the advertised endpoint by default when available", async () => {

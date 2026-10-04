@@ -51,10 +51,7 @@ const findMatchingPairingCode = async (
   return matches.find((entry) => entry.matched)?.row
 }
 
-const resolveRaceOutcome = (
-  latest: PairingCodeSnapshot | undefined,
-  now: string,
-): DeviceError => {
+const resolveRaceOutcome = (latest: PairingCodeSnapshot | undefined, now: string): DeviceError => {
   if (latest?.state === "claimed") {
     return { kind: "pairing_code_claimed" }
   }
@@ -78,10 +75,7 @@ export const makeClaimPairingCode =
     const now = nowIso()
     deps.markExpiredActiveBefore({ nowIso: now })
 
-    const activeMatch = await findMatchingPairingCode(
-      normalized,
-      deps.listActivePairingCodes(),
-    )
+    const activeMatch = await findMatchingPairingCode(normalized, deps.listActivePairingCodes())
 
     if (activeMatch !== undefined) {
       if (activeMatch.expiresAt <= now) {
