@@ -14,6 +14,7 @@ import {
   resolveOpenCodePath,
   smokeRunRequested,
 } from "../test-support/smoke.gate"
+import { seedSmokeDevice } from "../test-support/session.stream.smoke"
 
 const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
   authorization: `Bearer ${app.deviceCredential.credential}`,
@@ -42,6 +43,7 @@ describe("ACP catalog session/list smoke", () => {
     const database = openDatabase({ dataDir: config.dataDir })
     const runtime = createRuntime("0.1.0")
     const { app, acpSupervisor } = await createServer({ config, runtime, database, whichFn })
+    seedSmokeDevice(app, database)
 
     try {
       const enableResponse = await app.inject({
@@ -93,6 +95,7 @@ describe("ACP catalog session/list smoke", () => {
       const database = openDatabase({ dataDir: config.dataDir })
       const runtime = createRuntime("0.1.0")
       const { app, acpSupervisor } = await createServer({ config, runtime, database, whichFn })
+      seedSmokeDevice(app, database)
 
       try {
         const enableResponse = await app.inject({

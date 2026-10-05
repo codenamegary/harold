@@ -12,6 +12,7 @@ import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
 import { allowWorkspaceRoots } from "../test-support/test.app"
+import { createSmokeLogCapture, seedSmokeDevice } from "../test-support/session.stream.smoke"
 import {
   hasCursorAuth,
   resolveCursorAgentPath,

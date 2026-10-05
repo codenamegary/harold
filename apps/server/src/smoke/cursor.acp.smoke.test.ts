@@ -11,9 +11,11 @@ import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
 import {
   boundStreamUrl,
+  createSmokeLogCapture,
   drainPrompt,
   failWithLogs,
   openStreamClient,
+  seedSmokeDevice,
 } from "../test-support/session.stream.smoke"
 import { allowWorkspaceRoots } from "../test-support/test.app"
 import {

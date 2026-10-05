@@ -135,6 +135,7 @@ describe("opencode ACP smoke", () => {
           {
             method: "POST",
             url: "/v1/sessions",
+            headers: authHeaders(app),
             payload: { agentId: "opencode", cwd: workspaceDir },
           },
           SESSION_CREATE_TIMEOUT_MS,
@@ -197,6 +198,7 @@ describe("opencode ACP smoke", () => {
           app,
           {
             method: "DELETE",
+            headers: authHeaders(app),
             url: `/v1/sessions/${encodeURIComponent(session.sessionId)}?agentId=opencode`,
           },
           SESSION_DELETE_TIMEOUT_MS,
