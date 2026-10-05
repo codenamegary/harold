@@ -10,6 +10,10 @@ import { WorkspaceCollectionSchema, WorkspaceSchema } from "contracts/http/works
 import { bootTestApp } from "../test-support/test.harness"
 import { encodeWorkspacePageCursor } from "core/workspace/page.cursor"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 type TestServerApp = Awaited<ReturnType<typeof bootTestApp>>["app"]
 
 const createWorkspaceDir = async (parent: string, name: string) => {
@@ -20,6 +24,7 @@ const createWorkspaceDir = async (parent: string, name: string) => {
 
 const allowRoots = async (app: TestServerApp, roots: string[]) => {
   await app.inject({
+    headers: authHeaders(app),
     method: "PATCH",
     url: "/v1/settings/runtime",
     payload: { allowedRoots: roots },
@@ -33,6 +38,7 @@ const registerWorkspace = async (
 ) => {
   await allowRoots(app, [dataDir])
   return app.inject({
+    headers: authHeaders(app),
     method: "POST",
     url: "/v1/workspaces",
     payload,
@@ -63,6 +69,7 @@ describe("POST /v1/workspaces", () => {
     const missingPath = path.join(dataDir, "missing")
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/workspaces",
       payload: { name: "Missing", path: missingPath },
@@ -84,6 +91,7 @@ describe("POST /v1/workspaces", () => {
     await writeFile(filePath, "not a directory")
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/workspaces",
       payload: { name: "File", path: filePath },
@@ -124,6 +132,7 @@ describe("GET /v1/workspaces", () => {
     await registerWorkspace(app, dataDir, { name: "Beta", path: beta })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/workspaces?limit=1",
     })
@@ -156,6 +165,7 @@ describe("GET /v1/workspaces", () => {
       JSON.parse(
         (
           await app.inject({
+            headers: authHeaders(app),
             method: "GET",
             url: "/v1/workspaces?limit=2",
           })
@@ -171,6 +181,7 @@ describe("GET /v1/workspaces", () => {
       JSON.parse(
         (
           await app.inject({
+            headers: authHeaders(app),
             method: "GET",
             url: `/v1/workspaces?limit=2&cursor=${firstPage.page.nextCursor}`,
           })
@@ -186,6 +197,7 @@ describe("GET /v1/workspaces", () => {
       JSON.parse(
         (
           await app.inject({
+            headers: authHeaders(app),
             method: "GET",
             url: `/v1/workspaces?limit=2&cursor=${secondPage.page.previousCursor}`,
           })
@@ -202,6 +214,7 @@ describe("GET /v1/workspaces", () => {
     const { app } = await bootTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: `/v1/workspaces?cursor=${encodeWorkspacePageCursor({
         id: "ws_01J0000000000000000000000",
@@ -226,6 +239,7 @@ describe("GET /v1/workspaces", () => {
     await rm(beta, { recursive: true, force: true })
 
     const searchResponse = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/workspaces?q=alpha",
     })
@@ -236,6 +250,7 @@ describe("GET /v1/workspaces", () => {
     expect(searchBody.page.count).toBe(1)
 
     const stateResponse = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/workspaces?state=missing",
     })
@@ -259,6 +274,7 @@ describe("GET /v1/workspaces/:workspaceId", () => {
     const workspace = WorkspaceSchema.parse(JSON.parse(created.body))
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: `/v1/workspaces/${workspace.id}`,
     })
@@ -274,6 +290,7 @@ describe("GET /v1/workspaces/:workspaceId", () => {
     const { app } = await bootTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/workspaces/ws_01J0000000000000000000000",
     })
@@ -297,6 +314,7 @@ describe("PATCH /v1/workspaces/:workspaceId", () => {
     const workspace = WorkspaceSchema.parse(JSON.parse(created.body))
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: `/v1/workspaces/${workspace.id}`,
       payload: { name: "Renamed" },
@@ -313,6 +331,7 @@ describe("PATCH /v1/workspaces/:workspaceId", () => {
     const { app } = await bootTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/workspaces/ws_01J0000000000000000000000",
       payload: { name: "Nope" },
@@ -335,13 +354,18 @@ describe("DELETE /v1/workspaces/:workspaceId", () => {
     const workspace = WorkspaceSchema.parse(JSON.parse(created.body))
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: `/v1/workspaces/${workspace.id}`,
     })
 
     expect(response.statusCode).toBe(204)
 
-    const listResponse = await app.inject({ method: "GET", url: "/v1/workspaces" })
+    const listResponse = await app.inject({
+      headers: authHeaders(app),
+      method: "GET",
+      url: "/v1/workspaces",
+    })
     const list = WorkspaceCollectionSchema.parse(JSON.parse(listResponse.body))
     expect(list.items).toEqual([])
 
@@ -353,6 +377,7 @@ describe("DELETE /v1/workspaces/:workspaceId", () => {
     const { app } = await bootTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: "/v1/workspaces/ws_01J0000000000000000000000",
     })
@@ -376,6 +401,7 @@ describe("workspace state transitions", () => {
     await rm(workspaceDir, { recursive: true, force: true })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: `/v1/workspaces/${workspace.id}`,
     })
@@ -398,7 +424,11 @@ describe("restart durability", () => {
 
     const second = await first.reopen()
 
-    const listResponse = await second.app.inject({ method: "GET", url: "/v1/workspaces" })
+    const listResponse = await second.app.inject({
+      headers: authHeaders(second.app),
+      method: "GET",
+      url: "/v1/workspaces",
+    })
     const list = WorkspaceCollectionSchema.parse(JSON.parse(listResponse.body))
 
     expect(list.items.length).toBe(1)

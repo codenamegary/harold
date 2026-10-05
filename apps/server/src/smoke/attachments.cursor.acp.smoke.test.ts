@@ -18,6 +18,10 @@ import {
   smokeRunRequested,
 } from "../test-support/smoke.gate"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 const SUBSCRIBE_TIMEOUT_MS = 30_000
 const PROMPT_DEADLINE_MS = 120_000
 
@@ -111,7 +115,10 @@ const uploadImage = (
     method: "POST",
     url: `/v1/workspaces/${workspaceId}/attachments`,
     payload,
-    headers: { "content-type": `multipart/form-data; boundary=${MULTIPART_BOUNDARY}` },
+    headers: {
+      authorization: `Bearer ${app.deviceCredential.credential}`,
+      "content-type": `multipart/form-data; boundary=${MULTIPART_BOUNDARY}`,
+    },
   })
 }
 
@@ -133,9 +140,11 @@ type StreamClient = {
   close: () => Promise<void>
 }
 
-const openStreamClient = (wsUrl: string): Promise<StreamClient> =>
+const openStreamClient = (wsUrl: string, credential: string): Promise<StreamClient> =>
   new Promise((resolve, reject) => {
-    const ws = new WebSocket(wsUrl)
+    const ws = new WebSocket(wsUrl, {
+      headers: { authorization: `Bearer ${credential}` },
+    })
     const messages: Array<Record<string, unknown>> = []
     const waiters: Array<{
       predicate: (message: Record<string, unknown>) => boolean
@@ -314,11 +323,20 @@ describe("cursor attachment smoke", () => {
       })
       const database = openDatabase({ dataDir: config.dataDir })
       const runtime = createRuntime("0.1.0")
-      const { app } = await createServer({ config, runtime, database, whichFn })
+      const logCapture = createSmokeLogCapture()
+      const { app } = await createServer({
+        config,
+        runtime,
+        database,
+        whichFn,
+        logStream: logCapture.stream,
+      })
+      const device = seedSmokeDevice(app, database)
       await app.listen({ host: config.host, port: config.port })
 
       try {
         const enableResponse = await app.inject({
+          headers: authHeaders(app),
           method: "PATCH",
           url: "/v1/settings/agents/cursor",
           payload: { enabled: true, path: detectedPath },
@@ -328,6 +346,7 @@ describe("cursor attachment smoke", () => {
         await allowWorkspaceRoots(app, [dataDir])
 
         const workspaceResponse = await app.inject({
+          headers: authHeaders(app),
           method: "POST",
           url: "/v1/workspaces",
           payload: { name: "Attachment smoke workspace", path: workspaceDir },
@@ -336,6 +355,7 @@ describe("cursor attachment smoke", () => {
         const workspaceId = (JSON.parse(workspaceResponse.body) as { id: string }).id
 
         const sessionResponse = await app.inject({
+          headers: authHeaders(app),
           method: "POST",
           url: "/v1/sessions",
           payload: { agentId: "cursor", cwd: workspaceDir },
@@ -352,7 +372,7 @@ describe("cursor attachment smoke", () => {
           true,
         )
 
-        const client = await openStreamClient(boundStreamUrl(app))
+        const client = await openStreamClient(boundStreamUrl(app), device.credential)
         try {
           client.send({
             type: "subscribe",

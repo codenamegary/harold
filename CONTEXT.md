@@ -17,18 +17,13 @@ backend
 
 **Host**:
 The machine and process that run Harold, acting as the ACP client toward
-agent processes. Loopback requests with no device credential authenticate as
-the **host principal**.
-_Avoid_: host (for the web UI)
-
-**Operator console**:
-The web UI operators use to run the host. Usually bound to loopback and
-authenticated as the host principal.
-_Avoid_: admin panel, dashboard
+agent processes. The host has no principal on the Device API; local
+operators use the `harold` CLI, which reads host state directly.
+_Avoid_: host (for a client), host principal
 
 **Device**:
 A paired client that holds a durable opaque credential and acts as a full
-operator alongside the host console. Devices never speak ACP and never hold
+operator over the Device API. Devices never speak ACP and never hold
 provider secrets as the source of truth.
 _Avoid_: client (bare), phone
 

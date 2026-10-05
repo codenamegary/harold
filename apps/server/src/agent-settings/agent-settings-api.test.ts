@@ -23,6 +23,10 @@ import { SpawnAgentProcessFn } from "../acp/supervisor/supervisor.ports"
 import { acceptTestExecutablePath } from "../test-support/test.app"
 import { bootTestApp } from "../test-support/test.harness"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 const defaultFakeAcpOptions: SpawnFakeAcpOptions = {
   capabilities: { loadSession: true, sessionClose: true, sessionList: true },
 }
@@ -72,6 +76,7 @@ describe("GET /v1/settings/agents capabilities", () => {
     const { app } = await createTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/settings/agents",
     })
@@ -88,12 +93,14 @@ describe("GET /v1/settings/agents capabilities", () => {
     const { app } = await createTestApp({ whichFn })
 
     await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true },
     })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/settings/agents",
     })
@@ -127,18 +134,21 @@ describe("GET /v1/settings/agents capabilities", () => {
     })
 
     await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true },
     })
 
     await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/settings/agents/cursor/actions",
       payload: { type: "respawn" },
     })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/settings/agents",
     })
@@ -159,6 +169,7 @@ describe("GET /v1/settings/agents", () => {
     const { app } = await createTestApp({ whichFn })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/settings/agents",
     })
@@ -198,12 +209,14 @@ describe("GET /v1/settings/agents", () => {
     const { app } = await createTestApp({ whichFn })
 
     await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/opencode",
       payload: { enabled: true },
     })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/settings/agents",
     })
@@ -261,6 +274,7 @@ describe("POST /v1/settings/agents/:agentId/detect-path", () => {
     const { app } = await createTestApp({ whichFn })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/settings/agents/cursor/detect-path",
     })
@@ -271,6 +285,7 @@ describe("POST /v1/settings/agents/:agentId/detect-path", () => {
     expect(body.path).toBe(detectedPath)
 
     const listResponse = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/settings/agents",
     })
@@ -283,6 +298,7 @@ describe("POST /v1/settings/agents/:agentId/detect-path", () => {
     const { app } = await createTestApp({ whichFn })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/settings/agents/cursor/detect-path",
     })
@@ -305,6 +321,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/gemini",
       payload: { enabled: true, path: "/usr/local/bin/gemini" },
@@ -314,7 +331,11 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const problem = ConflictProblemSchema.parse(JSON.parse(response.body))
     expect(problem.detail).toContain("sessionCapabilities.list")
 
-    const listed = await app.inject({ method: "GET", url: "/v1/settings/agents" })
+    const listed = await app.inject({
+      headers: authHeaders(app),
+      method: "GET",
+      url: "/v1/settings/agents",
+    })
     const gemini = findAgent(AgentSettingsCollectionSchema.parse(JSON.parse(listed.body)), "gemini")
     expect(gemini.enabled).toBe(false)
   })
@@ -324,6 +345,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const { app } = await createTestApp({ whichFn })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/gemini",
       payload: { enabled: true, path: "/usr/local/bin/gemini" },
@@ -342,6 +364,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const { app } = await createTestApp({ whichFn })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true },
@@ -362,6 +385,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const { app } = await createTestApp({ whichFn })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true },
@@ -375,6 +399,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     expect(body.errors[0]?.code).toBe("validation.field.path.auto_detect_failed")
 
     const listResponse = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/settings/agents",
     })
@@ -392,12 +417,14 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const { app } = await createTestApp({ whichFn })
 
     await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true },
     })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: false },
@@ -416,18 +443,21 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const { app } = await createTestApp({ whichFn })
 
     await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true, path: storedPath },
     })
 
     await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: false },
     })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true },
@@ -445,12 +475,14 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const first = await createTestApp()
 
     await first.app.inject({
+      headers: authHeaders(first.app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true, path: storedPath },
     })
 
     await first.app.inject({
+      headers: authHeaders(first.app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: false },
@@ -459,6 +491,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const second = await first.reopen({ validateExecutablePathFn: validateExecutablePath })
 
     const response = await second.app.inject({
+      headers: authHeaders(second.app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true },
@@ -474,6 +507,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const { app } = await createTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true, path: "/opt/custom/agent" },
@@ -490,6 +524,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const { app } = await createTestApp({ validateExecutablePathFn: validateExecutablePath })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true, path: "/does/not/exist" },
@@ -505,6 +540,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const { app } = await createTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true, path: null },
@@ -519,6 +555,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const { app } = await createTestApp({ whichFn })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/claude-acp",
       payload: { enabled: true, path: detectedPath },
@@ -547,6 +584,7 @@ describe("PATCH /v1/settings/agents/:agentId", () => {
     const { app } = await createTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/unknown",
       payload: { enabled: true },
@@ -619,6 +657,7 @@ describe("POST /v1/settings/agents/import/detect and apply", () => {
     const { app } = await createTestApp({ whichFn, fetchRegistryFn })
 
     const detectResponse = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/settings/agents/import/detect",
     })
@@ -646,6 +685,7 @@ describe("POST /v1/settings/agents/import/detect and apply", () => {
       JSON.parse(
         (
           await app.inject({
+            headers: authHeaders(app),
             method: "GET",
             url: "/v1/settings/agents",
           })
@@ -655,6 +695,7 @@ describe("POST /v1/settings/agents/import/detect and apply", () => {
     expect(listBeforeApply.items.some((item) => item.id === "brand-new-agent")).toBe(false)
 
     const applyResponse = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/settings/agents/import/apply",
       payload: {
@@ -707,6 +748,7 @@ describe("POST /v1/settings/agents/import/detect and apply", () => {
     const { app } = await createTestApp({ fetchRegistryFn })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/settings/agents/import/detect",
     })
@@ -722,6 +764,7 @@ describe("POST /v1/settings/agents custom create", () => {
     const { app } = await createTestApp()
 
     const createResponse = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/settings/agents",
       payload: {},
@@ -750,6 +793,7 @@ describe("POST /v1/settings/agents custom create", () => {
     })
 
     const secondResponse = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/settings/agents",
       payload: {},
@@ -759,6 +803,7 @@ describe("POST /v1/settings/agents custom create", () => {
     expect(second.id).toBe("custom-custom-agent-1")
 
     const listResponse = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/settings/agents",
     })
@@ -773,6 +818,7 @@ describe("PATCH /v1/settings/agents/:agentId rename custom", () => {
     const { app } = await createTestApp()
 
     const createResponse = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/settings/agents",
       payload: {},
@@ -780,6 +826,7 @@ describe("PATCH /v1/settings/agents/:agentId rename custom", () => {
     const created = AgentSettingsSchema.parse(JSON.parse(createResponse.body))
 
     const renameResponse = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: `/v1/settings/agents/${created.id}`,
       payload: { displayName: "My Bot" },
@@ -794,6 +841,7 @@ describe("PATCH /v1/settings/agents/:agentId rename custom", () => {
       JSON.parse(
         (
           await app.inject({
+            headers: authHeaders(app),
             method: "GET",
             url: "/v1/settings/agents",
           })
@@ -808,6 +856,7 @@ describe("PATCH /v1/settings/agents/:agentId rename custom", () => {
     const { app } = await createTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { displayName: "Nope" },
@@ -825,6 +874,7 @@ describe("DELETE /v1/settings/agents/:agentId", () => {
       JSON.parse(
         (
           await app.inject({
+            headers: authHeaders(app),
             method: "POST",
             url: "/v1/settings/agents",
             payload: {},
@@ -834,6 +884,7 @@ describe("DELETE /v1/settings/agents/:agentId", () => {
     )
 
     const deleteCustom = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: `/v1/settings/agents/${created.id}`,
     })
@@ -843,6 +894,7 @@ describe("DELETE /v1/settings/agents/:agentId", () => {
       JSON.parse(
         (
           await app.inject({
+            headers: authHeaders(app),
             method: "GET",
             url: "/v1/settings/agents",
           })
@@ -852,6 +904,7 @@ describe("DELETE /v1/settings/agents/:agentId", () => {
     expect(list.items.some((item) => item.id === created.id)).toBe(false)
 
     const deleteCatalog = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: "/v1/settings/agents/cursor",
     })
@@ -870,6 +923,7 @@ describe("custom agent enable and spawn snapshot", () => {
         JSON.parse(
           (
             await app.inject({
+              headers: authHeaders(app),
               method: "POST",
               url: "/v1/settings/agents",
               payload: {},
@@ -879,6 +933,7 @@ describe("custom agent enable and spawn snapshot", () => {
       )
 
       const enableResponse = await app.inject({
+        headers: authHeaders(app),
         method: "PATCH",
         url: `/v1/settings/agents/${created.id}`,
         payload: { enabled: true, path: customPath, args: ["acp"] },
@@ -922,6 +977,7 @@ describe("agent settings durability", () => {
 
     const first = await createTestApp({ whichFn })
     const enableResponse = await first.app.inject({
+      headers: authHeaders(first.app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true },
@@ -930,6 +986,7 @@ describe("agent settings durability", () => {
 
     const second = await first.reopen({ whichFn })
     const response = await second.app.inject({
+      headers: authHeaders(second.app),
       method: "GET",
       url: "/v1/settings/agents",
     })
@@ -954,6 +1011,7 @@ describe("PATCH /v1/settings/agents/:agentId enable failures", () => {
     })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true },
@@ -963,6 +1021,7 @@ describe("PATCH /v1/settings/agents/:agentId enable failures", () => {
       JSON.parse(
         (
           await app.inject({
+            headers: authHeaders(app),
             method: "GET",
             url: "/v1/settings/agents",
           })
@@ -985,6 +1044,7 @@ describe("POST /v1/settings/agents/:agentId/actions", () => {
     const { app } = await createTestApp({ whichFn })
 
     const enableResponse = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true },
@@ -992,6 +1052,7 @@ describe("POST /v1/settings/agents/:agentId/actions", () => {
     expect(enableResponse.statusCode).toBe(200)
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/settings/agents/cursor/actions",
       payload: { type: "respawn" },
@@ -1007,6 +1068,7 @@ describe("POST /v1/settings/agents/:agentId/actions", () => {
     const { app } = await createTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/settings/agents/cursor/actions",
       payload: { type: "respawn" },
@@ -1016,6 +1078,7 @@ describe("POST /v1/settings/agents/:agentId/actions", () => {
       JSON.parse(
         (
           await app.inject({
+            headers: authHeaders(app),
             method: "GET",
             url: "/v1/settings/agents",
           })
@@ -1048,6 +1111,7 @@ describe("POST /v1/settings/agents/:agentId/actions", () => {
     })
 
     const enableResponse = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true },
@@ -1055,6 +1119,7 @@ describe("POST /v1/settings/agents/:agentId/actions", () => {
     expect(enableResponse.statusCode).toBe(200)
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/settings/agents/cursor/actions",
       payload: { type: "respawn" },
@@ -1064,6 +1129,7 @@ describe("POST /v1/settings/agents/:agentId/actions", () => {
       JSON.parse(
         (
           await app.inject({
+            headers: authHeaders(app),
             method: "GET",
             url: "/v1/settings/agents",
           })

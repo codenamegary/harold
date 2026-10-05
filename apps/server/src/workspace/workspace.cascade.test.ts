@@ -3,6 +3,10 @@ import { WorkspaceActiveSessionsProblemSchema } from "contracts/http/error"
 import { bootTestApp } from "../test-support/test.harness"
 import { enableAgent, seedBoundSession, seedWorkspace } from "../test-support/test.app"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 const whichFn = (binaryName: string) =>
   binaryName === "agent" ? "/usr/local/bin/agent" : undefined
 
@@ -26,18 +30,21 @@ describe("DELETE /v1/workspaces/:id cascade", () => {
     })
 
     const deleteResponse = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: `/v1/workspaces/${workspaceId}`,
     })
     expect(deleteResponse.statusCode).toBe(204)
 
     const getWorkspaceResponse = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: `/v1/workspaces/${workspaceId}`,
     })
     expect(getWorkspaceResponse.statusCode).toBe(404)
 
     const listSessions = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: `/v1/sessions?cwd=${encodeURIComponent(workspaceDir)}`,
     })
@@ -65,6 +72,7 @@ describe("DELETE /v1/workspaces/:id cascade", () => {
     })
 
     const deleteResponse = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: `/v1/workspaces/${workspaceId}`,
     })
@@ -74,12 +82,14 @@ describe("DELETE /v1/workspaces/:id cascade", () => {
     expect(problem.type).toBe("https://harold.local/problems/workspace-has-active-sessions")
 
     const forceDeleteResponse = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: `/v1/workspaces/${workspaceId}?force=true`,
     })
     expect(forceDeleteResponse.statusCode).toBe(204)
 
     const getWorkspaceResponse = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: `/v1/workspaces/${workspaceId}`,
     })

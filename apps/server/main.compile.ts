@@ -4,7 +4,6 @@ import path from "node:path"
 import { runServer } from "./src/bootstrap/run.server"
 import { extractMigrationFiles } from "./src/persistence/migrations/migrations.extract"
 import { embeddedMigrationEntries } from "./.generated/migrations.generated"
-import { consoleAssetEntries } from "./.generated/console.assets.generated"
 
 const migrationsDir = await mkdtemp(path.join(os.tmpdir(), "harold-migrations-"))
 await extractMigrationFiles(
@@ -15,9 +14,4 @@ await extractMigrationFiles(
   migrationsDir,
 )
 
-const consoleAssets = consoleAssetEntries.map((entry) => ({
-  path: entry.path,
-  body: new Uint8Array(Buffer.from(entry.base64, "base64")),
-}))
-
-await runServer({ consoleAssets, migrationsFolder: migrationsDir })
+await runServer({ migrationsFolder: migrationsDir })

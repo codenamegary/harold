@@ -15,6 +15,10 @@ import {
   smokeRunRequested,
 } from "../test-support/smoke.gate"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 const shouldRunSmoke =
   smokeRunRequested() && hasCursorAuth() && resolveCursorAgentPath() !== undefined
 
@@ -41,6 +45,7 @@ describe("ACP catalog session/list smoke", () => {
 
     try {
       const enableResponse = await app.inject({
+        headers: authHeaders(app),
         method: "PATCH",
         url: "/v1/settings/agents/cursor",
         payload: { enabled: true, path: detectedPath },
@@ -48,7 +53,11 @@ describe("ACP catalog session/list smoke", () => {
       expect(enableResponse.statusCode).toBe(200)
       expect(acpSupervisor.getRunningAgentIds()).toContain("cursor")
 
-      const listResponse = await app.inject({ method: "GET", url: "/v1/sessions" })
+      const listResponse = await app.inject({
+        headers: authHeaders(app),
+        method: "GET",
+        url: "/v1/sessions",
+      })
       expect(listResponse.statusCode).toBe(200)
       const collection = SessionCollectionSchema.parse(JSON.parse(listResponse.body))
       expect(Array.isArray(collection.items)).toBe(true)
@@ -87,6 +96,7 @@ describe("ACP catalog session/list smoke", () => {
 
       try {
         const enableResponse = await app.inject({
+          headers: authHeaders(app),
           method: "PATCH",
           url: "/v1/settings/agents/opencode",
           payload: { enabled: true, path: detectedPath },
@@ -94,7 +104,11 @@ describe("ACP catalog session/list smoke", () => {
         expect(enableResponse.statusCode).toBe(200)
         expect(acpSupervisor.getRunningAgentIds()).toContain("opencode")
 
-        const listResponse = await app.inject({ method: "GET", url: "/v1/sessions" })
+        const listResponse = await app.inject({
+          headers: authHeaders(app),
+          method: "GET",
+          url: "/v1/sessions",
+        })
         expect(listResponse.statusCode).toBe(200)
         const collection = SessionCollectionSchema.parse(JSON.parse(listResponse.body))
         expect(Array.isArray(collection.items)).toBe(true)

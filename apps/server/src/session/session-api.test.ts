@@ -10,6 +10,10 @@ import { WhichFn } from "core/agent-settings/resolve-agent-path"
 import { enableAgent, seedBoundSession, seedWorkspace } from "../test-support/test.app"
 import { bootTestApp } from "../test-support/test.harness"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 describe("POST /v1/sessions catalog create", () => {
   test("returns 201 with ACP catalog row and session config options", async () => {
     const whichFn: WhichFn = (binaryName) =>
@@ -35,6 +39,7 @@ describe("POST /v1/sessions catalog create", () => {
     await enableAgent(app, "cursor", whichFn)
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/sessions",
       payload: { agentId: "cursor", cwd: "/tmp/project" },
@@ -55,6 +60,7 @@ describe("POST /v1/sessions catalog create", () => {
     const { app } = await bootTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/sessions",
       payload: { agentId: "unknown", cwd: "/tmp/project" },
@@ -71,6 +77,7 @@ describe("POST /v1/sessions catalog create", () => {
     const { app } = await bootTestApp({ whichFn })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/sessions",
       payload: { agentId: "cursor", cwd: "/tmp/project" },
@@ -98,6 +105,7 @@ describe("POST /v1/sessions catalog create", () => {
     await acpSupervisor.stop()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/sessions",
       payload: { agentId: "cursor", cwd: "/tmp/project" },
@@ -116,6 +124,7 @@ describe("POST /v1/sessions catalog create", () => {
     const { app } = await bootTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/sessions",
       payload: { agentId: "cursor", cwd: "" },
@@ -166,7 +175,11 @@ describe("GET /v1/sessions catalog list", () => {
       agentId: "cursor",
     })
 
-    const listResponse = await app.inject({ method: "GET", url: "/v1/sessions" })
+    const listResponse = await app.inject({
+      headers: authHeaders(app),
+      method: "GET",
+      url: "/v1/sessions",
+    })
     const listed = SessionCollectionSchema.parse(JSON.parse(listResponse.body))
     expect(listResponse.statusCode).toBe(200)
     expect(listed.items).toEqual([

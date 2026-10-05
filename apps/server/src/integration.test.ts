@@ -9,6 +9,10 @@ import {
 } from "contracts/http/error"
 import { bootTestApp, disposeTestResources } from "./test-support/test.harness"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 describe("GET /v1/status", () => {
   test("returns 200 with a StatusSchema payload", async () => {
     const { app } = await bootTestApp({
@@ -16,7 +20,11 @@ describe("GET /v1/status", () => {
       registerTestRoutes: true,
     })
 
-    const response = await app.inject({ method: "GET", url: "/v1/status" })
+    const response = await app.inject({
+      headers: authHeaders(app),
+      method: "GET",
+      url: "/v1/status",
+    })
     const body = StatusSchema.parse(JSON.parse(response.body))
 
     expect(response.statusCode).toBe(200)
@@ -73,6 +81,7 @@ describe("error responses", () => {
     const { app } = await bootTestApp({ registerTestRoutes: true })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/_test/validate",
       payload: {},
@@ -90,6 +99,7 @@ describe("error responses", () => {
     const { app } = await bootTestApp({ registerTestRoutes: true })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/_test/error",
     })

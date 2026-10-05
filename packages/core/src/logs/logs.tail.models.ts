@@ -1,4 +1,14 @@
-import { LogRecordInput } from "./logs.models"
+import { LogLevel } from "contracts/http/runtime-settings"
+
+/** A parsed daemon log line. The daemon log is the single log surface since
+ * the console retirement; the tail is read from the file, not over HTTP. */
+export type LogRecordInput = {
+  ts: string
+  level: LogLevel
+  source: "server" | "agent"
+  message: string
+  agentId?: string
+}
 
 /** One line of the daemon log file: the raw text beside its parsed record. */
 export type LogTailEntry = Readonly<{

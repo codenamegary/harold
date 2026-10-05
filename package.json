@@ -29,11 +29,11 @@
     "test": "bun run --filter '*' test",
     "typecheck": "bun run --filter '*' typecheck",
     "check": "bun run lint && bun run typecheck && bun run test",
-    "test:coverage": "bun run --filter server test:coverage && bun run --filter web test:coverage",
+    "test:coverage": "bun run --filter server test:coverage",
     "test:smoke": "HAROLD_RUN_SMOKE=1 bun --filter server test:smoke",
     "db:generate": "bun run --filter server db:generate",
     "catalog:codegen": "bun run --filter core catalog:codegen",
-    "build:release": "bun run --filter web build && bun run --filter server build:release",
+    "build:release": "bun run --filter server build:release",
     "prepare": "husky"
   },
   "devDependencies": {

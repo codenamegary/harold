@@ -4,11 +4,10 @@ import {
   SessionStreamClientMessageSchema,
   SessionStreamServerMessage,
 } from "contracts/http/session.stream"
-import { authorizeActiveFullOperator } from "../auth/authorize"
+import { authorizeActiveDevice } from "../auth/authorize"
 import { getRequestPrincipal } from "../auth/middleware"
-import { isHostPrincipalRequest } from "../auth/request.origin"
 import { DEFAULT_WS_AUTH_FRAME_TIMEOUT_MS, waitForAuthFrame } from "../auth/ws.auth"
-import { hostPrincipal, Principal } from "../auth/principal"
+import { Principal } from "../auth/principal"
 import { websocketRawDataText } from "../auth/websocket.raw.data.text"
 import { touchDeviceLastSeenTolerant } from "../device/device.connection.lifecycle"
 import { FindDeviceByCredentialHash, TouchDeviceLastSeen } from "core/device/ports"
@@ -21,8 +20,6 @@ type RegisterSessionStreamRoutesParams = {
   findDeviceByCredentialHash: FindDeviceByCredentialHash
   touchDeviceLastSeen: TouchDeviceLastSeen
   sessionHub: SessionHub
-  getTrustedProxies?: () => readonly string[]
-  isLoopbackRequest?: (request: FastifyRequest) => boolean
   wsAuthFrameTimeoutMs?: number
 }
 
@@ -30,16 +27,11 @@ const resolveStreamPrincipal = async (params: {
   request: FastifyRequest
   socket: WebSocket
   findDeviceByCredentialHash: FindDeviceByCredentialHash
-  isLoopback: boolean
   timeoutMs: number
 }): Promise<Principal | undefined> => {
   const existing = getRequestPrincipal(params.request)
-  if (existing !== undefined && authorizeActiveFullOperator(existing)) {
+  if (existing !== undefined && authorizeActiveDevice(existing)) {
     return existing
-  }
-
-  if (params.isLoopback) {
-    return existing ?? hostPrincipal()
   }
 
   const frameResult = await waitForAuthFrame({
@@ -104,10 +96,6 @@ export const registerSessionStreamRoutes = (
   app: FastifyInstance,
   params: RegisterSessionStreamRoutesParams,
 ) => {
-  const resolveHostPrincipal =
-    params.isLoopbackRequest ??
-    ((request: FastifyRequest) =>
-      isHostPrincipalRequest(request, params.getTrustedProxies?.() ?? []))
   const timeoutMs = params.wsAuthFrameTimeoutMs ?? DEFAULT_WS_AUTH_FRAME_TIMEOUT_MS
 
   app.route({
@@ -122,11 +110,10 @@ export const registerSessionStreamRoutes = (
           request,
           socket,
           findDeviceByCredentialHash: params.findDeviceByCredentialHash,
-          isLoopback: resolveHostPrincipal(request),
           timeoutMs,
         })
 
-        if (principal === undefined || !authorizeActiveFullOperator(principal)) {
+        if (principal === undefined || !authorizeActiveDevice(principal)) {
           if (socket.readyState === socket.OPEN || socket.readyState === socket.CONNECTING) {
             socket.close(1008, "unauthorized")
           }

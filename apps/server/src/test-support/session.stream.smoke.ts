@@ -1,5 +1,7 @@
+import { Writable } from "node:stream"
 import { createServer } from "../bootstrap/server"
-import { LogCollectionSchema } from "contracts/http/logs"
+import { seedTestDevice, TestDeviceCredential } from "./test.harness"
+import { toLogTailEntry } from "core/logs/tail.usecase"
 import {
   SessionStreamClientMessage,
   SessionStreamServerMessage,
@@ -9,7 +11,17 @@ import { z } from "zod"
 import { WebSocket } from "ws"
 import { websocketRawDataText } from "../auth/websocket.raw.data.text"
 
-type SmokeServerApp = Awaited<ReturnType<typeof createServer>>["app"]
+/**
+ * Seeds a device row for a directly-created server app and exposes its
+ * credential on the app instance so `authHeaders(app)` works in smoke tests.
+ */
+export const seedSmokeDevice = (
+  app: Awaited<ReturnType<typeof createServer>>["app"],
+  database: Parameters<typeof seedTestDevice>[0],
+): TestDeviceCredential => {
+  const device = seedTestDevice(database)
+  return Object.assign(app, { deviceCredential: device }).deviceCredential
+}
 
 export const PermissionParamsSchema = z
   .object({
@@ -70,9 +82,11 @@ export type StreamClient = {
   close: () => Promise<void>
 }
 
-export const openStreamClient = (wsUrl: string): Promise<StreamClient> =>
+export const openStreamClient = (wsUrl: string, credential: string): Promise<StreamClient> =>
   new Promise((resolve, reject) => {
-    const ws = new WebSocket(wsUrl)
+    const ws = new WebSocket(wsUrl, {
+      headers: { authorization: `Bearer ${credential}` },
+    })
     const messages: SessionStreamServerMessage[] = []
     const waiters: Array<{
       predicate: (message: SessionStreamServerMessage) => boolean
@@ -170,42 +184,61 @@ export const openStreamClient = (wsUrl: string): Promise<StreamClient> =>
     })
   })
 
-export const readLogsBody = async (app: SmokeServerApp): Promise<string> => {
-  const response = await app.inject({
-    method: "GET",
-    url: "/v1/logs?limit=200",
-  })
-  const parsed = LogCollectionSchema.safeParse(JSON.parse(response.body))
-  if (!parsed.success) {
-    return response.body
-  }
+export type SmokeLogCapture = Readonly<{
+  stream: Writable
+  text: () => string
+}>
 
-  return parsed.data.items
-    .map((item) => `${item.ts} ${item.level} ${item.source} ${item.message}`)
-    .join("\n")
+/** Captures the daemon log stream so smoke failures can dump recent lines. */
+export const createSmokeLogCapture = (): SmokeLogCapture => {
+  const lines: string[] = []
+  let leftover = ""
+  const stream = new Writable({
+    write(chunk, _encoding, callback) {
+      leftover += chunk.toString("utf8")
+      const pieces = leftover.split("\n")
+      leftover = pieces.pop() ?? ""
+      lines.push(...pieces)
+      callback()
+    },
+  })
+  return {
+    stream,
+    text: () =>
+      [...lines, leftover]
+        .filter((line) => line.trim().length > 0)
+        .map(toLogTailEntry)
+        .map(
+          (entry) =>
+            `${entry.record.ts} ${entry.record.level} ${entry.record.source} ${entry.record.message}`,
+        )
+        .join("\n"),
+  }
 }
 
-export const failWithLogs = async (
-  app: SmokeServerApp,
+export const readLogsBody = (capture: SmokeLogCapture): string => capture.text()
+
+export const failWithLogs = (
+  capture: SmokeLogCapture,
   client: StreamClient,
   label: string,
-): Promise<never> => {
-  const logs = await readLogsBody(app)
+): never => {
+  const logs = readLogsBody(capture)
   throw new Error(`${label}\nstream messages: ${JSON.stringify(client.messages)}\nlogs:\n${logs}`)
 }
 
 export const drainPrompt = async (params: {
-  app: SmokeServerApp
+  logCapture: SmokeLogCapture
   client: StreamClient
   deadlineMs: number
 }): Promise<void> => {
-  const { app, client, deadlineMs } = params
+  const { logCapture, client, deadlineMs } = params
   const handledRequestIds = new Set<string>()
 
   const next = async (): Promise<void> => {
     const remainingMs = deadlineMs - Date.now()
     if (remainingMs <= 0) {
-      await failWithLogs(app, client, "prompt did not complete before timeout")
+      failWithLogs(logCapture, client, "prompt did not complete before timeout")
     }
 
     const message = await client.waitFor((item) => {
@@ -221,7 +254,7 @@ export const drainPrompt = async (params: {
     }, remainingMs)
 
     if (message.type === "error") {
-      await failWithLogs(app, client, `stream error during prompt: ${message.message}`)
+      failWithLogs(logCapture, client, `stream error during prompt: ${message.message}`)
     }
 
     if (message.type === "prompt_complete") {
@@ -248,7 +281,7 @@ export const drainPrompt = async (params: {
       return next()
     }
 
-    await failWithLogs(app, client, `unexpected stream message ${message.type}`)
+    failWithLogs(logCapture, client, `unexpected stream message ${message.type}`)
   }
 
   await next()

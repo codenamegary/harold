@@ -8,21 +8,10 @@ import {
 } from "contracts/http/pairing-code"
 import { eq } from "drizzle-orm"
 import { WebSocket } from "ws"
-import { bootTestApp } from "../test-support/test.harness"
+import { bootTestApp, seedTestDevice } from "../test-support/test.harness"
 import { devices } from "../persistence/schema/devices"
-import { AgentDatabase } from "../persistence/database"
 import { Config } from "../config/config"
-import { hashDeviceCredential } from "core/device/hash.credential"
 import { BEARER_CHALLENGE } from "./problems"
-
-const patchTrustedProxies = async (httpBase: string, trustedProxies: string[]) => {
-  const response = await fetch(`${httpBase}/v1/settings/runtime`, {
-    method: "PATCH",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ trustedProxies }),
-  })
-  expect(response.status).toBe(200)
-}
 
 const getListeningHttpBase = async (
   app: {
@@ -43,38 +32,16 @@ const getListeningHttpBase = async (
   }
 }
 
-const pairDevice = async (httpBase: string) => {
+const authHeaders = (credential: string) => ({ authorization: `Bearer ${credential}` })
+
+const createPairingCode = async (httpBase: string, credential: string) => {
   const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...authHeaders(credential) },
     body: JSON.stringify({}),
   })
   expect(createResponse.status).toBe(201)
-  const created = CreatePairingCodeResponseSchema.parse(await createResponse.json())
-
-  const claimResponse = await fetch(`${httpBase}${claimPairingCodePath(created.code)}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: "Auth test device" }),
-  })
-  expect(claimResponse.status).toBe(201)
-  return ClaimPairingCodeResponseSchema.parse(await claimResponse.json())
-}
-
-const seedActiveDevice = (database: AgentDatabase, credential: string) => {
-  const pairedAt = "2026-08-02T12:00:00.000Z"
-  database.db
-    .insert(devices)
-    .values({
-      id: "device_auth_seed",
-      name: "Seeded device",
-      platform: "test",
-      credentialHash: hashDeviceCredential(credential),
-      pairedAt,
-      lastSeenAt: pairedAt,
-      revokedAt: null,
-    })
-    .run()
+  return CreatePairingCodeResponseSchema.parse(await createResponse.json())
 }
 
 const websocketUpgradeHeaders = {
@@ -84,34 +51,78 @@ const websocketUpgradeHeaders = {
   "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==",
 }
 
-describe("device auth HTTP", () => {
-  test("host loopback without Bearer can create pairing codes and list workspaces", async () => {
+const expectUnauthorized = async (response: Response) => {
+  expect(response.status).toBe(401)
+  expect(response.headers.get("www-authenticate")).toBe(BEARER_CHALLENGE)
+  expect(response.headers.get("content-type")).toContain("application/problem+json")
+  const problem = UnauthorizedProblemSchema.parse(await response.json())
+  expect(problem.status).toBe(401)
+}
+
+const waitForCloseCode = (wsUrl: string) =>
+  new Promise<number>((resolve, reject) => {
+    const ws = new WebSocket(wsUrl)
+    const timer = setTimeout(() => {
+      ws.close()
+      reject(new Error("timeout waiting for close"))
+    }, 2_000)
+
+    ws.addEventListener("close", (event) => {
+      clearTimeout(timer)
+      resolve(event.code)
+    })
+
+    ws.addEventListener("unexpected-response", (_req, res) => {
+      clearTimeout(timer)
+      reject(new Error(`unexpected response ${res.statusCode}`))
+    })
+  })
+
+const waitForOpen = (wsUrl: string, headers?: Record<string, string>) =>
+  new Promise<boolean>((resolve, reject) => {
+    const ws = new WebSocket(wsUrl, { headers })
+    const timer = setTimeout(() => {
+      ws.close()
+      reject(new Error("timeout waiting for open"))
+    }, 2_000)
+    ws.addEventListener("open", () => {
+      clearTimeout(timer)
+      ws.close()
+      resolve(true)
+    })
+    ws.addEventListener("unexpected-response", (_req, res) => {
+      clearTimeout(timer)
+      reject(new Error(`unexpected response ${res.statusCode}`))
+    })
+  })
+
+describe("device-only HTTP edge", () => {
+  test("unauthenticated request on loopback is rejected on protected routes", async () => {
     const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
 
-    const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({}),
-    })
-    expect(createResponse.status).toBe(201)
-
-    const workspaces = await fetch(`${httpBase}/v1/workspaces`)
-    expect(workspaces.status).toBe(200)
+    await expectUnauthorized(await fetch(`${httpBase}/v1/workspaces`))
+    await expectUnauthorized(await fetch(`${httpBase}/v1/sessions`))
+    await expectUnauthorized(await fetch(`${httpBase}/v1/settings/agents`))
+    await expectUnauthorized(
+      await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+    )
   })
 
   test("valid device Bearer unlocks operator HTTP", async () => {
-    const { app, config } = await bootTestApp()
+    const { app, config, database } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
-    const paired = await pairDevice(httpBase)
+    const { credential } = seedTestDevice(database)
 
-    const response = await fetch(`${httpBase}/v1/workspaces`, {
-      headers: { authorization: `Bearer ${paired.credential}` },
-    })
+    const response = await fetch(`${httpBase}/v1/workspaces`, { headers: authHeaders(credential) })
     expect(response.status).toBe(200)
   })
 
-  test("bad Bearer on loopback returns 401 with Bearer challenge", async () => {
+  test("bad Bearer returns 401 with Bearer challenge", async () => {
     const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
 
@@ -119,49 +130,24 @@ describe("device auth HTTP", () => {
       headers: { authorization: "Bearer not-a-real-credential" },
     })
 
-    expect(response.status).toBe(401)
-    expect(response.headers.get("www-authenticate")).toBe(BEARER_CHALLENGE)
-    expect(response.headers.get("content-type")).toContain("application/problem+json")
-    const problem = UnauthorizedProblemSchema.parse(await response.json())
-    expect(problem.status).toBe(401)
+    await expectUnauthorized(response)
   })
 
   test("revoked device credential returns 401", async () => {
     const { app, config, database } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
-    const paired = await pairDevice(httpBase)
+    const { deviceId, credential } = seedTestDevice(database)
 
     database.db
       .update(devices)
       .set({ revokedAt: "2026-08-02T12:00:00.000Z" })
-      .where(eq(devices.id, paired.device.id))
+      .where(eq(devices.id, deviceId))
       .run()
 
-    const response = await fetch(`${httpBase}/v1/workspaces`, {
-      headers: { authorization: `Bearer ${paired.credential}` },
-    })
+    const response = await fetch(`${httpBase}/v1/workspaces`, { headers: authHeaders(credential) })
 
     expect(response.status).toBe(401)
     expect(response.headers.get("www-authenticate")).toBe(BEARER_CHALLENGE)
-  })
-
-  test("pairing claim stays open without operator auth", async () => {
-    const { app, config } = await bootTestApp()
-    const { httpBase } = await getListeningHttpBase(app, config)
-
-    const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({}),
-    })
-    const created = CreatePairingCodeResponseSchema.parse(await createResponse.json())
-
-    const claimResponse = await fetch(`${httpBase}${claimPairingCodePath(created.code)}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({}),
-    })
-    expect(claimResponse.status).toBe(201)
   })
 
   test("status stays open without Bearer", async () => {
@@ -172,189 +158,36 @@ describe("device auth HTTP", () => {
     expect(response.status).toBe(200)
   })
 
-  test("non-loopback without Bearer is rejected on protected routes", async () => {
-    const { app, config } = await bootTestApp({ isLoopbackRequest: () => false })
+  test("pairing claim stays open without Bearer", async () => {
+    const { app, config, database } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
+    const { credential } = seedTestDevice(database)
+    const created = await createPairingCode(httpBase, credential)
 
-    const workspaces = await fetch(`${httpBase}/v1/workspaces`)
-    expect(workspaces.status).toBe(401)
-    expect(workspaces.headers.get("www-authenticate")).toBe(BEARER_CHALLENGE)
-
-    const sessions = await fetch(`${httpBase}/v1/sessions`)
-    expect(sessions.status).toBe(401)
-
-    const agents = await fetch(`${httpBase}/v1/settings/agents`)
-    expect(agents.status).toBe(401)
-
-    const pairingCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
+    const claimResponse = await fetch(`${httpBase}${claimPairingCodePath(created.code)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ name: "Claimed without credential" }),
     })
-    expect(pairingCreate.status).toBe(401)
-  })
-})
-
-describe("trusted proxy host principal", () => {
-  test("direct loopback outside trustedProxies stays host", async () => {
-    const { app, config } = await bootTestApp()
-    const { httpBase } = await getListeningHttpBase(app, config)
-
-    const response = await fetch(`${httpBase}/v1/workspaces`)
-    expect(response.status).toBe(200)
-  })
-
-  test("trusted proxy without forwarded headers is not host", async () => {
-    const { app, config } = await bootTestApp()
-    const { httpBase } = await getListeningHttpBase(app, config)
-    await patchTrustedProxies(httpBase, ["127.0.0.1"])
-
-    const response = await fetch(`${httpBase}/v1/workspaces`)
-    expect(response.status).toBe(401)
-    expect(response.headers.get("www-authenticate")).toBe(BEARER_CHALLENGE)
-  })
-
-  test("trusted loopback peer with forwarded headers is not host", async () => {
-    const { app, config } = await bootTestApp()
-    const { httpBase } = await getListeningHttpBase(app, config)
-    await patchTrustedProxies(httpBase, ["127.0.0.1"])
-
-    const response = await fetch(`${httpBase}/v1/workspaces`, {
-      headers: {
-        "x-forwarded-for": "203.0.113.5",
-      },
-    })
-
-    expect(response.status).toBe(401)
-    expect(response.headers.get("www-authenticate")).toBe(BEARER_CHALLENGE)
-  })
-
-  test("spoofed forwarded headers from untrusted loopback stay host", async () => {
-    const { app, config } = await bootTestApp()
-    const { httpBase } = await getListeningHttpBase(app, config)
-
-    const response = await fetch(`${httpBase}/v1/workspaces`, {
-      headers: {
-        "x-forwarded-for": "203.0.113.5",
-      },
-    })
-
-    expect(response.status).toBe(200)
-  })
-
-  test("hot-reloads trusted proxies after PATCH", async () => {
-    const { app, config } = await bootTestApp()
-    const { httpBase } = await getListeningHttpBase(app, config)
-
-    const beforePatch = await fetch(`${httpBase}/v1/workspaces`, {
-      headers: {
-        "x-forwarded-for": "203.0.113.5",
-      },
-    })
-    expect(beforePatch.status).toBe(200)
-
-    await patchTrustedProxies(httpBase, ["127.0.0.1"])
-
-    const afterPatch = await fetch(`${httpBase}/v1/workspaces`, {
-      headers: {
-        "x-forwarded-for": "203.0.113.5",
-      },
-    })
-    expect(afterPatch.status).toBe(401)
-  })
-
-  test("allowlist miss ignores forwarded headers on loopback", async () => {
-    const { app, config } = await bootTestApp()
-    const { httpBase } = await getListeningHttpBase(app, config)
-    await patchTrustedProxies(httpBase, ["10.0.0.0/8"])
-
-    const response = await fetch(`${httpBase}/v1/workspaces`, {
-      headers: {
-        "x-forwarded-for": "203.0.113.5",
-      },
-    })
-
-    expect(response.status).toBe(200)
+    expect(claimResponse.status).toBe(201)
+    ClaimPairingCodeResponseSchema.parse(await claimResponse.json())
   })
 })
 
 describe("device auth WebSocket", () => {
-  test("loopback without Bearer connects as host", async () => {
-    const { app, config } = await bootTestApp()
+  test("loopback without Bearer and without auth frame fails closed", async () => {
+    const { app, config } = await bootTestApp({ wsAuthFrameTimeoutMs: 200 })
     const { wsUrl } = await getListeningHttpBase(app, config)
 
-    const opened = await new Promise<boolean>((resolve, reject) => {
-      const ws = new WebSocket(wsUrl)
-      const timer = setTimeout(() => {
-        ws.close()
-        reject(new Error("timeout waiting for open"))
-      }, 2_000)
-      ws.addEventListener("open", () => {
-        clearTimeout(timer)
-        ws.close()
-        resolve(true)
-      })
-      ws.addEventListener("unexpected-response", (_req, res) => {
-        clearTimeout(timer)
-        reject(new Error(`unexpected response ${res.statusCode}`))
-      })
-    })
-
-    expect(opened).toBe(true)
-  })
-
-  test("trusted proxy without forwarded headers does not connect as host", async () => {
-    const { app, config } = await bootTestApp({ wsAuthFrameTimeoutMs: 200 })
-    const { httpBase, wsUrl } = await getListeningHttpBase(app, config)
-    await patchTrustedProxies(httpBase, ["127.0.0.1"])
-
-    const closeCode = await new Promise<number>((resolve, reject) => {
-      const ws = new WebSocket(wsUrl)
-      const timer = setTimeout(() => {
-        ws.close()
-        reject(new Error("timeout waiting for close"))
-      }, 2_000)
-
-      ws.addEventListener("close", (event) => {
-        clearTimeout(timer)
-        resolve(event.code)
-      })
-
-      ws.addEventListener("unexpected-response", (_req, res) => {
-        clearTimeout(timer)
-        reject(new Error(`unexpected response ${res.statusCode}`))
-      })
-    })
-
-    expect(closeCode).toBe(1008)
+    expect(await waitForCloseCode(wsUrl)).toBe(1008)
   })
 
   test("Upgrade Authorization Bearer unlocks event stream", async () => {
-    const { app, config } = await bootTestApp()
-    const { httpBase, wsUrl } = await getListeningHttpBase(app, config)
-    const paired = await pairDevice(httpBase)
+    const { app, config, database } = await bootTestApp()
+    const { wsUrl } = await getListeningHttpBase(app, config)
+    const { credential } = seedTestDevice(database)
 
-    const opened = await new Promise<boolean>((resolve, reject) => {
-      const ws = new WebSocket(wsUrl, {
-        headers: { authorization: `Bearer ${paired.credential}` },
-      })
-      const timer = setTimeout(() => {
-        ws.close()
-        reject(new Error("timeout waiting for open"))
-      }, 2_000)
-
-      ws.addEventListener("open", () => {
-        clearTimeout(timer)
-        ws.close()
-        resolve(true)
-      })
-      ws.addEventListener("unexpected-response", (_req, res) => {
-        clearTimeout(timer)
-        reject(new Error(`unexpected response ${res.statusCode}`))
-      })
-    })
-
-    expect(opened).toBe(true)
+    expect(await waitForOpen(wsUrl, authHeaders(credential))).toBe(true)
   })
 
   test("bad Upgrade Bearer rejects with 401 challenge", async () => {
@@ -373,14 +206,10 @@ describe("device auth WebSocket", () => {
     UnauthorizedProblemSchema.parse(await response.json())
   })
 
-  test("first-message auth frame unlocks non-loopback stream", async () => {
-    const { app, config, database } = await bootTestApp({
-      isLoopbackRequest: () => false,
-      wsAuthFrameTimeoutMs: 2_000,
-    })
+  test("first-message auth frame unlocks stream", async () => {
+    const { app, config, database } = await bootTestApp({ wsAuthFrameTimeoutMs: 2_000 })
     const { wsUrl } = await getListeningHttpBase(app, config)
-    const credential = "devcred_first_message_auth"
-    seedActiveDevice(database, credential)
+    const { credential } = seedTestDevice(database)
 
     const opened = await new Promise<boolean>((resolve, reject) => {
       const ws = new WebSocket(wsUrl)
@@ -421,31 +250,10 @@ describe("device auth WebSocket", () => {
     expect(opened).toBe(true)
   })
 
-  test("missing first-message auth on non-loopback fails closed", async () => {
-    const { app, config } = await bootTestApp({
-      isLoopbackRequest: () => false,
-      wsAuthFrameTimeoutMs: 200,
-    })
+  test("missing first-message auth fails closed", async () => {
+    const { app, config } = await bootTestApp({ wsAuthFrameTimeoutMs: 200 })
     const { wsUrl } = await getListeningHttpBase(app, config)
 
-    const closeCode = await new Promise<number>((resolve, reject) => {
-      const ws = new WebSocket(wsUrl)
-      const timer = setTimeout(() => {
-        ws.close()
-        reject(new Error("timeout waiting for close"))
-      }, 2_000)
-
-      ws.addEventListener("close", (event) => {
-        clearTimeout(timer)
-        resolve(event.code)
-      })
-
-      ws.addEventListener("unexpected-response", (_req, res) => {
-        clearTimeout(timer)
-        reject(new Error(`unexpected response ${res.statusCode}`))
-      })
-    })
-
-    expect(closeCode).toBe(1008)
+    expect(await waitForCloseCode(wsUrl)).toBe(1008)
   })
 })

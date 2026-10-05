@@ -2,16 +2,17 @@
 
 **Hark! The Harold Agents Sing**
 
-Harold is a local host process. It speaks HTTP and WebSocket to operator clients
-through the Device API, and ACP over stdio to agent child processes. The web
-operator console and the paired Android app are the two clients.
+Harold is a local host process. It speaks HTTP and WebSocket to operator
+clients through the Device API, and ACP over stdio to agent child processes.
+The paired Android app is the remote client; the `harold` CLI is the local
+operator tooling.
 
 ## Layout
 
 | Path                 | What lives there                            |
 | -------------------- | ------------------------------------------- |
 | `apps/server`        | The host process and Device API             |
-| `apps/web`           | Operator console                            |
+| `apps/cli`           | The `harold` CLI                            |
 | `apps/android`       | Paired device app                           |
 | `packages/contracts` | Wire contracts shared by server and clients |
 
@@ -24,8 +25,9 @@ bun install
 bun run dev
 ```
 
-The Device API listens on `127.0.0.1:3847`. The web dev server serves the
-operator console on `http://127.0.0.1:5173` and proxies `/v1` to the API.
+The Device API listens on `127.0.0.1:3847`. Every route except
+`GET /v1/status` and the pairing claim requires a device credential
+(`Authorization: Bearer`). Pair a device with `harold pair` to get one.
 
 ## Configuration
 

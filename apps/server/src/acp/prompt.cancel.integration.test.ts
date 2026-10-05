@@ -7,6 +7,10 @@ import { createAcpSupervisor } from "./supervisor/supervisor"
 import { AcpSupervisor } from "./supervisor/supervisor.ports"
 import { SpawnedAgentProcess } from "./supervisor/models"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 const waitFor = async (predicate: () => boolean, timeoutMs = 1000) => {
   const startedAt = Date.now()
   while (!predicate()) {
@@ -68,6 +72,7 @@ describe("ACP prompt, update, and cancel integration", () => {
       })
 
       await app.inject({
+        headers: authHeaders(app),
         method: "PATCH",
         url: "/v1/settings/agents/cursor",
         payload: { enabled: true, path: "/fake/agent" },

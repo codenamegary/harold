@@ -12,6 +12,10 @@ import { eventDataText } from "../test/event.data.text"
 import { enableAgent } from "../test-support/test.app"
 import { bootTestApp } from "../test-support/test.harness"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 const whichFn: WhichFn = (binaryName) =>
   binaryName === "agent" ? "/usr/local/bin/agent" : undefined
 
@@ -45,9 +49,11 @@ type StreamClient = {
   close: () => Promise<void>
 }
 
-const openStreamClient = (wsUrl: string): Promise<StreamClient> =>
+const openStreamClient = (wsUrl: string, credential: string): Promise<StreamClient> =>
   new Promise((resolve, reject) => {
-    const ws = new WebSocket(wsUrl)
+    const ws = new WebSocket(wsUrl, {
+      headers: { authorization: `Bearer ${credential}` },
+    })
     const messages: SessionStreamServerMessage[] = []
     const waiters: Array<{
       predicate: (message: SessionStreamServerMessage) => boolean
@@ -142,7 +148,10 @@ describe("session hub stream integration", () => {
 
     const createResponse = await fetch(`${httpBase}/v1/sessions`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({
         agentId: "cursor",
         cwd: "/tmp/hub-stream-project",
@@ -152,8 +161,8 @@ describe("session hub stream integration", () => {
     const created = CreateSessionResponseSchema.parse(await createResponse.json())
     expect(created.sessionId).toBe("hub-stream-1")
 
-    const clientA = await openStreamClient(wsUrl)
-    const clientB = await openStreamClient(wsUrl)
+    const clientA = await openStreamClient(wsUrl, app.deviceCredential.credential)
+    const clientB = await openStreamClient(wsUrl, app.deviceCredential.credential)
 
     clientA.send({
       type: "subscribe",
@@ -252,7 +261,10 @@ describe("session hub stream integration", () => {
 
     const createResponse = await fetch(`${httpBase}/v1/sessions`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({
         agentId: "cursor",
         cwd: "/tmp/hub-stream-new-project",
@@ -261,7 +273,7 @@ describe("session hub stream integration", () => {
     expect(createResponse.status).toBe(201)
     const created = CreateSessionResponseSchema.parse(await createResponse.json())
 
-    const client = await openStreamClient(wsUrl)
+    const client = await openStreamClient(wsUrl, app.deviceCredential.credential)
     client.send({
       type: "subscribe",
       agentId: "cursor",
@@ -306,7 +318,10 @@ describe("session hub stream integration", () => {
 
     const createResponse = await fetch(`${httpBase}/v1/sessions`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({
         agentId: "cursor",
         cwd: "/tmp/hub-resub-project",
@@ -315,7 +330,7 @@ describe("session hub stream integration", () => {
     expect(createResponse.status).toBe(201)
     const created = CreateSessionResponseSchema.parse(await createResponse.json())
 
-    const firstClient = await openStreamClient(wsUrl)
+    const firstClient = await openStreamClient(wsUrl, app.deviceCredential.credential)
     firstClient.send({
       type: "subscribe",
       agentId: "cursor",
@@ -324,7 +339,7 @@ describe("session hub stream integration", () => {
     await firstClient.waitFor((message) => message.type === "subscribed")
     await firstClient.close()
 
-    const secondClient = await openStreamClient(wsUrl)
+    const secondClient = await openStreamClient(wsUrl, app.deviceCredential.credential)
     secondClient.send({
       type: "subscribe",
       agentId: "cursor",
@@ -370,7 +385,10 @@ describe("session hub stream integration", () => {
 
       const createResponse = await fetch(`${httpBase}/v1/sessions`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${app.deviceCredential.credential}`,
+        },
         body: JSON.stringify({
           agentId: "cursor",
           cwd: "/tmp/auth-fanout",
@@ -379,8 +397,8 @@ describe("session hub stream integration", () => {
       expect(createResponse.status).toBe(201)
       const created = CreateSessionResponseSchema.parse(await createResponse.json())
 
-      const clientA = await openStreamClient(wsUrl)
-      const clientB = await openStreamClient(wsUrl)
+      const clientA = await openStreamClient(wsUrl, app.deviceCredential.credential)
+      const clientB = await openStreamClient(wsUrl, app.deviceCredential.credential)
 
       clientA.send({
         type: "subscribe",
@@ -397,7 +415,10 @@ describe("session hub stream integration", () => {
 
       const startResponse = await fetch(`${httpBase}/v1/agents/cursor/auth/sessions`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${app.deviceCredential.credential}`,
+        },
         body: "{}",
       })
       expect(startResponse.status).toBe(201)
@@ -438,7 +459,10 @@ describe("session hub stream integration", () => {
 
       const createResponse = await fetch(`${httpBase}/v1/sessions`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${app.deviceCredential.credential}`,
+        },
         body: JSON.stringify({
           agentId: "cursor",
           cwd: "/tmp/auth-prompt",
@@ -447,7 +471,7 @@ describe("session hub stream integration", () => {
       expect(createResponse.status).toBe(201)
       const created = CreateSessionResponseSchema.parse(await createResponse.json())
 
-      const client = await openStreamClient(wsUrl)
+      const client = await openStreamClient(wsUrl, app.deviceCredential.credential)
       client.send({
         type: "subscribe",
         agentId: "cursor",
@@ -494,6 +518,7 @@ describe("session hub stream integration", () => {
       await enableAgent(app, "cursor", whichFn)
 
       const createResponse = await app.inject({
+        headers: authHeaders(app),
         method: "POST",
         url: "/v1/sessions",
         payload: {
@@ -505,6 +530,7 @@ describe("session hub stream integration", () => {
       expect(JSON.parse(createResponse.body).title).toBe("Agent authentication required")
 
       const authResponse = await app.inject({
+        headers: authHeaders(app),
         method: "GET",
         url: "/v1/agents/cursor/auth",
       })
@@ -533,7 +559,10 @@ describe("session hub stream integration", () => {
 
     const createResponse = await fetch(`${httpBase}/v1/sessions`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({
         agentId: "cursor",
         cwd: "/tmp/hub-cmds-project",
@@ -542,7 +571,7 @@ describe("session hub stream integration", () => {
     expect(createResponse.status).toBe(201)
     const created = CreateSessionResponseSchema.parse(await createResponse.json())
 
-    const client = await openStreamClient(wsUrl)
+    const client = await openStreamClient(wsUrl, app.deviceCredential.credential)
     client.send({
       type: "subscribe",
       agentId: "cursor",

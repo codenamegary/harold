@@ -1,6 +1,6 @@
 import { hashDeviceCredential } from "core/device/hash.credential"
 import { parseAuthorizationHeader } from "./bearer"
-import { devicePrincipal, hostPrincipal, Principal, unauthenticatedPrincipal } from "./principal"
+import { devicePrincipal, Principal, unauthenticatedPrincipal } from "./principal"
 
 export type DeviceCredentialLookup = {
   id: string
@@ -9,7 +9,6 @@ export type DeviceCredentialLookup = {
 
 export type AuthenticateParams = {
   authorization: string | string[] | undefined
-  isLoopback: boolean
   lookupByCredentialHash: (credentialHash: string) => DeviceCredentialLookup | undefined
 }
 
@@ -22,10 +21,6 @@ export const authenticate = (params: AuthenticateParams): AuthenticateResult => 
   const parsed = parseAuthorizationHeader(params.authorization)
 
   if (parsed.presented === false) {
-    if (params.isLoopback) {
-      return { principal: hostPrincipal(), credentialPresented: false }
-    }
-
     return { principal: unauthenticatedPrincipal(), credentialPresented: false }
   }
 

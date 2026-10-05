@@ -25,7 +25,6 @@ describe("makeRuntimeSettingsFileStore", () => {
     expect(store.get()).toEqual({
       advertisedUrl: null,
       advertisedUrlEnabled: true,
-      trustedProxies: [],
       bindHost: "127.0.0.1",
       bindPort: 3847,
       logLevel: "info",
@@ -45,7 +44,6 @@ describe("makeRuntimeSettingsFileStore", () => {
       seedDefaults: {
         advertisedUrl: null,
         advertisedUrlEnabled: true,
-        trustedProxies: [],
         bindHost: "127.0.0.1",
         bindPort: 4123,
         logLevel: "info",
@@ -75,7 +73,6 @@ describe("makeRuntimeSettingsFileStore", () => {
       YAML.stringify({
         advertisedUrl: null,
         advertisedUrlEnabled: true,
-        trustedProxies: [],
         bindHost: "0.0.0.0",
         bindPort: 3847,
         logLevel: "info",
@@ -86,6 +83,30 @@ describe("makeRuntimeSettingsFileStore", () => {
     )
 
     expect(() => makeRuntimeSettingsFileStore({ dataDir })).toThrow(/Invalid settings\.yml/)
+  })
+
+  test("ignores the retired trustedProxies key when loading legacy settings.yml", async () => {
+    const dataDir = await createTempDataDir()
+    const filePath = path.join(dataDir, settingsFileName)
+    await writeFile(
+      filePath,
+      YAML.stringify({
+        advertisedUrl: null,
+        advertisedUrlEnabled: true,
+        trustedProxies: ["127.0.0.1"],
+        bindHost: "127.0.0.1",
+        bindPort: 3847,
+        logLevel: "info",
+        logPath: null,
+        allowedRoots: [],
+      }),
+      "utf8",
+    )
+
+    const store = makeRuntimeSettingsFileStore({ dataDir })
+    const settings = store.get()
+    expect("trustedProxies" in settings).toBe(false)
+    expect(settings.bindPort).toBe(3847)
   })
 
   test("ignores hand edits until a new store loads", async () => {
@@ -115,7 +136,6 @@ describe("makeRuntimeSettingsFileStore", () => {
       filePath,
       YAML.stringify({
         advertisedUrl: "https://agents.example.com",
-        trustedProxies: [],
         bindHost: "127.0.0.1",
         bindPort: 3847,
         logLevel: "info",

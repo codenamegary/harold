@@ -9,12 +9,17 @@ import { WorkspaceCollectionSchema, WorkspaceSchema } from "contracts/http/works
 import { bootTestApp } from "../test-support/test.harness"
 import { allowWorkspaceRoots, createWorkspaceDir } from "../test-support/test.app"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 describe("allowed roots enforcement", () => {
   test("rejects workspace registration when allowedRoots is empty", async () => {
     const { app, dataDir } = await bootTestApp()
     const workspaceDir = await createWorkspaceDir(dataDir, "project")
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/workspaces",
       payload: { name: "Project", path: workspaceDir },
@@ -33,6 +38,7 @@ describe("allowed roots enforcement", () => {
     await allowWorkspaceRoots(app, [dataDir])
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/workspaces",
       payload: { name: "Project", path: workspaceDir },
@@ -50,6 +56,7 @@ describe("allowed roots enforcement", () => {
     await allowWorkspaceRoots(app, [allowedDir])
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/workspaces",
       payload: { name: "Outside", path: outsideDir },
@@ -71,6 +78,7 @@ describe("allowed roots enforcement", () => {
     await allowWorkspaceRoots(app, [allowedDir])
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/workspaces",
       payload: { name: "Escape", path: link },
@@ -89,6 +97,7 @@ describe("PATCH /v1/settings/runtime allowedRoots", () => {
     const rootDir = await createWorkspaceDir(dataDir, "roots")
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/runtime",
       payload: { allowedRoots: [rootDir, rootDir] },
@@ -104,6 +113,7 @@ describe("PATCH /v1/settings/runtime allowedRoots", () => {
 
     await allowWorkspaceRoots(app, [dataDir])
     await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/workspaces",
       payload: {
@@ -113,6 +123,7 @@ describe("PATCH /v1/settings/runtime allowedRoots", () => {
     })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/runtime",
       payload: { allowedRoots: [] },
@@ -129,6 +140,7 @@ describe("PATCH /v1/settings/runtime allowedRoots", () => {
 
     await allowWorkspaceRoots(app, [dataDir])
     await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/workspaces",
       payload: {
@@ -138,6 +150,7 @@ describe("PATCH /v1/settings/runtime allowedRoots", () => {
     })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/runtime?force=true",
       payload: { allowedRoots: [] },
@@ -145,7 +158,11 @@ describe("PATCH /v1/settings/runtime allowedRoots", () => {
 
     expect(response.statusCode).toBe(200)
 
-    const listResponse = await app.inject({ method: "GET", url: "/v1/workspaces" })
+    const listResponse = await app.inject({
+      headers: authHeaders(app),
+      method: "GET",
+      url: "/v1/workspaces",
+    })
     const list = WorkspaceCollectionSchema.parse(JSON.parse(listResponse.body))
     expect(list.items).toEqual([])
   })

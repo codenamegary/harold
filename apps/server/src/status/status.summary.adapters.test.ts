@@ -78,7 +78,6 @@ describe("composeStatusSummaryPorts", () => {
       [
         "advertisedUrl: https://harold.example.com",
         "advertisedUrlEnabled: false",
-        "trustedProxies: []",
         "bindHost: 127.0.0.1",
         "bindPort: 3847",
         "logLevel: info",

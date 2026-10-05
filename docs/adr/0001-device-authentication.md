@@ -6,11 +6,12 @@ Related: [ADR-0002 Authorization](0002-device-authorization.md), [ADR-0003 Pairi
 
 Paired clients authenticate with a high-entropy opaque device credential sent as
 `Authorization: Bearer <credential>` ([RFC 6750][rfc6750]). The server stores
-only a hash. Host loopback console access stays a separate operator path without
-a device credential. Opaque server-side handles win over JWTs because Milestone 2
-requires immediate revocation.
+only a hash. Loopback requests carry no implicit identity (the host principal
+that ADR-0000 originally sketched is retired, see
+[ADR-0007](0007-retire-console-device-only-edge.md)). Opaque server-side handles
+win over JWTs because Milestone 2 requires immediate revocation.
 
-This is the standard API token model. Milestone 2 uses OAuth Bearer *usage*
+This is the standard API token model. Milestone 2 uses OAuth Bearer _usage_
 without standing up an OAuth authorization server. Pairing issues the credential
 ([ADR-0003](0003-device-pairing-protocol.md)). Day-to-day calls present it per
 RFC 6750.
@@ -42,40 +43,40 @@ Milestone 3.
 
 ### Credential transport
 
-| Option | Verdict | Why |
-|--------|---------|-----|
-| Bearer in `Authorization` ([RFC 6750][rfc6750]) | **Selected** | Standard API pattern. Header is the recommended method. Resource servers must support it. |
-| HTTP Basic ([RFC 7617][rfc7617]) | Rejected | Password-pair model. Wrong shape for a one-shot device secret. |
-| HTTP Digest ([RFC 7616][rfc7616]) | Rejected | Password challenge-response. Rare in modern APIs. Weak without TLS. |
-| Mutual TLS client certs ([RFC 8705][rfc8705]) | Deferred | Strong sender-constraining. Needs PKI and the remote TLS milestone. |
-| API key in custom header or query | Rejected as primary | Custom headers fragment clients. Query keys leak via logs and history ([OWASP REST][owasp-rest]). |
+| Option                                          | Verdict             | Why                                                                                               |
+| ----------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------- |
+| Bearer in `Authorization` ([RFC 6750][rfc6750]) | **Selected**        | Standard API pattern. Header is the recommended method. Resource servers must support it.         |
+| HTTP Basic ([RFC 7617][rfc7617])                | Rejected            | Password-pair model. Wrong shape for a one-shot device secret.                                    |
+| HTTP Digest ([RFC 7616][rfc7616])               | Rejected            | Password challenge-response. Rare in modern APIs. Weak without TLS.                               |
+| Mutual TLS client certs ([RFC 8705][rfc8705])   | Deferred            | Strong sender-constraining. Needs PKI and the remote TLS milestone.                               |
+| API key in custom header or query               | Rejected as primary | Custom headers fragment clients. Query keys leak via logs and history ([OWASP REST][owasp-rest]). |
 
 ### Token representation
 
-| Option | Verdict | Why |
-|--------|---------|-----|
-| Opaque server-side handle | **Selected** | Lookup each request. Revoke flips device state. Matches "terminate access immediately." |
+| Option                                                      | Verdict          | Why                                                                                                                                                                                           |
+| ----------------------------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Opaque server-side handle                                   | **Selected**     | Lookup each request. Revoke flips device state. Matches "terminate access immediately."                                                                                                       |
 | JWT access token ([RFC 7519][rfc7519], [RFC 8725][rfc8725]) | Rejected for MS2 | Self-contained tokens stay valid until expiry unless a denylist or introspection exists ([RFC 7009][rfc7009], [OWASP REST][owasp-rest]). That recreates server state plus JWT attack surface. |
-| Short-lived JWT + refresh | Rejected for MS2 | Adds refresh infra. Revocation is bounded by access-token TTL, not immediate. |
+| Short-lived JWT + refresh                                   | Rejected for MS2 | Adds refresh infra. Revocation is bounded by access-token TTL, not immediate.                                                                                                                 |
 
 ### WebSocket credential placement
 
-| Option | Verdict | Why |
-|--------|---------|-----|
-| `Authorization` on HTTP Upgrade | **Selected** for non-browser clients | Same credential path as HTTP. Handshake can fail closed. |
-| First WebSocket message | **Selected** for browsers | Browser `WebSocket` API cannot set custom headers ([WHATWG][whatwg-ws]). |
-| `?access_token=` query | Rejected | Explicitly discouraged ([RFC 6750 §2.3][rfc6750], [OWASP API2:2023][owasp-api2]). |
-| Cookie session for second clients | Rejected for MS2 | CSRF and cookie-scope complexity. Second clients are API clients. |
-| Abuse `Sec-WebSocket-Protocol` | Rejected | Subprotocol negotiation, not an auth standard ([RFC 6455][rfc6455]). |
+| Option                            | Verdict                              | Why                                                                               |
+| --------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------- |
+| `Authorization` on HTTP Upgrade   | **Selected** for non-browser clients | Same credential path as HTTP. Handshake can fail closed.                          |
+| First WebSocket message           | **Selected** for browsers            | Browser `WebSocket` API cannot set custom headers ([WHATWG][whatwg-ws]).          |
+| `?access_token=` query            | Rejected                             | Explicitly discouraged ([RFC 6750 §2.3][rfc6750], [OWASP API2:2023][owasp-api2]). |
+| Cookie session for second clients | Rejected for MS2                     | CSRF and cookie-scope complexity. Second clients are API clients.                 |
+| Abuse `Sec-WebSocket-Protocol`    | Rejected                             | Subprotocol negotiation, not an auth standard ([RFC 6455][rfc6455]).              |
 
 ### At-rest storage
 
-| Option | Verdict | Why |
-|--------|---------|-----|
-| Hash high-entropy credential (SHA-256 / HMAC) | **Selected** | NIST allows approved hash for look-up secrets ≥ 112 bits security strength ([NIST SP 800-63B-4][nist-authn]). Fast hash is fine. Slow password KDFs add request latency with no brute-force benefit. |
-| Store plaintext | Rejected | DB leak equals full operator access ([OWASP API2:2023][owasp-api2]). |
-| Encrypt recoverable secret | Rejected as primary | Needs key management. Hashing removes a decryptable blob. |
-| Argon2id on durable credential | Rejected | Right tool for low-entropy secrets. Wrong cost for ≥112-bit random tokens. |
+| Option                                        | Verdict             | Why                                                                                                                                                                                                  |
+| --------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hash high-entropy credential (SHA-256 / HMAC) | **Selected**        | NIST allows approved hash for look-up secrets ≥ 112 bits security strength ([NIST SP 800-63B-4][nist-authn]). Fast hash is fine. Slow password KDFs add request latency with no brute-force benefit. |
+| Store plaintext                               | Rejected            | DB leak equals full operator access ([OWASP API2:2023][owasp-api2]).                                                                                                                                 |
+| Encrypt recoverable secret                    | Rejected as primary | Needs key management. Hashing removes a decryptable blob.                                                                                                                                            |
+| Argon2id on durable credential                | Rejected            | Right tool for low-entropy secrets. Wrong cost for ≥112-bit random tokens.                                                                                                                           |
 
 ## Consequences
 

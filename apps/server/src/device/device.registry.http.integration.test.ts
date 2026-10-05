@@ -11,6 +11,10 @@ import { bootTestApp } from "../test-support/test.harness"
 import { Config } from "../config/config"
 import { clearDevicePresence } from "./device.presence"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 afterEach(async () => {
   clearDevicePresence()
 })
@@ -34,10 +38,19 @@ const getListeningBase = async (
   }
 }
 
-const pairDevice = async (httpBase: string, body: Record<string, unknown> = {}) => {
+const pairDevice = async (
+  httpBase: string,
+  body: Record<string, unknown> = {},
+  operatorCredential?: string,
+) => {
   const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...(operatorCredential === undefined
+        ? {}
+        : { authorization: `Bearer ${operatorCredential}` }),
+    },
     body: JSON.stringify({}),
   })
   expect(createResponse.status).toBe(201)
@@ -117,71 +130,80 @@ describe("device registry and presence", () => {
     const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningBase(app, config)
 
-    const emptyResponse = await fetch(`${httpBase}${DEVICES_PATH}`)
+    const emptyResponse = await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })
     expect(emptyResponse.status).toBe(200)
     const empty = DeviceCollectionSchema.parse(await emptyResponse.json())
-    expect(empty.items).toEqual([])
-    expect(empty.page.count).toBe(0)
+    expect(empty.items.map((item) => item.id)).toEqual([app.deviceCredential.deviceId])
+    expect(empty.page.count).toBe(1)
 
-    const paired = await pairDevice(httpBase, { name: "Pixel", platform: "android" })
+    const paired = await pairDevice(
+      httpBase,
+      { name: "Pixel", platform: "android" },
+      app.deviceCredential.credential,
+    )
     expect(paired.device.state).toBe("offline")
 
-    const listResponse = await fetch(`${httpBase}${DEVICES_PATH}`)
+    const listResponse = await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })
     expect(listResponse.status).toBe(200)
     const listed = DeviceCollectionSchema.parse(await listResponse.json())
-    expect(listed.items).toHaveLength(1)
-    expect(listed.items[0]?.id).toBe(paired.device.id)
-    expect(listed.items[0]?.name).toBe("Pixel")
-    expect(listed.items[0]?.state).toBe("offline")
-    expect(listed.page.count).toBe(1)
+    const pixel = listed.items.find((item) => item.id === paired.device.id)
+    expect(pixel?.name).toBe("Pixel")
+    expect(pixel?.state).toBe("offline")
+    expect(listed.page.count).toBe(2)
   })
 
   test("claim persists paired device in registry", async () => {
     const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningBase(app, config)
 
-    const paired = await pairDevice(httpBase, { name: "Watch", platform: "wearos" })
+    const paired = await pairDevice(
+      httpBase,
+      { name: "Watch", platform: "wearos" },
+      app.deviceCredential.credential,
+    )
 
-    const listResponse = await fetch(`${httpBase}${DEVICES_PATH}`)
+    const listResponse = await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })
     expect(listResponse.status).toBe(200)
     const listed = DeviceCollectionSchema.parse(await listResponse.json())
-    expect(listed.items).toEqual([
+    expect(listed.items.find((item) => item.id === paired.device.id)).toEqual(
       expect.objectContaining({
         id: paired.device.id,
         name: "Watch",
         platform: "wearos",
         state: "offline",
       }),
-    ])
+    )
   })
 
   test("list state follows real WS presence for connect/disconnect", async () => {
     const { app, config } = await bootTestApp()
     const { httpBase, wsUrl } = await getListeningBase(app, config)
-    const paired = await pairDevice(httpBase)
+    const paired = await pairDevice(httpBase, {}, app.deviceCredential.credential)
 
     const beforeConnect = DeviceCollectionSchema.parse(
-      await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
+      await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
     )
     expect(beforeConnect.items[0]?.state).toBe("offline")
 
     const deviceWs = await openDeviceStream(wsUrl, paired.credential)
     await waitFor(async () => {
       const online = DeviceCollectionSchema.parse(
-        await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
+        await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
       )
       return online.items[0]?.state === "online"
     })
 
     const onlineFilter = DeviceCollectionSchema.parse(
-      await (await fetch(`${httpBase}${DEVICES_PATH}?state=online`)).json(),
+      await (
+        await fetch(`${httpBase}${DEVICES_PATH}?state=online`, { headers: authHeaders(app) })
+      ).json(),
     )
     expect(onlineFilter.items).toHaveLength(1)
 
     await closeSocket(deviceWs)
     await waitFor(async () => {
       const offline = DeviceCollectionSchema.parse(
-        await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
+        await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
       )
       return offline.items[0]?.state === "offline"
     })
@@ -190,13 +212,13 @@ describe("device registry and presence", () => {
   test("host streams do not mark devices online", async () => {
     const { app, config } = await bootTestApp()
     const { httpBase, wsUrl } = await getListeningBase(app, config)
-    const paired = await pairDevice(httpBase)
+    const paired = await pairDevice(httpBase, {}, app.deviceCredential.credential)
     const host = await openHostStream(wsUrl)
 
     await new Promise((resolve) => setTimeout(resolve, 100))
 
     const listed = DeviceCollectionSchema.parse(
-      await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
+      await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
     )
     expect(listed.items[0]?.id).toBe(paired.device.id)
     expect(listed.items[0]?.state).toBe("offline")
@@ -207,7 +229,7 @@ describe("device registry and presence", () => {
   test("authenticated device HTTP updates lastSeenAt without flipping online", async () => {
     const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningBase(app, config)
-    const paired = await pairDevice(httpBase)
+    const paired = await pairDevice(httpBase, {}, app.deviceCredential.credential)
     const initialLastSeen = paired.device.lastSeenAt
     expect(initialLastSeen).not.toBeNull()
 
@@ -219,7 +241,7 @@ describe("device registry and presence", () => {
     expect(workspaces.status).toBe(200)
 
     const listed = DeviceCollectionSchema.parse(
-      await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
+      await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
     )
     expect(listed.items[0]?.state).toBe("offline")
     expect(listed.items[0]?.lastSeenAt).not.toBeNull()

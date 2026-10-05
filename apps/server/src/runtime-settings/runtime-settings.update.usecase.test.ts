@@ -10,7 +10,6 @@ import {
 const previousSettings: RuntimeSettings = {
   advertisedUrl: "https://agents.example.com",
   advertisedUrlEnabled: true,
-  trustedProxies: ["10.0.0.0/8"],
   bindHost: "127.0.0.1",
   bindPort: 3847,
   logLevel: "info",

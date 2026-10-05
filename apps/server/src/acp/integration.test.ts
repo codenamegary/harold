@@ -10,6 +10,10 @@ import {
   inventoryAdvertisesSessionList,
 } from "./agent/inventory"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 type SpawnedFakeAcpHandle = ReturnType<typeof spawnFakeAcp>
 
 const createFakeSpawnFn = () => {
@@ -41,6 +45,7 @@ describe("ACP supervisor integration", () => {
     })
 
     const enableResponse = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true, path: "/fake/agent" },
@@ -49,7 +54,11 @@ describe("ACP supervisor integration", () => {
 
     await acpSupervisor.start("cursor")
 
-    const statusResponse = await app.inject({ method: "GET", url: "/v1/status" })
+    const statusResponse = await app.inject({
+      headers: authHeaders(app),
+      method: "GET",
+      url: "/v1/status",
+    })
     const status = StatusSchema.parse(JSON.parse(statusResponse.body))
 
     expect(status.acp).toEqual({ state: "ready", activeSessions: 0 })
@@ -71,7 +80,11 @@ describe("ACP supervisor integration", () => {
       reason: "Agent is not enabled",
     })
 
-    const statusResponse = await app.inject({ method: "GET", url: "/v1/status" })
+    const statusResponse = await app.inject({
+      headers: authHeaders(app),
+      method: "GET",
+      url: "/v1/status",
+    })
     const status = StatusSchema.parse(JSON.parse(statusResponse.body))
     expect(status.acp.state).toBe("stopped")
   })
@@ -86,6 +99,7 @@ describe("ACP supervisor integration", () => {
       })
 
       await app.inject({
+        headers: authHeaders(app),
         method: "PATCH",
         url: "/v1/settings/agents/cursor",
         payload: { enabled: true, path: "/fake/agent" },
@@ -94,6 +108,7 @@ describe("ACP supervisor integration", () => {
       expect(acpSupervisor.getStatus().state).toBe("ready")
 
       await app.inject({
+        headers: authHeaders(app),
         method: "PATCH",
         url: "/v1/settings/agents/cursor",
         payload: { enabled: false },
@@ -101,7 +116,11 @@ describe("ACP supervisor integration", () => {
 
       expect(acpSupervisor.getStatus().state).toBe("stopped")
 
-      const statusResponse = await app.inject({ method: "GET", url: "/v1/status" })
+      const statusResponse = await app.inject({
+        headers: authHeaders(app),
+        method: "GET",
+        url: "/v1/status",
+      })
       const status = StatusSchema.parse(JSON.parse(statusResponse.body))
       expect(status.acp.state).toBe("stopped")
     },
@@ -118,6 +137,7 @@ describe("ACP supervisor integration", () => {
       })
 
       const enableResponse = await app.inject({
+        headers: authHeaders(app),
         method: "PATCH",
         url: "/v1/settings/agents/cursor",
         payload: { enabled: true, path: "/fake/agent" },
@@ -126,7 +146,11 @@ describe("ACP supervisor integration", () => {
       expect(acpSupervisor.getStatus().state).toBe("ready")
       expect(acpSupervisor.getRunningAgentIds()).toEqual(["cursor"])
 
-      const statusResponse = await app.inject({ method: "GET", url: "/v1/status" })
+      const statusResponse = await app.inject({
+        headers: authHeaders(app),
+        method: "GET",
+        url: "/v1/status",
+      })
       const status = StatusSchema.parse(JSON.parse(statusResponse.body))
       expect(status.acp.state).toBe("ready")
     },
@@ -141,6 +165,7 @@ describe("ACP supervisor integration", () => {
     })
 
     await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true, path: "/fake/agent" },
@@ -173,6 +198,7 @@ describe("ACP supervisor integration", () => {
     expect(spawned).toHaveLength(1)
 
     const listResponse = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/sessions",
     })
