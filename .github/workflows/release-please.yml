@@ -18,8 +18,11 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
+      # Component paths other than "." namespace outputs as
+      # `<path>--<name>`; unscoped names are only emitted for a root
+      # package, which is why the yuekbox workflow can use the plain names.
+      release_created: ${{ steps.release.outputs['apps/cli--release_created'] }}
+      tag_name: ${{ steps.release.outputs['apps/cli--tag_name'] }}
     steps:
       - uses: googleapis/release-please-action@v5
         id: release
