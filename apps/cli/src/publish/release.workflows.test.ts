@@ -30,4 +30,23 @@ describe("GitHub workflows", () => {
 
     expect(offenders).toEqual([])
   })
+
+  test("maps release-please outputs with the component path prefix", async () => {
+    // release-please-action namespaces outputs by component path for any
+    // package not at the repo root (apps/cli--release_created), and only
+    // emits plain names for the special "." component. Mapping the wrong
+    // name leaves the output empty and silently skips the npm job.
+    const config = JSON.parse(
+      await readFile(path.join(repoRoot, "release-please-config.json"), "utf8"),
+    )
+    const workflow = await readFile(path.join(workflowsDir, "release-please.yml"), "utf8")
+
+    for (const componentPath of Object.keys(config.packages)) {
+      if (componentPath === ".") {
+        continue
+      }
+      expect(workflow).toContain(`${componentPath}--release_created`)
+      expect(workflow).toContain(`${componentPath}--tag_name`)
+    }
+  })
 })
