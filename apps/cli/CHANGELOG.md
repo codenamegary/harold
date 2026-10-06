@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/codenamegary/harold/compare/v1.0.3...v1.1.0) (2026-10-06)
+
+
+### Features
+
+* **cli:** default to help, let setup own the server, and keep logs off screen ([#344](https://github.com/codenamegary/harold/issues/344)) ([20465d3](https://github.com/codenamegary/harold/commit/20465d30361d154800d15d85a3719b9de38a80c0))
+
 ## [1.0.3](https://github.com/codenamegary/harold/compare/v1.0.2...v1.0.3) (2026-10-06)
 
 
