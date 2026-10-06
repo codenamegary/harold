@@ -59,8 +59,8 @@ The Device API listens on `127.0.0.1:3847`. Every route except
 
 release-please watches `apps/cli` only. Merges with `feat`/`fix` commits
 touching `apps/cli` open a release PR for `@codenamegary/harold`; merging
-it tags `harold-vX.Y.Z`, publishes to npm with provenance, and smoke tests
-`npx @codenamegary/harold --version`.
+it tags a release, publishes to npm with provenance (`publish-cli`), and
+smoke tests `npx @codenamegary/harold --version`.
 
 The npm bundle embeds the server, so a server-only change ships to npm
 only through a CLI release: make the commit touch `apps/cli` (or pair it

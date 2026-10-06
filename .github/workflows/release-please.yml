@@ -4,18 +4,41 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
 jobs:
   release-please:
-    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - name: Run release-please
-        uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
+        id: release
         with:
-          # A PAT is required so the published release event can trigger
-          # publish-cli. GitHub suppresses events created by GITHUB_TOKEN.
+          # A PAT is required so CI starts on release PRs. PRs created with
+          # GITHUB_TOKEN hold their runs for manual approval.
           token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # Same trigger, npm channel. Trusted publishing validates the OIDC claims
+  # against the package's trusted publishers, and a workflow_call caller
+  # may need its own name registered too, so the caller carries
+  # id-token: write alongside the called workflow.
+  npm:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/publish-cli.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}

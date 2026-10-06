@@ -1,7 +1,7 @@
 {
   "name": "@codenamegary/harold",
   "description": "Hark! The Harold Agents Sing - Access your agents on Android from anywhere.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "bin": {
     "harold": "./src/main.ts"
