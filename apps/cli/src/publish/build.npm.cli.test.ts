@@ -17,7 +17,17 @@ describe("build.npm.cli", () => {
 
       expect(manifest.name).toBe("@codenamegary/harold")
       expect(manifest.private).toBeUndefined()
-      expect(manifest.bin).toEqual({ harold: "./harold.js" })
+      expect(manifest.bin).toEqual({ harold: "harold.js" })
+    })
+
+    test("publishes a dry run without manifest auto-correction", async () => {
+      // npm 11.19 strips a "./"-prefixed bin path from the published
+      // manifest, which would ship the package with no harold command.
+      const proc = await Bun.$`npm publish --dry-run`.cwd(distDir).nothrow().quiet()
+      const output = `${proc.stderr.toString()} ${proc.stdout.toString()}`
+
+      expect(proc.exitCode).toBe(0)
+      expect(output).not.toContain("auto-corrected")
     })
 
     test("carries no workspace references", async () => {
