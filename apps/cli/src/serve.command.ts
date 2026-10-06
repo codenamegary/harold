@@ -14,7 +14,6 @@ import { readRunningView, renderRunningView, RunningView, RunningViewColors } fr
 export type ServeDeps = Readonly<{
   readLiveDaemonState: ReadLiveDaemonState
   runServer: () => Promise<void>
-  isInteractive: () => boolean
   readRunningView: () => RunningView
   writeOut: (line: string) => void
   writeWarn: (message: string) => void
@@ -32,7 +31,6 @@ const openServeDeps = (): ServeDeps => {
       isProcessAlive: makeNodeProcessAlive(),
     }),
     runServer,
-    isInteractive: () => process.stdin.isTTY === true && process.stdout.isTTY === true,
     readRunningView: () => readRunningView(config),
     writeOut: (line) => console.log(line),
     writeWarn: (message) => log.warn(message),
@@ -42,9 +40,9 @@ const openServeDeps = (): ServeDeps => {
 
 /**
  * Serves the daemon. The listener is confirmed before any output: runServer
- * resolves once the bind succeeds. Interactive terminals get the running
- * view (summary plus one next step), scripts get a single confirmation line.
- * The wizard never runs here. Setup owns configuration.
+ * resolves once the bind succeeds. The running view is always printed, then
+ * the daemon keeps running in the foreground. The wizard never runs here.
+ * Setup owns configuration.
  */
 const executeServe = async (deps: ServeDeps): Promise<number> => {
   const running = deps.readLiveDaemonState()
@@ -54,16 +52,7 @@ const executeServe = async (deps: ServeDeps): Promise<number> => {
   }
 
   await deps.runServer()
-  const view = deps.readRunningView()
-
-  if (deps.isInteractive()) {
-    deps.writeOut(renderRunningView(view, deps.colors))
-    return 0
-  }
-
-  deps.writeOut(
-    `Harold listening at http://${view.summary.localApi.host}:${view.summary.localApi.port}`,
-  )
+  deps.writeOut(renderRunningView(deps.readRunningView(), deps.colors))
   return 0
 }
 

@@ -115,7 +115,6 @@ type HarnessOptions = Readonly<{
   verifyResults?: boolean[]
   pairResult?: boolean
   daemonRunning?: boolean
-  interactive?: boolean
   script?: PromptScript
 }>
 
@@ -147,7 +146,6 @@ const makeHarness = (options: HarnessOptions = {}) => {
   const deps: SetupWizardDeps = {
     dataDir: "/home/dev/.harold",
     cwd: "/home/dev",
-    interactive: options.interactive ?? true,
     prompts: promptBundle.prompts,
     colors: {
       red: (text) => text,
@@ -498,29 +496,11 @@ describe("runSetupWizard pair step", () => {
     expect(harness.pair.calls).toBe(0)
   })
 
-  test("pairs without a prompt when not interactive", async () => {
-    const harness = makeHarness({
-      agents: [makeAgent({ id: "cursor", displayName: "Cursor" })],
-      interactive: false,
-    })
-
-    const exitCode = await runSetupWizard(harness.deps, {
-      agents: ["cursor"],
-      workspace: "/home/dev/project",
-      advertisedUrl: "https://harold.example.com",
-      pair: true,
-    })
-
-    expect(exitCode).toBe(0)
-    expect(harness.pair.calls).toBe(1)
-    expect(harness.calls.confirm).toEqual([])
-  })
-
   test("fails when pairing does not complete", async () => {
     const harness = makeHarness({
       agents: [makeAgent({ id: "cursor", displayName: "Cursor" })],
-      interactive: false,
       pairResult: false,
+      script: { confirm: [true] },
     })
 
     const exitCode = await runSetupWizard(harness.deps, {
@@ -537,7 +517,6 @@ describe("runSetupWizard pair step", () => {
     const harness = makeHarness({
       agents: [makeAgent({ id: "cursor", displayName: "Cursor" })],
       daemonRunning: false,
-      interactive: false,
     })
 
     const exitCode = await runSetupWizard(harness.deps, {

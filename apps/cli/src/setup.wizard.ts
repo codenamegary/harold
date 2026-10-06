@@ -60,7 +60,6 @@ export type SetupOptions = Readonly<{
 export type SetupWizardDeps = Readonly<{
   dataDir: string
   cwd: string
-  interactive: boolean
   prompts: SetupPrompts
   colors: SetupColors
   writeLine: (line: string) => void
@@ -146,8 +145,6 @@ const agentsStep = async (deps: SetupWizardDeps, options: SetupOptions): Promise
         return false
       }
     }
-  } else if (!deps.interactive) {
-    deps.prompts.info("Skipped agents: no --agents flag and stdin is not a terminal.")
   } else {
     const present = deps.agents.list().filter((agent) => agent.present)
 
@@ -229,11 +226,6 @@ const workspaceStep = async (deps: SetupWizardDeps, options: SetupOptions): Prom
     return await registerWorkspace(deps, options.workspace)
   }
 
-  if (!deps.interactive) {
-    deps.prompts.info("Skipped workspace: no --workspace flag and stdin is not a terminal.")
-    return true
-  }
-
   const existing = deps.workspaces.list()
   if (existing.length > 0) {
     deps.prompts.note(
@@ -289,11 +281,6 @@ const reachabilityStep = async (deps: SetupWizardDeps, options: SetupOptions): P
       return false
     }
 
-    return true
-  }
-
-  if (!deps.interactive) {
-    deps.prompts.info("Skipped reachability: no --advertised-url flag and stdin is not a terminal.")
     return true
   }
 
@@ -360,18 +347,16 @@ const pairStep = async (deps: SetupWizardDeps, options: SetupOptions): Promise<b
     return true
   }
 
-  if (deps.interactive) {
-    const wantsToPair = await deps.prompts.confirm({
-      message: "Pair a phone now?",
-      initialValue: true,
-    })
-    if (deps.prompts.isCancel(wantsToPair)) {
-      return false
-    }
-    if (!wantsToPair) {
-      deps.prompts.info("Skipped pairing. Run `harold pair` when you are ready.")
-      return true
-    }
+  const wantsToPair = await deps.prompts.confirm({
+    message: "Pair a phone now?",
+    initialValue: true,
+  })
+  if (deps.prompts.isCancel(wantsToPair)) {
+    return false
+  }
+  if (!wantsToPair) {
+    deps.prompts.info("Skipped pairing. Run `harold pair` when you are ready.")
+    return true
   }
 
   const paired = await deps.pair()

@@ -17,7 +17,6 @@ const startCommand = (
   process.exitCode = undefined
 
   const done = makeSetupCommand({
-    isInteractive: () => false,
     prompts: silentPrompts,
     cwd: () => process.cwd(),
     writeOut: (line) => lines.push(line),
@@ -59,7 +58,7 @@ const silentPrompts: SetupPrompts = {
   multiselect: async () => [],
   text: async () => "",
   select: async () => "",
-  confirm: async () => false,
+  confirm: async () => true,
   isCancel: (value): value is symbol => typeof value === "symbol",
   cancel: () => undefined,
 }
@@ -253,14 +252,13 @@ describe("harold setup command wiring", () => {
     }
   })
 
-  test("starts the server for an interactive run and prints the status when done", async () => {
+  test("starts the server when no daemon is running and prints the status when done", async () => {
     const lines: string[] = []
     let daemonLive = false
     let runServerCalls = 0
     process.exitCode = 0
 
     await makeSetupCommand({
-      isInteractive: () => true,
       prompts: silentPrompts,
       cwd: () => process.cwd(),
       writeOut: (line) => lines.push(line),
@@ -300,7 +298,6 @@ describe("harold setup command wiring", () => {
     process.exitCode = 0
 
     await makeSetupCommand({
-      isInteractive: () => true,
       prompts: silentPrompts,
       cwd: () => process.cwd(),
       writeOut: (line) => lines.push(line),
@@ -327,40 +324,5 @@ describe("harold setup command wiring", () => {
     expect(process.exitCode).toBe(0)
     expect(runServerCalls).toBe(0)
     expect(lines.join("\n")).toContain("Harold is running")
-  })
-
-  test("does not start a server for a non-interactive run", async () => {
-    const lines: string[] = []
-    let runServerCalls = 0
-    process.exitCode = 0
-
-    await makeSetupCommand({
-      isInteractive: () => false,
-      prompts: silentPrompts,
-      cwd: () => process.cwd(),
-      writeOut: (line) => lines.push(line),
-      writeErr: (line) => lines.push(line),
-      readLiveDaemonState: () => ({ ok: false, error: { kind: "no_state_file" } }),
-      runServer: async () => {
-        runServerCalls += 1
-      },
-      readRunningView: () => ({
-        summary: {
-          dataDir,
-          localApi: { host: "127.0.0.1", port: 3847 },
-          advertisedEndpoint: { url: null, enabled: false },
-          agents: { enabled: 1, needsAuth: null },
-          workspaces: 1,
-        },
-        devices: 0,
-      }),
-      colors: plainColors,
-    }).parseAsync(["--agents", "cursor", "--workspace", workspaceDir, "--no-pair"], {
-      from: "user",
-    })
-
-    expect(process.exitCode).toBe(0)
-    expect(runServerCalls).toBe(0)
-    expect(lines.join("\n")).not.toContain("Harold is running")
   })
 })

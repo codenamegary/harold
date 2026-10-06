@@ -43,7 +43,6 @@ import { SetupOptions, SetupPrompts, SetupWizardDeps, runSetupWizard } from "./s
 import { defaultWorkspaceName } from "./workspace.command"
 
 export type SetupCommandDeps = Readonly<{
-  isInteractive: () => boolean
   prompts: SetupPrompts
   cwd: () => string
   writeOut: (line: string) => void
@@ -97,7 +96,6 @@ const defaultSetupCommandDeps = (): SetupCommandDeps => {
   const config = parseConfig(process.env)
 
   return {
-    isInteractive: () => process.stdin.isTTY === true && process.stdout.isTTY === true,
     prompts: makeClackPrompts(),
     cwd: () => process.cwd(),
     writeOut: (line) => console.log(line),
@@ -133,18 +131,17 @@ export const parseAgentIds = (raw: string | undefined): readonly string[] | unde
 
 /**
  * Composes the agent, workspace, reachability, and pairing batches into one
- * interactive flow. On an interactive first run with no daemon, setup starts
- * the listener first: reachability verification and pairing both need it
- * answering. When the wizard ends against a live daemon, the running view is
- * printed. Scripts never start a foreground server; they run setup against a
- * daemon started elsewhere.
+ * interactive flow. When no daemon is running, setup starts the listener
+ * first: reachability verification and pairing both need it answering. The
+ * running view is printed when the wizard ends against a live daemon, and
+ * the daemon keeps serving in the foreground.
  */
 export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): Promise<number> => {
   const config = parseConfig(process.env)
   const dataDir = config.dataDir
   const cwd = deps.cwd()
 
-  if (!deps.readLiveDaemonState().ok && deps.isInteractive()) {
+  if (!deps.readLiveDaemonState().ok) {
     await deps.runServer()
   }
 
@@ -211,7 +208,6 @@ export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): P
     const wizardDeps: SetupWizardDeps = {
       dataDir,
       cwd,
-      interactive: deps.isInteractive(),
       prompts: deps.prompts,
       colors: { red: pc.red, yellow: pc.yellow },
       writeLine,

@@ -66,9 +66,10 @@ the CLI reads it, and no host HTTP route is involved.
 ## Consequences
 
 - The daemon is the single writer of the state file. Readers never block it.
-- `harold serve` runs in the foreground and tees the default log file to
-  stdout, so the terminal keeps printing while `harold logs` still has a file
-  to tail. An explicit `logPath` writes only to that file.
+- `harold serve` runs in the foreground and prints the running view once the
+  listener is confirmed. Logs never go to the screen. The daemon writes them
+  to the default file, or the operator-configured `logPath`, and
+  `harold logs` tails that file.
 - `harold serve` while a daemon runs exits 1 with a warning from the same
   state file.
 - The CLI opens the SQLite database for CRUD batches. WAL mode allows one

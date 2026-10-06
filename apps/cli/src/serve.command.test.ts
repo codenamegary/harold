@@ -27,7 +27,6 @@ const makeDeps = (overrides: Partial<ServeDeps> = {}) => {
     runServer: async () => {
       order.push("serve")
     },
-    isInteractive: () => true,
     readRunningView: () => view(),
     writeOut: (line) => {
       output.push(line)
@@ -73,16 +72,6 @@ describe("harold serve", () => {
     expect(exitCode).toBe(0)
     expect(harness.order).toEqual(["serve"])
     expect(output).toContain("harold setup")
-  })
-
-  test("prints one confirmation line when stdin is not a terminal", async () => {
-    const harness = makeDeps({ isInteractive: () => false })
-
-    const exitCode = await run(harness.deps)
-
-    expect(exitCode).toBe(0)
-    expect(harness.output).toHaveLength(1)
-    expect(harness.output[0]).toContain("http://127.0.0.1:3847")
   })
 
   test("exits 1 without serving when a daemon is already running", async () => {
