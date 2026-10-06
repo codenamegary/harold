@@ -24,11 +24,11 @@ its command is `harold`.
 
 ```sh
 # first run, no install
-npx @codenamegary/harold
+npx @codenamegary/harold setup
 
 # daily use
 npm install -g @codenamegary/harold
-harold
+harold serve
 ```
 
 Never run bare `npx harold`. That name belongs to an unrelated dormant
@@ -40,8 +40,11 @@ Requires [Bun](https://bun.sh).
 
 ```sh
 bun install
-bun run dev
+bun run dev serve
 ```
+
+`bun run dev` runs the CLI. Pass it any command: `bun run dev setup`,
+`bun run dev status`. With no command it prints the command surface.
 
 The Device API listens on `127.0.0.1:3847`. Every route except
 `GET /v1/status` and the pairing claim requires a device credential

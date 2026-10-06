@@ -21,7 +21,7 @@ export const makeHaroldProgram = (deps: HaroldProgramDeps = {}): Command => {
     .name("harold")
     .description("Hark! The Harold Agents Sing - Access your agents on Android from anywhere.")
     .version(packageJson.version)
-  program.addCommand(makeServeCommand(deps.serve), { isDefault: true })
+  program.addCommand(makeServeCommand(deps.serve))
   program.addCommand(makeSetupCommand())
   program.addCommand(makeStatusCommand())
   program.addCommand(makeAgentCommand())
@@ -30,6 +30,10 @@ export const makeHaroldProgram = (deps: HaroldProgramDeps = {}): Command => {
   program.addCommand(makeWorkspaceCommand())
   program.addCommand(makeLogsCommand())
   program.addCommand(makeConnectCommand())
+
+  program.action(() => {
+    program.outputHelp()
+  })
 
   return program
 }

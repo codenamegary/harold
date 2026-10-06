@@ -64,6 +64,21 @@ const silentPrompts: SetupPrompts = {
   cancel: () => undefined,
 }
 
+const plainColors = { bold: (text: string) => text, dim: (text: string) => text }
+
+const daemonState = {
+  pid: 4321,
+  writtenAt: "2026-10-04T00:00:00.000Z",
+  status: {
+    version: "1.0.3",
+    state: "online",
+    bindAddress: "127.0.0.1",
+    port: 3847,
+    startedAt: "2026-10-04T00:00:00.000Z",
+    acp: { state: "ready", activeSessions: 0 },
+  },
+} as const
+
 describe("harold setup command wiring", () => {
   let scratch = ""
   let dataDir = ""
@@ -236,5 +251,116 @@ describe("harold setup command wiring", () => {
       await statusServer.stop(true)
       await rm(path.join(dataDir, "daemon-state.json"), { force: true })
     }
+  })
+
+  test("starts the server for an interactive run and prints the status when done", async () => {
+    const lines: string[] = []
+    let daemonLive = false
+    let runServerCalls = 0
+    process.exitCode = 0
+
+    await makeSetupCommand({
+      isInteractive: () => true,
+      prompts: silentPrompts,
+      cwd: () => process.cwd(),
+      writeOut: (line) => lines.push(line),
+      writeErr: (line) => lines.push(line),
+      readLiveDaemonState: () =>
+        daemonLive
+          ? { ok: true, state: daemonState }
+          : { ok: false, error: { kind: "no_state_file" } },
+      runServer: async () => {
+        runServerCalls += 1
+        daemonLive = true
+      },
+      readRunningView: () => ({
+        summary: {
+          dataDir,
+          localApi: { host: "127.0.0.1", port: 3847 },
+          advertisedEndpoint: { url: null, enabled: false },
+          agents: { enabled: 1, needsAuth: null },
+          workspaces: 1,
+        },
+        devices: 0,
+      }),
+      colors: plainColors,
+    }).parseAsync(["--agents", "cursor", "--workspace", workspaceDir, "--no-pair"], {
+      from: "user",
+    })
+
+    expect(process.exitCode).toBe(0)
+    expect(runServerCalls).toBe(1)
+    expect(lines.join("\n")).toContain("Harold is running")
+    expect(lines.join("\n")).toContain("harold connect")
+  })
+
+  test("uses a running daemon without starting a second one", async () => {
+    const lines: string[] = []
+    let runServerCalls = 0
+    process.exitCode = 0
+
+    await makeSetupCommand({
+      isInteractive: () => true,
+      prompts: silentPrompts,
+      cwd: () => process.cwd(),
+      writeOut: (line) => lines.push(line),
+      writeErr: (line) => lines.push(line),
+      readLiveDaemonState: () => ({ ok: true, state: daemonState }),
+      runServer: async () => {
+        runServerCalls += 1
+      },
+      readRunningView: () => ({
+        summary: {
+          dataDir,
+          localApi: { host: "127.0.0.1", port: 3847 },
+          advertisedEndpoint: { url: null, enabled: false },
+          agents: { enabled: 1, needsAuth: null },
+          workspaces: 1,
+        },
+        devices: 0,
+      }),
+      colors: plainColors,
+    }).parseAsync(["--agents", "cursor", "--workspace", workspaceDir, "--no-pair"], {
+      from: "user",
+    })
+
+    expect(process.exitCode).toBe(0)
+    expect(runServerCalls).toBe(0)
+    expect(lines.join("\n")).toContain("Harold is running")
+  })
+
+  test("does not start a server for a non-interactive run", async () => {
+    const lines: string[] = []
+    let runServerCalls = 0
+    process.exitCode = 0
+
+    await makeSetupCommand({
+      isInteractive: () => false,
+      prompts: silentPrompts,
+      cwd: () => process.cwd(),
+      writeOut: (line) => lines.push(line),
+      writeErr: (line) => lines.push(line),
+      readLiveDaemonState: () => ({ ok: false, error: { kind: "no_state_file" } }),
+      runServer: async () => {
+        runServerCalls += 1
+      },
+      readRunningView: () => ({
+        summary: {
+          dataDir,
+          localApi: { host: "127.0.0.1", port: 3847 },
+          advertisedEndpoint: { url: null, enabled: false },
+          agents: { enabled: 1, needsAuth: null },
+          workspaces: 1,
+        },
+        devices: 0,
+      }),
+      colors: plainColors,
+    }).parseAsync(["--agents", "cursor", "--workspace", workspaceDir, "--no-pair"], {
+      from: "user",
+    })
+
+    expect(process.exitCode).toBe(0)
+    expect(runServerCalls).toBe(0)
+    expect(lines.join("\n")).not.toContain("Harold is running")
   })
 })

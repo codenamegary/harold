@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs"
 import { log } from "@clack/prompts"
 import { Command } from "commander"
 import pc from "picocolors"
@@ -9,57 +8,43 @@ import {
 } from "core/daemon-state/node.adapters"
 import { makeReadLiveDaemonState, ReadLiveDaemonState } from "core/daemon-state/read.live.usecase"
 import { runServer } from "server/bootstrap"
-import { databasePath } from "server/database"
 import { parseConfig } from "server/config"
-import { isFreshInstall } from "./install.detect"
-import { makeSetupCommandDeps, runSetup as executeSetup } from "./setup.command"
-import { SetupOptions } from "./setup.wizard"
+import { readRunningView, renderRunningView, RunningView, RunningViewColors } from "./running.view"
 
 export type ServeDeps = Readonly<{
-  dataDir: string
   readLiveDaemonState: ReadLiveDaemonState
-  isFreshInstall: () => boolean
-  isInteractive: () => boolean
   runServer: () => Promise<void>
-  runSetup: (options: SetupOptions) => Promise<number>
+  isInteractive: () => boolean
+  readRunningView: () => RunningView
+  writeOut: (line: string) => void
   writeWarn: (message: string) => void
-  writeInfo: (message: string) => void
+  colors: RunningViewColors
 }>
-
-const freshInstallSetupOptions: SetupOptions = {
-  agents: undefined,
-  workspace: undefined,
-  advertisedUrl: undefined,
-  pair: true,
-}
 
 const openServeDeps = (): ServeDeps => {
   const config = parseConfig(process.env)
 
   return {
-    dataDir: config.dataDir,
     readLiveDaemonState: makeReadLiveDaemonState({
       readDaemonState: makeDaemonStateFileStore({
         path: daemonStateFilePath(config.dataDir),
       }).read,
       isProcessAlive: makeNodeProcessAlive(),
     }),
-    isFreshInstall: () =>
-      isFreshInstall({ databasePath: databasePath(config.dataDir), fileExists: existsSync }),
-    isInteractive: () => process.stdin.isTTY === true && process.stdout.isTTY === true,
     runServer,
-    runSetup: (options) =>
-      executeSetup(options, makeSetupCommandDeps({ isInteractive: () => true })),
+    isInteractive: () => process.stdin.isTTY === true && process.stdout.isTTY === true,
+    readRunningView: () => readRunningView(config),
+    writeOut: (line) => console.log(line),
     writeWarn: (message) => log.warn(message),
-    writeInfo: (message) => log.info(message),
+    colors: pc,
   }
 }
 
 /**
- * Serves the daemon. On a fresh interactive install the setup wizard runs
- * after the listener is up: reachability verification and the pairing claim
- * both need the daemon answering. Non-interactive installs keep serving with
- * defaults and get a pointer at `harold setup`.
+ * Serves the daemon. The listener is confirmed before any output: runServer
+ * resolves once the bind succeeds. Interactive terminals get the running
+ * view (summary plus one next step), scripts get a single confirmation line.
+ * The wizard never runs here. Setup owns configuration.
  */
 const executeServe = async (deps: ServeDeps): Promise<number> => {
   const running = deps.readLiveDaemonState()
@@ -68,20 +53,16 @@ const executeServe = async (deps: ServeDeps): Promise<number> => {
     return 1
   }
 
-  const fresh = deps.isFreshInstall()
   await deps.runServer()
+  const view = deps.readRunningView()
 
-  if (!fresh) {
+  if (deps.isInteractive()) {
+    deps.writeOut(renderRunningView(view, deps.colors))
     return 0
   }
 
-  if (deps.isInteractive()) {
-    return await deps.runSetup(freshInstallSetupOptions)
-  }
-
-  deps.writeWarn(pc.yellow(`Fresh install: no database in ${deps.dataDir} yet.`))
-  deps.writeInfo(
-    "Serving with defaults. Run `harold setup` to configure agents, workspace, and pairing.",
+  deps.writeOut(
+    `Harold listening at http://${view.summary.localApi.host}:${view.summary.localApi.port}`,
   )
   return 0
 }

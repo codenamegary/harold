@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import { makeHaroldProgram } from "./harold.program"
 
 const originalExitCode = process.exitCode
@@ -8,23 +8,33 @@ afterEach(() => {
 })
 
 describe("makeHaroldProgram", () => {
-  test("running harold with no command serves the daemon", async () => {
+  test("running harold with no command prints help and does not serve", async () => {
     let served = false
-    process.exitCode = undefined
-
-    const program = makeHaroldProgram({
-      serve: {
-        readLiveDaemonState: () => ({ ok: false, error: { kind: "no_state_file" } }),
-        isFreshInstall: () => false,
-        runServer: async () => {
-          served = true
-        },
-      },
+    const output: string[] = []
+    const writeSpy = spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      output.push(String(chunk))
+      return true
     })
 
-    await program.parseAsync([], { from: "user" })
+    try {
+      process.exitCode = 0
 
-    expect(served).toBe(true)
+      const program = makeHaroldProgram({
+        serve: {
+          runServer: async () => {
+            served = true
+          },
+        },
+      })
+
+      await program.parseAsync([], { from: "user" })
+    } finally {
+      writeSpy.mockRestore()
+    }
+
+    expect(served).toBe(false)
+    expect(output.join("")).toContain("Usage: harold")
+    expect(process.exitCode ?? 0).toBe(0)
   })
 
   test("registers the setup command", () => {
