@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3](https://github.com/codenamegary/harold/compare/v1.0.2...v1.0.3) (2026-10-06)
+
+
+### Bug Fixes
+
+* **ci:** unblock the npm release chain ([#341](https://github.com/codenamegary/harold/issues/341)) ([b59e19d](https://github.com/codenamegary/harold/commit/b59e19da415108708ffe4cf7fe64187ee8964edd))
+
 ## [1.0.2](https://github.com/codenamegary/harold/compare/v1.0.1...v1.0.2) (2026-10-06)
 
 
