@@ -18,7 +18,7 @@
     }
   },
   "scripts": {
-    "dev": "bun run --filter '*' dev",
+    "dev": "bun run apps/cli/src/main.ts",
     "build": "bun run --filter '*' build",
     "format": "oxfmt",
     "format:check": "oxfmt --check",

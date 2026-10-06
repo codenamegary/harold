@@ -1,6 +1,5 @@
 import { createWriteStream } from "node:fs"
 import packageJson from "../../package.json"
-import { teeWritable } from "./tee.writable"
 import { createServer } from "./server"
 import { listen, registerShutdown } from "./shutdown"
 import { ConfigSchema, parseConfig } from "../config/config"
@@ -44,14 +43,11 @@ export const runServer = async (options: RunServerOptions = {}) => {
     dataDir: envConfig.dataDir,
   })
   // The daemon always logs to a file so `harold logs` can tail it from
-  // outside the daemon process (ADR-0006). A null logPath means the default
-  // file under the data dir. In the foreground default case the pino stream
-  // is also teed to stdout so `harold serve` keeps printing.
+  // outside the daemon process (ADR-0006). Screen output belongs to the CLI:
+  // `harold serve` prints the running view when the listener is confirmed.
+  // A null logPath means the default file under the data dir.
   const logFilePath = resolveDaemonLogPath(applied.logPath, envConfig.dataDir)
-  const logStream =
-    applied.logPath === null
-      ? teeWritable([createWriteStream(logFilePath, { flags: "a" }), process.stdout])
-      : createWriteStream(logFilePath, { flags: "a" })
+  const logStream = createWriteStream(logFilePath, { flags: "a" })
   const runtime = createRuntime(packageJson.version)
   const { app, acpSupervisor, runtimeStatusService } = await createServer({
     config,

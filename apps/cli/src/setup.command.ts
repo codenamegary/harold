@@ -20,8 +20,12 @@ import {
   makeDaemonStateFileStore,
   makeNodeProcessAlive,
 } from "core/daemon-state/node.adapters"
-import { makeReadLiveDaemonState } from "core/daemon-state/read.live.usecase"
+import {
+  makeReadLiveDaemonState,
+  ReadLiveDaemonStateResult,
+} from "core/daemon-state/read.live.usecase"
 import { makeNodeFetchStatusEndpoint } from "core/reachability/node.adapters"
+import { runServer } from "server/bootstrap"
 import { parseConfig } from "server/config"
 import { openDatabase } from "server/database"
 import { assembleDeviceSlice } from "server/device"
@@ -34,15 +38,19 @@ import { ConnectDeps, runConnect } from "./connect.command"
 import { connectRecipes } from "./connect.recipes"
 import { PairActionDeps, executePair } from "./pair.command"
 import { renderTerminalQr } from "./pair.qr"
+import { readRunningView, renderRunningView, RunningView, RunningViewColors } from "./running.view"
 import { SetupOptions, SetupPrompts, SetupWizardDeps, runSetupWizard } from "./setup.wizard"
 import { defaultWorkspaceName } from "./workspace.command"
 
 export type SetupCommandDeps = Readonly<{
-  isInteractive: () => boolean
   prompts: SetupPrompts
   cwd: () => string
   writeOut: (line: string) => void
   writeErr: (line: string) => void
+  readLiveDaemonState: () => ReadLiveDaemonStateResult
+  runServer: () => Promise<void>
+  readRunningView: () => RunningView
+  colors: RunningViewColors
 }>
 
 export const makeClackPrompts = (): SetupPrompts => ({
@@ -84,13 +92,25 @@ export const makeClackPrompts = (): SetupPrompts => ({
   cancel: (message) => clackCancel(message),
 })
 
-const defaultSetupCommandDeps = (): SetupCommandDeps => ({
-  isInteractive: () => process.stdin.isTTY === true && process.stdout.isTTY === true,
-  prompts: makeClackPrompts(),
-  cwd: () => process.cwd(),
-  writeOut: (line) => console.log(line),
-  writeErr: (line) => console.error(line),
-})
+const defaultSetupCommandDeps = (): SetupCommandDeps => {
+  const config = parseConfig(process.env)
+
+  return {
+    prompts: makeClackPrompts(),
+    cwd: () => process.cwd(),
+    writeOut: (line) => console.log(line),
+    writeErr: (line) => console.error(line),
+    readLiveDaemonState: makeReadLiveDaemonState({
+      readDaemonState: makeDaemonStateFileStore({
+        path: daemonStateFilePath(config.dataDir),
+      }).read,
+      isProcessAlive: makeNodeProcessAlive(),
+    }),
+    runServer,
+    readRunningView: () => readRunningView(config),
+    colors: pc,
+  }
+}
 
 export const makeSetupCommandDeps = (
   overrides: Partial<SetupCommandDeps> = {},
@@ -111,25 +131,26 @@ export const parseAgentIds = (raw: string | undefined): readonly string[] | unde
 
 /**
  * Composes the agent, workspace, reachability, and pairing batches into one
- * interactive flow. All ports come from the same CLI contexts the individual
- * commands use, so flags and prompts converge on one code path per step.
+ * interactive flow. When no daemon is running, setup starts the listener
+ * first: reachability verification and pairing both need it answering. The
+ * running view is printed when the wizard ends against a live daemon, and
+ * the daemon keeps serving in the foreground.
  */
 export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): Promise<number> => {
   const config = parseConfig(process.env)
   const dataDir = config.dataDir
   const cwd = deps.cwd()
+
+  if (!deps.readLiveDaemonState().ok) {
+    await deps.runServer()
+  }
+
   const database = openDatabase({ dataDir })
   const settingsStore = makeRuntimeSettingsFileStore({
     dataDir,
     seedDefaults: seedDefaultsFromConfig(config),
   })
   const agentCli = openAgentCli({ dataDir })
-  const readLiveDaemonState = makeReadLiveDaemonState({
-    readDaemonState: makeDaemonStateFileStore({
-      path: daemonStateFilePath(dataDir),
-    }).read,
-    isProcessAlive: makeNodeProcessAlive(),
-  })
 
   try {
     agentCli.ensureCatalogRows()
@@ -187,7 +208,6 @@ export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): P
     const wizardDeps: SetupWizardDeps = {
       dataDir,
       cwd,
-      interactive: deps.isInteractive(),
       prompts: deps.prompts,
       colors: { red: pc.red, yellow: pc.yellow },
       writeLine,
@@ -234,12 +254,18 @@ export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): P
         verifyAndPersist: async (advertisedUrl) =>
           (await runConnect({ options: { advertisedUrl }, dataDir, deps: connectDeps })) === 0,
       },
-      isDaemonRunning: () => readLiveDaemonState().ok,
+      isDaemonRunning: () => deps.readLiveDaemonState().ok,
       pair: async () =>
         (await executePair(pairDeps, { endpoint: undefined, wait: true, json: false })) === 0,
     }
 
-    return await runSetupWizard(wizardDeps, options)
+    const code = await runSetupWizard(wizardDeps, options)
+
+    if (code === 0 && deps.readLiveDaemonState().ok) {
+      deps.writeOut(renderRunningView(deps.readRunningView(), deps.colors))
+    }
+
+    return code
   } finally {
     database.close()
     agentCli.close()
