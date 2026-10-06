@@ -16,6 +16,24 @@ operator tooling.
 | `apps/android`       | Paired device app                           |
 | `packages/contracts` | Wire contracts shared by server and clients |
 
+## Install
+
+Requires [Bun](https://bun.sh). The package is
+[`@codenamegary/harold`](https://www.npmjs.com/package/@codenamegary/harold);
+its command is `harold`.
+
+```sh
+# first run, no install
+npx @codenamegary/harold
+
+# daily use
+npm install -g @codenamegary/harold
+harold
+```
+
+Never run bare `npx harold`. That name belongs to an unrelated dormant
+package on npm.
+
 ## Run from source
 
 Requires [Bun](https://bun.sh).
@@ -37,7 +55,18 @@ The Device API listens on `127.0.0.1:3847`. Every route except
 | `HAROLD_PORT`     | `3847`      | Device API port                      |
 | `HAROLD_DATA_DIR` | `~/.harold` | Database, logs, and runtime settings |
 
-## Release binaries
+## Releases
+
+Two release tracks run on every merge to `main`, both driven by
+release-please:
+
+- **Repo and server.** Release PRs version the repo root and
+  `apps/server/package.json`. Merging a release publishes binaries
+  (`release-binaries`).
+- **npm CLI.** Commits touching `apps/cli` (conventional commits only) open
+  a release PR for `@codenamegary/harold`. Its releases are tagged
+  `harold-vX.Y.Z`, and each one publishes to npm with provenance
+  (`publish-cli`) and smoke tests `npx @codenamegary/harold --version`.
 
 `bun run build:release` compiles standalone binaries to
 `apps/server/release/harold-<target>`. Releases attach `harold-linux-x64`,

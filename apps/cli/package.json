@@ -1,6 +1,6 @@
 {
-  "name": "harold",
-  "private": true,
+  "name": "@codenamegary/harold",
+  "description": "Hark! The Harold Agents Sing - Access your agents on Android from anywhere.",
   "version": "0.1.0",
   "type": "module",
   "bin": {
@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "bun run src/main.ts",
     "start": "bun run src/main.ts",
+    "build:npm": "bun run src/publish/build.npm.cli.ts",
     "lint": "oxlint --deny-warnings",
     "typecheck": "tsc -b tsconfig.app.json --noEmit",
     "test": "NODE_ENV=test bun test --parallel=4 --timeout 20000"
