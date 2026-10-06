@@ -26,7 +26,9 @@ export const makePublishableManifest = (source: SourceManifest) => ({
   description: source.description,
   type: "module",
   bin: {
-    harold: "./harold.js",
+    // no "./" prefix: npm 11.19 normalizes it away and warns it "removed"
+    // the bin, which would publish the package without a command.
+    harold: "harold.js",
   },
   repository,
   engines: {
