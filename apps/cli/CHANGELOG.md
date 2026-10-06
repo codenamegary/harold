@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/codenamegary/harold/compare/v1.0.0...v1.0.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* **cli:** emit an npm-accepted bin path ([#336](https://github.com/codenamegary/harold/issues/336)) ([896b4c0](https://github.com/codenamegary/harold/commit/896b4c09cb31253e3f8c7bdd32b32922eb52cdc4))
+
 ## 1.0.0 (2026-10-06)
 
 
