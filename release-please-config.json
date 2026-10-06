@@ -5,6 +5,9 @@
   "packages": {
     ".": {
       "extra-files": ["apps/server/package.json"]
+    },
+    "apps/cli": {
+      "include-component-in-tag": true
     }
   },
   "changelog-sections": [

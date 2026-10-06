@@ -10,3 +10,4 @@ connect-tunnel.sh
 .harold/attachments/
 apps/server/.generated/
 apps/server/release/
+apps/cli/dist/

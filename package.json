@@ -1,12 +1,9 @@
 {
-  "name": "@codenamegary/harold",
+  "name": "harold-monorepo",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "packageManager": "bun@1.4.2",
-  "bin": {
-    "harold": "./apps/server/src/main.ts"
-  },
   "workspaces": {
     "packages": [
       "apps/*",
@@ -34,6 +31,7 @@
     "db:generate": "bun run --filter server db:generate",
     "catalog:codegen": "bun run --filter core catalog:codegen",
     "build:release": "bun run --filter server build:release",
+    "build:npm": "bun run --filter @codenamegary/harold build:npm",
     "prepare": "husky"
   },
   "devDependencies": {
