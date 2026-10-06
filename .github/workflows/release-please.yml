@@ -17,5 +17,5 @@ jobs:
         uses: googleapis/release-please-action@v4
         with:
           # A PAT is required so the published release event can trigger
-          # release-binaries. GitHub suppresses events created by GITHUB_TOKEN.
+          # publish-cli. GitHub suppresses events created by GITHUB_TOKEN.
           token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
