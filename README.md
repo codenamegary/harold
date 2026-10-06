@@ -57,20 +57,14 @@ The Device API listens on `127.0.0.1:3847`. Every route except
 
 ## Releases
 
-Two release tracks run on every merge to `main`, both driven by
-release-please:
+release-please watches `apps/cli` only. Merges with `feat`/`fix` commits
+touching `apps/cli` open a release PR for `@codenamegary/harold`; merging
+it tags `harold-vX.Y.Z`, publishes to npm with provenance, and smoke tests
+`npx @codenamegary/harold --version`.
 
-- **Repo and server.** Release PRs version the repo root and
-  `apps/server/package.json`. Merging a release publishes binaries
-  (`release-binaries`).
-- **npm CLI.** Commits touching `apps/cli` (conventional commits only) open
-  a release PR for `@codenamegary/harold`. Its releases are tagged
-  `harold-vX.Y.Z`, and each one publishes to npm with provenance
-  (`publish-cli`) and smoke tests `npx @codenamegary/harold --version`.
-
-`bun run build:release` compiles standalone binaries to
-`apps/server/release/harold-<target>`. Releases attach `harold-linux-x64`,
-`harold-darwin-arm64`, and `harold-windows-x64.exe` plus `SHA256SUMS`.
+The npm bundle embeds the server, so a server-only change ships to npm
+only through a CLI release: make the commit touch `apps/cli` (or pair it
+with one) so release-please counts it.
 
 ## Checks
 

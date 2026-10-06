@@ -22,7 +22,7 @@ permissions:
 jobs:
   publish:
     # Only the CLI component's releases (tagged `harold-vX.Y.Z`) publish to
-    # npm; repo-level releases keep driving binaries via release-binaries.
+    # npm; other tags are not CLI releases.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       startsWith(github.event.release.tag_name, 'harold-')
