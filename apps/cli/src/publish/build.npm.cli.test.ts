@@ -26,6 +26,17 @@ describe("build.npm.cli", () => {
       expect(raw).not.toContain("workspace:")
     })
 
+    test("points npm provenance at this repository", async () => {
+      // Trusted publishing validates repository.url against the publishing
+      // repo; this is the shape the registry accepts.
+      const manifest = JSON.parse(await readFile(path.join(distDir, "package.json"), "utf8"))
+
+      expect(manifest.repository).toEqual({
+        type: "git",
+        url: "git+https://github.com/codenamegary/harold.git",
+      })
+    })
+
     test("pins the version of the manifest it was built from", async () => {
       const source = JSON.parse(await readFile(path.join(cliRoot, "package.json"), "utf8"))
       const manifest = JSON.parse(await readFile(path.join(distDir, "package.json"), "utf8"))

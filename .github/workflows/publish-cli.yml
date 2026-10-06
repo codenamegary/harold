@@ -1,3 +1,8 @@
+# Trusted publishing: no NPM_TOKEN secret. The publish job exchanges the
+# workflow's OIDC token (id-token: write) for a short-lived publish
+# credential, and npm attaches provenance automatically. The package's
+# trusted publisher on npmjs.com must list this workflow's filename
+# (publish-cli.yml) — see docs.npmjs.com/trusted-publishers.
 name: publish-cli
 
 on:
@@ -10,7 +15,6 @@ on:
         description: "Release tag to publish (defaults to the latest harold-* release)"
         required: false
 
-# id-token: npm provenance signs the publish with the workflow's OIDC token.
 permissions:
   contents: read
   id-token: write
@@ -68,11 +72,10 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+          package-manager-cache: false
 
       - name: Publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish apps/cli/dist --access public --provenance
+        run: npm publish apps/cli/dist --access public
 
       # Done-when check from #323: the published bin runs on a clean
       # machine. The scratch dir has no repo, so npx resolves the package
