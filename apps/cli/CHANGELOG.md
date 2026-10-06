@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.2](https://github.com/codenamegary/harold/compare/v1.0.1...v1.0.2) (2026-10-06)
+
+
+### Bug Fixes
+
+* **ci:** declare the release-please runner ([#339](https://github.com/codenamegary/harold/issues/339)) ([b4062de](https://github.com/codenamegary/harold/commit/b4062de2405498114c908a70f0f144a5a3f2dbe0))
+* **cli:** cut npm releases from the node releaser ([#338](https://github.com/codenamegary/harold/issues/338)) ([0cd44f5](https://github.com/codenamegary/harold/commit/0cd44f5bce8612b6d92bdcaee6b3d9fb174bcd61))
+
 ## [1.0.1](https://github.com/codenamegary/harold/compare/v1.0.0...v1.0.1) (2026-10-06)
 
 
