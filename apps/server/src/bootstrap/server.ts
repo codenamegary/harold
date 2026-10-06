@@ -25,7 +25,6 @@ import { assembleAttachmentsSlice } from "../attachments/attachments.assembly"
 import { registerSessionRoutes } from "../session/session.routes"
 import { createArchivedAcpSessionsStore } from "../session/archived.acp.sessions.store"
 import { assembleDeviceSlice } from "../device/device.assembly"
-import { assembleConnectionTestSlice } from "../connection-test/connection-test.assembly"
 import { createRuntimeStatusService } from "../runtime/status.service"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn } from "core/agent-settings/validate-agent-path"
@@ -41,9 +40,6 @@ import {
 import { SpawnAgentProcessFn } from "../acp/supervisor/supervisor.ports"
 import { spawnAgentProcess } from "../acp/supervisor/supervisor.process.adapters"
 import { registerSessionStreamRoutes } from "../session/session.stream.routes"
-import { assembleLogsSlice } from "../logs/logs.assembly"
-import { ConsoleAsset } from "../console/console.assets"
-import { registerConsoleRoutes } from "../console/console.routes"
 import { createAcpHubPromptSession } from "../session/hub/acp.hub.prompt"
 import { createSessionCwdCache, createSessionHub, SessionHub } from "../session/hub/hub"
 import { createCommandsCache } from "../session/hub/commands.cache"
@@ -83,14 +79,12 @@ export type CreateServerOptions = {
   spawnAgentProcessFn?: SpawnAgentProcessFn
   /** Test seam: replaces the supervisor's agent start used by session routes. */
   startAcpAgentFn?: StartAcpAgent
-  isLoopbackRequest?: (request: FastifyRequest) => boolean
   wsAuthFrameTimeoutMs?: number
   logStream?: Writable
   logLevel?: LogLevel
   runtimeSettingsStore?: RuntimeSettingsFileStore
   appliedRuntimeSettings?: AppliedRuntimeSettingsHolder
   envBindOverrides?: EnvBindOverrides
-  consoleAssets?: ReadonlyArray<ConsoleAsset>
 }
 
 const loggerRedactPaths = [
@@ -140,20 +134,17 @@ export const createServer = async ({
   acpSupervisor: providedAcpSupervisor,
   spawnAgentProcessFn,
   startAcpAgentFn,
-  isLoopbackRequest,
   wsAuthFrameTimeoutMs,
   logStream,
   logLevel,
   runtimeSettingsStore: providedRuntimeSettingsStore,
   appliedRuntimeSettings,
   envBindOverrides,
-  consoleAssets,
 }: CreateServerOptions) => {
-  const logs = assembleLogsSlice({ downstream: logStream, spawnAgentProcess })
   const app = Fastify({
-    logger: buildLoggerOptions({ logStream: logs.logSink, logLevel }),
+    logger: buildLoggerOptions({ logStream, logLevel }),
   })
-  const spawnFn = spawnAgentProcessFn ?? logs.spawnAgentProcessFn
+  const spawnFn = spawnAgentProcessFn ?? spawnAgentProcess
 
   registerErrorHandler(app)
 
@@ -193,8 +184,6 @@ export const createServer = async ({
   registerAuthMiddleware(app, {
     findDeviceByCredentialHash: device.findDeviceByCredentialHash,
     touchDeviceLastSeen: device.touchDeviceLastSeen,
-    getTrustedProxies: () => runtimeSettingsStore.get().trustedProxies,
-    isLoopbackRequest,
   })
 
   const acpSupervisorRef: { current: AcpSupervisor } = { current: null! }
@@ -358,13 +347,10 @@ export const createServer = async ({
     findDeviceByCredentialHash: device.findDeviceByCredentialHash,
     touchDeviceLastSeen: device.touchDeviceLastSeen,
     sessionHub,
-    getTrustedProxies: () => runtimeSettingsStore.get().trustedProxies,
-    isLoopbackRequest,
     wsAuthFrameTimeoutMs,
   })
 
   registerStatusRoutes(app, runtime, config, acpSupervisor)
-  logs.registerRoutes(app)
   const runtimeStatusService = createRuntimeStatusService({
     runtime,
   })
@@ -397,17 +383,9 @@ export const createServer = async ({
     authBroker,
   })
 
-  const connectionTest = assembleConnectionTestSlice({
-    getAdvertisedUrl: () => runtimeSettings.get().advertisedUrl,
-    deviceProvisioning: device,
-  })
-  connectionTest.registerRoutes(app)
-
   if (withTestRoutes) {
     registerTestRoutes(app)
   }
-
-  registerConsoleRoutes(app, { assets: consoleAssets ?? [] })
 
   await startEnabledAgents(agentSettings, acpSupervisor, app.log)
 

@@ -1,14 +1,49 @@
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { FastifyInstance } from "fastify"
 import { spawnFakeAcp, SpawnedFakeAcp, SpawnFakeAcpOptions } from "test-support/spawn"
 import { createServer, CreateServerOptions } from "../bootstrap/server"
 import { Config, ConfigSchema, parseConfig } from "../config/config"
 import { AgentDatabase, openDatabase } from "../persistence/database"
+import { devices } from "../persistence/schema/devices"
 import { createRuntime, Runtime } from "../runtime/runtime"
 import { SpawnAgentProcessFn } from "../acp/supervisor/supervisor.ports"
 import { SpawnedAgentProcess } from "../acp/supervisor/models"
+import { hashDeviceCredential } from "core/device/hash.credential"
 import { acceptTestExecutablePath } from "./test.app"
+
+let testDeviceCounter = 0
+
+/**
+ * Seeds a device row directly and returns its plaintext credential. The HTTP
+ * edge is device-only, so tests that call protected routes must present this
+ * credential as `Authorization: Bearer <credential>`.
+ */
+export const seedTestDevice = (database: AgentDatabase): TestDeviceCredential => {
+  testDeviceCounter += 1
+  const deviceId = `device_test_${testDeviceCounter}`
+  const credential = `devcred_test_${deviceId}_${testDeviceCounter}`
+  const pairedAt = "2026-08-02T12:00:00.000Z"
+  database.db
+    .insert(devices)
+    .values({
+      id: deviceId,
+      name: "Test device",
+      platform: "test",
+      credentialHash: hashDeviceCredential(credential),
+      pairedAt,
+      lastSeenAt: pairedAt,
+      revokedAt: null,
+    })
+    .run()
+  return { deviceId, credential }
+}
+
+export type TestDeviceCredential = {
+  deviceId: string
+  credential: string
+}
 
 type Cleanup = () => void | Promise<unknown>
 const phases = ["supervisor", "app", "database", "child", "directory"] as const
@@ -175,6 +210,8 @@ export type TestAppOptions = ServerOverrides & {
 }
 export type TestApp = Awaited<ReturnType<typeof createServer>> &
   Omit<TestAppContext, "registerTestApp" | "registerTestChild" | "registerTestFakeProcess"> & {
+    app: FastifyInstance & { deviceCredential: TestDeviceCredential }
+    deviceCredential: TestDeviceCredential
     reopen: (options?: TestAppOptions) => Promise<TestApp>
   }
 
@@ -235,12 +272,16 @@ const bootAppInDirectory = (
       scope.actions.supervisor.add(() => result.acpSupervisor.stop())
     }
     scope.actions.app.add(() => result.app.close())
+    const deviceCredential = seedTestDevice(database)
+    const app = Object.assign(result.app, { deviceCredential })
     return {
       ...result,
+      app,
       database,
       config: serverOptions.config,
       runtime: serverOptions.runtime,
       dataDir,
+      deviceCredential,
       reopen: async (nextOptions = {}) => {
         await disposeScopes([scope], ["supervisor", "app", "database", "child"])
         return bootAppInDirectory(dataDir, {

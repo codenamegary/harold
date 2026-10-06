@@ -6,6 +6,10 @@ import { FilesystemDirectoryCollectionSchema } from "contracts/http/filesystem.b
 import { bootTestApp } from "../test-support/test.harness"
 import { allowWorkspaceRoots } from "../test-support/test.app"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 describe("GET /v1/filesystem/directories", () => {
   test("lists immediate child directories under an allowed root", async () => {
     const { app, dataDir } = await bootTestApp()
@@ -19,6 +23,7 @@ describe("GET /v1/filesystem/directories", () => {
     await allowWorkspaceRoots(app, [root])
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: `/v1/filesystem/directories?root=${encodeURIComponent(root)}`,
     })
@@ -42,6 +47,7 @@ describe("GET /v1/filesystem/directories", () => {
     await allowWorkspaceRoots(app, [allowed])
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: `/v1/filesystem/directories?root=${encodeURIComponent(outside)}`,
     })
@@ -60,6 +66,7 @@ describe("GET /v1/filesystem/directories", () => {
     await allowWorkspaceRoots(app, [root])
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: `/v1/filesystem/directories?root=${encodeURIComponent(nested)}`,
     })
@@ -81,6 +88,7 @@ describe("GET /v1/filesystem/directories", () => {
     await allowWorkspaceRoots(app, [root])
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: `/v1/filesystem/directories?root=${encodeURIComponent(root)}`,
     })

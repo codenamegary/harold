@@ -20,6 +20,10 @@ import {
 } from "./runtime-settings.file.adapters"
 import { buildAppliedRuntimeSettings } from "./resolve.runtime.settings.state"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 const createTestApp = (options?: { envBindOverrides?: ReturnType<typeof readEnvBindOverrides> }) =>
   bootTestApp({
     setup: ({ config }) => {
@@ -46,6 +50,7 @@ describe("GET /v1/settings/runtime", () => {
     const { app, dataDir } = await createTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/settings/runtime",
     })
@@ -56,7 +61,6 @@ describe("GET /v1/settings/runtime", () => {
     expect(body.settings).toEqual({
       advertisedUrl: null,
       advertisedUrlEnabled: true,
-      trustedProxies: [],
       bindHost: "127.0.0.1",
       bindPort: 3847,
       logLevel: "info",
@@ -81,6 +85,7 @@ describe("GET /v1/settings/runtime", () => {
     })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/settings/runtime",
     })
@@ -101,11 +106,11 @@ describe("PATCH /v1/settings/runtime", () => {
     await mkdir(allowedDir)
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/runtime",
       payload: {
         advertisedUrl: "https://agents.example.com",
-        trustedProxies: ["10.0.0.0/8", "::1"],
         logLevel: "debug",
         allowedRoots: [allowedDir],
       },
@@ -116,12 +121,12 @@ describe("PATCH /v1/settings/runtime", () => {
     expect(response.statusCode).toBe(200)
     expect(body.restartRequired).toBe(false)
     expect(body.settings.advertisedUrl).toBe("https://agents.example.com")
-    expect(body.settings.trustedProxies).toEqual(["10.0.0.0/8", "::1"])
     expect(body.settings.logLevel).toBe("debug")
     expect(body.settings.allowedRoots).toEqual([path.resolve(allowedDir)])
     expect(app.log.level).toBe("debug")
 
     const getResponse = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/settings/runtime",
     })
@@ -133,6 +138,7 @@ describe("PATCH /v1/settings/runtime", () => {
     const { app } = await createTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/runtime",
       payload: { bindPort: 4000 },
@@ -150,6 +156,7 @@ describe("PATCH /v1/settings/runtime", () => {
     const { app } = await createTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/runtime",
       payload: { logPath: "/tmp/harold.log" },
@@ -166,12 +173,14 @@ describe("PATCH /v1/settings/runtime", () => {
     const { app } = await createTestApp()
 
     await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/runtime",
       payload: { advertisedUrl: "https://agents.example.com" },
     })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/runtime",
       payload: { advertisedUrl: null },
@@ -187,12 +196,14 @@ describe("PATCH /v1/settings/runtime", () => {
     const { app } = await createTestApp()
 
     await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/runtime",
       payload: { advertisedUrl: "https://agents.example.com" },
     })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/runtime",
       payload: { advertisedUrl: "" },
@@ -208,6 +219,7 @@ describe("PATCH /v1/settings/runtime", () => {
     const { app } = await createTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/runtime",
       payload: { advertisedUrl: "http://agents.example.com" },
@@ -220,26 +232,29 @@ describe("PATCH /v1/settings/runtime", () => {
     expect(body.errors[0]?.pointer).toBe("#/advertisedUrl")
   })
 
-  test("returns Problem+JSON for hostname trusted proxy", async () => {
+  test("returns Problem+JSON for unknown retired keys", async () => {
     const { app } = await createTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/runtime",
-      payload: { trustedProxies: ["proxy.example.com"] },
+      payload: { trustedProxies: ["127.0.0.1"] },
     })
 
     const body = ValidationProblemSchema.parse(JSON.parse(response.body))
 
     expect(response.statusCode).toBe(400)
     expect(response.headers["content-type"]).toStartWith("application/problem+json")
-    expect(body.errors[0]?.pointer).toBe("#/trustedProxies/0")
+    expect(body.errors[0]?.code).toBe("validation.field.invalid")
+    expect(body.errors[0]?.pointer).toBe("#")
   })
 
   test("returns Problem+JSON for non-loopback bind host", async () => {
     const { app } = await createTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/runtime",
       payload: { bindHost: "0.0.0.0" },
@@ -256,6 +271,7 @@ describe("PATCH /v1/settings/runtime", () => {
     const { app, database } = await createTestApp()
 
     await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/runtime",
       payload: { logLevel: "warn" },
@@ -277,19 +293,20 @@ describe("runtime settings durability", () => {
     const first = await createTestApp()
 
     await first.app.inject({
+      headers: authHeaders(first.app),
       method: "PATCH",
       url: "/v1/settings/runtime",
       payload: {
         advertisedUrl: "https://edge.example.com",
         bindPort: 4100,
         logLevel: "warn",
-        trustedProxies: ["192.168.0.0/16"],
       },
     })
 
     const second = await first.reopen()
 
     const response = await second.app.inject({
+      headers: authHeaders(second.app),
       method: "GET",
       url: "/v1/settings/runtime",
     })
@@ -298,7 +315,6 @@ describe("runtime settings durability", () => {
     expect(body.settings.advertisedUrl).toBe("https://edge.example.com")
     expect(body.settings.bindPort).toBe(4100)
     expect(body.settings.logLevel).toBe("warn")
-    expect(body.settings.trustedProxies).toEqual(["192.168.0.0/16"])
   })
 
   test("seeds missing settings.yml bind port from env config defaults", async () => {
@@ -326,6 +342,7 @@ describe("createServer runtime settings seed", () => {
     })
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/settings/runtime",
     })

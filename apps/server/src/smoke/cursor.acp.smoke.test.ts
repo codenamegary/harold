@@ -11,9 +11,11 @@ import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
 import {
   boundStreamUrl,
+  createSmokeLogCapture,
   drainPrompt,
   failWithLogs,
   openStreamClient,
+  seedSmokeDevice,
 } from "../test-support/session.stream.smoke"
 import { allowWorkspaceRoots } from "../test-support/test.app"
 import {
@@ -21,6 +23,9 @@ import {
   resolveCursorAgentPath,
   smokeRunRequested,
 } from "../test-support/smoke.gate"
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
 
 const CURSOR_SMOKE_TIMEOUT_MS = 180_000
 const SUBSCRIBE_TIMEOUT_MS = 30_000
@@ -47,11 +52,20 @@ describe("cursor ACP smoke", () => {
       })
       const database = openDatabase({ dataDir: config.dataDir })
       const runtime = createRuntime("0.1.0")
-      const { app, acpSupervisor } = await createServer({ config, runtime, database, whichFn })
+      const logCapture = createSmokeLogCapture()
+      const { app, acpSupervisor } = await createServer({
+        config,
+        runtime,
+        database,
+        whichFn,
+        logStream: logCapture.stream,
+      })
+      const device = seedSmokeDevice(app, database)
       await app.listen({ host: config.host, port: config.port })
 
       try {
         const enableResponse = await app.inject({
+          headers: authHeaders(app),
           method: "PATCH",
           url: "/v1/settings/agents/cursor",
           payload: { enabled: true, path: detectedPath },
@@ -61,6 +75,7 @@ describe("cursor ACP smoke", () => {
         await allowWorkspaceRoots(app, [dataDir])
 
         const workspaceResponse = await app.inject({
+          headers: authHeaders(app),
           method: "POST",
           url: "/v1/workspaces",
           payload: { name: "Smoke workspace", path: workspaceDir },
@@ -68,6 +83,7 @@ describe("cursor ACP smoke", () => {
         expect(workspaceResponse.statusCode).toBe(201)
 
         const sessionResponse = await app.inject({
+          headers: authHeaders(app),
           method: "POST",
           url: "/v1/sessions",
           payload: { agentId: "cursor", cwd: workspaceDir },
@@ -76,6 +92,7 @@ describe("cursor ACP smoke", () => {
         const session = CreateSessionResponseSchema.parse(JSON.parse(sessionResponse.body))
 
         const listResponse = await app.inject({
+          headers: authHeaders(app),
           method: "GET",
           url: `/v1/sessions?cwd=${encodeURIComponent(workspaceDir)}`,
         })
@@ -83,7 +100,7 @@ describe("cursor ACP smoke", () => {
         const listed = SessionCollectionSchema.parse(JSON.parse(listResponse.body))
         expect(listed.items.some((item) => item.sessionId === session.sessionId)).toBe(true)
 
-        const client = await openStreamClient(boundStreamUrl(app))
+        const client = await openStreamClient(boundStreamUrl(app), device.credential)
         try {
           client.send({
             type: "subscribe",
@@ -96,7 +113,7 @@ describe("cursor ACP smoke", () => {
             SUBSCRIBE_TIMEOUT_MS,
           )
           if (subscribed.type === "error") {
-            await failWithLogs(app, client, `subscribe failed: ${subscribed.message}`)
+            failWithLogs(logCapture, client, `subscribe failed: ${subscribed.message}`)
           }
           expect(subscribed).toMatchObject({
             type: "subscribed",
@@ -112,7 +129,7 @@ describe("cursor ACP smoke", () => {
           })
 
           await drainPrompt({
-            app,
+            logCapture,
             client,
             deadlineMs: Date.now() + PROMPT_TIMEOUT_MS,
           })
@@ -124,6 +141,7 @@ describe("cursor ACP smoke", () => {
         }
 
         const deleteResponse = await app.inject({
+          headers: authHeaders(app),
           method: "DELETE",
           url: `/v1/sessions/${encodeURIComponent(session.sessionId)}?agentId=cursor`,
         })

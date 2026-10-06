@@ -51,39 +51,6 @@ export const isIpv6Address = (value: string): boolean => {
   })
 }
 
-export const isIpOrCidr = (value: string): boolean => {
-  const slash = value.lastIndexOf("/")
-  if (slash === -1) {
-    return isIpv4Address(value) || isIpv6Address(value)
-  }
-
-  const address = value.slice(0, slash)
-  const prefixText = value.slice(slash + 1)
-  if (!/^\d{1,3}$/.test(prefixText)) {
-    return false
-  }
-
-  const prefix = Number(prefixText)
-  if (!Number.isInteger(prefix) || String(prefix) !== prefixText) {
-    return false
-  }
-
-  if (isIpv4Address(address)) {
-    return prefix >= 0 && prefix <= 32
-  }
-
-  if (isIpv6Address(address)) {
-    return prefix >= 0 && prefix <= 128
-  }
-
-  return false
-}
-
-export const TrustedProxySchema = z
-  .string()
-  .min(1)
-  .refine(isIpOrCidr, { message: "must be an IPv4/IPv6 address or CIDR" })
-
 export const HttpsAbsoluteUrlSchema = z
   .string()
   .min(1)
@@ -202,7 +169,6 @@ export const AdvertisedUrlSchema = z
 export const RuntimeSettingsSchema = z.strictObject({
   advertisedUrl: AdvertisedUrlSchema.nullable(),
   advertisedUrlEnabled: z.boolean().default(true),
-  trustedProxies: z.array(TrustedProxySchema),
   bindHost: z.literal("127.0.0.1"),
   bindPort: z.number().int().nonnegative().max(65535),
   logLevel: LogLevelSchema,
@@ -216,7 +182,6 @@ export const RuntimeSettingsSchema = z.strictObject({
 export const UpdateRuntimeSettingsBodySchema = z.strictObject({
   advertisedUrl: z.union([AdvertisedUrlSchema, z.null(), z.literal("")]).optional(),
   advertisedUrlEnabled: z.boolean().optional(),
-  trustedProxies: z.array(TrustedProxySchema).optional(),
   bindHost: z.literal("127.0.0.1").optional(),
   bindPort: z.number().int().nonnegative().max(65535).optional(),
   logLevel: LogLevelSchema.optional(),

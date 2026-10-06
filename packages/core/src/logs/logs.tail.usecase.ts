@@ -1,5 +1,5 @@
 import { LogLevel } from "contracts/http/runtime-settings"
-import { parsePinoLine } from "./logs.pino.line"
+import { parsePinoLine } from "./logs.tail.pino.line"
 import { LogTailEntry, ReadLogTailResult } from "./logs.tail.models"
 import { FollowLogAppends, ReadLogTailLines, StopFollowingLogLines } from "./logs.tail.ports"
 

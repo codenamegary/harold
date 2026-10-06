@@ -87,7 +87,7 @@ directly.
 ```mermaid
 flowchart TB
   subgraph devices [Paired devices]
-    Console[Web operator console]
+    Client[Paired device]
     WebChat[Web chat]
     Android[Android chat later]
   end
@@ -104,7 +104,7 @@ flowchart TB
     AgentProc[Agent process]
   end
 
-  Console --> API
+  Client --> API
   WebChat --> API
   Android --> API
   API --> Broker
@@ -302,12 +302,9 @@ apps/server/src/agent/auth/
     cursor.adapter.ts           # Cursor instructions + cursor-agent status probe
     cursor.adapter.test.ts
 
-apps/web/src/agent/auth/
-  agent.auth.ts                 # fetch helpers for AgentAuth
-  auth.session.actions.ts
-  use.agent.auth.ts             # react-query hooks
-  AgentAuthPanel.tsx            # Sign in / host-login steps / cancel
-  AgentAuthBadge.tsx
+apps/android/.../agent/auth/
+  # AgentAuth UI on the paired device (the web console client is retired
+  # per ADR-0007; the server-side shapes are unchanged)
   auth.step.view.tsx            # render v1 step subset
 
 apps/android/                   # later: same HTTP/WS contracts

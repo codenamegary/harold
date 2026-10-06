@@ -6,11 +6,16 @@ import { ValidationProblemSchema } from "contracts/http/error"
 import { bootTestApp, TestApp } from "../test-support/test.harness"
 import { allowWorkspaceRoots } from "../test-support/test.app"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 const createWorkspace = async (app: TestApp["app"], dataDir: string) => {
   const workspaceDir = path.join(dataDir, "project")
   await mkdir(workspaceDir, { recursive: true })
   await allowWorkspaceRoots(app, [dataDir])
   const response = await app.inject({
+    headers: authHeaders(app),
     method: "POST",
     url: "/v1/workspaces",
     payload: { name: "Project", path: workspaceDir },
@@ -60,7 +65,10 @@ const uploadAttachment = (
     method: "POST",
     url: `/v1/workspaces/${workspaceId}/attachments`,
     payload,
-    headers: { "content-type": contentType },
+    headers: {
+      authorization: `Bearer ${app.deviceCredential.credential}`,
+      "content-type": contentType,
+    },
   })
 }
 
@@ -132,7 +140,10 @@ describe("POST /v1/workspaces/:workspaceId/attachments", () => {
       method: "POST",
       url: "/v1/workspaces//attachments",
       payload: Buffer.alloc(0),
-      headers: { "content-type": "multipart/form-data" },
+      headers: {
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+        "content-type": "multipart/form-data",
+      },
     })
 
     const body = ValidationProblemSchema.parse(JSON.parse(response.body))
@@ -166,6 +177,7 @@ describe("DELETE /v1/workspaces/:workspaceId/attachments/:attachmentId", () => {
     const descriptor = AttachmentDescriptorSchema.parse(JSON.parse(uploaded.body))
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: `/v1/workspaces/${workspaceId}/attachments/${path.basename(descriptor.path)}`,
     })
@@ -179,6 +191,7 @@ describe("DELETE /v1/workspaces/:workspaceId/attachments/:attachmentId", () => {
     const { workspaceId } = await createWorkspace(app, dataDir)
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: `/v1/workspaces/${workspaceId}/attachments/`,
     })
@@ -193,6 +206,7 @@ describe("DELETE /v1/workspaces/:workspaceId/attachments/:attachmentId", () => {
     const { workspaceId } = await createWorkspace(app, dataDir)
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: `/v1/workspaces/${workspaceId}/attachments/att_MISSING9.txt`,
     })
@@ -205,6 +219,7 @@ describe("DELETE /v1/workspaces/:workspaceId/attachments/:attachmentId", () => {
     const { workspaceId } = await createWorkspace(app, dataDir)
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: `/v1/workspaces/${workspaceId}/attachments/${encodeURIComponent("../secret.txt")}`,
     })

@@ -31,13 +31,16 @@ const getListeningHttpBase = async (
 }
 
 describe("pairing HTTP integration", () => {
-  test("create without credential, claim once, second claim fails", async () => {
+  test("create, claim once, second claim fails", async () => {
     const { app, config, database } = await bootTestApp()
     const httpBase = await getListeningHttpBase(app, config)
 
     const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({}),
     })
 
@@ -107,7 +110,10 @@ describe("pairing HTTP integration", () => {
 
     const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({}),
     })
     const created = CreatePairingCodeResponseSchema.parse(await createResponse.json())
@@ -151,14 +157,20 @@ describe("pairing HTTP integration", () => {
 
     const patchResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({ advertisedUrl: "https://agents.example.com" }),
     })
     expect(patchResponse.status).toBe(200)
 
     const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({}),
     })
 
@@ -173,7 +185,10 @@ describe("pairing HTTP integration", () => {
 
     const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({}),
     })
     const created = CreatePairingCodeResponseSchema.parse(await createResponse.json())
@@ -196,7 +211,10 @@ describe("pairing HTTP integration", () => {
 
     const loopbackCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({}),
     })
     const loopbackPairing = CreatePairingCodeResponseSchema.parse(await loopbackCreate.json())
@@ -204,14 +222,20 @@ describe("pairing HTTP integration", () => {
 
     const patchResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({ advertisedUrl: "https://agents.example.com" }),
     })
     expect(patchResponse.status).toBe(200)
 
     const advertisedCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({}),
     })
     const advertisedPairing = CreatePairingCodeResponseSchema.parse(await advertisedCreate.json())
@@ -219,14 +243,20 @@ describe("pairing HTTP integration", () => {
 
     const clearResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({ advertisedUrl: null }),
     })
     expect(clearResponse.status).toBe(200)
 
     const clearedCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({}),
     })
     const clearedPairing = CreatePairingCodeResponseSchema.parse(await clearedCreate.json())
@@ -239,14 +269,20 @@ describe("pairing HTTP integration", () => {
 
     const setAdvertisedResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({ advertisedUrl: "https://agents.example.com" }),
     })
     expect(setAdvertisedResponse.status).toBe(200)
 
     const staleCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({}),
     })
     const stalePairing = CreatePairingCodeResponseSchema.parse(await staleCreate.json())
@@ -254,14 +290,20 @@ describe("pairing HTTP integration", () => {
 
     const clearResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({ advertisedUrl: null }),
     })
     expect(clearResponse.status).toBe(200)
 
     const localCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({}),
     })
     const localPairing = CreatePairingCodeResponseSchema.parse(await localCreate.json())
@@ -274,20 +316,28 @@ describe("pairing HTTP integration", () => {
 
     const setAdvertisedResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({ advertisedUrl: "https://agents.example.com" }),
     })
     expect(setAdvertisedResponse.status).toBe(200)
 
     const loopbackCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({ endpoint: "loopback" }),
     })
     const loopbackPairing = CreatePairingCodeResponseSchema.parse(await loopbackCreate.json())
     expect(loopbackPairing.endpoint).toBe(`http://${config.host}:${config.port}`)
 
-    const settingsResponse = await fetch(`${httpBase}/v1/settings/runtime`)
+    const settingsResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
+      headers: { authorization: `Bearer ${app.deviceCredential.credential}` },
+    })
     const settingsBody = (await settingsResponse.json()) as {
       settings: { advertisedUrl: string | null }
     }
@@ -300,21 +350,30 @@ describe("pairing HTTP integration", () => {
 
     const setAdvertisedResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({ advertisedUrl: "https://agents.example.com" }),
     })
     expect(setAdvertisedResponse.status).toBe(200)
 
     const disableResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({ advertisedUrlEnabled: false }),
     })
     expect(disableResponse.status).toBe(200)
 
     const disabledCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({}),
     })
     const disabledPairing = CreatePairingCodeResponseSchema.parse(await disabledCreate.json())
@@ -322,7 +381,10 @@ describe("pairing HTTP integration", () => {
 
     const advertisedCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({ endpoint: "advertised" }),
     })
     expect(advertisedCreate.status).toBe(400)

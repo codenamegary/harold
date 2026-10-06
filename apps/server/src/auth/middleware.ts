@@ -1,8 +1,7 @@
-import { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
+import { FastifyInstance, FastifyReply } from "fastify"
 import { FindDeviceByCredentialHash, TouchDeviceLastSeen } from "core/device/ports"
 import { authenticate } from "./authenticate"
-import { authorizeActiveFullOperator } from "./authorize"
-import { isHostPrincipalRequest } from "./request.origin"
+import { authorizeActiveDevice } from "./authorize"
 import { BEARER_CHALLENGE, buildUnauthorizedProblem } from "./problems"
 import { Principal } from "./principal"
 import { isOpenRoute } from "./route.policy"
@@ -19,8 +18,6 @@ export const setRequestPrincipal = (request: object, principal: Principal): void
 export type AuthMiddlewareDeps = {
   findDeviceByCredentialHash: FindDeviceByCredentialHash
   touchDeviceLastSeen: TouchDeviceLastSeen
-  getTrustedProxies?: () => readonly string[]
-  isLoopbackRequest?: (request: FastifyRequest) => boolean
 }
 
 const sendUnauthorized = (reply: FastifyReply) =>
@@ -47,10 +44,6 @@ const touchDeviceLastSeenForPrincipal = (params: {
 }
 
 export const registerAuthMiddleware = (app: FastifyInstance, deps: AuthMiddlewareDeps) => {
-  const resolveHostPrincipal =
-    deps.isLoopbackRequest ??
-    ((request: FastifyRequest) => isHostPrincipalRequest(request, deps.getTrustedProxies?.() ?? []))
-
   // preValidation so auth runs before route handshake / auto-resume work.
   app.addHook("preValidation", async (request, reply) => {
     const routerPath = request.routeOptions.url
@@ -60,7 +53,6 @@ export const registerAuthMiddleware = (app: FastifyInstance, deps: AuthMiddlewar
 
     const authResult = authenticate({
       authorization: request.headers.authorization,
-      isLoopback: resolveHostPrincipal(request),
       lookupByCredentialHash: deps.findDeviceByCredentialHash,
     })
 
@@ -87,7 +79,7 @@ export const registerAuthMiddleware = (app: FastifyInstance, deps: AuthMiddlewar
       return
     }
 
-    if (!authorizeActiveFullOperator(authResult.principal)) {
+    if (!authorizeActiveDevice(authResult.principal)) {
       return sendUnauthorized(reply)
     }
 

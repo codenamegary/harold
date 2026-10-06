@@ -13,14 +13,12 @@ import {
 } from "../runtime-settings/runtime-settings.file.adapters"
 import { buildAppliedRuntimeSettings } from "../runtime-settings/resolve.runtime.settings.state"
 import { createRuntime } from "../runtime/runtime"
-import { ConsoleAsset } from "../console/console.assets"
 import { daemonStateFilePath, makeDaemonStateFileStore } from "core/daemon-state/node.adapters"
 import { resolveDaemonLogPath } from "core/logs/tail.node.adapters"
 import { composeServerGetStatus } from "../status/status.adapters"
 import { startDaemonStateWriter } from "../status/daemon.state.writer"
 
 export type RunServerOptions = {
-  consoleAssets?: ReadonlyArray<ConsoleAsset>
   migrationsFolder?: string
 }
 
@@ -64,7 +62,6 @@ export const runServer = async (options: RunServerOptions = {}) => {
     envBindOverrides,
     logLevel: persisted.logLevel,
     logStream,
-    consoleAssets: options.consoleAssets,
   })
 
   await listen(app, config, runtimeStatusService)

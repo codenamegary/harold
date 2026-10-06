@@ -84,22 +84,6 @@
           }
         ]
       }
-    },
-    {
-      "files": ["**/apps/web/src/**/*.{ts,tsx}"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "paths": [
-              {
-                "name": "jotai-tanstack-query",
-                "message": "Use React Query hooks for remote state."
-              }
-            ]
-          }
-        ]
-      }
     }
   ]
 }

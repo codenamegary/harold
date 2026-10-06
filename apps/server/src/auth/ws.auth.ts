@@ -28,7 +28,6 @@ const authenticateAuthFrameMessage = (params: {
 
   const authResult = authenticate({
     authorization: frameResult.data.authorization,
-    isLoopback: false,
     lookupByCredentialHash: params.lookupByCredentialHash,
   })
 
@@ -39,9 +38,7 @@ const authenticateAuthFrameMessage = (params: {
   return { ok: true, principal: authResult.principal }
 }
 
-export const waitForAuthFrame = (
-  params: WaitForAuthFrameParams,
-): Promise<WsAuthFrameResult> =>
+export const waitForAuthFrame = (params: WaitForAuthFrameParams): Promise<WsAuthFrameResult> =>
   new Promise((resolve) => {
     const { socket, timeoutMs, lookupByCredentialHash } = params
     const done = { current: false }

@@ -9,6 +9,16 @@ import { makeEnsureSupervisorReady } from "../session/session.acp.ready"
 
 type TestServerApp = Awaited<ReturnType<typeof createServer>>["app"]
 
+type WithDeviceCredential = { deviceCredential?: { credential: string } }
+
+const testDeviceCredential = (app: TestServerApp & WithDeviceCredential): string => {
+  const credential = app.deviceCredential?.credential
+  if (credential === undefined) {
+    throw new Error("app was not booted with a seeded test device credential")
+  }
+  return credential
+}
+
 export const acceptTestExecutablePath: ValidateExecutablePathFn = () => true
 
 export const createWorkspaceDir = async (parent: string, name: string) => {
@@ -18,9 +28,11 @@ export const createWorkspaceDir = async (parent: string, name: string) => {
 }
 
 export const allowWorkspaceRoots = async (app: TestServerApp, roots: string[]) => {
+  const credential = testDeviceCredential(app)
   const response = await app.inject({
     method: "PATCH",
     url: "/v1/settings/runtime",
+    headers: { authorization: `Bearer ${credential}` },
     payload: { allowedRoots: roots },
   })
 
@@ -35,6 +47,7 @@ export const seedWorkspace = async (app: TestServerApp, dataDir: string) => {
   const response = await app.inject({
     method: "POST",
     url: "/v1/workspaces",
+    headers: { authorization: `Bearer ${testDeviceCredential(app)}` },
     payload: { name: "Project", path: workspaceDir },
   })
   const workspace = JSON.parse(response.body) as { id: string }
@@ -52,6 +65,7 @@ export const enableAgent = async (app: TestServerApp, agentId: AgentId, whichFn?
   const response = await app.inject({
     method: "PATCH",
     url: `/v1/settings/agents/${agentId}`,
+    headers: { authorization: `Bearer ${testDeviceCredential(app)}` },
     payload: { enabled: true, path },
   })
   if (response.statusCode !== 200) {

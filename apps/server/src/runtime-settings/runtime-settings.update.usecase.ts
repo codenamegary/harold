@@ -132,7 +132,6 @@ const mergeRuntimeSettings = (
   return {
     advertisedUrl: advertisedUrl === undefined ? previous.advertisedUrl : advertisedUrl,
     advertisedUrlEnabled: body.advertisedUrlEnabled ?? previous.advertisedUrlEnabled,
-    trustedProxies: body.trustedProxies ?? previous.trustedProxies,
     bindHost: body.bindHost ?? previous.bindHost,
     bindPort: body.bindPort ?? previous.bindPort,
     logLevel: body.logLevel ?? previous.logLevel,

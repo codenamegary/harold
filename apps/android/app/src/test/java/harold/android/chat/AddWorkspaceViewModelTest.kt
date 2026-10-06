@@ -185,7 +185,6 @@ private class FakeAddOperatorRepository(
         RuntimeSettingsView(
             settings = RuntimeSettings(
                 advertisedUrl = null,
-                trustedProxies = emptyList(),
                 bindHost = "127.0.0.1",
                 bindPort = 3847,
                 logLevel = LogLevel.Info,

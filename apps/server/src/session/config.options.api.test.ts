@@ -10,6 +10,10 @@ import { WhichFn } from "core/agent-settings/resolve-agent-path"
 import { enableAgent } from "../test-support/test.app"
 import { bootTestApp } from "../test-support/test.harness"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 const whichFn: WhichFn = (binaryName) =>
   binaryName === "agent" ? "/usr/local/bin/agent" : undefined
 
@@ -44,6 +48,7 @@ const createConfigApp = async (extraFakeOptions: Record<string, unknown> = {}) =
 
 const createSession = async (app: Awaited<ReturnType<typeof createConfigApp>>) => {
   const response = await app.inject({
+    headers: authHeaders(app),
     method: "POST",
     url: "/v1/sessions",
     payload: { agentId: "cursor", cwd: "/tmp/project" },
@@ -58,6 +63,7 @@ describe("PUT /v1/sessions/:sessionId/config-options/:configId", () => {
     const session = await createSession(app)
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PUT",
       url: `/v1/sessions/${session.sessionId}/config-options/model`,
       query: { agentId: "cursor" },
@@ -73,6 +79,7 @@ describe("PUT /v1/sessions/:sessionId/config-options/:configId", () => {
     await createSession(app)
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PUT",
       url: "/v1/sessions/never-created/config-options/model",
       query: { agentId: "cursor" },
@@ -89,6 +96,7 @@ describe("PUT /v1/sessions/:sessionId/config-options/:configId", () => {
     const session = await createSession(app)
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PUT",
       url: `/v1/sessions/${session.sessionId}/config-options/model`,
       query: { agentId: "unknown" },
@@ -105,6 +113,7 @@ describe("PUT /v1/sessions/:sessionId/config-options/:configId", () => {
     const session = await createSession(app)
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PUT",
       url: `/v1/sessions/${session.sessionId}/config-options/nope`,
       query: { agentId: "cursor" },
@@ -121,6 +130,7 @@ describe("PUT /v1/sessions/:sessionId/config-options/:configId", () => {
     const session = await createSession(app)
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PUT",
       url: `/v1/sessions/${session.sessionId}/config-options/model`,
       query: { agentId: "cursor" },
@@ -135,6 +145,7 @@ describe("PUT /v1/sessions/:sessionId/config-options/:configId", () => {
     const session = await createSession(app)
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PUT",
       url: `/v1/sessions/${session.sessionId}/config-options/model`,
       query: { agentId: "cursor" },
@@ -150,6 +161,7 @@ describe("PUT /v1/sessions/:sessionId/config-options/:configId", () => {
     const session = await createSession(app)
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "PUT",
       url: `/v1/sessions/${session.sessionId}/config-options/model`,
       query: { agentId: "cursor" },

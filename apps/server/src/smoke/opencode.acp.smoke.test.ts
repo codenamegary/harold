@@ -11,10 +11,17 @@ import { createRuntime } from "../runtime/runtime"
 import {
   boundStreamUrl,
   drainPrompt,
+  createSmokeLogCapture,
   failWithLogs,
   openStreamClient,
   readLogsBody,
+  seedSmokeDevice,
+  SmokeLogCapture,
 } from "../test-support/session.stream.smoke"
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 import { resolveOpenCodePath, smokeRunRequested } from "../test-support/smoke.gate"
 
 const OPENCODE_SMOKE_TIMEOUT_MS = 180_000
@@ -34,6 +41,7 @@ const injectWithTimeout = async (
   options: { method: string; url: string; payload?: unknown },
   timeoutMs: number,
   label: string,
+  logCapture?: SmokeLogCapture,
 ): Promise<{ statusCode: number; body: string }> => {
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<never>((_, reject) => {
@@ -46,7 +54,7 @@ const injectWithTimeout = async (
     return await Promise.race([app.inject(options), timeout])
   } catch (error: unknown) {
     const reason = error instanceof Error ? error.message : "request failed"
-    const logs = await readLogsBody(app)
+    const logs = logCapture === undefined ? "(log capture unavailable)" : readLogsBody(logCapture)
     throw new Error(`${reason}\nserver logs:\n${logs}`)
   } finally {
     if (timer !== undefined) {
@@ -86,11 +94,20 @@ describe("opencode ACP smoke", () => {
       })
       const database = openDatabase({ dataDir: config.dataDir })
       const runtime = createRuntime("0.1.0")
-      const { app, acpSupervisor } = await createServer({ config, runtime, database, whichFn })
+      const logCapture = createSmokeLogCapture()
+      const { app, acpSupervisor } = await createServer({
+        config,
+        runtime,
+        database,
+        whichFn,
+        logStream: logCapture.stream,
+      })
+      const device = seedSmokeDevice(app, database)
       await app.listen({ host: config.host, port: config.port })
 
       try {
         const enableResponse = await app.inject({
+          headers: authHeaders(app),
           method: "PATCH",
           url: "/v1/settings/agents/opencode",
           payload: { enabled: true, path: detectedPath },
@@ -98,6 +115,7 @@ describe("opencode ACP smoke", () => {
         expect(enableResponse.statusCode).toBe(200)
 
         const allowResponse = await app.inject({
+          headers: authHeaders(app),
           method: "PATCH",
           url: "/v1/settings/runtime",
           payload: { allowedRoots: [dataDir] },
@@ -105,6 +123,7 @@ describe("opencode ACP smoke", () => {
         expect(allowResponse.statusCode).toBe(200)
 
         const workspaceResponse = await app.inject({
+          headers: authHeaders(app),
           method: "POST",
           url: "/v1/workspaces",
           payload: { name: "Smoke workspace", path: workspaceDir },
@@ -116,15 +135,18 @@ describe("opencode ACP smoke", () => {
           {
             method: "POST",
             url: "/v1/sessions",
+            headers: authHeaders(app),
             payload: { agentId: "opencode", cwd: workspaceDir },
           },
           SESSION_CREATE_TIMEOUT_MS,
           "POST /v1/sessions",
+          logCapture,
         )
         expect(sessionResponse.statusCode).toBe(201)
         const session = CreateSessionResponseSchema.parse(JSON.parse(sessionResponse.body))
 
         const listResponse = await app.inject({
+          headers: authHeaders(app),
           method: "GET",
           url: `/v1/sessions?cwd=${encodeURIComponent(workspaceDir)}`,
         })
@@ -132,7 +154,7 @@ describe("opencode ACP smoke", () => {
         const listed = SessionCollectionSchema.parse(JSON.parse(listResponse.body))
         expect(listed.items.some((item) => item.sessionId === session.sessionId)).toBe(true)
 
-        const client = await openStreamClient(boundStreamUrl(app))
+        const client = await openStreamClient(boundStreamUrl(app), device.credential)
         try {
           client.send({
             type: "subscribe",
@@ -145,7 +167,7 @@ describe("opencode ACP smoke", () => {
             SUBSCRIBE_TIMEOUT_MS,
           )
           if (subscribed.type === "error") {
-            await failWithLogs(app, client, `subscribe failed: ${subscribed.message}`)
+            failWithLogs(logCapture, client, `subscribe failed: ${subscribed.message}`)
           }
           expect(subscribed).toMatchObject({
             type: "subscribed",
@@ -161,7 +183,7 @@ describe("opencode ACP smoke", () => {
           })
 
           await drainPrompt({
-            app,
+            logCapture,
             client,
             deadlineMs: Date.now() + PROMPT_TIMEOUT_MS,
           })
@@ -176,10 +198,12 @@ describe("opencode ACP smoke", () => {
           app,
           {
             method: "DELETE",
+            headers: authHeaders(app),
             url: `/v1/sessions/${encodeURIComponent(session.sessionId)}?agentId=opencode`,
           },
           SESSION_DELETE_TIMEOUT_MS,
           "DELETE /v1/sessions",
+          logCapture,
         )
         expect([204, 409]).toContain(deleteResponse.statusCode)
       } finally {

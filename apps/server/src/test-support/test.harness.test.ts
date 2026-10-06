@@ -14,13 +14,33 @@ import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
 import { assembleAgentSettingsSlice } from "../agent-settings/agent.settings.assembly"
 import { seedWorkspace } from "./test.app"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 test("boots an isolated Harold with a working Device API", async () => {
   const first = await bootTestApp()
   const second = await bootTestApp()
   expect(first.dataDir).not.toBe(second.dataDir)
   expect(first.database).not.toBe(second.database)
-  expect((await first.app.inject({ method: "GET", url: "/v1/workspaces" })).statusCode).toBe(200)
-  expect((await second.app.inject({ method: "GET", url: "/v1/workspaces" })).statusCode).toBe(200)
+  expect(
+    (
+      await first.app.inject({
+        headers: authHeaders(first.app),
+        method: "GET",
+        url: "/v1/workspaces",
+      })
+    ).statusCode,
+  ).toBe(200)
+  expect(
+    (
+      await second.app.inject({
+        headers: authHeaders(second.app),
+        method: "GET",
+        url: "/v1/workspaces",
+      })
+    ).statusCode,
+  ).toBe(200)
   await disposeTestResources()
 })
 
@@ -81,6 +101,7 @@ test("cleanup stops ACP before apps, keeps SQLite open for app hooks, and awaits
   expect(
     (
       await result.app.inject({
+        headers: authHeaders(result.app),
         method: "POST",
         url: "/v1/_test/validate",
         payload: { name: "test" },
@@ -157,7 +178,11 @@ test("reopens an app and database in their owned directories without losing data
   expect(reopened.dataDir).toBe(original.dataDir)
   expect(reopened.app).not.toBe(original.app)
   expect(() => original.database.sqlite.query("SELECT 1").get()).toThrow()
-  const response = await reopened.app.inject({ method: "GET", url: "/v1/workspaces" })
+  const response = await reopened.app.inject({
+    headers: authHeaders(reopened.app),
+    method: "GET",
+    url: "/v1/workspaces",
+  })
   expect(response.body).toContain("Project")
   const first = await bootTestDatabase()
   first.database.sqlite.run("CREATE TABLE durability (value TEXT)")

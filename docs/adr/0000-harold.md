@@ -5,6 +5,7 @@ Related: [ADR-0001 Device authentication](0001-device-authentication.md),
 [ADR-0002 Device authorization](0002-device-authorization.md),
 [ADR-0003 Device pairing](0003-device-pairing-protocol.md),
 [ADR-0004 Agent auth broker](0004-agent-auth-broker.md),
+[ADR-0007 Console retirement](0007-retire-console-device-only-edge.md),
 [ADR-0005 Session stream frames](0005-session-stream-frames.md)
 
 Harold is a local host process. It speaks HTTP and WebSocket to operator
@@ -20,8 +21,9 @@ login. This one only names the map.
 2. Use [CONTEXT.md](../../CONTEXT.md) as the canonical glossary in docs,
    contracts, and UI copy. Prefer a qualified phrase when a bare word collides
    (for example **ACP agent capability** vs **host capability**).
-3. Keep **devices off ACP**. Devices and the operator console call the Device
-   API only. The host is the ACP client. Agent processes are ACP servers.
+3. Keep **devices off ACP**. Devices call the Device API only. The host is the
+   ACP client. Agent processes are ACP servers. (The operator console that
+   originally shared this band is retired per ADR-0007.)
 4. Draw the topology as three bands: clients, host process, ACP agents. Do not
    draw provider login UI on devices as a direct ACP path
    ([ADR-0004](0004-agent-auth-broker.md)).
@@ -49,13 +51,13 @@ keeps the topology and naming boundaries below.
 ```mermaid
 flowchart TB
   subgraph clients [Clients]
-    Console[Operator console<br/>web, usually loopback]
+    CLI[harold CLI<br/>local operator tooling]
     Android[Paired device<br/>Android / remote clients]
   end
 
   subgraph host [Host — Harold process]
-    API[Device API<br/>HTTP + WS /v1]
-    Auth[Authn / authz<br/>host or device principal]
+    API[Device API<br/>HTTP + WS /v1<br/>device credentials only]
+    Auth[Authn / authz<br/>device principal]
     Workspaces[Workspaces]
     AgentSettings[Agent settings]
     SessionHub[Session hub]
@@ -67,7 +69,7 @@ flowchart TB
     Proc[Agent child processes]
   end
 
-  Console -->|host principal| API
+  CLI -->|host state, direct db/files| Host
   Android -->|Bearer device principal| API
   API --> Auth
   Auth --> Workspaces
@@ -82,10 +84,11 @@ flowchart TB
 
 ### How the bands interact
 
-1. **Operator console → Device API.** Loopback operator. Registers workspaces.
-   Enables agents. Opens chat. Issues pairing codes.
-2. **Device → Device API.** Claims a pairing code once. Then uses Bearer on
-   every call. Same operator surface as the console.
+1. **Device → Device API.** Claims a pairing code once. Then uses Bearer on
+   every call. The only operator surface over the network.
+2. **CLI → host state.** The CLI runs on the host and reads the database,
+   settings file, and daemon log directly. It never proxies operator actions
+   over the Device API without a device credential.
 3. **Device API → host modules.** Auth picks the principal. Routes hit
    workspaces, agent settings, session hub, devices.
 4. **Host → agents.** Supervisor spawns enabled agents. Initializes with ACP
@@ -99,7 +102,7 @@ flowchart TB
 
 ```mermaid
 sequenceDiagram
-  participant Client as Console or device
+  participant Client as Paired device
   participant API as Device API
   participant Hub as Session hub
   participant Super as ACP supervisor
@@ -126,13 +129,13 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-  participant Console as Operator console
+  participant CLI as harold CLI (host)
   participant API as Device API
   participant Device as New device
 
-  Console->>API: POST pairing code (host principal)
-  API-->>Console: code + QR payload
-  Device->>API: POST claim(code)
+  CLI->>Host: create pairing code (direct db access)
+  CLI-->>Device: code + QR payload
+  Device->>API: POST claim(code, open route)
   API-->>Device: opaque credential once
   Device->>API: later calls with Bearer
 ```
@@ -142,8 +145,8 @@ sequenceDiagram
 | Do                                                     | Do not                                               |
 | ------------------------------------------------------ | ---------------------------------------------------- |
 | Call the HTTP/WS surface the **Device API**            | Call it "the ACP API"                                |
-| Say **host** for the process and loopback principal    | Call the web UI "the host"                           |
-| Say **operator console** for the web UI                | Say "admin panel" or "dashboard" in product copy     |
+| Say **host** for the process                           | Say "host principal"; HTTP has no host identity      |
+| Say **device** for authenticated remote operators      | Say "console"; the web console is retired            |
 | Qualify **capability** (ACP agent / ACP client / host) | Use bare "capability" for authz                      |
 | Say **session** for ACP chat                           | Reuse "session" alone for device auth or agent login |
 
@@ -159,6 +162,12 @@ sequenceDiagram
 ## Open questions for review
 
 1. Is **Device API** the right product name, or should contracts say **Operator
-   API** (since the host console uses it too)?
-2. Should **Host** mean only the process, with **host principal** always spelled
-   out for auth?
+   API** (now that devices are the only networked operator)?
+
+## Amendment — console retired (ADR-0007)
+
+The web operator console existed in the original topology as a loopback client
+authenticated as a **host principal**. [ADR-0007](0007-retire-console-device-only-edge.md)
+retires it: the HTTP edge is device-only by construction, the host principal no
+longer exists, and the CLI is the local operator tooling. The diagrams above
+reflect the amended topology.

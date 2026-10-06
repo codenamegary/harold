@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { hashDeviceCredential } from "core/device/hash.credential"
 import { authenticate } from "./authenticate"
-import { authorizeActiveFullOperator } from "./authorize"
+import { authorizeActiveDevice } from "./authorize"
 import { parseAuthorizationHeader } from "./bearer"
-import { isLoopbackRequest } from "./loopback"
 import { formatPrincipal } from "./principal"
 import { isOpenRoute } from "./route.policy"
 
@@ -42,31 +41,20 @@ describe("parseAuthorizationHeader", () => {
 })
 
 describe("authenticate", () => {
-  test("loopback without Bearer is host", () => {
+  test("without Bearer is unauthenticated, even on loopback", () => {
     const result = authenticate({
       authorization: undefined,
-      isLoopback: true,
-      lookupByCredentialHash: () => undefined,
-    })
-    expect(formatPrincipal(result.principal)).toBe("host")
-    expect(result.credentialPresented).toBe(false)
-  })
-
-  test("non-loopback without Bearer is unauthenticated", () => {
-    const result = authenticate({
-      authorization: undefined,
-      isLoopback: false,
       lookupByCredentialHash: () => undefined,
     })
     expect(formatPrincipal(result.principal)).toBe("unauthenticated")
+    expect(result.credentialPresented).toBe(false)
   })
 
-  test("valid active credential yields device principal even on loopback", () => {
+  test("valid active credential yields device principal", () => {
     const credential = "devcred_test_secret"
     const credentialHash = hashDeviceCredential(credential)
     const result = authenticate({
       authorization: `Bearer ${credential}`,
-      isLoopback: true,
       lookupByCredentialHash: (hash) =>
         hash === credentialHash ? { id: "device_1", revokedAt: null } : undefined,
     })
@@ -75,10 +63,9 @@ describe("authenticate", () => {
     expect(result.credentialPresented).toBe(true)
   })
 
-  test("bad Bearer on loopback never becomes host", () => {
+  test("bad Bearer never authenticates", () => {
     const result = authenticate({
       authorization: "Bearer unknown",
-      isLoopback: true,
       lookupByCredentialHash: () => undefined,
     })
 
@@ -91,7 +78,6 @@ describe("authenticate", () => {
     const credentialHash = hashDeviceCredential(credential)
     const result = authenticate({
       authorization: `Bearer ${credential}`,
-      isLoopback: true,
       lookupByCredentialHash: (hash) =>
         hash === credentialHash
           ? { id: "device_2", revokedAt: "2026-08-01T00:00:00.000Z" }
@@ -102,23 +88,13 @@ describe("authenticate", () => {
   })
 })
 
-describe("authorizeActiveFullOperator", () => {
-  test("host and device are operators", () => {
-    expect(authorizeActiveFullOperator({ kind: "host" })).toBe(true)
-    expect(authorizeActiveFullOperator({ kind: "device", deviceId: "device_1" })).toBe(true)
+describe("authorizeActiveDevice", () => {
+  test("device is authorized", () => {
+    expect(authorizeActiveDevice({ kind: "device", deviceId: "device_1" })).toBe(true)
   })
 
-  test("unauthenticated is not an operator", () => {
-    expect(authorizeActiveFullOperator({ kind: "unauthenticated" })).toBe(false)
-  })
-})
-
-describe("isLoopbackRequest", () => {
-  test("recognizes IPv4 and IPv6 loopback", () => {
-    expect(isLoopbackRequest({ ip: "127.0.0.1" })).toBe(true)
-    expect(isLoopbackRequest({ ip: "::1" })).toBe(true)
-    expect(isLoopbackRequest({ ip: "::ffff:127.0.0.1" })).toBe(true)
-    expect(isLoopbackRequest({ ip: "10.0.0.1" })).toBe(false)
+  test("unauthenticated is not authorized", () => {
+    expect(authorizeActiveDevice({ kind: "unauthenticated" })).toBe(false)
   })
 })
 

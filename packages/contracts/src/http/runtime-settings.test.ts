@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test"
 import {
-  isIpOrCidr,
   RuntimeSettingsSchema,
   RuntimeSettingsViewSchema,
   UpdateRuntimeSettingsBodySchema,
@@ -10,35 +9,12 @@ import {
 const validSettings = {
   advertisedUrl: null,
   advertisedUrlEnabled: true,
-  trustedProxies: [],
   bindHost: "127.0.0.1",
   bindPort: 3847,
   logLevel: "info",
   logPath: null,
   allowedRoots: [],
 } as const
-
-describe("isIpOrCidr", () => {
-  test("accepts IPv4 addresses and CIDRs", () => {
-    expect(isIpOrCidr("127.0.0.1")).toBe(true)
-    expect(isIpOrCidr("10.0.0.0/8")).toBe(true)
-    expect(isIpOrCidr("192.168.1.0/24")).toBe(true)
-  })
-
-  test("accepts IPv6 addresses and CIDRs", () => {
-    expect(isIpOrCidr("::1")).toBe(true)
-    expect(isIpOrCidr("2001:db8::/32")).toBe(true)
-  })
-
-  test("rejects hostnames and junk", () => {
-    expect(isIpOrCidr("example.com")).toBe(false)
-    expect(isIpOrCidr("localhost")).toBe(false)
-    expect(isIpOrCidr("999.999.999.999")).toBe(false)
-    expect(isIpOrCidr("10.0.0.0/99")).toBe(false)
-    expect(isIpOrCidr("not-an-ip")).toBe(false)
-    expect(isIpOrCidr("[::1]")).toBe(false)
-  })
-})
 
 describe("RuntimeSettingsSchema", () => {
   test("accepts loopback http advertised URL", () => {
@@ -72,7 +48,6 @@ describe("RuntimeSettingsSchema", () => {
   test("defaults advertisedUrlEnabled to true when omitted", () => {
     const withoutFlag = {
       advertisedUrl: validSettings.advertisedUrl,
-      trustedProxies: validSettings.trustedProxies,
       bindHost: validSettings.bindHost,
       bindPort: validSettings.bindPort,
       logLevel: validSettings.logLevel,
@@ -82,11 +57,10 @@ describe("RuntimeSettingsSchema", () => {
     expect(RuntimeSettingsSchema.parse(withoutFlag).advertisedUrlEnabled).toBe(true)
   })
 
-  test("accepts https advertised URL and proxies", () => {
+  test("accepts https advertised URL", () => {
     const settings = {
       ...validSettings,
       advertisedUrl: "https://agents.example.com",
-      trustedProxies: ["10.0.0.0/8", "::1"],
       logLevel: "debug",
       logPath: "/var/log/harold.log",
       allowedRoots: ["/home/ops/projects"],
@@ -140,11 +114,11 @@ describe("RuntimeSettingsSchema", () => {
     ).toThrow()
   })
 
-  test("rejects hostname trusted proxies", () => {
+  test("rejects unknown keys such as the retired trustedProxies", () => {
     expect(() =>
       RuntimeSettingsSchema.parse({
         ...validSettings,
-        trustedProxies: ["proxy.example.com"],
+        trustedProxies: ["127.0.0.1"],
       }),
     ).toThrow()
   })

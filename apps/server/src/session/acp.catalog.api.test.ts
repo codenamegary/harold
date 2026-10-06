@@ -9,6 +9,10 @@ import { WhichFn } from "core/agent-settings/resolve-agent-path"
 import { enableAgent } from "../test-support/test.app"
 import { bootTestApp } from "../test-support/test.harness"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 describe("ACP catalog sessions HTTP", () => {
   test("POST /v1/sessions creates via session/new and GET lists ACP rows", async () => {
     const detectedPath = "/usr/local/bin/agent"
@@ -23,6 +27,7 @@ describe("ACP catalog sessions HTTP", () => {
     await enableAgent(app, "cursor", whichFn)
 
     const createResponse = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/sessions",
       payload: {
@@ -42,6 +47,7 @@ describe("ACP catalog sessions HTTP", () => {
     expect(acpSupervisor.getRunningAgentIds()).toEqual(["cursor"])
 
     const listResponse = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/sessions",
     })
@@ -92,6 +98,7 @@ describe("ACP catalog sessions HTTP", () => {
     expect(opencodeCreate.ok).toBe(true)
 
     const listResponse = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/sessions",
     })
@@ -125,6 +132,7 @@ describe("ACP catalog sessions HTTP", () => {
     await enableAgent(app, "cursor", whichFn)
 
     const createResponse = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/sessions",
       payload: {
@@ -136,6 +144,7 @@ describe("ACP catalog sessions HTTP", () => {
     const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
 
     const deleteResponse = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: deleteSessionPath(created.sessionId, { agentId: "cursor" }),
     })
@@ -143,6 +152,7 @@ describe("ACP catalog sessions HTTP", () => {
     expect(deleteResponse.body).toBe("")
 
     const listResponse = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/sessions",
     })
@@ -163,6 +173,7 @@ describe("ACP catalog sessions HTTP", () => {
     await enableAgent(app, "cursor", whichFn)
 
     const createResponse = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/sessions",
       payload: {
@@ -174,6 +185,7 @@ describe("ACP catalog sessions HTTP", () => {
     const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
 
     const deleteResponse = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: deleteSessionPath(created.sessionId, { agentId: "cursor" }),
     })
@@ -181,6 +193,7 @@ describe("ACP catalog sessions HTTP", () => {
     expect(deleteResponse.body).toBe("")
 
     const listResponse = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/sessions",
     })
@@ -201,6 +214,7 @@ describe("ACP catalog sessions HTTP", () => {
     await enableAgent(app, "cursor", whichFn)
 
     const createResponse = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/sessions",
       payload: {
@@ -211,10 +225,12 @@ describe("ACP catalog sessions HTTP", () => {
     const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
 
     const firstDelete = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: deleteSessionPath(created.sessionId, { agentId: "cursor" }),
     })
     const secondDelete = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: deleteSessionPath(created.sessionId, { agentId: "cursor" }),
     })
@@ -222,6 +238,7 @@ describe("ACP catalog sessions HTTP", () => {
     expect(secondDelete.statusCode).toBe(204)
 
     const listResponse = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/sessions",
     })
@@ -243,6 +260,7 @@ describe("ACP catalog sessions HTTP", () => {
     await enableAgent(app, "cursor", whichFn)
 
     const createResponse = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/sessions",
       payload: {
@@ -253,12 +271,14 @@ describe("ACP catalog sessions HTTP", () => {
     const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
 
     const deleteResponse = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: deleteSessionPath(created.sessionId, { agentId: "cursor" }),
     })
     expect(deleteResponse.statusCode).toBe(204)
 
     const listResponse = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/sessions",
     })
@@ -270,6 +290,7 @@ describe("ACP catalog sessions HTTP", () => {
     const { app } = await bootTestApp()
 
     const deleteResponse = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: deleteSessionPath("acp-1", { agentId: "unknown" }),
     })
@@ -291,6 +312,7 @@ describe("ACP catalog sessions HTTP", () => {
     await enableAgent(app, "cursor", whichFn)
 
     const createBefore = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/sessions",
       payload: { agentId: "cursor", cwd: "/tmp/before-respawn" },
@@ -298,6 +320,7 @@ describe("ACP catalog sessions HTTP", () => {
     expect(createBefore.statusCode).toBe(201)
 
     const disableResponse = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: false },
@@ -305,6 +328,7 @@ describe("ACP catalog sessions HTTP", () => {
     expect(disableResponse.statusCode).toBe(200)
 
     const enableResponse = await app.inject({
+      headers: authHeaders(app),
       method: "PATCH",
       url: "/v1/settings/agents/cursor",
       payload: { enabled: true, path: "/usr/local/bin/agent" },
@@ -312,6 +336,7 @@ describe("ACP catalog sessions HTTP", () => {
     expect(enableResponse.statusCode).toBe(200)
 
     const createAfter = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/sessions",
       payload: { agentId: "cursor", cwd: "/tmp/after-respawn" },
@@ -320,6 +345,7 @@ describe("ACP catalog sessions HTTP", () => {
     const created = CreateSessionResponseSchema.parse(JSON.parse(createAfter.body))
 
     const listResponse = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/sessions",
     })
@@ -347,6 +373,7 @@ describe("ACP catalog sessions HTTP", () => {
     await enableAgent(app, "cursor", whichFn)
 
     const createResponse = await app.inject({
+      headers: authHeaders(app),
       method: "POST",
       url: "/v1/sessions",
       payload: {
@@ -358,18 +385,21 @@ describe("ACP catalog sessions HTTP", () => {
     const created = CreateSessionResponseSchema.parse(JSON.parse(createResponse.body))
 
     const deleteOk = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: deleteSessionPath(created.sessionId, { agentId: "cursor" }),
     })
     expect(deleteOk.statusCode).toBe(204)
 
     const deleteUnknown = await app.inject({
+      headers: authHeaders(app),
       method: "DELETE",
       url: deleteSessionPath("sess_missing", { agentId: "unknown" }),
     })
     expect(deleteUnknown.statusCode).toBe(404)
 
     const listResponse = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/sessions",
     })

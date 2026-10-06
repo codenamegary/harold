@@ -41,6 +41,7 @@ describe("second-client journey", () => {
     const paired = await pairDevice({
       httpBase,
       body: { name: "Journey client", platform: "test-second-client" },
+      credential: app.deviceCredential.credential,
     })
 
     const firstClient = createSecondClient({
@@ -80,20 +81,28 @@ describe("second-client journey", () => {
     const deviceWs = await reconnected.openEventStream()
     await waitFor(async () => {
       const online = DeviceCollectionSchema.parse(
-        await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
+        await (
+          await fetch(`${httpBase}${DEVICES_PATH}`, {
+            headers: { authorization: `Bearer ${app.deviceCredential.credential}` },
+          })
+        ).json(),
       )
-      return online.items[0]?.state === "online"
+      return online.items.find((item) => item.id === paired.deviceId)?.state === "online"
     })
     const online = DeviceCollectionSchema.parse(
-      await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
+      await (
+        await fetch(`${httpBase}${DEVICES_PATH}`, {
+          headers: { authorization: `Bearer ${app.deviceCredential.credential}` },
+        })
+      ).json(),
     )
-    expect(online.items).toHaveLength(1)
-    expect(online.items[0]?.id).toBe(paired.deviceId)
-    expect(online.items[0]?.state).toBe("online")
+    const onlineEntry = online.items.find((item) => item.id === paired.deviceId)
+    expect(onlineEntry?.state).toBe("online")
 
     const closePromise = waitForSocketClose(deviceWs)
     const revokeResponse = await fetch(`${httpBase}${devicePath(paired.deviceId)}`, {
       method: "DELETE",
+      headers: { authorization: `Bearer ${app.deviceCredential.credential}` },
     })
     expect(revokeResponse.status).toBe(204)
 
@@ -102,9 +111,15 @@ describe("second-client journey", () => {
     expect(closed.reason).toBe("unauthorized")
 
     const listedAfterRevoke = DeviceCollectionSchema.parse(
-      await (await fetch(`${httpBase}${DEVICES_PATH}`)).json(),
+      await (
+        await fetch(`${httpBase}${DEVICES_PATH}`, {
+          headers: { authorization: `Bearer ${app.deviceCredential.credential}` },
+        })
+      ).json(),
     )
-    expect(listedAfterRevoke.items[0]?.state).toBe("revoked")
+    expect(listedAfterRevoke.items.find((item) => item.id === paired.deviceId)?.state).toBe(
+      "revoked",
+    )
 
     const httpDenied = await reconnected.fetch("/v1/workspaces")
     expect(httpDenied.status).toBe(401)
@@ -138,7 +153,10 @@ describe("second-client journey", () => {
       host: config.host,
     })
 
-    const created = await createPairingCode(httpBase)
+    const created = await createPairingCode({
+      httpBase,
+      credential: app.deviceCredential.credential,
+    })
     const firstClaim = await claimPairingCode({
       httpBase,
       code: created.code,
@@ -157,7 +175,10 @@ describe("second-client journey", () => {
     const claimedProblem = ConflictProblemSchema.parse(await secondClaim.response.json())
     expect(claimedProblem.title).toBe("Pairing code already claimed")
 
-    const expiredCandidate = await createPairingCode(httpBase)
+    const expiredCandidate = await createPairingCode({
+      httpBase,
+      credential: app.deviceCredential.credential,
+    })
     database.db
       .update(pairingCodes)
       .set({ expiresAt: "2020-01-01T00:00:00.000Z" })
@@ -173,7 +194,10 @@ describe("second-client journey", () => {
     const expiredProblem = ConflictProblemSchema.parse(await expiredClaim.response.json())
     expect(expiredProblem.title).toBe("Pairing code expired")
 
-    const regenerated = await createPairingCode(httpBase)
+    const regenerated = await createPairingCode({
+      httpBase,
+      credential: app.deviceCredential.credential,
+    })
     const recovered = await claimPairingCode({
       httpBase,
       code: regenerated.code,

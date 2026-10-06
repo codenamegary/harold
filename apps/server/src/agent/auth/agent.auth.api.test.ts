@@ -13,6 +13,10 @@ import { bootTestApp } from "../../test-support/test.harness"
 import { enableAgent } from "../../test-support/test.app"
 import { HOST_LOGIN_CONFIRM_STEP_ID } from "./adapters/default.adapter"
 
+const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
+  authorization: `Bearer ${app.deviceCredential.credential}`,
+})
+
 describe("agent auth HTTP routes", () => {
   test(
     "runs full session lifecycle and blocks logout while in flight",
@@ -21,6 +25,7 @@ describe("agent auth HTTP routes", () => {
       const agentId = "gemini"
 
       const startResponse = await app.inject({
+        headers: authHeaders(app),
         method: "POST",
         url: agentAuthSessionsPath(agentId),
         payload: {},
@@ -32,6 +37,7 @@ describe("agent auth HTTP routes", () => {
       expect(started.status).toBe("in_progress")
 
       const logoutBlocked = await app.inject({
+        headers: authHeaders(app),
         method: "POST",
         url: agentAuthLogoutPath(agentId),
       })
@@ -42,6 +48,7 @@ describe("agent auth HTTP routes", () => {
       await enableAgent(app, agentId)
 
       const confirmResponse = await app.inject({
+        headers: authHeaders(app),
         method: "POST",
         url: agentAuthSessionActionsPath(agentId, started.sessionId),
         payload: { type: "confirm", stepId: HOST_LOGIN_CONFIRM_STEP_ID },
@@ -53,6 +60,7 @@ describe("agent auth HTTP routes", () => {
       expect(confirmed.status).toBe("succeeded")
 
       const authResponse = await app.inject({
+        headers: authHeaders(app),
         method: "GET",
         url: agentAuthPath(agentId),
       })
@@ -61,6 +69,7 @@ describe("agent auth HTTP routes", () => {
       expect(auth.session).toBeNull()
 
       const logoutResponse = await app.inject({
+        headers: authHeaders(app),
         method: "POST",
         url: agentAuthLogoutPath(agentId),
       })
@@ -75,6 +84,7 @@ describe("agent auth HTTP routes", () => {
     const { app } = await bootTestApp()
 
     const response = await app.inject({
+      headers: authHeaders(app),
       method: "GET",
       url: "/v1/settings/agents",
     })

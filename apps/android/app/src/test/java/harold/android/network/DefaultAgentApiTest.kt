@@ -374,8 +374,7 @@ class DefaultAgentApiTest {
                     {
                       "settings": {
                         "advertisedUrl": null,
-                        "trustedProxies": [],
-                        "bindHost": "127.0.0.1",
+                                "bindHost": "127.0.0.1",
                         "bindPort": 3847,
                         "logLevel": "info",
                         "logPath": null,

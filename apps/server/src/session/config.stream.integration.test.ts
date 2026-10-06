@@ -45,9 +45,11 @@ type StreamClient = {
   close: () => Promise<void>
 }
 
-const openStreamClient = (wsUrl: string): Promise<StreamClient> =>
+const openStreamClient = (wsUrl: string, credential: string): Promise<StreamClient> =>
   new Promise((resolve, reject) => {
-    const ws = new WebSocket(wsUrl)
+    const ws = new WebSocket(wsUrl, {
+      headers: { authorization: `Bearer ${credential}` },
+    })
     const messages: SessionStreamServerMessage[] = []
     const waiters: Array<{
       predicate: (message: SessionStreamServerMessage) => boolean
@@ -165,7 +167,10 @@ describe("session config stream integration", () => {
 
     const createResponse = await fetch(`${httpBase}/v1/sessions`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
       body: JSON.stringify({
         agentId: "cursor",
         cwd: "/tmp/config-stream-project",
@@ -174,7 +179,7 @@ describe("session config stream integration", () => {
     expect(createResponse.status).toBe(201)
     const created = CreateSessionResponseSchema.parse(await createResponse.json())
 
-    const subscriber = await openStreamClient(wsUrl)
+    const subscriber = await openStreamClient(wsUrl, app.deviceCredential.credential)
     subscriber.send({
       type: "subscribe",
       agentId: "cursor",
@@ -194,7 +199,10 @@ describe("session config stream integration", () => {
       `${httpBase}/v1/sessions/${created.sessionId}/config-options/model?agentId=cursor`,
       {
         method: "PUT",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${app.deviceCredential.credential}`,
+        },
         body: JSON.stringify({ value: "m2" }),
       },
     )

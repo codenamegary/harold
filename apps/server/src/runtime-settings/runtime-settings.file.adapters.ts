@@ -25,7 +25,6 @@ const fallbackSeedDefaults: RuntimeSettings = RuntimeSettingsSchema.parse({
   logPath: null,
   advertisedUrl: null,
   advertisedUrlEnabled: true,
-  trustedProxies: [],
   allowedRoots: [],
 })
 
@@ -44,6 +43,16 @@ const formatLoadError = (params: { filePath: string; cause: unknown }): Error =>
   return new Error(`Invalid settings.yml at ${filePath}`)
 }
 
+// `trustedProxies` supported host-proxy classification and is retired; older
+// settings.yml files may still carry the key, so strip it before validating.
+const stripRetiredKeys = (value: unknown): unknown => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return value
+  }
+  const { trustedProxies: _retired, ...rest } = value as Record<string, unknown>
+  return rest
+}
+
 const parseSettingsDocument = (params: { filePath: string; raw: string }): RuntimeSettings => {
   const { filePath, raw } = params
   const parsed: unknown = (() => {
@@ -55,7 +64,7 @@ const parseSettingsDocument = (params: { filePath: string; raw: string }): Runti
   })()
 
   try {
-    return RuntimeSettingsSchema.parse(parsed)
+    return RuntimeSettingsSchema.parse(stripRetiredKeys(parsed))
   } catch (cause: unknown) {
     throw formatLoadError({ filePath, cause })
   }
@@ -119,6 +128,5 @@ export const seedDefaultsFromConfig = (config: Config): RuntimeSettings =>
     logPath: null,
     advertisedUrl: null,
     advertisedUrlEnabled: true,
-    trustedProxies: [],
     allowedRoots: [],
   })
