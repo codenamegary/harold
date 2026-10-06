@@ -1,60 +1,47 @@
-# Trusted publishing: no NPM_TOKEN secret. The publish job exchanges the
-# workflow's OIDC token (id-token: write) for a short-lived publish
-# credential, and npm attaches provenance automatically. The package's
-# trusted publisher on npmjs.com must list this workflow's filename
-# (publish-cli.yml) — see docs.npmjs.com/trusted-publishers.
 name: publish-cli
 
+# Builds and publishes the npm package via trusted publishing. Called by
+# the Release Please workflow whenever a release is created (merging the
+# release PR is what publishes), and dispatchable by hand for recovery
+# runs. The npm side trusts this exact workflow filename — see
+# docs.npmjs.com/trusted-publishers.
+#
+# Trusted publishing needs no NPM_TOKEN secret: the publish job exchanges
+# the workflow's OIDC token for short-lived credentials, and npm attaches
+# the provenance attestation automatically.
+#
+# Careful with manual dispatch: the tag's version is what ships.
+# Dispatching v1.0.2 publishes @codenamegary/harold@1.0.2 for real.
 on:
-  release:
-    types:
-      - published
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to build and publish (for example v1.0.2)
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (defaults to the latest harold-* release)"
-        required: false
+        description: Release tag to build and publish (for example v1.0.2)
+        required: true
+        type: string
 
 permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: publish-cli-${{ inputs.tag }}
+  cancel-in-progress: false
+
 jobs:
   publish:
-    # Only the CLI component's releases (tagged `harold-vX.Y.Z`) publish to
-    # npm; other tags are not CLI releases.
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      startsWith(github.event.release.tag_name, 'harold-')
     runs-on: ubuntu-latest
     steps:
-      - name: Resolve release tag
-        id: tag
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          INPUT_TAG: ${{ inputs.tag }}
-        run: |
-          TAG="$INPUT_TAG"
-          if [ -z "$TAG" ]; then
-            if [ "${{ github.event_name }}" = "release" ]; then
-              TAG="${{ github.event.release.tag_name }}"
-            else
-              TAG="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 50 --json tagName \
-                --jq '[.[].tagName | select(startswith("harold-"))][0]')"
-            fi
-          fi
-          if [ -z "$TAG" ]; then
-            echo "No harold-* release found" >&2
-            exit 1
-          fi
-          VERSION="${TAG#harold-v}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout
+      - name: Checkout the release tag
         uses: actions/checkout@v7
         with:
-          ref: ${{ steps.tag.outputs.tag }}
+          ref: ${{ inputs.tag }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -82,8 +69,10 @@ jobs:
       # from the registry.
       - name: Smoke test the published bin
         env:
-          VERSION: ${{ steps.tag.outputs.version }}
+          TAG: ${{ inputs.tag }}
         run: |
+          VERSION="${TAG#harold-}"
+          VERSION="${VERSION#v}"
           SMOKE_DIR="$(mktemp -d)"
           cd "$SMOKE_DIR"
           OUTPUT="$(npx --yes @codenamegary/harold@"$VERSION" --version)"
