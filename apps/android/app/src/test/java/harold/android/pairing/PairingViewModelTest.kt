@@ -69,6 +69,52 @@ class PairingViewModelTest {
     }
 
     @Test
+    fun onQrScannedSurfacesLegacyAgentServerSchemeErrorWithAppUpdateMessage() = runTest {
+        val coordinator = FakePairingCoordinator(Result.success(Unit))
+        val viewModel = PairingViewModel(
+            pairingCoordinator = coordinator,
+            payloadParser = DefaultPairingPayloadParser(rejectCleartext = false),
+            deviceNameProvider = { "Pixel Test" },
+        )
+
+        viewModel.onQrScanned("agent-server://pair?v=1&endpoint=http%3A%2F%2F10.0.2.2%3A3847&code=R7K-4MP")
+
+        assertTrue(coordinator.calls.isEmpty())
+        assertEquals(
+            "Legacy agent-server pairing payload is not supported; app update required",
+            viewModel.uiState.value.errorMessage,
+        )
+        assertFalse(viewModel.uiState.value.completed)
+    }
+
+    @Test
+    fun consumesDeepLinkFromPairingRequestsAndClaimsAutomatically() = runTest {
+        val coordinator = FakePairingCoordinator(Result.success(Unit))
+        val requests = DefaultPairingRequests()
+        requests.requestPairing("harold://pair?v=1&endpoint=http%3A%2F%2F10.0.2.2%3A3847&code=R7K-4MP")
+
+        val viewModel = PairingViewModel(
+            pairingCoordinator = coordinator,
+            payloadParser = DefaultPairingPayloadParser(rejectCleartext = false),
+            deviceNameProvider = { "Pixel Test" },
+            pairingRequests = requests,
+        )
+
+        assertEquals(
+            listOf(
+                FakePairingCoordinator.Call(
+                    endpoint = "http://10.0.2.2:3847",
+                    code = "R7K-4MP",
+                    deviceName = "Pixel Test",
+                ),
+            ),
+            coordinator.calls,
+        )
+        assertTrue(viewModel.uiState.value.completed)
+        org.junit.Assert.assertNull(requests.pendingUri.value)
+    }
+
+    @Test
     fun submitManualPairingUsesTheSameParserSeam() = runTest {
         val coordinator = FakePairingCoordinator(Result.success(Unit))
         val viewModel = PairingViewModel(

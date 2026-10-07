@@ -4,8 +4,8 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Harold slanted prism mark centered inside the 72dp safe zone. -->
+    <!-- Harold slanted prism monochrome mark for Android 13+ themed adaptive icons. -->
     <path
-        android:fillColor="@color/brand_lime_ink"
+        android:fillColor="#FFFFFFFF"
         android:pathData="M36,26 L52,26 L47,48 L65,48 L70,26 L86,26 L74,82 L58,82 L63,60 L45,60 L40,82 L24,82 Z" />
 </vector>

@@ -28,6 +28,20 @@ Install a debug build on a connected device or emulator:
 ./gradlew :app:installDebug
 ```
 
+## Migration from pre-rename app
+
+The application id was renamed to `harold.android` (formerly `server.agent.android`). Because the `applicationId` changed, existing installations will not upgrade in-place.
+
+1. Uninstall the legacy build from your device or emulator:
+   ```sh
+   adb uninstall server.agent.android
+   ```
+2. Install the Harold Android app:
+   ```sh
+   ./gradlew :app:installDebug
+   ```
+3. Pair using the in-app scanner or by pointing your phone camera at the terminal pairing QR code (`harold://pair`), which opens Harold directly. Legacy `agent-server://pair` payloads will prompt that an app update is required.
+
 ## Local development transport
 
 - **Release** builds reject cleartext HTTP and WebSocket traffic.

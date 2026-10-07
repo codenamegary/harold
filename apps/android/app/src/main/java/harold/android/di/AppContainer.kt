@@ -32,8 +32,10 @@ import harold.android.operator.DefaultOperatorRepository
 import harold.android.operator.OperatorRepository
 import harold.android.pairing.DefaultPairingCoordinator
 import harold.android.pairing.DefaultPairingPayloadParser
+import harold.android.pairing.DefaultPairingRequests
 import harold.android.pairing.PairingCoordinator
 import harold.android.pairing.PairingPayloadParser
+import harold.android.pairing.PairingRequests
 import harold.android.pairing.defaultDeviceName
 import harold.android.session.DefaultSessionGateway
 import harold.android.session.SessionGateway
@@ -46,6 +48,7 @@ interface AppContainer {
     val pairingApi: PairingApi
     val pairingPayloadParser: PairingPayloadParser
     val pairingCoordinator: PairingCoordinator
+    val pairingRequests: PairingRequests
     val deviceNameProvider: () -> String
     val agentApi: AgentApi
     val sessionOwner: SessionOwner
@@ -84,6 +87,7 @@ class DefaultAppContainer(
         credentialStore = credentialStore,
         sessionGateway = sessionGateway,
     )
+    override val pairingRequests: PairingRequests = DefaultPairingRequests()
     override val deviceNameProvider: () -> String = ::defaultDeviceName
 
     override val agentApi: AgentApi = DefaultAgentApi(client = authenticatedClient)

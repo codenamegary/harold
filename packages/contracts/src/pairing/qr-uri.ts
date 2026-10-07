@@ -2,6 +2,7 @@ import { z } from "zod"
 import { PairingCodeValueSchema } from "../http/pairing-code"
 
 export const PAIRING_QR_SCHEME = "harold" as const
+export const LEGACY_PAIRING_QR_SCHEME = "agent-server" as const
 export const PAIRING_QR_HOST = "pair" as const
 export const PAIRING_QR_VERSION = 1 as const
 
@@ -101,6 +102,10 @@ export const parsePairingQrUri = (
 
   if (trimmed.startsWith("{")) {
     throw pairingQrParseError("Legacy JSON pairing payload is not supported")
+  }
+
+  if (trimmed.startsWith(`${LEGACY_PAIRING_QR_SCHEME}://`)) {
+    throw pairingQrParseError("Legacy agent-server pairing payload is not supported; app update required")
   }
 
   const schemePrefix = `${PAIRING_QR_SCHEME}://`

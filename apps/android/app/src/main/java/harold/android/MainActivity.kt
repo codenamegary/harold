@@ -15,6 +15,7 @@ class MainActivity : ComponentActivity() {
 
         val appContainer = (application as HaroldApplication).appContainer
         deliverOpenSession(intent)
+        deliverPairingDeepLink(intent)
 
         enableEdgeToEdge()
         setContent {
@@ -28,11 +29,20 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         deliverOpenSession(intent)
+        deliverPairingDeepLink(intent)
     }
 
     private fun deliverOpenSession(intent: Intent?) {
         val sessionId = intent?.getStringExtra(EXTRA_OPEN_SESSION_ID) ?: return
         val appContainer = (application as HaroldApplication).appContainer
         appContainer.openSessionRequests.open(sessionId)
+    }
+
+    private fun deliverPairingDeepLink(intent: Intent?) {
+        val uri = intent?.dataString ?: return
+        if (intent.action == Intent.ACTION_VIEW) {
+            val appContainer = (application as HaroldApplication).appContainer
+            appContainer.pairingRequests.requestPairing(uri)
+        }
     }
 }

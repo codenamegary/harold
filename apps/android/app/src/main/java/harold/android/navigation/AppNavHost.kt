@@ -77,6 +77,16 @@ fun AppNavHost(
         }
     }
 
+    LaunchedEffect(appContainer.pairingRequests) {
+        appContainer.pairingRequests.pendingUri.collect { uri ->
+            if (uri != null) {
+                navController.navigate(Routes.Pairing) {
+                    launchSingleTop = true
+                }
+            }
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = Routes.Shell,
@@ -99,6 +109,7 @@ fun AppNavHost(
                     pairingCoordinator = appContainer.pairingCoordinator,
                     payloadParser = appContainer.pairingPayloadParser,
                     deviceNameProvider = appContainer.deviceNameProvider,
+                    pairingRequests = appContainer.pairingRequests,
                 ),
             )
             val pairingUiState by pairingViewModel.uiState.collectAsState()

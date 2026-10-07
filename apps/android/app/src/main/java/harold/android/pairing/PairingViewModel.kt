@@ -30,9 +30,23 @@ class PairingViewModel(
     private val pairingCoordinator: PairingCoordinator,
     private val payloadParser: PairingPayloadParser,
     private val deviceNameProvider: () -> String,
+    private val pairingRequests: PairingRequests? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(PairingUiState())
     val uiState: StateFlow<PairingUiState> = _uiState.asStateFlow()
+
+    init {
+        pairingRequests?.let { requests ->
+            viewModelScope.launch {
+                requests.pendingUri.collect { uri ->
+                    if (uri != null) {
+                        requests.consume()
+                        onQrScanned(uri)
+                    }
+                }
+            }
+        }
+    }
 
     fun showManualEntry() {
         _uiState.update { current ->
@@ -140,6 +154,7 @@ class PairingViewModelFactory(
     private val pairingCoordinator: PairingCoordinator,
     private val payloadParser: PairingPayloadParser,
     private val deviceNameProvider: () -> String,
+    private val pairingRequests: PairingRequests? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -148,6 +163,7 @@ class PairingViewModelFactory(
                 pairingCoordinator = pairingCoordinator,
                 payloadParser = payloadParser,
                 deviceNameProvider = deviceNameProvider,
+                pairingRequests = pairingRequests,
             ) as T
         }
 
