@@ -7,11 +7,12 @@ import { openDatabase } from "server/database"
 import { assembleDeviceSlice } from "server/device"
 import { assembleWorkspaceSlice } from "server/workspace"
 import { openAgentCli } from "./agent.command"
-import { makeSetupCommand } from "./setup.command"
+import { makeSetupCommand, SetupCommandDeps } from "./setup.command"
 import { SetupPrompts } from "./setup.wizard"
 
 const startCommand = (
   args: readonly string[],
+  overrides: Partial<SetupCommandDeps> = {},
 ): { lines: string[]; done: Promise<number | undefined> } => {
   const lines: string[] = []
   process.exitCode = undefined
@@ -21,6 +22,7 @@ const startCommand = (
     cwd: () => process.cwd(),
     writeOut: (line) => lines.push(line),
     writeErr: (line) => lines.push(line),
+    ...overrides,
   })
     .parseAsync([...args], { from: "user" })
     .then(() => process.exitCode)
@@ -30,8 +32,9 @@ const startCommand = (
 
 const runCommand = async (
   args: readonly string[],
+  overrides: Partial<SetupCommandDeps> = {},
 ): Promise<{ output: string; exitCode: number | undefined }> => {
-  const command = startCommand(args)
+  const command = startCommand(args, overrides)
   const exitCode = await command.done
   return { output: command.lines.join("\n"), exitCode }
 }
@@ -61,6 +64,12 @@ const silentPrompts: SetupPrompts = {
   confirm: async () => true,
   isCancel: (value): value is symbol => typeof value === "symbol",
   cancel: () => undefined,
+}
+
+const offlineDaemon: Partial<SetupCommandDeps> = {
+  readLiveDaemonState: () => ({ ok: false, error: { kind: "no_state_file" } }),
+  startDaemon: async () => ({ ok: true, value: { pid: 4321 } }),
+  stopDaemon: async () => ({ ok: true, value: { pid: 4321 } }),
 }
 
 const plainColors = { bold: (text: string) => text, dim: (text: string) => text }
@@ -119,13 +128,10 @@ describe("harold setup command wiring", () => {
   })
 
   test("enables the flagged agent and registers the flagged workspace", async () => {
-    const { output, exitCode } = await runCommand([
-      "--agents",
-      "cursor",
-      "--workspace",
-      workspaceDir,
-      "--no-pair",
-    ])
+    const { output, exitCode } = await runCommand(
+      ["--agents", "cursor", "--workspace", workspaceDir, "--no-pair"],
+      offlineDaemon,
+    )
 
     expect(exitCode).toBe(0)
     expect(output).toContain("cursor")
@@ -144,13 +150,10 @@ describe("harold setup command wiring", () => {
   })
 
   test("re-running is idempotent for the same workspace", async () => {
-    const { exitCode } = await runCommand([
-      "--agents",
-      "cursor",
-      "--workspace",
-      workspaceDir,
-      "--no-pair",
-    ])
+    const { exitCode } = await runCommand(
+      ["--agents", "cursor", "--workspace", workspaceDir, "--no-pair"],
+      offlineDaemon,
+    )
 
     expect(exitCode).toBe(0)
 
@@ -170,7 +173,7 @@ describe("harold setup command wiring", () => {
   })
 
   test("rejects an unknown agent id", async () => {
-    const { output, exitCode } = await runCommand(["--agents", "nope", "--no-pair"])
+    const { output, exitCode } = await runCommand(["--agents", "nope", "--no-pair"], offlineDaemon)
 
     expect(exitCode).toBe(1)
     expect(output).toContain("Unknown agent id: nope.")
@@ -252,10 +255,11 @@ describe("harold setup command wiring", () => {
     }
   })
 
-  test("starts the server when no daemon is running and prints the status when done", async () => {
+  test("starts a detached daemon when none is running and prints the status when done", async () => {
     const lines: string[] = []
     let daemonLive = false
-    let runServerCalls = 0
+    let startDaemonCalls = 0
+    let stopDaemonCalls = 0
     process.exitCode = 0
 
     await makeSetupCommand({
@@ -267,9 +271,14 @@ describe("harold setup command wiring", () => {
         daemonLive
           ? { ok: true, state: daemonState }
           : { ok: false, error: { kind: "no_state_file" } },
-      runServer: async () => {
-        runServerCalls += 1
+      startDaemon: async () => {
+        startDaemonCalls += 1
         daemonLive = true
+        return { ok: true, value: { pid: 4321 } }
+      },
+      stopDaemon: async () => {
+        stopDaemonCalls += 1
+        return { ok: true, value: { pid: 4321 } }
       },
       readRunningView: () => ({
         summary: {
@@ -287,14 +296,81 @@ describe("harold setup command wiring", () => {
     })
 
     expect(process.exitCode).toBe(0)
-    expect(runServerCalls).toBe(1)
+    expect(startDaemonCalls).toBe(1)
+    expect(stopDaemonCalls).toBe(0)
     expect(lines.join("\n")).toContain("Harold is running")
     expect(lines.join("\n")).toContain("harold connect")
   })
 
+  test("stops the daemon it started when the wizard fails", async () => {
+    const lines: string[] = []
+    let startDaemonCalls = 0
+    let stopDaemonCalls = 0
+    process.exitCode = 0
+
+    await makeSetupCommand({
+      prompts: silentPrompts,
+      cwd: () => process.cwd(),
+      writeOut: (line) => lines.push(line),
+      writeErr: (line) => lines.push(line),
+      readLiveDaemonState: () => ({ ok: false, error: { kind: "no_state_file" } }),
+      startDaemon: async () => {
+        startDaemonCalls += 1
+        return { ok: true, value: { pid: 4321 } }
+      },
+      stopDaemon: async () => {
+        stopDaemonCalls += 1
+        return { ok: false, error: { kind: "timeout", pid: 4321 } }
+      },
+      readRunningView: () => ({
+        summary: {
+          dataDir,
+          localApi: { host: "127.0.0.1", port: 3847 },
+          advertisedEndpoint: { url: null, enabled: false },
+          agents: { enabled: 0, needsAuth: null },
+          workspaces: 0,
+        },
+        devices: 0,
+      }),
+      colors: plainColors,
+    }).parseAsync(["--agents", "nope", "--no-pair"], { from: "user" })
+
+    expect(process.exitCode).toBe(1)
+    expect(startDaemonCalls).toBe(1)
+    expect(stopDaemonCalls).toBe(1)
+    expect(lines.join("\n")).toContain("Setup could not stop the daemon it started")
+  })
+
+  test("fails before the wizard when the daemon never becomes ready", async () => {
+    const lines: string[] = []
+    process.exitCode = 0
+
+    await makeSetupCommand({
+      prompts: silentPrompts,
+      cwd: () => process.cwd(),
+      writeOut: (line) => lines.push(line),
+      writeErr: (line) => lines.push(line),
+      readLiveDaemonState: () => ({ ok: false, error: { kind: "no_state_file" } }),
+      startDaemon: async () => ({ ok: false, error: { kind: "timed_out" } }),
+      stopDaemon: async () => {
+        throw new Error("stop must not run when the daemon never started")
+      },
+      readRunningView: () => {
+        throw new Error("running view must not render when the daemon never started")
+      },
+      colors: plainColors,
+    }).parseAsync(["--agents", "cursor", "--workspace", workspaceDir, "--no-pair"], {
+      from: "user",
+    })
+
+    expect(process.exitCode).toBe(1)
+    expect(lines.join("\n")).toContain("Timed out waiting for Harold to start")
+  })
+
   test("uses a running daemon without starting a second one", async () => {
     const lines: string[] = []
-    let runServerCalls = 0
+    let startDaemonCalls = 0
+    let stopDaemonCalls = 0
     process.exitCode = 0
 
     await makeSetupCommand({
@@ -303,8 +379,13 @@ describe("harold setup command wiring", () => {
       writeOut: (line) => lines.push(line),
       writeErr: (line) => lines.push(line),
       readLiveDaemonState: () => ({ ok: true, state: daemonState }),
-      runServer: async () => {
-        runServerCalls += 1
+      startDaemon: async () => {
+        startDaemonCalls += 1
+        return { ok: true, value: { pid: 4321 } }
+      },
+      stopDaemon: async () => {
+        stopDaemonCalls += 1
+        return { ok: true, value: { pid: 4321 } }
       },
       readRunningView: () => ({
         summary: {
@@ -322,7 +403,8 @@ describe("harold setup command wiring", () => {
     })
 
     expect(process.exitCode).toBe(0)
-    expect(runServerCalls).toBe(0)
+    expect(startDaemonCalls).toBe(0)
+    expect(stopDaemonCalls).toBe(0)
     expect(lines.join("\n")).toContain("Harold is running")
   })
 })

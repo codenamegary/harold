@@ -1,7 +1,12 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { DaemonState, DaemonStateSchema, ReadDaemonStateResult } from "./daemon.state.models"
-import { IsProcessAlive, ReadDaemonState, WriteDaemonState } from "./daemon.state.ports"
+import {
+  IsProcessAlive,
+  ReadDaemonState,
+  RequestStop,
+  WriteDaemonState,
+} from "./daemon.state.ports"
 
 const isNotFoundFilesystemError = (error: unknown): boolean =>
   typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT"
@@ -53,6 +58,21 @@ export const makeNodeProcessAlive = (): IsProcessAlive => {
   return (pid: number) => {
     try {
       process.kill(pid, 0)
+      return true
+    } catch {
+      return false
+    }
+  }
+}
+
+/**
+ * Asks the daemon to shut down. A false result means the process was already
+ * gone (ESRCH) or the caller may not signal it.
+ */
+export const makeNodeRequestStop = (): RequestStop => {
+  return (pid: number) => {
+    try {
+      process.kill(pid, "SIGTERM")
       return true
     } catch {
       return false

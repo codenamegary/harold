@@ -14,6 +14,7 @@
     "./daemon-state/ports": "./src/daemon-state/daemon.state.ports.ts",
     "./daemon-state/node.adapters": "./src/daemon-state/daemon.state.node.adapters.ts",
     "./daemon-state/read.live.usecase": "./src/daemon-state/daemon.state.read.live.usecase.ts",
+    "./daemon-state/stop.usecase": "./src/daemon-state/daemon.state.stop.usecase.ts",
     "./agent-settings/ports": "./src/agent-settings/agent.settings.ports.ts",
     "./agent-settings/errors": "./src/agent-settings/agent.settings.errors.ts",
     "./agent-settings/view": "./src/agent-settings/agent.settings.view.ts",
