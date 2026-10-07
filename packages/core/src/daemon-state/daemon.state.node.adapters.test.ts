@@ -3,7 +3,11 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { DaemonStateSchema } from "./daemon.state.models"
-import { daemonStateFilePath, makeDaemonStateFileStore } from "./daemon.state.node.adapters"
+import {
+  daemonStateFilePath,
+  makeDaemonStateFileStore,
+  makeNodeRequestStop,
+} from "./daemon.state.node.adapters"
 
 const makeState = (overrides: Partial<{ pid: number }> = {}) =>
   DaemonStateSchema.parse({
@@ -78,5 +82,20 @@ describe("daemon state file store", () => {
     expect(readdirSync(dataDir)).toEqual(["daemon-state.json"])
     expect(readFileSync(daemonStateFilePath(dataDir), "utf8")).toContain("4322")
     rmSync(dataDir, { recursive: true, force: true })
+  })
+})
+
+describe("node request stop", () => {
+  test("signals a live process and reports false for a dead pid", async () => {
+    const requestStop = makeNodeRequestStop()
+    const child = Bun.spawn(["sleep", "30"], { stdio: ["ignore", "ignore", "ignore"] })
+
+    try {
+      expect(requestStop(child.pid)).toBe(true)
+      await child.exited
+      expect(requestStop(child.pid)).toBe(false)
+    } finally {
+      child.kill()
+    }
   })
 })

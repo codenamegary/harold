@@ -8,6 +8,7 @@ import { makePairCommand } from "./pair.command"
 import { ServeDeps, makeServeCommand } from "./serve.command"
 import { makeSetupCommand } from "./setup.command"
 import { makeStatusCommand } from "./status.command"
+import { makeStopCommand } from "./stop.command"
 import { makeWorkspaceCommand } from "./workspace.command"
 
 export type HaroldProgramDeps = Readonly<{
@@ -24,6 +25,7 @@ export const makeHaroldProgram = (deps: HaroldProgramDeps = {}): Command => {
   program.addCommand(makeServeCommand(deps.serve))
   program.addCommand(makeSetupCommand())
   program.addCommand(makeStatusCommand())
+  program.addCommand(makeStopCommand())
   program.addCommand(makeAgentCommand())
   program.addCommand(makePairCommand())
   program.addCommand(makeDeviceCommand())

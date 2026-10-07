@@ -389,6 +389,6 @@ export const runSetupWizard = async (
     }
   }
 
-  deps.prompts.outro("Harold is set up. Run `harold serve` if it is not already running.")
+  deps.prompts.outro("Harold is set up.")
   return 0
 }

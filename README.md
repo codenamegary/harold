@@ -31,6 +31,9 @@ npm install -g @codenamegary/harold
 harold serve
 ```
 
+Setup starts the daemon detached and exits; `harold stop` stops it. Use
+`harold serve` when you want the daemon in the foreground.
+
 Never run bare `npx harold`. That name belongs to an unrelated dormant
 package on npm.
 
@@ -44,7 +47,8 @@ bun run dev serve
 ```
 
 `bun run dev` runs the CLI. Pass it any command: `bun run dev setup`,
-`bun run dev status`. With no command it prints the command surface.
+`bun run dev status`, `bun run dev stop`. With no command it prints the
+command surface. Setup leaves the daemon running in the background.
 
 The Device API listens on `127.0.0.1:3847`. Every route except
 `GET /v1/status` and the pairing claim requires a device credential

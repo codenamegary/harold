@@ -5,3 +5,5 @@ export type ReadDaemonState = () => ReadDaemonStateResult
 export type WriteDaemonState = (state: DaemonState) => void
 
 export type IsProcessAlive = (pid: number) => boolean
+
+export type RequestStop = (pid: number) => boolean

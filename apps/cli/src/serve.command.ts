@@ -47,7 +47,9 @@ const openServeDeps = (): ServeDeps => {
 const executeServe = async (deps: ServeDeps): Promise<number> => {
   const running = deps.readLiveDaemonState()
   if (running.ok) {
-    deps.writeWarn(`Harold looks already running (pid ${running.state.pid}).`)
+    deps.writeWarn(
+      `Harold looks already running (pid ${running.state.pid}). Stop it with \`harold stop\`.`,
+    )
     return 1
   }
 

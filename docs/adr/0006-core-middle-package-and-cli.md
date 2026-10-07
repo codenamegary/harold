@@ -37,6 +37,13 @@ the CLI reads it, and no host HTTP route is involved.
    through core's tail slice. A null `logPath` selects the default file, not
    stdout.
 
+9. `harold setup` guarantees a live daemon for the wizard. When none is
+   running it spawns the CLI entry with `serve` detached, waits until the
+   state file names that pid, and exits after the wizard. The daemon outlives
+   setup. `harold stop` signals the live pid through the state file, but only
+   when the heartbeat is fresh: a live pid with a stale heartbeat is treated
+   as a recycled pid.
+
 ## Why not the alternatives
 
 ### Live state path
@@ -71,7 +78,12 @@ the CLI reads it, and no host HTTP route is involved.
   to the default file, or the operator-configured `logPath`, and
   `harold logs` tails that file.
 - `harold serve` while a daemon runs exits 1 with a warning from the same
-  state file.
+  state file and points at `harold stop`.
+- `harold setup` starts a detached daemon when none is live and exits after
+  the wizard. `harold stop` stops a detached daemon; a foreground `serve`
+  still stops with Ctrl+C. This reverses the #313 non-goal of no
+  daemonization: setup owns a background process, and `harold stop` owns its
+  lifecycle.
 - The CLI opens the SQLite database for CRUD batches. WAL mode allows one
   writer at a time, so CLI writes stay short.
 - The CLI depends on the `server` package for `serve`, config parsing, and

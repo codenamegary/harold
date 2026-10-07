@@ -42,4 +42,10 @@ describe("makeHaroldProgram", () => {
 
     expect(program.commands.map((command) => command.name())).toContain("setup")
   })
+
+  test("registers the stop command", () => {
+    const program = makeHaroldProgram()
+
+    expect(program.commands.map((command) => command.name())).toContain("stop")
+  })
 })
