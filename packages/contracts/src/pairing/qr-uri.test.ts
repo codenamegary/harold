@@ -70,6 +70,14 @@ describe("parsePairingQrUri", () => {
     ).toThrow(/Legacy JSON/)
   })
 
+  test("rejects legacy agent-server scheme with app update required message", () => {
+    const uri = "agent-server://pair?v=1&endpoint=https%3A%2F%2Fagent.example.com&code=R7K-4MP"
+
+    expect(() => parsePairingQrUri(uri)).toThrow(
+      /Legacy agent-server pairing payload is not supported; app update required/,
+    )
+  })
+
   test("rejects cleartext endpoints when configured", () => {
     const uri = formatPairingQrUri({
       endpoint: "http://127.0.0.1:3847",

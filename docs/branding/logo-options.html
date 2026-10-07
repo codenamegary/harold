@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Harold — Geometric App Mark Options</title>
+  <style>
+    :root {
+      --lime: #B6F36B;
+      --lime-hover: #C2FF78;
+      --lime-ink: #10150C;
+      --ink: #080A0D;
+      --panel: #0E1117;
+      --panel2: #12161D;
+      --panel-elevated: #181D25;
+      --body: #C4CAD3;
+      --muted: #8C96A5;
+      --dim: #5D6674;
+      --line: #242A35;
+      --line-soft: #1A1F28;
+      --line-input: #2E3540;
+      --violet: #9D8CFF;
+      --violet-soft: #C0B6FF;
+      --sky: #7CC9F2;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--ink);
+      color: var(--body);
+      font-family: var(--font-sans);
+      line-height: 1.5;
+      padding: 2.5rem 1.5rem 5rem;
+    }
+
+    .container {
+      max-width: 1240px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    header {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 2rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .brand-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--lime);
+      background: rgba(182, 243, 107, 0.08);
+      border: 1px solid rgba(182, 243, 107, 0.25);
+      padding: 0.25rem 0.65rem;
+      border-radius: 9999px;
+      margin-bottom: 1rem;
+    }
+
+    .brand-tag-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--lime);
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: #FFFFFF;
+      margin-bottom: 0.5rem;
+    }
+
+    h1 span {
+      color: var(--lime);
+    }
+
+    .subtitle {
+      font-size: 1.125rem;
+      color: var(--muted);
+      max-width: 840px;
+    }
+
+    .subtitle code {
+      font-family: var(--font-mono);
+      color: var(--lime);
+      background: var(--panel2);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+
+    /* Interactive Toolbar */
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .toolbar-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .toolbar-label {
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-right: 0.25rem;
+    }
+
+    .pill-btn {
+      background: var(--panel2);
+      border: 1px solid var(--line);
+      color: var(--body);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      padding: 0.4rem 0.85rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .pill-btn:hover {
+      border-color: var(--muted);
+      color: #fff;
+    }
+
+    .pill-btn.active {
+      background: var(--lime);
+      border-color: var(--lime);
+      color: var(--lime-ink);
+      font-weight: 600;
+    }
+
+    /* Options Grid */
+    .options-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 2rem;
+      margin-bottom: 3.5rem;
+    }
+
+    .option-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .option-card:hover {
+      border-color: var(--line-input);
+      transform: translateY(-2px);
+    }
+
+    .option-card.highlight {
+      border-color: rgba(182, 243, 107, 0.4);
+      box-shadow: 0 0 24px rgba(182, 243, 107, 0.08);
+    }
+
+    .option-header {
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .option-title-group h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .badge-tag {
+      font-size: 0.65rem;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: rgba(182, 243, 107, 0.15);
+      border: 1px solid rgba(182, 243, 107, 0.4);
+      color: var(--lime);
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    .option-number {
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      color: var(--dim);
+    }
+
+    /* Icon Canvas Container */
+    .canvas-stage {
+      padding: 2.75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--panel2);
+      border-bottom: 1px solid var(--line-soft);
+      position: relative;
+    }
+
+    .icon-mask-wrapper {
+      width: 140px;
+      height: 140px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4);
+      position: relative;
+      background-color: var(--ink);
+    }
+
+    .mask-squircle { border-radius: 28%; }
+    .mask-circle   { border-radius: 50%; }
+    .mask-rounded  { border-radius: 18px; }
+    .mask-none     { border-radius: 0; }
+
+    .safe-zone-guide {
+      position: absolute;
+      width: 66.66%;
+      height: 66.66%;
+      border-radius: 50%;
+      border: 1px dashed rgba(255, 255, 255, 0.25);
+      pointer-events: none;
+      display: none;
+    }
+
+    .show-guides .safe-zone-guide {
+      display: block;
+    }
+
+    .icon-mask-wrapper svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Mini scale context row */
+    .mini-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 1rem 1.5rem;
+      background: rgba(0, 0, 0, 0.2);
+      border-bottom: 1px solid var(--line-soft);
+      gap: 1rem;
+    }
+
+    .mini-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .mini-item-label {
+      font-size: 0.65rem;
+      font-family: var(--font-mono);
+      color: var(--dim);
+      text-transform: uppercase;
+    }
+
+    .appbar-mock {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0.35rem 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .appbar-mock .app-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .appbar-mock .app-status {
+      font-size: 0.65rem;
+      color: var(--lime);
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .appbar-mock .app-status::before {
+      content: "";
+      width: 5px;
+      height: 5px;
+      background: var(--lime);
+      border-radius: 50%;
+    }
+
+    /* Card Body */
+    .option-body {
+      padding: 1.5rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .metaphor-box {
+      background: var(--panel2);
+      border-left: 3px solid var(--lime);
+      padding: 0.75rem 1rem;
+      border-radius: 0 8px 8px 0;
+      font-size: 0.8125rem;
+      color: var(--body);
+      margin-bottom: 1rem;
+    }
+
+    .metaphor-box strong {
+      color: #fff;
+    }
+
+    .description-text {
+      font-size: 0.875rem;
+      color: var(--muted);
+      line-height: 1.5;
+      margin-bottom: 1.25rem;
+    }
+
+    .traits-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.8125rem;
+    }
+
+    .traits-list li {
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+      color: var(--body);
+    }
+
+    .traits-list li::before {
+      content: "•";
+      color: var(--lime);
+      font-size: 1.1em;
+    }
+
+    .card-actions {
+      margin-top: auto;
+      padding-top: 1rem;
+      border-top: 1px solid var(--line-soft);
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .btn-action {
+      flex: 1;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+      font-weight: 500;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: var(--panel2);
+      color: var(--body);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+      text-decoration: none;
+    }
+
+    .btn-action:hover {
+      border-color: var(--lime);
+      color: #fff;
+    }
+
+    /* Toast */
+    #copy-toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: var(--lime);
+      color: var(--lime-ink);
+      padding: 0.75rem 1.25rem;
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.2s ease;
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    #copy-toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand-tag">
+        <span class="brand-tag-dot"></span>
+        <span>Geometric Mark Explorations</span>
+      </div>
+      <h1>Harold <span>Geometric Marks</span></h1>
+      <p class="subtitle">
+        Pure geometric simplicity. Solid shapes, high contrast, zero line art, and zero decorative strokes. Designed for maximum punch at 512px down to 16px.
+      </p>
+    </header>
+
+    <!-- Interactive Toolbar -->
+    <div class="toolbar">
+      <div class="toolbar-group">
+        <span class="toolbar-label">Launcher Mask:</span>
+        <button class="pill-btn active" data-mask="squircle">Squircle</button>
+        <button class="pill-btn" data-mask="circle">Circle</button>
+        <button class="pill-btn" data-mask="rounded">Rounded Rect</button>
+        <button class="pill-btn" data-mask="none">Full Bleed</button>
+      </div>
+
+      <div class="toolbar-group">
+        <span class="toolbar-label">Surface:</span>
+        <button class="pill-btn active" data-bg="#080A0D">Ink (#080A0D)</button>
+        <button class="pill-btn" data-bg="#181D25">Panel (#181D25)</button>
+        <button class="pill-btn" data-bg="#B6F36B">Lime (#B6F36B)</button>
+        <button class="pill-btn" data-bg="#F5F6F8">Light (#F5F6F8)</button>
+      </div>
+
+      <div class="toolbar-group">
+        <button class="pill-btn" id="toggle-guides">72dp Safe Zone Grid</button>
+      </div>
+    </div>
+
+    <!-- The 5 Pure Geometric Options -->
+    <div class="options-grid">
+
+      <!-- ================= OPTION 1 ================= -->
+      <div class="option-card highlight">
+        <div class="option-header">
+          <div class="option-title-group">
+            <h2>The Monolith <span class="badge-tag">Solid Block</span></h2>
+          </div>
+          <span class="option-number">01</span>
+        </div>
+
+        <div class="canvas-stage">
+          <div class="icon-mask-wrapper mask-squircle">
+            <div class="safe-zone-guide"></div>
+            <!-- SVG 1: The Monolith -->
+            <svg id="svg-opt-1" viewBox="0 0 108 108" width="108" height="108" fill="none">
+              <path d="M 34 24 L 42 24 L 42 45 L 66 45 L 66 24 L 84 24 L 84 74 L 74 84 L 66 84 L 66 63 L 42 63 L 42 84 L 24 84 L 24 34 Z" fill="#B6F36B" />
+            </svg>
+          </div>
+        </div>
+
+        <div class="mini-row">
+          <div class="mini-item">
+            <span class="mini-item-label">App Bar (32dp)</span>
+            <div class="appbar-mock">
+              <svg viewBox="0 0 108 108" width="22" height="22" fill="none">
+                <path d="M 34 24 L 42 24 L 42 45 L 66 45 L 66 24 L 84 24 L 84 74 L 74 84 L 66 84 L 66 63 L 42 63 L 42 84 L 24 84 L 24 34 Z" fill="#B6F36B" />
+              </svg>
+              <div>
+                <div class="app-title">Harold</div>
+                <div class="app-status">127.0.0.1:3847</div>
+              </div>
+            </div>
+          </div>
+          <div class="mini-item">
+            <span class="mini-item-label">Favicon (16dp)</span>
+            <div style="width: 24px; height: 24px; background: #080A0D; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+              <svg viewBox="0 0 108 108" width="18" height="18" fill="none">
+                <path d="M 34 24 L 42 24 L 42 45 L 66 45 L 66 24 L 84 24 L 84 74 L 74 84 L 66 84 L 66 63 L 42 63 L 42 84 L 24 84 L 24 34 Z" fill="#B6F36B" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="option-body">
+          <div class="metaphor-box">
+            <strong>Geometry:</strong> Single monolithic polygon with diagonal 45° corner chamfers.
+          </div>
+          <p class="description-text">
+            Ultra-bold Swiss brutalist lettermark <strong>‘H’</strong>. Completely solid flat shape with zero strokes. The opposing 45° chamfers give it distinctive character while keeping it rock-solid.
+          </p>
+          <ul class="traits-list">
+            <li>Single continuous polygon — maximum rendering simplicity</li>
+            <li>Incredible punch at tiny favicon and status bar sizes</li>
+            <li>Developer-grade, industrial architectural presence</li>
+          </ul>
+
+          <div class="card-actions">
+            <button class="btn-action" onclick="copySvg('svg-opt-1')">Copy SVG</button>
+            <button class="btn-action" onclick="copyVectorDrawable('opt-1')">Copy Vector XML</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= OPTION 2 ================= -->
+      <div class="option-card">
+        <div class="option-header">
+          <div class="option-title-group">
+            <h2>The Bauhaus Triad <span class="badge-tag">3 Primitives</span></h2>
+          </div>
+          <span class="option-number">02</span>
+        </div>
+
+        <div class="canvas-stage">
+          <div class="icon-mask-wrapper mask-squircle">
+            <div class="safe-zone-guide"></div>
+            <!-- SVG 2: The Bauhaus Triad -->
+            <svg id="svg-opt-2" viewBox="0 0 108 108" width="108" height="108" fill="none">
+              <!-- Left Pillar -->
+              <rect x="24" y="24" width="16" height="60" rx="8" fill="#B6F36B" />
+              <!-- Right Pillar -->
+              <rect x="68" y="24" width="16" height="60" rx="8" fill="#B6F36B" />
+              <!-- Center Host Disc Core -->
+              <circle cx="54" cy="54" r="17" fill="#9D8CFF" />
+            </svg>
+          </div>
+        </div>
+
+        <div class="mini-row">
+          <div class="mini-item">
+            <span class="mini-item-label">App Bar (32dp)</span>
+            <div class="appbar-mock">
+              <svg viewBox="0 0 108 108" width="22" height="22" fill="none">
+                <rect x="24" y="24" width="16" height="60" rx="8" fill="#B6F36B" />
+                <rect x="68" y="24" width="16" height="60" rx="8" fill="#B6F36B" />
+                <circle cx="54" cy="54" r="17" fill="#9D8CFF" />
+              </svg>
+              <div>
+                <div class="app-title">Harold</div>
+                <div class="app-status">127.0.0.1:3847</div>
+              </div>
+            </div>
+          </div>
+          <div class="mini-item">
+            <span class="mini-item-label">Favicon (16dp)</span>
+            <div style="width: 24px; height: 24px; background: #080A0D; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+              <svg viewBox="0 0 108 108" width="18" height="18" fill="none">
+                <rect x="24" y="24" width="16" height="60" rx="8" fill="#B6F36B" />
+                <rect x="68" y="24" width="16" height="60" rx="8" fill="#B6F36B" />
+                <circle cx="54" cy="54" r="17" fill="#9D8CFF" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="option-body">
+          <div class="metaphor-box">
+            <strong>Geometry:</strong> Two solid vertical capsules bridged by a solid circular core.
+          </div>
+          <p class="description-text">
+            Constructed strictly from pure geometric primitives. The two pillars represent the operator client and ACP agent process, locked together by the Harold host daemon circle.
+          </p>
+          <ul class="traits-list">
+            <li>Pure primary geometry: 2 pills + 1 circle</li>
+            <li>Electric Lime pillars with contrasting Electric Violet core</li>
+            <li>Modernist, warm, and distinctly recognizable silhouette</li>
+          </ul>
+
+          <div class="card-actions">
+            <button class="btn-action" onclick="copySvg('svg-opt-2')">Copy SVG</button>
+            <button class="btn-action" onclick="copyVectorDrawable('opt-2')">Copy Vector XML</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= OPTION 3 ================= -->
+      <div class="option-card">
+        <div class="option-header">
+          <div class="option-title-group">
+            <h2>The Dual Chevrons <span class="badge-tag">Inward Angles</span></h2>
+          </div>
+          <span class="option-number">03</span>
+        </div>
+
+        <div class="canvas-stage">
+          <div class="icon-mask-wrapper mask-squircle">
+            <div class="safe-zone-guide"></div>
+            <!-- SVG 3: Dual Chevrons -->
+            <svg id="svg-opt-3" viewBox="0 0 108 108" width="108" height="108" fill="none">
+              <!-- Left Chevron: Operator (Lime) -->
+              <path d="M 24 28 L 40 28 L 51 54 L 40 80 L 24 80 L 35 54 Z" fill="#B6F36B" />
+              <!-- Right Chevron: Agents (Violet) -->
+              <path d="M 84 28 L 68 28 L 57 54 L 68 80 L 84 80 L 73 54 Z" fill="#9D8CFF" />
+            </svg>
+          </div>
+        </div>
+
+        <div class="mini-row">
+          <div class="mini-item">
+            <span class="mini-item-label">App Bar (32dp)</span>
+            <div class="appbar-mock">
+              <svg viewBox="0 0 108 108" width="22" height="22" fill="none">
+                <path d="M 24 28 L 40 28 L 51 54 L 40 80 L 24 80 L 35 54 Z" fill="#B6F36B" />
+                <path d="M 84 28 L 68 28 L 57 54 L 68 80 L 84 80 L 73 54 Z" fill="#9D8CFF" />
+              </svg>
+              <div>
+                <div class="app-title">Harold</div>
+                <div class="app-status">127.0.0.1:3847</div>
+              </div>
+            </div>
+          </div>
+          <div class="mini-item">
+            <span class="mini-item-label">Favicon (16dp)</span>
+            <div style="width: 24px; height: 24px; background: #080A0D; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+              <svg viewBox="0 0 108 108" width="18" height="18" fill="none">
+                <path d="M 24 28 L 40 28 L 51 54 L 40 80 L 24 80 L 35 54 Z" fill="#B6F36B" />
+                <path d="M 84 28 L 68 28 L 57 54 L 68 80 L 84 80 L 73 54 Z" fill="#9D8CFF" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="option-body">
+          <div class="metaphor-box">
+            <strong>Geometry:</strong> Two solid prompt chevrons (`>` and `<`) facing inwards.
+          </div>
+          <p class="description-text">
+            Two thick solid polygon chevrons meeting at a narrow vertical channel. The outer vertical bounds and negative space between the angles form an unmistakable lettermark <strong>‘H’</strong>.
+          </p>
+          <ul class="traits-list">
+            <li>Terminal CLI command prompt (`>`) motif embedded naturally</li>
+            <li>Negative space forms a diamond aperture crossbar</li>
+            <li>Two clean solid flat shapes with zero borders</li>
+          </ul>
+
+          <div class="card-actions">
+            <button class="btn-action" onclick="copySvg('svg-opt-3')">Copy SVG</button>
+            <button class="btn-action" onclick="copyVectorDrawable('opt-3')">Copy Vector XML</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= OPTION 4 ================= -->
+      <div class="option-card">
+        <div class="option-header">
+          <div class="option-title-group">
+            <h2>The Slanted Prisms <span class="badge-tag">Forward Momentum</span></h2>
+          </div>
+          <span class="option-number">04</span>
+        </div>
+
+        <div class="canvas-stage">
+          <div class="icon-mask-wrapper mask-squircle">
+            <div class="safe-zone-guide"></div>
+            <!-- SVG 4: Slanted Prisms -->
+            <svg id="svg-opt-4" viewBox="0 0 108 108" width="108" height="108" fill="none">
+              <path d="M 36 26 L 52 26 L 47 48 L 65 48 L 70 26 L 86 26 L 74 82 L 58 82 L 63 60 L 45 60 L 40 82 L 24 82 Z" fill="#B6F36B" />
+            </svg>
+          </div>
+        </div>
+
+        <div class="mini-row">
+          <div class="mini-item">
+            <span class="mini-item-label">App Bar (32dp)</span>
+            <div class="appbar-mock">
+              <svg viewBox="0 0 108 108" width="22" height="22" fill="none">
+                <path d="M 36 26 L 52 26 L 47 48 L 65 48 L 70 26 L 86 26 L 74 82 L 58 82 L 63 60 L 45 60 L 40 82 L 24 82 Z" fill="#B6F36B" />
+              </svg>
+              <div>
+                <div class="app-title">Harold</div>
+                <div class="app-status">127.0.0.1:3847</div>
+              </div>
+            </div>
+          </div>
+          <div class="mini-item">
+            <span class="mini-item-label">Favicon (16dp)</span>
+            <div style="width: 24px; height: 24px; background: #080A0D; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+              <svg viewBox="0 0 108 108" width="18" height="18" fill="none">
+                <path d="M 36 26 L 52 26 L 47 48 L 65 48 L 70 26 L 86 26 L 74 82 L 58 82 L 63 60 L 45 60 L 40 82 L 24 82 Z" fill="#B6F36B" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="option-body">
+          <div class="metaphor-box">
+            <strong>Geometry:</strong> Solid forward-slanted parallelograms forming a dynamic 'H'.
+          </div>
+          <p class="description-text">
+            An aerodynamic, forward-leaning solid monogram. Conveys speed, command execution, and runtime responsiveness with high-energy geometric angles.
+          </p>
+          <ul class="traits-list">
+            <li>Single solid polygon with crisp parallel angles</li>
+            <li>Dynamic forward slant adds velocity and momentum</li>
+            <li>Sharp silhouette stands out vividly on home screens</li>
+          </ul>
+
+          <div class="card-actions">
+            <button class="btn-action" onclick="copySvg('svg-opt-4')">Copy SVG</button>
+            <button class="btn-action" onclick="copyVectorDrawable('opt-4')">Copy Vector XML</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= OPTION 5 ================= -->
+      <div class="option-card">
+        <div class="option-header">
+          <div class="option-title-group">
+            <h2>The Hexagon Prism <span class="badge-tag">Modular Crystal</span></h2>
+          </div>
+          <span class="option-number">05</span>
+        </div>
+
+        <div class="canvas-stage">
+          <div class="icon-mask-wrapper mask-squircle">
+            <div class="safe-zone-guide"></div>
+            <!-- SVG 5: Hexagon Prism -->
+            <svg id="svg-opt-5" viewBox="0 0 108 108" width="108" height="108" fill="none">
+              <!-- Left Facet -->
+              <path d="M 50 22 L 27 35 L 27 73 L 50 86 L 50 62 L 40 54 L 50 46 Z" fill="#B6F36B" />
+              <!-- Right Facet -->
+              <path d="M 58 22 L 81 35 L 81 73 L 58 86 L 58 62 L 68 54 L 58 46 Z" fill="#B6F36B" />
+              <!-- Center Diamond Connector -->
+              <polygon points="54,46 62,54 54,62 46,54" fill="#9D8CFF" />
+            </svg>
+          </div>
+        </div>
+
+        <div class="mini-row">
+          <div class="mini-item">
+            <span class="mini-item-label">App Bar (32dp)</span>
+            <div class="appbar-mock">
+              <svg viewBox="0 0 108 108" width="22" height="22" fill="none">
+                <path d="M 50 22 L 27 35 L 27 73 L 50 86 L 50 62 L 40 54 L 50 46 Z" fill="#B6F36B" />
+                <path d="M 58 22 L 81 35 L 81 73 L 58 86 L 58 62 L 68 54 L 58 46 Z" fill="#B6F36B" />
+                <polygon points="54,46 62,54 54,62 46,54" fill="#9D8CFF" />
+              </svg>
+              <div>
+                <div class="app-title">Harold</div>
+                <div class="app-status">127.0.0.1:3847</div>
+              </div>
+            </div>
+          </div>
+          <div class="mini-item">
+            <span class="mini-item-label">Favicon (16dp)</span>
+            <div style="width: 24px; height: 24px; background: #080A0D; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+              <svg viewBox="0 0 108 108" width="18" height="18" fill="none">
+                <path d="M 50 22 L 27 35 L 27 73 L 50 86 L 50 62 L 40 54 L 50 46 Z" fill="#B6F36B" />
+                <path d="M 58 22 L 81 35 L 81 73 L 58 86 L 58 62 L 68 54 L 58 46 Z" fill="#B6F36B" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="option-body">
+          <div class="metaphor-box">
+            <strong>Geometry:</strong> Regular geometric hexagon carved into two solid facets and a center diamond.
+          </div>
+          <p class="description-text">
+            A modular hexagonal crystal silhouette with a solid central diamond key. Evolves the old hexagon into an unmistakably modern lettermark <strong>‘H’</strong>.
+          </p>
+          <ul class="traits-list">
+            <li>Respects the heritage of the hexagon while making it an 'H'</li>
+            <li>3 flat solid polygon pieces with zero strokes</li>
+            <li>Contrasting Electric Violet diamond connector</li>
+          </ul>
+
+          <div class="card-actions">
+            <button class="btn-action" onclick="copySvg('svg-opt-5')">Copy SVG</button>
+            <button class="btn-action" onclick="copyVectorDrawable('opt-5')">Copy Vector XML</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="copy-toast">Copied to clipboard!</div>
+
+  <script>
+    // Launcher Mask Controls
+    const maskButtons = document.querySelectorAll('[data-mask]');
+    const maskWrappers = document.querySelectorAll('.icon-mask-wrapper');
+
+    maskButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        maskButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const mask = btn.dataset.mask;
+
+        maskWrappers.forEach(wrap => {
+          wrap.className = 'icon-mask-wrapper mask-' + mask;
+        });
+      });
+    });
+
+    // Surface Color Controls
+    const bgButtons = document.querySelectorAll('[data-bg]');
+    bgButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        bgButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const color = btn.dataset.bg;
+
+        maskWrappers.forEach(wrap => {
+          wrap.style.backgroundColor = color;
+        });
+      });
+    });
+
+    // Safe zone guides toggle
+    const guideToggle = document.getElementById('toggle-guides');
+    guideToggle.addEventListener('click', () => {
+      guideToggle.classList.toggle('active');
+      document.body.classList.toggle('show-guides');
+    });
+
+    // Toast feedback
+    function showToast(msg) {
+      const toast = document.getElementById('copy-toast');
+      toast.innerText = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    // Copy SVG
+    function copySvg(svgId) {
+      const svgEl = document.getElementById(svgId);
+      const serializer = new XMLSerializer();
+      const svgStr = serializer.serializeToString(svgEl);
+      navigator.clipboard.writeText(svgStr).then(() => {
+        showToast('SVG XML copied to clipboard');
+      });
+    }
+
+    // Android Vector Drawables map
+    const vectorDrawables = {
+      'opt-1': `<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#B6F36B"
+        android:pathData="M34,24 L42,24 L42,45 L66,45 L66,24 L84,24 L84,74 L74,84 L66,84 L66,63 L42,63 L42,84 L24,84 L24,34 Z" />
+</vector>`,
+      'opt-2': `<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#B6F36B" android:pathData="M32,24 L40,24 A8,8 0 0,1 48,32 L48,76 A8,8 0 0,1 40,84 L32,84 A8,8 0 0,1 24,76 L24,32 A8,8 0 0,1 32,24 Z" />
+    <path android:fillColor="#B6F36B" android:pathData="M76,24 L84,24 A8,8 0 0,1 92,32 L92,76 A8,8 0 0,1 84,84 L76,84 A8,8 0 0,1 68,76 L68,32 A8,8 0 0,1 76,24 Z" />
+    <path android:fillColor="#9D8CFF" android:pathData="M54,37 A17,17 0 1,1 54,71 A17,17 0 1,1 54,37 Z" />
+</vector>`,
+      'opt-3': `<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#B6F36B" android:pathData="M24,28 L40,28 L51,54 L40,80 L24,80 L35,54 Z" />
+    <path android:fillColor="#9D8CFF" android:pathData="M84,28 L68,28 L57,54 L68,80 L84,80 L73,54 Z" />
+</vector>`,
+      'opt-4': `<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#B6F36B" android:pathData="M36,26 L52,26 L47,48 L65,48 L70,26 L86,26 L74,82 L58,82 L63,60 L45,60 L40,82 L24,82 Z" />
+</vector>`,
+      'opt-5': `<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#B6F36B" android:pathData="M50,22 L27,35 L27,73 L50,86 L50,62 L40,54 L50,46 Z" />
+    <path android:fillColor="#B6F36B" android:pathData="M58,22 L81,35 L81,73 L58,86 L58,62 L68,54 L58,46 Z" />
+    <path android:fillColor="#9D8CFF" android:pathData="M54,46 L62,54 L54,62 L46,54 Z" />
+</vector>`
+    };
+
+    function copyVectorDrawable(optKey) {
+      const xml = vectorDrawables[optKey];
+      if (xml) {
+        navigator.clipboard.writeText(xml).then(() => {
+          showToast('Android Vector Drawable XML copied');
+        });
+      }
+    }
+  </script>
+</body>
+</html>

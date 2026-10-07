@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108" fill="none">
+  <!-- Option 5: The Hexagon Prism (Faceted Geometric Hexagon 'H') -->
+  <!-- Left Facet -->
+  <path d="M 50 22 L 27 35 L 27 73 L 50 86 L 50 62 L 40 54 L 50 46 Z" fill="#B6F36B" />
+
+  <!-- Right Facet -->
+  <path d="M 58 22 L 81 35 L 81 73 L 58 86 L 58 62 L 68 54 L 58 46 Z" fill="#B6F36B" />
+
+  <!-- Center Diamond Connector -->
+  <polygon points="54,46 62,54 54,62 46,54" fill="#9D8CFF" />
+</svg>

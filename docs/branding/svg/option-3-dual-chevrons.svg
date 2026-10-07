@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108" fill="none">
+  <!-- Option 3: The Dual Chevrons (Opposing Solid Angles) -->
+  <!-- Left Chevron: Operator Command Stream (Electric Lime) -->
+  <path d="M 24 28 L 40 28 L 51 54 L 40 80 L 24 80 L 35 54 Z" fill="#B6F36B" />
+
+  <!-- Right Chevron: Agent Response Stream (Electric Violet) -->
+  <path d="M 84 28 L 68 28 L 57 54 L 68 80 L 84 80 L 73 54 Z" fill="#9D8CFF" />
+</svg>

@@ -30,6 +30,10 @@ class DefaultPairingPayloadParser(
             .getOrNull()
             ?: throw PairingPayloadParseException("Invalid pairing URI")
 
+        if (uri.scheme == LEGACY_SCHEME) {
+            throw PairingPayloadParseException("Legacy agent-server pairing payload is not supported; app update required")
+        }
+
         if (uri.scheme != SCHEME) {
             throw PairingPayloadParseException("Invalid pairing URI scheme")
         }
@@ -129,9 +133,10 @@ class DefaultPairingPayloadParser(
         value.startsWith("http://") || value.startsWith("https://")
 
     companion object {
-        private const val SCHEME = "harold"
-        private const val HOST = "pair"
-        private const val VERSION = "1"
+        const val SCHEME = "harold"
+        const val HOST = "pair"
+        const val LEGACY_SCHEME = "agent-server"
+        const val VERSION = "1"
         private val CODE_PATTERN = Regex("^[A-Z0-9]{3}-[A-Z0-9]{3}$")
     }
 }
