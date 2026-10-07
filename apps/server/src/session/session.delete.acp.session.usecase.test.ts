@@ -16,10 +16,7 @@ describe("makeDeleteAcpSession", () => {
     const forgotten: Array<{ agentId: typeof agentId; sessionId: string }> = []
 
     const deleteAcpSession = makeDeleteAcpSession({
-      archivedAcpSessions: {
-        isArchived: () => false,
-        archive: () => undefined,
-      },
+      archiveAcpSession: () => undefined,
       commandsCache: {
         remember: () => undefined,
         get: () => undefined,
@@ -52,10 +49,7 @@ describe("makeDeleteAcpSession", () => {
   test("skips session/close when the agent does not advertise it", async () => {
     let closed = false
     const deleteAcpSession = makeDeleteAcpSession({
-      archivedAcpSessions: {
-        isArchived: () => false,
-        archive: () => undefined,
-      },
+      archiveAcpSession: () => undefined,
       commandsCache: {
         remember: () => undefined,
         get: () => undefined,
@@ -78,10 +72,7 @@ describe("makeDeleteAcpSession", () => {
   test("still deletes when the supervisor fails to become ready", async () => {
     let closed = false
     const deleteAcpSession = makeDeleteAcpSession({
-      archivedAcpSessions: {
-        isArchived: () => false,
-        archive: () => undefined,
-      },
+      archiveAcpSession: () => undefined,
       commandsCache: {
         remember: () => undefined,
         get: () => undefined,

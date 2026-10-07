@@ -4,6 +4,7 @@ import { Config } from "server/config"
 import { openDatabase } from "server/database"
 import { assembleDeviceSlice } from "server/device"
 import { makeRuntimeSettingsFileStore, seedDefaultsFromConfig } from "server/runtime-settings"
+import { makeListAgentSettingsRows } from "server/agent-settings/sqlite-adapters"
 import { composeStatusSummaryPorts } from "server/status-summary"
 import { renderStatusSummary } from "./status.render"
 
@@ -71,7 +72,14 @@ export const readRunningView = (config: Config): RunningView => {
       dataDir: config.dataDir,
       seedDefaults: seedDefaultsFromConfig(config),
     })
-    const getStatusSummary = makeGetStatusSummary(composeStatusSummaryPorts({ database, config }))
+    const getStatusSummary = makeGetStatusSummary(
+      composeStatusSummaryPorts({
+        config,
+        database,
+        getRuntimeSettings: settingsStore.get,
+        listAgentSettingsRows: makeListAgentSettingsRows(database),
+      }),
+    )
     const devices = assembleDeviceSlice({
       database,
       loopbackEndpoint: `http://${config.host}:${config.port}`,

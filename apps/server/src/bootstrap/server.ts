@@ -21,9 +21,10 @@ import { assembleRuntimeSettingsSlice } from "../runtime-settings/runtime-settin
 import { AppliedRuntimeSettingsHolder } from "../runtime-settings/applied.runtime.settings"
 import { assembleWorkspaceSlice } from "../workspace/workspace.assembly"
 import { registerFilesystemBrowseRoutes } from "../filesystem/filesystem.routes"
+import { makeCanonicalizePath } from "../filesystem/filesystem.node.adapters"
 import { assembleAttachmentsSlice } from "../attachments/attachments.assembly"
 import { registerSessionRoutes } from "../session/session.routes"
-import { createArchivedAcpSessionsStore } from "../session/archived.acp.sessions.store"
+import { makeArchivedAcpSessionsStore } from "../session/session.archived.acp.sessions.sqlite.adapters"
 import { assembleDeviceSlice } from "../device/device.assembly"
 import { createRuntimeStatusService } from "../runtime/status.service"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
@@ -32,7 +33,7 @@ import { createAuthBroker, AuthBroker } from "../agent/auth/broker"
 import { registerAgentAuthRoutes } from "../agent/auth/routes"
 import { createSupervisorAuthHooks } from "../agent/auth/supervisor.hooks"
 import { createAcpSupervisor } from "../acp/supervisor/supervisor"
-import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
+import { AcpSupervisor } from "../acp/supervisor/supervisor"
 import {
   inventoryAdvertisesEmbeddedContext,
   inventoryAdvertisesPromptImage,
@@ -204,7 +205,7 @@ export const createServer = async ({
       return broker
     },
   })
-  const archivedAcpSessions = createArchivedAcpSessionsStore(database)
+  const archivedAcpSessions = makeArchivedAcpSessionsStore(database)
   const getAllowedRoots = () => runtimeSettingsStore.get().allowedRoots
 
   const sessionHubRef: { current: SessionHub | null } = { current: null }
@@ -280,8 +281,10 @@ export const createServer = async ({
     start: startAcpAgentFn ?? ((agentId) => acpSupervisor.start(agentId)),
   })
 
+  const canonicalizePath = makeCanonicalizePath()
   const workspace = assembleWorkspaceSlice({
     database,
+    canonicalizePath,
     getAllowedRoots,
     listLiveByWorkspaceRoot: acpSupervisor.listLiveByWorkspaceRoot,
     closeWorkspaceSessions: acpSupervisor.closeWorkspaceSessions,
@@ -363,6 +366,7 @@ export const createServer = async ({
   registerAgentAuthRoutes(app, authBroker, agentExists)
   const runtimeSettings = assembleRuntimeSettingsSlice({
     store: runtimeSettingsStore,
+    canonicalizePath,
     listAllWorkspaces: workspace.listAll,
     deleteWorkspace: workspace.deleteWorkspace,
     onLogLevelChanged: (nextLevel) => {
@@ -379,7 +383,8 @@ export const createServer = async ({
     ensureSupervisorReady,
     cwdCache,
     commandsCache,
-    archivedAcpSessions,
+    isArchivedAcpSession: archivedAcpSessions.isArchived,
+    archiveAcpSession: archivedAcpSessions.archive,
     authBroker,
   })
 

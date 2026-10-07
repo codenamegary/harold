@@ -15,7 +15,7 @@ const startCommand = (
   overrides: Partial<SetupCommandDeps> = {},
 ): { lines: string[]; done: Promise<number | undefined> } => {
   const lines: string[] = []
-  process.exitCode = undefined
+  process.exitCode = 0
 
   const done = makeSetupCommand({
     prompts: silentPrompts,

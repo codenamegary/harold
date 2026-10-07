@@ -14,7 +14,7 @@
       "drizzle-orm": "^0.45.2",
       "typescript": "~6.0.2",
       "fastify": "^5.2.1",
-      "oxlint": "^1.76.0"
+      "oxlint": "^1.87.0"
     }
   },
   "scripts": {
@@ -23,9 +23,10 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "bun run --filter '*' lint",
+    "lint:boundaries": "depcruise apps/server/src packages/core/src apps/cli/src",
     "test": "bun run --filter '*' test",
     "typecheck": "bun run --filter '*' typecheck",
-    "check": "bun run lint && bun run typecheck && bun run test",
+    "check": "bun run lint && bun run lint:boundaries && bun run typecheck && bun run test && bun test scripts",
     "test:coverage": "bun run --filter server test:coverage",
     "test:smoke": "HAROLD_RUN_SMOKE=1 bun --filter server test:smoke",
     "db:generate": "bun run --filter server db:generate",
@@ -34,10 +35,13 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "@swc/core": "^1.16.2",
+    "dependency-cruiser": "^18.4.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.5.1",
+    "oxc-parser": "^0.150.0",
     "oxfmt": "^0.68.0",
     "oxlint": "catalog:",
-    "oxlint-tsgolint": "^7.0.2001"
+    "oxlint-tsgolint": "^7.0.2003"
   }
 }

@@ -1,6 +1,6 @@
 import { AgentId } from "contracts/http/agent-settings"
 import { AgentProfile, resolveAgentProfile } from "../agent.profile"
-import { AgentSettingsReader } from "./supervisor.ports"
+import { AgentSettingsReader } from "./models"
 
 export type ResolvedStartConfig =
   | { ok: false; reason: string }

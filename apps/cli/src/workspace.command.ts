@@ -44,6 +44,7 @@ const openWorkspaceCommandContext = (): WorkspaceCommandContext => {
   })
   const slice = assembleWorkspaceSlice({
     database,
+    canonicalizePath: makeCanonicalizePath(),
     getAllowedRoots: () => runtimeSettingsStore.get().allowedRoots,
     listLiveByWorkspaceRoot: () => [],
     closeWorkspaceSessions: async () => ({ failures: [] }),

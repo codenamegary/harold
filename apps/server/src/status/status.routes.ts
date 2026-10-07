@@ -1,5 +1,5 @@
 import { FastifyInstance } from "fastify"
-import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
+import { AcpSupervisor } from "../acp/supervisor/supervisor"
 import { Config } from "../config/config"
 import { Runtime } from "../runtime/runtime"
 import { composeServerGetStatus } from "./status.adapters"

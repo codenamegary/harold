@@ -1,9 +1,21 @@
 import { AgentId } from "contracts/http/agent-settings"
 import { AvailableCommandsUpdate } from "./commands.available"
-import { CommandsCache } from "../session.ports"
 
-const cacheKey = (agentId: AgentId, sessionId: string): string =>
-  `${agentId}:${sessionId}`
+/**
+ * In-memory per-session commands cache owned by the hub. Not a port: the hub
+ * creates it and hands it to the routes that read and update it.
+ */
+export type CommandsCache = {
+  remember: (params: {
+    agentId: AgentId
+    sessionId: string
+    update: AvailableCommandsUpdate
+  }) => void
+  get: (params: { agentId: AgentId; sessionId: string }) => AvailableCommandsUpdate | undefined
+  forget: (params: { agentId: AgentId; sessionId: string }) => void
+}
+
+const cacheKey = (agentId: AgentId, sessionId: string): string => `${agentId}:${sessionId}`
 
 export const createCommandsCache = (): CommandsCache => {
   const byKey = new Map<string, AvailableCommandsUpdate>()

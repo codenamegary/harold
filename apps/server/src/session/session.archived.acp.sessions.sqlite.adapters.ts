@@ -1,17 +1,17 @@
 import { AgentIdSchema } from "contracts/http/agent-settings"
 import { AgentDatabase } from "../persistence/database"
 import { archivedAcpSessions } from "../persistence/schema/archived.acp.sessions"
-import {
-  ArchivedAcpSessionKey,
-  ArchivedAcpSessionsStore,
-} from "./session.ports"
+import { ArchiveAcpSession, ArchivedAcpSessionKey, IsArchivedAcpSession } from "./session.ports"
+
+export type ArchivedAcpSessionsStore = Readonly<{
+  isArchived: IsArchivedAcpSession
+  archive: ArchiveAcpSession
+}>
 
 const archiveKey = (params: ArchivedAcpSessionKey): string =>
   `${params.agentId}\0${params.sessionId}`
 
-export const createArchivedAcpSessionsStore = (
-  database: AgentDatabase,
-): ArchivedAcpSessionsStore => {
+export const makeArchivedAcpSessionsStore = (database: AgentDatabase): ArchivedAcpSessionsStore => {
   const keys = new Set(
     database.db
       .select()

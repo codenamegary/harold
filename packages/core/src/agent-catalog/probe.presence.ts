@@ -1,5 +1,5 @@
 import { AgentId } from "contracts/http/agent-settings"
-import { PresenceProbeContext, PresenceProbeResult } from "./agent.profile.override"
+import { PresenceProbeContext, PresenceProbeResult } from "./catalog.ports"
 import { CatalogSpawn, catalogAgentsById } from "./generated/catalog.agents.generated"
 import { productAgentOverridesById } from "./overrides/product.overrides"
 
