@@ -14,19 +14,23 @@ const runCommand = async (
   const errLines: string[] = []
   const originalLog = console.log
   const originalErr = console.error
+  const previousExitCode = process.exitCode
   console.log = (...values: unknown[]) => {
     lines.push(values.join(" "))
   }
   console.error = (...values: unknown[]) => {
     errLines.push(values.join(" "))
   }
+  process.exitCode = 0
   try {
     await makePairCommand().parseAsync([...args], { from: "user" })
   } finally {
     console.log = originalLog
     console.error = originalErr
   }
-  return { output: lines.join("\n"), errOutput: errLines.join("\n"), exitCode: process.exitCode }
+  const exitCode = process.exitCode
+  process.exitCode = previousExitCode
+  return { output: lines.join("\n"), errOutput: errLines.join("\n"), exitCode }
 }
 
 describe("harold pair command wiring", () => {
@@ -52,11 +56,9 @@ describe("harold pair command wiring", () => {
   })
 
   test("--no-wait --json persists a pairing code", async () => {
-    process.exitCode = undefined
-
     const { output, exitCode } = await runCommand(["--no-wait", "--json"])
 
-    expect(exitCode).toBeUndefined()
+    expect(exitCode).toBe(0)
 
     const pairing = JSON.parse(output) as {
       id: string
@@ -86,8 +88,6 @@ describe("harold pair command wiring", () => {
   })
 
   test("rejects an unknown --endpoint value", async () => {
-    process.exitCode = undefined
-
     const { errOutput, exitCode } = await runCommand(["--endpoint", "bad", "--no-wait"])
 
     expect(exitCode).toBe(1)
