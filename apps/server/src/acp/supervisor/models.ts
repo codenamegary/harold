@@ -1,11 +1,22 @@
-import { AgentId } from "contracts/http/agent-settings"
+import { AgentId, AgentSpawnSnapshot } from "contracts/http/agent-settings"
 import { SessionConfig } from "contracts/http/config.options"
 
 /**
- * Data shapes and result unions for the ACP supervisor. Public capability
- * ports live in `./supervisor.ports`; the process driver adapter lives in
- * `./supervisor.process.adapters`.
+ * Data shapes and dependency records for the ACP supervisor. Atomic function
+ * ports live in `./supervisor.ports`, the public capability record in
+ * `./supervisor`, and the process driver adapter in `./supervisor.process.adapters`.
  */
+
+/** Narrow read dependency over the agent settings slice. */
+export type AgentSettingsReader = {
+  list: () => ReadonlyArray<{
+    id: AgentId
+    enabled: boolean
+    path: string | null
+    args: string[]
+  }>
+  getSpawnSnapshot: (agentId: AgentId) => AgentSpawnSnapshot | null
+}
 
 export type AcpSupervisorState = "stopped" | "starting" | "ready" | "error"
 

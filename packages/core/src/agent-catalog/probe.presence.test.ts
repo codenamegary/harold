@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { WhichFn } from "../agent-settings/resolve-agent-path"
-import { PresenceProbeContext } from "./agent.profile.override"
+import { PresenceProbeContext } from "./catalog.ports"
 import { probePresence } from "./probe.presence"
 
 const createCtx = (

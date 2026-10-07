@@ -3,6 +3,7 @@ import { CreateWorkspaceBody } from "contracts/http/workspace"
 import { makeDeleteWorkspace } from "core/workspace/delete.usecase"
 import { makeRegisterWorkspace, RegisterWorkspaceResult } from "core/workspace/register.usecase"
 import {
+  CanonicalizePath,
   CloseWorkspaceSessions,
   DeleteWorkspace,
   FindWorkspaceById,
@@ -12,7 +13,6 @@ import {
   UnbindWorkspaceSessions,
 } from "core/workspace/ports"
 import { AgentDatabase } from "../persistence/database"
-import { makeCanonicalizePath } from "../filesystem/filesystem.node.adapters"
 import { registerWorkspaceRoutes } from "./workspace.routes"
 import {
   makeDeleteWorkspaceRow,
@@ -25,6 +25,7 @@ import {
 
 export type AssembleWorkspaceSliceDeps = Readonly<{
   database: AgentDatabase
+  canonicalizePath: CanonicalizePath
   getAllowedRoots: GetAllowedRoots
   listLiveByWorkspaceRoot: ListLiveByWorkspaceRoot
   closeWorkspaceSessions: CloseWorkspaceSessions
@@ -47,7 +48,7 @@ export const assembleWorkspaceSlice = (deps: AssembleWorkspaceSliceDeps): Worksp
   const updateWorkspaceName = makeUpdateWorkspaceName(deps.database)
   const deleteWorkspaceRow = makeDeleteWorkspaceRow(deps.database)
   const registerWorkspace = makeRegisterWorkspace({
-    canonicalizePath: makeCanonicalizePath(),
+    canonicalizePath: deps.canonicalizePath,
     getAllowedRoots: deps.getAllowedRoots,
     insertWorkspace,
   })

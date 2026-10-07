@@ -4,7 +4,6 @@ import os from "node:os"
 import path from "node:path"
 import YAML from "yaml"
 import { makeCreatePairingCode } from "core/device/create.pairing.code.usecase"
-import { makeCanonicalizePath } from "../filesystem/filesystem.node.adapters"
 import { makeRuntimeSettingsFileStore, settingsFileName } from "./runtime-settings.file.adapters"
 import { makeUpdateRuntimeSettings } from "./runtime-settings.update.usecase"
 
@@ -30,7 +29,9 @@ const makeConnectUpdateUseCase = (dataDir: string) => {
   return makeUpdateRuntimeSettings({
     getSettings: store.get,
     saveSettings: store.save,
-    canonicalizePath: makeCanonicalizePath(),
+    canonicalizePath: () => {
+      throw new Error("connect does not manage allowed roots")
+    },
     listAllWorkspaces: () => {
       throw new Error("connect does not manage allowed roots")
     },

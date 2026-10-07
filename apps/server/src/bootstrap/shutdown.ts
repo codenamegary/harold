@@ -2,7 +2,7 @@ import { FastifyInstance } from "fastify"
 import { Config } from "../config/config"
 import { AgentDatabase } from "../persistence/database"
 import { RuntimeStatusService } from "../runtime/status.service"
-import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
+import { AcpSupervisor } from "../acp/supervisor/supervisor"
 import { DaemonStateWriter } from "../status/daemon.state.writer"
 
 export const listen = async (

@@ -194,6 +194,7 @@ export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): P
     agentCli.ensureCatalogRows()
     const workspaceSlice = assembleWorkspaceSlice({
       database,
+      canonicalizePath: makeCanonicalizePath(),
       getAllowedRoots: () => settingsStore.get().allowedRoots,
       listLiveByWorkspaceRoot: () => [],
       closeWorkspaceSessions: async () => ({ failures: [] }),

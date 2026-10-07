@@ -5,17 +5,24 @@ import { SessionConfig } from "contracts/http/config.options"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
 import { AUTH_GATED_PROMPT_MESSAGE } from "../../acp/auth.required"
 import { parseAvailableCommandsUpdate } from "./commands.available"
-import { createCommandsCache } from "./commands.cache"
+import { CommandsCache, createCommandsCache } from "./commands.cache"
 import { makePromptAuthGate, PromptAuthGate } from "../session.prompt.auth.gate.usecase"
 import {
-  CommandsCache,
-  SessionCwdCache,
   SessionHubCancelSession,
   SessionHubLoadSession,
   SessionHubPromptSession,
 } from "../session.ports"
 
 export type SessionKey = `${AgentId}:${string}`
+
+/**
+ * In-memory per-session cwd cache owned by the hub. Not a port: the hub
+ * creates it and hands it to the routes that read and update it.
+ */
+export type SessionCwdCache = {
+  remember: (params: { agentId: AgentId; sessionId: string; cwd: string }) => void
+  get: (params: { agentId: AgentId; sessionId: string }) => string | undefined
+}
 
 export const sessionKey = (agentId: AgentId, sessionId: string): SessionKey =>
   `${agentId}:${sessionId}`

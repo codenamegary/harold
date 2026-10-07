@@ -1,5 +1,4 @@
-import { WhichFn } from "../agent-settings/resolve-agent-path"
-import { PresenceProbe } from "./catalog.ports"
+import { PresenceProbe, PresenceProbeContext, PresenceProbeResult } from "./catalog.ports"
 
 export type AcpClientCapabilities = {
   readonly fs: {
@@ -10,16 +9,6 @@ export type AcpClientCapabilities = {
   readonly _meta?: {
     readonly parameterizedModelPicker?: boolean
   }
-}
-
-export type PresenceProbeContext = {
-  readonly which: WhichFn
-  readonly env: Readonly<Record<string, string | undefined>>
-}
-
-export type PresenceProbeResult = {
-  readonly present: boolean
-  readonly path: string | null
 }
 
 export type AgentProfileOverride = {

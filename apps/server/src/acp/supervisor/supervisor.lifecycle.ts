@@ -11,19 +11,19 @@ import {
 } from "../client/register.handlers"
 import { SessionBindingRegistry } from "../client/session.binding.registry"
 import { createJsonRpcTransport, JsonRpcTransport } from "../transport/json.rpc.transport"
-import { spawnAgentProcess } from "./supervisor.process.adapters"
 import { sanitizeFailureReason } from "../sanitize.failure.reason"
 import {
   AcpAgentRuntimeState,
   AcpStartResult,
   AcpSupervisorState,
+  AgentSettingsReader,
   DEFAULT_ACP_RESTART_BACKOFF_MS,
   RequestExtensionRpcFn,
   RequestPermissionFn,
   SessionUpdateHandler,
   SpawnedAgentProcess,
 } from "./models"
-import { AgentSettingsReader, SpawnAgentProcessFn } from "./supervisor.ports"
+import { SpawnAgentProcessFn } from "./supervisor.ports"
 import { buildAdapterAuthContext } from "./supervisor.auth.context"
 import { resolveStartConfig } from "./supervisor.resolve.start.config"
 
@@ -52,7 +52,7 @@ export type CreateSupervisorLifecycleParams = {
   onSupervisorReady?: () => void | Promise<void>
   restartBackoffMs?: ReadonlyArray<number>
   sleepFn?: (ms: number) => Promise<void>
-  spawnAgentProcessFn?: SpawnAgentProcessFn
+  spawnAgentProcessFn: SpawnAgentProcessFn
   createTransportFn?: (process: SpawnedAgentProcess) => JsonRpcTransport
   authHooks?: SupervisorAuthHooks
 }
@@ -107,7 +107,7 @@ export const createSupervisorLifecycle = ({
   onSupervisorReady = () => undefined,
   restartBackoffMs = DEFAULT_ACP_RESTART_BACKOFF_MS,
   sleepFn = defaultSleep,
-  spawnAgentProcessFn = spawnAgentProcess,
+  spawnAgentProcessFn,
   createTransportFn = (process) =>
     createJsonRpcTransport({
       stdin: process.stdin,

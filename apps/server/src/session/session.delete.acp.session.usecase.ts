@@ -1,9 +1,9 @@
 import { AgentId } from "contracts/http/agent-settings"
+import { CommandsCache } from "./hub/commands.cache"
 import {
   AdvertisesSessionClose,
-  ArchivedAcpSessionsStore,
+  ArchiveAcpSession,
   CloseAcpSession,
-  CommandsCache,
   EnsureSupervisorReady,
 } from "./session.ports"
 
@@ -15,7 +15,7 @@ export type DeleteAcpSessionInput = Readonly<{
 }>
 
 export type DeleteAcpSessionDeps = Readonly<{
-  archivedAcpSessions: ArchivedAcpSessionsStore
+  archiveAcpSession: ArchiveAcpSession
   commandsCache: CommandsCache
   ensureSupervisorReady: EnsureSupervisorReady
   advertisesSessionClose: AdvertisesSessionClose
@@ -27,7 +27,7 @@ export type DeleteAcpSession = (input: DeleteAcpSessionInput) => Promise<DeleteA
 export const makeDeleteAcpSession =
   (deps: DeleteAcpSessionDeps): DeleteAcpSession =>
   async (input) => {
-    deps.archivedAcpSessions.archive({
+    deps.archiveAcpSession({
       agentId: input.agentId,
       sessionId: input.sessionId,
     })

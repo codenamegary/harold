@@ -13,17 +13,18 @@ import {
   SessionCollectionSchema,
 } from "contracts/http/session"
 import { FastifyInstance } from "fastify"
-import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
+import { AcpSupervisor } from "../acp/supervisor/supervisor"
 import { AuthBroker } from "../agent/auth/broker"
+import { CommandsCache } from "./hub/commands.cache"
+import { SessionCwdCache } from "./hub/hub"
 import { agentAdvertisesSessionClose, agentAdvertisesSessionList } from "./session.acp.ready"
 import { makeDeleteAcpSession } from "./session.delete.acp.session.usecase"
 import { makeResolveAgentGate, AgentGateError } from "./session.resolve.agent.gate.usecase"
 import {
-  ArchivedAcpSessionsStore,
-  CommandsCache,
+  ArchiveAcpSession,
   EnsureSupervisorReady,
   FindAgentSettings,
-  SessionCwdCache,
+  IsArchivedAcpSession,
 } from "./session.ports"
 import {
   buildAcpUnavailableProblem,
@@ -50,7 +51,8 @@ export type SessionRouteDeps = Readonly<{
   ensureSupervisorReady: EnsureSupervisorReady
   cwdCache: SessionCwdCache
   commandsCache: CommandsCache
-  archivedAcpSessions: ArchivedAcpSessionsStore
+  isArchivedAcpSession: IsArchivedAcpSession
+  archiveAcpSession: ArchiveAcpSession
   authBroker?: AuthBroker
 }>
 
@@ -59,7 +61,7 @@ export const registerSessionRoutes = (app: FastifyInstance, deps: SessionRouteDe
     findAgentSettings: deps.findAgentSettings,
   })
   const deleteAcpSession = makeDeleteAcpSession({
-    archivedAcpSessions: deps.archivedAcpSessions,
+    archiveAcpSession: deps.archiveAcpSession,
     commandsCache: deps.commandsCache,
     ensureSupervisorReady: deps.ensureSupervisorReady,
     advertisesSessionClose: (agentId) => agentAdvertisesSessionClose(deps.acpSupervisor, agentId),
@@ -156,7 +158,7 @@ export const registerSessionRoutes = (app: FastifyInstance, deps: SessionRouteDe
 
     const visible = listed.sessions.filter(
       (session) =>
-        !deps.archivedAcpSessions.isArchived({
+        !deps.isArchivedAcpSession({
           agentId: session.agentId,
           sessionId: session.sessionId,
         }),

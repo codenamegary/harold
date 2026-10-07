@@ -1,11 +1,19 @@
 import { describe, expect, test } from "bun:test"
 import { writeFileSync } from "node:fs"
 import path from "node:path"
+import { AgentDatabase } from "../persistence/database"
 import { Config } from "../config/config"
-import { makeInsertAgentSettingsRow } from "../agent-settings/agent.settings.sqlite.adapters"
+import {
+  makeInsertAgentSettingsRow,
+  makeListAgentSettingsRows,
+} from "../agent-settings/agent.settings.sqlite.adapters"
 import { makeInsertWorkspace } from "../workspace/workspace.sqlite.adapters"
+import {
+  makeRuntimeSettingsFileStore,
+  seedDefaultsFromConfig,
+} from "../runtime-settings/runtime-settings.file.adapters"
 import { bootTestDatabase } from "../test-support/test.harness"
-import { composeStatusSummaryPorts } from "./status.summary.adapters"
+import { composeStatusSummaryPorts } from "./status.summary.assembly"
 
 const makeConfig = (dataDir: string): Config => ({
   host: "127.0.0.1",
@@ -13,14 +21,28 @@ const makeConfig = (dataDir: string): Config => ({
   dataDir,
 })
 
+const composePorts = (
+  database: AgentDatabase,
+  config: Config,
+  env: Readonly<Record<string, string | undefined>>,
+) => {
+  const store = makeRuntimeSettingsFileStore({
+    dataDir: config.dataDir,
+    seedDefaults: seedDefaultsFromConfig(config),
+  })
+  return composeStatusSummaryPorts({
+    config,
+    database,
+    getRuntimeSettings: store.get,
+    listAgentSettingsRows: makeListAgentSettingsRows(database),
+    env,
+  })
+}
+
 describe("composeStatusSummaryPorts", () => {
   test("reports the data dir, applied local api, and seeded advertised endpoint", async () => {
     const { database, dataDir } = await bootTestDatabase()
-    const ports = composeStatusSummaryPorts({
-      database,
-      config: makeConfig(dataDir),
-      env: {},
-    })
+    const ports = composePorts(database, makeConfig(dataDir), {})
 
     expect(ports.getDataDir()).toBe(dataDir)
     expect(ports.getLocalApi()).toEqual({ host: "127.0.0.1", port: 3847 })
@@ -29,11 +51,7 @@ describe("composeStatusSummaryPorts", () => {
 
   test("prefers env bind overrides for the local api", async () => {
     const { database, dataDir } = await bootTestDatabase()
-    const ports = composeStatusSummaryPorts({
-      database,
-      config: makeConfig(dataDir),
-      env: { HAROLD_PORT: "9999" },
-    })
+    const ports = composePorts(database, makeConfig(dataDir), { HAROLD_PORT: "9999" })
 
     expect(ports.getLocalApi()).toEqual({ host: "127.0.0.1", port: 9999 })
   })
@@ -61,11 +79,7 @@ describe("composeStatusSummaryPorts", () => {
     insertWorkspace({ name: "One", canonicalPath: "/tmp/one" })
     insertWorkspace({ name: "Two", canonicalPath: "/tmp/two" })
 
-    const ports = composeStatusSummaryPorts({
-      database,
-      config: makeConfig(dataDir),
-      env: {},
-    })
+    const ports = composePorts(database, makeConfig(dataDir), {})
 
     expect(ports.getAgentSummary()).toEqual({ enabled: 1, needsAuth: null })
     expect(ports.getWorkspaceCount()).toBe(2)
@@ -87,11 +101,7 @@ describe("composeStatusSummaryPorts", () => {
       ].join("\n"),
     )
 
-    const ports = composeStatusSummaryPorts({
-      database,
-      config: makeConfig(dataDir),
-      env: {},
-    })
+    const ports = composePorts(database, makeConfig(dataDir), {})
 
     expect(ports.getAdvertisedEndpoint()).toEqual({
       url: "https://harold.example.com",

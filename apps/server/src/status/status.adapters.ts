@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify"
 import { makeGetStatus } from "core/status/get.usecase"
-import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
+import { AcpSupervisor } from "../acp/supervisor/supervisor"
 import { Config } from "../config/config"
 import { Runtime } from "../runtime/runtime"
 

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
 import { makeHaroldProgram } from "./harold.program"
 
 const originalExitCode = process.exitCode
@@ -11,26 +11,23 @@ describe("makeHaroldProgram", () => {
   test("running harold with no command prints help and does not serve", async () => {
     let served = false
     const output: string[] = []
-    const writeSpy = spyOn(process.stdout, "write").mockImplementation((chunk) => {
-      output.push(String(chunk))
-      return true
+
+    process.exitCode = 0
+
+    const program = makeHaroldProgram({
+      serve: {
+        runServer: async () => {
+          served = true
+        },
+      },
+    })
+    program.configureOutput({
+      writeOut: (chunk) => {
+        output.push(chunk)
+      },
     })
 
-    try {
-      process.exitCode = 0
-
-      const program = makeHaroldProgram({
-        serve: {
-          runServer: async () => {
-            served = true
-          },
-        },
-      })
-
-      await program.parseAsync([], { from: "user" })
-    } finally {
-      writeSpy.mockRestore()
-    }
+    await program.parseAsync([], { from: "user" })
 
     expect(served).toBe(false)
     expect(output.join("")).toContain("Usage: harold")

@@ -4,7 +4,7 @@ import {
   inventoryAdvertisesSessionClose,
   inventoryAdvertisesSessionList,
 } from "../acp/agent/inventory"
-import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
+import { AcpSupervisor } from "../acp/supervisor/supervisor"
 import { sanitizeAcpErrorMessage } from "../acp/sanitize.error"
 import {
   EnsureSupervisorReady,

@@ -4,7 +4,7 @@ import { assembleAgentSettingsSlice } from "../agent-settings/agent.settings.ass
 import { acceptTestExecutablePath } from "../test-support/test.app"
 import { bootTestApp } from "../test-support/test.harness"
 import { createAcpSupervisor } from "./supervisor/supervisor"
-import { AcpSupervisor } from "./supervisor/supervisor.ports"
+import { AcpSupervisor } from "./supervisor/supervisor"
 import { SpawnedAgentProcess } from "./supervisor/models"
 
 const authHeaders = (app: { deviceCredential: { credential: string } }) => ({

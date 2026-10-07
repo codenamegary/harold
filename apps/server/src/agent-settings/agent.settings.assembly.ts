@@ -2,9 +2,9 @@ import { FastifyInstance } from "fastify"
 import { AgentDatabase } from "../persistence/database"
 import { ensureCatalogAgentSettingsRows } from "../acp/catalog/catalog.sqlite.adapters"
 import { probePresence } from "core/agent-catalog/probe.presence"
-import { PresenceProbeContext } from "core/agent-catalog/profile.override"
+import { PresenceProbeContext } from "core/agent-catalog/ports"
 import { AuthBroker } from "../agent/auth/broker"
-import { AcpSupervisor } from "../acp/supervisor/supervisor.ports"
+import { AcpSupervisor } from "../acp/supervisor/supervisor"
 import {
   makeDeleteAgentSettingsRow,
   makeFindAgentSettingsRow,
