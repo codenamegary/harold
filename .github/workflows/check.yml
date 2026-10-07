@@ -34,7 +34,11 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Lint and typecheck
-        run: bun run lint && bun run typecheck
+        run: |
+          bun run lint
+          bun run lint:boundaries
+          bun run typecheck
+          bun test scripts
 
       - name: Test with coverage
         id: coverage

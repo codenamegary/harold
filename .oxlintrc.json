@@ -24,7 +24,11 @@
     // Lowercase blocks uppercase letters. Dot separators remain a review convention.
     "unicorn/filename-case": ["error", { "case": "lowercase" }],
     "prefer-const": "error",
-    "no-var": "error"
+    "no-var": "error",
+    "import/no-cycle": "error",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/switch-exhaustiveness-check": "error"
   },
   "overrides": [
     {
@@ -79,6 +83,139 @@
                   "**/*.repository.*"
                 ],
                 "message": "Projectors must not depend on persistence modules."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      // Ported from yuekbox, same typescript-dev-backend skill. Subpaths matter:
+      // `paths` alone misses `fastify/types/instance` and `drizzle-orm/sqlite-core`.
+      "files": ["**/*.usecase.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["fastify", "fastify/**"],
+                "message": "backend skill: use cases depend on ports, not transport"
+              },
+              {
+                "group": ["drizzle-orm", "drizzle-orm/**"],
+                "message": "backend skill: use cases depend on ports, not persistence"
+              },
+              {
+                "group": ["bun:sqlite"],
+                "message": "backend skill: use cases depend on ports, not persistence"
+              },
+              {
+                "regex": "^node:(fs|fs/promises|child_process|net|http|https|os|worker_threads|cluster|dgram|tls|vm|inspector|repl|v8|perf_hooks|stream|stream/promises|timers|timers/promises|zlib)(/|$)",
+                "message": "backend skill: use cases depend on ports, not runtime I/O"
+              },
+              {
+                "group": ["**/persistence/**"],
+                "message": "backend skill: use cases depend on ports, not database modules"
+              },
+              {
+                "group": ["**/*.adapters"],
+                "message": "backend skill: use cases depend on ports, not adapters"
+              },
+              {
+                "group": ["**/*.routes"],
+                "message": "backend skill: use cases depend on ports, not routes"
+              },
+              {
+                "group": ["**/*.assembly"],
+                "message": "backend skill: use cases depend on ports, not slice assemblies"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["**/*.models.ts", "**/*.ports.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["fastify", "fastify/**"],
+                "message": "backend skill: models and ports depend inward only"
+              },
+              {
+                "group": ["drizzle-orm", "drizzle-orm/**"],
+                "message": "backend skill: models and ports depend inward only"
+              },
+              {
+                "group": ["bun:sqlite"],
+                "message": "backend skill: models and ports depend inward only"
+              },
+              {
+                "regex": "^node:(fs|fs/promises|child_process|net|http|https|os|worker_threads|cluster|dgram|tls|vm|inspector|repl|v8|perf_hooks|stream|stream/promises|timers|timers/promises|zlib)(/|$)",
+                "message": "backend skill: models and ports depend inward only"
+              },
+              {
+                "group": ["**/persistence/**"],
+                "message": "backend skill: models and ports depend inward only"
+              },
+              {
+                "group": ["**/*.adapters"],
+                "message": "backend skill: models and ports depend inward only"
+              },
+              {
+                "group": ["**/*.routes"],
+                "message": "backend skill: models and ports depend inward only"
+              },
+              {
+                "group": ["**/*.assembly"],
+                "message": "backend skill: models and ports depend inward only"
+              },
+              {
+                "group": ["**/*.usecase"],
+                "message": "backend skill: models and ports depend inward only"
+              },
+              {
+                "group": ["**/*.worker"],
+                "message": "backend skill: models and ports depend inward only"
+              },
+              {
+                "group": ["**/*.slice"],
+                "message": "backend skill: models and ports depend inward only"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["**/*.test.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "jest",
+                "message": "backend skill: tests use bun:test and inline stubs"
+              },
+              {
+                "name": "vitest",
+                "message": "backend skill: tests use bun:test and inline stubs"
+              },
+              {
+                "name": "@jest/globals",
+                "message": "backend skill: tests use bun:test and inline stubs"
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["bun:test"],
+                "importNames": ["mock", "spyOn"],
+                "message": "backend skill: tests use inline stubs, not mocks"
               }
             ]
           }
