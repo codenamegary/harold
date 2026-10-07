@@ -1,10 +1,30 @@
+import { mkdtempSync, rmSync } from "node:fs"
 import { readFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import path from "node:path"
 import { beforeAll, describe, expect, test } from "bun:test"
 import { main as buildNpmPackage } from "./build.npm.cli"
 
 const cliRoot = path.join(import.meta.dir, "..", "..")
 const distDir = path.join(cliRoot, "dist")
+
+const readUntil = async (stream: ReadableStream<Uint8Array>, marker: string): Promise<string> => {
+  const reader = stream.getReader()
+  const decoder = new TextDecoder()
+  let text = ""
+
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) {
+      return text
+    }
+
+    text += decoder.decode(value, { stream: true })
+    if (text.includes(marker)) {
+      return text
+    }
+  }
+}
 
 describe("build.npm.cli", () => {
   beforeAll(async () => {
@@ -78,6 +98,51 @@ describe("build.npm.cli", () => {
 
       for (const command of ["serve", "setup", "pair", "connect"]) {
         expect(output).toContain(command)
+      }
+    })
+  })
+
+  describe("bundled database access", () => {
+    test("status opens the database without a drizzle folder next to the bundle", async () => {
+      const dataDir = mkdtempSync(path.join(tmpdir(), "harold-bundle-status-"))
+
+      try {
+        const proc = await Bun.$`bun ${path.join(distDir, "harold.js")} status`
+          .env({ ...process.env, HAROLD_DATA_DIR: dataDir })
+          .nothrow()
+          .quiet()
+
+        expect(proc.exitCode).toBe(0)
+        expect(proc.stdout.toString()).toContain(dataDir)
+      } finally {
+        rmSync(dataDir, { recursive: true, force: true })
+      }
+    })
+
+    test("serve reaches the running view and shuts down cleanly", async () => {
+      const dataDir = mkdtempSync(path.join(tmpdir(), "harold-bundle-serve-"))
+      const child = Bun.spawn({
+        cmd: [process.execPath, path.join(distDir, "harold.js"), "serve"],
+        env: { ...process.env, HAROLD_DATA_DIR: dataDir, HAROLD_PORT: "0" },
+        stdin: "ignore",
+        stdout: "pipe",
+        stderr: "pipe",
+      })
+
+      try {
+        const stdout = await readUntil(child.stdout, "Harold is running")
+
+        expect(stdout).toContain("Harold is running")
+
+        child.kill()
+        const exitCode = await child.exited
+
+        expect(exitCode).toBe(0)
+      } finally {
+        if (child.exitCode === null) {
+          child.kill()
+        }
+        rmSync(dataDir, { recursive: true, force: true })
       }
     })
   })
