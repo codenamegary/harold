@@ -23,7 +23,18 @@ export type OpenDatabaseOptions = {
 }
 
 const databaseFileName = "harold.db"
-const defaultMigrationsFolder = path.join(import.meta.dir, "drizzle")
+const builtinMigrationsFolder = path.join(import.meta.dir, "drizzle")
+
+let defaultMigrationsFolderOverride: string | undefined
+
+/**
+ * Composition roots that do not sit next to a `drizzle` folder, such as the
+ * bundled CLI, extract migrations and register the folder before any command
+ * opens a database. An explicit `migrationsFolder` option still wins.
+ */
+export const setDefaultMigrationsFolder = (folder: string): void => {
+  defaultMigrationsFolderOverride = folder
+}
 
 export const databasePath = (dataDir: string): string => path.join(dataDir, databaseFileName)
 
@@ -40,7 +51,8 @@ export const openDatabase = (options: OpenDatabaseOptions): AgentDatabase => {
 
   try {
     migrate(db, {
-      migrationsFolder: options.migrationsFolder ?? defaultMigrationsFolder,
+      migrationsFolder:
+        options.migrationsFolder ?? defaultMigrationsFolderOverride ?? builtinMigrationsFolder,
     })
   } catch (error: unknown) {
     sqlite.close()
