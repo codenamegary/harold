@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/codenamegary/harold/compare/v1.1.0...v1.2.0) (2026-10-07)
+
+
+### Features
+
+* **cli:** detach the daemon from setup and add stop ([#346](https://github.com/codenamegary/harold/issues/346)) ([5efcf33](https://github.com/codenamegary/harold/commit/5efcf33ed8576739f67d3b56a67d9c318c213c34))
+
+
+### Bug Fixes
+
+* **cli:** use embedded migrations for every bundled database open ([#347](https://github.com/codenamegary/harold/issues/347)) ([36f9f26](https://github.com/codenamegary/harold/commit/36f9f263bef78bb1a866b2aef63d2b8fc2dac036))
+
 ## [1.1.0](https://github.com/codenamegary/harold/compare/v1.0.3...v1.1.0) (2026-10-06)
 
 
