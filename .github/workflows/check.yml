@@ -66,25 +66,58 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload coverage to fs
-        if: >-
-          github.event_name == 'push' && github.ref == 'refs/heads/main' &&
-          always() && steps.coverage.outcome == 'success'
-        env:
-          FS_URL: ${{ secrets.FS_URL }}
-          FS_USER: ${{ secrets.FS_USER }}
-          FS_PASSWORD: ${{ secrets.FS_PASSWORD }}
+      # summary.json is the machine-readable entry point for anything that
+      # reads the artifact. Bump schemaVersion when its shape changes.
+      - name: Write coverage summary
+        if: always() && steps.coverage.outcome == 'success'
         run: |
-          stamp=$(date -u +%Y%m%d-%H%M%S)
-          zip_path="${stamp}.zip"
-          (cd coverage/html && zip -qr "../../${zip_path}" .)
-          export LOCAL_PATH="${zip_path}"
-          export REMOTE_PATH="harold/coverage"
-          bash .github/scripts/upload-to-fs.sh
-          base="${FS_URL:-https://fs.codenamegary.com}"
-          base="${base%/}"
+          read -r lf lh fnf fnh < <(awk -F: '
+            /^LF:/ { lf += $2 } /^LH:/ { lh += $2 }
+            /^FNF:/ { fnf += $2 } /^FNH:/ { fnh += $2 }
+            END { print lf + 0, lh + 0, fnf + 0, fnh + 0 }
+          ' coverage/server/lcov.info)
+          jq -n \
+            --arg commit "$GITHUB_SHA" \
+            --arg ref "$GITHUB_REF" \
+            --arg runId "$GITHUB_RUN_ID" \
+            --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson lf "$lf" --argjson lh "$lh" \
+            --argjson fnf "$fnf" --argjson fnh "$fnh" '
+            def metric($found; $hit):
+              { found: $found, hit: $hit,
+                pct: (if $found > 0 then ($hit * 10000 / $found | round) / 100 else null end) };
+            {
+              schemaVersion: 1,
+              commit: $commit,
+              ref: $ref,
+              runId: $runId,
+              generatedAt: $generatedAt,
+              packages: {
+                "apps/server": {
+                  lcov: "server/lcov.info",
+                  html: "html/server/index.html",
+                  lines: metric($lf; $lh),
+                  functions: metric($fnf; $fnh)
+                }
+              }
+            }' > coverage/summary.json
+          cat coverage/summary.json
+
+      - name: Upload coverage artifact
+        id: coverage-artifact
+        if: always() && steps.coverage.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 90
+
+      - name: Link coverage artifact
+        if: always() && steps.coverage-artifact.outcome == 'success'
+        env:
+          ARTIFACT_URL: ${{ steps.coverage-artifact.outputs.artifact-url }}
+        run: |
           {
-            echo "## Coverage on fs"
             echo ""
-            echo "Extracted report: [\`harold/coverage/${stamp}/\`](${base}/harold/coverage/${stamp}/)"
+            echo "Full report (lcov, HTML, summary.json): [coverage artifact](${ARTIFACT_URL})"
           } >> "$GITHUB_STEP_SUMMARY"
