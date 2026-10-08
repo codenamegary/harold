@@ -37,6 +37,25 @@ Setup starts the daemon detached and exits; `harold stop` stops it. Use
 Never run bare `npx harold`. That name belongs to an unrelated dormant
 package on npm.
 
+### Android app
+
+Download `harold-android-<version>.apk` from the latest
+[`harold-android-v*` release](https://github.com/codenamegary/harold/releases)
+and open it on the phone. Android asks once to allow installs from your
+browser. Later releases install over the top.
+
+Each release lists the APK SHA-256 and the signing certificate SHA-256. To
+check a download on a computer with the Android SDK:
+
+```sh
+sha256sum harold-android-<version>.apk
+apksigner verify --print-certs harold-android-<version>.apk
+```
+
+If you installed an older debug-signed build of `harold.android`, uninstall
+it once before the first release install. The signatures differ, so Android
+refuses to update it in place.
+
 ## Run from source
 
 Requires [Bun](https://bun.sh).
@@ -64,10 +83,18 @@ The Device API listens on `127.0.0.1:3847`. Every route except
 
 ## Releases
 
-release-please watches `apps/cli` only. Merges with `feat`/`fix` commits
-touching `apps/cli` open a release PR for `@codenamegary/harold`; merging
-it tags a release, publishes to npm with provenance (`publish-cli`), and
-smoke tests `npx @codenamegary/harold --version`.
+release-please watches two packages and opens a separate release PR for
+each.
+
+- `apps/cli`: `feat`/`fix` commits touching `apps/cli` open a release PR
+  for `@codenamegary/harold`. Merging it tags `vX.Y.Z`, publishes to npm
+  with provenance (`publish-cli`), and smoke tests
+  `npx @codenamegary/harold --version`.
+- `apps/android`: `feat`/`fix` commits touching `apps/android` open a
+  release PR that bumps `versionName`. Merging it tags
+  `harold-android-vX.Y.Z` and runs `release-android`, which builds the
+  signed APK and attaches it to the GitHub Release. To rebuild the APK for
+  an existing release, dispatch `release-android` with the tag.
 
 The npm bundle embeds the server, so a server-only change ships to npm
 only through a CLI release: make the commit touch `apps/cli` (or pair it

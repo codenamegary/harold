@@ -1,3 +1,4 @@
 {
-  "apps/cli": "1.2.0"
+  "apps/cli": "1.2.0",
+  "apps/android": "1.0.0"
 }

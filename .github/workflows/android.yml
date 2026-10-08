@@ -7,7 +7,6 @@ on:
     paths:
       - apps/android/**
       - .github/workflows/android.yml
-      - .github/scripts/upload-to-fs.sh
   pull_request:
     branches:
       - main
@@ -15,7 +14,6 @@ on:
     paths:
       - apps/android/**
       - .github/workflows/android.yml
-      - .github/scripts/upload-to-fs.sh
   workflow_dispatch:
 
 jobs:
@@ -51,24 +49,3 @@ jobs:
         with:
           name: test-results
           path: apps/android/app/build/test-results/testDebugUnitTest/
-
-      - name: Build debug APK
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: ./gradlew --no-daemon --stacktrace assembleDebug
-
-      - name: Upload debug APK to fs
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        working-directory: .
-        env:
-          FS_URL: ${{ secrets.FS_URL }}
-          FS_USER: ${{ secrets.FS_USER }}
-          FS_PASSWORD: ${{ secrets.FS_PASSWORD }}
-          FS_KEEP_RECENT: "10"
-        run: |
-          stamp=$(date -u +%Y%m%d-%H%M%S)
-          mkdir -p staged
-          cp apps/android/app/build/outputs/apk/debug/app-debug.apk \
-            "staged/${stamp}-debug-app.apk"
-          export LOCAL_PATH=staged
-          export REMOTE_PATH=harold/apk
-          bash .github/scripts/upload-to-fs.sh
