@@ -12,7 +12,8 @@
     "build:npm": "bun run src/publish/build.npm.cli.ts",
     "lint": "oxlint --deny-warnings",
     "typecheck": "tsc -b tsconfig.app.json --noEmit",
-    "test": "NODE_ENV=test bun test --parallel=4 --timeout 20000"
+    "test": "NODE_ENV=test bun test --parallel=4 --timeout 20000",
+    "test:coverage": "NODE_ENV=test bun test --parallel=4 --timeout 20000 --coverage --coverage-reporter=lcov --coverage-dir=../../coverage/cli"
   },
   "dependencies": {
     "@clack/prompts": "^1.8.1",

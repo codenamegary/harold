@@ -47,59 +47,67 @@ jobs:
       - name: Build HTML coverage report
         if: always() && steps.coverage.outcome == 'success'
         run: |
-          mkdir -p coverage/html/server
-          (
-            cd apps/server
-            genhtml ../../coverage/server/lcov.info \
-              --output-directory ../../coverage/html/server \
-              --title "apps/server" \
-              --legend \
-              --show-details
-          )
-          {
-            echo "## Test coverage"
-            echo ""
-            echo "### apps/server"
-            echo ""
-            echo '```'
-            lcov --summary coverage/server/lcov.info
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "## Test coverage" >> "$GITHUB_STEP_SUMMARY"
+          # lcov source paths are relative to each package, so genhtml runs from there.
+          for name in server cli; do
+            mkdir -p "coverage/html/$name"
+            (
+              cd "apps/$name"
+              genhtml "../../coverage/$name/lcov.info" \
+                --output-directory "../../coverage/html/$name" \
+                --title "apps/$name" \
+                --legend \
+                --show-details
+            )
+            {
+              echo ""
+              echo "### apps/$name"
+              echo ""
+              echo '```'
+              lcov --summary "coverage/$name/lcov.info"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
 
       # summary.json is the machine-readable entry point for anything that
       # reads the artifact. Bump schemaVersion when its shape changes.
       - name: Write coverage summary
         if: always() && steps.coverage.outcome == 'success'
         run: |
-          read -r lf lh fnf fnh < <(awk -F: '
-            /^LF:/ { lf += $2 } /^LH:/ { lh += $2 }
-            /^FNF:/ { fnf += $2 } /^FNH:/ { fnh += $2 }
-            END { print lf + 0, lh + 0, fnf + 0, fnh + 0 }
-          ' coverage/server/lcov.info)
+          packages='{}'
+          for name in server cli; do
+            read -r lf lh fnf fnh < <(awk -F: '
+              /^LF:/ { lf += $2 } /^LH:/ { lh += $2 }
+              /^FNF:/ { fnf += $2 } /^FNH:/ { fnh += $2 }
+              END { print lf + 0, lh + 0, fnf + 0, fnh + 0 }
+            ' "coverage/$name/lcov.info")
+            packages="$(jq -c \
+              --arg name "$name" \
+              --argjson lf "$lf" --argjson lh "$lh" \
+              --argjson fnf "$fnf" --argjson fnh "$fnh" '
+              def metric($found; $hit):
+                { found: $found, hit: $hit,
+                  pct: (if $found > 0 then ($hit * 10000 / $found | round) / 100 else null end) };
+              . + { "apps/\($name)": {
+                lcov: "\($name)/lcov.info",
+                html: "html/\($name)/index.html",
+                lines: metric($lf; $lh),
+                functions: metric($fnf; $fnh)
+              } }' <<< "$packages")"
+          done
           jq -n \
             --arg commit "$GITHUB_SHA" \
             --arg ref "$GITHUB_REF" \
             --arg runId "$GITHUB_RUN_ID" \
             --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --argjson lf "$lf" --argjson lh "$lh" \
-            --argjson fnf "$fnf" --argjson fnh "$fnh" '
-            def metric($found; $hit):
-              { found: $found, hit: $hit,
-                pct: (if $found > 0 then ($hit * 10000 / $found | round) / 100 else null end) };
+            --argjson packages "$packages" '
             {
               schemaVersion: 1,
               commit: $commit,
               ref: $ref,
               runId: $runId,
               generatedAt: $generatedAt,
-              packages: {
-                "apps/server": {
-                  lcov: "server/lcov.info",
-                  html: "html/server/index.html",
-                  lines: metric($lf; $lh),
-                  functions: metric($fnf; $fnh)
-                }
-              }
+              packages: $packages
             }' > coverage/summary.json
           cat coverage/summary.json
 

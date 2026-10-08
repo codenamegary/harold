@@ -27,7 +27,7 @@
     "test": "bun run --filter '*' test",
     "typecheck": "bun run --filter '*' typecheck",
     "check": "bun run lint && bun run lint:boundaries && bun run typecheck && bun run test && bun test scripts",
-    "test:coverage": "bun run --filter server test:coverage",
+    "test:coverage": "bun run --filter server --filter @codenamegary/harold test:coverage",
     "test:smoke": "HAROLD_RUN_SMOKE=1 bun --filter server test:smoke",
     "db:generate": "bun run --filter server db:generate",
     "catalog:codegen": "bun run --filter core catalog:codegen",

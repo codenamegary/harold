@@ -1,0 +1,3 @@
+[test]
+# The CLI imports server and packages/*. Their coverage belongs to the server report.
+coveragePathIgnorePatterns = ["../server/**", "../../packages/**"]
