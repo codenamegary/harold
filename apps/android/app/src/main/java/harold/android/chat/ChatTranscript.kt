@@ -65,10 +65,12 @@ fun ChatTranscript(
     val showActivity = activity != null
     val streamingRowIndex = liveAssistantRowIndex(rows = rows, isRunning = isRunning)
 
+    // requestScrollToItem applies on the next measure pass. scrollToItem forces
+    // a remeasure, which throws when the layoutInfo collector resumes mid-layout.
     LaunchedEffect(blocks.size, showActivity, rows, activity?.label) {
         val lastIndex = blocks.size - 1 + if (showActivity) 1 else 0
         if (lastIndex >= 0) {
-            listState.scrollToItem(lastIndex, scrollOffset = TailScrollOffset)
+            listState.requestScrollToItem(lastIndex, scrollOffset = TailScrollOffset)
         }
     }
 
@@ -79,7 +81,7 @@ fun ChatTranscript(
             .collect {
                 val lastIndex = listState.layoutInfo.totalItemsCount - 1
                 if (lastIndex >= 0) {
-                    listState.scrollToItem(lastIndex, scrollOffset = TailScrollOffset)
+                    listState.requestScrollToItem(lastIndex, scrollOffset = TailScrollOffset)
                 }
             }
     }
