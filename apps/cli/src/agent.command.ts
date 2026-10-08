@@ -47,9 +47,10 @@ export type AgentCli = Readonly<{
 
 export const openAgentCli = (deps: AgentCliDeps): AgentCli => {
   const database = openDatabase({ dataDir: deps.dataDir })
-  const whichFn: WhichFn = deps.whichFn ?? ((name) => Bun.which(name))
-  const validatePath = deps.validateExecutablePathFn ?? validateExecutablePath
   const env = deps.env ?? process.env
+  // Bun.which ignores runtime PATH changes unless PATH is passed explicitly.
+  const whichFn: WhichFn = deps.whichFn ?? ((name) => Bun.which(name, { PATH: env.PATH }))
+  const validatePath = deps.validateExecutablePathFn ?? validateExecutablePath
 
   const presenceCtx = (): PresenceProbeContext => ({ which: whichFn, env })
   const buildView = makeAgentSettingsView({

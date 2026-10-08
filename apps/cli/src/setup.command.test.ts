@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { stripVTControlCharacters } from "node:util"
 import YAML from "yaml"
 import { openDatabase } from "server/database"
 import { assembleDeviceSlice } from "server/device"
@@ -41,7 +42,8 @@ const runCommand = async (
 
 const waitForMatch = async (lines: readonly string[], pattern: RegExp): Promise<string> => {
   for (let attempt = 0; attempt < 200; attempt += 1) {
-    const match = lines.join("\n").match(pattern)
+    // picocolors turns colors on when CI is set, so match against plain text.
+    const match = stripVTControlCharacters(lines.join("\n")).match(pattern)
     if (match?.[1] !== undefined) {
       return match[1]
     }
@@ -103,7 +105,7 @@ describe("harold setup command wiring", () => {
     await mkdir(binDir, { recursive: true })
     workspaceDir = await realpath(await mkdir(path.join(scratch, "project"), { recursive: true }))
 
-    agentPath = path.join(binDir, "cursor-agent")
+    agentPath = path.join(binDir, "agent")
     await writeFile(agentPath, "#!/bin/sh\nexit 0\n")
     await chmod(agentPath, 0o755)
 
