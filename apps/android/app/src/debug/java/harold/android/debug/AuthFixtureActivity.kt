@@ -25,7 +25,7 @@ import harold.android.ui.theme.HaroldTheme
 
 /**
  * Debug-only fixture host for emulator screenshots.
- * Launch: adb shell am start -n harold.android/.debug.AuthFixtureActivity \
+ * Launch: adb shell am start -n harold.android.debug/harold.android.debug.AuthFixtureActivity \
  *   --es scene idle|panel
  */
 class AuthFixtureActivity : ComponentActivity() {

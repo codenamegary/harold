@@ -16,9 +16,7 @@ interface PairingPayloadParser {
     fun parse(payload: String): PairingPayload
 }
 
-class DefaultPairingPayloadParser(
-    private val rejectCleartext: Boolean,
-) : PairingPayloadParser {
+class DefaultPairingPayloadParser : PairingPayloadParser {
     override fun parse(payload: String): PairingPayload {
         val trimmed = payload.trim()
 
@@ -76,10 +74,6 @@ class DefaultPairingPayloadParser(
 
         if (!isAbsoluteUrl(endpoint)) {
             throw PairingPayloadParseException("Invalid endpoint parameter")
-        }
-
-        if (rejectCleartext && endpoint.startsWith("http://")) {
-            throw PairingPayloadParseException("Cleartext endpoint is not allowed")
         }
 
         val codeValues = params["code"].orEmpty()

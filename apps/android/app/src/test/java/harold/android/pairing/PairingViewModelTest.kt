@@ -30,7 +30,7 @@ class PairingViewModelTest {
         val coordinator = FakePairingCoordinator(Result.success(Unit))
         val viewModel = PairingViewModel(
             pairingCoordinator = coordinator,
-            payloadParser = DefaultPairingPayloadParser(rejectCleartext = false),
+            payloadParser = DefaultPairingPayloadParser(),
             deviceNameProvider = { "Pixel Test" },
         )
 
@@ -57,7 +57,7 @@ class PairingViewModelTest {
         val coordinator = FakePairingCoordinator(Result.success(Unit))
         val viewModel = PairingViewModel(
             pairingCoordinator = coordinator,
-            payloadParser = DefaultPairingPayloadParser(rejectCleartext = false),
+            payloadParser = DefaultPairingPayloadParser(),
             deviceNameProvider = { "Pixel Test" },
         )
 
@@ -73,7 +73,7 @@ class PairingViewModelTest {
         val coordinator = FakePairingCoordinator(Result.success(Unit))
         val viewModel = PairingViewModel(
             pairingCoordinator = coordinator,
-            payloadParser = DefaultPairingPayloadParser(rejectCleartext = false),
+            payloadParser = DefaultPairingPayloadParser(),
             deviceNameProvider = { "Pixel Test" },
         )
 
@@ -95,7 +95,7 @@ class PairingViewModelTest {
 
         val viewModel = PairingViewModel(
             pairingCoordinator = coordinator,
-            payloadParser = DefaultPairingPayloadParser(rejectCleartext = false),
+            payloadParser = DefaultPairingPayloadParser(),
             deviceNameProvider = { "Pixel Test" },
             pairingRequests = requests,
         )
@@ -119,7 +119,7 @@ class PairingViewModelTest {
         val coordinator = FakePairingCoordinator(Result.success(Unit))
         val viewModel = PairingViewModel(
             pairingCoordinator = coordinator,
-            payloadParser = DefaultPairingPayloadParser(rejectCleartext = false),
+            payloadParser = DefaultPairingPayloadParser(),
             deviceNameProvider = { "Pixel Test" },
         )
 

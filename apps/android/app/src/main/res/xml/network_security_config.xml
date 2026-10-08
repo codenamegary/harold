@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cleartext LAN hosts are allowed in every build. See docs/adr/0008-android-lan-cleartext.md. -->
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <base-config
+        cleartextTrafficPermitted="true"
+        tools:ignore="InsecureBaseConfiguration" />
+</network-security-config>

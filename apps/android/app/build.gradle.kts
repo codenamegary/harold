@@ -10,6 +10,28 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+val appVersionName = "1.0.0" // x-release-please-version
+val appVersionCode = run {
+    val match = checkNotNull(Regex("""^(\d+)\.(\d+)\.(\d+)$""").matchEntire(appVersionName)) {
+        "versionName must be MAJOR.MINOR.PATCH, got $appVersionName"
+    }
+    val (major, minor, patch) = match.destructured.toList().map(String::toInt)
+    check(minor < 100 && patch < 100) {
+        "versionCode packs minor and patch into two digits each, got $appVersionName"
+    }
+    major * 10000 + minor * 100 + patch
+}
+
+// Release signing comes from env vars set by CI (or exported locally).
+// Without all four, release builds stay unsigned so lint and PR checks still run.
+val releaseSigning = listOf(
+    "ANDROID_KEYSTORE_PATH",
+    "ANDROID_KEYSTORE_PASSWORD",
+    "ANDROID_KEY_ALIAS",
+    "ANDROID_KEY_PASSWORD",
+).associateWith { System.getenv(it).orEmpty() }
+val hasReleaseSigning = releaseSigning.values.all(String::isNotBlank)
+
 android {
     namespace = "harold.android"
     compileSdk {
@@ -22,8 +44,8 @@ android {
         applicationId = "harold.android"
         minSdk = 30
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -32,8 +54,26 @@ android {
         }
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseSigning.getValue("ANDROID_KEYSTORE_PATH"))
+                storePassword = releaseSigning.getValue("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = releaseSigning.getValue("ANDROID_KEY_ALIAS")
+                keyPassword = releaseSigning.getValue("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

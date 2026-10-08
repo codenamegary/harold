@@ -95,13 +95,12 @@ but that blocks unattended startup and reconnect
 
 ## HTTPS and development cleartext
 
-- Release builds must allow only `https` and `wss`. Accepted server policy
-  requires TLS before any non-loopback Bearer use
-  ([ADR-0001](../adr/0001-device-authentication.md)).
-- Use a release network security config with cleartext disabled.
-- If local development needs `http` and `ws`, put a permissive
-  `network_security_config.xml` in the debug source set only. Do not use one
-  permissive config shared by release.
+- Superseded for the app: every build type allows `http` and `ws` through one
+  `network_security_config.xml` in `src/main`
+  ([ADR-0008](../adr/0008-android-lan-cleartext.md)). This research first
+  recommended HTTPS-only release builds per
+  [ADR-0001](../adr/0001-device-authentication.md), which blocked pairing
+  with LAN hosts until Milestone 3 HTTPS.
 - Prefer local HTTPS with a debug-only CA when practical. Android network
   security config supports debug-only trust anchors. Its `debug-overrides`
   element controls trust anchors, while `cleartextTrafficPermitted` belongs on

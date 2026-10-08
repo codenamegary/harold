@@ -10,3 +10,6 @@ connect-tunnel.sh
 .harold/attachments/
 apps/server/.generated/
 apps/cli/dist/
+*.jks
+*.keystore
+keystore.properties

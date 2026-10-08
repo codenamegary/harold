@@ -36,16 +36,30 @@ The application id was renamed to `harold.android` (formerly `server.agent.andro
    ```sh
    adb uninstall server.agent.android
    ```
-2. Install the Harold Android app:
+2. Install the Harold Android app. Use a release APK from GitHub Releases, or a debug build (installs as `harold.android.debug`):
    ```sh
    ./gradlew :app:installDebug
    ```
 3. Pair using the in-app scanner or by pointing your phone camera at the terminal pairing QR code (`harold://pair`), which opens Harold directly. Legacy `agent-server://pair` payloads will prompt that an app update is required.
 
-## Local development transport
+## Transport
 
-- **Release** builds reject cleartext HTTP and WebSocket traffic.
-- **Debug** builds allow cleartext through a debug-only network security config. No trust-all TLS.
+Every build type allows cleartext HTTP and WebSocket traffic, so the app can pair with a LAN host over `http://` ([ADR-0008](../../docs/adr/0008-android-lan-cleartext.md)). One network security config in `src/main` sets this. No trust-all TLS.
+
+## Debug and release builds
+
+Debug builds use the application id `harold.android.debug` and a `-debug` version suffix. They install next to the release app (`harold.android`) and never replace it.
+
+Release builds are signed only when these env vars are all set:
+
+- `ANDROID_KEYSTORE_PATH`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+Without them, `assembleRelease` produces an unsigned APK. CI signs releases with the distribution key held in repo secrets.
+
+`versionName` is set by release-please. `versionCode` is derived from it as `major * 10000 + minor * 100 + patch`.
 
 ## Authenticated transport
 

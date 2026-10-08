@@ -6,7 +6,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
-import harold.android.BuildConfig
 import harold.android.live.DefaultSessionOwner
 import harold.android.live.SessionOwner
 import harold.android.credentials.CredentialHolder
@@ -79,9 +78,7 @@ class DefaultAppContainer(
 
     /** Pairing runs before a credential exists, so it keeps its own unauthenticated client. */
     override val pairingApi: PairingApi = DefaultPairingApi()
-    override val pairingPayloadParser: PairingPayloadParser = DefaultPairingPayloadParser(
-        rejectCleartext = !BuildConfig.DEBUG,
-    )
+    override val pairingPayloadParser: PairingPayloadParser = DefaultPairingPayloadParser()
     override val pairingCoordinator: PairingCoordinator = DefaultPairingCoordinator(
         pairingApi = pairingApi,
         credentialStore = credentialStore,
