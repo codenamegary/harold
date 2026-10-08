@@ -3,6 +3,7 @@
   "release-type": "node",
   "include-component-in-tag": false,
   "separate-pull-requests": true,
+  "bootstrap-sha": "26e4e1e397c0111d055cedcf909848a3da0b657f",
   "packages": {
     "apps/cli": {},
     "apps/android": {
