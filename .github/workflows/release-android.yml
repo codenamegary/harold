@@ -1,0 +1,133 @@
+name: release-android
+
+# Builds the signed release APK for a harold-android-v* tag and attaches it
+# to that tag's GitHub Release. Called by the Release Please workflow when
+# an Android release is created, and dispatchable by hand to rebuild the
+# APK for an existing release.
+#
+# Signing uses the distribution key in repo secrets. Every release must be
+# signed with that same key, or installed users cannot update in place.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to build (for example harold-android-v1.1.0)
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build (for example harold-android-v1.1.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-android-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag }}
+      BUILD_TOOLS: "36.0.0"
+    steps:
+      - name: Checkout the release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools platforms;android-37.0 build-tools;36.0.0"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Restore the signing keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing repo secret $name"
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ]
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/harold-dist.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/harold-dist.jks" >> "$GITHUB_ENV"
+
+      - name: Build the release APK
+        working-directory: apps/android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon --stacktrace assembleRelease
+
+      - name: Verify and name the APK
+        run: |
+          VERSION="${TAG#harold-android-v}"
+          TOOLS="$ANDROID_HOME/build-tools/$BUILD_TOOLS"
+          SOURCE=apps/android/app/build/outputs/apk/release/app-release.apk
+          APK="harold-android-$VERSION.apk"
+          cp "$SOURCE" "$APK"
+
+          APK_VERSION="$("$TOOLS/aapt2" dump badging "$APK" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")"
+          if [ "$APK_VERSION" != "$VERSION" ]; then
+            echo "::error::APK versionName is '$APK_VERSION' but the tag is $TAG"
+            exit 1
+          fi
+
+          CERT_SHA256="$("$TOOLS/apksigner" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
+          if [ -z "$CERT_SHA256" ]; then
+            echo "::error::APK is not signed"
+            exit 1
+          fi
+          APK_SHA256="$(sha256sum "$APK" | cut -d' ' -f1)"
+
+          {
+            echo "APK=$APK"
+            echo "APK_SHA256=$APK_SHA256"
+            echo "CERT_SHA256=$CERT_SHA256"
+          } >> "$GITHUB_ENV"
+
+      - name: Attach the APK to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$TAG" "$APK" --clobber
+
+          # Reruns rebuild the APK, so replace the section instead of appending twice.
+          MARKER="<!-- harold-android-apk -->"
+          gh release view "$TAG" --json body --jq .body \
+            | awk -v marker="$MARKER" '
+                index($0, marker) { exit }
+                /^$/ { blank++; next }
+                { while (blank > 0) { print ""; blank-- } print }
+              ' > notes.md
+          {
+            echo
+            echo "$MARKER"
+            echo "### Android APK"
+            echo
+            echo "- File: \`$APK\`"
+            echo "- APK SHA-256: \`$APK_SHA256\`"
+            echo "- Signing certificate SHA-256: \`$CERT_SHA256\`"
+          } >> notes.md
+          gh release edit "$TAG" --notes-file notes.md

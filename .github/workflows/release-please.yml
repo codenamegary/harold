@@ -23,6 +23,8 @@ jobs:
       # package, which is why the yuekbox workflow can use the plain names.
       release_created: ${{ steps.release.outputs['apps/cli--release_created'] }}
       tag_name: ${{ steps.release.outputs['apps/cli--tag_name'] }}
+      android_release_created: ${{ steps.release.outputs['apps/android--release_created'] }}
+      android_tag_name: ${{ steps.release.outputs['apps/android--tag_name'] }}
     steps:
       - uses: googleapis/release-please-action@v5
         id: release
@@ -46,3 +48,16 @@ jobs:
     uses: ./.github/workflows/publish-cli.yml
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
+
+  # Called directly instead of on `release: published`. When release-please
+  # falls back to GITHUB_TOKEN, the release it creates starts no workflows,
+  # and the release would ship without an APK.
+  android:
+    needs: release-please
+    if: needs.release-please.outputs.android_release_created == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release-android.yml
+    with:
+      tag: ${{ needs.release-please.outputs.android_tag_name }}
+    secrets: inherit
