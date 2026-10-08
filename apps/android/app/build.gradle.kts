@@ -10,7 +10,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
-val appVersionName = "1.1.0" // x-release-please-version
+val appVersionName = "1.1.1" // x-release-please-version
 val appVersionCode = run {
     val match = checkNotNull(Regex("""^(\d+)\.(\d+)\.(\d+)$""").matchEntire(appVersionName)) {
         "versionName must be MAJOR.MINOR.PATCH, got $appVersionName"
