@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/codenamegary/harold/compare/v1.2.0...v1.2.1) (2026-10-08)
+
+
+### CI
+
+* upload server and CLI coverage as a workflow artifact ([#356](https://github.com/codenamegary/harold/issues/356)) ([6224338](https://github.com/codenamegary/harold/commit/622433862889fa859ae1e9224063a48685bb9750))
+
 ## [1.2.0](https://github.com/codenamegary/harold/compare/v1.1.0...v1.2.0) (2026-10-07)
 
 
