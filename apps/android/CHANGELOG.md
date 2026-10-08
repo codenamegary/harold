@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/codenamegary/harold/compare/harold-android-v1.1.0...harold-android-v1.1.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* **android:** stop the transcript auto-scroll from remeasuring mid-layout ([#359](https://github.com/codenamegary/harold/issues/359)) ([2f6e224](https://github.com/codenamegary/harold/commit/2f6e2242dd0efb6a10a9b7fa7994eea9a99cf677))
+
 ## [1.1.0](https://github.com/codenamegary/harold/compare/harold-android-v1.0.0...harold-android-v1.1.0) (2026-10-08)
 
 
