@@ -28,7 +28,7 @@ import harold.android.ui.theme.HaroldTheme
 
 /**
  * Debug-only fixture host for emulator screenshots of Vosk voice input.
- * Launch: adb shell am start -n harold.android/.debug.VoiceFixtureActivity
+ * Launch: adb shell am start -n harold.android.debug/harold.android.debug.VoiceFixtureActivity
  * Scripted voice, no microphone needed: add --ez scripted_voice true
  */
 class VoiceFixtureActivity : ComponentActivity() {

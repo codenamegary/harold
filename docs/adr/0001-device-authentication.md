@@ -86,6 +86,8 @@ Milestone 3.
   `packages/contracts`.
 - Milestone 3 must put TLS in front of Bearer credentials before any non-loopback
   bind or reverse proxy.
+- [ADR-0008](0008-android-lan-cleartext.md) lets the Android app use cleartext
+  LAN hosts until then.
 - Sender-constrained tokens (mTLS or DPoP, [RFC 9700][rfc9700]) stay open for a
   later remote hardening pass.
 
