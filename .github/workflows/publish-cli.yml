@@ -67,26 +67,27 @@ jobs:
       # Done-when check from #323: the published bin runs on a clean
       # machine. The scratch dir has no repo, so npx resolves the package
       # from the registry. npm accepts publishes asynchronously ("may take
-      # a few minutes to become available"), so poll before the check.
+      # a few minutes to become available"), so retry the npx call itself.
+      # npm view reads the full packument, but npx resolves from the
+      # abbreviated install packument, which the registry caches separately
+      # and can serve stale after npm view already sees the version.
       - name: Smoke test the published bin
         env:
           TAG: ${{ inputs.tag }}
         run: |
           VERSION="${TAG#harold-}"
           VERSION="${VERSION#v}"
+          SMOKE_DIR="$(mktemp -d)"
+          cd "$SMOKE_DIR"
           for attempt in $(seq 1 30); do
-            if npm view "@codenamegary/harold@$VERSION" version >/dev/null 2>&1; then
-              echo "available after $((attempt * 10))s"
+            if OUTPUT="$(npx --yes --prefer-online @codenamegary/harold@"$VERSION" --version)"; then
+              echo "npx reported after $((attempt * 10))s: $OUTPUT"
               break
             fi
             if [ "$attempt" -eq 30 ]; then
-              echo "@codenamegary/harold@$VERSION never became available" >&2
+              echo "@codenamegary/harold@$VERSION never became installable" >&2
               exit 1
             fi
             sleep 10
           done
-          SMOKE_DIR="$(mktemp -d)"
-          cd "$SMOKE_DIR"
-          OUTPUT="$(npx --yes @codenamegary/harold@"$VERSION" --version)"
-          echo "npx reported: $OUTPUT"
           [ "$OUTPUT" = "$VERSION" ]
