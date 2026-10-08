@@ -103,7 +103,7 @@ describe("harold setup command wiring", () => {
     await mkdir(binDir, { recursive: true })
     workspaceDir = await realpath(await mkdir(path.join(scratch, "project"), { recursive: true }))
 
-    agentPath = path.join(binDir, "cursor-agent")
+    agentPath = path.join(binDir, "agent")
     await writeFile(agentPath, "#!/bin/sh\nexit 0\n")
     await chmod(agentPath, 0o755)
 
