@@ -134,3 +134,58 @@ jobs:
             echo "- Signing certificate SHA-256: \`$CERT_SHA256\`"
           } >> notes.md
           gh release edit "$TAG" --notes-file notes.md
+
+      - name: Push APK and manifest to the downloads site
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_DEST: ${{ secrets.VPS_DEST }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Rebuild the full manifest from all published android releases.
+          VERSION="${TAG#harold-android-v}"
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > releases.json
+          python3 - <<'PY' > manifest.json
+          import json, re, sys
+          from datetime import datetime, timezone
+
+          MARKER = "<!-- harold-android-apk -->"
+          PREFIX = "harold-android-v"
+          releases = json.load(open("releases.json"))
+
+          out = []
+          for r in releases:
+              tag = r.get("tag_name", "")
+              if not tag.startswith(PREFIX) or r.get("draft"):
+                  continue
+              apks = [a for a in r.get("assets", []) if a["name"].endswith(".apk")]
+              if not apks:
+                  continue
+              apk, body, version = apks[0], r.get("body") or "", tag[len(PREFIX):]
+              grab = lambda p: (m.group(1) if (m := re.search(p, body, re.I)) else None)
+              sha = (apk.get("digest") or "").removeprefix("sha256:") \
+                    or grab(r"APK SHA-?256[^0-9a-f]*([0-9a-f]{64})")
+              out.append({
+                  "version": version,
+                  "published_at": r["published_at"],
+                  "size": apk["size"],
+                  "sha256": sha,
+                  "cert_sha256": grab(r"certificate SHA-?256[^0-9a-f]*([0-9a-f]{64})"),
+                  "notes_md": body.split(MARKER)[0],
+                  "apk": f"/downloads/harold-android-{version}.apk",
+                  "github_url": r["html_url"],
+              })
+          out.sort(key=lambda r: r["published_at"], reverse=True)
+          json.dump({"generated_at": datetime.now(timezone.utc).isoformat(),
+                     "releases": out}, sys.stdout, indent=2)
+          PY
+
+          install -m 600 /dev/null id_ed25519
+          printf '%s\n' "$VPS_SSH_KEY" > id_ed25519
+          OPTS=(-i id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+
+          # Land both files under temp names, then flip them into place.
+          scp "${OPTS[@]}" "$APK" "$VPS_HOST:$VPS_DEST/.apk.tmp"
+          scp "${OPTS[@]}" manifest.json "$VPS_HOST:$VPS_DEST/.manifest.tmp"
+          ssh "${OPTS[@]}" "$VPS_HOST" "cd '$VPS_DEST' && mv .apk.tmp harold-android-$VERSION.apk && mv .manifest.tmp manifest.json"
+          rm -f id_ed25519
