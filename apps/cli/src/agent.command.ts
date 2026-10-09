@@ -4,6 +4,7 @@ import { AgentSettings } from "contracts/http/agent-settings"
 import { probePresence } from "core/agent-catalog/probe.presence"
 import { PresenceProbeContext } from "core/agent-catalog/ports"
 import { AgentSettingsResult } from "core/agent-settings/errors"
+import { makeHasAgentId } from "core/agent-settings/has.agent.id.usecase"
 import { makeListAgentSettings, ListAgentSettings } from "core/agent-settings/list.usecase"
 import { AgentSettingsRow, FindAgentSettingsRow } from "core/agent-settings/ports"
 import { makeAgentSettingsView } from "core/agent-settings/view"
@@ -13,6 +14,7 @@ import {
   validateExecutablePath,
   ValidateExecutablePathFn,
 } from "core/agent-settings/validate-agent-path"
+import { createAuthBroker, CreateAuthBrokerParams } from "server/agent/auth/broker"
 import { parseConfig } from "server/config"
 import { openDatabase } from "server/database"
 import { ensureCatalogAgentSettingsRows } from "server/agent-settings/catalog.sqlite.adapters"
@@ -33,11 +35,13 @@ export type AgentCliDeps = Readonly<{
   dataDir: string
   whichFn?: WhichFn
   validateExecutablePathFn?: ValidateExecutablePathFn
+  resolveAuthAdapter?: NonNullable<CreateAuthBrokerParams["resolveAdapter"]>
   env?: Readonly<Record<string, string | undefined>>
 }>
 
 export type AgentCli = Readonly<{
   list: ListAgentSettings
+  listWithAuthProbe: () => Promise<AgentSettings[]>
   update: UpdateAgentSettings
   findRow: FindAgentSettingsRow
   restoreRow: (row: AgentSettingsRow) => void
@@ -62,8 +66,31 @@ export const openAgentCli = (deps: AgentCliDeps): AgentCli => {
   const findRow = makeFindAgentSettingsRow(database)
   const updateRow = makeUpdateAgentSettingsRow(database)
 
+  const authBroker = createAuthBroker({
+    agentExists: makeHasAgentId({ findRow }),
+    requestRespawn: async () => undefined,
+    resolveAdapter: deps.resolveAuthAdapter,
+  })
+
+  const list = makeListAgentSettings({ listRows, buildView })
+
   return {
-    list: makeListAgentSettings({ listRows, buildView }),
+    list,
+    listWithAuthProbe: async () => {
+      const items = list()
+      const enabledIds = items.filter((item) => item.enabled).map((item) => item.id)
+      await Promise.all(
+        enabledIds.map((agentId) =>
+          authBroker.probeEnabledAgents([agentId]).catch(() => undefined),
+        ),
+      )
+      return Promise.all(
+        items.map(async (item) => ({
+          ...item,
+          authSummary: await authBroker.getSummary(item.id),
+        })),
+      )
+    },
     update: makeUpdateAgentSettings({
       listRows,
       findRow,
@@ -120,12 +147,13 @@ export const makeAgentCommand = (): Command => {
   const list = new Command("list")
   list.description("list agents and their settings")
   list.option("--probe", "include presence path and runtime state")
-  list.action((options: { probe?: boolean }) => {
+  list.action(async (options: { probe?: boolean }) => {
     const config = parseConfig(process.env)
     const cli = openAgentCli({ dataDir: config.dataDir })
 
     try {
-      console.log(renderAgentList({ items: cli.list(), probe: options.probe === true }))
+      const items = await cli.listWithAuthProbe()
+      console.log(renderAgentList({ items, probe: options.probe === true }))
     } finally {
       cli.close()
     }

@@ -37,6 +37,8 @@
     "./bootstrap": "./src/bootstrap/run.server.ts",
     "./config": "./src/config/config.ts",
     "./database": "./src/persistence/database.ts",
+    "./agent/auth/broker": "./src/agent/auth/broker.ts",
+    "./agent/auth/adapters/default.adapter": "./src/agent/auth/adapters/default.adapter.ts",
     "./agent-settings/sqlite-adapters": "./src/agent-settings/agent.settings.sqlite.adapters.ts",
     "./agent-settings/catalog.sqlite.adapters": "./src/acp/catalog/catalog.sqlite.adapters.ts",
     "./device": "./src/device/device.assembly.ts",
