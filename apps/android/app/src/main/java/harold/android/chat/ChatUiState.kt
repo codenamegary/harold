@@ -135,8 +135,8 @@ data class ChatUiState(
             return when (authSummary?.status) {
                 AgentAuthStatus.NeedsAuth,
                 AgentAuthStatus.Error,
-                AgentAuthStatus.Unknown,
                 -> true
+                AgentAuthStatus.Unknown,
                 AgentAuthStatus.Authenticated,
                 null,
                 -> false
