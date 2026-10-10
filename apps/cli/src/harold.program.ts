@@ -7,12 +7,14 @@ import { makeLogsCommand } from "./logs.command"
 import { makePairCommand } from "./pair.command"
 import { ServeDeps, makeServeCommand } from "./serve.command"
 import { makeSetupCommand } from "./setup.command"
+import { StartDeps, makeStartCommand } from "./start.command"
 import { makeStatusCommand } from "./status.command"
 import { makeStopCommand } from "./stop.command"
 import { makeWorkspaceCommand } from "./workspace.command"
 
 export type HaroldProgramDeps = Readonly<{
   serve?: Partial<ServeDeps>
+  start?: Partial<StartDeps>
 }>
 
 export const makeHaroldProgram = (deps: HaroldProgramDeps = {}): Command => {
@@ -22,7 +24,10 @@ export const makeHaroldProgram = (deps: HaroldProgramDeps = {}): Command => {
     .name("harold")
     .description("Hark! The Harold Agents Sing - Access your agents on Android from anywhere.")
     .version(packageJson.version)
-  program.addCommand(makeServeCommand(deps.serve))
+  program.addCommand(makeStartCommand(deps.start))
+  // serve is the internal foreground command: start and setup spawn it
+  // detached as the daemon, so it stays out of the operator help.
+  program.addCommand(makeServeCommand(deps.serve), { hidden: true })
   program.addCommand(makeSetupCommand())
   program.addCommand(makeStatusCommand())
   program.addCommand(makeStopCommand())

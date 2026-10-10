@@ -44,7 +44,7 @@ export const runServer = async (options: RunServerOptions = {}) => {
   })
   // The daemon always logs to a file so `harold logs` can tail it from
   // outside the daemon process (ADR-0006). Screen output belongs to the CLI:
-  // `harold serve` prints the running view when the listener is confirmed.
+  // `harold start` prints the running view once the daemon answers.
   // A null logPath means the default file under the data dir.
   const logFilePath = resolveDaemonLogPath(applied.logPath, envConfig.dataDir)
   const logStream = createWriteStream(logFilePath, { flags: "a" })

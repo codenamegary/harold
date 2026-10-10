@@ -37,9 +37,10 @@ export type BunSpawnBackgroundDaemonParams = Readonly<{
 }>
 
 /**
- * The daemon is the CLI itself: re-exec the entry with `serve`. Ignored stdio
- * and `detached` keep it serving after the setup process exits. The child
- * writes diagnostics to its log file, so nothing is lost off screen.
+ * The daemon is the CLI itself: re-exec the entry with the internal
+ * foreground `serve` command. Ignored stdio and `detached` keep it serving
+ * after the setup process exits. The child writes diagnostics to its log
+ * file, so nothing is lost off screen.
  */
 export const makeBunSpawnBackgroundDaemon =
   (params: BunSpawnBackgroundDaemonParams): SpawnBackgroundDaemon =>
@@ -62,6 +63,23 @@ export const makeBunSpawnBackgroundDaemon =
  * spawned pid. Matching the pid proves this child owns the state file, so a
  * daemon that exits leaves a failure instead of a stale-readiness success.
  */
+/**
+ * One renderer for both commands that spawn the daemon: only the retry
+ * command differs (setup reruns the wizard, start reruns the spawn).
+ */
+export const renderStartDaemonError = (
+  error: StartBackgroundDaemonError,
+  port: number,
+  retryCommand: string,
+): string => {
+  switch (error.kind) {
+    case "daemon_exited":
+      return `Harold exited before it was ready (exit code ${error.code}). Check for a process already using port ${port}, then run \`${retryCommand}\` again.`
+    case "timed_out":
+      return `Timed out waiting for Harold to start. Check \`harold logs\`, then run \`${retryCommand}\` again.`
+  }
+}
+
 export const makeStartBackgroundDaemon =
   (deps: StartBackgroundDaemonDeps): StartBackgroundDaemon =>
   async (): Promise<StartBackgroundDaemonResult> => {

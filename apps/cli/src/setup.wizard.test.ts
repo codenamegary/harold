@@ -528,6 +528,6 @@ describe("runSetupWizard pair step", () => {
 
     expect(exitCode).toBe(0)
     expect(harness.pair.calls).toBe(0)
-    expect(harness.warns.join("\n")).toContain("harold serve")
+    expect(harness.warns.join("\n")).toContain("harold start")
   })
 })

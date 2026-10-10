@@ -14,7 +14,7 @@ export const daemonLogFilePath = (dataDir: string): string => path.join(dataDir,
 /**
  * The daemon's log destination: the operator's persisted `logPath` when set,
  * otherwise the default file under the data dir. The CLI resolves the same
- * way so `harold logs` tails what `harold serve` writes.
+ * way so `harold logs` tails what the daemon writes.
  */
 export const resolveDaemonLogPath = (persistedLogPath: string | null, dataDir: string): string =>
   persistedLogPath ?? daemonLogFilePath(dataDir)

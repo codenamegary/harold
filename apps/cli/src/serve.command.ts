@@ -43,6 +43,10 @@ const openServeDeps = (): ServeDeps => {
  * resolves once the bind succeeds. The running view is always printed, then
  * the daemon keeps running in the foreground. The wizard never runs here.
  * Setup owns configuration.
+ *
+ * This command is internal: it is hidden from the operator help and is what
+ * `harold start` and `harold setup` re-exec detached as the daemon. The
+ * operator-facing command is `harold start`.
  */
 const executeServe = async (deps: ServeDeps): Promise<number> => {
   const running = deps.readLiveDaemonState()
@@ -60,7 +64,7 @@ const executeServe = async (deps: ServeDeps): Promise<number> => {
 
 export const makeServeCommand = (overrides: Partial<ServeDeps> = {}): Command => {
   const command = new Command("serve")
-  command.description("run the Harold daemon (local host server)")
+  command.description("run the Harold daemon in the foreground")
 
   command.action(async () => {
     process.exitCode = await executeServe({ ...openServeDeps(), ...overrides })

@@ -52,7 +52,7 @@ describe("renderLogEntries", () => {
 
 describe("renderLogReadError", () => {
   test("explains a missing log file", () => {
-    expect(renderLogReadError({ kind: "log_file_missing" })).toContain("harold serve")
+    expect(renderLogReadError({ kind: "log_file_missing" })).toContain("harold start")
   })
 
   test("explains an invalid line count", () => {

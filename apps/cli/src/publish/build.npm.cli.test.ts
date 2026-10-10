@@ -108,9 +108,11 @@ describe("build.npm.cli", () => {
     test("lists the operator commands on --help", async () => {
       const output = await Bun.$`bun ${path.join(distDir, "harold.js")} --help`.text()
 
-      for (const command of ["serve", "setup", "pair", "connect"]) {
+      for (const command of ["start", "setup", "pair", "connect"]) {
         expect(output).toContain(command)
       }
+      // serve is the internal foreground command the daemon spawner re-execs.
+      expect(output).not.toMatch(/^\s+serve\b/m)
     })
   })
 
@@ -131,10 +133,11 @@ describe("build.npm.cli", () => {
       }
     })
 
-    test("serve reaches the running view and shuts down cleanly", async () => {
-      const dataDir = mkdtempSync(path.join(tmpdir(), "harold-bundle-serve-"))
-      const child = Bun.spawn({
-        cmd: [process.execPath, path.join(distDir, "harold.js"), "serve"],
+    test("start returns to the shell with the daemon serving, and stop shuts it down", async () => {
+      const dataDir = mkdtempSync(path.join(tmpdir(), "harold-bundle-start-"))
+      const bin = path.join(distDir, "harold.js")
+      const start = Bun.spawn({
+        cmd: [process.execPath, bin, "start"],
         env: { ...process.env, HAROLD_DATA_DIR: dataDir, HAROLD_PORT: "0" },
         stdin: "ignore",
         stdout: "pipe",
@@ -142,18 +145,37 @@ describe("build.npm.cli", () => {
       })
 
       try {
-        const stdout = await readUntil(child.stdout, "Harold is running")
+        const stdout = await readUntil(start.stdout, "Harold is running")
 
         expect(stdout).toContain("Harold is running")
 
-        child.kill()
-        const exitCode = await child.exited
-
-        expect(exitCode).toBe(0)
-      } finally {
-        if (child.exitCode === null) {
-          child.kill()
+        // Control returns to the shell while the daemon keeps serving.
+        let bail: ReturnType<typeof setTimeout> | undefined
+        const startExit = await Promise.race([
+          start.exited,
+          new Promise<"timeout">((resolve) => {
+            bail = setTimeout(() => resolve("timeout"), 15_000)
+          }),
+        ])
+        if (bail !== undefined) {
+          clearTimeout(bail)
         }
+
+        expect(startExit).not.toBe("timeout")
+        expect(startExit).toBe(0)
+
+        const stop = await Bun.$`bun ${bin} stop`
+          .env({ ...process.env, HAROLD_DATA_DIR: dataDir })
+          .nothrow()
+          .quiet()
+
+        expect(stop.exitCode).toBe(0)
+        expect(stop.stdout.toString()).toContain("Harold stopped")
+      } finally {
+        await Bun.$`bun ${bin} stop`
+          .env({ ...process.env, HAROLD_DATA_DIR: dataDir })
+          .nothrow()
+          .quiet()
         rmSync(dataDir, { recursive: true, force: true })
       }
     })
