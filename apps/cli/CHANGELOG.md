@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.3](https://github.com/codenamegary/harold/compare/v1.2.2...v1.2.3) (2026-10-10)
+
+
+### Bug Fixes
+
+* **cli:** ship the repo README in the npm package ([#371](https://github.com/codenamegary/harold/issues/371)) ([fbd43fe](https://github.com/codenamegary/harold/commit/fbd43fe78455a624bc1523e845d7c778477af3c4)), closes [#368](https://github.com/codenamegary/harold/issues/368)
+
 ## [1.2.2](https://github.com/codenamegary/harold/compare/v1.2.1...v1.2.2) (2026-10-10)
 
 
