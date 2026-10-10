@@ -60,8 +60,8 @@ class DefaultAgentApi(
     ): Result<AttachmentDescriptor> = withContext(Dispatchers.IO) {
         val url = buildUrl(
             serverOrigin = serverOrigin,
-            pathSegments = "v1/workspaces/${request.workspaceId}/attachments",
-            query = emptyMap(),
+            pathSegments = "v1/sessions/${request.sessionId}/attachments",
+            query = mapOf("agentId" to request.agentId),
         ) ?: return@withContext failure(
             AgentApiError.Transport(IllegalArgumentException("Invalid server origin")),
         )
@@ -102,13 +102,14 @@ class DefaultAgentApi(
 
     override suspend fun deleteAttachment(
         serverOrigin: String,
-        workspaceId: String,
+        agentId: AgentId,
+        sessionId: String,
         attachmentId: String,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val url = buildUrl(
             serverOrigin = serverOrigin,
-            pathSegments = "v1/workspaces/$workspaceId/attachments/$attachmentId",
-            query = emptyMap(),
+            pathSegments = "v1/sessions/$sessionId/attachments/$attachmentId",
+            query = mapOf("agentId" to agentId),
         ) ?: return@withContext failure(
             AgentApiError.Transport(IllegalArgumentException("Invalid server origin")),
         )

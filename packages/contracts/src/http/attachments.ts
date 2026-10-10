@@ -1,11 +1,11 @@
 import { z } from "zod"
+import { AgentIdSchema } from "./agent-settings"
 import { IdSchema } from "./primitives"
 
 export const AttachmentKindSchema = z.enum(["image", "file"])
 
 export const AttachmentDescriptorSchema = z.strictObject({
   id: z.string().min(1),
-  workspaceId: z.string().min(1),
   name: z.string().min(1),
   mimeType: z.string().min(1),
   kind: AttachmentKindSchema,
@@ -43,16 +43,25 @@ export const BLOCKED_ATTACHMENT_EXTENSIONS = [
 
 export const attachmentsFolderName = ".harold/attachments"
 
-export const AttachmentWorkspaceIdParamsSchema = z.strictObject({
-  workspaceId: IdSchema,
+/**
+ * Attachments belong to a session. The server finds the session's folder itself,
+ * so a client never names a workspace.
+ */
+export const AttachmentSessionParamsSchema = z.strictObject({
+  sessionId: z.string().min(1),
 })
 
-export const AttachmentDeleteParamsSchema = AttachmentWorkspaceIdParamsSchema.extend({
+export const AttachmentSessionQuerySchema = z.strictObject({
+  agentId: AgentIdSchema,
+})
+
+export const AttachmentDeleteParamsSchema = AttachmentSessionParamsSchema.extend({
   attachmentId: IdSchema,
 })
 
 export type AttachmentKind = z.infer<typeof AttachmentKindSchema>
 export type AttachmentDescriptor = z.infer<typeof AttachmentDescriptorSchema>
 export type AttachmentReference = z.infer<typeof AttachmentReferenceSchema>
-export type AttachmentWorkspaceIdParams = z.infer<typeof AttachmentWorkspaceIdParamsSchema>
+export type AttachmentSessionParams = z.infer<typeof AttachmentSessionParamsSchema>
+export type AttachmentSessionQuery = z.infer<typeof AttachmentSessionQuerySchema>
 export type AttachmentDeleteParams = z.infer<typeof AttachmentDeleteParamsSchema>

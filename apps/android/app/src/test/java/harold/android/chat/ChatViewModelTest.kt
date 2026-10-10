@@ -801,12 +801,13 @@ class ChatViewModelTest {
             PairedState.Paired(ORIGIN, "device_01", "Pixel"),
         ),
         configApi: SessionConfigApi = RecordingSessionConfigApi(),
+        attachmentApi: AttachmentApi = NoopAttachmentApi(),
     ): ChatViewModel = ChatViewModel(
         savedStateHandle = SavedStateHandle(),
         sessionGateway = sessionGateway,
         sessionOwner = sessionOwner,
         operatorRepository = repository,
-        attachmentApi = NoopAttachmentApi(),
+        attachmentApi = attachmentApi,
         configApi = configApi,
         navigationPreferences = navigation,
         voiceDictationController = VoiceDictationController(
@@ -815,6 +816,123 @@ class ChatViewModelTest {
             restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         ),
     )
+
+    @Test
+    fun attachmentUploadsToTheSelectedSessionWithoutNamingAWorkspace() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository(
+            extraSessions = listOf(session("sess_09", "Elsewhere", cwd = "/tmp/not-a-workspace")),
+        )
+        val attachments = RecordingAttachmentApi()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_09"),
+            attachmentApi = attachments,
+        )
+        advanceUntilIdle()
+        assertEquals("", viewModel.uiState.value.selectedSession?.workspaceId)
+
+        viewModel.onAttachmentsPicked(listOf(AttachmentPick("notes.txt", "text/plain", byteArrayOf(1))))
+        advanceUntilIdle()
+
+        val upload = attachments.uploads.single()
+        assertEquals("cursor", upload.agentId)
+        assertEquals("sess_09", upload.sessionId)
+        assertEquals(
+            AttachmentUploadStatus.Ready,
+            viewModel.uiState.value.pendingAttachments.single().status,
+        )
+    }
+
+    @Test
+    fun removingAnUploadedAttachmentDeletesItFromTheSession() = runTest(dispatcher) {
+        val attachments = RecordingAttachmentApi()
+        val viewModel = createViewModel(
+            repository = ChatFakeOperatorRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            attachmentApi = attachments,
+        )
+        advanceUntilIdle()
+        viewModel.onAttachmentsPicked(listOf(AttachmentPick("notes.txt", "text/plain", byteArrayOf(1))))
+        advanceUntilIdle()
+
+        viewModel.removeAttachment(viewModel.uiState.value.pendingAttachments.single().localId)
+        advanceUntilIdle()
+
+        assertEquals(listOf(Triple("cursor", "sess_02", "att_1")), attachments.deletes)
+        assertTrue(viewModel.uiState.value.pendingAttachments.isEmpty())
+    }
+
+    @Test
+    fun attachingInADraftCreatesTheSessionOnceThenUploadsEveryFile() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository()
+        val attachments = RecordingAttachmentApi()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            attachmentApi = attachments,
+        )
+        advanceUntilIdle()
+        viewModel.showCreateDialog()
+        advanceUntilIdle()
+        viewModel.onCreateWorkspaceChanged("ws_01")
+        viewModel.onCreateAgentChanged("cursor")
+        viewModel.confirmNewSession()
+        advanceUntilIdle()
+        assertEquals("", viewModel.uiState.value.selectedSession?.sessionId)
+
+        viewModel.onAttachmentsPicked(
+            listOf(
+                AttachmentPick("a.txt", "text/plain", byteArrayOf(1)),
+                AttachmentPick("b.txt", "text/plain", byteArrayOf(2)),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(1, repository.createCalls.size)
+        assertEquals(listOf("sess_new", "sess_new"), attachments.uploads.map { it.sessionId })
+        assertEquals("sess_new", viewModel.uiState.value.selectedSession?.sessionId)
+        assertTrue(
+            viewModel.uiState.value.pendingAttachments.all { it.status == AttachmentUploadStatus.Ready },
+        )
+    }
+
+    @Test
+    fun attachmentFailsWithTheServerReasonWhenTheSessionFolderIsNotAllowed() = runTest(dispatcher) {
+        val attachments = object : AttachmentApi {
+            override suspend fun uploadAttachment(
+                serverOrigin: String,
+                request: AttachmentUploadRequest,
+            ): Result<AttachmentDescriptor> = Result.failure(
+                AgentApiException(
+                    AgentApiError.Problem(
+                        status = 409,
+                        title = "Session folder not allowed",
+                        detail = "The session folder is outside the allowed roots",
+                    ),
+                ),
+            )
+
+            override suspend fun deleteAttachment(
+                serverOrigin: String,
+                agentId: String,
+                sessionId: String,
+                attachmentId: String,
+            ): Result<Unit> = Result.success(Unit)
+        }
+        val viewModel = createViewModel(
+            repository = ChatFakeOperatorRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            attachmentApi = attachments,
+        )
+        advanceUntilIdle()
+
+        viewModel.onAttachmentsPicked(listOf(AttachmentPick("notes.txt", "text/plain", byteArrayOf(1))))
+        advanceUntilIdle()
+
+        val pending = viewModel.uiState.value.pendingAttachments.single()
+        assertEquals(AttachmentUploadStatus.Failed, pending.status)
+        assertEquals("The session folder is outside the allowed roots", pending.error)
+    }
 
     private fun modelOption(currentValue: String): SelectOption = SelectOption(
         id = "model",
@@ -861,9 +979,42 @@ private class NoopAttachmentApi : AttachmentApi {
 
     override suspend fun deleteAttachment(
         serverOrigin: String,
-        workspaceId: String,
+        agentId: String,
+        sessionId: String,
         attachmentId: String,
     ): Result<Unit> = Result.success(Unit)
+}
+
+private class RecordingAttachmentApi : AttachmentApi {
+    val uploads = mutableListOf<AttachmentUploadRequest>()
+    val deletes = mutableListOf<Triple<String, String, String>>()
+
+    override suspend fun uploadAttachment(
+        serverOrigin: String,
+        request: AttachmentUploadRequest,
+    ): Result<AttachmentDescriptor> {
+        uploads += request
+        return Result.success(
+            AttachmentDescriptor(
+                id = "att_${uploads.size}",
+                name = request.fileName,
+                mimeType = request.mimeType,
+                kind = request.kind ?: harold.android.contracts.AttachmentKind.File,
+                size = request.bytes.size.toLong(),
+                path = "/tmp/harold/.harold/attachments/att_${uploads.size}.txt",
+            ),
+        )
+    }
+
+    override suspend fun deleteAttachment(
+        serverOrigin: String,
+        agentId: String,
+        sessionId: String,
+        attachmentId: String,
+    ): Result<Unit> {
+        deletes += Triple(agentId, sessionId, attachmentId)
+        return Result.success(Unit)
+    }
 }
 
 private class ChatFakeSessionGateway(
@@ -1181,10 +1332,11 @@ private fun session(
     id: String,
     title: String,
     updatedAt: String = "2026-08-05T01:00:00.000Z",
+    cwd: String = "/tmp/harold",
 ): Session = Session(
     agentId = "cursor",
     sessionId = id,
-    cwd = "/tmp/harold",
+    cwd = cwd,
     title = title,
     updatedAt = updatedAt,
 )

@@ -6,7 +6,6 @@ import {
 import { DeleteAttachmentError, SaveAttachmentError } from "./attachments.errors"
 
 export type SaveAttachmentCommand = Readonly<{
-  workspaceId: string
   workspacePath: string
   fileName: string
   mimeType: string

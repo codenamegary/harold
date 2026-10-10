@@ -6,7 +6,6 @@ const workspacePath = "/projects/app"
 const attachmentsRoot = path.join(workspacePath, ".harold", "attachments")
 
 const command = {
-  workspaceId: "ws_1",
   workspacePath,
   fileName: "shot.png",
   mimeType: "image/png",
@@ -38,7 +37,6 @@ describe("save attachment", () => {
       ok: true,
       value: {
         id: "att_01JQ4KX7Q2M",
-        workspaceId: "ws_1",
         name: "shot.png",
         mimeType: "image/png",
         kind: "image",

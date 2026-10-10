@@ -15,7 +15,6 @@ enum class AttachmentKind {
 @Serializable
 data class AttachmentDescriptor(
     val id: String,
-    val workspaceId: String,
     val name: String,
     val mimeType: String,
     val kind: AttachmentKind,
