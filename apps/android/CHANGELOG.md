@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/codenamegary/harold/compare/harold-android-v1.1.1...harold-android-v1.1.2) (2026-10-10)
+
+
+### Bug Fixes
+
+* **auth:** stop host-login card on probe unknown, probe auth in harold agent list ([#364](https://github.com/codenamegary/harold/issues/364)) ([e757705](https://github.com/codenamegary/harold/commit/e7577059cc6fc38569352e325601b7ed84ca674d))
+
 ## [1.1.1](https://github.com/codenamegary/harold/compare/harold-android-v1.1.0...harold-android-v1.1.1) (2026-10-08)
 
 
