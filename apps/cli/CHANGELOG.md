@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0](https://github.com/codenamegary/harold/compare/v1.2.3...v1.3.0) (2026-10-10)
+
+
+### Features
+
+* **cli:** rename serve to start and run the daemon in the background ([#376](https://github.com/codenamegary/harold/issues/376)) ([14c27d0](https://github.com/codenamegary/harold/commit/14c27d07b585a5ce988ccbffa7d38c610e2c5974)), closes [#374](https://github.com/codenamegary/harold/issues/374)
+* **server:** warm up ACP agents in the background after listening ([#380](https://github.com/codenamegary/harold/issues/380)) ([f43fa35](https://github.com/codenamegary/harold/commit/f43fa35d5cbd3f8eda63761bb11c29dbcacadce0))
+
 ## [1.2.3](https://github.com/codenamegary/harold/compare/v1.2.2...v1.2.3) (2026-10-10)
 
 
