@@ -6,6 +6,7 @@ import { beforeAll, describe, expect, test } from "bun:test"
 import { main as buildNpmPackage } from "./build.npm.cli"
 
 const cliRoot = path.join(import.meta.dir, "..", "..")
+const repoRoot = path.join(cliRoot, "..", "..")
 const distDir = path.join(cliRoot, "dist")
 
 const readUntil = async (stream: ReadableStream<Uint8Array>, marker: string): Promise<string> => {
@@ -73,6 +74,17 @@ describe("build.npm.cli", () => {
       const manifest = JSON.parse(await readFile(path.join(distDir, "package.json"), "utf8"))
 
       expect(manifest.version).toBe(source.version)
+    })
+  })
+
+  describe("published readme", () => {
+    test("ships the repo README so npm displays it", async () => {
+      // npm embeds README.md from the published directory into the
+      // packument; without the file the npm page renders no readme.
+      const published = await readFile(path.join(distDir, "README.md"), "utf8")
+      const repoReadme = await readFile(path.join(repoRoot, "README.md"), "utf8")
+
+      expect(published).toBe(repoReadme)
     })
   })
 

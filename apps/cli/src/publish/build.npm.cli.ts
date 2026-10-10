@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 
 const cliRoot = path.join(import.meta.dir, "..", "..")
+const repoRoot = path.join(cliRoot, "..", "..")
 const distDir = path.join(cliRoot, "dist")
 
 const repository = {
@@ -74,6 +75,12 @@ export const main = async () => {
   const outfile = path.join(distDir, "harold.js")
   await writeFile(outfile, withShebang, { mode: 0o755 })
   console.log(`[cli] wrote bundled bin to ${path.relative(cliRoot, outfile)}`)
+
+  // npm embeds README.md from the published directory into the packument;
+  // shipping the repo README is what makes the npm page render it.
+  const readme = path.join(distDir, "README.md")
+  await writeFile(readme, await readFile(path.join(repoRoot, "README.md"), "utf8"))
+  console.log(`[cli] wrote repo README to ${path.relative(cliRoot, readme)}`)
 }
 
 if (import.meta.main) {
