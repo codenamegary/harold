@@ -16,8 +16,10 @@ the CLI reads it, and no host HTTP route is involved.
 2. `apps/cli` is the operator surface. The workspace package is `harold`. It
    uses commander for the command surface, picocolors for output, and
    @clack/prompts for interactive flows.
-3. `harold serve` boots the server composition root in the CLI process. One
-   process, one daemon.
+3. `harold start` starts the daemon and returns to the shell. It re-execs
+   the CLI entry with the hidden foreground command `serve` detached — one
+   process, one daemon — and exits once the state file names the spawned pid.
+   Operators see `start`; `serve` is the internal spawn target.
 4. Live daemon state travels through a state file. The daemon writes
    `<dataDir>/daemon-state.json` with `pid`, `writtenAt`, and the status
    projection. Writes are atomic (temp file plus rename), one at startup, one
@@ -38,11 +40,11 @@ the CLI reads it, and no host HTTP route is involved.
    stdout.
 
 9. `harold setup` guarantees a live daemon for the wizard. When none is
-   running it spawns the CLI entry with `serve` detached, waits until the
-   state file names that pid, and exits after the wizard. The daemon outlives
-   setup. `harold stop` signals the live pid through the state file, but only
-   when the heartbeat is fresh: a live pid with a stale heartbeat is treated
-   as a recycled pid.
+   running it starts one detached through the same path `harold start` uses,
+   waits until the state file names that pid, and exits after the wizard.
+   The daemon outlives setup. `harold stop` signals the live pid through the
+   state file, but only when the heartbeat is fresh: a live pid with a stale
+   heartbeat is treated as a recycled pid.
 
 ## Why not the alternatives
 
@@ -73,17 +75,19 @@ the CLI reads it, and no host HTTP route is involved.
 ## Consequences
 
 - The daemon is the single writer of the state file. Readers never block it.
-- `harold serve` runs in the foreground and prints the running view once the
-  listener is confirmed. Logs never go to the screen. The daemon writes them
-  to the default file, or the operator-configured `logPath`, and
+- `harold start` spawns the daemon detached, prints the running view once
+  the state file names the spawned pid, and exits; the daemon keeps serving.
+  A daemon that is already live is a success: start prints the status and
+  exits 0 without spawning. Logs never go to the screen. The daemon writes
+  them to the default file, or the operator-configured `logPath`, and
   `harold logs` tails that file.
-- `harold serve` while a daemon runs exits 1 with a warning from the same
-  state file and points at `harold stop`.
+- `harold serve` remains the hidden foreground path that start and setup
+  re-exec detached. It exits 1 with a warning from the same state file and
+  points at `harold stop` when a daemon already runs.
 - `harold setup` starts a detached daemon when none is live and exits after
-  the wizard. `harold stop` stops a detached daemon; a foreground `serve`
-  still stops with Ctrl+C. This reverses the #313 non-goal of no
-  daemonization: setup owns a background process, and `harold stop` owns its
-  lifecycle.
+  the wizard. `harold stop` stops a detached daemon. This reverses the #313
+  non-goal of no daemonization: start and setup own background processes,
+  and `harold stop` owns their lifecycle.
 - The CLI opens the SQLite database for CRUD batches. WAL mode allows one
   writer at a time, so CLI writes stay short.
 - The CLI depends on the `server` package for `serve`, config parsing, and

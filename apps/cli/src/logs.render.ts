@@ -14,7 +14,7 @@ export const renderLogEntries = (entries: readonly LogTailEntry[], json: boolean
 export const renderLogReadError = (error: LogTailReadError): string => {
   switch (error.kind) {
     case "log_file_missing":
-      return "No log file yet. Start the daemon with `harold serve` to begin writing logs."
+      return "No log file yet. Start the daemon with `harold start` to begin writing logs."
     case "invalid_lines":
       return `Invalid line count: ${error.lines}.`
     case "log_file_read_failed":

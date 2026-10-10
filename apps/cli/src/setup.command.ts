@@ -39,9 +39,9 @@ import { ConnectDeps, runConnect } from "./connect.command"
 import { connectRecipes } from "./connect.recipes"
 import {
   StartBackgroundDaemon,
-  StartBackgroundDaemonError,
   makeBunSpawnBackgroundDaemon,
   makeStartBackgroundDaemon,
+  renderStartDaemonError,
 } from "./daemon.background"
 import { PairActionDeps, executePair } from "./pair.command"
 import { renderTerminalQr } from "./pair.qr"
@@ -154,15 +154,6 @@ export const parseAgentIds = (raw: string | undefined): readonly string[] | unde
   return [...new Set(ids)]
 }
 
-const renderStartDaemonError = (error: StartBackgroundDaemonError, port: number): string => {
-  switch (error.kind) {
-    case "daemon_exited":
-      return `Harold exited before it was ready (exit code ${error.code}). Check for a process already using port ${port}, then run \`harold setup\` again.`
-    case "timed_out":
-      return "Timed out waiting for Harold to start. Check `harold logs`, then run `harold setup` again."
-  }
-}
-
 /**
  * Composes the agent, workspace, reachability, and pairing batches into one
  * interactive flow. When no daemon is running, setup starts one detached in
@@ -179,7 +170,7 @@ export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): P
   const startedDaemon = liveDaemon.ok ? undefined : await deps.startDaemon()
 
   if (startedDaemon !== undefined && !startedDaemon.ok) {
-    deps.writeErr(renderStartDaemonError(startedDaemon.error, config.port))
+    deps.writeErr(renderStartDaemonError(startedDaemon.error, config.port, "harold setup"))
     return 1
   }
 

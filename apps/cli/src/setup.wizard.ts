@@ -342,7 +342,7 @@ const pairStep = async (deps: SetupWizardDeps, options: SetupOptions): Promise<b
 
   if (!deps.isDaemonRunning()) {
     deps.prompts.warn(
-      "Harold is not running on this host. Start `harold serve`, then run `harold pair` to pair the phone.",
+      "Harold is not running on this host. Start the daemon with `harold start`, then run `harold pair` to pair the phone.",
     )
     return true
   }
