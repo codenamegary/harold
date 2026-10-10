@@ -17,7 +17,7 @@
     },
     "apps/cli": {
       "name": "@codenamegary/harold",
-      "version": "1.2.2",
+      "version": "1.2.3",
       "bin": {
         "harold": "./src/main.ts",
       },
