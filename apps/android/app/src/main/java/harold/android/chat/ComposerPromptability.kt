@@ -14,6 +14,8 @@ fun resolveEffectiveSessionState(
     return transcriptSessionState ?: listSessionState
 }
 
+const val PENDING_SESSION_MESSAGE = "Sign in to the agent to start this session."
+
 /**
  * The agent owns the session and its working folder, so a prompt needs only an agent and an idle
  * session. A registered Harold workspace is not required.
@@ -23,12 +25,8 @@ fun isComposerPromptable(
     sessionId: String,
     sessionState: SessionState?,
 ): Boolean {
-    if (agentId == null) {
+    if (agentId == null || sessionId.isEmpty()) {
         return false
-    }
-
-    if (sessionId.isEmpty()) {
-        return true
     }
 
     return sessionState == SessionState.Idle

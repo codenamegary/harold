@@ -227,6 +227,47 @@ class ContractDecodingTest {
     }
 
     @Test
+    fun decodesCreateSessionResponseWithConfigOptions() {
+        val created = HaroldJson.decodeFromString(
+            CreateSessionResponse.serializer(),
+            """
+            {
+              "agentId": "cursor",
+              "sessionId": "1b24880f-900d-4b7a-9fed-8385e483caef",
+              "cwd": "/home/operator/sites/harold",
+              "title": "1b24880f-900d-4b7a-9fed-8385e483caef",
+              "updatedAt": "2026-10-10T02:25:09.202Z",
+              "configOptions": [
+                {
+                  "id": "mode",
+                  "name": "Mode",
+                  "description": "Controls how the agent executes tasks",
+                  "category": "mode",
+                  "type": "select",
+                  "currentValue": "agent",
+                  "options": [
+                    {
+                      "value": "agent",
+                      "name": "Agent",
+                      "description": "Full agent capabilities with tool access"
+                    }
+                  ]
+                }
+              ]
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals("cursor", created.agentId)
+        assertEquals("1b24880f-900d-4b7a-9fed-8385e483caef", created.sessionId)
+        assertEquals(1, created.configOptions.size)
+        assertEquals(
+            "mode",
+            created.configOptions.first().jsonObject.getValue("id").jsonPrimitive.content,
+        )
+    }
+
+    @Test
     fun decodesWorkspaceCollectionWithPageInfo() {
         val collection = HaroldJson.decodeFromString(
             ItemCollection.serializer(Workspace.serializer()),

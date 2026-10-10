@@ -12,7 +12,10 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -31,6 +34,7 @@ import harold.android.network.SessionConfigApi
 import harold.android.contracts.AgentSettings
 import harold.android.contracts.AgentSettingsCollection
 import harold.android.contracts.BooleanOption
+import harold.android.contracts.ConfigOption
 import harold.android.contracts.ConfigOptionValue
 import harold.android.contracts.ConfigValue
 import harold.android.contracts.CreateSessionBody
@@ -86,7 +90,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun confirmNewSessionEnablesComposerWithoutCreateCall() = runTest(dispatcher) {
+    fun confirmNewSessionCreatesTheSessionAndSeedsConfig() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository()
         val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
@@ -104,15 +108,139 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertFalse(viewModel.uiState.value.createDialogVisible)
-        assertTrue(repository.createCalls.isEmpty())
-        assertEquals("New session", viewModel.uiState.value.selectedSession?.name)
-        assertEquals("", viewModel.uiState.value.selectedSession?.sessionId)
+        assertEquals(1, repository.createCalls.size)
+        assertEquals("/tmp/harold", repository.createCalls.first().cwd)
+        assertEquals("sess_new", viewModel.uiState.value.selectedSession?.sessionId)
+        assertEquals("cursor" to "sess_new", sessionOwner.target)
         assertTrue(viewModel.uiState.value.composerEnabled)
+
+        val (configAgent, configSession, configOptions) = sessionOwner.rememberedConfigs.single()
+        assertEquals("cursor", configAgent)
+        assertEquals("sess_new", configSession)
+        assertEquals(listOf("model"), configOptions.map { option -> option.id })
+    }
+
+    @Test
+    fun confirmNewSessionKeepsTheDialogOpenWhenCreateFails() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository()
+        repository.createFailure = AgentApiException(
+            AgentApiError.Problem(status = 409, title = "ACP unavailable", detail = "Agent crashed"),
+        )
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+        )
+
+        advanceUntilIdle()
+        viewModel.showCreateDialog()
+        advanceUntilIdle()
+        viewModel.onCreateWorkspaceChanged("ws_01")
+        viewModel.onCreateAgentChanged("cursor")
+        viewModel.confirmNewSession()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.createDialogVisible)
+        assertEquals("Agent crashed", viewModel.uiState.value.createState.error)
+        assertFalse(viewModel.uiState.value.createState.submitting)
+    }
+
+    @Test
+    fun confirmNewSessionShowsLoginWhenTheAgentNeedsAuth() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository(
+            agentAuth = harold.android.contracts.AgentAuth(
+                agentId = "cursor",
+                status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
+                error = null,
+                session = null,
+            ),
+        )
+        repository.createFailure = AgentApiException(
+            AgentApiError.Problem(status = 409, title = "Agent authentication required", detail = null),
+        )
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = sessionOwner,
+        )
+
+        advanceUntilIdle()
+        viewModel.showCreateDialog()
+        advanceUntilIdle()
+        viewModel.onCreateWorkspaceChanged("ws_01")
+        viewModel.onCreateAgentChanged("cursor")
+        viewModel.confirmNewSession()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.createDialogVisible)
+        assertTrue(state.isPendingNewSession)
+        assertTrue(state.showAuthPanel)
+        assertFalse(state.composerEnabled)
+        assertEquals(PENDING_SESSION_MESSAGE, state.composerBlockedMessage)
         assertNull(sessionOwner.target)
     }
 
     @Test
-    fun firstComposerSendCreatesSessionThenPrompts() = runTest(dispatcher) {
+    fun pendingSessionIsCreatedOnceLoginSucceeds() = runTest(dispatcher) {
+        val inProgress = harold.android.contracts.AgentAuthSession(
+            sessionId = "auth-1",
+            agentId = "cursor",
+            status = harold.android.contracts.AuthSessionStatus.InProgress,
+            steps = listOf(
+                harold.android.contracts.AuthStep.Confirm(
+                    stepId = "confirm-1",
+                    title = "Ready?",
+                    body = "Finish login",
+                    confirmLabel = "I have logged in",
+                ),
+            ),
+            error = null,
+        )
+        val repository = ChatFakeOperatorRepository(
+            agentAuth = harold.android.contracts.AgentAuth(
+                agentId = "cursor",
+                status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
+                error = null,
+                session = inProgress,
+            ),
+            actionSession = inProgress.copy(
+                status = harold.android.contracts.AuthSessionStatus.Succeeded,
+                steps = emptyList(),
+            ),
+        )
+        repository.createFailure = AgentApiException(
+            AgentApiError.Problem(status = 409, title = "Agent authentication required", detail = null),
+        )
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = sessionOwner,
+        )
+
+        advanceUntilIdle()
+        viewModel.showCreateDialog()
+        advanceUntilIdle()
+        viewModel.onCreateWorkspaceChanged("ws_01")
+        viewModel.onCreateAgentChanged("cursor")
+        viewModel.confirmNewSession()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isPendingNewSession)
+
+        repository.createFailure = null
+        viewModel.onAuthConfirm("confirm-1")
+        advanceUntilIdle()
+
+        assertEquals(2, repository.createCalls.size)
+        assertEquals("/tmp/harold", repository.createCalls.last().cwd)
+        assertEquals("sess_new", viewModel.uiState.value.selectedSession?.sessionId)
+        assertEquals("cursor" to "sess_new", sessionOwner.target)
+        assertEquals("sess_new", sessionOwner.rememberedConfigs.single().second)
+    }
+
+    @Test
+    fun composerSendPromptsTheNewlyCreatedSession() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository()
         val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
@@ -134,7 +262,6 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertEquals(1, repository.createCalls.size)
-        assertEquals("/tmp/harold", repository.createCalls.first().cwd)
         assertEquals("sess_new", viewModel.uiState.value.selectedSession?.sessionId)
         assertEquals("cursor" to "sess_new", sessionOwner.target)
         assertEquals(listOf("Ship it"), sessionOwner.prompts)
@@ -863,7 +990,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun attachingInADraftCreatesTheSessionOnceThenUploadsEveryFile() = runTest(dispatcher) {
+    fun attachingInANewSessionUploadsEveryFileWithoutASecondCreate() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository()
         val attachments = RecordingAttachmentApi()
         val viewModel = createViewModel(
@@ -878,7 +1005,8 @@ class ChatViewModelTest {
         viewModel.onCreateAgentChanged("cursor")
         viewModel.confirmNewSession()
         advanceUntilIdle()
-        assertEquals("", viewModel.uiState.value.selectedSession?.sessionId)
+        assertEquals("sess_new", viewModel.uiState.value.selectedSession?.sessionId)
+        assertEquals(1, repository.createCalls.size)
 
         viewModel.onAttachmentsPicked(
             listOf(
@@ -1039,6 +1167,7 @@ private class ChatFakeSessionOwner : SessionOwner {
 
     val prompts = mutableListOf<String>()
     val permissionReplies = mutableListOf<Pair<String, String>>()
+    val rememberedConfigs = mutableListOf<Triple<AgentId, String, List<ConfigOption>>>()
     var cancels = 0
         private set
     var disconnects = 0
@@ -1104,6 +1233,10 @@ private class ChatFakeSessionOwner : SessionOwner {
         _snapshot.update { current -> current.copy(extension = null) }
     }
 
+    override fun rememberConfig(agentId: AgentId, sessionId: String, configOptions: List<ConfigOption>) {
+        rememberedConfigs += Triple(agentId, sessionId, configOptions)
+    }
+
     override fun forget(agentId: AgentId, sessionId: String) = Unit
 }
 
@@ -1149,6 +1282,7 @@ private class ChatFakeOperatorRepository(
     val authLogoutCalls = mutableListOf<String>()
     val revokeDeviceCalls = mutableListOf<String>()
     var agentAuthOverride: harold.android.contracts.AgentAuth = agentAuth
+    var createFailure: Throwable? = null
     private val createdSessions = mutableListOf<Session>()
     private val seed = extraSessions.ifEmpty {
         listOf(
@@ -1227,9 +1361,39 @@ private class ChatFakeOperatorRepository(
         body: CreateSessionBody,
     ): Result<CreateSessionResponse> {
         createCalls += body
+        createFailure?.let { error -> return Result.failure(error) }
         val created = session("sess_new", "New session", updatedAt = "2026-08-05T03:00:00.000Z")
         createdSessions += created
-        return Result.success(created)
+        return Result.success(
+            CreateSessionResponse(
+                agentId = created.agentId,
+                sessionId = created.sessionId,
+                cwd = created.cwd,
+                title = created.title,
+                updatedAt = created.updatedAt,
+                configOptions = listOf(
+                    JsonObject(
+                        mapOf(
+                            "id" to JsonPrimitive("model"),
+                            "name" to JsonPrimitive("Model"),
+                            "category" to JsonPrimitive("model"),
+                            "type" to JsonPrimitive("select"),
+                            "currentValue" to JsonPrimitive("m1"),
+                            "options" to JsonArray(
+                                listOf(
+                                    JsonObject(
+                                        mapOf(
+                                            "value" to JsonPrimitive("m1"),
+                                            "name" to JsonPrimitive("M1"),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
     }
 
     override suspend fun deleteSession(

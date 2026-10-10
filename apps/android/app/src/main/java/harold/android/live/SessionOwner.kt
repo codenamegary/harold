@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.JsonElement
 import harold.android.contracts.AgentId
 import harold.android.contracts.AttachmentReference
+import harold.android.contracts.ConfigOption
 import harold.android.stream.ConnectionState
 
 /**
@@ -23,7 +24,7 @@ interface SessionOwner {
 
     /**
      * Drain the inbox, empty the live snapshot, then subscribe when
-     * [sessionId] is a real session. Null or blank [sessionId] is a draft.
+     * [sessionId] is a real session. Null or blank [sessionId] means no session yet.
      */
     fun watch(agentId: AgentId?, sessionId: String?)
 
@@ -34,6 +35,12 @@ interface SessionOwner {
     fun replyPermission(requestId: String, optionId: String)
 
     fun replyExtension(requestId: String, result: JsonElement)
+
+    /**
+     * Seeds a session's config selectors from data the client already has (the
+     * create response) so they render before the stream delivers a frame.
+     */
+    fun rememberConfig(agentId: AgentId, sessionId: String, configOptions: List<ConfigOption>)
 
     fun forget(agentId: AgentId, sessionId: String)
 }

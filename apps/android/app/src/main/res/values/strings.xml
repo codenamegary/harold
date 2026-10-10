@@ -72,7 +72,7 @@
     <string name="chat_welcome_select_session_body">Start a new session or pick an existing one.</string>
     <string name="chat_select_session">Select session</string>
     <string name="chat_new_session">New session</string>
-    <string name="create_session_helper">Choose a workspace and agent, then send a prompt to start the session.</string>
+    <string name="create_session_helper">Choose a workspace and agent to start the session.</string>
     <string name="create_session_continue">Continue</string>
     <string name="create_session_continuing">Continuing…</string>
     <string name="sessions_title">Sessions</string>
