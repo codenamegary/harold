@@ -50,7 +50,7 @@ import { StartAcpAgent } from "../session/session.ports"
 import { registerAuthMiddleware } from "../auth/middleware"
 import { redactPairingCodeInUrl } from "core/device/redact.pairing.code.in.url"
 import { FetchRegistryFn } from "core/agent-settings/ports"
-import { startEnabledAgents } from "./start.enabled.agents"
+import { startEnabledAgents, StartEnabledAgentResult } from "./start.enabled.agents"
 
 const TestBodySchema = z.object({
   name: z.string().min(1),
@@ -394,12 +394,20 @@ export const createServer = async ({
     registerTestRoutes(app)
   }
 
-  await startEnabledAgents(agentSettings, acpSupervisor, app.log)
+  /**
+   * Agent warm-up is a caller decision, not part of building the app. The
+   * daemon fires this after the listener is up so `harold start` returns
+   * without waiting on agent processes; the lazy session path still starts
+   * any agent that is not running yet.
+   */
+  const warmAgents = (): Promise<ReadonlyArray<StartEnabledAgentResult>> =>
+    startEnabledAgents(agentSettings, acpSupervisor, app.log)
 
   return {
     app,
     acpSupervisor,
     runtimeStatusService,
     runtimeSettingsStore,
+    warmAgents,
   }
 }

@@ -37,6 +37,8 @@ export type SupervisorRuntime = {
   exitMonitor: Promise<void> | null
   acceptUnexpectedExit: boolean
   restartGeneration: number
+  /** In-flight spawn plus initialize, shared by every caller racing to start. */
+  startPromise: Promise<void> | null
 }
 
 export type CreateSupervisorLifecycleParams = {
@@ -87,6 +89,7 @@ const createEmptyRuntime = (agentId: AgentId): SupervisorRuntime => ({
   exitMonitor: null,
   acceptUnexpectedExit: false,
   restartGeneration: 0,
+  startPromise: null,
 })
 
 /**
@@ -347,10 +350,41 @@ export const createSupervisorLifecycle = ({
     beginBoundedRestart(agentId)
   }
 
+  /**
+   * Outcome of a spawn that has settled. A runtime the supervisor already
+   * cleared was stopped mid-flight, so its caller must not be told it started.
+   */
+  const settleStartOutcome = (runtime: SupervisorRuntime): AcpStartResult => {
+    if (runtimes.get(runtime.agentId) !== runtime) {
+      return { ok: false, reason: "ACP supervisor was stopped while the agent was starting" }
+    }
+
+    return runtime.state === "ready"
+      ? { ok: true }
+      : { ok: false, reason: runtime.lastError ?? "ACP supervisor failed to start" }
+  }
+
+  /**
+   * The starting caller owns the error transition, so a caller that raced it
+   * only reports the settled outcome instead of spawning a second agent.
+   */
+  const waitForInFlightStart = async (runtime: SupervisorRuntime): Promise<AcpStartResult> => {
+    const inFlight = runtime.startPromise
+    if (inFlight !== null) {
+      try {
+        await inFlight
+      } catch {
+        // Reported from the settled runtime state below.
+      }
+    }
+
+    return settleStartOutcome(runtime)
+  }
+
   const start = async (agentId: AgentId): Promise<AcpStartResult> => {
     const existing = runtimes.get(agentId)
     if (existing?.state === "starting") {
-      return { ok: false, reason: "ACP supervisor is already starting" }
+      return waitForInFlightStart(existing)
     }
 
     if (existing?.state === "ready") {
@@ -370,15 +404,22 @@ export const createSupervisorLifecycle = ({
     runtime.state = "starting"
     runtimes.set(agentId, runtime)
 
+    const inFlight = spawnAndInitialize(agentId).finally(() => {
+      if (runtimes.get(agentId) === runtime) {
+        runtime.startPromise = null
+      }
+    })
+    runtime.startPromise = inFlight
+
     try {
-      await spawnAndInitialize(agentId)
+      await inFlight
     } catch (error: unknown) {
       const reason = sanitizeFailureReason(error, "ACP supervisor failed to start")
       transitionToError(agentId, reason)
       return { ok: false, reason }
     }
 
-    return { ok: true }
+    return settleStartOutcome(runtime)
   }
 
   const handleAgentDisabled = async (agentId: AgentId): Promise<void> => {
