@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.2](https://github.com/codenamegary/harold/compare/v1.2.1...v1.2.2) (2026-10-10)
+
+
+### Bug Fixes
+
+* **auth:** stop host-login card on probe unknown, probe auth in harold agent list ([#364](https://github.com/codenamegary/harold/issues/364)) ([e757705](https://github.com/codenamegary/harold/commit/e7577059cc6fc38569352e325601b7ed84ca674d))
+
 ## [1.2.1](https://github.com/codenamegary/harold/compare/v1.2.0...v1.2.1) (2026-10-08)
 
 
