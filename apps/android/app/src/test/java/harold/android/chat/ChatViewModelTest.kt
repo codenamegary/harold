@@ -121,6 +121,125 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun confirmNewSessionKeepsTheDialogOpenWhenCreateFails() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository()
+        repository.createFailure = AgentApiException(
+            AgentApiError.Problem(status = 409, title = "ACP unavailable", detail = "Agent crashed"),
+        )
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+        )
+
+        advanceUntilIdle()
+        viewModel.showCreateDialog()
+        advanceUntilIdle()
+        viewModel.onCreateWorkspaceChanged("ws_01")
+        viewModel.onCreateAgentChanged("cursor")
+        viewModel.confirmNewSession()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.createDialogVisible)
+        assertEquals("Agent crashed", viewModel.uiState.value.createState.error)
+        assertFalse(viewModel.uiState.value.createState.submitting)
+    }
+
+    @Test
+    fun confirmNewSessionShowsLoginWhenTheAgentNeedsAuth() = runTest(dispatcher) {
+        val repository = ChatFakeOperatorRepository(
+            agentAuth = harold.android.contracts.AgentAuth(
+                agentId = "cursor",
+                status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
+                error = null,
+                session = null,
+            ),
+        )
+        repository.createFailure = AgentApiException(
+            AgentApiError.Problem(status = 409, title = "Agent authentication required", detail = null),
+        )
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = sessionOwner,
+        )
+
+        advanceUntilIdle()
+        viewModel.showCreateDialog()
+        advanceUntilIdle()
+        viewModel.onCreateWorkspaceChanged("ws_01")
+        viewModel.onCreateAgentChanged("cursor")
+        viewModel.confirmNewSession()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.createDialogVisible)
+        assertTrue(state.isPendingNewSession)
+        assertTrue(state.showAuthPanel)
+        assertFalse(state.composerEnabled)
+        assertEquals(PENDING_SESSION_MESSAGE, state.composerBlockedMessage)
+        assertNull(sessionOwner.target)
+    }
+
+    @Test
+    fun pendingSessionIsCreatedOnceLoginSucceeds() = runTest(dispatcher) {
+        val inProgress = harold.android.contracts.AgentAuthSession(
+            sessionId = "auth-1",
+            agentId = "cursor",
+            status = harold.android.contracts.AuthSessionStatus.InProgress,
+            steps = listOf(
+                harold.android.contracts.AuthStep.Confirm(
+                    stepId = "confirm-1",
+                    title = "Ready?",
+                    body = "Finish login",
+                    confirmLabel = "I have logged in",
+                ),
+            ),
+            error = null,
+        )
+        val repository = ChatFakeOperatorRepository(
+            agentAuth = harold.android.contracts.AgentAuth(
+                agentId = "cursor",
+                status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
+                error = null,
+                session = inProgress,
+            ),
+            actionSession = inProgress.copy(
+                status = harold.android.contracts.AuthSessionStatus.Succeeded,
+                steps = emptyList(),
+            ),
+        )
+        repository.createFailure = AgentApiException(
+            AgentApiError.Problem(status = 409, title = "Agent authentication required", detail = null),
+        )
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = sessionOwner,
+        )
+
+        advanceUntilIdle()
+        viewModel.showCreateDialog()
+        advanceUntilIdle()
+        viewModel.onCreateWorkspaceChanged("ws_01")
+        viewModel.onCreateAgentChanged("cursor")
+        viewModel.confirmNewSession()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isPendingNewSession)
+
+        repository.createFailure = null
+        viewModel.onAuthConfirm("confirm-1")
+        advanceUntilIdle()
+
+        assertEquals(2, repository.createCalls.size)
+        assertEquals("/tmp/harold", repository.createCalls.last().cwd)
+        assertEquals("sess_new", viewModel.uiState.value.selectedSession?.sessionId)
+        assertEquals("cursor" to "sess_new", sessionOwner.target)
+        assertEquals("sess_new", sessionOwner.rememberedConfigs.single().second)
+    }
+
+    @Test
     fun composerSendPromptsTheNewlyCreatedSession() = runTest(dispatcher) {
         val repository = ChatFakeOperatorRepository()
         val sessionOwner = ChatFakeSessionOwner()
@@ -1163,6 +1282,7 @@ private class ChatFakeOperatorRepository(
     val authLogoutCalls = mutableListOf<String>()
     val revokeDeviceCalls = mutableListOf<String>()
     var agentAuthOverride: harold.android.contracts.AgentAuth = agentAuth
+    var createFailure: Throwable? = null
     private val createdSessions = mutableListOf<Session>()
     private val seed = extraSessions.ifEmpty {
         listOf(
@@ -1241,6 +1361,7 @@ private class ChatFakeOperatorRepository(
         body: CreateSessionBody,
     ): Result<CreateSessionResponse> {
         createCalls += body
+        createFailure?.let { error -> return Result.failure(error) }
         val created = session("sess_new", "New session", updatedAt = "2026-08-05T03:00:00.000Z")
         createdSessions += created
         return Result.success(

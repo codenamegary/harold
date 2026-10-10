@@ -10,8 +10,8 @@ import harold.android.contracts.SessionState
 
 class ComposerPromptabilityTest {
     @Test
-    fun enablesComposerForDraftNewSession() {
-        assertTrue(
+    fun blocksComposerUntilTheSessionExists() {
+        assertFalse(
             isComposerPromptable(
                 agentId = "cursor",
                 sessionId = "",

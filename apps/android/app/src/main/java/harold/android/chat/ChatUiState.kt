@@ -160,11 +160,15 @@ data class ChatUiState(
             ) && !composerSubmitting && !streamReconnecting
         }
 
-    val isDraftNewSession: Boolean
+    val isPendingNewSession: Boolean
         get() = selectedSession?.sessionId?.isEmpty() == true
 
     val composerBlockedMessage: String?
-        get() = composerBlockedMessage(effectiveSessionState)
+        get() = if (isPendingNewSession) {
+            PENDING_SESSION_MESSAGE
+        } else {
+            composerBlockedMessage(effectiveSessionState)
+        }
 
     val showComposerCancel: Boolean
         get() = showComposerCancel(effectiveSessionState) && !cancelSubmitting

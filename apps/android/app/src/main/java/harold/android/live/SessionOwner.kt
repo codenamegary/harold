@@ -24,7 +24,7 @@ interface SessionOwner {
 
     /**
      * Drain the inbox, empty the live snapshot, then subscribe when
-     * [sessionId] is a real session. Null or blank [sessionId] is a draft.
+     * [sessionId] is a real session. Null or blank [sessionId] means no session yet.
      */
     fun watch(agentId: AgentId?, sessionId: String?)
 

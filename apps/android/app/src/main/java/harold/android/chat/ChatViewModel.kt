@@ -11,14 +11,11 @@ import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AttachmentDescriptor
 import harold.android.contracts.AttachmentKind
 import harold.android.contracts.AttachmentUploadRequest
-import harold.android.contracts.AttachmentReference
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.joinAll
 import kotlinx.serialization.json.JsonObject
 import harold.android.chat.composer.ComposerConfigUi
@@ -94,7 +91,7 @@ class ChatViewModel(
     private var authHydrateGeneration: Int = 0
     private var lastLiveWatchKey: String? = null
     private var lastAuthRequired: Boolean = false
-    private val draftSessionLock = Mutex()
+    private var pendingCreateInFlight = false
 
     init {
         voiceDictationController.onStateChanged = ::syncVoiceDictationState
@@ -463,9 +460,8 @@ class ChatViewModel(
             current.copy(createState = current.createState.copy(submitting = true, error = null))
         }
 
-        // The session is created here, not on the first prompt, so the create
-        // response can seed the composer's model, mode, and effort selectors
-        // before the user writes anything. The web client works the same way.
+        // Config options only exist once the agent has a session, so create it
+        // on confirm for the selectors to render before the first prompt.
         viewModelScope.launch {
             val result = operatorRepository.createSession(
                 serverOrigin = paired.serverOrigin,
@@ -477,16 +473,15 @@ class ChatViewModel(
 
             result.fold(
                 onSuccess = { created ->
-                    rememberCreatedConfig(created)
-                    val row = created.toSession().toSessionRow()
                     hideCreateDialog()
-                    clearComposer()
-                    adoptCreatedSession(row)
-                    syncActiveSessionsFromUiState()
-                    hydrateAgentAuth(row.agentId)
-                    refreshCatalog()
+                    openCreatedSession(created)
                 },
                 onFailure = { error ->
+                    if (agentNeedsLogin(paired.serverOrigin, agentId)) {
+                        hideCreateDialog()
+                        openPendingSession(workspace = workspace, agentId = agentId)
+                        return@fold
+                    }
                     _uiState.update { current ->
                         current.copy(
                             createState = current.createState.copy(
@@ -497,6 +492,88 @@ class ChatViewModel(
                     }
                 },
             )
+        }
+    }
+
+    private suspend fun openCreatedSession(created: CreateSessionResponse) {
+        rememberCreatedConfig(created)
+        activateSession(created.toSession().toSessionRow())
+        refreshCatalog()
+    }
+
+    private suspend fun agentNeedsLogin(serverOrigin: String, agentId: AgentId): Boolean =
+        operatorRepository.getAgentAuth(serverOrigin = serverOrigin, agentId = agentId)
+            .getOrNull()
+            ?.status == AgentAuthStatus.NeedsAuth
+
+    /**
+     * The agent refused to create a session until it is signed in. Show its login panel on a
+     * row with no session id, and create the session once login succeeds.
+     */
+    private suspend fun openPendingSession(workspace: WorkspaceRow, agentId: AgentId) {
+        if (voiceDictationController.state.visible) {
+            syncVoiceDictationState(voiceDictationController.cancel())
+        }
+        clearComposer()
+        clearPersistedSession()
+        _uiState.update { current ->
+            current.copy(
+                selectedSession = pendingSessionRow(workspace = workspace, agentId = agentId),
+                pickerVisible = false,
+                transcript = emptyAcpTranscript,
+                composerText = "",
+                composerError = null,
+                composerSubmitting = false,
+                availableCommands = emptyList(),
+                composerConfig = ComposerConfigUi(),
+                voiceCommandPrefix = "",
+                voiceCommandListVisible = false,
+                pendingPermissions = emptyList(),
+                permissionUiState = PermissionUiState(),
+                extensionUiState = ExtensionUiState(),
+                streamReconnecting = false,
+                agentAuth = null,
+                agentAuthSummary = agentAuthSummaries[agentId],
+                authPanelSubmitting = false,
+                authActionBusy = false,
+                authError = null,
+            )
+        }
+        sessionOwner.watch(agentId, null)
+        syncActiveSessionsFromUiState()
+        hydrateAgentAuth(agentId)
+    }
+
+    private fun createPendingSessionAfterLogin(agentId: AgentId, status: AgentAuthStatus) {
+        val pending = _uiState.value.selectedSession ?: return
+        if (
+            status != AgentAuthStatus.Authenticated ||
+            pending.sessionId.isNotEmpty() ||
+            pending.agentId != agentId ||
+            pendingCreateInFlight
+        ) {
+            return
+        }
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+
+        pendingCreateInFlight = true
+        viewModelScope.launch {
+            operatorRepository.createSession(
+                serverOrigin = paired.serverOrigin,
+                body = CreateSessionBody(agentId = agentId, cwd = pending.cwd),
+            ).fold(
+                onSuccess = { created ->
+                    if (_uiState.value.selectedSession == pending) {
+                        openCreatedSession(created)
+                    } else {
+                        refreshCatalog()
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update { current -> current.copy(composerError = errorMessage(error)) }
+                },
+            )
+            pendingCreateInFlight = false
         }
     }
 
@@ -524,11 +601,6 @@ class ChatViewModel(
         }
 
         val references = pending.mapNotNull { it.toReference() }
-
-        if (session.sessionId.isEmpty()) {
-            createSessionFromComposer(session = session, prompt = prompt, attachments = references)
-            return
-        }
 
         clearComposer()
         _uiState.update { current ->
@@ -629,8 +701,9 @@ class ChatViewModel(
     }
 
     private suspend fun uploadAttachment(serverOrigin: String, attachment: PendingAttachmentUi) {
-        val session = sessionForAttachment(serverOrigin).getOrElse { error ->
-            failAttachment(attachment.localId, errorMessage(error))
+        val session = _uiState.value.selectedSession?.takeIf { it.sessionId.isNotEmpty() }
+        if (session == null) {
+            failAttachment(attachment.localId, "No session selected")
             return
         }
         val result = attachmentApi.uploadAttachment(
@@ -679,26 +752,6 @@ class ChatViewModel(
             )
         }
     }
-
-    /**
-     * Attachments belong to a session and the server decides where they live. A draft has no
-     * session yet, so create it now. The lock makes several files picked together share one.
-     */
-    private suspend fun sessionForAttachment(serverOrigin: String): Result<SessionRow> =
-        draftSessionLock.withLock {
-            val session = _uiState.value.selectedSession
-                ?: return@withLock Result.failure(IllegalStateException("No session selected"))
-            if (session.sessionId.isNotEmpty()) {
-                return@withLock Result.success(session)
-            }
-            operatorRepository.createSession(
-                serverOrigin = serverOrigin,
-                body = CreateSessionBody(agentId = session.agentId, cwd = session.cwd),
-            ).map { created ->
-                rememberCreatedConfig(created)
-                created.toSession().toSessionRow().also { row -> adoptCreatedSession(row) }
-            }
-        }
 
     private fun syncAttachmentGating() {
         val session = _uiState.value.selectedSession
@@ -1019,6 +1072,7 @@ class ChatViewModel(
                 authError = null,
             )
         }
+        createPendingSessionAfterLogin(agentId, auth.status)
     }
 
     private suspend fun hydrateAgentAuth(
@@ -1056,6 +1110,7 @@ class ChatViewModel(
                 ) {
                     startAuthSession(agentId)
                 }
+                createPendingSessionAfterLogin(agentId, auth.status)
             },
             onFailure = { error ->
                 if (generation != authHydrateGeneration) {
@@ -1253,7 +1308,7 @@ class ChatViewModel(
     }
 
     private suspend fun restoreLastSession() {
-        if (_uiState.value.isDraftNewSession) {
+        if (_uiState.value.isPendingNewSession) {
             return
         }
 
@@ -1372,57 +1427,18 @@ class ChatViewModel(
         sessionForegroundCoordinator?.onSessionsChanged()
     }
 
-    private fun createSessionFromComposer(
-        session: SessionRow,
-        prompt: String,
-        attachments: List<AttachmentReference> = emptyList(),
-    ) {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
-
-        clearComposer()
-        _uiState.update { current ->
-            current.copy(
-                composerText = "",
-                composerSubmitting = true,
-                composerError = null,
-            )
-        }
-
-        viewModelScope.launch {
-            val result = operatorRepository.createSession(
-                serverOrigin = paired.serverOrigin,
-                body = CreateSessionBody(
-                    agentId = session.agentId,
-                    cwd = session.cwd,
-                ),
-            )
-
-            result.fold(
-                onSuccess = { created ->
-                    rememberCreatedConfig(created)
-                    val row = created.toSession().toSessionRow()
-                    adoptCreatedSession(row)
-                    _uiState.update { current -> current.copy(composerSubmitting = false) }
-                    sessionOwner.prompt(prompt, attachments)
-                    _uiState.update { current ->
-                        current.copy(pendingAttachments = emptyList())
-                    }
-                    syncActiveSessionsFromUiState()
-                    hydrateAgentAuth(row.agentId)
-                    refreshCatalog()
-                },
-                onFailure = { error ->
-                    _uiState.update { current ->
-                        current.copy(
-                            composerSubmitting = false,
-                            composerError = errorMessage(error),
-                            transcript = emptyAcpTranscript,
-                        )
-                    }
-                },
-            )
-        }
-    }
+    private fun pendingSessionRow(workspace: WorkspaceRow, agentId: AgentId): SessionRow =
+        SessionRow(
+            sessionId = "",
+            name = NEW_SESSION_NAME,
+            cwd = workspace.path,
+            workspaceId = workspace.id,
+            workspaceLabel = workspace.name,
+            agentId = agentId,
+            agentLabel = agentLabels[agentId] ?: agentId,
+            state = SessionState.Idle,
+            updatedAt = "",
+        )
 
     /**
      * The create response carries the agent's config options; seed them so the
@@ -1435,26 +1451,6 @@ class ChatViewModel(
             sessionId = created.sessionId,
             configOptions = parseConfigOptions(created.configOptions),
         )
-    }
-
-    private suspend fun adoptCreatedSession(row: SessionRow) {
-        navigationPreferences.saveLastSessionId(row.id)
-        persistSelectedSession(row.id)
-        _uiState.update { current ->
-            current.copy(
-                selectedSession = row,
-                pendingPermissions = emptyList(),
-                permissionUiState = PermissionUiState(),
-                extensionUiState = ExtensionUiState(),
-                streamReconnecting = false,
-                agentAuth = null,
-                agentAuthSummary = agentAuthSummaries[row.agentId],
-                authPanelSubmitting = false,
-                authActionBusy = false,
-                authError = null,
-            )
-        }
-        sessionOwner.watch(row.agentId, row.sessionId)
     }
 
     private fun Session.toSessionRow(): SessionRow {
@@ -1490,6 +1486,7 @@ class ChatViewModel(
     companion object {
         const val KEY_SELECTED_SESSION_ID = "selected_session_id"
         const val RECENT_SESSIONS_LIMIT = 5
+        const val NEW_SESSION_NAME = "New session"
     }
 }
 
