@@ -30,6 +30,7 @@ import harold.android.chat.parseAcpUpdate
 import harold.android.chat.parseStreamPermission
 import harold.android.contracts.AgentId
 import harold.android.contracts.AttachmentReference
+import harold.android.contracts.ConfigOption
 import harold.android.contracts.SessionStreamClientMessage
 import harold.android.contracts.SessionStreamServerMessage
 import harold.android.contracts.catalogSessionKey
@@ -220,6 +221,20 @@ class DefaultSessionOwner(
                 result = result,
             ),
         )
+    }
+
+    override fun rememberConfig(agentId: AgentId, sessionId: String, configOptions: List<ConfigOption>) {
+        if (sessionId.isEmpty() || configOptions.isEmpty()) {
+            return
+        }
+        synchronized(lock) {
+            configCatalog.remember(agentId, sessionId, configOptions)
+            if (belongsToWatchLocked(agentId, sessionId)) {
+                _snapshot.update { current ->
+                    current.copy(configOptions = configOptions)
+                }
+            }
+        }
     }
 
     override fun forget(agentId: AgentId, sessionId: String) {

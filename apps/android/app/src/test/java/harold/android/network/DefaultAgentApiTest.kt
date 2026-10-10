@@ -213,7 +213,17 @@ class DefaultAgentApiTest {
                       "sessionId": "sess_01",
                       "cwd": "/tmp/harold",
                       "title": "New session",
-                      "updatedAt": "2026-08-05T00:00:00.000Z"
+                      "updatedAt": "2026-08-05T00:00:00.000Z",
+                      "configOptions": [
+                        {
+                          "id": "model",
+                          "name": "Model",
+                          "category": "model",
+                          "type": "select",
+                          "currentValue": "m1",
+                          "options": [{ "value": "m1", "name": "M1" }]
+                        }
+                      ]
                     }
                     """.trimIndent(),
                 ),

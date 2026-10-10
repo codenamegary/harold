@@ -239,6 +239,12 @@ private class FakeSessionOwner : SessionOwner {
 
     override fun replyExtension(requestId: String, result: JsonElement) = Unit
 
+    override fun rememberConfig(
+        agentId: AgentId,
+        sessionId: String,
+        configOptions: List<harold.android.contracts.ConfigOption>,
+    ) = Unit
+
     override fun forget(agentId: AgentId, sessionId: String) = Unit
 }
 

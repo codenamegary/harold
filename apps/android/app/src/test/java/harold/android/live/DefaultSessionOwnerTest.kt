@@ -19,6 +19,7 @@ import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AuthSessionStatus
 import harold.android.contracts.AuthShowMessageLevel
 import harold.android.contracts.AuthStep
+import harold.android.contracts.ConfigOptionValue
 import harold.android.contracts.SelectOption
 import harold.android.contracts.SessionState
 import harold.android.contracts.SessionStreamClientMessage
@@ -558,6 +559,47 @@ class DefaultSessionOwnerTest {
         assertTrue(owner.snapshot.value.configOptions.isEmpty())
 
         owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+        assertEquals(
+            listOf("model"),
+            owner.snapshot.value.configOptions.map { option -> option.id },
+        )
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun rememberConfigSeedsSelectorsBeforeAnyFrame() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(holdOpen()),
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("opencode", "ses_02")
+        advanceUntilIdle()
+
+        owner.rememberConfig(
+            "opencode",
+            "ses_02",
+            listOf(
+                SelectOption(
+                    id = "model",
+                    name = "Model",
+                    category = "model",
+                    currentValue = "m1",
+                    options = listOf(ConfigOptionValue(value = "m1", name = "M1")),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        val options = owner.snapshot.value.configOptions
+        assertEquals(listOf("model"), options.map { option -> option.id })
+        assertEquals("m1", (options.single() as SelectOption).currentValue)
+
+        owner.watch("opencode", "ses_01")
+        owner.watch("opencode", "ses_02")
         advanceUntilIdle()
         assertEquals(
             listOf("model"),

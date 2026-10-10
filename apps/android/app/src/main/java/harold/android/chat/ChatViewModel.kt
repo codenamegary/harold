@@ -35,6 +35,8 @@ import harold.android.contracts.AuthSessionStatus
 import harold.android.contracts.ConfigOptionValue
 import harold.android.contracts.ConfigValue
 import harold.android.contracts.CreateSessionBody
+import harold.android.contracts.CreateSessionResponse
+import harold.android.contracts.parseConfigOptions
 import harold.android.contracts.Session
 import harold.android.contracts.SessionState
 import harold.android.contracts.WorkspaceState
@@ -449,39 +451,52 @@ class ChatViewModel(
             return
         }
 
-        val draftSession = draftNewSessionRow(workspace = workspace, agentId = agentId)
-        hideCreateDialog()
-        clearComposer()
-        viewModelScope.launch {
-            clearPersistedSession()
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired
+        if (paired == null) {
+            _uiState.update { current ->
+                current.copy(createState = current.createState.copy(error = "Connect to Harold first"))
+            }
+            return
         }
+
         _uiState.update { current ->
-            current.copy(
-                selectedSession = draftSession,
-                pickerVisible = false,
-                transcript = emptyAcpTranscript,
-                composerText = "",
-                composerError = null,
-                composerSubmitting = false,
-                availableCommands = emptyList(),
-                composerConfig = ComposerConfigUi(),
-                voiceCommandPrefix = "",
-                voiceCommandListVisible = false,
-                pendingPermissions = emptyList(),
-                permissionUiState = PermissionUiState(),
-                extensionUiState = ExtensionUiState(),
-                streamReconnecting = false,
-                agentAuth = null,
-                agentAuthSummary = agentAuthSummaries[agentId],
-                authPanelSubmitting = false,
-                authActionBusy = false,
-                authError = null,
-            )
+            current.copy(createState = current.createState.copy(submitting = true, error = null))
         }
-        sessionOwner.watch(agentId, null)
-        syncActiveSessionsFromUiState()
+
+        // The session is created here, not on the first prompt, so the create
+        // response can seed the composer's model, mode, and effort selectors
+        // before the user writes anything. The web client works the same way.
         viewModelScope.launch {
-            hydrateAgentAuth(agentId)
+            val result = operatorRepository.createSession(
+                serverOrigin = paired.serverOrigin,
+                body = CreateSessionBody(
+                    agentId = agentId,
+                    cwd = workspace.path,
+                ),
+            )
+
+            result.fold(
+                onSuccess = { created ->
+                    rememberCreatedConfig(created)
+                    val row = created.toSession().toSessionRow()
+                    hideCreateDialog()
+                    clearComposer()
+                    adoptCreatedSession(row)
+                    syncActiveSessionsFromUiState()
+                    hydrateAgentAuth(row.agentId)
+                    refreshCatalog()
+                },
+                onFailure = { error ->
+                    _uiState.update { current ->
+                        current.copy(
+                            createState = current.createState.copy(
+                                submitting = false,
+                                error = errorMessage(error),
+                            ),
+                        )
+                    }
+                },
+            )
         }
     }
 
@@ -680,7 +695,8 @@ class ChatViewModel(
                 serverOrigin = serverOrigin,
                 body = CreateSessionBody(agentId = session.agentId, cwd = session.cwd),
             ).map { created ->
-                created.toSessionRow().also { row -> adoptCreatedSession(row) }
+                rememberCreatedConfig(created)
+                created.toSession().toSessionRow().also { row -> adoptCreatedSession(row) }
             }
         }
 
@@ -1356,19 +1372,6 @@ class ChatViewModel(
         sessionForegroundCoordinator?.onSessionsChanged()
     }
 
-    private fun draftNewSessionRow(workspace: WorkspaceRow, agentId: AgentId): SessionRow =
-        SessionRow(
-            sessionId = "",
-            name = NEW_SESSION_NAME,
-            cwd = workspace.path,
-            workspaceId = workspace.id,
-            workspaceLabel = workspace.name,
-            agentId = agentId,
-            agentLabel = agentLabels[agentId] ?: agentId,
-            state = SessionState.Idle,
-            updatedAt = "",
-        )
-
     private fun createSessionFromComposer(
         session: SessionRow,
         prompt: String,
@@ -1396,7 +1399,8 @@ class ChatViewModel(
 
             result.fold(
                 onSuccess = { created ->
-                    val row = created.toSessionRow()
+                    rememberCreatedConfig(created)
+                    val row = created.toSession().toSessionRow()
                     adoptCreatedSession(row)
                     _uiState.update { current -> current.copy(composerSubmitting = false) }
                     sessionOwner.prompt(prompt, attachments)
@@ -1418,6 +1422,19 @@ class ChatViewModel(
                 },
             )
         }
+    }
+
+    /**
+     * The create response carries the agent's config options; seed them so the
+     * composer's model, mode, and effort selectors render before the first
+     * prompt instead of waiting on the stream.
+     */
+    private fun rememberCreatedConfig(created: CreateSessionResponse) {
+        sessionOwner.rememberConfig(
+            agentId = created.agentId,
+            sessionId = created.sessionId,
+            configOptions = parseConfigOptions(created.configOptions),
+        )
     }
 
     private suspend fun adoptCreatedSession(row: SessionRow) {
@@ -1473,7 +1490,6 @@ class ChatViewModel(
     companion object {
         const val KEY_SELECTED_SESSION_ID = "selected_session_id"
         const val RECENT_SESSIONS_LIMIT = 5
-        const val NEW_SESSION_NAME = "New session"
     }
 }
 

@@ -222,7 +222,7 @@ class DefaultAgentApi(
         pathSegments = "v1/sessions",
         body = json.encodeToString(CreateSessionBody.serializer(), body),
     ) { responseBody ->
-        json.decodeFromString(Session.serializer(), responseBody)
+        json.decodeFromString(CreateSessionResponse.serializer(), responseBody)
     }
 
     override suspend fun getAgentAuth(
