@@ -1,4 +1,5 @@
 import {
+  ConflictProblemSchema,
   NotFoundProblemSchema,
   PayloadTooLargeProblemSchema,
   PROBLEM_TYPES,
@@ -20,12 +21,13 @@ export const buildAttachmentParamsProblem = (error: ZodError) =>
     })),
   })
 
-export const buildWorkspaceNotFoundProblem = (detail = "Unknown workspace id") =>
-  NotFoundProblemSchema.parse({
-    type: PROBLEM_TYPES.notFound,
-    title: "Workspace not found",
-    status: 404,
-    detail,
+export const buildAttachmentFolderNotAllowedProblem = () =>
+  ConflictProblemSchema.parse({
+    type: PROBLEM_TYPES.conflict,
+    title: "Session folder not allowed",
+    status: 409,
+    detail:
+      "The session folder is outside the allowed roots, so attachments cannot be stored there",
   })
 
 export const buildAttachmentNotFoundProblem = (detail = "Unknown attachment") =>

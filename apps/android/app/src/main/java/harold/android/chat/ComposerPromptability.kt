@@ -14,13 +14,16 @@ fun resolveEffectiveSessionState(
     return transcriptSessionState ?: listSessionState
 }
 
+/**
+ * The agent owns the session and its working folder, so a prompt needs only an agent and an idle
+ * session. A registered Harold workspace is not required.
+ */
 fun isComposerPromptable(
-    workspaceId: String,
     agentId: harold.android.contracts.AgentId?,
     sessionId: String,
     sessionState: SessionState?,
 ): Boolean {
-    if (workspaceId.isEmpty() || agentId == null) {
+    if (agentId == null) {
         return false
     }
 

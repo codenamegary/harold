@@ -41,7 +41,6 @@ export const makeSaveAttachment =
       ok: true,
       value: {
         id,
-        workspaceId: command.workspaceId,
         name: command.fileName,
         mimeType: command.mimeType,
         kind: command.kind ?? inferAttachmentKind(command.mimeType),

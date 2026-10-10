@@ -291,7 +291,9 @@ export const createServer = async ({
     unbindWorkspaceSessions: acpSupervisor.unbindWorkspaceSessions,
   })
   const attachments = assembleAttachmentsSlice({
-    findWorkspaceById: workspace.findById,
+    findSessionCwd: cwdCache.get,
+    canonicalizePath,
+    getAllowedRoots,
   })
 
   const promptSession = createAcpHubPromptSession({

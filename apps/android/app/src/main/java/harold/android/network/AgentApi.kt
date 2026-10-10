@@ -118,7 +118,8 @@ interface AttachmentApi {
 
     suspend fun deleteAttachment(
         serverOrigin: String,
-        workspaceId: String,
+        agentId: AgentId,
+        sessionId: String,
         attachmentId: String,
     ): Result<Unit>
 }

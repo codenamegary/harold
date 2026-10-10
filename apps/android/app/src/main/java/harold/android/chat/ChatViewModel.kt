@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.joinAll
 import kotlinx.serialization.json.JsonObject
 import harold.android.chat.composer.ComposerConfigUi
@@ -90,6 +92,7 @@ class ChatViewModel(
     private var authHydrateGeneration: Int = 0
     private var lastLiveWatchKey: String? = null
     private var lastAuthRequired: Boolean = false
+    private val draftSessionLock = Mutex()
 
     init {
         voiceDictationController.onStateChanged = ::syncVoiceDictationState
@@ -579,8 +582,13 @@ class ChatViewModel(
         if (attachment.status == AttachmentUploadStatus.Ready && attachment.uploadedId != null) {
             viewModelScope.launch {
                 val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return@launch
-                val workspaceId = _uiState.value.selectedSession?.workspaceId ?: return@launch
-                attachmentApi.deleteAttachment(paired.serverOrigin, workspaceId, attachment.uploadedId)
+                val session = _uiState.value.selectedSession ?: return@launch
+                attachmentApi.deleteAttachment(
+                    serverOrigin = paired.serverOrigin,
+                    agentId = session.agentId,
+                    sessionId = session.sessionId,
+                    attachmentId = attachment.uploadedId,
+                )
             }
         }
     }
@@ -606,11 +614,15 @@ class ChatViewModel(
     }
 
     private suspend fun uploadAttachment(serverOrigin: String, attachment: PendingAttachmentUi) {
-        val workspaceId = _uiState.value.selectedSession?.workspaceId ?: return
+        val session = sessionForAttachment(serverOrigin).getOrElse { error ->
+            failAttachment(attachment.localId, errorMessage(error))
+            return
+        }
         val result = attachmentApi.uploadAttachment(
             serverOrigin = serverOrigin,
             request = AttachmentUploadRequest(
-                workspaceId = workspaceId,
+                agentId = session.agentId,
+                sessionId = session.sessionId,
                 fileName = attachment.name,
                 mimeType = attachment.mimeType,
                 bytes = attachment.bytes,
@@ -635,24 +647,42 @@ class ChatViewModel(
                     )
                 }
             },
-            onFailure = { error ->
-                _uiState.update { current ->
-                    current.copy(
-                        pendingAttachments = current.pendingAttachments.map { existing ->
-                            if (existing.localId == attachment.localId) {
-                                existing.copy(
-                                    status = AttachmentUploadStatus.Failed,
-                                    error = error.message ?: "Upload failed",
-                                )
-                            } else {
-                                existing
-                            }
-                        },
-                    )
-                }
-            },
+            onFailure = { error -> failAttachment(attachment.localId, errorMessage(error)) },
         )
     }
+
+    private fun failAttachment(localId: String, message: String) {
+        _uiState.update { current ->
+            current.copy(
+                pendingAttachments = current.pendingAttachments.map { existing ->
+                    if (existing.localId == localId) {
+                        existing.copy(status = AttachmentUploadStatus.Failed, error = message)
+                    } else {
+                        existing
+                    }
+                },
+            )
+        }
+    }
+
+    /**
+     * Attachments belong to a session and the server decides where they live. A draft has no
+     * session yet, so create it now. The lock makes several files picked together share one.
+     */
+    private suspend fun sessionForAttachment(serverOrigin: String): Result<SessionRow> =
+        draftSessionLock.withLock {
+            val session = _uiState.value.selectedSession
+                ?: return@withLock Result.failure(IllegalStateException("No session selected"))
+            if (session.sessionId.isNotEmpty()) {
+                return@withLock Result.success(session)
+            }
+            operatorRepository.createSession(
+                serverOrigin = serverOrigin,
+                body = CreateSessionBody(agentId = session.agentId, cwd = session.cwd),
+            ).map { created ->
+                created.toSessionRow().also { row -> adoptCreatedSession(row) }
+            }
+        }
 
     private fun syncAttachmentGating() {
         val session = _uiState.value.selectedSession
@@ -1367,24 +1397,8 @@ class ChatViewModel(
             result.fold(
                 onSuccess = { created ->
                     val row = created.toSessionRow()
-                    navigationPreferences.saveLastSessionId(row.id)
-                    persistSelectedSession(row.id)
-                    _uiState.update { current ->
-                        current.copy(
-                            selectedSession = row,
-                            composerSubmitting = false,
-                            pendingPermissions = emptyList(),
-                            permissionUiState = PermissionUiState(),
-                            extensionUiState = ExtensionUiState(),
-                            streamReconnecting = false,
-                            agentAuth = null,
-                            agentAuthSummary = agentAuthSummaries[row.agentId],
-                            authPanelSubmitting = false,
-                            authActionBusy = false,
-                            authError = null,
-                        )
-                    }
-                    sessionOwner.watch(row.agentId, row.sessionId)
+                    adoptCreatedSession(row)
+                    _uiState.update { current -> current.copy(composerSubmitting = false) }
                     sessionOwner.prompt(prompt, attachments)
                     _uiState.update { current ->
                         current.copy(pendingAttachments = emptyList())
@@ -1404,6 +1418,26 @@ class ChatViewModel(
                 },
             )
         }
+    }
+
+    private suspend fun adoptCreatedSession(row: SessionRow) {
+        navigationPreferences.saveLastSessionId(row.id)
+        persistSelectedSession(row.id)
+        _uiState.update { current ->
+            current.copy(
+                selectedSession = row,
+                pendingPermissions = emptyList(),
+                permissionUiState = PermissionUiState(),
+                extensionUiState = ExtensionUiState(),
+                streamReconnecting = false,
+                agentAuth = null,
+                agentAuthSummary = agentAuthSummaries[row.agentId],
+                authPanelSubmitting = false,
+                authActionBusy = false,
+                authError = null,
+            )
+        }
+        sessionOwner.watch(row.agentId, row.sessionId)
     }
 
     private fun Session.toSessionRow(): SessionRow {

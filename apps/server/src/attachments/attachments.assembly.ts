@@ -1,5 +1,5 @@
 import { FastifyInstance } from "fastify"
-import { FindWorkspaceById } from "core/workspace/ports"
+import { CanonicalizePath } from "core/filesystem/ports"
 import { createAttachmentId } from "./attachments.create.id"
 import { makeDeleteAttachment } from "./attachments.delete.usecase"
 import {
@@ -11,11 +11,14 @@ import {
 } from "./attachments.fs.adapters"
 import { makeLoadAttachment } from "./attachments.load.usecase"
 import { LoadAttachment } from "./attachments.ports"
+import { makeResolveSessionFolder } from "./attachments.resolve.session.folder.usecase"
 import { registerAttachmentRoutes } from "./attachments.routes"
 import { makeSaveAttachment } from "./attachments.save.usecase"
 
 export type AssembleAttachmentsSliceDeps = Readonly<{
-  findWorkspaceById: FindWorkspaceById
+  findSessionCwd: (params: { agentId: string; sessionId: string }) => string | undefined
+  canonicalizePath: CanonicalizePath
+  getAllowedRoots: () => readonly string[]
 }>
 
 export type AttachmentsSlice = Readonly<{
@@ -45,10 +48,16 @@ export const assembleAttachmentsSlice = (deps: AssembleAttachmentsSliceDeps): At
     deleteAttachmentFile,
   })
 
+  const resolveSessionFolder = makeResolveSessionFolder({
+    findSessionCwd: deps.findSessionCwd,
+    canonicalizePath: deps.canonicalizePath,
+    getAllowedRoots: deps.getAllowedRoots,
+  })
+
   return {
     registerRoutes: (app) => {
       registerAttachmentRoutes(app, {
-        findWorkspaceById: deps.findWorkspaceById,
+        resolveSessionFolder,
         saveAttachment,
         deleteAttachment,
       })

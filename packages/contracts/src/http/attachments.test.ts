@@ -9,7 +9,6 @@ import {
 
 const descriptor = {
   id: "att_01JQ4KX7Q2M",
-  workspaceId: "ws_01HQ2WN8P9",
   name: "screenshot.png",
   mimeType: "image/png",
   kind: "image",
@@ -20,6 +19,12 @@ const descriptor = {
 describe("AttachmentDescriptorSchema", () => {
   test("parses a full descriptor", () => {
     expect(AttachmentDescriptorSchema.parse(descriptor)).toEqual(descriptor)
+  })
+
+  test("does not carry a workspace id", () => {
+    expect(
+      AttachmentDescriptorSchema.safeParse({ ...descriptor, workspaceId: "ws_01HQ2WN8P9" }).success,
+    ).toBe(false)
   })
 
   test("rejects unknown kind", () => {
@@ -75,7 +80,7 @@ describe("limits", () => {
     expect(MAX_ATTACHMENT_BYTES).toBe(20 * 1024 * 1024)
   })
 
-  test("storage folder is dot-prefixed inside the workspace", () => {
+  test("storage folder is dot-prefixed inside the session folder", () => {
     expect(attachmentsFolderName).toBe(".harold/attachments")
   })
 })

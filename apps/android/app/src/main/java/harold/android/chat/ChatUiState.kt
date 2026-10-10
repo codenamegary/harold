@@ -154,7 +154,6 @@ data class ChatUiState(
         get() {
             val session = selectedSession ?: return false
             return isComposerPromptable(
-                workspaceId = session.workspaceId,
                 agentId = session.agentId,
                 sessionId = session.sessionId,
                 sessionState = effectiveSessionState,

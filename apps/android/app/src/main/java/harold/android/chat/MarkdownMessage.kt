@@ -41,6 +41,8 @@ private fun CompletedMarkdown(
     SelectionContainer {
         Markdown(
             markdownState = markdownState,
+            typography = haroldMarkdownTypography(),
+            dimens = haroldMarkdownDimens(),
             modifier = modifier.testTag("markdown_message"),
         )
     }
@@ -67,6 +69,8 @@ private fun StreamingMarkdown(
         SelectionContainer {
             Markdown(
                 streamingMarkdownState = streamingState,
+                typography = haroldMarkdownTypography(),
+                dimens = haroldMarkdownDimens(),
                 modifier = modifier.testTag("markdown_message"),
             )
         }

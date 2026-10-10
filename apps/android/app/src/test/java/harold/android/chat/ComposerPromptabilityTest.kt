@@ -13,7 +13,6 @@ class ComposerPromptabilityTest {
     fun enablesComposerForDraftNewSession() {
         assertTrue(
             isComposerPromptable(
-                workspaceId = "ws_01",
                 agentId = "cursor",
                 sessionId = "",
                 sessionState = null,
@@ -25,7 +24,6 @@ class ComposerPromptabilityTest {
     fun enablesComposerWhenSessionIdle() {
         assertTrue(
             isComposerPromptable(
-                workspaceId = "ws_01",
                 agentId = "cursor",
                 sessionId = "sess_01",
                 sessionState = SessionState.Idle,
@@ -37,10 +35,20 @@ class ComposerPromptabilityTest {
     fun blocksComposerWhileRunning() {
         assertFalse(
             isComposerPromptable(
-                workspaceId = "ws_01",
                 agentId = "cursor",
                 sessionId = "sess_01",
                 sessionState = SessionState.Running,
+            ),
+        )
+    }
+
+    @Test
+    fun blocksComposerWithoutAnAgent() {
+        assertFalse(
+            isComposerPromptable(
+                agentId = null,
+                sessionId = "sess_01",
+                sessionState = SessionState.Idle,
             ),
         )
     }

@@ -1,3 +1,4 @@
+import { ResolveSessionFolderError } from "./attachments.errors"
 import {
   DeleteAttachmentParams,
   DeleteAttachmentResult,
@@ -24,3 +25,8 @@ export type SaveAttachment = (command: SaveAttachmentCommand) => Promise<SaveAtt
 export type LoadAttachment = (params: LoadAttachmentParams) => Promise<ResolvedAttachment | null>
 
 export type DeleteAttachment = (params: DeleteAttachmentParams) => Promise<DeleteAttachmentResult>
+
+export type ResolveSessionFolder = (params: {
+  agentId: string
+  sessionId: string
+}) => { ok: true; value: string } | { ok: false; error: ResolveSessionFolderError }

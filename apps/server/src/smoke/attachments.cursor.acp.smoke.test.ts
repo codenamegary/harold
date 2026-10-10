@@ -103,7 +103,7 @@ const MULTIPART_BOUNDARY = "----agentserverattachmentsmoke"
 
 const uploadImage = (
   app: Awaited<ReturnType<typeof createServer>>["app"],
-  workspaceId: string,
+  sessionId: string,
   fileName: string,
   bytes: Uint8Array,
 ) => {
@@ -114,7 +114,8 @@ const uploadImage = (
   const payload = Buffer.concat([jsonPart, bytes, tail])
   return app.inject({
     method: "POST",
-    url: `/v1/workspaces/${workspaceId}/attachments`,
+    url: `/v1/sessions/${sessionId}/attachments`,
+    query: { agentId: "cursor" },
     payload,
     headers: {
       authorization: `Bearer ${app.deviceCredential.credential}`,
@@ -346,15 +347,6 @@ describe("cursor attachment smoke", () => {
 
         await allowWorkspaceRoots(app, [dataDir])
 
-        const workspaceResponse = await app.inject({
-          headers: authHeaders(app),
-          method: "POST",
-          url: "/v1/workspaces",
-          payload: { name: "Attachment smoke workspace", path: workspaceDir },
-        })
-        expect(workspaceResponse.statusCode).toBe(201)
-        const workspaceId = (JSON.parse(workspaceResponse.body) as { id: string }).id
-
         const sessionResponse = await app.inject({
           headers: authHeaders(app),
           method: "POST",
@@ -366,7 +358,7 @@ describe("cursor attachment smoke", () => {
 
         // Upload a solid red PNG through the real API surface.
         const png = createSolidPng(8, [220, 30, 30])
-        const uploadResponse = await uploadImage(app, workspaceId, "red-square.png", png)
+        const uploadResponse = await uploadImage(app, session.sessionId, "red-square.png", png)
         expect(uploadResponse.statusCode).toBe(201)
         const descriptor = AttachmentDescriptorSchema.parse(JSON.parse(uploadResponse.body))
         expect(descriptor.path.startsWith(path.join(workspaceDir, ".harold", "attachments"))).toBe(
