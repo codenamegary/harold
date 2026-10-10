@@ -1,5 +1,5 @@
 import { createWriteStream } from "node:fs"
-import packageJson from "../../package.json"
+import cliPackageJson from "../../../cli/package.json"
 import { createServer } from "./server"
 import { listen, registerShutdown } from "./shutdown"
 import { ConfigSchema, parseConfig } from "../config/config"
@@ -48,7 +48,7 @@ export const runServer = async (options: RunServerOptions = {}) => {
   // A null logPath means the default file under the data dir.
   const logFilePath = resolveDaemonLogPath(applied.logPath, envConfig.dataDir)
   const logStream = createWriteStream(logFilePath, { flags: "a" })
-  const runtime = createRuntime(packageJson.version)
+  const runtime = createRuntime(cliPackageJson.version)
   const { app, acpSupervisor, runtimeStatusService, warmAgents } = await createServer({
     config,
     runtime,
