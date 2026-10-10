@@ -1708,3 +1708,84 @@ describe("session config options", () => {
     expect(result).toMatchObject({ ok: false, kind: "error" })
   })
 })
+
+describe("supervisor start coalescing and shutdown", () => {
+  const supervisors: Awaited<ReturnType<typeof createAcpSupervisor>>[] = []
+
+  afterEach(async () => {
+    await Promise.all(supervisors.splice(0).map((supervisor) => supervisor.stop()))
+  })
+
+  const gatedInitialize = () => {
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const mock = createMockTransport()
+    mock.setHandler("initialize", async () => {
+      await gate
+      return { agentCapabilities: { loadSession: false, sessionCapabilities: {} } }
+    })
+    mock.setHandler("authenticate", () => ({}))
+    return { mock, release: () => release() }
+  }
+
+  test("a second start while the agent is starting shares the in-flight start", async () => {
+    const { mock, release } = gatedInitialize()
+
+    const spawnCount = { value: 0 }
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: () => {
+        spawnCount.value += 1
+        return createMockProcess()
+      },
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    const warmUp = supervisor.start("cursor")
+    const firstPrompt = supervisor.start("cursor")
+    release()
+
+    expect(await warmUp).toEqual({ ok: true })
+    expect(await firstPrompt).toEqual({ ok: true })
+    expect(spawnCount.value).toBe(1)
+    expect(supervisor.getRunningAgentIds()).toEqual(["cursor"])
+  })
+
+  test("stop during a starting agent kills the child and never reports ready", async () => {
+    const { mock, release } = gatedInitialize()
+
+    const killed = { value: false }
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: () => ({
+        ...createMockProcess(),
+        kill: () => {
+          killed.value = true
+        },
+      }),
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    const warmUp = supervisor.start("cursor")
+    await supervisor.stop()
+    release()
+
+    expect(await warmUp).toEqual({
+      ok: false,
+      reason: "ACP supervisor was stopped while the agent was starting",
+    })
+    expect(killed.value).toBe(true)
+    expect(supervisor.getRunningAgentIds()).toEqual([])
+    expect(supervisor.getStatus().state).toBe("stopped")
+  })
+})

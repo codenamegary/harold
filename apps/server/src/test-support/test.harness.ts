@@ -268,6 +268,9 @@ const bootAppInDirectory = (
       scope.actions.supervisor.add(() => serverOptions.acpSupervisor!.stop())
     }
     const result = await createServer(serverOptions)
+    // Booted apps in tests want the warmed state the daemon reaches in the
+    // background: agents are up as soon as the app is.
+    await result.warmAgents()
     if (!serverOptions.acpSupervisor) {
       scope.actions.supervisor.add(() => result.acpSupervisor.stop())
     }

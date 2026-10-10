@@ -44,6 +44,11 @@ const openServeDeps = (): ServeDeps => {
  * the daemon keeps running in the foreground. The wizard never runs here.
  * Setup owns configuration.
  *
+ * Agent warm-up happens after the listener is up, in the background: agents
+ * spawn and initialize while the daemon already answers, so readiness is the
+ * bind rather than the slowest agent process. The session path still starts
+ * any agent that is not running yet when a prompt needs it.
+ *
  * This command is internal: it is hidden from the operator help and is what
  * `harold start` and `harold setup` re-exec detached as the daemon. The
  * operator-facing command is `harold start`.
