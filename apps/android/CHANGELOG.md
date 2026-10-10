@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.3](https://github.com/codenamegary/harold/compare/harold-android-v1.1.2...harold-android-v1.1.3) (2026-10-10)
+
+
+### Bug Fixes
+
+* **android:** create session on confirm, seed config from response ([#375](https://github.com/codenamegary/harold/issues/375)) ([f516ac5](https://github.com/codenamegary/harold/commit/f516ac539705a279073ade02e18621ff9502960a))
+
+
+### CI
+
+* **workflows:** gate branch protection behind an always-reporting ci-ok job ([#379](https://github.com/codenamegary/harold/issues/379)) ([c29e8cd](https://github.com/codenamegary/harold/commit/c29e8cd143ee695b9c973898a075c9043ff9a440))
+
 ## [1.1.2](https://github.com/codenamegary/harold/compare/harold-android-v1.1.1...harold-android-v1.1.2) (2026-10-10)
 
 
