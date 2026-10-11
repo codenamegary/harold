@@ -69,7 +69,7 @@ class PairingViewModelTest {
     }
 
     @Test
-    fun onQrScannedSurfacesLegacyAgentServerSchemeErrorWithAppUpdateMessage() = runTest {
+    fun onQrScannedSurfacesRetiredAgentServerSchemeAsInvalidScheme() = runTest {
         val coordinator = FakePairingCoordinator(Result.success(Unit))
         val viewModel = PairingViewModel(
             pairingCoordinator = coordinator,
@@ -81,7 +81,7 @@ class PairingViewModelTest {
 
         assertTrue(coordinator.calls.isEmpty())
         assertEquals(
-            "Legacy agent-server pairing payload is not supported; app update required",
+            "Invalid pairing URI scheme",
             viewModel.uiState.value.errorMessage,
         )
         assertFalse(viewModel.uiState.value.completed)

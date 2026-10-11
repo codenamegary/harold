@@ -29,7 +29,7 @@ import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceState
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
-import harold.android.operator.OperatorRepository
+import harold.android.user.UserRepository
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 
@@ -51,7 +51,7 @@ class AddWorkspaceViewModelTest {
     fun loadsAllowedRoots() = runTest(dispatcher) {
         val viewModel = AddWorkspaceViewModel(
             sessionGateway = fakeSession(),
-            operatorRepository = FakeAddOperatorRepository(),
+            userRepository = FakeAddUserRepository(),
         )
 
         advanceUntilIdle()
@@ -64,7 +64,7 @@ class AddWorkspaceViewModelTest {
     fun reportsEmptyRoots() = runTest(dispatcher) {
         val viewModel = AddWorkspaceViewModel(
             sessionGateway = fakeSession(),
-            operatorRepository = FakeAddOperatorRepository(allowedRoots = emptyList()),
+            userRepository = FakeAddUserRepository(allowedRoots = emptyList()),
         )
 
         advanceUntilIdle()
@@ -75,10 +75,10 @@ class AddWorkspaceViewModelTest {
 
     @Test
     fun selectingFolderAutofillsNameAndSubmitCreatesWorkspace() = runTest(dispatcher) {
-        val repository = FakeAddOperatorRepository()
+        val repository = FakeAddUserRepository()
         val viewModel = AddWorkspaceViewModel(
             sessionGateway = fakeSession(),
-            operatorRepository = repository,
+            userRepository = repository,
         )
 
         advanceUntilIdle()
@@ -104,7 +104,7 @@ class AddWorkspaceViewModelTest {
     fun folderSearchFiltersList() = runTest(dispatcher) {
         val viewModel = AddWorkspaceViewModel(
             sessionGateway = fakeSession(),
-            operatorRepository = FakeAddOperatorRepository(
+            userRepository = FakeAddUserRepository(
                 folders = listOf(
                     FilesystemDirectory(name = "harold", path = "/home/ops/code/harold"),
                     FilesystemDirectory(name = "notes", path = "/home/ops/code/notes"),
@@ -125,7 +125,7 @@ class AddWorkspaceViewModelTest {
     fun folderLoadErrorBlocksSubmit() = runTest(dispatcher) {
         val viewModel = AddWorkspaceViewModel(
             sessionGateway = fakeSession(),
-            operatorRepository = FakeAddOperatorRepository(
+            userRepository = FakeAddUserRepository(
                 foldersFailure = AgentApiException(AgentApiError.Transport(RuntimeException("boom"))),
             ),
         )
@@ -167,13 +167,13 @@ private class AddFakeSessionGateway(
     }
 }
 
-private class FakeAddOperatorRepository(
+private class FakeAddUserRepository(
     private val allowedRoots: List<String> = listOf("/home/ops/code"),
     private val folders: List<FilesystemDirectory> = listOf(
         FilesystemDirectory(name = "harold", path = "/home/ops/code/harold"),
     ),
     private val foldersFailure: Throwable? = null,
-) : OperatorRepository {
+) : UserRepository {
     val createCalls = mutableListOf<CreateWorkspaceBody>()
 
     override suspend fun listWorkspaces(

@@ -38,7 +38,7 @@ class PostPairingNavigationTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun afterPairingCompletesOperatorScreenIsVisible() {
+    fun afterPairingCompletesChatScreenIsVisible() {
         composeTestRule.setContent {
             val navController = rememberNavController()
             var showShell by remember { mutableStateOf(true) }

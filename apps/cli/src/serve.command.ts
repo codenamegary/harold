@@ -49,9 +49,9 @@ const openServeDeps = (): ServeDeps => {
  * bind rather than the slowest agent process. The session path still starts
  * any agent that is not running yet when a prompt needs it.
  *
- * This command is internal: it is hidden from the operator help and is what
+ * This command is internal: it is hidden from the user help and is what
  * `harold start` and `harold setup` re-exec detached as the daemon. The
- * operator-facing command is `harold start`.
+ * user-facing command is `harold start`.
  */
 const executeServe = async (deps: ServeDeps): Promise<number> => {
   const running = deps.readLiveDaemonState()

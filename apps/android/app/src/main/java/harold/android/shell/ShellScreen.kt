@@ -127,15 +127,6 @@ fun ShellScreen(
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(top = 8.dp),
                     )
-
-                    Text(
-                        text = stringResource(R.string.shell_brand_subtitle).uppercase(),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 6.dp),
-                    )
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))

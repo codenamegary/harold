@@ -22,7 +22,7 @@ export type VerifyAdvertisedEndpointResult =
   | { readonly ok: false; readonly error: ReachabilityFailure }
 
 /**
- * Android verifies reachability against `GET /v1/status` (ADR-0006), so the
+ * Android verifies reachability against `GET /v1/status`, so the
  * advertised endpoint is verified through the same path. A path prefix on the
  * advertised URL is kept and the trailing slash collapsed. Query and fragment
  * suffixes are not part of the endpoint base, so they are dropped before the

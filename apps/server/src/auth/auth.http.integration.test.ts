@@ -113,7 +113,7 @@ describe("device-only HTTP edge", () => {
     )
   })
 
-  test("valid device Bearer unlocks operator HTTP", async () => {
+  test("valid device Bearer unlocks user HTTP", async () => {
     const { app, config, database } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
     const { credential } = seedTestDevice(database)

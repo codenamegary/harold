@@ -27,8 +27,8 @@ import harold.android.network.BearerAuthInterceptor
 import harold.android.network.DefaultAgentApi
 import harold.android.network.DefaultPairingApi
 import harold.android.network.PairingApi
-import harold.android.operator.DefaultOperatorRepository
-import harold.android.operator.OperatorRepository
+import harold.android.user.DefaultUserRepository
+import harold.android.user.UserRepository
 import harold.android.pairing.DefaultPairingCoordinator
 import harold.android.pairing.DefaultPairingPayloadParser
 import harold.android.pairing.DefaultPairingRequests
@@ -52,7 +52,7 @@ interface AppContainer {
     val agentApi: AgentApi
     val sessionOwner: SessionOwner
     val navigationPreferences: NavigationPreferences
-    val operatorRepository: OperatorRepository
+    val userRepository: UserRepository
     val activeSessionTracker: ActiveSessionTracker
     val sessionForegroundCoordinator: SessionForegroundCoordinator
     val openSessionRequests: OpenSessionRequests
@@ -96,7 +96,7 @@ class DefaultAppContainer(
         scope = applicationScope,
     )
     override val navigationPreferences: NavigationPreferences = DefaultNavigationPreferences(context)
-    override val operatorRepository: OperatorRepository = DefaultOperatorRepository(agentApi)
+    override val userRepository: UserRepository = DefaultUserRepository(agentApi)
 
     override val activeSessionTracker: ActiveSessionTracker = DefaultActiveSessionTracker()
     override val openSessionRequests: OpenSessionRequests = DefaultOpenSessionRequests()

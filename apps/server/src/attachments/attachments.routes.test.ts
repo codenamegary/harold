@@ -49,7 +49,7 @@ const createSessionInAllowedFolder = async (app: TestApp["app"], dataDir: string
   return { sessionId: await createSessionIn(app, folder), folder }
 }
 
-const MULTIPART_BOUNDARY = "----agentservertestboundary"
+const MULTIPART_BOUNDARY = "----haroldtestboundary"
 
 const makeMultipartBody = (
   file: { fileName: string; mimeType: string; bytes: Uint8Array },

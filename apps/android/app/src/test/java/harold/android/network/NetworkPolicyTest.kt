@@ -7,7 +7,7 @@ import org.junit.Test
 
 /**
  * Guards the cleartext policy without needing a device.
- * Every build type pairs with LAN hosts over http (ADR-0008), so the
+ * Every build type pairs with LAN hosts over http, so the
  * allowance lives in main and no build type overrides it.
  */
 class NetworkPolicyTest {

@@ -17,7 +17,7 @@ class ContractDecodingTest {
             {
               "id": "ws_01",
               "name": "harold",
-              "path": "/home/operator/sites/harold",
+              "path": "/home/user/sites/harold",
               "state": "available",
               "createdAt": "2026-08-05T00:00:00.000Z",
               "lastUsedAt": "2026-08-05T01:00:00.000Z"
@@ -234,7 +234,7 @@ class ContractDecodingTest {
             {
               "agentId": "cursor",
               "sessionId": "1b24880f-900d-4b7a-9fed-8385e483caef",
-              "cwd": "/home/operator/sites/harold",
+              "cwd": "/home/user/sites/harold",
               "title": "1b24880f-900d-4b7a-9fed-8385e483caef",
               "updatedAt": "2026-10-10T02:25:09.202Z",
               "configOptions": [

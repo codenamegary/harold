@@ -47,15 +47,13 @@ const getListeningBase = async (
 const pairDevice = async (
   httpBase: string,
   body: Record<string, unknown> = {},
-  operatorCredential?: string,
+  userCredential?: string,
 ) => {
   const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      ...(operatorCredential === undefined
-        ? {}
-        : { authorization: `Bearer ${operatorCredential}` }),
+      ...(userCredential === undefined ? {} : { authorization: `Bearer ${userCredential}` }),
     },
     body: JSON.stringify({}),
   })

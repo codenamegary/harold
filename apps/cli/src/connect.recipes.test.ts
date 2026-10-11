@@ -220,7 +220,7 @@ describe("custom recipe", () => {
 
     expect(recipe.detect({ which: makeWhich([]) })).toEqual({
       available: true,
-      detail: "operator-supplied endpoint",
+      detail: "user-supplied endpoint",
     })
   })
 
@@ -228,7 +228,7 @@ describe("custom recipe", () => {
     if (recipe === undefined) throw new Error("custom recipe missing")
     const { lines, writeLine } = collectLines()
 
-    recipe.guide({ detection: detection(true, "operator-supplied endpoint"), writeLine })
+    recipe.guide({ detection: detection(true, "user-supplied endpoint"), writeLine })
 
     const text = output(lines)
     expect(text).toContain("https")

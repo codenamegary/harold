@@ -1,6 +1,6 @@
 # Harold Android
 
-Native Jetpack Compose app for the Harold operator workflow.
+Native Jetpack Compose app for the Harold user workflow.
 
 ## Prerequisites
 
@@ -40,11 +40,11 @@ The application id was renamed to `harold.android` (formerly `server.agent.andro
    ```sh
    ./gradlew :app:installDebug
    ```
-3. Pair using the in-app scanner or by pointing your phone camera at the terminal pairing QR code (`harold://pair`), which opens Harold directly. Legacy `agent-server://pair` payloads will prompt that an app update is required.
+3. Pair using the in-app scanner or by pointing your phone camera at the terminal pairing QR code (`harold://pair`), which opens Harold directly. Payloads using any other scheme are rejected as invalid pairing URIs.
 
 ## Transport
 
-Every build type allows cleartext HTTP and WebSocket traffic, so the app can pair with a LAN host over `http://` ([ADR-0008](../../docs/adr/0008-android-lan-cleartext.md)). One network security config in `src/main` sets this. No trust-all TLS.
+Every build type allows cleartext HTTP and WebSocket traffic, so the app can pair with a LAN host over `http://`. One network security config in `src/main` sets this. No trust-all TLS.
 
 ## Debug and release builds
 
@@ -64,7 +64,7 @@ Without them, `assembleRelease` produces an unsigned APK. CI signs releases with
 ## Authenticated transport
 
 One OkHttp client serves both authenticated paths. It attaches the paired device
-credential as `Authorization: Bearer` ([ADR-0001](../../docs/adr/0001-device-authentication.md)).
+credential as `Authorization: Bearer`.
 The credential never appears in a URL or a log line.
 
 - HTTP: `GET /v1/workspaces?limit=1` proves the path from the shell.
@@ -75,7 +75,7 @@ The credential never appears in a URL or a log line.
 
 Reconnect uses `min(250 * 2^(attempt - 1), 4000)` ms with no jitter. A rejected
 credential (HTTP `401`, or close `1008` with reason `unauthorized`) stops
-auto-retry, clears the local credential, and returns the operator to pairing.
+auto-retry, clears the local credential, and returns the user to pairing.
 Every other close, slow consumer included, keeps reconnecting.
 
 ## CI

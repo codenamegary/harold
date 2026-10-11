@@ -51,7 +51,7 @@ import harold.android.foreground.ActiveSessionTracker
 import harold.android.foreground.OpenSessionRequests
 import harold.android.foreground.SessionForegroundCoordinator
 import harold.android.navigation.NavigationPreferences
-import harold.android.operator.OperatorRepository
+import harold.android.user.UserRepository
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 import harold.android.ui.promptinput.PromptEdit
@@ -61,7 +61,7 @@ class ChatViewModel(
     private val savedStateHandle: SavedStateHandle,
     private val sessionGateway: SessionGateway,
     private val sessionOwner: SessionOwner,
-    private val operatorRepository: OperatorRepository,
+    private val userRepository: UserRepository,
     private val attachmentApi: AttachmentApi,
     private val configApi: SessionConfigApi,
     private val navigationPreferences: NavigationPreferences,
@@ -463,7 +463,7 @@ class ChatViewModel(
         // Config options only exist once the agent has a session, so create it
         // on confirm for the selectors to render before the first prompt.
         viewModelScope.launch {
-            val result = operatorRepository.createSession(
+            val result = userRepository.createSession(
                 serverOrigin = paired.serverOrigin,
                 body = CreateSessionBody(
                     agentId = agentId,
@@ -502,7 +502,7 @@ class ChatViewModel(
     }
 
     private suspend fun agentNeedsLogin(serverOrigin: String, agentId: AgentId): Boolean =
-        operatorRepository.getAgentAuth(serverOrigin = serverOrigin, agentId = agentId)
+        userRepository.getAgentAuth(serverOrigin = serverOrigin, agentId = agentId)
             .getOrNull()
             ?.status == AgentAuthStatus.NeedsAuth
 
@@ -558,7 +558,7 @@ class ChatViewModel(
 
         pendingCreateInFlight = true
         viewModelScope.launch {
-            operatorRepository.createSession(
+            userRepository.createSession(
                 serverOrigin = paired.serverOrigin,
                 body = CreateSessionBody(agentId = agentId, cwd = pending.cwd),
             ).fold(
@@ -842,7 +842,7 @@ class ChatViewModel(
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
 
         viewModelScope.launch {
-            operatorRepository.deleteSession(
+            userRepository.deleteSession(
                 serverOrigin = paired.serverOrigin,
                 agentId = row.agentId,
                 sessionId = row.sessionId,
@@ -883,7 +883,7 @@ class ChatViewModel(
             current.copy(authActionBusy = true, authError = null)
         }
         viewModelScope.launch {
-            operatorRepository.applyAgentAuthSessionAction(
+            userRepository.applyAgentAuthSessionAction(
                 serverOrigin = paired.serverOrigin,
                 agentId = selected.agentId,
                 sessionId = authSession.sessionId,
@@ -916,7 +916,7 @@ class ChatViewModel(
             current.copy(authActionBusy = true, authError = null)
         }
         viewModelScope.launch {
-            operatorRepository.applyAgentAuthSessionAction(
+            userRepository.applyAgentAuthSessionAction(
                 serverOrigin = paired.serverOrigin,
                 agentId = selected.agentId,
                 sessionId = authSession.sessionId,
@@ -956,7 +956,7 @@ class ChatViewModel(
             current.copy(authActionBusy = true, authError = null)
         }
         viewModelScope.launch {
-            operatorRepository.logoutAgentAuth(
+            userRepository.logoutAgentAuth(
                 serverOrigin = paired.serverOrigin,
                 agentId = selected.agentId,
             ).fold(
@@ -992,7 +992,7 @@ class ChatViewModel(
         viewModelScope.launch {
             val paired = sessionGateway.pairedState.value as? PairedState.Paired
             if (paired != null) {
-                operatorRepository.revokeDevice(
+                userRepository.revokeDevice(
                     serverOrigin = paired.serverOrigin,
                     deviceId = paired.deviceId,
                 )
@@ -1022,7 +1022,7 @@ class ChatViewModel(
             current.copy(authPanelSubmitting = true, authError = null)
         }
         viewModelScope.launch {
-            operatorRepository.startAgentAuthSession(
+            userRepository.startAgentAuthSession(
                 serverOrigin = paired.serverOrigin,
                 agentId = agentId,
             ).fold(
@@ -1081,7 +1081,7 @@ class ChatViewModel(
     ) {
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
         val generation = ++authHydrateGeneration
-        operatorRepository.getAgentAuth(
+        userRepository.getAgentAuth(
             serverOrigin = paired.serverOrigin,
             agentId = agentId,
         ).fold(
@@ -1241,9 +1241,9 @@ class ChatViewModel(
             current.copy(sessionsLoading = true, sessionsError = null)
         }
 
-        val workspacesResult = operatorRepository.listWorkspaces(paired.serverOrigin)
-        val sessionsResult = operatorRepository.listSessions(paired.serverOrigin)
-        val agentsResult = operatorRepository.listAgents(paired.serverOrigin)
+        val workspacesResult = userRepository.listWorkspaces(paired.serverOrigin)
+        val sessionsResult = userRepository.listSessions(paired.serverOrigin)
+        val agentsResult = userRepository.listAgents(paired.serverOrigin)
 
         val workspaces = workspacesResult.getOrNull()?.items.orEmpty().map { workspace ->
             WorkspaceRow(
@@ -1334,7 +1334,7 @@ class ChatViewModel(
     }
 
     private suspend fun loadCreateForm(serverOrigin: String): CreateSessionUiState {
-        val workspaces = operatorRepository.listWorkspaces(serverOrigin).getOrNull()?.items.orEmpty()
+        val workspaces = userRepository.listWorkspaces(serverOrigin).getOrNull()?.items.orEmpty()
             .map { workspace ->
                 WorkspaceRow(
                     id = workspace.id,
@@ -1345,7 +1345,7 @@ class ChatViewModel(
             }
             .filter { workspace -> workspace.state == WorkspaceState.Available }
 
-        val agents = operatorRepository.listAgents(serverOrigin).getOrNull()?.items.orEmpty()
+        val agents = userRepository.listAgents(serverOrigin).getOrNull()?.items.orEmpty()
             .filter { agent -> agent.enabled }
             .map { agent -> AgentOption(id = agent.id, displayName = agent.displayName) }
 
@@ -1494,7 +1494,7 @@ class ChatViewModelFactory(
     private val savedStateHandle: SavedStateHandle,
     private val sessionGateway: SessionGateway,
     private val sessionOwner: SessionOwner,
-    private val operatorRepository: OperatorRepository,
+    private val userRepository: UserRepository,
     private val attachmentApi: AttachmentApi,
     private val configApi: SessionConfigApi,
     private val navigationPreferences: NavigationPreferences,
@@ -1510,7 +1510,7 @@ class ChatViewModelFactory(
                 savedStateHandle = savedStateHandle,
                 sessionGateway = sessionGateway,
                 sessionOwner = sessionOwner,
-                operatorRepository = operatorRepository,
+                userRepository = userRepository,
                 attachmentApi = attachmentApi,
                 configApi = configApi,
                 navigationPreferences = navigationPreferences,

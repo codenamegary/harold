@@ -20,7 +20,7 @@ export type ReadLiveDaemonState = () => ReadLiveDaemonStateResult
 /**
  * Reads the daemon's persisted state and only accepts it as live when the
  * process that wrote it still exists. This is how the CLI observes the
- * daemon without a host HTTP route (ADR-0006).
+ * daemon without a host HTTP route.
  */
 export const makeReadLiveDaemonState =
   (deps: ReadLiveDaemonStateDeps): ReadLiveDaemonState =>

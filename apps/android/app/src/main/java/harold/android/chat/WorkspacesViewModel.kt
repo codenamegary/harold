@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
-import harold.android.operator.OperatorRepository
+import harold.android.user.UserRepository
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 
@@ -34,7 +34,7 @@ data class WorkspacesUiState(
 
 class WorkspacesViewModel(
     private val sessionGateway: SessionGateway,
-    private val operatorRepository: OperatorRepository,
+    private val userRepository: UserRepository,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(WorkspacesUiState())
     val uiState: StateFlow<WorkspacesUiState> = _uiState.asStateFlow()
@@ -50,7 +50,7 @@ class WorkspacesViewModel(
 
         _uiState.update { WorkspacesUiState(loadState = WorkspacesLoadState.Loading) }
 
-        operatorRepository.listWorkspaces(paired.serverOrigin).fold(
+        userRepository.listWorkspaces(paired.serverOrigin).fold(
             onSuccess = { collection ->
                 val rows = collection.items.map { workspace ->
                     WorkspaceRow(
@@ -93,14 +93,14 @@ class WorkspacesViewModel(
 
 class WorkspacesViewModelFactory(
     private val sessionGateway: SessionGateway,
-    private val operatorRepository: OperatorRepository,
+    private val userRepository: UserRepository,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(WorkspacesViewModel::class.java)) {
             return WorkspacesViewModel(
                 sessionGateway = sessionGateway,
-                operatorRepository = operatorRepository,
+                userRepository = userRepository,
             ) as T
         }
 

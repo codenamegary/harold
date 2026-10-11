@@ -11,7 +11,7 @@ sealed interface ConnectionStatus {
         val attempt: Int,
     ) : ConnectionStatus
 
-    /** Terminal. Auto-retry stops until the operator asks for it. */
+    /** Terminal. Auto-retry stops until the user asks for it. */
     data class AuthFailed(
         val detail: String?,
     ) : ConnectionStatus

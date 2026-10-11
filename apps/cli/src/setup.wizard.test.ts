@@ -133,7 +133,7 @@ const makeHarness = (options: HarnessOptions = {}) => {
     {
       id: "custom",
       label: "I already have an endpoint",
-      hint: "operator-supplied endpoint",
+      hint: "user-supplied endpoint",
       guide: () => {
         guided.push("custom")
       },
@@ -360,7 +360,7 @@ describe("runSetupWizard reachability step", () => {
     expect(harness.calls.select[0]?.message).toContain("phone")
   })
 
-  test("retries after a failed verification when the operator asks", async () => {
+  test("retries after a failed verification when the user asks", async () => {
     const harness = makeHarness({
       agents: [makeAgent({ id: "cursor", displayName: "Cursor" })],
       verifyResults: [false, true],
@@ -479,7 +479,7 @@ describe("runSetupWizard pair step", () => {
     expect(harness.calls.confirm[0]?.message).toContain("Pair")
   })
 
-  test("skips pairing when the operator declines", async () => {
+  test("skips pairing when the user declines", async () => {
     const harness = makeHarness({
       agents: [makeAgent({ id: "cursor", displayName: "Cursor" })],
       script: { confirm: [false] },

@@ -1,4 +1,4 @@
-package harold.android.operator
+package harold.android.user
 
 import harold.android.contracts.AgentAuth
 import harold.android.contracts.AgentAuthSession
@@ -15,7 +15,7 @@ import harold.android.contracts.SessionCollection
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 
-interface OperatorRepository {
+interface UserRepository {
     suspend fun listWorkspaces(
         serverOrigin: String,
         limit: Int = 100,

@@ -105,7 +105,7 @@ describe("build.npm.cli", () => {
       expect(output.trim()).toMatch(/^\d+\.\d+\.\d+$/)
     })
 
-    test("lists the operator commands on --help", async () => {
+    test("lists the user commands on --help", async () => {
       const output = await Bun.$`bun ${path.join(distDir, "harold.js")} --help`.text()
 
       for (const command of ["start", "setup", "pair", "connect"]) {

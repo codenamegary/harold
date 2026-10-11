@@ -1,5 +1,6 @@
 package harold.android.shell
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -34,7 +35,7 @@ class ShellScreenTest {
 
         composeTestRule.onNodeWithTag("shell_app_mark").assertIsDisplayed()
         assertTrue(composeTestRule.onAllNodesWithText("Harold").fetchSemanticsNodes().isNotEmpty())
-        composeTestRule.onNodeWithText("OPERATOR CONSOLE").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("OPERATOR CONSOLE").assertCountEquals(0)
         composeTestRule.onNodeWithText("Not paired").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithTag("shell_hint").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithTag("shell_pair_button")

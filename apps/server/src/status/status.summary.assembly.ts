@@ -41,7 +41,7 @@ export type StatusSummaryPorts = Readonly<{
  * workspace rows) into the core status-summary ports. The runtime settings
  * store and the agent-settings rows arrive as injected ports so this slice
  * never imports another slice's adapters; the CLI composes the same use case
- * over these ports in process against the same data dir (ADR-0006). The agent
+ * over these ports in process against the same data dir. The agent
  * summary uses the static view: the daemon-only auth broker holds live auth
  * state, so `needsAuth` is `null` (unknown) while the daemon is not the
  * caller. It is never reported as a definitive `0` from this unknown source.

@@ -19,7 +19,7 @@ interface SessionGateway {
 
     /**
      * Deletes the stored credential and published bearer token. Used when the
-     * server rejects the device so the operator returns to pairing.
+     * server rejects the device so the user returns to pairing.
      */
     suspend fun clearLocalAccess()
 }

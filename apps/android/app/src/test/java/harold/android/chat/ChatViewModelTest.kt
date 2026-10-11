@@ -54,7 +54,7 @@ import harold.android.stream.ConnectionState
 import harold.android.live.SessionOwner
 import harold.android.live.SessionSnapshot
 import harold.android.navigation.NavigationPreferences
-import harold.android.operator.OperatorRepository
+import harold.android.user.UserRepository
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 
@@ -74,7 +74,7 @@ class ChatViewModelTest {
 
     @Test
     fun loadsSessionsAndRestoresLastSession() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository()
+        val repository = ChatFakeUserRepository()
         val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
             repository = repository,
@@ -91,7 +91,7 @@ class ChatViewModelTest {
 
     @Test
     fun confirmNewSessionCreatesTheSessionAndSeedsConfig() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository()
+        val repository = ChatFakeUserRepository()
         val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
             repository = repository,
@@ -122,7 +122,7 @@ class ChatViewModelTest {
 
     @Test
     fun confirmNewSessionKeepsTheDialogOpenWhenCreateFails() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository()
+        val repository = ChatFakeUserRepository()
         repository.createFailure = AgentApiException(
             AgentApiError.Problem(status = 409, title = "ACP unavailable", detail = "Agent crashed"),
         )
@@ -146,7 +146,7 @@ class ChatViewModelTest {
 
     @Test
     fun confirmNewSessionShowsLoginWhenTheAgentNeedsAuth() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository(
+        val repository = ChatFakeUserRepository(
             agentAuth = harold.android.contracts.AgentAuth(
                 agentId = "cursor",
                 status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
@@ -197,7 +197,7 @@ class ChatViewModelTest {
             ),
             error = null,
         )
-        val repository = ChatFakeOperatorRepository(
+        val repository = ChatFakeUserRepository(
             agentAuth = harold.android.contracts.AgentAuth(
                 agentId = "cursor",
                 status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
@@ -241,7 +241,7 @@ class ChatViewModelTest {
 
     @Test
     fun composerSendPromptsTheNewlyCreatedSession() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository()
+        val repository = ChatFakeUserRepository()
         val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
             repository = repository,
@@ -272,7 +272,7 @@ class ChatViewModelTest {
     fun streamsTranscriptAndAllowsFollowUpPrompt() = runTest(dispatcher) {
         val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
-            repository = ChatFakeOperatorRepository(),
+            repository = ChatFakeUserRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
             sessionOwner = sessionOwner,
         )
@@ -292,7 +292,7 @@ class ChatViewModelTest {
     fun cancelSessionSendsStreamCancel() = runTest(dispatcher) {
         val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
-            repository = ChatFakeOperatorRepository(),
+            repository = ChatFakeUserRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
             sessionOwner = sessionOwner,
         )
@@ -309,7 +309,7 @@ class ChatViewModelTest {
 
     @Test
     fun deleteSessionRemovesRowAndClearsSelection() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository()
+        val repository = ChatFakeUserRepository()
         val navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02")
         val viewModel = createViewModel(repository, navigation)
 
@@ -326,7 +326,7 @@ class ChatViewModelTest {
 
     @Test
     fun deleteSessionShowsErrorOnConflict() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository(deleteConflict = true)
+        val repository = ChatFakeUserRepository(deleteConflict = true)
         val viewModel = createViewModel(
             repository = repository,
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
@@ -347,7 +347,7 @@ class ChatViewModelTest {
     fun reconnectClearsTranscriptBeforeReplay() = runTest(dispatcher) {
         val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
-            repository = ChatFakeOperatorRepository(),
+            repository = ChatFakeUserRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
             sessionOwner = sessionOwner,
         )
@@ -374,7 +374,7 @@ class ChatViewModelTest {
     fun permissionRequestUpdatesPendingState() = runTest(dispatcher) {
         val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
-            repository = ChatFakeOperatorRepository(),
+            repository = ChatFakeUserRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
             sessionOwner = sessionOwner,
         )
@@ -408,7 +408,7 @@ class ChatViewModelTest {
     fun liveSnapshotMapsComposerConfig() = runTest(dispatcher) {
         val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
-            repository = ChatFakeOperatorRepository(),
+            repository = ChatFakeUserRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
             sessionOwner = sessionOwner,
         )
@@ -446,7 +446,7 @@ class ChatViewModelTest {
         val sessionOwner = ChatFakeSessionOwner()
         val configApi = RecordingSessionConfigApi()
         val viewModel = createViewModel(
-            repository = ChatFakeOperatorRepository(),
+            repository = ChatFakeUserRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
             sessionOwner = sessionOwner,
             configApi = configApi,
@@ -488,7 +488,7 @@ class ChatViewModelTest {
     fun configEchoSettlesTheOptimisticPick() = runTest(dispatcher) {
         val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
-            repository = ChatFakeOperatorRepository(),
+            repository = ChatFakeUserRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
             sessionOwner = sessionOwner,
         )
@@ -524,7 +524,7 @@ class ChatViewModelTest {
         val sessionOwner = ChatFakeSessionOwner()
         val configApi = RecordingSessionConfigApi()
         val viewModel = createViewModel(
-            repository = ChatFakeOperatorRepository(),
+            repository = ChatFakeUserRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
             sessionOwner = sessionOwner,
             configApi = configApi,
@@ -557,7 +557,7 @@ class ChatViewModelTest {
 
     @Test
     fun recentMenuTakesFiveNewestByUpdatedAt() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository(
+        val repository = ChatFakeUserRepository(
             extraSessions = (1..8).map { index ->
                 session(
                     id = "sess_$index",
@@ -579,7 +579,7 @@ class ChatViewModelTest {
     @Test
     fun sessionsSearchFiltersTitlesClientSide() = runTest(dispatcher) {
         val viewModel = createViewModel(
-            ChatFakeOperatorRepository(),
+            ChatFakeUserRepository(),
             ChatFakeNavigationPreferences(),
         )
 
@@ -594,7 +594,7 @@ class ChatViewModelTest {
 
     @Test
     fun hydratesAgentAuthWhenSelectingSession() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository(
+        val repository = ChatFakeUserRepository(
             agentAuth = harold.android.contracts.AgentAuth(
                 agentId = "cursor",
                 status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
@@ -620,7 +620,7 @@ class ChatViewModelTest {
     fun appliesAuthSessionUpdatedForMatchingAgent() = runTest(dispatcher) {
         val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
-            repository = ChatFakeOperatorRepository(),
+            repository = ChatFakeUserRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
             sessionOwner = sessionOwner,
         )
@@ -652,7 +652,7 @@ class ChatViewModelTest {
 
     @Test
     fun authSignInStartsSession() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository(
+        val repository = ChatFakeUserRepository(
             agentAuth = harold.android.contracts.AgentAuth(
                 agentId = "cursor",
                 status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
@@ -705,7 +705,7 @@ class ChatViewModelTest {
             ),
             error = null,
         )
-        val repository = ChatFakeOperatorRepository(
+        val repository = ChatFakeUserRepository(
             agentAuth = harold.android.contracts.AgentAuth(
                 agentId = "cursor",
                 status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
@@ -743,7 +743,7 @@ class ChatViewModelTest {
 
     @Test
     fun authLogoutWhenCanLogout() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository(
+        val repository = ChatFakeUserRepository(
             agentAuth = harold.android.contracts.AgentAuth(
                 agentId = "cursor",
                 status = harold.android.contracts.AgentAuthStatus.Authenticated,
@@ -772,7 +772,7 @@ class ChatViewModelTest {
 
     @Test
     fun disconnectFromServerRevokesDeviceAndClearsLocalAccess() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository()
+        val repository = ChatFakeUserRepository()
         val sessionGateway = ChatFakeSessionGateway(
             PairedState.Paired(ORIGIN, "device_01", "Pixel"),
         )
@@ -814,7 +814,7 @@ class ChatViewModelTest {
 
     @Test
     fun authRequiredStreamErrorHydratesAuth() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository(
+        val repository = ChatFakeUserRepository(
             agentAuth = harold.android.contracts.AgentAuth(
                 agentId = "cursor",
                 status = harold.android.contracts.AgentAuthStatus.Unknown,
@@ -865,7 +865,7 @@ class ChatViewModelTest {
 
     @Test
     fun commandsUpdatePopulatesStateWithoutTouchingTranscriptAndRestoresOnSwitchBack() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository()
+        val repository = ChatFakeUserRepository()
         val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
             repository = repository,
@@ -897,7 +897,7 @@ class ChatViewModelTest {
 
     @Test
     fun voiceCommandPickPrefixesSubmittedPrompt() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository()
+        val repository = ChatFakeUserRepository()
         val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
             repository = repository,
@@ -921,7 +921,7 @@ class ChatViewModelTest {
     }
 
     private fun createViewModel(
-        repository: ChatFakeOperatorRepository,
+        repository: ChatFakeUserRepository,
         navigation: ChatFakeNavigationPreferences,
         sessionOwner: ChatFakeSessionOwner = ChatFakeSessionOwner(),
         sessionGateway: ChatFakeSessionGateway = ChatFakeSessionGateway(
@@ -933,7 +933,7 @@ class ChatViewModelTest {
         savedStateHandle = SavedStateHandle(),
         sessionGateway = sessionGateway,
         sessionOwner = sessionOwner,
-        operatorRepository = repository,
+        userRepository = repository,
         attachmentApi = attachmentApi,
         configApi = configApi,
         navigationPreferences = navigation,
@@ -946,7 +946,7 @@ class ChatViewModelTest {
 
     @Test
     fun attachmentUploadsToTheSelectedSessionWithoutNamingAWorkspace() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository(
+        val repository = ChatFakeUserRepository(
             extraSessions = listOf(session("sess_09", "Elsewhere", cwd = "/tmp/not-a-workspace")),
         )
         val attachments = RecordingAttachmentApi()
@@ -974,7 +974,7 @@ class ChatViewModelTest {
     fun removingAnUploadedAttachmentDeletesItFromTheSession() = runTest(dispatcher) {
         val attachments = RecordingAttachmentApi()
         val viewModel = createViewModel(
-            repository = ChatFakeOperatorRepository(),
+            repository = ChatFakeUserRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
             attachmentApi = attachments,
         )
@@ -991,7 +991,7 @@ class ChatViewModelTest {
 
     @Test
     fun attachingInANewSessionUploadsEveryFileWithoutASecondCreate() = runTest(dispatcher) {
-        val repository = ChatFakeOperatorRepository()
+        val repository = ChatFakeUserRepository()
         val attachments = RecordingAttachmentApi()
         val viewModel = createViewModel(
             repository = repository,
@@ -1048,7 +1048,7 @@ class ChatViewModelTest {
             ): Result<Unit> = Result.success(Unit)
         }
         val viewModel = createViewModel(
-            repository = ChatFakeOperatorRepository(),
+            repository = ChatFakeUserRepository(),
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
             attachmentApi = attachments,
         )
@@ -1261,7 +1261,7 @@ private class ChatFakeNavigationPreferences(
     }
 }
 
-private class ChatFakeOperatorRepository(
+private class ChatFakeUserRepository(
     private val deleteConflict: Boolean = false,
     extraSessions: List<Session> = emptyList(),
     agentAuth: harold.android.contracts.AgentAuth = harold.android.contracts.AgentAuth(
@@ -1273,7 +1273,7 @@ private class ChatFakeOperatorRepository(
     private val startSession: harold.android.contracts.AgentAuthSession? = null,
     private val actionSession: harold.android.contracts.AgentAuthSession? = null,
     var canLogout: Boolean = false,
-) : OperatorRepository {
+) : UserRepository {
     val createCalls = mutableListOf<CreateSessionBody>()
     val deleteCalls = mutableListOf<Pair<String, String>>()
     val authGetCalls = mutableListOf<String>()

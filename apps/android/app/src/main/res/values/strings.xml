@@ -7,7 +7,6 @@
     <string name="retry_action">Retry</string>
     <string name="retry_content_description">Retry connecting to Harold</string>
     <string name="pairing_title">Pair device</string>
-    <string name="pairing_back">Back</string>
     <string name="pairing_back_content_description">Go back from pairing</string>
     <string name="pairing_manual_entry">Enter manually</string>
     <string name="pairing_manual_entry_content_description">Enter pairing details manually</string>
@@ -79,7 +78,6 @@
     <string name="sessions_search_label">Search sessions</string>
     <string name="sessions_see_all">See all sessions…</string>
     <string name="sessions_back_content_description">Go back from sessions</string>
-    <string name="shell_brand_subtitle">Operator console</string>
     <string name="shell_status_label">STATUS</string>
     <string name="shell_connection_label">CONNECTION</string>
     <string name="shell_workspaces_label">WORKSPACES</string>

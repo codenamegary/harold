@@ -99,7 +99,7 @@ const createSolidPng = (size: number, rgb: [number, number, number]): Uint8Array
   return out
 }
 
-const MULTIPART_BOUNDARY = "----agentserverattachmentsmoke"
+const MULTIPART_BOUNDARY = "----haroldattachmentsmoke"
 
 const uploadImage = (
   app: Awaited<ReturnType<typeof createServer>>["app"],

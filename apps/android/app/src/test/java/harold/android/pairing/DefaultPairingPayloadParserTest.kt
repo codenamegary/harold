@@ -63,12 +63,12 @@ class DefaultPairingPayloadParserTest {
     }
 
     @Test
-    fun rejectsLegacyAgentServerSchemeWithAppUpdateMessage() {
+    fun rejectsRetiredAgentServerSchemeAsInvalidScheme() {
         val payload = "agent-server://pair?v=1&endpoint=https%3A%2F%2Fa.example&code=R7K-4MP"
         val exception = assertThrows(PairingPayloadParseException::class.java) {
             parser.parse(payload)
         }
-        assertEquals("Legacy agent-server pairing payload is not supported; app update required", exception.message)
+        assertEquals("Invalid pairing URI scheme", exception.message)
     }
 
     @Test

@@ -61,7 +61,7 @@ export const renderRunningView = (view: RunningView, colors: RunningViewColors):
 
 /**
  * Reads the running view in process against the same data dir the daemon
- * uses (ADR-0006). The database handle is short lived: serve and setup call
+ * uses. The database handle is short lived: serve and setup call
  * this after the listener is confirmed, then print the block.
  */
 export const readRunningView = (config: Config): RunningView => {

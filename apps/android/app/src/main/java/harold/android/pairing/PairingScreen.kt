@@ -18,9 +18,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -77,15 +81,19 @@ fun PairingScreen(
             TopAppBar(
                 title = { Text(text = stringResource(R.string.pairing_title)) },
                 navigationIcon = {
-                    TextButton(
+                    IconButton(
                         onClick = onBack,
                         modifier = Modifier
                             .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                            .testTag("pairing_back")
                             .semantics {
                                 contentDescription = backContentDescription
                             },
                     ) {
-                        Text(text = stringResource(R.string.pairing_back))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = null,
+                        )
                     }
                 },
             )

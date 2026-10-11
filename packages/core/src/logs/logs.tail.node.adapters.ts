@@ -12,7 +12,7 @@ export const daemonLogFileName = "harold.log"
 export const daemonLogFilePath = (dataDir: string): string => path.join(dataDir, daemonLogFileName)
 
 /**
- * The daemon's log destination: the operator's persisted `logPath` when set,
+ * The daemon's log destination: the user's persisted `logPath` when set,
  * otherwise the default file under the data dir. The CLI resolves the same
  * way so `harold logs` tails what the daemon writes.
  */

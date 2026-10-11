@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108" fill="none">
   <!-- Option 2: The Bauhaus Triad (Pure Geometric Primitives) -->
-  <!-- Left Pillar (Operator Device) -->
+  <!-- Left Pillar (User Device) -->
   <rect x="24" y="24" width="16" height="60" rx="8" fill="#B6F36B" />
 
   <!-- Right Pillar (Agent Supervisor) -->
