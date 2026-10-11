@@ -109,5 +109,5 @@ cd apps/android && ./gradlew testDebugUnitTest  # Android unit tests
 
 ## Docs
 
-- [CONTEXT.md](CONTEXT.md) is the canonical product language.
-- [docs/adr](docs/adr) holds the architecture decision records.
+- [docs/branding](docs/branding) holds logo and brand explorations.
+- [docs/research](docs/research) holds research notes.

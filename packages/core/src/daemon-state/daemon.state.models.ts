@@ -4,7 +4,7 @@ import { TimestampSchema } from "contracts/http/primitives"
 
 /**
  * Envelope the daemon atomically persists to `<dataDir>/daemon-state.json`
- * so the CLI can read live state without a host HTTP route. See ADR-0006.
+ * so the CLI can read live state without a host HTTP route.
  */
 export const DaemonStateSchema = z.strictObject({
   pid: z.number().int().positive(),

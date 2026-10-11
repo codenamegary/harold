@@ -44,7 +44,7 @@ The application id was renamed to `harold.android` (formerly `server.agent.andro
 
 ## Transport
 
-Every build type allows cleartext HTTP and WebSocket traffic, so the app can pair with a LAN host over `http://` ([ADR-0008](../../docs/adr/0008-android-lan-cleartext.md)). One network security config in `src/main` sets this. No trust-all TLS.
+Every build type allows cleartext HTTP and WebSocket traffic, so the app can pair with a LAN host over `http://`. One network security config in `src/main` sets this. No trust-all TLS.
 
 ## Debug and release builds
 
@@ -64,7 +64,7 @@ Without them, `assembleRelease` produces an unsigned APK. CI signs releases with
 ## Authenticated transport
 
 One OkHttp client serves both authenticated paths. It attaches the paired device
-credential as `Authorization: Bearer` ([ADR-0001](../../docs/adr/0001-device-authentication.md)).
+credential as `Authorization: Bearer`.
 The credential never appears in a URL or a log line.
 
 - HTTP: `GET /v1/workspaces?limit=1` proves the path from the shell.

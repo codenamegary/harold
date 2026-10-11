@@ -17,7 +17,7 @@ const defaultIntervalMs = 1_000
 
 /**
  * Publishes the daemon's live status to the state file so the CLI can read
- * it without a host HTTP route (ADR-0006). Writes once at startup and then
+ * it without a host HTTP route. Writes once at startup and then
  * on an interval, which keeps the heartbeat and `activeSessions` fresh.
  */
 export const startDaemonStateWriter = (deps: DaemonStateWriterDeps): DaemonStateWriter => {

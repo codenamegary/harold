@@ -174,7 +174,7 @@ export const RuntimeSettingsSchema = z.strictObject({
   logLevel: LogLevelSchema,
   // `null` means the daemon writes to the default log file under the data dir
   // (`harold.log`), not to stdout; the CLI tails that same file with
-  // `harold logs` (ADR-0006). A non-null value is an explicit log file path.
+  // `harold logs`. A non-null value is an explicit log file path.
   logPath: z.string().min(1).nullable(),
   allowedRoots: z.array(z.string().min(1)),
 })

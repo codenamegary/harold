@@ -27,8 +27,8 @@ export type StopLiveDaemonDeps = Readonly<{
 }>
 
 /**
- * Stops the daemon through the state file the daemon is the single writer of
- * (ADR-0006). The heartbeat must be fresh before the pid is signaled: a live
+ * Stops the daemon through the state file the daemon is the single writer of.
+ * The heartbeat must be fresh before the pid is signaled: a live
  * pid with a stale heartbeat is a recycled pid more often than a hung daemon.
  */
 export const makeStopLiveDaemon =
