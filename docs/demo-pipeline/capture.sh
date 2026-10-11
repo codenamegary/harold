@@ -1,24 +1,60 @@
 #!/usr/bin/env bash
 # One-shot capture orchestrator for the Harold README demo video.
 #
-#   terminal (VHS, tmux two-pane)  +  phone (adb screenrecord, driven by
+#   terminal (VHS, one tmux pane)  +  phone (adb screenrecord, driven by
 #   drive_phone.py)  run on the same wall clock. This script records both,
-#   injects the live pairing QR into the emulator's virtual-scene poster, and
-#   writes timing marks used later to cut the combined video.
+#   injects the live pairing QR into the emulator's virtual-scene wall poster,
+#   and writes timing marks used later to cut the combined video.
 set -euo pipefail
 
 SERIAL=emulator-5554
-MEDIA=/tmp/opencode/media
-REPO=/home/codenamegary/sites/harold
+MEDIA=$(pwd)
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+MACRO_DIR=/usr/lib/android-sdk/emulator/resources/macros
 TMUX_SESSION=harold-demo
 LOG=$MEDIA/capture.log
 MARKS=$MEDIA/marks.log
 PROMPT="${PROMPT:-Summarize this repo in one sentence}"
 
+mkdir -p "$MEDIA"
 : >"$LOG"
 : >"$MARKS"
 
 log() { printf '%s %s\n' "$(date +%s.%3N)" "$*" | tee -a "$LOG"; }
+
+log "media $MEDIA"
+
+# The emulated camera paints a fixed room. virtualscene-image and the walk
+# macros only change what the scanner sees when the back camera is virtualscene.
+require_virtualscene() {
+  local pid cmdline found=0
+  for pid in $(pgrep -f 'qemu-system-x86_64' || true); do
+    cmdline=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)
+    case "$cmdline" in
+      *qemu-system-x86_64*-camera-back\ virtualscene*) found=1 ;;
+    esac
+  done
+  if [[ "$found" -ne 1 ]]; then
+    echo "capture.sh: the emulator back camera is not a virtual scene." >&2
+    echo "Relaunch with -camera-back virtualscene." >&2
+    exit 1
+  fi
+}
+
+emu() {
+  local reply
+  reply=$(printf 'auth %s\n%s\nquit\n' "$TOKEN" "$1" | nc -q 2 localhost "${SERIAL#emulator-}")
+  if printf '%s\n' "$reply" | grep -q '^KO'; then
+    echo "emulator console failed: $1" >&2
+    printf '%s\n' "$reply" >&2
+    exit 1
+  fi
+}
+
+require_virtualscene
+TOKEN=$(cat ~/.emulator_console_auth_token)
+log "camera_reset"
+emu "automation play ${MACRO_DIR}/Reset_position"
 
 log "reset_begin"
 harold stop >/dev/null 2>&1 || true
@@ -36,10 +72,8 @@ adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command batt
 adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command network -e wifi show -e level 4 >/dev/null 2>&1 || true
 adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command notifications -e visible false >/dev/null 2>&1 || true
 
-# Poster starts blank; the live QR lands once the terminal issues a code.
-TOKEN=$(cat ~/.emulator_console_auth_token)
-printf "auth %s\nvirtualscene-image wall /usr/lib/android-sdk/emulator/resources/poster.png\nquit\n" "$TOKEN" \
-  | nc -q 2 localhost 5554 >/dev/null
+# Poster starts as the default image. The live QR replaces it once the terminal issues a code.
+emu "virtualscene-image wall /usr/lib/android-sdk/emulator/resources/poster.png"
 
 # App cold-starts on the unpaired shell screen.
 adb -s "$SERIAL" shell am force-stop harold.android.debug
@@ -54,7 +88,7 @@ log "app_ready"
 tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
 sleep 1
 for _ in 1 2 3; do
-  tmux -f "$MEDIA/tmux-harold.conf" new-session -d -s "$TMUX_SESSION" -c "$HOME" 2>/dev/null && break
+  tmux -f "$SCRIPT_DIR/tmux-harold.conf" new-session -d -s "$TMUX_SESSION" -c "$HOME" 2>/dev/null && break
   sleep 0.5
 done
 tmux select-pane -t "$TMUX_SESSION:0.0"
@@ -66,7 +100,7 @@ SCREENRECORD_WRAPPER=$!
 sleep 2
 log "screenrecord_start"
 # VHS output paths are relative to its cwd; keep artifacts in the media dir.
-(cd "$MEDIA" && vhs "$MEDIA/terminal-pair.tape" >"$MEDIA/vhs.log" 2>&1) &
+(cd "$MEDIA" && vhs "$SCRIPT_DIR/terminal-pair.tape" >"$MEDIA/vhs.log" 2>&1) &
 VHS_PID=$!
 log "vhs_start"
 
@@ -81,14 +115,13 @@ done
 [[ -n "$CODE" ]] || { echo "no pairing code captured" >&2; exit 1; }
 log "code_seen $CODE"
 node -e "require('qrcode').toFile('$MEDIA/qr-live.png','harold://pair?v=1&endpoint=http%3A%2F%2F127.0.0.1%3A3847&code=$CODE',{width:1024,margin:4}).then(()=>{})"
-printf "auth %s\nvirtualscene-image wall %s/qr-live.png\nquit\n" "$TOKEN" "$MEDIA" \
-  | nc -q 2 localhost 5554 >/dev/null
+emu "virtualscene-image wall ${MEDIA}/qr-live.png"
 log "poster_injected"
 
-# Phone: scan, pair, create a session, send a prompt.
+# Phone: open the scanner, walk the camera onto the wall poster, pair, send a prompt.
 sleep 1
 SERIAL="$SERIAL" PROMPT="$PROMPT" MARKS="$MARKS" \
-  python3 "$MEDIA/drive_phone.py" 2>&1 | tee "$MEDIA/driver.log"
+  python3 "$SCRIPT_DIR/drive_phone.py" 2>&1 | tee "$MEDIA/driver.log"
 
 # Stop the recording and pull it.
 sleep 1

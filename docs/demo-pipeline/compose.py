@@ -58,9 +58,9 @@ def split_chunk(index, term_start, term_end, phone_start, phone_end):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--terminal", default="/tmp/opencode/media/terminal-pair.mp4")
-    parser.add_argument("--phone", default="/tmp/opencode/media/phone-cfr.mp4")
-    parser.add_argument("--out", default="/tmp/opencode/media/harold-demo.mp4")
+    parser.add_argument("--terminal", default="terminal-pair.mp4")
+    parser.add_argument("--phone", default="phone-demo.mp4")
+    parser.add_argument("--out", default="harold-demo.mp4")
     parser.add_argument("--card-seconds", type=float, default=2.5)
     parser.add_argument("--terminal-start", type=float, default=0.4)
     parser.add_argument("--t-qr", type=float, required=True)

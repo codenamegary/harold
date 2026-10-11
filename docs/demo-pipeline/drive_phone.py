@@ -2,7 +2,8 @@
 """Drive the Harold Android app through the README demo flow (v2).
 
 Assumes the app was just cleared (unpaired) and is showing the Shell screen,
-and that the pairing QR is already on the virtual-scene poster.
+and that the pairing QR is already on the virtual-scene wall poster.
+After Pair is tapped, plays Walk_to_image_room so the camera ends facing that poster.
 Taps are located through UIAutomator dumps, never hard-coded.
 """
 import os
@@ -16,7 +17,11 @@ SERIAL = os.environ.get("SERIAL", "emulator-5554")
 PROMPT = os.environ.get("PROMPT", "Summarize this repo in one sentence")
 MODEL = os.environ.get("MODEL", "deepseek/DeepSeek V4.1 Flash")
 EFFORT_TARGET = os.environ.get("EFFORT_TARGET", "High")
-MARKS = os.environ.get("MARKS", "/tmp/opencode/media/marks.log")
+MARKS = os.environ.get("MARKS", "marks.log")
+WALK_MACRO = os.environ.get(
+    "WALK_MACRO",
+    "/usr/lib/android-sdk/emulator/resources/macros/Walk_to_image_room",
+)
 START = time.time()
 
 
@@ -30,6 +35,30 @@ def adb(*args, timeout=30):
     return subprocess.run(
         ["adb", "-s", SERIAL, *args], capture_output=True, text=True, timeout=timeout
     )
+
+
+def console_port():
+    if SERIAL.startswith("emulator-"):
+        return SERIAL.split("-", 1)[1]
+    return "5554"
+
+
+def emu_console(command):
+    token_path = os.path.expanduser("~/.emulator_console_auth_token")
+    with open(token_path) as handle:
+        token = handle.read().strip()
+    payload = f"auth {token}\n{command}\nquit\n"
+    result = subprocess.run(
+        ["nc", "-q", "2", "localhost", console_port()],
+        input=payload,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    output = result.stdout or ""
+    if result.returncode != 0 or "\nKO" in f"\n{output}":
+        raise RuntimeError(f"emulator console failed: {command}\n{output}{result.stderr}")
+    return output
 
 
 def dump_root():
@@ -159,8 +188,11 @@ def main():
 
     tap_text("Pair", timeout=25)
     mark("tap_pair")
+    # Walk_to_image_room is about 12s and ends facing the wall poster.
+    emu_console(f"automation play {WALK_MACRO}")
+    mark("walk_playing")
 
-    wait_for(text="New session", timeout=30)
+    wait_for(text="New session", timeout=45)
     mark("paired_chat_visible")
     time.sleep(1.2)
 
