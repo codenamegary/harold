@@ -3,7 +3,6 @@ package harold.android.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -13,6 +12,7 @@ import android.app.Application
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -62,8 +62,8 @@ fun AppNavHost(
             agentApi = appContainer.agentApi,
         ),
     )
-    val shellUiState by shellViewModel.uiState.collectAsState()
-    val showShell by shellViewModel.showShell.collectAsState()
+    val shellUiState by shellViewModel.uiState.collectAsStateWithLifecycle()
+    val showShell by shellViewModel.showShell.collectAsStateWithLifecycle()
 
     LaunchedEffect(showShell) {
         if (showShell) {
@@ -112,7 +112,7 @@ fun AppNavHost(
                     pairingRequests = appContainer.pairingRequests,
                 ),
             )
-            val pairingUiState by pairingViewModel.uiState.collectAsState()
+            val pairingUiState by pairingViewModel.uiState.collectAsStateWithLifecycle()
 
             PairingScreen(
                 uiState = pairingUiState,
@@ -143,7 +143,7 @@ fun AppNavHost(
                     voiceDictationController = voiceDictationController,
                 ),
             )
-            val chatUiState by chatViewModel.uiState.collectAsState()
+            val chatUiState by chatViewModel.uiState.collectAsStateWithLifecycle()
             val lifecycleOwner = LocalLifecycleOwner.current
 
             DisposableEffect(lifecycleOwner, chatViewModel) {
@@ -232,7 +232,7 @@ fun AppNavHost(
                     voiceDictationController = voiceDictationController,
                 ),
             )
-            val chatUiState by chatViewModel.uiState.collectAsState()
+            val chatUiState by chatViewModel.uiState.collectAsStateWithLifecycle()
 
             SessionsScreen(
                 uiState = chatUiState,
@@ -270,7 +270,7 @@ fun AppNavHost(
                     voiceDictationController = voiceDictationController,
                 ),
             )
-            val chatUiState by chatViewModel.uiState.collectAsState()
+            val chatUiState by chatViewModel.uiState.collectAsStateWithLifecycle()
             var createFormOpened by remember { mutableStateOf(false) }
 
             LaunchedEffect(chatUiState.createDialogVisible) {
@@ -300,7 +300,7 @@ fun AppNavHost(
                     userRepository = appContainer.userRepository,
                 ),
             )
-            val workspacesUiState by workspacesViewModel.uiState.collectAsState()
+            val workspacesUiState by workspacesViewModel.uiState.collectAsStateWithLifecycle()
             val lifecycleOwner = LocalLifecycleOwner.current
 
             DisposableEffect(lifecycleOwner, workspacesViewModel) {
@@ -327,7 +327,7 @@ fun AppNavHost(
                     userRepository = appContainer.userRepository,
                 ),
             )
-            val addWorkspaceUiState by addWorkspaceViewModel.uiState.collectAsState()
+            val addWorkspaceUiState by addWorkspaceViewModel.uiState.collectAsStateWithLifecycle()
 
             AddWorkspaceScreen(
                 uiState = addWorkspaceUiState,
