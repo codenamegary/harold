@@ -93,7 +93,7 @@ val voskModelAssetDir = layout.projectDirectory.dir("src/main/assets/model-en-us
 val voskModelMarker = voskModelAssetDir.file("uuid")
 val voskModelCacheDir = layout.buildDirectory.dir("vosk-model")
 
-val fetchVoskModel by tasks.registering {
+val fetchVoskModel = tasks.register("fetchVoskModel") {
     description = "Download and unpack the bundled Vosk en-us model into assets."
     group = "vosk"
 
