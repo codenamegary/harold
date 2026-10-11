@@ -1,6 +1,6 @@
 # Harold Android
 
-Native Jetpack Compose app for the Harold operator workflow.
+Native Jetpack Compose app for the Harold user workflow.
 
 ## Prerequisites
 
@@ -40,7 +40,7 @@ The application id was renamed to `harold.android` (formerly `server.agent.andro
    ```sh
    ./gradlew :app:installDebug
    ```
-3. Pair using the in-app scanner or by pointing your phone camera at the terminal pairing QR code (`harold://pair`), which opens Harold directly. Legacy `agent-server://pair` payloads will prompt that an app update is required.
+3. Pair using the in-app scanner or by pointing your phone camera at the terminal pairing QR code (`harold://pair`), which opens Harold directly. Payloads using any other scheme are rejected as invalid pairing URIs.
 
 ## Transport
 
@@ -75,7 +75,7 @@ The credential never appears in a URL or a log line.
 
 Reconnect uses `min(250 * 2^(attempt - 1), 4000)` ms with no jitter. A rejected
 credential (HTTP `401`, or close `1008` with reason `unauthorized`) stops
-auto-retry, clears the local credential, and returns the operator to pairing.
+auto-retry, clears the local credential, and returns the user to pairing.
 Every other close, slow consumer included, keeps reconnecting.
 
 ## CI
