@@ -11,6 +11,8 @@ import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AttachmentDescriptor
 import harold.android.contracts.AttachmentKind
 import harold.android.contracts.AttachmentUploadRequest
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -69,6 +71,7 @@ class ChatViewModel(
     private val sessionForegroundCoordinator: SessionForegroundCoordinator? = null,
     private val openSessionRequests: OpenSessionRequests? = null,
     private val voiceDictationController: VoiceDictationController,
+    private val previewDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -640,7 +643,7 @@ class ChatViewModel(
 
         for (attachment in created) {
             viewModelScope.launch {
-                val preview = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                val preview = kotlinx.coroutines.withContext(previewDispatcher) {
                     decodePreview(attachment.bytes, attachment.kind)
                 }
                 _uiState.update { current ->
