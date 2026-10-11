@@ -1,5 +1,7 @@
 package harold.android.pairing
 
+import javax.inject.Inject
+
 interface PairingCoordinator {
     suspend fun pair(
         endpoint: String,
@@ -8,7 +10,7 @@ interface PairingCoordinator {
     ): Result<Unit>
 }
 
-class DefaultPairingCoordinator(
+class DefaultPairingCoordinator @Inject constructor(
     private val pairingApi: harold.android.network.PairingApi,
     private val credentialStore: harold.android.credentials.CredentialStore,
     private val sessionGateway: harold.android.session.SessionGateway,

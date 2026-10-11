@@ -6,6 +6,8 @@ dependencies {
     implementation(libs.android.gradle.plugin)
     implementation(libs.kotlin.compose.gradle.plugin)
     implementation(libs.kotlin.serialization.gradle.plugin)
+    implementation(libs.hilt.gradle.plugin)
+    implementation(libs.ksp.gradle.plugin)
     testImplementation(libs.junit)
     testImplementation(gradleTestKit())
 }
@@ -27,6 +29,10 @@ gradlePlugin {
         register("androidFeature") {
             id = "harold.android.feature"
             implementationClass = "AndroidFeatureConventionPlugin"
+        }
+        register("androidHilt") {
+            id = "harold.android.hilt"
+            implementationClass = "AndroidHiltConventionPlugin"
         }
     }
 }

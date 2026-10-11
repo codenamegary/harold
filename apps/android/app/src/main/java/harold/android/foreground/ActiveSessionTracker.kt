@@ -1,5 +1,6 @@
 package harold.android.foreground
 
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,7 +17,7 @@ interface ActiveSessionTracker {
     fun replaceAll(sessions: List<ActiveSessionSnapshot>)
 }
 
-class DefaultActiveSessionTracker : ActiveSessionTracker {
+class DefaultActiveSessionTracker @Inject constructor() : ActiveSessionTracker {
     private val _sessions = MutableStateFlow<List<ActiveSessionSnapshot>>(emptyList())
     override val sessions: StateFlow<List<ActiveSessionSnapshot>> = _sessions.asStateFlow()
 

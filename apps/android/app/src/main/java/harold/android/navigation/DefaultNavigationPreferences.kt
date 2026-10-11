@@ -1,6 +1,8 @@
 package harold.android.navigation
 
 import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
@@ -8,8 +10,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.first
 
-class DefaultNavigationPreferences(
-    context: Context,
+class DefaultNavigationPreferences @Inject constructor(
+    @ApplicationContext context: Context,
 ) : NavigationPreferences {
     private val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create {
         context.getNoBackupFilesDir().resolve(PREFERENCES_FILE_NAME)

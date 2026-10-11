@@ -1,5 +1,7 @@
 package harold.android.foreground
 
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,7 +32,8 @@ data class ForegroundCoordinatorState(
  * permission is granted. Otherwise surfaces permission-denied UX.
  * Keep-alive chat traffic stays on [harold.android.live.SessionOwner].
  */
-class SessionForegroundCoordinator(
+@Singleton
+class SessionForegroundCoordinator @Inject constructor(
     private val tracker: ActiveSessionTracker,
     private val permissionChecker: NotificationPermissionChecker,
     private val launcher: SessionForegroundLauncher,

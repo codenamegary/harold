@@ -11,6 +11,8 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
 import harold.android.MainActivity
 import harold.android.R
 
@@ -63,8 +65,8 @@ fun buildActiveSessionsNotification(
         .build()
 }
 
-class AndroidNotificationPermissionChecker(
-    private val context: Context,
+class AndroidNotificationPermissionChecker @Inject constructor(
+    @ApplicationContext private val context: Context,
 ) : NotificationPermissionChecker {
     override fun hasPostNotificationsPermission(): Boolean {
         if (Build.VERSION.SDK_INT < 33) {
@@ -78,8 +80,8 @@ class AndroidNotificationPermissionChecker(
     }
 }
 
-class AndroidSessionForegroundLauncher(
-    private val context: Context,
+class AndroidSessionForegroundLauncher @Inject constructor(
+    @ApplicationContext private val context: Context,
 ) : SessionForegroundLauncher {
     @Volatile
     override var isRunning: Boolean = false

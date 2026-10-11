@@ -1,8 +1,9 @@
 package harold.android.chat
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -83,7 +84,8 @@ data class AddWorkspaceUiState(
                 foldersLoadState !is FoldersLoadState.Error
 }
 
-class AddWorkspaceViewModel(
+@HiltViewModel
+class AddWorkspaceViewModel @Inject constructor(
     private val sessionGateway: SessionGateway,
     private val userRepository: UserRepository,
 ) : ViewModel() {
@@ -219,21 +221,4 @@ class AddWorkspaceViewModel(
             is AgentApiError.Transport -> "Could not reach Harold"
             null -> error.message ?: "Request failed"
         }
-}
-
-class AddWorkspaceViewModelFactory(
-    private val sessionGateway: SessionGateway,
-    private val userRepository: UserRepository,
-) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(AddWorkspaceViewModel::class.java)) {
-            return AddWorkspaceViewModel(
-                sessionGateway = sessionGateway,
-                userRepository = userRepository,
-            ) as T
-        }
-
-        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
-    }
 }

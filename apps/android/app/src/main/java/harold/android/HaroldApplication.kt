@@ -1,15 +1,7 @@
 package harold.android
 
-import android.content.Context
-import harold.android.di.AppContainer
-import harold.android.di.DefaultAppContainer
+import android.app.Application
+import dagger.hilt.android.HiltAndroidApp
 
-class HaroldApplication : android.app.Application() {
-    lateinit var appContainer: AppContainer
-        private set
-
-    override fun onCreate() {
-        super.onCreate()
-        appContainer = DefaultAppContainer(applicationContext)
-    }
-}
+@HiltAndroidApp
+class HaroldApplication : Application()

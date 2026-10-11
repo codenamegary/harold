@@ -1,5 +1,7 @@
 package harold.android.live
 
+import harold.android.di.ApplicationScope
+import javax.inject.Inject
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -49,9 +51,9 @@ import harold.android.stream.reduce
 /**
  * One socket, one unbounded inbox, one pump. Chat never sees a raw frame.
  */
-class DefaultSessionOwner(
+class DefaultSessionOwner @Inject constructor(
     private val streamFactory: SessionStreamFactory,
-    private val scope: CoroutineScope,
+    @ApplicationScope private val scope: CoroutineScope,
 ) : SessionOwner {
     private val lock = Any()
     private val commandsCatalog = AvailableCommandsCatalog()

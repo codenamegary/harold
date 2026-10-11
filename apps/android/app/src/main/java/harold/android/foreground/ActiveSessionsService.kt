@@ -4,19 +4,21 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import androidx.core.app.ServiceCompat
-import harold.android.HaroldApplication
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 /**
  * Keeps the process alive while any session is in user-visible active work.
  * Session-stream keep-alive stays on SessionOwner, not this service.
  */
+@AndroidEntryPoint
 class ActiveSessionsService : Service() {
+    @Inject lateinit var coordinator: SessionForegroundCoordinator
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action ?: ACTION_START
-        val app = application as HaroldApplication
-        val coordinator = app.appContainer.sessionForegroundCoordinator
 
         when (action) {
             ACTION_STOP -> {

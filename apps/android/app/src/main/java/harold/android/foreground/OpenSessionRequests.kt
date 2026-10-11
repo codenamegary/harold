@@ -1,5 +1,6 @@
 package harold.android.foreground
 
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -14,7 +15,7 @@ interface OpenSessionRequests {
     fun open(sessionId: String)
 }
 
-class DefaultOpenSessionRequests : OpenSessionRequests {
+class DefaultOpenSessionRequests @Inject constructor() : OpenSessionRequests {
     private val _sessionIds = MutableSharedFlow<String>(extraBufferCapacity = 1)
     override val sessionIds: SharedFlow<String> = _sessionIds.asSharedFlow()
 

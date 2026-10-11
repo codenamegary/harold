@@ -7,61 +7,35 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
-import android.app.Application
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import harold.android.chat.AddWorkspaceScreen
 import harold.android.chat.AddWorkspaceViewModel
-import harold.android.chat.AddWorkspaceViewModelFactory
 import harold.android.chat.ChatScreen
 import harold.android.chat.ChatViewModel
-import harold.android.chat.ChatViewModelFactory
-import harold.android.network.AttachmentApi
-import harold.android.network.SessionConfigApi
-import harold.android.chat.HandlerVoiceDictationRestartScheduler
-import harold.android.chat.VoiceDictationController
-import harold.android.chat.VoskSpeechRecognitionClient
 import harold.android.chat.CreateSessionScreen
 import harold.android.chat.SessionsScreen
 import harold.android.chat.WorkspacesScreen
 import harold.android.chat.WorkspacesViewModel
-import harold.android.chat.WorkspacesViewModelFactory
 import harold.android.chat.composer.ComposerConfigActions
-import harold.android.di.AppContainer
+import harold.android.pairing.PairingRequests
 import harold.android.pairing.PairingScreen
 import harold.android.pairing.PairingViewModel
-import harold.android.pairing.PairingViewModelFactory
 import harold.android.shell.ShellScreen
 import harold.android.shell.ShellViewModel
-import harold.android.shell.ShellViewModelFactory
 
 @Composable
 fun AppNavHost(
-    appContainer: AppContainer,
+    pairingRequests: PairingRequests,
 ) {
     val navController = rememberNavController()
-    val application = LocalContext.current.applicationContext as Application
-    val voiceDictationController = remember(application) {
-        VoiceDictationController(
-            speechClient = VoskSpeechRecognitionClient(application),
-            restartScheduler = HandlerVoiceDictationRestartScheduler(),
-            silenceScheduler = HandlerVoiceDictationRestartScheduler(),
-        )
-    }
-    val shellViewModel: ShellViewModel = viewModel(
-        factory = ShellViewModelFactory(
-            sessionGateway = appContainer.sessionGateway,
-            sessionOwner = appContainer.sessionOwner,
-            agentApi = appContainer.agentApi,
-        ),
-    )
+    val shellViewModel: ShellViewModel = hiltViewModel()
     val shellUiState by shellViewModel.uiState.collectAsStateWithLifecycle()
     val showShell by shellViewModel.showShell.collectAsStateWithLifecycle()
 
@@ -77,8 +51,8 @@ fun AppNavHost(
         }
     }
 
-    LaunchedEffect(appContainer.pairingRequests) {
-        appContainer.pairingRequests.pendingUri.collect { uri ->
+    LaunchedEffect(pairingRequests) {
+        pairingRequests.pendingUri.collect { uri ->
             if (uri != null) {
                 navController.navigate(Routes.Pairing) {
                     launchSingleTop = true
@@ -104,14 +78,7 @@ fun AppNavHost(
         }
 
         composable(Routes.Pairing) {
-            val pairingViewModel: PairingViewModel = viewModel(
-                factory = PairingViewModelFactory(
-                    pairingCoordinator = appContainer.pairingCoordinator,
-                    payloadParser = appContainer.pairingPayloadParser,
-                    deviceNameProvider = appContainer.deviceNameProvider,
-                    pairingRequests = appContainer.pairingRequests,
-                ),
-            )
+            val pairingViewModel: PairingViewModel = hiltViewModel()
             val pairingUiState by pairingViewModel.uiState.collectAsStateWithLifecycle()
 
             PairingScreen(
@@ -127,21 +94,8 @@ fun AppNavHost(
         }
 
         composable(Routes.Chat) { backStackEntry ->
-            val chatViewModel: ChatViewModel = viewModel(
+            val chatViewModel: ChatViewModel = hiltViewModel(
                 viewModelStoreOwner = backStackEntry,
-                factory = ChatViewModelFactory(
-                    savedStateHandle = backStackEntry.savedStateHandle,
-                    sessionGateway = appContainer.sessionGateway,
-                    sessionOwner = appContainer.sessionOwner,
-                    userRepository = appContainer.userRepository,
-                    attachmentApi = appContainer.agentApi as AttachmentApi,
-                    configApi = appContainer.agentApi as SessionConfigApi,
-                    navigationPreferences = appContainer.navigationPreferences,
-                    activeSessionTracker = appContainer.activeSessionTracker,
-                    sessionForegroundCoordinator = appContainer.sessionForegroundCoordinator,
-                    openSessionRequests = appContainer.openSessionRequests,
-                    voiceDictationController = voiceDictationController,
-                ),
             )
             val chatUiState by chatViewModel.uiState.collectAsStateWithLifecycle()
             val lifecycleOwner = LocalLifecycleOwner.current
@@ -216,21 +170,8 @@ fun AppNavHost(
             val chatEntry = remember(sessionsEntry) {
                 navController.getBackStackEntry(Routes.Chat)
             }
-            val chatViewModel: ChatViewModel = viewModel(
+            val chatViewModel: ChatViewModel = hiltViewModel(
                 viewModelStoreOwner = chatEntry,
-                factory = ChatViewModelFactory(
-                    savedStateHandle = chatEntry.savedStateHandle,
-                    sessionGateway = appContainer.sessionGateway,
-                    sessionOwner = appContainer.sessionOwner,
-                    userRepository = appContainer.userRepository,
-                    attachmentApi = appContainer.agentApi as AttachmentApi,
-                    configApi = appContainer.agentApi as SessionConfigApi,
-                    navigationPreferences = appContainer.navigationPreferences,
-                    activeSessionTracker = appContainer.activeSessionTracker,
-                    sessionForegroundCoordinator = appContainer.sessionForegroundCoordinator,
-                    openSessionRequests = appContainer.openSessionRequests,
-                    voiceDictationController = voiceDictationController,
-                ),
             )
             val chatUiState by chatViewModel.uiState.collectAsStateWithLifecycle()
 
@@ -254,21 +195,8 @@ fun AppNavHost(
             val chatEntry = remember(createEntry) {
                 navController.getBackStackEntry(Routes.Chat)
             }
-            val chatViewModel: ChatViewModel = viewModel(
+            val chatViewModel: ChatViewModel = hiltViewModel(
                 viewModelStoreOwner = chatEntry,
-                factory = ChatViewModelFactory(
-                    savedStateHandle = chatEntry.savedStateHandle,
-                    sessionGateway = appContainer.sessionGateway,
-                    sessionOwner = appContainer.sessionOwner,
-                    userRepository = appContainer.userRepository,
-                    attachmentApi = appContainer.agentApi as AttachmentApi,
-                    configApi = appContainer.agentApi as SessionConfigApi,
-                    navigationPreferences = appContainer.navigationPreferences,
-                    activeSessionTracker = appContainer.activeSessionTracker,
-                    sessionForegroundCoordinator = appContainer.sessionForegroundCoordinator,
-                    openSessionRequests = appContainer.openSessionRequests,
-                    voiceDictationController = voiceDictationController,
-                ),
             )
             val chatUiState by chatViewModel.uiState.collectAsStateWithLifecycle()
             var createFormOpened by remember { mutableStateOf(false) }
@@ -294,12 +222,7 @@ fun AppNavHost(
         }
 
         composable(Routes.Workspaces) {
-            val workspacesViewModel: WorkspacesViewModel = viewModel(
-                factory = WorkspacesViewModelFactory(
-                    sessionGateway = appContainer.sessionGateway,
-                    userRepository = appContainer.userRepository,
-                ),
-            )
+            val workspacesViewModel: WorkspacesViewModel = hiltViewModel()
             val workspacesUiState by workspacesViewModel.uiState.collectAsStateWithLifecycle()
             val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -321,12 +244,7 @@ fun AppNavHost(
         }
 
         composable(Routes.AddWorkspace) {
-            val addWorkspaceViewModel: AddWorkspaceViewModel = viewModel(
-                factory = AddWorkspaceViewModelFactory(
-                    sessionGateway = appContainer.sessionGateway,
-                    userRepository = appContainer.userRepository,
-                ),
-            )
+            val addWorkspaceViewModel: AddWorkspaceViewModel = hiltViewModel()
             val addWorkspaceUiState by addWorkspaceViewModel.uiState.collectAsStateWithLifecycle()
 
             AddWorkspaceScreen(

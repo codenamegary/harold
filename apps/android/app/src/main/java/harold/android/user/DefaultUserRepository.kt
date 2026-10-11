@@ -5,8 +5,9 @@ import harold.android.contracts.AuthSessionAction
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.network.AgentApi
+import javax.inject.Inject
 
-class DefaultUserRepository(
+class DefaultUserRepository @Inject constructor(
     private val agentApi: AgentApi,
 ) : UserRepository {
     override suspend fun listWorkspaces(

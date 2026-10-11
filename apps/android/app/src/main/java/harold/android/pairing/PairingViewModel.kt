@@ -2,8 +2,9 @@ package harold.android.pairing
 
 import android.os.Build
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,10 +27,11 @@ data class PairingUiState(
     val completed: Boolean = false,
 )
 
-class PairingViewModel(
+@HiltViewModel
+class PairingViewModel @Inject constructor(
     private val pairingCoordinator: PairingCoordinator,
     private val payloadParser: PairingPayloadParser,
-    private val deviceNameProvider: () -> String,
+    private val deviceNameProvider: DeviceNameProvider,
     private val pairingRequests: PairingRequests? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(PairingUiState())
@@ -150,25 +152,8 @@ class PairingViewModel(
         }
 }
 
-class PairingViewModelFactory(
-    private val pairingCoordinator: PairingCoordinator,
-    private val payloadParser: PairingPayloadParser,
-    private val deviceNameProvider: () -> String,
-    private val pairingRequests: PairingRequests? = null,
-) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(PairingViewModel::class.java)) {
-            return PairingViewModel(
-                pairingCoordinator = pairingCoordinator,
-                payloadParser = payloadParser,
-                deviceNameProvider = deviceNameProvider,
-                pairingRequests = pairingRequests,
-            ) as T
-        }
-
-        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
-    }
+fun interface DeviceNameProvider {
+    operator fun invoke(): String
 }
 
 fun defaultDeviceName(): String = "${Build.MANUFACTURER} ${Build.MODEL}".trim()
