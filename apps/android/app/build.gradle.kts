@@ -5,9 +5,8 @@ import java.util.UUID
 import java.util.zip.ZipInputStream
 
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.plugin.compose")
-    id("org.jetbrains.kotlin.plugin.serialization")
+    alias(libs.plugins.harold.android.application)
+    alias(libs.plugins.harold.android.compose)
 }
 
 val appVersionName = "1.1.2" // x-release-please-version
@@ -34,20 +33,11 @@ val hasReleaseSigning = releaseSigning.values.all(String::isNotBlank)
 
 android {
     namespace = "harold.android"
-    compileSdk {
-        version = release(37) {
-            minorApiLevel = 0
-        }
-    }
 
     defaultConfig {
         applicationId = "harold.android"
-        minSdk = 30
-        targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
-
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64", "x86")
@@ -82,18 +72,8 @@ android {
         }
     }
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
     buildFeatures {
-        compose = true
         buildConfig = true
-    }
-
-    testOptions {
-        unitTests.isIncludeAndroidResources = true
     }
 
     packaging {
@@ -203,43 +183,51 @@ tasks.matching { it.name.startsWith("compile") && it.name.contains("UnitTest") }
 }
 
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2026.09.00")
+    val composeBom = platform(libs.androidx.compose.bom)
 
     implementation(composeBom)
     androidTestImplementation(composeBom)
 
-    implementation("androidx.activity:activity-compose:1.13.0")
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
-    implementation("androidx.navigation:navigation-compose:2.9.8")
-    implementation("androidx.datastore:datastore-preferences:1.1.7")
-    implementation("com.squareup.okhttp3:okhttp:5.4.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
-    implementation("androidx.camera:camera-camera2:1.5.0")
-    implementation("androidx.camera:camera-lifecycle:1.5.0")
-    implementation("androidx.camera:camera-view:1.5.0")
-    implementation("com.google.zxing:core:3.5.3")
-    implementation("com.mikepenz:multiplatform-markdown-renderer-android:0.43.0")
-    implementation("com.mikepenz:multiplatform-markdown-renderer-m3:0.43.0")
-    implementation("com.alphacephei:vosk-android:0.3.75@aar")
-    implementation("net.java.dev.jna:jna:5.18.1@aar")
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.okhttp)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.zxing.core)
+    implementation(libs.markdown.renderer.android)
+    implementation(libs.markdown.renderer.m3)
+    implementation(libs.vosk.android) {
+        artifact {
+            type = "aar"
+        }
+    }
+    implementation(libs.jna) {
+        artifact {
+            type = "aar"
+        }
+    }
 
-    testImplementation("com.squareup.okhttp3:mockwebserver:5.4.0")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.turbine)
 
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    androidTestImplementation("androidx.test:runner:1.6.2")
-    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.kotlinx.coroutines.test)
 
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
-
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("org.robolectric:robolectric:4.17")
-    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

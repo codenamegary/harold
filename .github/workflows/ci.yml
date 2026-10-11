@@ -209,7 +209,7 @@ jobs:
           cache-provider: basic
 
       - name: Android checks
-        run: ./gradlew --no-daemon --stacktrace lintRelease testDebugUnitTest
+        run: ./gradlew --no-daemon --stacktrace lintRelease testDebugUnitTest testBuildLogic
 
       - name: Upload test results
         if: failure()

@@ -942,6 +942,7 @@ class ChatViewModelTest {
             silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
             restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         ),
+        previewDispatcher = dispatcher,
     )
 
     @Test
