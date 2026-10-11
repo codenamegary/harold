@@ -4,6 +4,8 @@ plugins {
 
 dependencies {
     implementation(libs.android.gradle.plugin)
+    implementation(libs.kotlin.compose.gradle.plugin)
+    implementation(libs.kotlin.serialization.gradle.plugin)
     testImplementation(libs.junit)
     testImplementation(gradleTestKit())
 }

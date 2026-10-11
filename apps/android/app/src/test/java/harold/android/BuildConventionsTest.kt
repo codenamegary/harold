@@ -12,7 +12,9 @@ class BuildConventionsTest {
         val androidRoot = androidRoot()
         val appBuild = File(androidRoot, "app/build.gradle.kts").readText()
         val plugins = appBuild.substringAfter("plugins {").substringBefore("}")
-        val pluginLines = plugins.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        val pluginLines = plugins.lines()
+            .map { it.substringBefore("//").trim() }
+            .filter { it.isNotEmpty() }
 
         assertEquals(
             listOf(
