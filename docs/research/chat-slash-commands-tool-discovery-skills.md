@@ -226,7 +226,7 @@ lines 40–80).
 | `SpeechRecognizer` engine, mute cycles, start-over, `RECORD_AUDIO` | Done ([AGE-58](https://linear.app/harold/issue/AGE-58/android-chat-voice-dictation-recognition-and-session-state))        | `SpeechRecognitionClient.kt`, `VoiceDictationController.kt`, ViewModel wiring |
 | Mic button + full-screen overlay UI                                | In Review ([AGE-59](https://linear.app/harold/issue/AGE-59/android-chat-voice-dictation-full-screen-overlay-ui), PR #215) | Not wired on `ChatScreen` / `AppNavHost` in this tree at check time           |
 
-Voice fills the **composer draft** then the operator still taps Send. Separate
+Voice fills the **composer draft** then the user still taps Send. Separate
 from slash discovery.
 
 ## Related ADRs / delivery structure
@@ -259,7 +259,7 @@ Project: [ACP session gateway](https://linear.app/harold/project/acp-session-gat
 
 ### Possible now
 
-1. Operator types `/anything` as plain prompt text. Agent may treat it as a
+1. User types `/anything` as plain prompt text. Agent may treat it as a
    slash command if it implements that convention (ACP running-commands model).
 2. Agent may emit `available_commands_update`. Server will fan it out. Clients
    ignore it for UI.

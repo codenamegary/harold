@@ -5,10 +5,10 @@ Related: [ADR-0000 Terms and topology](0000-harold.md),
 [ADR-0001 Device authentication](0001-device-authentication.md),
 [ADR-0002 Device authorization](0002-device-authorization.md)
 
-Harold shipped with a web operator console served from the daemon
+Harold shipped with a web console served from the daemon
 (`apps/web`, bundled into the binary). The console authenticated by origin:
 a loopback request with no credential became a **host principal** with full
-operator power, with a `trustedProxies` setting to classify peers behind a
+user power, with a `trustedProxies` setting to classify peers behind a
 reverse proxy. This ADR retires that model.
 
 ## Decision
@@ -30,9 +30,9 @@ reverse proxy. This ADR retires that model.
    route and the session stream require a device credential. The host
    principal type no longer exists in the codebase, so the HTTP surface
    cannot do host things by construction.
-5. **The CLI is the local operator tooling.** It already read host state
+5. **The CLI is the local user tooling.** It already read host state
    directly (database, settings file, daemon log) rather than over HTTP, so
-   local operators lose nothing. Where the CLI speaks HTTP it presents a
+   local users lose nothing. Where the CLI speaks HTTP it presents a
    device credential like any client.
 6. **Contracts shrink to what remains.** `packages/contracts` drops the logs
    and connection-test contracts and the `trustedProxies` field; legacy
@@ -54,6 +54,6 @@ reverse proxy. This ADR retires that model.
 ## Amendment of earlier ADRs
 
 - ADR-0000 topology: the console band and host principal are gone; the CLI is
-  the local operator path.
-- ADR-0001: the "separate loopback operator path" sentence no longer holds.
+  the local user path.
+- ADR-0001: the "separate loopback user path" sentence no longer holds.
 - ADR-0002: the flat model keeps only one principal kind, the paired device.

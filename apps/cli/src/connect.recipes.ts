@@ -232,7 +232,7 @@ export const connectRecipes: readonly ConnectRecipe[] = [
   {
     id: "custom",
     label: "I already have an endpoint",
-    detect: () => ({ available: true, detail: "operator-supplied endpoint" }),
+    detect: () => ({ available: true, detail: "user-supplied endpoint" }),
     guide: guideCustom,
   },
 ]

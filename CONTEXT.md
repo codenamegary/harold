@@ -1,6 +1,6 @@
 # Harold
 
-Harold is a local host process. It speaks HTTP and WebSocket to operator
+Harold is a local host process. It speaks HTTP and WebSocket to user
 clients through the Device API, and ACP over stdio to agent child processes.
 This is the canonical language for docs, contracts, and UI copy.
 
@@ -18,7 +18,7 @@ backend
 **Host**:
 The machine and process that run Harold, acting as the ACP client toward
 agent processes. The host has no principal on the Device API; local
-operators use the `harold` CLI, which reads host state directly.
+users use the `harold` CLI, which reads host state directly.
 _Avoid_: host (for a client), host principal
 
 **Setup wizard**:
@@ -29,7 +29,7 @@ _Avoid_: onboarding, installer
 
 **Device**:
 A paired client that holds a durable opaque credential and acts as a full
-operator over the Device API. Devices never speak ACP and never hold
+user over the Device API. Devices never speak ACP and never hold
 provider secrets as the source of truth.
 _Avoid_: client (bare), phone
 
@@ -62,7 +62,7 @@ ACP server.
 _Avoid_: calling the Device API "the ACP API"
 
 **Workspace**:
-A named host directory the operator registers. Agents use it as their working
+A named host directory the user registers. Agents use it as their working
 directory and root.
 _Avoid_: project, folder
 
@@ -105,5 +105,5 @@ _Avoid_: agent settings, composer config
 
 **Protocol Error**:
 A terminal Session Stream failure caused by a Malformed Frame. Auto-retry
-stops until the operator asks.
+stops until the user asks.
 _Avoid_: fatal error

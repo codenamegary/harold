@@ -105,7 +105,7 @@ describe("isOpenRoute", () => {
     expect(isOpenRoute({ method: "POST", routerPath: "/v1/_test/validate" })).toBe(true)
   })
 
-  test("operator routes are not open", () => {
+  test("user routes are not open", () => {
     expect(isOpenRoute({ method: "POST", routerPath: "/v1/pairing-codes" })).toBe(false)
     expect(isOpenRoute({ method: "GET", routerPath: "/v1/workspaces" })).toBe(false)
     expect(isOpenRoute({ method: "GET", routerPath: "/v1/sessions/stream" })).toBe(false)

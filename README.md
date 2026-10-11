@@ -2,10 +2,10 @@
 
 **Hark! The Harold Agents Sing**
 
-Harold is a local host process. It speaks HTTP and WebSocket to operator
+Harold is a local host process. It speaks HTTP and WebSocket to user
 clients through the Device API, and ACP over stdio to agent child processes.
 The paired Android app is the remote client; the `harold` CLI is the local
-operator tooling.
+user tooling.
 
 ## Layout
 

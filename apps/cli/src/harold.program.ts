@@ -26,7 +26,7 @@ export const makeHaroldProgram = (deps: HaroldProgramDeps = {}): Command => {
     .version(packageJson.version)
   program.addCommand(makeStartCommand(deps.start))
   // serve is the internal foreground command: start and setup spawn it
-  // detached as the daemon, so it stays out of the operator help.
+  // detached as the daemon, so it stays out of the user help.
   program.addCommand(makeServeCommand(deps.serve), { hidden: true })
   program.addCommand(makeSetupCommand())
   program.addCommand(makeStatusCommand())

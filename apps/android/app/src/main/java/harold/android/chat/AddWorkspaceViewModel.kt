@@ -12,7 +12,7 @@ import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectory
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
-import harold.android.operator.OperatorRepository
+import harold.android.user.UserRepository
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 
@@ -85,7 +85,7 @@ data class AddWorkspaceUiState(
 
 class AddWorkspaceViewModel(
     private val sessionGateway: SessionGateway,
-    private val operatorRepository: OperatorRepository,
+    private val userRepository: UserRepository,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AddWorkspaceUiState())
     val uiState: StateFlow<AddWorkspaceUiState> = _uiState.asStateFlow()
@@ -140,7 +140,7 @@ class AddWorkspaceViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(submitting = true, submitError = null) }
 
-            operatorRepository.createWorkspace(
+            userRepository.createWorkspace(
                 serverOrigin = paired.serverOrigin,
                 body = CreateWorkspaceBody(
                     name = state.name.trim(),
@@ -167,7 +167,7 @@ class AddWorkspaceViewModel(
 
         _uiState.update { it.copy(rootsLoadState = RootsLoadState.Loading) }
 
-        operatorRepository.getRuntimeSettings(paired.serverOrigin).fold(
+        userRepository.getRuntimeSettings(paired.serverOrigin).fold(
             onSuccess = { view ->
                 val roots = view.settings.allowedRoots
                 _uiState.update {
@@ -191,7 +191,7 @@ class AddWorkspaceViewModel(
     private suspend fun loadFolders(root: String) {
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
 
-        operatorRepository.listFilesystemDirectories(paired.serverOrigin, root).fold(
+        userRepository.listFilesystemDirectories(paired.serverOrigin, root).fold(
             onSuccess = { collection ->
                 _uiState.update {
                     it.copy(
@@ -223,14 +223,14 @@ class AddWorkspaceViewModel(
 
 class AddWorkspaceViewModelFactory(
     private val sessionGateway: SessionGateway,
-    private val operatorRepository: OperatorRepository,
+    private val userRepository: UserRepository,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(AddWorkspaceViewModel::class.java)) {
             return AddWorkspaceViewModel(
                 sessionGateway = sessionGateway,
-                operatorRepository = operatorRepository,
+                userRepository = userRepository,
             ) as T
         }
 

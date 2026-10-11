@@ -18,7 +18,7 @@ required fields is a terminal Protocol Error.
 2. Unknown Frames never end the Stream. The client discards them and keeps a
    count for diagnostics.
 3. Malformed Frames end the Stream as a terminal Protocol Error. The client
-   cancels the socket and stops auto-retry until the operator asks.
+   cancels the socket and stops auto-retry until the user asks.
 4. Unknown keys inside a known Frame are ignored. Required fields must still
    decode; a missing or invalid required field is malformed.
 5. Additive evolution of the Session Stream happens through new frame `type`

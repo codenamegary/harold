@@ -8,7 +8,7 @@ Related: [ADR-0001 Device authentication](0001-device-authentication.md),
 [ADR-0007 Console retirement](0007-retire-console-device-only-edge.md),
 [ADR-0005 Session stream frames](0005-session-stream-frames.md)
 
-Harold is a local host process. It speaks HTTP and WebSocket to operator
+Harold is a local host process. It speaks HTTP and WebSocket to user
 clients. It speaks ACP to agent child processes. This ADR records the topology
 and the naming boundaries for that split. The shared words live in
 [CONTEXT.md](../../CONTEXT.md). Later ADRs decide auth, pairing, and agent
@@ -22,7 +22,7 @@ login. This one only names the map.
    contracts, and UI copy. Prefer a qualified phrase when a bare word collides
    (for example **ACP agent capability** vs **host capability**).
 3. Keep **devices off ACP**. Devices call the Device API only. The host is the
-   ACP client. Agent processes are ACP servers. (The operator console that
+   ACP client. Agent processes are ACP servers. (The web console that
    originally shared this band is retired per ADR-0007.)
 4. Draw the topology as three bands: clients, host process, ACP agents. Do not
    draw provider login UI on devices as a direct ACP path
@@ -51,7 +51,7 @@ keeps the topology and naming boundaries below.
 ```mermaid
 flowchart TB
   subgraph clients [Clients]
-    CLI[harold CLI<br/>local operator tooling]
+    CLI[harold CLI<br/>local user tooling]
     Android[Paired device<br/>Android / remote clients]
   end
 
@@ -85,9 +85,9 @@ flowchart TB
 ### How the bands interact
 
 1. **Device → Device API.** Claims a pairing code once. Then uses Bearer on
-   every call. The only operator surface over the network.
+   every call. The only user surface over the network.
 2. **CLI → host state.** The CLI runs on the host and reads the database,
-   settings file, and daemon log directly. It never proxies operator actions
+   settings file, and daemon log directly. It never proxies user actions
    over the Device API without a device credential.
 3. **Device API → host modules.** Auth picks the principal. Routes hit
    workspaces, agent settings, session hub, devices.
@@ -146,7 +146,7 @@ sequenceDiagram
 | ------------------------------------------------------ | ---------------------------------------------------- |
 | Call the HTTP/WS surface the **Device API**            | Call it "the ACP API"                                |
 | Say **host** for the process                           | Say "host principal"; HTTP has no host identity      |
-| Say **device** for authenticated remote operators      | Say "console"; the web console is retired            |
+| Say **device** for authenticated remote users          | Say "console"; the web console is retired            |
 | Qualify **capability** (ACP agent / ACP client / host) | Use bare "capability" for authz                      |
 | Say **session** for ACP chat                           | Reuse "session" alone for device auth or agent login |
 
@@ -156,18 +156,18 @@ sequenceDiagram
   drift when found.
 - ADR-0001 through ADR-0004 stay the decision records for auth, pairing, and
   agent login. This ADR is the map they sit on.
-- If a later milestone splits operator roles, update **Device** and **Device
+- If a later milestone splits user roles, update **Device** and **Device
   API** here before scattering new words through feature ADRs.
 
 ## Open questions for review
 
-1. Is **Device API** the right product name, or should contracts say **Operator
-   API** (now that devices are the only networked operator)?
+1. Is **Device API** the right product name, or should contracts say **User
+   API** (now that devices are the only networked user)?
 
 ## Amendment — console retired (ADR-0007)
 
-The web operator console existed in the original topology as a loopback client
+The web console existed in the original topology as a loopback client
 authenticated as a **host principal**. [ADR-0007](0007-retire-console-device-only-edge.md)
 retires it: the HTTP edge is device-only by construction, the host principal no
-longer exists, and the CLI is the local operator tooling. The diagrams above
+longer exists, and the CLI is the local user tooling. The diagrams above
 reflect the amended topology.

@@ -1,4 +1,4 @@
-package harold.android.operator
+package harold.android.user
 
 import harold.android.contracts.AgentId
 import harold.android.contracts.AuthSessionAction
@@ -6,9 +6,9 @@ import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.network.AgentApi
 
-class DefaultOperatorRepository(
+class DefaultUserRepository(
     private val agentApi: AgentApi,
-) : OperatorRepository {
+) : UserRepository {
     override suspend fun listWorkspaces(
         serverOrigin: String,
         limit: Int,

@@ -4,7 +4,7 @@ Status: Accepted
 Related: [ADR-0000 Harold](0000-harold.md), [Epic #313](https://github.com/codenamegary/harold/issues/313)
 
 HTTP becomes the device-only API. Android and pairing keep the `/v1` edge. The
-operator gets a first-party CLI. Server routes and the CLI consume one shared
+user gets a first-party CLI. Server routes and the CLI consume one shared
 middle package. Status is the exemplar slice: the daemon publishes live state,
 the CLI reads it, and no host HTTP route is involved.
 
@@ -13,13 +13,13 @@ the CLI reads it, and no host HTTP route is involved.
 1. `packages/core` is the middle package. It holds ports, curried use cases,
    and transport-generic adapters. It depends on `contracts` and zod only. No
    Fastify, no database driver, no terminal I/O crosses into it.
-2. `apps/cli` is the operator surface. The workspace package is `harold`. It
+2. `apps/cli` is the user surface. The workspace package is `harold`. It
    uses commander for the command surface, picocolors for output, and
    @clack/prompts for interactive flows.
 3. `harold start` starts the daemon and returns to the shell. It re-execs
    the CLI entry with the hidden foreground command `serve` detached — one
    process, one daemon — and exits once the state file names the spawned pid.
-   Operators see `start`; `serve` is the internal spawn target.
+   Users see `start`; `serve` is the internal spawn target.
 4. Live daemon state travels through a state file. The daemon writes
    `<dataDir>/daemon-state.json` with `pid`, `writtenAt`, and the status
    projection. Writes are atomic (temp file plus rename), one at startup, one
@@ -35,7 +35,7 @@ the CLI reads it, and no host HTTP route is involved.
    `GET /v1/status` because Android verifies reachability against it
    (#320).
 8. The daemon writes logs to a file under `<dataDir>` (default `harold.log`)
-   or the operator-configured `logPath`. `harold logs` tails that file
+   or the user-configured `logPath`. `harold logs` tails that file
    through core's tail slice. A null `logPath` selects the default file, not
    stdout.
 
@@ -79,7 +79,7 @@ the CLI reads it, and no host HTTP route is involved.
   the state file names the spawned pid, and exits; the daemon keeps serving.
   A daemon that is already live is a success: start prints the status and
   exits 0 without spawning. Logs never go to the screen. The daemon writes
-  them to the default file, or the operator-configured `logPath`, and
+  them to the default file, or the user-configured `logPath`, and
   `harold logs` tails that file.
 - `harold serve` remains the hidden foreground path that start and setup
   re-exec detached. It exits 1 with a warning from the same state file and

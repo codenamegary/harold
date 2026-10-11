@@ -1,10 +1,10 @@
-# Device pairing: operator-issued binding codes
+# Device pairing: user-issued binding codes
 
 Status: Accepted  
 Milestone: [MS2 Trusted Devices](../../spec/ms2-trusted-devices.md)  
 Related: [ADR-0001 Authentication](0001-device-authentication.md), [ADR-0002 Authorization](0002-device-authorization.md)
 
-Pairing uses a short-lived, one-time operator-issued code claimed by the new
+Pairing uses a short-lived, one-time user-issued code claimed by the new
 client. The claim response returns the durable device credential from
 [ADR-0001](0001-device-authentication.md). This follows NIST authenticator-binding
 shape, not the OAuth 2.0 Device Authorization Grant. QR codes are a local
@@ -12,7 +12,7 @@ transfer convenience, not a separate protocol.
 
 ## Decision
 
-1. The host operator creates a pairing code through an authenticated host path.
+1. The host user creates a pairing code through an authenticated host path.
 2. The new client claims the code once through `POST /v1/pairing-codes/:code/claim`
    (or equivalent contract) and receives the opaque device credential.
 3. Codes are one-time, short-lived (**≤ 10 minutes**), and generated with a CSPRNG
@@ -41,10 +41,10 @@ and the constrained device polls for user tokens.
 
 | Aspect        | RFC 8628                      | Harold pairing                    |
 | ------------- | ----------------------------- | --------------------------------- |
-| Who starts    | Constrained device            | Host operator (already trusted)   |
+| Who starts    | Constrained device            | Host user (already trusted)       |
 | Who approves  | Resource owner at AS          | Host, by creating the code        |
 | What issues   | OAuth access / refresh tokens | Opaque device credential          |
-| Account model | User account at AS            | Single local operator server      |
+| Account model | User account at AS            | Single local Harold host          |
 | Polling       | Required (`device_code`)      | Not required. Client claims once. |
 
 Borrow RFC 8628 hygiene for human codes. Do not take on an authorization server,
@@ -65,9 +65,9 @@ Device Grant), record that as a new ADR. Do not silently reshape
 
 | Option                                                     | Verdict               | Why                                                                                          |
 | ---------------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------- |
-| Operator-issued binding code + claim API                   | **Selected**          | Matches product trust direction. Host grants membership. Client receives durable credential. |
+| User-issued binding code + claim API                       | **Selected**          | Matches product trust direction. Host grants membership. Client receives durable credential. |
 | OAuth 2.0 Device Authorization Grant ([RFC 8628][rfc8628]) | Rejected for MS2      | Wrong initiator and account model. Full AS stack for no MS2 gain.                            |
-| Pre-shared long API key pasted by hand                     | Rejected              | No short TTL. Easy to copy forever. Weak operator UX for revoke-and-repair.                  |
+| Pre-shared long API key pasted by hand                     | Rejected              | No short TTL. Easy to copy forever. Weak user UX for revoke-and-repair.                      |
 | Public-key device attestation / mTLS enroll                | Deferred              | Stronger bind. Needs PKI and remote threat model.                                            |
 | QR-only pairing with no typed code                         | Rejected as sole path | QR is optional convenience. Typed code remains the protocol.                                 |
 | Email / SMS delivery of codes                              | Rejected              | NIST forbids insecure channels for binding codes ([nist-events]). Local transfer only.       |
@@ -90,7 +90,7 @@ reachable off-machine (Milestone 3).
 
 ## Consequences
 
-- Pairing create stays a host-operator action. Unauthenticated clients cannot mint
+- Pairing create stays a host-side action. Unauthenticated clients cannot mint
   codes.
 - Claim endpoint is the brute-force surface. Harold does not add claim
   rate limits for this product. Do not introduce per-code, per-source, or global

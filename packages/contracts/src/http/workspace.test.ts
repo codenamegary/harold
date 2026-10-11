@@ -10,7 +10,7 @@ import {
 const validWorkspace = {
   id: "ws-harold",
   name: "harold",
-  path: "/home/operator/harold",
+  path: "/home/user/harold",
   state: "available",
   createdAt: "2026-07-24T12:00:00.000Z",
   lastUsedAt: "2026-07-24T12:05:00.000Z",
@@ -37,7 +37,7 @@ describe("WorkspaceSchema", () => {
 
 describe("CreateWorkspaceBodySchema", () => {
   test("accepts a valid create body", () => {
-    const body = { name: "harold", path: "/home/operator/harold" }
+    const body = { name: "harold", path: "/home/user/harold" }
 
     expect(CreateWorkspaceBodySchema.parse(body)).toEqual(body)
   })
@@ -46,7 +46,7 @@ describe("CreateWorkspaceBodySchema", () => {
     expect(() =>
       CreateWorkspaceBodySchema.parse({
         name: "",
-        path: "/home/operator/harold",
+        path: "/home/user/harold",
       }),
     ).toThrow()
   })
@@ -55,7 +55,7 @@ describe("CreateWorkspaceBodySchema", () => {
     expect(() =>
       CreateWorkspaceBodySchema.parse({
         name: "a".repeat(81),
-        path: "/home/operator/harold",
+        path: "/home/user/harold",
       }),
     ).toThrow()
   })
@@ -64,7 +64,7 @@ describe("CreateWorkspaceBodySchema", () => {
     expect(() =>
       CreateWorkspaceBodySchema.parse({
         name: "harold",
-        path: "/home/operator/harold",
+        path: "/home/user/harold",
         state: "available",
       }),
     ).toThrow()
@@ -82,7 +82,7 @@ describe("UpdateWorkspaceBodySchema", () => {
     expect(() =>
       UpdateWorkspaceBodySchema.parse({
         name: "renamed",
-        path: "/home/operator/harold",
+        path: "/home/user/harold",
       }),
     ).toThrow()
   })

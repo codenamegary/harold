@@ -22,7 +22,7 @@ import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceState
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
-import harold.android.operator.OperatorRepository
+import harold.android.user.UserRepository
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 
@@ -44,7 +44,7 @@ class WorkspacesViewModelTest {
     fun loadsWorkspaces() = runTest(dispatcher) {
         val viewModel = WorkspacesViewModel(
             sessionGateway = WorkspacesFakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
-            operatorRepository = WorkspacesFakeOperatorRepository(),
+            userRepository = WorkspacesFakeUserRepository(),
         )
 
         viewModel.refresh()
@@ -59,7 +59,7 @@ class WorkspacesViewModelTest {
     fun reportsEmptyWorkspaces() = runTest(dispatcher) {
         val viewModel = WorkspacesViewModel(
             sessionGateway = WorkspacesFakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
-            operatorRepository = WorkspacesFakeOperatorRepository(workspaces = emptyList()),
+            userRepository = WorkspacesFakeUserRepository(workspaces = emptyList()),
         )
 
         viewModel.refresh()
@@ -72,7 +72,7 @@ class WorkspacesViewModelTest {
     fun reportsApiFailure() = runTest(dispatcher) {
         val viewModel = WorkspacesViewModel(
             sessionGateway = WorkspacesFakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
-            operatorRepository = WorkspacesFakeOperatorRepository(
+            userRepository = WorkspacesFakeUserRepository(
                 apiFailure = AgentApiException(AgentApiError.Transport(RuntimeException("boom"))),
             ),
         )
@@ -102,7 +102,7 @@ private class WorkspacesFakeSessionGateway(
     }
 }
 
-private class WorkspacesFakeOperatorRepository(
+private class WorkspacesFakeUserRepository(
     private val workspaces: List<Workspace> = listOf(
         Workspace(
             id = "ws_01",
@@ -114,7 +114,7 @@ private class WorkspacesFakeOperatorRepository(
         ),
     ),
     private val apiFailure: Throwable? = null,
-) : OperatorRepository {
+) : UserRepository {
     override suspend fun listWorkspaces(
         serverOrigin: String,
         limit: Int,

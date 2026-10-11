@@ -11,7 +11,7 @@ sealed interface WorkspaceProbe {
         val count: Int,
     ) : WorkspaceProbe
 
-    /** The credential was rejected on HTTP. Same operator choice as a rejected socket. */
+    /** The credential was rejected on HTTP. Same user choice as a rejected socket. */
     data class Unauthorized(
         val detail: String?,
     ) : WorkspaceProbe

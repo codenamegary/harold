@@ -133,7 +133,7 @@ fun AppNavHost(
                     savedStateHandle = backStackEntry.savedStateHandle,
                     sessionGateway = appContainer.sessionGateway,
                     sessionOwner = appContainer.sessionOwner,
-                    operatorRepository = appContainer.operatorRepository,
+                    userRepository = appContainer.userRepository,
                     attachmentApi = appContainer.agentApi as AttachmentApi,
                     configApi = appContainer.agentApi as SessionConfigApi,
                     navigationPreferences = appContainer.navigationPreferences,
@@ -222,7 +222,7 @@ fun AppNavHost(
                     savedStateHandle = chatEntry.savedStateHandle,
                     sessionGateway = appContainer.sessionGateway,
                     sessionOwner = appContainer.sessionOwner,
-                    operatorRepository = appContainer.operatorRepository,
+                    userRepository = appContainer.userRepository,
                     attachmentApi = appContainer.agentApi as AttachmentApi,
                     configApi = appContainer.agentApi as SessionConfigApi,
                     navigationPreferences = appContainer.navigationPreferences,
@@ -260,7 +260,7 @@ fun AppNavHost(
                     savedStateHandle = chatEntry.savedStateHandle,
                     sessionGateway = appContainer.sessionGateway,
                     sessionOwner = appContainer.sessionOwner,
-                    operatorRepository = appContainer.operatorRepository,
+                    userRepository = appContainer.userRepository,
                     attachmentApi = appContainer.agentApi as AttachmentApi,
                     configApi = appContainer.agentApi as SessionConfigApi,
                     navigationPreferences = appContainer.navigationPreferences,
@@ -297,7 +297,7 @@ fun AppNavHost(
             val workspacesViewModel: WorkspacesViewModel = viewModel(
                 factory = WorkspacesViewModelFactory(
                     sessionGateway = appContainer.sessionGateway,
-                    operatorRepository = appContainer.operatorRepository,
+                    userRepository = appContainer.userRepository,
                 ),
             )
             val workspacesUiState by workspacesViewModel.uiState.collectAsState()
@@ -324,7 +324,7 @@ fun AppNavHost(
             val addWorkspaceViewModel: AddWorkspaceViewModel = viewModel(
                 factory = AddWorkspaceViewModelFactory(
                     sessionGateway = appContainer.sessionGateway,
-                    operatorRepository = appContainer.operatorRepository,
+                    userRepository = appContainer.userRepository,
                 ),
             )
             val addWorkspaceUiState by addWorkspaceViewModel.uiState.collectAsState()

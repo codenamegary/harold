@@ -2,7 +2,7 @@
 
 Checked: 2026-08-05
 
-Scope: facts needed to define the first small native Android operator app.
+Scope: facts needed to define the first small native Android app.
 External claims use first-party Android, Gradle, and OkHttp sources. Repository
 claims link to source or accepted ADRs.
 
@@ -58,7 +58,7 @@ unless the project opts out
 
 ## Credential storage
 
-The claimed credential is a durable, opaque, full-operator Bearer secret. The
+The claimed credential is a durable, opaque, full-user Bearer secret. The
 server returns it once and stores only its hash
 ([ADR-0001](../adr/0001-device-authentication.md),
 [device response schema](../../packages/contracts/src/http/device.ts)).
@@ -314,12 +314,12 @@ end-to-end flows. Keep protocol and reducer coverage on the JVM.
 2. What exact versioned QR payload becomes server contract?
 3. Is cleartext allowed in debug builds only, and which reachable development
    hosts must it cover?
-4. Does opening the app decrypt immediately, or must the operator pass a
+4. Does opening the app decrypt immediately, or must the user pass a
    biometric or device-unlock gate?
 5. Are live updates foreground-only, or does product require a visible
    foreground service for background operation?
 6. Does v1 always rebuild from `cursor=0`, or persist an event projection and
    cursor?
 7. What device range justifies `minSdk` lower than 23, if any?
-8. Which first operator workflows are in the Android project beyond pairing,
+8. Which first user workflows are in the Android project beyond pairing,
    connection state, and event transport?

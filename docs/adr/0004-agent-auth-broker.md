@@ -4,9 +4,9 @@ Status: Accepted
 Related: [ADR-0001 Device authentication](0001-device-authentication.md), [ADR-0002 Device authorization](0002-device-authorization.md)
 
 Agent auth (provider login for Claude, Cursor, and other ACP agents) is not
-device auth. Agent-server is the ACP client and the host. Paired devices never
+device auth. Harold is the ACP client and the host. Paired devices never
 run provider login themselves. They drive a single **host-login** flow over our
-HTTP/WS API: tell the operator what to run on the host, wait for confirmation,
+HTTP/WS API: tell the user what to run on the host, wait for confirmation,
 reconnect, and verify on the next real prompt.
 
 We do not call ACP `authenticate` with a catalog fantasy method id on start.
@@ -26,7 +26,7 @@ orchestrates UX and probes when an adapter can.
    paste. No in-app browser automation in v1.
    - `show_message` — adapter-specific instructions (always names the **host
      machine**; remote paired devices use the same copy).
-   - `confirm` — **I have logged in** (operator finished on the host).
+   - `confirm` — **I have logged in** (user finished on the host).
    - `working` — probe (if available) and reconnect per completion policy.
    - `done` — session finished for this attempt.
    - **Cancel** — end the auth session; agent stays unauthenticated until the
@@ -50,7 +50,7 @@ orchestrates UX and probes when an adapter can.
 9. **Verify auth pragmatically** after host login:
    - On **I have logged in**: adapter probe (if implemented), then honor
      **completion policy** (`reconnect` or `reuse_process`).
-   - End the auth session after reconnect. Do not block the operator on probe
+   - End the auth session after reconnect. Do not block the user on probe
      `unknown`.
    - Allow prompts when summary is `authenticated` or `unknown`.
    - **Operational success** = the next gated prompt completes without
@@ -81,7 +81,7 @@ orchestrates UX and probes when an adapter can.
 
 ## Architecture
 
-Agent-server is the host and the ACP client. Devices never speak ACP auth
+Harold is the host and the ACP client. Devices never speak ACP auth
 directly.
 
 ```mermaid
@@ -92,7 +92,7 @@ flowchart TB
     Android[Android chat later]
   end
 
-  subgraph host [Agent-server host]
+  subgraph host [Harold host]
     API[HTTP / WS API]
     Broker[Auth broker]
     Adapters[Auth adapters]
@@ -192,11 +192,11 @@ sequenceDiagram
   Broker-->>D1: session + steps
   Broker-->>D2: auth_session_updated
 
-  alt Operator cancels
+  alt User cancels
     D1->>API: action cancel
     API->>Broker: cancel
     Broker-->>D1: done(cancelled)
-  else Operator confirms host login
+  else User confirms host login
     D1->>API: action confirm
     API->>Broker: continue(confirm)
     Broker->>Adapter: probe (if available)
@@ -507,7 +507,7 @@ type SupervisorAuthHooks = {
 | -------------------------------------- | --------------- | ----------------------------------------------------------------------------- |
 | Single host-login flow for all agents  | **Selected**    | Matches how CLIs store creds. One client UX. Remote devices only orchestrate. |
 | Per-agent method picker + secret paste | Rejected for v1 | Broker becomes a password manager. Duplicates provider UIs.                   |
-| HostBrowser automation in v1           | Deferred        | High cost; host CLI login is enough for local operator installs.              |
+| HostBrowser automation in v1           | Deferred        | High cost; host CLI login is enough for local user installs.                  |
 | ACP terminal auth in clients           | Rejected        | Bad on phones. Wrong abstraction for our device API.                          |
 
 ### Auth vs enable
@@ -522,7 +522,7 @@ type SupervisorAuthHooks = {
 
 | Option                                                         | Verdict      | Why                                                         |
 | -------------------------------------------------------------- | ------------ | ----------------------------------------------------------- |
-| Reconnect + next prompt is the truth; retry on `auth_required` | **Selected** | Probe may be `unknown`. Operators still get a clear loop.   |
+| Reconnect + next prompt is the truth; retry on `auth_required` | **Selected** | Probe may be `unknown`. Users still get a clear loop.       |
 | Block until probe is `authenticated`                           | Rejected     | Many agents lack a probe CLI. False negatives strand users. |
 | Optimistic `authenticated` on confirm only                     | Rejected     | Hides failures until unrelated errors surface.              |
 
@@ -535,11 +535,11 @@ type SupervisorAuthHooks = {
 
 ### Credentials
 
-| Option                                   | Verdict             | Why                           |
-| ---------------------------------------- | ------------------- | ----------------------------- |
-| Single host OS identity                  | **Selected for v1** | Matches one operator install. |
-| Broker / SQLite as provider secret store | Rejected            | Host CLI is the vault.        |
-| API key paste in broker                  | Rejected for v1     | Defer to host env / CLI.      |
+| Option                                   | Verdict             | Why                       |
+| ---------------------------------------- | ------------------- | ------------------------- |
+| Single host OS identity                  | **Selected for v1** | Matches one user install. |
+| Broker / SQLite as provider secret store | Rejected            | Host CLI is the vault.    |
+| API key paste in broker                  | Rejected for v1     | Defer to host env / CLI.  |
 
 ## Consequences
 
@@ -551,7 +551,7 @@ type SupervisorAuthHooks = {
 - Claude adapter v1: `claude auth login` instructions and `claude auth status`
   probe; creds stay in Claude's host store.
 - Default adapter: generic instructions, probe `unknown`, logout no-op.
-- Paired devices are full operators for agent auth ([ADR-0002](0002-device-authorization.md)).
+- Paired devices are full users for agent auth ([ADR-0002](0002-device-authorization.md)).
   Revisit if least-privilege device roles appear later.
 - HostBrowser, method pickers, and secret steps need a new ADR before build.
 
