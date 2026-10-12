@@ -1,5 +1,7 @@
 package harold.android.pairing
 
+import javax.inject.Inject
+
 import java.net.URI
 import java.net.URLDecoder
 
@@ -16,7 +18,7 @@ interface PairingPayloadParser {
     fun parse(payload: String): PairingPayload
 }
 
-class DefaultPairingPayloadParser : PairingPayloadParser {
+class DefaultPairingPayloadParser @Inject constructor() : PairingPayloadParser {
     override fun parse(payload: String): PairingPayload {
         val trimmed = payload.trim()
 

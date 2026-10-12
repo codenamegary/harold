@@ -5,8 +5,10 @@ import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import harold.android.di.PreviewDispatcher
+import javax.inject.Inject
 import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AttachmentDescriptor
 import harold.android.contracts.AttachmentKind
@@ -59,7 +61,8 @@ import harold.android.session.SessionGateway
 import harold.android.ui.promptinput.PromptEdit
 import harold.android.ui.promptinput.applyEdit
 
-class ChatViewModel(
+@HiltViewModel
+class ChatViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val sessionGateway: SessionGateway,
     private val sessionOwner: SessionOwner,
@@ -70,8 +73,8 @@ class ChatViewModel(
     private val activeSessionTracker: ActiveSessionTracker? = null,
     private val sessionForegroundCoordinator: SessionForegroundCoordinator? = null,
     private val openSessionRequests: OpenSessionRequests? = null,
-    private val voiceDictationController: VoiceDictationController,
-    private val previewDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    internal val voiceDictationController: VoiceDictationController,
+    @PreviewDispatcher private val previewDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -1490,40 +1493,5 @@ class ChatViewModel(
         const val KEY_SELECTED_SESSION_ID = "selected_session_id"
         const val RECENT_SESSIONS_LIMIT = 5
         const val NEW_SESSION_NAME = "New session"
-    }
-}
-
-class ChatViewModelFactory(
-    private val savedStateHandle: SavedStateHandle,
-    private val sessionGateway: SessionGateway,
-    private val sessionOwner: SessionOwner,
-    private val userRepository: UserRepository,
-    private val attachmentApi: AttachmentApi,
-    private val configApi: SessionConfigApi,
-    private val navigationPreferences: NavigationPreferences,
-    private val activeSessionTracker: ActiveSessionTracker,
-    private val sessionForegroundCoordinator: SessionForegroundCoordinator,
-    private val openSessionRequests: OpenSessionRequests,
-    private val voiceDictationController: VoiceDictationController,
-) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(ChatViewModel::class.java)) {
-            return ChatViewModel(
-                savedStateHandle = savedStateHandle,
-                sessionGateway = sessionGateway,
-                sessionOwner = sessionOwner,
-                userRepository = userRepository,
-                attachmentApi = attachmentApi,
-                configApi = configApi,
-                navigationPreferences = navigationPreferences,
-                activeSessionTracker = activeSessionTracker,
-                sessionForegroundCoordinator = sessionForegroundCoordinator,
-                openSessionRequests = openSessionRequests,
-                voiceDictationController = voiceDictationController,
-            ) as T
-        }
-
-        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
 }

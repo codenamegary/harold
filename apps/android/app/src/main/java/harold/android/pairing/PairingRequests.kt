@@ -1,5 +1,7 @@
 package harold.android.pairing
 
+import javax.inject.Inject
+
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,7 +13,7 @@ interface PairingRequests {
     fun consume(): String?
 }
 
-class DefaultPairingRequests : PairingRequests {
+class DefaultPairingRequests @Inject constructor() : PairingRequests {
     private val _pendingUri = MutableStateFlow<String?>(null)
     override val pendingUri: StateFlow<String?> = _pendingUri.asStateFlow()
 

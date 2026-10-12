@@ -7,6 +7,7 @@ import java.util.zip.ZipInputStream
 plugins {
     alias(libs.plugins.harold.android.application)
     alias(libs.plugins.harold.android.compose)
+    alias(libs.plugins.harold.android.hilt)
 }
 
 val appVersionName = "1.1.2" // x-release-please-version
@@ -196,6 +197,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)
@@ -223,6 +225,8 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.turbine)
+    testImplementation(libs.hilt.android.testing)
+    kspTest(libs.hilt.compiler)
 
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)

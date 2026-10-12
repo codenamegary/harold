@@ -1,5 +1,10 @@
 package harold.android.chat
 
+import dagger.hilt.android.scopes.ViewModelScoped
+import harold.android.di.RestartScheduler
+import harold.android.di.SilenceScheduler
+import javax.inject.Inject
+
 /** How the active dictation session is presented in the chat UI. */
 enum class VoiceDictationPresentation {
     /** Replaces the composer's text slot; the conversation stays visible. */
@@ -24,10 +29,11 @@ data class VoiceDictationUiState(
     val silenceCountdownDurationMs: Long = VoiceDictationController.SILENCE_COUNTDOWN_MS,
 )
 
-class VoiceDictationController(
+@ViewModelScoped
+class VoiceDictationController @Inject constructor(
     private val speechClient: SpeechRecognitionClient,
-    private val silenceScheduler: VoiceDictationRestartScheduler,
-    private val restartScheduler: VoiceDictationRestartScheduler,
+    @SilenceScheduler private val silenceScheduler: VoiceDictationRestartScheduler,
+    @RestartScheduler private val restartScheduler: VoiceDictationRestartScheduler,
 ) {
     private var transcript = VoiceDictationTranscript("")
     private var hasRecordAudioPermission = false

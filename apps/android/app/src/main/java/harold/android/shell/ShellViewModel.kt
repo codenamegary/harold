@@ -1,8 +1,9 @@
 package harold.android.shell
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +22,8 @@ import harold.android.session.SessionGateway
 
 private const val WORKSPACE_PROBE_LIMIT = 1
 
-class ShellViewModel(
+@HiltViewModel
+class ShellViewModel @Inject constructor(
     private val sessionGateway: SessionGateway,
     private val sessionOwner: SessionOwner,
     private val agentApi: AgentApi,
@@ -118,23 +120,4 @@ class ShellViewModel(
             is AgentApiError.Transport -> WorkspaceProbe.Failed("Could not reach Harold")
             null -> WorkspaceProbe.Failed(error.message ?: "Could not reach Harold")
         }
-}
-
-class ShellViewModelFactory(
-    private val sessionGateway: SessionGateway,
-    private val sessionOwner: SessionOwner,
-    private val agentApi: AgentApi,
-) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(ShellViewModel::class.java)) {
-            return ShellViewModel(
-                sessionGateway = sessionGateway,
-                sessionOwner = sessionOwner,
-                agentApi = agentApi,
-            ) as T
-        }
-
-        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
-    }
 }

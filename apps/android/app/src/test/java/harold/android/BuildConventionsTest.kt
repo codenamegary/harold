@@ -20,6 +20,7 @@ class BuildConventionsTest {
             listOf(
                 "alias(libs.plugins.harold.android.application)",
                 "alias(libs.plugins.harold.android.compose)",
+                "alias(libs.plugins.harold.android.hilt)",
             ),
             pluginLines,
         )

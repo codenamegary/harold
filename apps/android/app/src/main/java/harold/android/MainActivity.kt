@@ -5,22 +5,29 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import dagger.hilt.android.AndroidEntryPoint
 import harold.android.foreground.EXTRA_OPEN_SESSION_ID
+import harold.android.foreground.OpenSessionRequests
 import harold.android.navigation.AppNavHost
+import harold.android.pairing.PairingRequests
 import harold.android.ui.theme.HaroldTheme
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    @Inject lateinit var openSessionRequests: OpenSessionRequests
+    @Inject lateinit var pairingRequests: PairingRequests
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val appContainer = (application as HaroldApplication).appContainer
         deliverOpenSession(intent)
         deliverPairingDeepLink(intent)
 
         enableEdgeToEdge()
         setContent {
             HaroldTheme {
-                AppNavHost(appContainer = appContainer)
+                AppNavHost(pairingRequests = pairingRequests)
             }
         }
     }
@@ -34,15 +41,13 @@ class MainActivity : ComponentActivity() {
 
     private fun deliverOpenSession(intent: Intent?) {
         val sessionId = intent?.getStringExtra(EXTRA_OPEN_SESSION_ID) ?: return
-        val appContainer = (application as HaroldApplication).appContainer
-        appContainer.openSessionRequests.open(sessionId)
+        openSessionRequests.open(sessionId)
     }
 
     private fun deliverPairingDeepLink(intent: Intent?) {
         val uri = intent?.dataString ?: return
         if (intent.action == Intent.ACTION_VIEW) {
-            val appContainer = (application as HaroldApplication).appContainer
-            appContainer.pairingRequests.requestPairing(uri)
+            pairingRequests.requestPairing(uri)
         }
     }
 }
