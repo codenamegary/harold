@@ -1,5 +1,22 @@
 package harold.android.shell
 
+import harold.android.contracts.AgentId
+import harold.android.contracts.AttachmentReference
+import harold.android.contracts.ItemCollection
+import harold.android.contracts.PageInfo
+import harold.android.contracts.Workspace
+import harold.android.contracts.WorkspaceCollection
+import harold.android.contracts.WorkspaceState
+import harold.android.live.SessionOwner
+import harold.android.live.SessionSnapshot
+import harold.android.network.AgentApi
+import harold.android.network.AgentApiError
+import harold.android.network.AgentApiException
+import harold.android.session.PairedState
+import harold.android.session.SessionGateway
+import harold.android.stream.ConnectionState
+import harold.android.stream.ConnectionStatus
+import harold.android.testing.FakeSessionGateway
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,22 +32,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import harold.android.contracts.AgentId
-import harold.android.contracts.AttachmentReference
-import harold.android.contracts.ItemCollection
-import harold.android.contracts.PageInfo
-import harold.android.contracts.Workspace
-import harold.android.contracts.WorkspaceCollection
-import harold.android.contracts.WorkspaceState
-import harold.android.stream.ConnectionState
-import harold.android.stream.ConnectionStatus
-import harold.android.live.SessionOwner
-import harold.android.live.SessionSnapshot
-import harold.android.network.AgentApi
-import harold.android.network.AgentApiError
-import harold.android.network.AgentApiException
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ShellViewModelTest {
@@ -258,23 +259,6 @@ private class GatedSessionGateway(
     }
 
     override suspend fun clearLocalAccess() {
-        _pairedState.value = PairedState.NotPaired
-    }
-}
-
-private class FakeSessionGateway(
-    initial: PairedState,
-) : SessionGateway {
-    private val _pairedState = MutableStateFlow(initial)
-    override val pairedState: StateFlow<PairedState> = _pairedState.asStateFlow()
-
-    var clearLocalAccessCount = 0
-        private set
-
-    override suspend fun refresh() = Unit
-
-    override suspend fun clearLocalAccess() {
-        clearLocalAccessCount += 1
         _pairedState.value = PairedState.NotPaired
     }
 }

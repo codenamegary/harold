@@ -15,14 +15,18 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import harold.android.contracts.ToolCallStatus
+import harold.android.contracts.ToolKind
+import harold.android.live.TranscriptAssistantRow
+import harold.android.live.TranscriptThinkingRow
+import harold.android.live.TranscriptToolRow
+import harold.android.live.TranscriptUserRow
+import harold.android.ui.theme.HaroldTheme
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import harold.android.contracts.ToolCallStatus
-import harold.android.contracts.ToolKind
-import harold.android.ui.theme.HaroldTheme
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [30])

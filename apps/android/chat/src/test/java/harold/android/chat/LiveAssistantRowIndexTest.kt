@@ -1,9 +1,13 @@
 package harold.android.chat
 
-import org.junit.Assert.assertEquals
-import org.junit.Test
 import harold.android.contracts.ToolCallStatus
 import harold.android.contracts.ToolKind
+import harold.android.live.TranscriptAssistantRow
+import harold.android.live.TranscriptThinkingRow
+import harold.android.live.TranscriptToolRow
+import harold.android.live.TranscriptUserRow
+import org.junit.Assert.assertEquals
+import org.junit.Test
 
 class LiveAssistantRowIndexTest {
     @Test

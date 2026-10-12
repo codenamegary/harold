@@ -18,6 +18,11 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import harold.android.live.TranscriptAssistantRow
+import harold.android.live.TranscriptRow
+import harold.android.live.TranscriptThinkingRow
+import harold.android.live.TranscriptToolRow
+import harold.android.live.TranscriptUserRow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 

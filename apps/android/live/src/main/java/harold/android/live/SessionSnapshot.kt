@@ -1,8 +1,5 @@
 package harold.android.live
 
-import harold.android.chat.AcpTranscriptState
-import harold.android.chat.StreamExtension
-import harold.android.chat.emptyAcpTranscript
 import harold.android.contracts.AgentAuth
 import harold.android.contracts.AgentId
 import harold.android.contracts.AvailableCommand

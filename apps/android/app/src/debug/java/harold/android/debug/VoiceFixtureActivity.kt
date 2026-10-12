@@ -19,12 +19,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.core.content.ContextCompat
-import harold.android.chat.HandlerVoiceDictationRestartScheduler
-import harold.android.chat.VoiceDictationController
 import harold.android.chat.VoiceDictationOverlay
-import harold.android.chat.VoiceDictationUiState
-import harold.android.chat.VoskSpeechRecognitionClient
 import harold.android.ui.theme.HaroldTheme
+import harold.android.voice.HandlerVoiceDictationRestartScheduler
+import harold.android.voice.VoiceDictationController
+import harold.android.voice.VoiceDictationUiState
+import harold.android.voice.VoskSpeechRecognitionClient
 
 /**
  * Debug-only fixture host for emulator screenshots of Vosk voice input.

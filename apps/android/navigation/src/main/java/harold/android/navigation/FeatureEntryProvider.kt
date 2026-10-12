@@ -1,4 +1,3 @@
-
 package harold.android.navigation
 
 import androidx.navigation3.runtime.EntryProviderScope

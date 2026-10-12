@@ -2,14 +2,18 @@ package harold.android.chat
 
 import harold.android.chat.composer.ComposerConfigUi
 import harold.android.contracts.AgentAuth
-import harold.android.contracts.AvailableCommand
 import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AgentAuthSummary
 import harold.android.contracts.AgentId
 import harold.android.contracts.AuthSessionStatus
+import harold.android.contracts.AvailableCommand
 import harold.android.contracts.PermissionRequest
 import harold.android.contracts.SessionState
 import harold.android.contracts.catalogSessionKey
+import harold.android.live.AcpTranscriptState
+import harold.android.live.StreamExtension
+import harold.android.live.emptyAcpTranscript
+import harold.android.voice.VoiceDictationUiState
 
 data class SessionRow(
     val sessionId: String,

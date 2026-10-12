@@ -2,6 +2,9 @@ package harold.android.chat
 
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -13,20 +16,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Rule
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import harold.android.chat.composer.ComposerConfigActions
 import harold.android.chat.composer.ComposerConfigUi
 import harold.android.chat.composer.completeSlashCommand
-import harold.android.ui.promptinput.applyEdit
 import harold.android.contracts.AgentId
 import harold.android.contracts.AvailableCommand
 import harold.android.contracts.ConfigOptionValue
@@ -36,7 +28,20 @@ import harold.android.contracts.PermissionRequest
 import harold.android.contracts.PermissionStatus
 import harold.android.contracts.SelectOption
 import harold.android.contracts.SessionState
+import harold.android.live.AcpTranscriptState
+import harold.android.live.TranscriptAssistantRow
+import harold.android.live.TranscriptUserRow
+import harold.android.ui.promptinput.applyEdit
 import harold.android.ui.theme.HaroldTheme
+import harold.android.voice.VoiceDictationPresentation
+import harold.android.voice.VoiceDictationUiState
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [30])

@@ -1,5 +1,8 @@
 package harold.android.chat
 
+import harold.android.live.TranscriptRow
+import harold.android.live.TranscriptToolRow
+
 sealed interface TranscriptBlock {
     data class Row(
         val row: TranscriptRow,

@@ -8,6 +8,7 @@ import harold.android.navigation.Chat
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.session.PairedState
+import harold.android.testing.FakeSessionGateway
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -121,7 +122,7 @@ class SessionsViewModelTest {
         navigator: harold.android.navigation.Navigator = testNavigator(),
         repository: RouteUserRepository = repository(sessions),
     ): SessionsViewModel = SessionsViewModel(
-        sessionGateway = FixedSessionGateway(PAIRED),
+        sessionGateway = FakeSessionGateway(PAIRED),
         userRepository = repository,
         sessionCommands = commands,
         navigator = navigator,

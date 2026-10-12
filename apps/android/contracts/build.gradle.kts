@@ -1,4 +1,3 @@
-
 plugins {
     alias(libs.plugins.harold.android.library)
     alias(libs.plugins.kotlin.serialization)

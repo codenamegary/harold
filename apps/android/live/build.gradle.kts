@@ -1,4 +1,3 @@
-
 plugins {
     alias(libs.plugins.harold.android.library)
     alias(libs.plugins.harold.android.hilt)
@@ -15,9 +14,5 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
 
-    testImplementation(libs.junit)
-    testImplementation(libs.robolectric)
-    testImplementation(libs.kotlinx.coroutines.test)
-    testImplementation(libs.turbine)
-
+    testImplementation(libs.bundles.unit.test)
 }

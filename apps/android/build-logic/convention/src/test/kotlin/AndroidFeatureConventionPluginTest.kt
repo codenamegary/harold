@@ -34,69 +34,93 @@ class AndroidFeatureConventionPluginTest {
     }
 
     @Test
-    fun featureConventionRejectsADependencyOnAnotherFeature() {
-        val output = runFailingMultiProjectFixture(
+    fun aFeatureCannotDependOnAnotherFeature() {
+        val output = runMultiProjectFixture(
             projects = mapOf(
-                ":shell" to """
-                plugins {
-                    id("harold.android.feature")
-                }
-
-                android {
-                    namespace = "harold.fixture.shell"
-                }
-                """,
-                ":chat" to """
-                plugins {
-                    id("harold.android.feature")
-                }
-
-                android {
-                    namespace = "harold.fixture.chat"
-                }
-
-                dependencies {
-                    implementation(project(":shell"))
-                }
-                """,
+                ":shell" to module("harold.android.feature", "shell"),
+                ":chat" to module("harold.android.feature", "chat", dependsOn = ":shell"),
             ),
-            task = ":chat:tasks",
+            task = ":chat:checkModuleBoundaries",
+            expectFailure = true,
         )
 
         assertTrue(output, output.contains(":chat cannot depend on feature :shell"))
     }
 
     @Test
-    fun featureConventionAllowsADependencyOnALibrary() {
+    fun aLibraryCannotDependOnAFeature() {
         val output = runMultiProjectFixture(
             projects = mapOf(
-                ":design" to """
-                plugins {
-                    id("harold.android.library")
-                    id("harold.android.compose")
-                }
-
-                android {
-                    namespace = "harold.fixture.design"
-                }
-                """,
-                ":chat" to """
-                plugins {
-                    id("harold.android.feature")
-                }
-
-                android {
-                    namespace = "harold.fixture.chat"
-                }
-
-                dependencies {
-                    implementation(project(":design"))
-                }
-                """,
+                ":chat" to module("harold.android.feature", "chat"),
+                ":design" to module("harold.android.library", "design", dependsOn = ":chat"),
             ),
-            task = ":chat:tasks",
+            task = ":design:checkModuleBoundaries",
+            expectFailure = true,
+        )
+
+        assertTrue(output, output.contains(":design cannot depend on feature :chat"))
+    }
+
+    @Test
+    fun aFeatureCannotReachAnotherFeatureThroughALibrary() {
+        val output = runMultiProjectFixture(
+            projects = mapOf(
+                ":chat" to module("harold.android.feature", "chat"),
+                ":design" to module("harold.android.library", "design", dependsOn = ":chat"),
+                ":workspaces" to module("harold.android.feature", "workspaces", dependsOn = ":design"),
+            ),
+            task = ":workspaces:checkModuleBoundaries",
+            expectFailure = true,
+        )
+
+        assertTrue(output, output.contains(":workspaces cannot depend on feature :chat"))
+    }
+
+    @Test
+    fun aFeatureCanDependOnALibrary() {
+        val output = runMultiProjectFixture(
+            projects = mapOf(
+                ":design" to module("harold.android.library", "design"),
+                ":chat" to module("harold.android.feature", "chat", dependsOn = ":design"),
+            ),
+            task = ":chat:checkModuleBoundaries",
         )
 
         assertTrue(output, output.contains("BUILD SUCCESSFUL"))
+    }
+
+    @Test
+    fun preBuildRunsTheBoundaryCheck() {
+        val output = runMultiProjectFixture(
+            projects = mapOf(
+                ":shell" to module("harold.android.feature", "shell"),
+                ":chat" to module("harold.android.feature", "chat", dependsOn = ":shell"),
+            ),
+            task = ":chat:preDebugBuild",
+            expectFailure = true,
+        )
+
+        assertTrue(output, output.contains(":chat cannot depend on feature :shell"))
+    }
+
+    private fun module(plugin: String, name: String, dependsOn: String? = null): String {
+        val dependencies = dependsOn?.let { path ->
+            """
+
+            dependencies {
+                implementation(project("$path"))
+            }
+            """.trimIndent()
+        }.orEmpty()
+        return """
+            |plugins {
+            |    id("$plugin")
+            |}
+            |
+            |android {
+            |    namespace = "harold.fixture.$name"
+            |}
+            |$dependencies
+            """.trimMargin()
     }
 }

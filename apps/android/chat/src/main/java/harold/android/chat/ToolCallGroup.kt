@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import harold.android.contracts.ToolCallStatus
+import harold.android.live.TranscriptToolRow
 
 @Composable
 fun ToolCallGroup(

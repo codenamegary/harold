@@ -54,6 +54,8 @@ import harold.android.ui.components.AgentButtonVariant
 import harold.android.ui.components.AgentIconButton
 import harold.android.ui.components.AudioPill
 import harold.android.ui.components.fadingEdge
+import harold.android.voice.VoiceDictationPresentation
+import harold.android.voice.VoiceDictationUiState
 
 /**
  * The expanded presentation of a voice dictation session: a full-screen

@@ -1,5 +1,10 @@
 package harold.android.chat
 
+import harold.android.live.TranscriptAssistantRow
+import harold.android.live.TranscriptRow
+import harold.android.live.TranscriptToolRow
+import harold.android.live.TranscriptUserRow
+
 enum class ActivityPhase {
     WaitingForPermission,
     UsingTools,

@@ -1,18 +1,5 @@
 package harold.android.live
 
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
-import harold.android.chat.TranscriptAssistantRow
 import harold.android.contracts.AgentAuth
 import harold.android.contracts.AgentAuthSession
 import harold.android.contracts.AgentAuthStatus
@@ -29,6 +16,18 @@ import harold.android.stream.DisconnectCause
 import harold.android.stream.SessionStream
 import harold.android.stream.SessionStreamFactory
 import harold.android.stream.SessionStreamHandlers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DefaultSessionOwnerTest {
@@ -397,7 +396,7 @@ class DefaultSessionOwnerTest {
         )
         assertEquals(
             "hello",
-            (owner.snapshot.value.transcript.rows.first() as harold.android.chat.TranscriptUserRow).text,
+            (owner.snapshot.value.transcript.rows.first() as TranscriptUserRow).text,
         )
 
         factory.lastStream!!.emit(

@@ -1,4 +1,3 @@
-
 plugins {
     alias(libs.plugins.harold.android.library)
     alias(libs.plugins.harold.android.hilt)
@@ -13,7 +12,9 @@ dependencies {
     implementation(project(":api"))
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.okhttp)
 
+    testImplementation(project(":testing"))
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)

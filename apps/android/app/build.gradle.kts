@@ -1,4 +1,3 @@
-
 plugins {
     alias(libs.plugins.harold.android.application)
     alias(libs.plugins.harold.android.compose)
@@ -106,9 +105,9 @@ dependencies {
     implementation(libs.androidx.navigation3.ui)
     implementation(libs.androidx.lifecycle.viewmodel.navigation3)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
-    implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)
 
+    testImplementation(project(":testing"))
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.kotlinx.coroutines.test)

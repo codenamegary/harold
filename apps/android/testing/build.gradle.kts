@@ -1,4 +1,3 @@
-
 plugins {
     alias(libs.plugins.harold.android.library)
 }
@@ -8,6 +7,7 @@ android {
 }
 
 dependencies {
-    implementation(project(":auth"))
+    api(project(":auth"))
+    api(project(":voice"))
     implementation(libs.kotlinx.coroutines.android)
 }

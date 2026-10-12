@@ -1,7 +1,6 @@
 package harold.android.chat
 
-import harold.android.network.apiErrorMessage
-
+import androidx.annotation.VisibleForTesting
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.snapshotFlow
@@ -9,21 +8,6 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import harold.android.di.PreviewDispatcher
-import javax.inject.Inject
-import harold.android.contracts.AgentCapabilityInventory
-import harold.android.contracts.AttachmentDescriptor
-import harold.android.contracts.AttachmentKind
-import harold.android.contracts.AttachmentUploadRequest
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.joinAll
-import kotlinx.serialization.json.JsonObject
 import harold.android.chat.composer.ComposerConfigUi
 import harold.android.chat.composer.SessionConfigWriter
 import harold.android.chat.composer.completeSlashCommand
@@ -32,33 +16,52 @@ import harold.android.chat.composer.supportsImageAttachments
 import harold.android.contracts.AgentAuth
 import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AgentAuthSummary
+import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AgentId
+import harold.android.contracts.AttachmentDescriptor
+import harold.android.contracts.AttachmentKind
+import harold.android.contracts.AttachmentUploadRequest
 import harold.android.contracts.AuthSessionAction
 import harold.android.contracts.AuthSessionStatus
 import harold.android.contracts.ConfigOptionValue
 import harold.android.contracts.ConfigValue
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
-import harold.android.contracts.parseConfigOptions
 import harold.android.contracts.SessionState
 import harold.android.contracts.catalogSessionKey
+import harold.android.contracts.parseConfigOptions
 import harold.android.contracts.toSummary
-import harold.android.network.AttachmentApi
-import harold.android.network.SessionConfigApi
-import harold.android.live.SessionOwner
-import harold.android.live.SessionSnapshot
-import harold.android.stream.ConnectionStatus
+import harold.android.di.PreviewDispatcher
 import harold.android.foreground.ActiveSessionSnapshot
 import harold.android.foreground.ActiveSessionTracker
 import harold.android.foreground.OpenSessionRequests
 import harold.android.foreground.SessionForegroundCoordinator
+import harold.android.live.SessionOwner
+import harold.android.live.SessionSnapshot
+import harold.android.live.emptyAcpTranscript
 import harold.android.navigation.NavigationPreferences
 import harold.android.navigation.Navigator
-import harold.android.user.UserRepository
+import harold.android.network.AttachmentApi
+import harold.android.network.SessionConfigApi
+import harold.android.network.apiErrorMessage
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
+import harold.android.stream.ConnectionStatus
 import harold.android.ui.promptinput.PromptEdit
 import harold.android.ui.promptinput.applyEdit
+import harold.android.user.UserRepository
+import harold.android.voice.VoiceDictationController
+import harold.android.voice.VoiceDictationUiState
+import javax.inject.Inject
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
@@ -72,6 +75,7 @@ class ChatViewModel @Inject constructor(
     private val activeSessionTracker: ActiveSessionTracker? = null,
     private val sessionForegroundCoordinator: SessionForegroundCoordinator? = null,
     private val openSessionRequests: OpenSessionRequests? = null,
+    @get:VisibleForTesting
     val voiceDictationController: VoiceDictationController,
     @PreviewDispatcher private val previewDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val navigator: Navigator,

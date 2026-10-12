@@ -1,4 +1,3 @@
-
 package harold.android.navigation
 
 import androidx.activity.compose.LocalActivity
@@ -18,11 +17,11 @@ import androidx.navigation3.ui.NavDisplay
 fun AppNavHost(
     navigator: Navigator,
     entryProviders: Set<FeatureEntryProvider>,
-    gates: Set<FeatureGate>,
+    activityEffects: Set<ActivityEffect>,
 ) {
     val activity = LocalActivity.current
-    for (gate in gates) {
-        gate.retain()
+    for (effect in activityEffects) {
+        effect.Run()
     }
 
     NavigationFrame(navigator = navigator) {

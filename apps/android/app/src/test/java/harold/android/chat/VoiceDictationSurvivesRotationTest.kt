@@ -3,15 +3,19 @@ package harold.android.chat
 import androidx.lifecycle.ViewModelProvider
 import dagger.Module
 import dagger.Provides
+import dagger.hilt.android.components.ViewModelComponent
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import dagger.hilt.android.testing.HiltTestApplication
-import dagger.hilt.android.components.ViewModelComponent
 import dagger.hilt.testing.TestInstallIn
 import harold.android.MainActivity
 import harold.android.di.RestartScheduler
 import harold.android.di.SilenceScheduler
 import harold.android.di.VoiceDictationModule
+import harold.android.testing.FakeSpeechRecognitionClient
+import harold.android.voice.ImmediateVoiceDictationRestartScheduler
+import harold.android.voice.SpeechRecognitionClient
+import harold.android.voice.VoiceDictationRestartScheduler
 import org.junit.Assert.assertSame
 import org.junit.Before
 import org.junit.Rule
@@ -53,7 +57,7 @@ class VoiceDictationSurvivesRotationTest {
 )
 object FakeVoiceDictationModule {
     @Provides
-    fun speechClient(): SpeechRecognitionClient = RotationSpeechClient()
+    fun speechClient(): SpeechRecognitionClient = FakeSpeechRecognitionClient()
 
     @Provides
     @SilenceScheduler
@@ -64,14 +68,4 @@ object FakeVoiceDictationModule {
     @RestartScheduler
     fun restartScheduler(): VoiceDictationRestartScheduler =
         ImmediateVoiceDictationRestartScheduler()
-}
-
-private class RotationSpeechClient : SpeechRecognitionClient {
-    override fun isAvailable(): Boolean = true
-
-    override fun startListening(callbacks: SpeechRecognitionCallbacks) = Unit
-
-    override fun stopListening() = Unit
-
-    override fun destroy() = Unit
 }

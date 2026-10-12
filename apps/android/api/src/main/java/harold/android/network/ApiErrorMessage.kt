@@ -1,4 +1,3 @@
-
 package harold.android.network
 
 fun apiErrorMessage(error: Throwable): String =

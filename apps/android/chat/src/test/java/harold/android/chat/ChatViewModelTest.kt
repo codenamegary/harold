@@ -1,6 +1,49 @@
 package harold.android.chat
 
 import androidx.lifecycle.SavedStateHandle
+import harold.android.contracts.AgentId
+import harold.android.contracts.AgentSettings
+import harold.android.contracts.AgentSettingsCollection
+import harold.android.contracts.AttachmentDescriptor
+import harold.android.contracts.AttachmentReference
+import harold.android.contracts.AttachmentUploadRequest
+import harold.android.contracts.BooleanOption
+import harold.android.contracts.ConfigOption
+import harold.android.contracts.ConfigOptionValue
+import harold.android.contracts.ConfigValue
+import harold.android.contracts.CreateSessionBody
+import harold.android.contracts.CreateSessionResponse
+import harold.android.contracts.PageInfo
+import harold.android.contracts.PermissionOption
+import harold.android.contracts.PermissionRequest
+import harold.android.contracts.PermissionStatus
+import harold.android.contracts.SelectOption
+import harold.android.contracts.Session
+import harold.android.contracts.SessionCollection
+import harold.android.contracts.SessionState
+import harold.android.contracts.Workspace
+import harold.android.contracts.WorkspaceCollection
+import harold.android.contracts.WorkspaceState
+import harold.android.live.SessionOwner
+import harold.android.live.SessionSnapshot
+import harold.android.live.TranscriptUserRow
+import harold.android.live.applyReconnect
+import harold.android.live.beginUserTurn
+import harold.android.live.emptyAcpTranscript
+import harold.android.navigation.NavigationPreferences
+import harold.android.navigation.Navigator
+import harold.android.network.AgentApiError
+import harold.android.network.AgentApiException
+import harold.android.network.AttachmentApi
+import harold.android.network.SessionConfigApi
+import harold.android.session.PairedState
+import harold.android.session.SessionGateway
+import harold.android.stream.ConnectionState
+import harold.android.testing.FakeSessionGateway
+import harold.android.testing.FakeSpeechRecognitionClient
+import harold.android.user.UserRepository
+import harold.android.voice.ImmediateVoiceDictationRestartScheduler
+import harold.android.voice.VoiceDictationController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,41 +67,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import harold.android.contracts.AgentId
-import harold.android.contracts.AttachmentReference
-import harold.android.contracts.AttachmentDescriptor
-import harold.android.contracts.AttachmentUploadRequest
-import harold.android.network.AgentApiError
-import harold.android.network.AgentApiException
-import harold.android.network.AttachmentApi
-import harold.android.network.SessionConfigApi
-import harold.android.contracts.AgentSettings
-import harold.android.contracts.AgentSettingsCollection
-import harold.android.contracts.BooleanOption
-import harold.android.contracts.ConfigOption
-import harold.android.contracts.ConfigOptionValue
-import harold.android.contracts.ConfigValue
-import harold.android.contracts.CreateSessionBody
-import harold.android.contracts.CreateSessionResponse
-import harold.android.contracts.PageInfo
-import harold.android.contracts.PermissionOption
-import harold.android.contracts.PermissionRequest
-import harold.android.contracts.PermissionStatus
-import harold.android.contracts.SelectOption
-import harold.android.contracts.Session
-import harold.android.contracts.SessionCollection
-import harold.android.contracts.SessionState
-import harold.android.contracts.Workspace
-import harold.android.contracts.WorkspaceCollection
-import harold.android.contracts.WorkspaceState
-import harold.android.stream.ConnectionState
-import harold.android.live.SessionOwner
-import harold.android.live.SessionSnapshot
-import harold.android.navigation.NavigationPreferences
-import harold.android.navigation.Navigator
-import harold.android.user.UserRepository
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModelTest {
@@ -702,7 +710,7 @@ class ChatViewModelTest {
     @Test
     fun disconnectFromServerRevokesDeviceAndClearsLocalAccess() = runTest(dispatcher) {
         val repository = ChatFakeUserRepository()
-        val sessionGateway = ChatFakeSessionGateway(
+        val sessionGateway = FakeSessionGateway(
             PairedState.Paired(ORIGIN, "device_01", "Pixel"),
         )
         val sessionOwner = ChatFakeSessionOwner()
@@ -853,7 +861,7 @@ class ChatViewModelTest {
         repository: ChatFakeUserRepository,
         navigation: ChatFakeNavigationPreferences,
         sessionOwner: ChatFakeSessionOwner = ChatFakeSessionOwner(),
-        sessionGateway: ChatFakeSessionGateway = pairedGateway(),
+        sessionGateway: FakeSessionGateway = pairedGateway(),
         configApi: SessionConfigApi = RecordingSessionConfigApi(),
         attachmentApi: AttachmentApi = NoopAttachmentApi(),
     ): ChatViewModel = ChatViewModel(
@@ -874,8 +882,8 @@ class ChatViewModelTest {
         sessionCommands = sessionCommands,
     )
 
-    private fun pairedGateway(): ChatFakeSessionGateway =
-        ChatFakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel"))
+    private fun pairedGateway(): FakeSessionGateway =
+        FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel"))
 
     private fun TestScope.createSessionThroughRoute(repository: ChatFakeUserRepository) {
         val route = CreateSessionViewModel(
@@ -1084,19 +1092,6 @@ private class RecordingAttachmentApi : AttachmentApi {
     ): Result<Unit> {
         deletes += Triple(agentId, sessionId, attachmentId)
         return Result.success(Unit)
-    }
-}
-
-private class ChatFakeSessionGateway(
-    initial: PairedState,
-) : SessionGateway {
-    private val _pairedState = MutableStateFlow(initial)
-    override val pairedState: StateFlow<PairedState> = _pairedState.asStateFlow()
-
-    override suspend fun refresh() = Unit
-
-    override suspend fun clearLocalAccess() {
-        _pairedState.value = PairedState.NotPaired
     }
 }
 

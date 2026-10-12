@@ -70,6 +70,24 @@ hilt-gradle-plugin = { group = "com.google.dagger", name = "hilt-android-gradle-
 ksp-gradle-plugin = { group = "com.google.devtools.ksp", name = "com.google.devtools.ksp.gradle.plugin", version.ref = "ksp" }
 androidx-hilt-lifecycle-viewmodel-compose = { group = "androidx.hilt", name = "hilt-lifecycle-viewmodel-compose", version.ref = "hiltLifecycleViewmodelCompose" }
 
+[bundles]
+compose-ui = [
+    "androidx-compose-ui",
+    "androidx-compose-ui-tooling-preview",
+    "androidx-compose-material3",
+    "androidx-compose-material-icons-extended",
+    "androidx-lifecycle-runtime-compose",
+    "androidx-lifecycle-viewmodel-compose",
+]
+compose-debug = ["androidx-compose-ui-tooling", "androidx-compose-ui-test-manifest"]
+feature = [
+    "androidx-activity-compose",
+    "androidx-navigation3-runtime",
+    "androidx-hilt-lifecycle-viewmodel-compose",
+    "kotlinx-coroutines-android",
+]
+unit-test = ["junit", "robolectric", "kotlinx-coroutines-test", "turbine"]
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }

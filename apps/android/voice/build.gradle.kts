@@ -11,7 +11,6 @@ plugins {
 
 android {
     namespace = "harold.android.voice"
-    testFixtures.enable = true
 }
 
 val voskModelVersion = "0.15"
@@ -127,6 +126,7 @@ dependencies {
         }
     }
 
+    testImplementation(project(":testing"))
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)

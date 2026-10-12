@@ -1,10 +1,19 @@
 package harold.android.chat
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
@@ -32,9 +41,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,13 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import android.Manifest
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import android.provider.Settings
 import androidx.core.content.ContextCompat
-import android.content.pm.PackageManager
 import harold.android.chat.auth.AgentAuthPanel
 import harold.android.chat.composer.CommandListPanel
 import harold.android.chat.composer.ComposerConfigActions
@@ -72,6 +72,7 @@ import harold.android.chat.composer.insertSlashShortcut
 import harold.android.chat.composer.removeCommandToken
 import harold.android.contracts.AuthSessionStatus
 import harold.android.ui.promptinput.PromptEdit
+import harold.android.voice.VoiceDictationPresentation
 
 private val MIN_TOUCH_TARGET = 48.dp
 private val SessionMenuItemPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)

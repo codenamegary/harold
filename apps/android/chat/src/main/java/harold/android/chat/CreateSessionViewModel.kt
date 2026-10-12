@@ -1,7 +1,5 @@
 package harold.android.chat
 
-import harold.android.network.apiErrorMessage
-
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -10,6 +8,7 @@ import harold.android.contracts.AgentId
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.WorkspaceState
 import harold.android.navigation.Navigator
+import harold.android.network.apiErrorMessage
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 import harold.android.user.UserRepository

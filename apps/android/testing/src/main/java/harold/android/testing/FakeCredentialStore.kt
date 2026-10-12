@@ -1,4 +1,3 @@
-
 package harold.android.testing
 
 import harold.android.credentials.CredentialStore

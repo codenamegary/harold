@@ -1,6 +1,25 @@
 package harold.android.live
 
+import harold.android.contracts.AgentId
+import harold.android.contracts.AttachmentReference
+import harold.android.contracts.ConfigOption
+import harold.android.contracts.SessionStreamClientMessage
+import harold.android.contracts.SessionStreamServerMessage
+import harold.android.contracts.catalogSessionKey
+import harold.android.contracts.parseAvailableCommands
+import harold.android.contracts.parseConfigOptions
 import harold.android.di.ApplicationScope
+import harold.android.live.composer.AvailableCommandsCatalog
+import harold.android.live.composer.SessionConfigCatalog
+import harold.android.stream.ConnectionSignal
+import harold.android.stream.ConnectionState
+import harold.android.stream.ConnectionStatus
+import harold.android.stream.DisconnectCause
+import harold.android.stream.ReconnectPolicy
+import harold.android.stream.SessionStream
+import harold.android.stream.SessionStreamFactory
+import harold.android.stream.SessionStreamHandlers
+import harold.android.stream.reduce
 import javax.inject.Inject
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -15,38 +34,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
-import harold.android.chat.StreamExtension
-import harold.android.chat.applyCancelled
-import harold.android.chat.applyPermissionRequested
-import harold.android.chat.applyPermissionResolved
-import harold.android.chat.applyPromptComplete
-import harold.android.chat.applyReconnect
-import harold.android.chat.applyStreamError
-import harold.android.chat.applySubscribed
-import harold.android.chat.beginUserTurn
-import harold.android.chat.composer.AvailableCommandsCatalog
-import harold.android.chat.composer.SessionConfigCatalog
-import harold.android.chat.emptyAcpTranscript
-import harold.android.chat.foldAcpUpdate
-import harold.android.chat.parseAcpUpdate
-import harold.android.chat.parseStreamPermission
-import harold.android.contracts.AgentId
-import harold.android.contracts.AttachmentReference
-import harold.android.contracts.ConfigOption
-import harold.android.contracts.SessionStreamClientMessage
-import harold.android.contracts.SessionStreamServerMessage
-import harold.android.contracts.catalogSessionKey
-import harold.android.contracts.parseAvailableCommands
-import harold.android.contracts.parseConfigOptions
-import harold.android.stream.ConnectionSignal
-import harold.android.stream.ConnectionState
-import harold.android.stream.ConnectionStatus
-import harold.android.stream.DisconnectCause
-import harold.android.stream.ReconnectPolicy
-import harold.android.stream.SessionStream
-import harold.android.stream.SessionStreamFactory
-import harold.android.stream.SessionStreamHandlers
-import harold.android.stream.reduce
 
 /**
  * One socket, one unbounded inbox, one pump. Chat never sees a raw frame.

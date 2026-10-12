@@ -15,8 +15,8 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Stop
@@ -30,20 +30,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import harold.android.chat.R
 import harold.android.chat.AttachmentUploadStatus
 import harold.android.chat.PendingAttachmentUi
-import harold.android.chat.VoiceDictationUiState
+import harold.android.chat.R
 import harold.android.contracts.SelectOption
 import harold.android.ui.components.AgentButtonVariant
 import harold.android.ui.components.AgentIconButton
 import harold.android.ui.components.AudioPill
 import harold.android.ui.promptinput.PromptInput
+import harold.android.voice.VoiceDictationUiState
 
 private val MIN_TOUCH_TARGET = 48.dp
 

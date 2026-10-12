@@ -12,17 +12,22 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.EntryProviderScope
 import dagger.Binds
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
 import harold.android.chat.composer.ComposerConfigActions
+import harold.android.di.PreviewDispatcher
+import harold.android.navigation.AppRoute
 import harold.android.navigation.Chat
 import harold.android.navigation.CreateSession
-import harold.android.navigation.AppRoute
 import harold.android.navigation.FeatureEntryProvider
 import harold.android.navigation.Navigator
 import harold.android.navigation.Sessions
 import javax.inject.Inject
+import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 
 class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
     override fun register(scope: EntryProviderScope<AppRoute>, navigator: Navigator) {
@@ -132,4 +137,14 @@ abstract class ChatFeatureModule {
     @Binds
     @IntoSet
     abstract fun entryProvider(impl: ChatEntryProvider): FeatureEntryProvider
+
+    @Binds
+    @Singleton
+    abstract fun sessionCommands(impl: DefaultSessionCommands): SessionCommands
+
+    companion object {
+        @Provides
+        @PreviewDispatcher
+        fun previewDispatcher(): CoroutineDispatcher = Dispatchers.Default
+    }
 }

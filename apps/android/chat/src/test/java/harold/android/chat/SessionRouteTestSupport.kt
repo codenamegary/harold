@@ -22,6 +22,7 @@ import harold.android.contracts.WorkspaceCollection
 import harold.android.navigation.Navigator
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
+import harold.android.testing.FakeSessionGateway
 import harold.android.user.UserRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,17 +36,6 @@ internal class RecordingSessionCommands : SessionCommands {
 
     override fun emit(command: SessionCommand) {
         emitted += command
-    }
-}
-
-internal class FixedSessionGateway(
-    initial: PairedState,
-) : SessionGateway {
-    private val state = MutableStateFlow(initial)
-    override val pairedState: StateFlow<PairedState> = state.asStateFlow()
-    override suspend fun refresh() = Unit
-    override suspend fun clearLocalAccess() {
-        state.value = PairedState.NotPaired
     }
 }
 

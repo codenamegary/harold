@@ -1,12 +1,13 @@
 package harold.android.session
 
+import harold.android.credentials.CredentialHolder
+import harold.android.credentials.CredentialStore
+import harold.android.credentials.StoredCredential
+import harold.android.testing.FakeCredentialStore
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
-import harold.android.credentials.CredentialHolder
-import harold.android.credentials.CredentialStore
-import harold.android.credentials.StoredCredential
 
 class DefaultSessionGatewayTest {
     @Test
@@ -69,23 +70,5 @@ class DefaultSessionGatewayTest {
         assertNull(store.load())
         assertEquals(1, store.clearCount)
         assertEquals(PairedState.NotPaired, gateway.pairedState.value)
-    }
-}
-
-private class FakeCredentialStore(
-    private var stored: StoredCredential?,
-) : CredentialStore {
-    var clearCount = 0
-        private set
-
-    override suspend fun load(): StoredCredential? = stored
-
-    override suspend fun save(credential: StoredCredential) {
-        stored = credential
-    }
-
-    override suspend fun clear() {
-        clearCount += 1
-        stored = null
     }
 }

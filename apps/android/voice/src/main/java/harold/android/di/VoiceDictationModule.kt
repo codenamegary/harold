@@ -6,10 +6,10 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.components.ViewModelComponent
 import dagger.hilt.android.scopes.ViewModelScoped
-import harold.android.chat.HandlerVoiceDictationRestartScheduler
-import harold.android.chat.SpeechRecognitionClient
-import harold.android.chat.VoiceDictationRestartScheduler
-import harold.android.chat.VoskSpeechRecognitionClient
+import harold.android.voice.HandlerVoiceDictationRestartScheduler
+import harold.android.voice.SpeechRecognitionClient
+import harold.android.voice.VoiceDictationRestartScheduler
+import harold.android.voice.VoskSpeechRecognitionClient
 
 @Module
 @InstallIn(ViewModelComponent::class)
