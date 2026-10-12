@@ -9,6 +9,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import harold.android.foreground.EXTRA_OPEN_SESSION_ID
 import harold.android.foreground.OpenSessionRequests
 import harold.android.navigation.AppNavHost
+import harold.android.navigation.Navigator
 import harold.android.pairing.PairingRequests
 import harold.android.ui.theme.HaroldTheme
 import javax.inject.Inject
@@ -17,6 +18,7 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
     @Inject lateinit var openSessionRequests: OpenSessionRequests
     @Inject lateinit var pairingRequests: PairingRequests
+    @Inject lateinit var navigator: Navigator
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,7 +29,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             HaroldTheme {
-                AppNavHost(pairingRequests = pairingRequests)
+                AppNavHost(navigator = navigator)
             }
         }
     }
@@ -48,6 +50,7 @@ class MainActivity : ComponentActivity() {
         val uri = intent?.dataString ?: return
         if (intent.action == Intent.ACTION_VIEW) {
             pairingRequests.requestPairing(uri)
+            navigator.openPairing()
         }
     }
 }

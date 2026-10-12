@@ -55,6 +55,7 @@ import harold.android.foreground.ActiveSessionTracker
 import harold.android.foreground.OpenSessionRequests
 import harold.android.foreground.SessionForegroundCoordinator
 import harold.android.navigation.NavigationPreferences
+import harold.android.navigation.Navigator
 import harold.android.user.UserRepository
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
@@ -75,6 +76,8 @@ class ChatViewModel @Inject constructor(
     private val openSessionRequests: OpenSessionRequests? = null,
     internal val voiceDictationController: VoiceDictationController,
     @PreviewDispatcher private val previewDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val navigator: Navigator = Navigator(),
+    private val sessionCommands: SessionCommands = DefaultSessionCommands(),
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -182,6 +185,20 @@ class ChatViewModel @Inject constructor(
             viewModelScope.launch {
                 requests.sessionIds.collect { sessionId ->
                     openSessionFromNotification(sessionId)
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            sessionCommands.commands.collect { command ->
+                when (command) {
+                    is SessionCommand.Open -> activateSession(command.row)
+                    is SessionCommand.Created -> openCreatedSession(command.response)
+                    is SessionCommand.Pending -> openPendingSession(
+                        workspace = command.workspace,
+                        agentId = command.agentId,
+                    )
+                    is SessionCommand.Deleted -> dropSession(command.row)
                 }
             }
         }
@@ -1015,6 +1032,7 @@ class ChatViewModel @Inject constructor(
             sessionForegroundCoordinator?.onSessionsChanged()
             sessionForegroundCoordinator?.setServerOrigin(null)
             sessionGateway.clearLocalAccess()
+            navigator.showShell()
         }
     }
 

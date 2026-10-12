@@ -33,7 +33,6 @@ class AddWorkspaceScreenTest {
                     onFolderChanged = {},
                     onFolderQueryChanged = {},
                     onSubmit = {},
-                    onCreated = {},
                 )
             }
         }
@@ -54,7 +53,6 @@ class AddWorkspaceScreenTest {
                     onFolderChanged = {},
                     onFolderQueryChanged = {},
                     onSubmit = {},
-                    onCreated = {},
                 )
             }
         }
@@ -86,7 +84,6 @@ class AddWorkspaceScreenTest {
                     onFolderChanged = {},
                     onFolderQueryChanged = {},
                     onSubmit = {},
-                    onCreated = {},
                 )
             }
         }

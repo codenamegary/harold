@@ -146,14 +146,70 @@ class ShellViewModelTest {
         assertEquals("Not paired", viewModel.uiState.value.status)
     }
 
+    @Test
+    fun pairedColdStartChoosesChatOnce() = runTest {
+        val navigator = harold.android.navigation.Navigator()
+        viewModel(
+            paired(),
+            FakeSessionOwner(),
+            FakeAgentApi(Result.success(collectionOf(1))),
+            navigator,
+        )
+
+        assertEquals(harold.android.navigation.StartGate.Paired, navigator.startGate)
+        assertEquals(listOf(harold.android.navigation.Chat), navigator.backStack.toList())
+    }
+
+    @Test
+    fun unpairedColdStartChoosesShell() = runTest {
+        val navigator = harold.android.navigation.Navigator()
+        viewModel(
+            FakeSessionGateway(PairedState.NotPaired),
+            FakeSessionOwner(),
+            FakeAgentApi(Result.success(collectionOf(1))),
+            navigator,
+        )
+
+        assertEquals(harold.android.navigation.StartGate.Unpaired, navigator.startGate)
+        assertEquals(listOf(harold.android.navigation.Shell), navigator.backStack.toList())
+    }
+
+    @Test
+    fun startStaysEmptyUntilRefreshResolves() = runTest {
+        val dispatcher = UnconfinedTestDispatcher()
+        Dispatchers.setMain(dispatcher)
+        val release = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val navigator = harold.android.navigation.Navigator()
+        viewModel(
+            GatedSessionGateway(
+                release = release,
+                resolved = PairedState.Paired(ORIGIN, "device_01", "Pixel"),
+            ),
+            FakeSessionOwner(),
+            FakeAgentApi(Result.success(collectionOf(1))),
+            navigator,
+        )
+
+        assertEquals(harold.android.navigation.StartGate.Unknown, navigator.startGate)
+        assertTrue(navigator.backStack.isEmpty())
+
+        release.complete(Unit)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(harold.android.navigation.StartGate.Paired, navigator.startGate)
+        assertEquals(listOf(harold.android.navigation.Chat), navigator.backStack.toList())
+    }
+
     private fun viewModel(
         session: SessionGateway,
         connection: SessionOwner,
         api: AgentApi,
+        navigator: harold.android.navigation.Navigator = harold.android.navigation.Navigator(),
     ): ShellViewModel = ShellViewModel(
         sessionGateway = session,
         sessionOwner = connection,
         agentApi = api,
+        navigator = navigator,
     )
 
     private fun paired(): FakeSessionGateway =
@@ -180,6 +236,23 @@ class ShellViewModelTest {
 
     private companion object {
         const val ORIGIN = "http://127.0.0.1:8787"
+    }
+}
+
+private class GatedSessionGateway(
+    private val release: kotlinx.coroutines.CompletableDeferred<Unit>,
+    private val resolved: PairedState,
+) : SessionGateway {
+    private val _pairedState = MutableStateFlow<PairedState>(PairedState.NotPaired)
+    override val pairedState: StateFlow<PairedState> = _pairedState.asStateFlow()
+
+    override suspend fun refresh() {
+        release.await()
+        _pairedState.value = resolved
+    }
+
+    override suspend fun clearLocalAccess() {
+        _pairedState.value = PairedState.NotPaired
     }
 }
 

@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectory
+import harold.android.navigation.Navigator
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.user.UserRepository
@@ -88,6 +89,7 @@ data class AddWorkspaceUiState(
 class AddWorkspaceViewModel @Inject constructor(
     private val sessionGateway: SessionGateway,
     private val userRepository: UserRepository,
+    private val navigator: Navigator = Navigator(),
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AddWorkspaceUiState())
     val uiState: StateFlow<AddWorkspaceUiState> = _uiState.asStateFlow()
@@ -151,6 +153,7 @@ class AddWorkspaceViewModel @Inject constructor(
             ).fold(
                 onSuccess = {
                     _uiState.update { it.copy(submitting = false, created = true) }
+                    navigator.goBack()
                 },
                 onFailure = { error ->
                     _uiState.update {

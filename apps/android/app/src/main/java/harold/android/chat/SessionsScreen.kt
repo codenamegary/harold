@@ -44,7 +44,7 @@ private val MIN_TOUCH_TARGET = 48.dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionsScreen(
-    uiState: ChatUiState,
+    uiState: SessionsUiState,
     onBack: () -> Unit,
     onSearchChanged: (String) -> Unit,
     onSessionClick: (SessionRow) -> Unit,
@@ -98,7 +98,7 @@ fun SessionsScreen(
 
 @Composable
 fun SessionsListContent(
-    uiState: ChatUiState,
+    uiState: SessionsUiState,
     onSearchChanged: (String) -> Unit,
     onSessionClick: (SessionRow) -> Unit,
     onDeleteSession: (SessionRow) -> Unit,
@@ -112,7 +112,7 @@ fun SessionsListContent(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         OutlinedTextField(
-            value = uiState.sessionsListSearch,
+            value = uiState.search,
             onValueChange = onSearchChanged,
             modifier = Modifier
                 .fillMaxWidth()
@@ -120,7 +120,7 @@ fun SessionsListContent(
             singleLine = true,
             label = { Text(text = stringResource(R.string.sessions_search_label)) },
             trailingIcon = {
-                if (uiState.sessionsListLoading) {
+                if (uiState.loading) {
                     CircularProgressIndicator(
                         modifier = Modifier
                             .size(20.dp)
@@ -131,7 +131,7 @@ fun SessionsListContent(
             },
         )
 
-        uiState.sessionsListError?.let { message ->
+        uiState.error?.let { message ->
             Text(
                 text = message,
                 color = MaterialTheme.colorScheme.error,
@@ -140,14 +140,14 @@ fun SessionsListContent(
         }
 
         when {
-            uiState.sessionsList.isEmpty() && uiState.sessionsListLoading -> {
+            uiState.sessions.isEmpty() && uiState.loading -> {
                 Text(
                     text = "Loading sessions…",
                     modifier = Modifier.testTag("sessions_list_loading"),
                 )
             }
 
-            uiState.sessionsList.isEmpty() -> {
+            uiState.sessions.isEmpty() -> {
                 Text(
                     text = "No sessions yet",
                     modifier = Modifier.testTag("sessions_list_empty"),
@@ -163,7 +163,7 @@ fun SessionsListContent(
                     contentPadding = PaddingValues(bottom = 88.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(uiState.sessionsList, key = { session -> session.id }) { session ->
+                    items(uiState.sessions, key = { session -> session.id }) { session ->
                         SwipeToRevealDelete(
                             rowTag = session.id,
                             onDelete = { onDeleteSession(session) },

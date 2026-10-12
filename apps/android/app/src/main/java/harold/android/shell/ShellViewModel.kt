@@ -5,20 +5,20 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import harold.android.live.SessionOwner
-import harold.android.stream.ConnectionStatus
+import harold.android.navigation.Chat
+import harold.android.navigation.Navigator
+import harold.android.navigation.Shell
 import harold.android.network.AgentApi
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
+import harold.android.stream.ConnectionStatus
 
 private const val WORKSPACE_PROBE_LIMIT = 1
 
@@ -27,26 +27,19 @@ class ShellViewModel @Inject constructor(
     private val sessionGateway: SessionGateway,
     private val sessionOwner: SessionOwner,
     private val agentApi: AgentApi,
+    private val navigator: Navigator,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ShellUiState())
     val uiState: StateFlow<ShellUiState> = _uiState.asStateFlow()
 
-    val showShell: StateFlow<Boolean> = combine(
-        sessionGateway.pairedState,
-        _uiState,
-        sessionOwner.connectionState,
-    ) { pairedState, shellState, connectionState ->
-        when {
-            pairedState is PairedState.NotPaired -> true
-            shellState.probeUnauthorized -> true
-            connectionState.status is ConnectionStatus.AuthFailed -> true
-            else -> false
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
-
     init {
         viewModelScope.launch {
             sessionGateway.refresh()
+            val start = when (sessionGateway.pairedState.value) {
+                is PairedState.Paired -> Chat
+                PairedState.NotPaired -> Shell
+            }
+            navigator.chooseStart(start)
         }
 
         viewModelScope.launch {
@@ -66,13 +59,14 @@ class ShellViewModel @Inject constructor(
 
                 if (state.status is ConnectionStatus.AuthFailed) {
                     sessionGateway.clearLocalAccess()
+                    navigator.showShell()
                 }
             }
         }
     }
 
-    fun onPairClick(onNavigateToPairing: () -> Unit) {
-        onNavigateToPairing()
+    fun onPairClick() {
+        navigator.openPairing()
     }
 
     fun onRetryClick() {
@@ -105,6 +99,7 @@ class ShellViewModel @Inject constructor(
 
             if (probe is WorkspaceProbe.Unauthorized) {
                 sessionGateway.clearLocalAccess()
+                navigator.showShell()
                 return@launch
             }
 

@@ -2,11 +2,6 @@ package harold.android.navigation
 
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
@@ -14,9 +9,10 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.ui.NavDisplay
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -25,11 +21,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Regression for the post-pairing blank screen.
- *
- * [AppNavHost] navigates with `showShell`: pairing success flips it to false and
- * navigates to Chat with a cleared stack. A second `popBackStack()` on pairing
- * `completed` raced that navigate and emptied the back stack.
+ * Pairing success replaces the stack with Chat. The pairing screen does not
+ * stay up, and a cold start with an empty stack shows the splash.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [30])
@@ -38,61 +31,70 @@ class PostPairingNavigationTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun afterPairingCompletesChatScreenIsVisible() {
+    fun unknownStartShowsSplash() {
+        val navigator = Navigator()
+
         composeTestRule.setContent {
-            val navController = rememberNavController()
-            var showShell by remember { mutableStateOf(true) }
-
-            // Same showShell effect as AppNavHost — sole post-pair navigator.
-            LaunchedEffect(showShell) {
-                if (showShell) {
-                    navController.navigate(Routes.Shell) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                } else {
-                    navController.navigate(Routes.Chat) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                }
+            NavigationFrame(navigator = navigator) {
+                Text(
+                    text = "app",
+                    modifier = Modifier.testTag("app"),
+                )
             }
+        }
 
-            NavHost(
-                navController = navController,
-                startDestination = Routes.Shell,
-            ) {
-                composable(Routes.Shell) {
-                    Text(
-                        text = "shell",
-                        modifier = Modifier.testTag("route_shell"),
-                    )
-                    Button(
-                        onClick = { navController.navigate(Routes.Pairing) },
-                        modifier = Modifier.testTag("go_pair_button"),
-                    ) {
-                        Text("go-pair")
+        composeTestRule.onNodeWithTag("start_splash").assertIsDisplayed()
+        assertTrue(
+            composeTestRule.onAllNodesWithTag("app").fetchSemanticsNodes().isEmpty(),
+        )
+    }
+
+    @Test
+    fun pairingSuccessShowsChatAndHidesPairing() {
+        val navigator = Navigator()
+        navigator.chooseStart(Shell)
+
+        composeTestRule.setContent {
+            NavDisplay(
+                backStack = navigator.backStack,
+                onBack = { navigator.goBack() },
+                entryDecorators = listOf(
+                    rememberSaveableStateHolderNavEntryDecorator(),
+                    rememberViewModelStoreNavEntryDecorator(),
+                ),
+                entryProvider = entryProvider {
+                    entry<Shell> {
+                        Text(
+                            text = "shell",
+                            modifier = Modifier.testTag("route_shell"),
+                        )
+                        Button(
+                            onClick = { navigator.openPairing() },
+                            modifier = Modifier.testTag("go_pair_button"),
+                        ) {
+                            Text("go-pair")
+                        }
                     }
-                }
-
-                composable(Routes.Pairing) {
-                    Text(
-                        text = "pairing",
-                        modifier = Modifier.testTag("route_pairing"),
-                    )
-                    Button(
-                        onClick = { showShell = false },
-                        modifier = Modifier.testTag("finish_pair"),
-                    ) {
-                        Text("finish-pair")
+                    entry<Pairing> {
+                        Text(
+                            text = "pairing",
+                            modifier = Modifier.testTag("route_pairing"),
+                        )
+                        Button(
+                            onClick = { navigator.showChat() },
+                            modifier = Modifier.testTag("finish_pair"),
+                        ) {
+                            Text("finish-pair")
+                        }
                     }
-                }
-
-                composable(Routes.Chat) {
-                    Text(
-                        text = "chat",
-                        modifier = Modifier.testTag("route_chat"),
-                    )
-                }
-            }
+                    entry<Chat> {
+                        Text(
+                            text = "chat",
+                            modifier = Modifier.testTag("route_chat"),
+                        )
+                    }
+                },
+            )
         }
 
         composeTestRule.onNodeWithTag("route_shell").assertIsDisplayed()
@@ -101,18 +103,12 @@ class PostPairingNavigationTest {
         composeTestRule.onNodeWithTag("finish_pair").performClick()
         composeTestRule.waitForIdle()
 
-        val chatVisible = composeTestRule
-            .onAllNodesWithTag("route_chat")
-            .fetchSemanticsNodes()
-            .isNotEmpty()
-        val shellVisible = composeTestRule
-            .onAllNodesWithTag("route_shell")
-            .fetchSemanticsNodes()
-            .isNotEmpty()
-
+        composeTestRule.onNodeWithTag("route_chat").assertIsDisplayed()
         assertTrue(
-            "Expected Chat (or Shell) after pairing; got blank back stack",
-            chatVisible || shellVisible,
+            composeTestRule.onAllNodesWithTag("route_pairing").fetchSemanticsNodes().isEmpty(),
+        )
+        assertTrue(
+            composeTestRule.onAllNodesWithTag("route_shell").fetchSemanticsNodes().isEmpty(),
         )
     }
 }
