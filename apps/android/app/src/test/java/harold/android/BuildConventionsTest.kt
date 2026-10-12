@@ -36,6 +36,37 @@ class BuildConventionsTest {
         assertTrue(File(androidRoot, "gradle/libs.versions.toml").readText().contains("turbine"))
     }
 
+    @Test
+    fun settingsIncludesDomainModules() {
+        val settings = File(androidRoot(), "settings.gradle.kts").readText()
+        listOf(
+            ":app",
+            ":navigation",
+            ":contracts",
+            ":api",
+            ":auth",
+            ":live",
+            ":voice",
+            ":design",
+            ":testing",
+            ":pairing",
+            ":chat",
+            ":workspaces",
+            ":shell",
+        ).forEach { module ->
+            assertTrue(settings, settings.contains(module))
+        }
+    }
+
+    @Test
+    fun featureModulesUseTheFeatureConvention() {
+        val root = androidRoot()
+        listOf("pairing", "chat", "workspaces", "shell").forEach { name ->
+            val buildFile = File(root, "$name/build.gradle.kts").readText()
+            assertTrue(buildFile, buildFile.contains("alias(libs.plugins.harold.android.feature)"))
+        }
+    }
+
     private fun androidRoot(): File {
         var dir = File("").absoluteFile
         while (true) {

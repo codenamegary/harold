@@ -1,0 +1,4 @@
+<resources>
+    <string name="active_sessions_channel_name">Active sessions</string>
+    <string name="active_sessions_channel_description">Shows while Harold sessions are actively running</string>
+</resources>

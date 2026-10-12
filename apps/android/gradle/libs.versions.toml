@@ -3,6 +3,7 @@ agp = "9.4.1"
 kotlin = "2.4.21"
 composeBom = "2026.09.00"
 activity = "1.13.0"
+core = "1.18.0"
 lifecycle = "2.11.0"
 navigation3 = "1.2.0"
 datastore = "1.2.1"
@@ -29,6 +30,8 @@ kotlin-compose-gradle-plugin = { group = "org.jetbrains.kotlin", name = "compose
 kotlin-serialization-gradle-plugin = { group = "org.jetbrains.kotlin", name = "kotlin-serialization", version.ref = "kotlin" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activity" }
+androidx-core = { group = "androidx.core", name = "core", version.ref = "core" }
+androidx-compose-runtime = { group = "androidx.compose.runtime", name = "runtime" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }

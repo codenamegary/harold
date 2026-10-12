@@ -60,3 +60,115 @@ internal fun runConventionFixture(
         projectDir.deleteRecursively()
     }
 }
+
+internal fun runFailingMultiProjectFixture(
+    projects: Map<String, String>,
+    task: String,
+): String {
+    val sdkDir = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
+    check(!sdkDir.isNullOrBlank()) { "ANDROID_HOME is required" }
+
+    val projectDir = Files.createTempDirectory("harold-convention").toFile()
+    try {
+        val includes = projects.keys.joinToString("\n") { path -> "include(\"$path\")" }
+        projectDir.resolve("settings.gradle.kts").writeText(
+            """
+            pluginManagement {
+                repositories {
+                    google()
+                    mavenCentral()
+                    gradlePluginPortal()
+                }
+            }
+            dependencyResolutionManagement {
+                repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+                repositories {
+                    google()
+                    mavenCentral()
+                }
+            }
+            rootProject.name = "fixture"
+            $includes
+            """.trimIndent(),
+        )
+        projectDir.resolve("gradle.properties").writeText(
+            """
+            org.gradle.jvmargs=-Xmx2048m
+            android.useAndroidX=true
+            android.nonTransitiveRClass=true
+            """.trimIndent(),
+        )
+        projectDir.resolve("local.properties").writeText("sdk.dir=${sdkDir.replace("\\", "\\\\")}\n")
+        projects.forEach { (path, buildScript) ->
+            val dir = projectDir.resolve(path.removePrefix(":").replace(":", "/"))
+            dir.resolve("src/main").mkdirs()
+            dir.resolve("src/main/AndroidManifest.xml").writeText("<manifest />\n")
+            dir.resolve("build.gradle.kts").writeText(buildScript.trimIndent())
+        }
+
+        return GradleRunner.create()
+            .withProjectDir(projectDir)
+            .withPluginClasspath()
+            .withArguments(task, "--stacktrace")
+            .buildAndFail()
+            .output
+    } finally {
+        projectDir.deleteRecursively()
+    }
+}
+
+internal fun runMultiProjectFixture(
+    projects: Map<String, String>,
+    task: String,
+): String {
+    val sdkDir = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
+    check(!sdkDir.isNullOrBlank()) { "ANDROID_HOME is required" }
+
+    val projectDir = Files.createTempDirectory("harold-convention").toFile()
+    try {
+        val includes = projects.keys.joinToString("\n") { path -> "include(\"$path\")" }
+        projectDir.resolve("settings.gradle.kts").writeText(
+            """
+            pluginManagement {
+                repositories {
+                    google()
+                    mavenCentral()
+                    gradlePluginPortal()
+                }
+            }
+            dependencyResolutionManagement {
+                repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+                repositories {
+                    google()
+                    mavenCentral()
+                }
+            }
+            rootProject.name = "fixture"
+            $includes
+            """.trimIndent(),
+        )
+        projectDir.resolve("gradle.properties").writeText(
+            """
+            org.gradle.jvmargs=-Xmx2048m
+            android.useAndroidX=true
+            android.nonTransitiveRClass=true
+            """.trimIndent(),
+        )
+        projectDir.resolve("local.properties").writeText("sdk.dir=${sdkDir.replace("\\", "\\\\")}\n")
+        projects.forEach { (path, buildScript) ->
+            val dir = projectDir.resolve(path.removePrefix(":").replace(":", "/"))
+            dir.resolve("src/main").mkdirs()
+            dir.resolve("src/main/AndroidManifest.xml").writeText("<manifest />\n")
+            dir.resolve("build.gradle.kts").writeText(buildScript.trimIndent())
+        }
+
+        return GradleRunner.create()
+            .withProjectDir(projectDir)
+            .withPluginClasspath()
+            .withArguments(task, "--stacktrace")
+            .build()
+            .output
+    } finally {
+        projectDir.deleteRecursively()
+    }
+}

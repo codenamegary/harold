@@ -7,4 +7,4 @@ build/
 captures/
 .externalNativeBuild/
 .cxx/
-app/src/main/assets/model-en-us/
+voice/src/main/assets/model-en-us/

@@ -53,7 +53,7 @@ class VoiceDictationSurvivesRotationTest {
 )
 object FakeVoiceDictationModule {
     @Provides
-    fun speechClient(): SpeechRecognitionClient = FakeSpeechRecognitionClient()
+    fun speechClient(): SpeechRecognitionClient = RotationSpeechClient()
 
     @Provides
     @SilenceScheduler
@@ -64,4 +64,14 @@ object FakeVoiceDictationModule {
     @RestartScheduler
     fun restartScheduler(): VoiceDictationRestartScheduler =
         ImmediateVoiceDictationRestartScheduler()
+}
+
+private class RotationSpeechClient : SpeechRecognitionClient {
+    override fun isAvailable(): Boolean = true
+
+    override fun startListening(callbacks: SpeechRecognitionCallbacks) = Unit
+
+    override fun stopListening() = Unit
+
+    override fun destroy() = Unit
 }

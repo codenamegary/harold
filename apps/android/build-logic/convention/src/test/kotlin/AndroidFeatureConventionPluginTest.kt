@@ -32,4 +32,71 @@ class AndroidFeatureConventionPluginTest {
         assertTrue(output, output.contains("COMPOSE=true"))
         assertTrue(output, output.contains("MIN_SDK=30"))
     }
+
+    @Test
+    fun featureConventionRejectsADependencyOnAnotherFeature() {
+        val output = runFailingMultiProjectFixture(
+            projects = mapOf(
+                ":shell" to """
+                plugins {
+                    id("harold.android.feature")
+                }
+
+                android {
+                    namespace = "harold.fixture.shell"
+                }
+                """,
+                ":chat" to """
+                plugins {
+                    id("harold.android.feature")
+                }
+
+                android {
+                    namespace = "harold.fixture.chat"
+                }
+
+                dependencies {
+                    implementation(project(":shell"))
+                }
+                """,
+            ),
+            task = ":chat:tasks",
+        )
+
+        assertTrue(output, output.contains(":chat cannot depend on feature :shell"))
+    }
+
+    @Test
+    fun featureConventionAllowsADependencyOnALibrary() {
+        val output = runMultiProjectFixture(
+            projects = mapOf(
+                ":design" to """
+                plugins {
+                    id("harold.android.library")
+                    id("harold.android.compose")
+                }
+
+                android {
+                    namespace = "harold.fixture.design"
+                }
+                """,
+                ":chat" to """
+                plugins {
+                    id("harold.android.feature")
+                }
+
+                android {
+                    namespace = "harold.fixture.chat"
+                }
+
+                dependencies {
+                    implementation(project(":design"))
+                }
+                """,
+            ),
+            task = ":chat:tasks",
+        )
+
+        assertTrue(output, output.contains("BUILD SUCCESSFUL"))
+    }
 }
