@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -54,6 +55,7 @@ import harold.android.stream.ConnectionState
 import harold.android.live.SessionOwner
 import harold.android.live.SessionSnapshot
 import harold.android.navigation.NavigationPreferences
+import harold.android.navigation.Navigator
 import harold.android.user.UserRepository
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
@@ -61,6 +63,7 @@ import harold.android.session.SessionGateway
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModelTest {
     private val dispatcher = StandardTestDispatcher()
+    private val sessionCommands = DefaultSessionCommands()
 
     @Before
     fun setUp() {
@@ -90,7 +93,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun confirmNewSessionCreatesTheSessionAndSeedsConfig() = runTest(dispatcher) {
+    fun createdSessionOpensInChatAndSeedsConfig() = runTest(dispatcher) {
         val repository = ChatFakeUserRepository()
         val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
@@ -100,14 +103,8 @@ class ChatViewModelTest {
         )
 
         advanceUntilIdle()
-        viewModel.showCreateDialog()
-        advanceUntilIdle()
-        viewModel.onCreateWorkspaceChanged("ws_01")
-        viewModel.onCreateAgentChanged("cursor")
-        viewModel.confirmNewSession()
-        advanceUntilIdle()
+        createSessionThroughRoute(repository)
 
-        assertFalse(viewModel.uiState.value.createDialogVisible)
         assertEquals(1, repository.createCalls.size)
         assertEquals("/tmp/harold", repository.createCalls.first().cwd)
         assertEquals("sess_new", viewModel.uiState.value.selectedSession?.sessionId)
@@ -121,31 +118,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun confirmNewSessionKeepsTheDialogOpenWhenCreateFails() = runTest(dispatcher) {
-        val repository = ChatFakeUserRepository()
-        repository.createFailure = AgentApiException(
-            AgentApiError.Problem(status = 409, title = "ACP unavailable", detail = "Agent crashed"),
-        )
-        val viewModel = createViewModel(
-            repository = repository,
-            navigation = ChatFakeNavigationPreferences(),
-        )
-
-        advanceUntilIdle()
-        viewModel.showCreateDialog()
-        advanceUntilIdle()
-        viewModel.onCreateWorkspaceChanged("ws_01")
-        viewModel.onCreateAgentChanged("cursor")
-        viewModel.confirmNewSession()
-        advanceUntilIdle()
-
-        assertTrue(viewModel.uiState.value.createDialogVisible)
-        assertEquals("Agent crashed", viewModel.uiState.value.createState.error)
-        assertFalse(viewModel.uiState.value.createState.submitting)
-    }
-
-    @Test
-    fun confirmNewSessionShowsLoginWhenTheAgentNeedsAuth() = runTest(dispatcher) {
+    fun pendingSessionShowsLoginWhenTheAgentNeedsAuth() = runTest(dispatcher) {
         val repository = ChatFakeUserRepository(
             agentAuth = harold.android.contracts.AgentAuth(
                 agentId = "cursor",
@@ -165,15 +138,9 @@ class ChatViewModelTest {
         )
 
         advanceUntilIdle()
-        viewModel.showCreateDialog()
-        advanceUntilIdle()
-        viewModel.onCreateWorkspaceChanged("ws_01")
-        viewModel.onCreateAgentChanged("cursor")
-        viewModel.confirmNewSession()
-        advanceUntilIdle()
+        createSessionThroughRoute(repository)
 
         val state = viewModel.uiState.value
-        assertFalse(state.createDialogVisible)
         assertTrue(state.isPendingNewSession)
         assertTrue(state.showAuthPanel)
         assertFalse(state.composerEnabled)
@@ -220,12 +187,7 @@ class ChatViewModelTest {
         )
 
         advanceUntilIdle()
-        viewModel.showCreateDialog()
-        advanceUntilIdle()
-        viewModel.onCreateWorkspaceChanged("ws_01")
-        viewModel.onCreateAgentChanged("cursor")
-        viewModel.confirmNewSession()
-        advanceUntilIdle()
+        createSessionThroughRoute(repository)
         assertTrue(viewModel.uiState.value.isPendingNewSession)
 
         repository.createFailure = null
@@ -250,12 +212,7 @@ class ChatViewModelTest {
         )
 
         advanceUntilIdle()
-        viewModel.showCreateDialog()
-        advanceUntilIdle()
-        viewModel.onCreateWorkspaceChanged("ws_01")
-        viewModel.onCreateAgentChanged("cursor")
-        viewModel.confirmNewSession()
-        advanceUntilIdle()
+        createSessionThroughRoute(repository)
 
         viewModel.onComposerTextChanged("Ship it")
         viewModel.submitComposerPrompt()
@@ -308,39 +265,27 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun deleteSessionRemovesRowAndClearsSelection() = runTest(dispatcher) {
+    fun deletingTheSelectedSessionFromTheListClearsChat() = runTest(dispatcher) {
         val repository = ChatFakeUserRepository()
         val navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02")
         val viewModel = createViewModel(repository, navigation)
 
         advanceUntilIdle()
         val selected = viewModel.uiState.value.selectedSession!!
-        viewModel.deleteSession(selected)
+        val sessionsRoute = SessionsViewModel(
+            sessionGateway = pairedGateway(),
+            userRepository = repository,
+            sessionCommands = sessionCommands,
+            navigator = Navigator(),
+        )
+        advanceUntilIdle()
+        sessionsRoute.delete(selected)
         advanceUntilIdle()
 
         assertEquals(null, viewModel.uiState.value.selectedSession)
         assertTrue(viewModel.uiState.value.sessions.none { row -> row.sessionId == "sess_02" })
         assertEquals("sess_02", repository.deleteCalls.single().second)
         assertEquals(null, navigation.savedSessionId)
-    }
-
-    @Test
-    fun deleteSessionShowsErrorOnConflict() = runTest(dispatcher) {
-        val repository = ChatFakeUserRepository(deleteConflict = true)
-        val viewModel = createViewModel(
-            repository = repository,
-            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-        )
-
-        advanceUntilIdle()
-        viewModel.deleteSession(viewModel.uiState.value.selectedSession!!)
-        advanceUntilIdle()
-
-        assertEquals(
-            "Agent is disabled",
-            viewModel.uiState.value.sessionsError,
-        )
-        assertEquals("sess_02", viewModel.uiState.value.selectedSession?.sessionId)
     }
 
     @Test
@@ -574,22 +519,6 @@ class ChatViewModelTest {
 
         assertEquals(5, viewModel.uiState.value.recentSessions.size)
         assertEquals("S8", viewModel.uiState.value.recentSessions.first().name)
-    }
-
-    @Test
-    fun sessionsSearchFiltersTitlesClientSide() = runTest(dispatcher) {
-        val viewModel = createViewModel(
-            ChatFakeUserRepository(),
-            ChatFakeNavigationPreferences(),
-        )
-
-        advanceUntilIdle()
-        viewModel.openSessionsList()
-        advanceUntilIdle()
-        viewModel.onSessionsSearchChanged("alp")
-        advanceUntilIdle()
-
-        assertEquals(listOf("Alpha"), viewModel.uiState.value.sessionsList.map { it.name })
     }
 
     @Test
@@ -924,9 +853,7 @@ class ChatViewModelTest {
         repository: ChatFakeUserRepository,
         navigation: ChatFakeNavigationPreferences,
         sessionOwner: ChatFakeSessionOwner = ChatFakeSessionOwner(),
-        sessionGateway: ChatFakeSessionGateway = ChatFakeSessionGateway(
-            PairedState.Paired(ORIGIN, "device_01", "Pixel"),
-        ),
+        sessionGateway: ChatFakeSessionGateway = pairedGateway(),
         configApi: SessionConfigApi = RecordingSessionConfigApi(),
         attachmentApi: AttachmentApi = NoopAttachmentApi(),
     ): ChatViewModel = ChatViewModel(
@@ -943,7 +870,26 @@ class ChatViewModelTest {
             restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         ),
         previewDispatcher = dispatcher,
+        navigator = Navigator(),
+        sessionCommands = sessionCommands,
     )
+
+    private fun pairedGateway(): ChatFakeSessionGateway =
+        ChatFakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel"))
+
+    private fun TestScope.createSessionThroughRoute(repository: ChatFakeUserRepository) {
+        val route = CreateSessionViewModel(
+            sessionGateway = pairedGateway(),
+            userRepository = repository,
+            sessionCommands = sessionCommands,
+            navigator = Navigator(),
+        )
+        advanceUntilIdle()
+        route.onWorkspaceChanged("ws_01")
+        route.onAgentChanged("cursor")
+        route.submit()
+        advanceUntilIdle()
+    }
 
     @Test
     fun attachmentUploadsToTheSelectedSessionWithoutNamingAWorkspace() = runTest(dispatcher) {
@@ -1000,12 +946,7 @@ class ChatViewModelTest {
             attachmentApi = attachments,
         )
         advanceUntilIdle()
-        viewModel.showCreateDialog()
-        advanceUntilIdle()
-        viewModel.onCreateWorkspaceChanged("ws_01")
-        viewModel.onCreateAgentChanged("cursor")
-        viewModel.confirmNewSession()
-        advanceUntilIdle()
+        createSessionThroughRoute(repository)
         assertEquals("sess_new", viewModel.uiState.value.selectedSession?.sessionId)
         assertEquals(1, repository.createCalls.size)
 

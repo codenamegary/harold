@@ -26,7 +26,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,14 +53,7 @@ fun AddWorkspaceScreen(
     onFolderChanged: (String) -> Unit,
     onFolderQueryChanged: (String) -> Unit,
     onSubmit: () -> Unit,
-    onCreated: () -> Unit,
 ) {
-    LaunchedEffect(uiState.created) {
-        if (uiState.created) {
-            onCreated()
-        }
-    }
-
     val backContentDescription = stringResource(R.string.add_workspace_back_content_description)
     val formDisabled = uiState.hasNoRoots || uiState.rootsLoadState is RootsLoadState.Loading
 

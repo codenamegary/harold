@@ -12,6 +12,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import harold.android.navigation.Chat
+import harold.android.navigation.Navigator
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PairingViewModelTest {
@@ -32,6 +34,7 @@ class PairingViewModelTest {
             pairingCoordinator = coordinator,
             payloadParser = DefaultPairingPayloadParser(),
             deviceNameProvider = { "Pixel Test" },
+            navigator = Navigator(),
         )
 
         viewModel.onQrScanned(
@@ -49,7 +52,30 @@ class PairingViewModelTest {
             coordinator.calls,
         )
         assertTrue(viewModel.uiState.value.completed)
-        assertFalse(viewModel.uiState.value.isClaiming)
+        assertTrue(viewModel.uiState.value.isClaiming)
+    }
+
+    @Test
+    fun claimSuccessStaysClaimingAndOpensChat() = runTest {
+        val navigator = Navigator()
+        navigator.start(paired = false)
+        navigator.openPairing()
+        val coordinator = FakePairingCoordinator(Result.success(Unit))
+        val viewModel = PairingViewModel(
+            pairingCoordinator = coordinator,
+            payloadParser = DefaultPairingPayloadParser(),
+            deviceNameProvider = { "Pixel Test" },
+            navigator = navigator,
+        )
+
+        val payload = "harold://pair?v=1&endpoint=http%3A%2F%2F10.0.2.2%3A3847&code=R7K-4MP"
+        viewModel.onQrScanned(payload)
+        viewModel.onQrScanned(payload)
+
+        assertEquals(1, coordinator.calls.size)
+        assertTrue(viewModel.uiState.value.completed)
+        assertTrue(viewModel.uiState.value.isClaiming)
+        assertEquals(listOf(Chat), navigator.backStack.toList())
     }
 
     @Test
@@ -59,6 +85,7 @@ class PairingViewModelTest {
             pairingCoordinator = coordinator,
             payloadParser = DefaultPairingPayloadParser(),
             deviceNameProvider = { "Pixel Test" },
+            navigator = Navigator(),
         )
 
         viewModel.onQrScanned("not-a-pairing-uri")
@@ -75,6 +102,7 @@ class PairingViewModelTest {
             pairingCoordinator = coordinator,
             payloadParser = DefaultPairingPayloadParser(),
             deviceNameProvider = { "Pixel Test" },
+            navigator = Navigator(),
         )
 
         viewModel.onQrScanned("agent-server://pair?v=1&endpoint=http%3A%2F%2F10.0.2.2%3A3847&code=R7K-4MP")
@@ -97,6 +125,7 @@ class PairingViewModelTest {
             pairingCoordinator = coordinator,
             payloadParser = DefaultPairingPayloadParser(),
             deviceNameProvider = { "Pixel Test" },
+            navigator = Navigator(),
             pairingRequests = requests,
         )
 
@@ -121,6 +150,7 @@ class PairingViewModelTest {
             pairingCoordinator = coordinator,
             payloadParser = DefaultPairingPayloadParser(),
             deviceNameProvider = { "Pixel Test" },
+            navigator = Navigator(),
         )
 
         viewModel.showManualEntry()

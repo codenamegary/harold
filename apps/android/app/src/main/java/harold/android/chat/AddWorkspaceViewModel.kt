@@ -11,8 +11,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectory
-import harold.android.network.AgentApiError
-import harold.android.network.AgentApiException
+import harold.android.navigation.Navigator
 import harold.android.user.UserRepository
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
@@ -56,7 +55,6 @@ data class AddWorkspaceUiState(
     val foldersLoadState: FoldersLoadState = FoldersLoadState.Idle,
     val submitting: Boolean = false,
     val submitError: String? = null,
-    val created: Boolean = false,
 ) {
     val hasNoRoots: Boolean
         get() = rootsLoadState is RootsLoadState.Empty
@@ -88,6 +86,7 @@ data class AddWorkspaceUiState(
 class AddWorkspaceViewModel @Inject constructor(
     private val sessionGateway: SessionGateway,
     private val userRepository: UserRepository,
+    private val navigator: Navigator,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AddWorkspaceUiState())
     val uiState: StateFlow<AddWorkspaceUiState> = _uiState.asStateFlow()
@@ -150,13 +149,14 @@ class AddWorkspaceViewModel @Inject constructor(
                 ),
             ).fold(
                 onSuccess = {
-                    _uiState.update { it.copy(submitting = false, created = true) }
+                    _uiState.update { it.copy(submitting = false) }
+                    navigator.goBack()
                 },
                 onFailure = { error ->
                     _uiState.update {
                         it.copy(
                             submitting = false,
-                            submitError = errorMessage(error),
+                            submitError = apiErrorMessage(error),
                         )
                     }
                 },
@@ -184,7 +184,7 @@ class AddWorkspaceViewModel @Inject constructor(
             },
             onFailure = { error ->
                 _uiState.update {
-                    it.copy(rootsLoadState = RootsLoadState.Error(errorMessage(error)))
+                    it.copy(rootsLoadState = RootsLoadState.Error(apiErrorMessage(error)))
                 }
             },
         )
@@ -207,18 +207,9 @@ class AddWorkspaceViewModel @Inject constructor(
             },
             onFailure = { error ->
                 _uiState.update {
-                    it.copy(foldersLoadState = FoldersLoadState.Error(errorMessage(error)))
+                    it.copy(foldersLoadState = FoldersLoadState.Error(apiErrorMessage(error)))
                 }
             },
         )
     }
-
-    private fun errorMessage(error: Throwable): String =
-        when (val apiError = (error as? AgentApiException)?.error) {
-            is AgentApiError.Unauthorized -> apiError.detail ?: "Authentication required"
-            is AgentApiError.Problem -> apiError.detail ?: apiError.title
-            is AgentApiError.Decode -> "Unexpected response from Harold"
-            is AgentApiError.Transport -> "Could not reach Harold"
-            null -> error.message ?: "Request failed"
-        }
 }

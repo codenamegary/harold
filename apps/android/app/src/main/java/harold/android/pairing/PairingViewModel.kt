@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import harold.android.network.PairingClaimError
 import harold.android.network.PairingClaimException
+import harold.android.navigation.Navigator
 
 enum class PairingMode {
     Scan,
@@ -32,6 +33,7 @@ class PairingViewModel @Inject constructor(
     private val pairingCoordinator: PairingCoordinator,
     private val payloadParser: PairingPayloadParser,
     private val deviceNameProvider: DeviceNameProvider,
+    private val navigator: Navigator,
     private val pairingRequests: PairingRequests? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(PairingUiState())
@@ -73,7 +75,7 @@ class PairingViewModel @Inject constructor(
     }
 
     fun onQrScanned(payload: String) {
-        if (_uiState.value.isClaiming) {
+        if (_uiState.value.isClaiming || _uiState.value.completed) {
             return
         }
 
@@ -89,6 +91,9 @@ class PairingViewModel @Inject constructor(
     }
 
     fun submitManualPairing() {
+        if (_uiState.value.isClaiming || _uiState.value.completed) {
+            return
+        }
         val endpoint = _uiState.value.endpoint.trim()
         val code = _uiState.value.code.trim().uppercase()
 
@@ -114,6 +119,10 @@ class PairingViewModel @Inject constructor(
     }
 
     private fun claim(endpoint: String, code: String) {
+        if (_uiState.value.isClaiming || _uiState.value.completed) {
+            return
+        }
+
         _uiState.update { current ->
             current.copy(isClaiming = true, errorMessage = null)
         }
@@ -125,19 +134,22 @@ class PairingViewModel @Inject constructor(
                 deviceName = deviceNameProvider(),
             )
 
-            _uiState.update { current ->
-                result.fold(
-                    onSuccess = {
-                        current.copy(isClaiming = false, completed = true, errorMessage = null)
-                    },
-                    onFailure = { error ->
+            result.fold(
+                onSuccess = {
+                    _uiState.update { current ->
+                        current.copy(isClaiming = true, completed = true, errorMessage = null)
+                    }
+                    navigator.showChat()
+                },
+                onFailure = { error ->
+                    _uiState.update { current ->
                         current.copy(
                             isClaiming = false,
                             errorMessage = errorMessageFor(error),
                         )
-                    },
-                )
-            }
+                    }
+                },
+            )
         }
     }
 

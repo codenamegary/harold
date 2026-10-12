@@ -20,6 +20,8 @@ import harold.android.foreground.OpenSessionRequests
 import harold.android.foreground.SessionForegroundLauncher
 import harold.android.live.DefaultSessionOwner
 import harold.android.live.SessionOwner
+import harold.android.chat.DefaultSessionCommands
+import harold.android.chat.SessionCommands
 import harold.android.navigation.DefaultNavigationPreferences
 import harold.android.navigation.NavigationPreferences
 import harold.android.network.AgentApi
@@ -99,6 +101,10 @@ abstract class AppBindings {
     @Binds
     @Singleton
     abstract fun navigationPreferences(impl: DefaultNavigationPreferences): NavigationPreferences
+
+    @Binds
+    @Singleton
+    abstract fun sessionCommands(impl: DefaultSessionCommands): SessionCommands
 
     @Binds
     @Singleton

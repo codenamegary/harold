@@ -124,12 +124,12 @@ class SessionSelectorUiTest {
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
                 SessionsScreen(
-                    uiState = ChatUiState(
-                        sessionsList = listOf(
+                    uiState = SessionsUiState(
+                        sessions = listOf(
                             sampleSession,
                             sampleSession.copy(sessionId = "sess_02", name = "Beta"),
                         ),
-                        
+                        loading = false,
                     ),
                     onBack = {},
                     onSearchChanged = { searchValue = it },
@@ -154,9 +154,9 @@ class SessionSelectorUiTest {
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
                 SessionsListContent(
-                    uiState = ChatUiState(
-                        sessionsList = listOf(sampleSession),
-                        sessionsListLoading = true,
+                    uiState = SessionsUiState(
+                        sessions = listOf(sampleSession),
+                        loading = true,
                     ),
                     onSearchChanged = {},
                     onSessionClick = {},
