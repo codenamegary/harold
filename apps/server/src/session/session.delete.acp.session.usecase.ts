@@ -1,5 +1,6 @@
 import { AgentId } from "contracts/http/agent-settings"
 import { CommandsCache } from "./hub/commands.cache"
+import { SessionInfoCache } from "./hub/session.info.cache"
 import {
   AdvertisesSessionClose,
   ArchiveAcpSession,
@@ -17,6 +18,7 @@ export type DeleteAcpSessionInput = Readonly<{
 export type DeleteAcpSessionDeps = Readonly<{
   archiveAcpSession: ArchiveAcpSession
   commandsCache: CommandsCache
+  sessionInfoCache: SessionInfoCache
   ensureSupervisorReady: EnsureSupervisorReady
   advertisesSessionClose: AdvertisesSessionClose
   closeAcpSession: CloseAcpSession
@@ -32,6 +34,10 @@ export const makeDeleteAcpSession =
       sessionId: input.sessionId,
     })
     deps.commandsCache.forget({
+      agentId: input.agentId,
+      sessionId: input.sessionId,
+    })
+    deps.sessionInfoCache.forget({
       agentId: input.agentId,
       sessionId: input.sessionId,
     })

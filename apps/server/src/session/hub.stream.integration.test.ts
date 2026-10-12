@@ -612,4 +612,61 @@ describe("session hub stream integration", () => {
 
     await client.close()
   })
+
+  test("subscribe after session/new receives the cached session title before subscribed", async () => {
+    const { app, config } = await bootTestApp({
+      whichFn,
+      fakeAcpOptions: {
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+        sessionNewSessionId: "hub-title-1",
+        sessionLoadSessionId: "hub-title-1",
+        emitSessionInfoOnNew: true,
+      },
+    })
+    await enableAgent(app, "cursor", whichFn)
+
+    const { httpBase, wsUrl } = await getListeningBase(app, config)
+
+    const createResponse = await fetch(`${httpBase}/v1/sessions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
+      body: JSON.stringify({
+        agentId: "cursor",
+        cwd: "/tmp/hub-title-project",
+      }),
+    })
+    expect(createResponse.status).toBe(201)
+    const created = CreateSessionResponseSchema.parse(await createResponse.json())
+
+    const client = await openStreamClient(wsUrl, app.deviceCredential.credential)
+    client.send({
+      type: "subscribe",
+      agentId: "cursor",
+      sessionId: created.sessionId,
+    })
+
+    const sessionInfo = await client.waitFor((message) => message.type === "session_info")
+    expect(sessionInfo).toMatchObject({
+      type: "session_info",
+      agentId: "cursor",
+      sessionId: created.sessionId,
+      title: "Renamed by the fake agent",
+    })
+
+    const subscribed = await client.waitFor((message) => message.type === "subscribed")
+    expect(subscribed).toMatchObject({
+      type: "subscribed",
+      agentId: "cursor",
+      sessionId: created.sessionId,
+    })
+
+    const subscribedIndex = client.messages.findIndex((message) => message.type === "subscribed")
+    const sessionInfoIndex = client.messages.findIndex((message) => message === sessionInfo)
+    expect(sessionInfoIndex).toBeLessThan(subscribedIndex)
+
+    await client.close()
+  })
 })

@@ -16,7 +16,9 @@ import harold.android.stream.DisconnectCause
 import harold.android.stream.SessionStream
 import harold.android.stream.SessionStreamFactory
 import harold.android.stream.SessionStreamHandlers
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -808,6 +810,194 @@ class DefaultSessionOwnerTest {
 
         assertTrue(owner.snapshot.value.authRequired)
         assertEquals(SessionState.Error, owner.snapshot.value.transcript.sessionState)
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun sessionInfoFrameUpdatesTitlesWithoutTouchingTranscript() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(holdOpen()),
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+
+        val rowsBefore = owner.snapshot.value.transcript.rows
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionInfo(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                title = "Fix the auth flow",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(mapOf("cursor:sess_02" to "Fix the auth flow"), owner.sessionTitles.value)
+        assertEquals(rowsBefore, owner.snapshot.value.transcript.rows)
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun sessionInfoFramesForOtherSessionsReachTheTitlesMap() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(holdOpen()),
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionInfo(
+                agentId = "cursor",
+                sessionId = "sess_01",
+                title = "Renamed elsewhere",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(mapOf("cursor:sess_01" to "Renamed elsewhere"), owner.sessionTitles.value)
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun rawSessionInfoUpdateSetsTitleWithoutTouchingTranscript() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(holdOpen()),
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("opencode", "ses_02")
+        advanceUntilIdle()
+
+        val rowsBefore = owner.snapshot.value.transcript.rows
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionUpdate(
+                agentId = "opencode",
+                sessionId = "ses_02",
+                update = JsonObject(
+                    mapOf(
+                        "sessionUpdate" to JsonPrimitive("session_info_update"),
+                        "title" to JsonPrimitive("Named by the agent"),
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(mapOf("opencode:ses_02" to "Named by the agent"), owner.sessionTitles.value)
+        assertEquals(rowsBefore, owner.snapshot.value.transcript.rows)
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionUpdate(
+                agentId = "opencode",
+                sessionId = "ses_02",
+                update = JsonObject(
+                    mapOf(
+                        "sessionUpdate" to JsonPrimitive("session_info_update"),
+                        "_meta" to JsonObject(mapOf("marker" to JsonPrimitive("retry"))),
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(mapOf("opencode:ses_02" to "Named by the agent"), owner.sessionTitles.value)
+        assertEquals(rowsBefore, owner.snapshot.value.transcript.rows)
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun nullTitleClearsTheRememberedTitle() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(holdOpen()),
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionInfo(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                title = "First",
+            ),
+        )
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionInfo(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                title = null,
+            ),
+        )
+        advanceUntilIdle()
+
+        assertTrue(owner.sessionTitles.value.isEmpty())
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun forgetClearsTheRememberedTitle() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(holdOpen()),
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionInfo(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                title = "First",
+            ),
+        )
+        advanceUntilIdle()
+        owner.forget("cursor", "sess_02")
+
+        assertTrue(owner.sessionTitles.value.isEmpty())
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun promptCompleteEmitsAPromptCompletionForTheWatchedSession() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(holdOpen()),
+        )
+        val owner = owner(factory)
+        val completions = mutableListOf<Unit>()
+        val collection = launch(start = CoroutineStart.UNDISPATCHED) {
+            owner.promptCompletions.collect { completions += it }
+        }
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.Subscribed(agentId = "cursor", sessionId = "sess_02"),
+        )
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.PromptComplete(agentId = "cursor", sessionId = "sess_02"),
+        )
+        advanceUntilIdle()
+
+        assertEquals(1, completions.size)
+        collection.cancel()
         owner.disconnect()
         advanceUntilIdle()
     }

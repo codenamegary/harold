@@ -190,4 +190,40 @@ describe("GET /v1/sessions catalog list", () => {
       }),
     ])
   })
+
+  test("GET /v1/sessions overlays the latest pushed title", async () => {
+    const whichFn: WhichFn = (binaryName) =>
+      binaryName === "agent" ? "/usr/local/bin/agent" : undefined
+    const { app, acpSupervisor, dataDir } = await bootTestApp({
+      whichFn,
+      fakeAcpOptions: {
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+        sessionNewSessionId: "listed-acp-title",
+        emitSessionInfoOnNew: true,
+      },
+    })
+    const { workspaceDir } = await seedWorkspace(app, dataDir)
+    await enableAgent(app, "cursor", whichFn)
+    await seedBoundSession({
+      acpSupervisor,
+      workspacePath: workspaceDir,
+      agentId: "cursor",
+    })
+
+    const listResponse = await app.inject({
+      headers: authHeaders(app),
+      method: "GET",
+      url: "/v1/sessions",
+    })
+    const listed = SessionCollectionSchema.parse(JSON.parse(listResponse.body))
+
+    expect(listResponse.statusCode).toBe(200)
+    expect(listed.items).toEqual([
+      expect.objectContaining({
+        agentId: "cursor",
+        sessionId: "listed-acp-title",
+        title: "Renamed by the fake agent",
+      }),
+    ])
+  })
 })

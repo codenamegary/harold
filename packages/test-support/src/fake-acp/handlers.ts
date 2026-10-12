@@ -32,7 +32,11 @@ const emptyHandlerExtras = () => ({
   deferredNotifications: [] as HandlerResult["deferredNotifications"],
 })
 
-const jsonRpcError = (id: JsonRpcRequest["id"], code: number, message: string): JsonRpcResponse => ({
+const jsonRpcError = (
+  id: JsonRpcRequest["id"],
+  code: number,
+  message: string,
+): JsonRpcResponse => ({
   jsonrpc: "2.0",
   id,
   error: { code, message },
@@ -58,6 +62,18 @@ const availableCommandsUpdate = (sessionId: string): JsonRpcNotification => ({
           input: { hint: "query" },
         },
       ],
+    },
+  },
+})
+
+const sessionInfoUpdate = (sessionId: string): JsonRpcNotification => ({
+  jsonrpc: "2.0",
+  method: "session/update",
+  params: {
+    sessionId,
+    update: {
+      sessionUpdate: "session_info_update",
+      title: "Renamed by the fake agent",
     },
   },
 })
@@ -179,14 +195,16 @@ const cursorAskQuestionRequest = (sessionId: string): JsonRpcRequest => ({
   params: {
     sessionId,
     toolCallId: "call-ask",
-    questions: [{
-      id: "q1",
-      prompt: "Pick one",
-      options: [
-        { id: "opt-a", label: "Option A" },
-        { id: "opt-b", label: "Option B" },
-      ],
-    }],
+    questions: [
+      {
+        id: "q1",
+        prompt: "Pick one",
+        options: [
+          { id: "opt-a", label: "Option A" },
+          { id: "opt-b", label: "Option B" },
+        ],
+      },
+    ],
   },
 })
 
@@ -281,9 +299,10 @@ const handleSessionNew = (
       ...(config.configOptions.length > 0 ? { configOptions: config.configOptions } : {}),
     }),
     outbound: outboundAfterSessionNew(sessionId, config),
-    notifications: config.emitAvailableCommandsOnNew
-      ? [availableCommandsUpdate(sessionId)]
-      : [],
+    notifications: [
+      ...(config.emitAvailableCommandsOnNew ? [availableCommandsUpdate(sessionId)] : []),
+      ...(config.emitSessionInfoOnNew ? [sessionInfoUpdate(sessionId)] : []),
+    ],
     deferredNotifications: [],
   }
 }
@@ -393,11 +412,7 @@ const handleSessionSetConfigOption = (
     }
   }
 
-  const outcome = configState.apply(
-    params.sessionId,
-    params.configId,
-    params.value ?? "",
-  )
+  const outcome = configState.apply(params.sessionId, params.configId, params.value ?? "")
   if (outcome === "unknown-session") {
     return {
       response: jsonRpcError(request.id, -32002, "session not found"),
@@ -502,8 +517,7 @@ const requestHandlers: Record<string, RequestHandler> = {
   authenticate: (request) => handleAuthenticate(request),
   "session/new": (request, config, promptState, configState) =>
     handleSessionNew(request, config, promptState, configState),
-  "session/list": (request, config, promptState) =>
-    handleSessionList(request, config, promptState),
+  "session/list": (request, config, promptState) => handleSessionList(request, config, promptState),
   "session/load": (request, config, _promptState, configState) =>
     handleSessionLoad(request, config, configState),
   "session/close": (request, config, promptState) =>

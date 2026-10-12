@@ -147,6 +147,14 @@ class ChatViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            sessionOwner.sessionTitles.collect(::applySessionTitles)
+        }
+
+        viewModelScope.launch {
+            sessionOwner.promptCompletions.collect { pullSelectedSessionTitle() }
+        }
+
+        viewModelScope.launch {
             configWriter.state.collect { config ->
                 _uiState.update { current -> current.copy(composerConfig = config) }
             }
@@ -1090,6 +1098,46 @@ class ChatViewModel @Inject constructor(
         lastAuthRequired = snapshot.authRequired
     }
 
+    private fun applySessionTitles(titles: Map<String, String>) {
+        if (titles.isEmpty()) {
+            return
+        }
+        val renamed = catalog.map { row ->
+            titles[row.id]?.let { title -> row.copy(name = title) } ?: row
+        }
+        catalog = renamed
+        _uiState.update { current ->
+            current.copy(
+                sessions = renamed,
+                selectedSession = current.selectedSession?.let { row ->
+                    titles[row.id]?.let { title -> row.copy(name = title) } ?: row
+                },
+            )
+        }
+        publishRecentSessions()
+        syncActiveSessionsFromUiState()
+    }
+
+    /**
+     * Session/list is the only title source for agents that never push
+     * session_info_update. Pull it once when a turn completes and the header
+     * still shows the raw ACP session id.
+     */
+    private suspend fun pullSelectedSessionTitle() {
+        val selected = _uiState.value.selectedSession ?: return
+        if (selected.sessionId.isEmpty() || selected.name != selected.sessionId) {
+            return
+        }
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+
+        userRepository.listSessions(paired.serverOrigin).onSuccess { collection ->
+            val titles = collection.items.associate { session ->
+                catalogSessionKey(session.agentId, session.sessionId) to session.title
+            }
+            applySessionTitles(titles)
+        }
+    }
+
     private suspend fun openSessionFromNotification(sessionId: String) {
         if (_uiState.value.selectedSession?.sessionId == sessionId) {
             return
@@ -1122,9 +1170,10 @@ class ChatViewModel @Inject constructor(
 
         sessionsResult.fold(
             onSuccess = { collection ->
-                catalog = collection.items.map { session ->
-                    session.toSessionRow(workspaceByPath, agentLabels)
-                }
+                val pushedTitles = sessionOwner.sessionTitles.value
+                catalog = collection.items
+                    .map { session -> session.toSessionRow(workspaceByPath, agentLabels) }
+                    .map { row -> pushedTitles[row.id]?.let { title -> row.copy(name = title) } ?: row }
                 _uiState.update { current ->
                     current.copy(
                         sessions = catalog,

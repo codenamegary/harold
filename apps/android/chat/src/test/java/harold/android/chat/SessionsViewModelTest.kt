@@ -1,20 +1,33 @@
 package harold.android.chat
 
+import harold.android.contracts.AgentId
 import harold.android.contracts.AgentSettings
+import harold.android.contracts.AttachmentReference
+import harold.android.contracts.ConfigOption
 import harold.android.contracts.Session
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceState
+import harold.android.live.SessionOwner
+import harold.android.live.SessionSnapshot
 import harold.android.navigation.Chat
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.session.PairedState
+import harold.android.stream.ConnectionState
 import harold.android.testing.FakeSessionGateway
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.serialization.json.JsonElement
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -116,16 +129,38 @@ class SessionsViewModelTest {
         assertTrue(commands.emitted.isEmpty())
     }
 
+    @Test
+    fun pushedTitlesRenameRowsInTheList() = runTest {
+        val sessionOwner = SessionsFakeSessionOwner()
+        val viewModel = viewModel(sessionOwner = sessionOwner)
+
+        sessionOwner.publishTitles(mapOf("cursor:sess_01" to "Renamed by the agent"))
+
+        assertEquals("Renamed by the agent", viewModel.uiState.value.sessions.single().name)
+    }
+
+    @Test
+    fun pushedTitlesForOtherSessionsLeaveRowsAlone() = runTest {
+        val sessionOwner = SessionsFakeSessionOwner()
+        val viewModel = viewModel(sessionOwner = sessionOwner)
+
+        sessionOwner.publishTitles(mapOf("cursor:sess_99" to "Elsewhere"))
+
+        assertEquals("Alpha", viewModel.uiState.value.sessions.single().name)
+    }
+
     private fun viewModel(
         sessions: List<Session> = listOf(session("sess_01", "Alpha", "2026-08-03T00:00:00.000Z")),
         commands: RecordingSessionCommands = RecordingSessionCommands(),
         navigator: harold.android.navigation.Navigator = testNavigator(),
         repository: RouteUserRepository = repository(sessions),
+        sessionOwner: SessionsFakeSessionOwner = SessionsFakeSessionOwner(),
     ): SessionsViewModel = SessionsViewModel(
         sessionGateway = FakeSessionGateway(PAIRED),
         userRepository = repository,
         sessionCommands = commands,
         navigator = navigator,
+        sessionOwner = sessionOwner,
     )
 
     private fun repository(
@@ -164,4 +199,48 @@ class SessionsViewModelTest {
     private companion object {
         val PAIRED = PairedState.Paired("http://127.0.0.1:8787", "device_01", "Pixel")
     }
+}
+
+private class SessionsFakeSessionOwner : SessionOwner {
+    private val _sessionTitles = MutableStateFlow<Map<String, String>>(emptyMap())
+    override val sessionTitles: StateFlow<Map<String, String>> = _sessionTitles.asStateFlow()
+
+    override val connectionState: StateFlow<ConnectionState> =
+        MutableStateFlow(ConnectionState()).asStateFlow()
+
+    override val snapshot: StateFlow<SessionSnapshot> =
+        MutableStateFlow(SessionSnapshot()).asStateFlow()
+
+    override val promptCompletions: Flow<Unit> = MutableSharedFlow<Unit>().asSharedFlow()
+
+    fun publishTitles(titles: Map<String, String>) {
+        _sessionTitles.value = titles
+    }
+
+    override fun connect(serverOrigin: String) = Unit
+
+    override fun retry() = Unit
+
+    override fun disconnect() = Unit
+
+    override fun watch(agentId: AgentId?, sessionId: String?) = Unit
+
+    override fun prompt(
+        text: String,
+        attachments: List<AttachmentReference>,
+    ) = Unit
+
+    override fun cancel() = Unit
+
+    override fun replyPermission(requestId: String, optionId: String) = Unit
+
+    override fun replyExtension(requestId: String, result: JsonElement) = Unit
+
+    override fun rememberConfig(
+        agentId: AgentId,
+        sessionId: String,
+        configOptions: List<ConfigOption>,
+    ) = Unit
+
+    override fun forget(agentId: AgentId, sessionId: String) = Unit
 }

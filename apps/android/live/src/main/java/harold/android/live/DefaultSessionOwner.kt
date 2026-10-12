@@ -3,11 +3,13 @@ package harold.android.live
 import harold.android.contracts.AgentId
 import harold.android.contracts.AttachmentReference
 import harold.android.contracts.ConfigOption
+import harold.android.contracts.ParsedSessionInfoUpdate
 import harold.android.contracts.SessionStreamClientMessage
 import harold.android.contracts.SessionStreamServerMessage
 import harold.android.contracts.catalogSessionKey
 import harold.android.contracts.parseAvailableCommands
 import harold.android.contracts.parseConfigOptions
+import harold.android.contracts.parseSessionInfoUpdate
 import harold.android.di.ApplicationScope
 import harold.android.live.composer.AvailableCommandsCatalog
 import harold.android.live.composer.SessionConfigCatalog
@@ -24,11 +26,15 @@ import javax.inject.Inject
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -51,6 +57,15 @@ class DefaultSessionOwner @Inject constructor(
 
     private val _snapshot = MutableStateFlow(SessionSnapshot())
     override val snapshot: StateFlow<SessionSnapshot> = _snapshot.asStateFlow()
+
+    private val _sessionTitles = MutableStateFlow<Map<String, String>>(emptyMap())
+    override val sessionTitles: StateFlow<Map<String, String>> = _sessionTitles.asStateFlow()
+
+    private val _promptCompletions = MutableSharedFlow<Unit>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    override val promptCompletions: Flow<Unit> = _promptCompletions.asSharedFlow()
 
     @Volatile
     private var inbox = Channel<SessionStreamServerMessage>(Channel.UNLIMITED)
@@ -109,6 +124,7 @@ class DefaultSessionOwner @Inject constructor(
             subscribedKey = null
             commandsCatalog.clear()
             configCatalog.clear()
+            _sessionTitles.value = emptyMap()
             _snapshot.value = SessionSnapshot()
         }
         _connectionState.update { current -> current.copy(status = ConnectionStatus.Idle) }
@@ -230,6 +246,7 @@ class DefaultSessionOwner @Inject constructor(
         synchronized(lock) {
             commandsCatalog.forget(agentId, sessionId)
             configCatalog.forget(agentId, sessionId)
+            _sessionTitles.update { titles -> titles - catalogSessionKey(agentId, sessionId) }
             if (watchAgentId == agentId && watchSessionId == sessionId) {
                 _snapshot.update { current ->
                     current.copy(
@@ -306,6 +323,17 @@ class DefaultSessionOwner @Inject constructor(
                     if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
                         return
                     }
+                    val sessionInfo = parseSessionInfoUpdate(message.update)
+                    if (sessionInfo != null) {
+                        if (sessionInfo is ParsedSessionInfoUpdate.Title) {
+                            applySessionTitleLocked(
+                                message.agentId,
+                                message.sessionId,
+                                sessionInfo.title,
+                            )
+                        }
+                        return
+                    }
                     val commands = parseAvailableCommands(message.update)
                     if (commands != null) {
                         commandsCatalog.remember(message.agentId, message.sessionId, commands)
@@ -370,6 +398,7 @@ class DefaultSessionOwner @Inject constructor(
                     _snapshot.update { current ->
                         current.copy(transcript = applyPromptComplete(current.transcript))
                     }
+                    _promptCompletions.tryEmit(Unit)
                 }
                 is SessionStreamServerMessage.Cancelled -> {
                     if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
@@ -438,6 +467,11 @@ class DefaultSessionOwner @Inject constructor(
                         )
                     }
                 }
+                is SessionStreamServerMessage.SessionInfo -> {
+                    // Renames for any session of the watched agent reach the
+                    // titles map, even when a different session is watched.
+                    applySessionTitleLocked(message.agentId, message.sessionId, message.title)
+                }
             }
         }
     }
@@ -498,6 +532,7 @@ class DefaultSessionOwner @Inject constructor(
         if (clearCatalog) {
             commandsCatalog.clear()
             configCatalog.clear()
+            _sessionTitles.value = emptyMap()
         }
         _snapshot.value = SessionSnapshot()
     }
@@ -517,6 +552,15 @@ class DefaultSessionOwner @Inject constructor(
 
     private fun belongsToWatchLocked(agentId: AgentId, sessionId: String): Boolean =
         watchAgentId == agentId && watchSessionId == sessionId
+
+    private fun applySessionTitleLocked(agentId: AgentId, sessionId: String, title: String?) {
+        val key = catalogSessionKey(agentId, sessionId)
+        val current = _sessionTitles.value
+        val next = if (title == null) current - key else current + (key to title)
+        if (next != current) {
+            _sessionTitles.value = next
+        }
+    }
 
     private fun nextTurnIdLocked(): String {
         turnSerial += 1

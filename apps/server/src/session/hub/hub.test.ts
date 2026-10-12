@@ -558,3 +558,157 @@ describe("session hub config options", () => {
     expect(b.messages.filter((m) => m.type === "session_config")).toHaveLength(0)
   })
 })
+
+describe("session hub session info", () => {
+  const rename = (title: string | null) => ({
+    sessionUpdate: "session_info_update",
+    title,
+  })
+
+  test("caches a pushed title with no subscriber and snapshots it to the joiner before subscribed", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/proj" })
+
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      promptSession: async () => ({ ok: true }),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    hub.handleSessionUpdate({
+      agentId: "cursor",
+      sessionId: "s1",
+      update: rename("Fix the auth flow"),
+    })
+
+    const a = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    const info = a.messages.filter((m) => m.type === "session_info")
+    expect(info).toEqual([
+      {
+        type: "session_info",
+        agentId: "cursor",
+        sessionId: "s1",
+        title: "Fix the auth flow",
+      },
+    ])
+    const subscribedIndex = a.messages.findIndex((m) => m.type === "subscribed")
+    const infoIndex = a.messages.findIndex((m) => m.type === "session_info")
+    expect(infoIndex).toBeGreaterThanOrEqual(0)
+    expect(infoIndex).toBeLessThan(subscribedIndex)
+  })
+
+  test("live renames fan out to every subscriber of the agent, not other agents", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+    cwdCache.remember({ agentId: "cursor", sessionId: "s2", cwd: "/tmp/b" })
+    cwdCache.remember({ agentId: "opencode", sessionId: "s1", cwd: "/tmp/c" })
+
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      promptSession: async () => ({ ok: true }),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const a = collectSink()
+    const b = collectSink()
+    const c = collectSink()
+    const idle = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    hub.addSubscriber({ id: "b", sink: b.sink, sessionKey: null })
+    hub.addSubscriber({ id: "c", sink: c.sink, sessionKey: null })
+    hub.addSubscriber({ id: "idle", sink: idle.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+    await hub.subscribe({ subscriberId: "b", agentId: "cursor", sessionId: "s2" })
+    await hub.subscribe({ subscriberId: "c", agentId: "opencode", sessionId: "s1" })
+
+    hub.handleSessionUpdate({
+      agentId: "cursor",
+      sessionId: "s1",
+      update: rename("Renamed by the agent"),
+    })
+
+    expect(a.messages.filter((m) => m.type === "session_info")).toEqual([
+      {
+        type: "session_info",
+        agentId: "cursor",
+        sessionId: "s1",
+        title: "Renamed by the agent",
+      },
+    ])
+    expect(b.messages.filter((m) => m.type === "session_info")).toHaveLength(1)
+    expect(c.messages.filter((m) => m.type === "session_info")).toHaveLength(0)
+    expect(idle.messages.filter((m) => m.type === "session_info")).toHaveLength(0)
+  })
+
+  test("repeated titles are not rebroadcast and marker updates are ignored", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      promptSession: async () => ({ ok: true }),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const a = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    hub.handleSessionUpdate({
+      agentId: "cursor",
+      sessionId: "s1",
+      update: rename("Steady title"),
+    })
+    hub.handleSessionUpdate({
+      agentId: "cursor",
+      sessionId: "s1",
+      update: rename("Steady title"),
+    })
+    hub.handleSessionUpdate({
+      agentId: "cursor",
+      sessionId: "s1",
+      update: { sessionUpdate: "session_info_update", _meta: { opencode: { marker: "retry" } } },
+    })
+
+    expect(a.messages.filter((m) => m.type === "session_info")).toHaveLength(1)
+  })
+
+  test("a null title clears the cache and broadcasts one clear", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      promptSession: async () => ({ ok: true }),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const a = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    hub.handleSessionUpdate({ agentId: "cursor", sessionId: "s1", update: rename(null) })
+    expect(a.messages.filter((m) => m.type === "session_info")).toHaveLength(0)
+
+    hub.handleSessionUpdate({ agentId: "cursor", sessionId: "s1", update: rename("First") })
+    hub.handleSessionUpdate({ agentId: "cursor", sessionId: "s1", update: rename(null) })
+    hub.handleSessionUpdate({ agentId: "cursor", sessionId: "s1", update: rename(null) })
+
+    expect(a.messages.filter((m) => m.type === "session_info")).toEqual([
+      { type: "session_info", agentId: "cursor", sessionId: "s1", title: "First" },
+      { type: "session_info", agentId: "cursor", sessionId: "s1", title: null },
+    ])
+
+    const b = collectSink()
+    hub.addSubscriber({ id: "b", sink: b.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "b", agentId: "cursor", sessionId: "s1" })
+    expect(b.messages.filter((m) => m.type === "session_info")).toHaveLength(0)
+  })
+})

@@ -28,6 +28,7 @@ export type FakeAcpConfig = FakeAcpCapabilities & {
   emitToolUpdatesOnPrompt: boolean
   emitLoadReplayUpdates: boolean
   emitAvailableCommandsOnNew: boolean
+  emitSessionInfoOnNew: boolean
   promptCompletionDelayMs: number | undefined
   fsReadPath: string
   fsWritePath: string
@@ -95,13 +96,16 @@ export const readFakeAcpConfig = (
     env.FAKE_ACP_SESSION_NEW_FAILS_WITH_AUTH_REQUIRED,
     false,
   ),
-  promptFailsWithAuthRequired: parseBooleanEnv(
-    env.FAKE_ACP_PROMPT_FAILS_WITH_AUTH_REQUIRED,
+  promptFailsWithAuthRequired: parseBooleanEnv(env.FAKE_ACP_PROMPT_FAILS_WITH_AUTH_REQUIRED, false),
+  emitPermissionRequest: parseBooleanEnv(env.FAKE_ACP_EMIT_PERMISSION_REQUEST, false),
+  emitPermissionRequestNoAllow: parseBooleanEnv(
+    env.FAKE_ACP_EMIT_PERMISSION_REQUEST_NO_ALLOW,
     false,
   ),
-  emitPermissionRequest: parseBooleanEnv(env.FAKE_ACP_EMIT_PERMISSION_REQUEST, false),
-  emitPermissionRequestNoAllow: parseBooleanEnv(env.FAKE_ACP_EMIT_PERMISSION_REQUEST_NO_ALLOW, false),
-  emitPermissionRequestOnPrompt: parseBooleanEnv(env.FAKE_ACP_EMIT_PERMISSION_REQUEST_ON_PROMPT, false),
+  emitPermissionRequestOnPrompt: parseBooleanEnv(
+    env.FAKE_ACP_EMIT_PERMISSION_REQUEST_ON_PROMPT,
+    false,
+  ),
   emitFsReadRequest: parseBooleanEnv(env.FAKE_ACP_EMIT_FS_READ_REQUEST, false),
   emitFsWriteRequest: parseBooleanEnv(env.FAKE_ACP_EMIT_FS_WRITE_REQUEST, false),
   emitTerminalCreateRequest: parseBooleanEnv(env.FAKE_ACP_EMIT_TERMINAL_CREATE_REQUEST, false),
@@ -111,10 +115,8 @@ export const readFakeAcpConfig = (
   emitSessionUpdatesOnPrompt: parseBooleanEnv(env.FAKE_ACP_EMIT_SESSION_UPDATES_ON_PROMPT, false),
   emitToolUpdatesOnPrompt: parseBooleanEnv(env.FAKE_ACP_EMIT_TOOL_UPDATES_ON_PROMPT, false),
   emitLoadReplayUpdates: parseBooleanEnv(env.FAKE_ACP_EMIT_LOAD_REPLAY_UPDATES, false),
-  emitAvailableCommandsOnNew: parseBooleanEnv(
-    env.FAKE_ACP_EMIT_AVAILABLE_COMMANDS_ON_NEW,
-    false,
-  ),
+  emitAvailableCommandsOnNew: parseBooleanEnv(env.FAKE_ACP_EMIT_AVAILABLE_COMMANDS_ON_NEW, false),
+  emitSessionInfoOnNew: parseBooleanEnv(env.FAKE_ACP_EMIT_SESSION_INFO_ON_NEW, false),
   promptCompletionDelayMs: parseOptionalNonNegativeIntEnv(env.FAKE_ACP_PROMPT_COMPLETION_DELAY_MS),
   fsReadPath: readEnvString(env, "FAKE_ACP_FS_READ_PATH", "readme.txt"),
   fsWritePath: readEnvString(env, "FAKE_ACP_FS_WRITE_PATH", "output.txt"),
@@ -145,6 +147,7 @@ export type FakeAcpEnvOptions = {
   emitToolUpdatesOnPrompt?: boolean
   emitLoadReplayUpdates?: boolean
   emitAvailableCommandsOnNew?: boolean
+  emitSessionInfoOnNew?: boolean
   promptCompletionDelayMs?: number
   fsReadPath?: string
   fsWritePath?: string
@@ -185,21 +188,31 @@ export const fakeAcpEnvFromCapabilities = (options: FakeAcpEnvOptions): Record<s
     options.promptFailsWithAuthRequired,
   ),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_PERMISSION_REQUEST", options.emitPermissionRequest),
-  ...optionalBooleanEnv("FAKE_ACP_EMIT_PERMISSION_REQUEST_NO_ALLOW", options.emitPermissionRequestNoAllow),
-  ...optionalBooleanEnv("FAKE_ACP_EMIT_PERMISSION_REQUEST_ON_PROMPT", options.emitPermissionRequestOnPrompt),
+  ...optionalBooleanEnv(
+    "FAKE_ACP_EMIT_PERMISSION_REQUEST_NO_ALLOW",
+    options.emitPermissionRequestNoAllow,
+  ),
+  ...optionalBooleanEnv(
+    "FAKE_ACP_EMIT_PERMISSION_REQUEST_ON_PROMPT",
+    options.emitPermissionRequestOnPrompt,
+  ),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_FS_READ_REQUEST", options.emitFsReadRequest),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_FS_WRITE_REQUEST", options.emitFsWriteRequest),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_TERMINAL_CREATE_REQUEST", options.emitTerminalCreateRequest),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_CURSOR_ASK_QUESTION", options.emitCursorAskQuestion),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_CURSOR_CREATE_PLAN", options.emitCursorCreatePlan),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_UNKNOWN_EXTENSION", options.emitUnknownExtension),
-  ...optionalBooleanEnv("FAKE_ACP_EMIT_SESSION_UPDATES_ON_PROMPT", options.emitSessionUpdatesOnPrompt),
+  ...optionalBooleanEnv(
+    "FAKE_ACP_EMIT_SESSION_UPDATES_ON_PROMPT",
+    options.emitSessionUpdatesOnPrompt,
+  ),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_TOOL_UPDATES_ON_PROMPT", options.emitToolUpdatesOnPrompt),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_LOAD_REPLAY_UPDATES", options.emitLoadReplayUpdates),
   ...optionalBooleanEnv(
     "FAKE_ACP_EMIT_AVAILABLE_COMMANDS_ON_NEW",
     options.emitAvailableCommandsOnNew,
   ),
+  ...optionalBooleanEnv("FAKE_ACP_EMIT_SESSION_INFO_ON_NEW", options.emitSessionInfoOnNew),
   ...optionalNumberEnv("FAKE_ACP_PROMPT_COMPLETION_DELAY_MS", options.promptCompletionDelayMs),
   ...stringEnv("FAKE_ACP_FS_READ_PATH", options.fsReadPath),
   ...stringEnv("FAKE_ACP_FS_WRITE_PATH", options.fsWritePath),

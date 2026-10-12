@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { readFakeAcpConfig, fakeAcpEnvFromCapabilities } from "./config"
 import { createFakeAcpConfigState } from "./config.state"
-import {
-  completePromptIfActive,
-  handleJsonRpcNotification,
-  handleJsonRpcRequest,
-} from "./handlers"
+import { completePromptIfActive, handleJsonRpcNotification, handleJsonRpcRequest } from "./handlers"
 import { createFakeAcpPromptState } from "./prompt-state"
 import { parseJsonRpcLine, serializeJsonRpcMessage } from "./protocol"
 
@@ -13,10 +9,10 @@ const createPromptState = () => createFakeAcpPromptState()
 
 const sessionIdFrom = (response: { result?: unknown } | undefined): string => {
   if (
-    typeof response?.result !== "object"
-    || response.result === null
-    || !("sessionId" in response.result)
-    || typeof response.result.sessionId !== "string"
+    typeof response?.result !== "object" ||
+    response.result === null ||
+    !("sessionId" in response.result) ||
+    typeof response.result.sessionId !== "string"
   ) {
     throw new Error("expected sessionId in response")
   }
@@ -25,10 +21,10 @@ const sessionIdFrom = (response: { result?: unknown } | undefined): string => {
 
 const notificationSessionId = (params: unknown): string | undefined => {
   if (
-    typeof params !== "object"
-    || params === null
-    || !("sessionId" in params)
-    || typeof params.sessionId !== "string"
+    typeof params !== "object" ||
+    params === null ||
+    !("sessionId" in params) ||
+    typeof params.sessionId !== "string"
   ) {
     return undefined
   }
@@ -230,6 +226,38 @@ describe("fake ACP protocol", () => {
                 input: { hint: "query" },
               },
             ],
+          },
+        },
+      },
+    ])
+  })
+
+  test("session/new emits session_info_update when enabled", () => {
+    const config = readFakeAcpConfig({
+      FAKE_ACP_SESSION_NEW_SESSION_ID: "session-info-1",
+      FAKE_ACP_EMIT_SESSION_INFO_ON_NEW: "true",
+    })
+
+    const { notifications } = handleJsonRpcRequest(
+      {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "session/new",
+        params: { cwd: "/tmp", mcpServers: [] },
+      },
+      config,
+      createPromptState(),
+    )
+
+    expect(notifications).toEqual([
+      {
+        jsonrpc: "2.0",
+        method: "session/update",
+        params: {
+          sessionId: "session-info-1",
+          update: {
+            sessionUpdate: "session_info_update",
+            title: "Renamed by the fake agent",
           },
         },
       },
@@ -562,12 +590,16 @@ describe("fake ACP protocol", () => {
     expect(second.notifications[0]?.params).toMatchObject({ sessionId: "session-b" })
     expect(first.deferredNotifications).toHaveLength(2)
     expect(second.deferredNotifications).toHaveLength(2)
-    expect(first.deferredNotifications.every((item) =>
-      notificationSessionId(item.notification.params) === "session-a"
-    )).toBe(true)
-    expect(second.deferredNotifications.every((item) =>
-      notificationSessionId(item.notification.params) === "session-b"
-    )).toBe(true)
+    expect(
+      first.deferredNotifications.every(
+        (item) => notificationSessionId(item.notification.params) === "session-a",
+      ),
+    ).toBe(true)
+    expect(
+      second.deferredNotifications.every(
+        (item) => notificationSessionId(item.notification.params) === "session-b",
+      ),
+    ).toBe(true)
     expect(first.promptCompletionDelayMs).toBe(60)
     expect(second.promptCompletionDelayMs).toBe(60)
 
@@ -697,9 +729,7 @@ describe("fake ACP config options", () => {
     },
   ]
 
-  const configWith = (
-    env: Record<string, string> = {},
-  ) =>
+  const configWith = (env: Record<string, string> = {}) =>
     readFakeAcpConfig({
       FAKE_ACP_LOAD_SESSION: "true",
       FAKE_ACP_SESSION_NEW_SESSION_ID: "fake-session-new",
@@ -707,11 +737,7 @@ describe("fake ACP config options", () => {
       ...env,
     })
 
-  const request = (
-    method: string,
-    params: unknown,
-    options: { withSession?: boolean } = {},
-  ) => {
+  const request = (method: string, params: unknown, options: { withSession?: boolean } = {}) => {
     const promptState = createPromptState()
     const configState = createFakeAcpConfigState(configOptions)
     if (options.withSession === true) {
