@@ -11,6 +11,7 @@ type Trigger = Readonly<{
 type Step = Readonly<{
   uses?: string
   run?: string
+  env?: Readonly<Record<string, string | undefined>>
   with?: Readonly<Record<string, string | undefined>>
 }>
 
@@ -119,5 +120,11 @@ describe("ci.yml", () => {
     expect(filters.smoke).toEqual(
       expect.arrayContaining(["apps/server/**", "packages/contracts/**", "bun.lock"]),
     )
+  })
+
+  test("smoke pins OpenCode free models to the zen endpoint", async () => {
+    const smoke = (await loadCi()).jobs?.smoke
+    const step = (smoke?.steps ?? []).find((s) => s.run === "bun run test:smoke")
+    expect(step?.env?.OPENCODE_CONFIG_CONTENT).toContain("https://opencode.ai/zen/v1")
   })
 })
