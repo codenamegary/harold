@@ -10,6 +10,7 @@ class AndroidLibraryConventionPlugin : Plugin<Project> {
             extensions.configure<LibraryExtension> {
                 configureHaroldAndroid()
             }
+            checkModuleBoundaries()
         }
     }
 }

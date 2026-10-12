@@ -22,7 +22,11 @@ const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
   authorization: `Bearer ${app.deviceCredential.credential}`,
 })
 
-import { resolveOpenCodePath, smokeRunRequested } from "../test-support/smoke.gate"
+import {
+  openCodeSmokeConfigContent,
+  resolveOpenCodePath,
+  smokeRunRequested,
+} from "../test-support/smoke.gate"
 
 const OPENCODE_SMOKE_TIMEOUT_MS = 180_000
 const SUBSCRIBE_TIMEOUT_MS = 30_000
@@ -72,10 +76,7 @@ describe("opencode ACP smoke", () => {
       await mkdir(workspaceDir)
 
       const previousConfigContent = process.env.OPENCODE_CONFIG_CONTENT
-      process.env.OPENCODE_CONFIG_CONTENT = JSON.stringify({
-        $schema: "https://opencode.ai/config.json",
-        model: FREE_MODEL,
-      })
+      process.env.OPENCODE_CONFIG_CONTENT = openCodeSmokeConfigContent(FREE_MODEL)
       if (process.env.OPENCODE_API_KEY === "") {
         delete process.env.OPENCODE_API_KEY
       }

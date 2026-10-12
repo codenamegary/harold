@@ -1,0 +1,15 @@
+<resources>
+    <string name="pairing_title">Pair device</string>
+    <string name="pairing_back_content_description">Go back from pairing</string>
+    <string name="pairing_manual_entry">Enter manually</string>
+    <string name="pairing_manual_entry_content_description">Enter pairing details manually</string>
+    <string name="pairing_use_scanner">Use scanner</string>
+    <string name="pairing_use_scanner_content_description">Scan pairing QR code</string>
+    <string name="pairing_scanner_content_description">QR code scanner for pairing</string>
+    <string name="pairing_endpoint_label">Harold endpoint</string>
+    <string name="pairing_code_label">Pairing code</string>
+    <string name="pairing_submit">Claim pairing code</string>
+    <string name="pairing_submit_content_description">Claim pairing code</string>
+    <string name="pairing_claiming">Claiming pairing code…</string>
+    <string name="pairing_camera_permission_required">Camera permission is required to scan pairing QR codes.</string>
+</resources>

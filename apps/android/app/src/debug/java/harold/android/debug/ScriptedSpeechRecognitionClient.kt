@@ -2,8 +2,8 @@ package harold.android.debug
 
 import android.os.Handler
 import android.os.Looper
-import harold.android.chat.SpeechRecognitionCallbacks
-import harold.android.chat.SpeechRecognitionClient
+import harold.android.voice.SpeechRecognitionCallbacks
+import harold.android.voice.SpeechRecognitionClient
 
 /** One scripted recognizer event, fired [atMs] after the session starts. */
 sealed interface ScriptedSpeech {

@@ -3,13 +3,14 @@ import org.gradle.api.Project
 
 /**
  * Feature modules are Compose Android libraries.
- * The modules story adds the rule that one feature cannot depend on another.
+ * Only the app may depend on a feature. See [checkModuleBoundaries].
  */
 class AndroidFeatureConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) {
         with(target) {
             pluginManager.apply("harold.android.library")
             pluginManager.apply("harold.android.compose")
+            markAsFeature()
         }
     }
 }

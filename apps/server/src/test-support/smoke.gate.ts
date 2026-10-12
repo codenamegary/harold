@@ -29,6 +29,19 @@ export const resolveCursorAgentPath = (): string | undefined => {
   }
 }
 
+export const OPENCODE_ZEN_BASE_URL = "https://opencode.ai/zen/v1"
+
+export const openCodeSmokeConfigContent = (model: string): string =>
+  JSON.stringify({
+    $schema: "https://opencode.ai/config.json",
+    model,
+    provider: {
+      opencode: {
+        options: { baseURL: OPENCODE_ZEN_BASE_URL },
+      },
+    },
+  })
+
 export const resolveOpenCodePath = (): string | undefined => {
   try {
     return execSync("which opencode", { encoding: "utf8" }).trim()

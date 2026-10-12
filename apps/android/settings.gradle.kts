@@ -16,4 +16,18 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "harold-android"
-include(":app")
+include(
+    ":app",
+    ":navigation",
+    ":contracts",
+    ":api",
+    ":auth",
+    ":live",
+    ":voice",
+    ":design",
+    ":testing",
+    ":pairing",
+    ":chat",
+    ":workspaces",
+    ":shell",
+)

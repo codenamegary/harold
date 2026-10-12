@@ -8,7 +8,9 @@ import androidx.activity.enableEdgeToEdge
 import dagger.hilt.android.AndroidEntryPoint
 import harold.android.foreground.EXTRA_OPEN_SESSION_ID
 import harold.android.foreground.OpenSessionRequests
+import harold.android.navigation.ActivityEffect
 import harold.android.navigation.AppNavHost
+import harold.android.navigation.FeatureEntryProvider
 import harold.android.navigation.Navigator
 import harold.android.pairing.PairingRequests
 import harold.android.ui.theme.HaroldTheme
@@ -19,6 +21,8 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var openSessionRequests: OpenSessionRequests
     @Inject lateinit var pairingRequests: PairingRequests
     @Inject lateinit var navigator: Navigator
+    @Inject lateinit var entryProviders: Set<@JvmSuppressWildcards FeatureEntryProvider>
+    @Inject lateinit var activityEffects: Set<@JvmSuppressWildcards ActivityEffect>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,7 +34,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             HaroldTheme {
-                AppNavHost(navigator = navigator)
+                AppNavHost(
+                    navigator = navigator,
+                    entryProviders = entryProviders,
+                    activityEffects = activityEffects,
+                )
             }
         }
     }
