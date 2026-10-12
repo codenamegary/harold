@@ -23,21 +23,18 @@ import harold.android.navigation.Navigator
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 import harold.android.user.UserRepository
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 
 internal class RecordingSessionCommands : SessionCommands {
     val emitted = mutableListOf<SessionCommand>()
-    private val flow = MutableSharedFlow<SessionCommand>(extraBufferCapacity = 16)
-    override val commands: SharedFlow<SessionCommand> = flow.asSharedFlow()
+    override val commands: Flow<SessionCommand> = emptyFlow()
 
     override fun emit(command: SessionCommand) {
         emitted += command
-        check(flow.tryEmit(command))
     }
 }
 
@@ -60,6 +57,7 @@ internal class RouteUserRepository(
         IllegalStateException("create was not stubbed"),
     ),
     private val authStatus: AgentAuthStatus = AgentAuthStatus.Authenticated,
+    private val deleteResult: Result<Unit> = Result.success(Unit),
 ) : UserRepository {
     val deleted = mutableListOf<String>()
 
@@ -98,7 +96,7 @@ internal class RouteUserRepository(
         sessionId: String,
     ): Result<Unit> {
         deleted += sessionId
-        return Result.success(Unit)
+        return deleteResult
     }
 
     override suspend fun getAgentAuth(
@@ -138,6 +136,6 @@ internal class RouteUserRepository(
 
 internal fun testNavigator(): Navigator {
     val navigator = Navigator()
-    navigator.chooseStart(harold.android.navigation.Chat)
+    navigator.start(paired = true)
     return navigator
 }

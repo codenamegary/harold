@@ -34,6 +34,7 @@ class PairingViewModelTest {
             pairingCoordinator = coordinator,
             payloadParser = DefaultPairingPayloadParser(),
             deviceNameProvider = { "Pixel Test" },
+            navigator = Navigator(),
         )
 
         viewModel.onQrScanned(
@@ -57,7 +58,7 @@ class PairingViewModelTest {
     @Test
     fun claimSuccessStaysClaimingAndOpensChat() = runTest {
         val navigator = Navigator()
-        navigator.chooseStart(harold.android.navigation.Shell)
+        navigator.start(paired = false)
         navigator.openPairing()
         val coordinator = FakePairingCoordinator(Result.success(Unit))
         val viewModel = PairingViewModel(
@@ -84,6 +85,7 @@ class PairingViewModelTest {
             pairingCoordinator = coordinator,
             payloadParser = DefaultPairingPayloadParser(),
             deviceNameProvider = { "Pixel Test" },
+            navigator = Navigator(),
         )
 
         viewModel.onQrScanned("not-a-pairing-uri")
@@ -100,6 +102,7 @@ class PairingViewModelTest {
             pairingCoordinator = coordinator,
             payloadParser = DefaultPairingPayloadParser(),
             deviceNameProvider = { "Pixel Test" },
+            navigator = Navigator(),
         )
 
         viewModel.onQrScanned("agent-server://pair?v=1&endpoint=http%3A%2F%2F10.0.2.2%3A3847&code=R7K-4MP")
@@ -122,6 +125,7 @@ class PairingViewModelTest {
             pairingCoordinator = coordinator,
             payloadParser = DefaultPairingPayloadParser(),
             deviceNameProvider = { "Pixel Test" },
+            navigator = Navigator(),
             pairingRequests = requests,
         )
 
@@ -146,6 +150,7 @@ class PairingViewModelTest {
             pairingCoordinator = coordinator,
             payloadParser = DefaultPairingPayloadParser(),
             deviceNameProvider = { "Pixel Test" },
+            navigator = Navigator(),
         )
 
         viewModel.showManualEntry()

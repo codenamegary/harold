@@ -2,28 +2,36 @@ package harold.android.navigation
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NavigatorTest {
     @Test
-    fun coldStartIsUnknownUntilARouteIsChosenOnce() {
+    fun coldStartIsEmptyUntilTheStartRouteIsChosenOnce() {
         val navigator = Navigator()
 
-        assertEquals(StartGate.Unknown, navigator.startGate)
-        assertEquals(emptyList<Any>(), navigator.backStack.toList())
+        assertTrue(navigator.backStack.isEmpty())
 
-        navigator.chooseStart(Chat)
-        navigator.chooseStart(Shell)
+        navigator.start(paired = true)
+        navigator.start(paired = false)
         navigator.openSessions()
 
-        assertEquals(StartGate.Paired, navigator.startGate)
         assertEquals(listOf(Chat, Sessions), navigator.backStack.toList())
+    }
+
+    @Test
+    fun unpairedStartShowsTheShell() {
+        val navigator = Navigator()
+
+        navigator.start(paired = false)
+
+        assertEquals(listOf(Shell), navigator.backStack.toList())
     }
 
     @Test
     fun pairingSuccessReplacesTheStackWithChat() {
         val navigator = Navigator()
-        navigator.chooseStart(Shell)
+        navigator.start(paired = false)
         navigator.openPairing()
 
         navigator.showChat()
@@ -36,9 +44,9 @@ class NavigatorTest {
         val navigator = Navigator()
 
         navigator.openPairing()
-        assertEquals(emptyList<Any>(), navigator.backStack.toList())
+        assertTrue(navigator.backStack.isEmpty())
 
-        navigator.chooseStart(Shell)
+        navigator.start(paired = false)
 
         assertEquals(listOf(Shell, Pairing), navigator.backStack.toList())
     }
@@ -46,24 +54,45 @@ class NavigatorTest {
     @Test
     fun backFromTheRootLeavesTheStackInPlace() {
         val navigator = Navigator()
-        navigator.chooseStart(Chat)
+        navigator.start(paired = true)
         navigator.openSessions()
 
-        assertEquals(true, navigator.goBack())
-        assertEquals(false, navigator.goBack())
+        assertTrue(navigator.goBack())
+        assertFalse(navigator.goBack())
         assertEquals(listOf(Chat), navigator.backStack.toList())
     }
 
     @Test
     fun showShellReplacesWhateverIsShowing() {
         val navigator = Navigator()
-        navigator.chooseStart(Chat)
+        navigator.start(paired = true)
         navigator.openWorkspaces()
 
         navigator.showShell()
 
-        assertEquals(StartGate.Paired, navigator.startGate)
         assertEquals(listOf(Shell), navigator.backStack.toList())
-        assertFalse(navigator.backStack.contains(Workspaces))
+    }
+
+    @Test
+    fun restoredStackSurvivesAndSkipsTheStartGate() {
+        val before = Navigator()
+        before.start(paired = true)
+        before.openSessions()
+        before.openCreateSession()
+
+        val after = Navigator()
+        after.restore(before.encode())
+        after.start(paired = false)
+
+        assertEquals(listOf(Chat, Sessions, CreateSession), after.backStack.toList())
+    }
+
+    @Test
+    fun unreadableSavedStackIsIgnored() {
+        val navigator = Navigator()
+
+        navigator.restore("not json")
+
+        assertTrue(navigator.backStack.isEmpty())
     }
 }

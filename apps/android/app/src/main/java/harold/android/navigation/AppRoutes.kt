@@ -4,22 +4,25 @@ import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
 
 @Serializable
-data object Shell : NavKey
+sealed interface AppRoute : NavKey
 
 @Serializable
-data object Pairing : NavKey
+data object Shell : AppRoute
 
 @Serializable
-data object Chat : NavKey
+data object Pairing : AppRoute
 
 @Serializable
-data object Sessions : NavKey
+data object Chat : AppRoute
 
 @Serializable
-data object CreateSession : NavKey
+data object Sessions : AppRoute
 
 @Serializable
-data object Workspaces : NavKey
+data object CreateSession : AppRoute
 
 @Serializable
-data object AddWorkspace : NavKey
+data object Workspaces : AppRoute
+
+@Serializable
+data object AddWorkspace : AppRoute

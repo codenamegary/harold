@@ -33,7 +33,7 @@ class PairingViewModel @Inject constructor(
     private val pairingCoordinator: PairingCoordinator,
     private val payloadParser: PairingPayloadParser,
     private val deviceNameProvider: DeviceNameProvider,
-    private val navigator: Navigator = Navigator(),
+    private val navigator: Navigator,
     private val pairingRequests: PairingRequests? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(PairingUiState())

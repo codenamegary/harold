@@ -8,8 +8,6 @@ import harold.android.contracts.AgentId
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.WorkspaceState
 import harold.android.navigation.Navigator
-import harold.android.network.AgentApiError
-import harold.android.network.AgentApiException
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 import harold.android.user.UserRepository
@@ -72,6 +70,8 @@ class CreateSessionViewModel @Inject constructor(
 
         _uiState.update { current -> current.copy(submitting = true, error = null) }
 
+        // Config options only exist once the agent has a session, so create it
+        // on confirm for the selectors to render before the first prompt.
         viewModelScope.launch {
             val result = userRepository.createSession(
                 serverOrigin = paired.serverOrigin,
@@ -93,7 +93,7 @@ class CreateSessionViewModel @Inject constructor(
                         return@fold
                     }
                     _uiState.update { current ->
-                        current.copy(submitting = false, error = errorMessage(error))
+                        current.copy(submitting = false, error = apiErrorMessage(error))
                     }
                 },
             )
@@ -107,14 +107,7 @@ class CreateSessionViewModel @Inject constructor(
 
     private suspend fun loadCreateForm(serverOrigin: String): CreateSessionUiState {
         val workspaces = userRepository.listWorkspaces(serverOrigin).getOrNull()?.items.orEmpty()
-            .map { workspace ->
-                WorkspaceRow(
-                    id = workspace.id,
-                    name = workspace.name,
-                    path = workspace.path,
-                    state = workspace.state,
-                )
-            }
+            .map { workspace -> workspace.toWorkspaceRow() }
             .filter { workspace -> workspace.state == WorkspaceState.Available }
 
         val agents = userRepository.listAgents(serverOrigin).getOrNull()?.items.orEmpty()
@@ -133,13 +126,4 @@ class CreateSessionViewModel @Inject constructor(
         userRepository.getAgentAuth(serverOrigin = serverOrigin, agentId = agentId)
             .getOrNull()
             ?.status == AgentAuthStatus.NeedsAuth
-
-    private fun errorMessage(error: Throwable): String =
-        when (val apiError = (error as? AgentApiException)?.error) {
-            is AgentApiError.Unauthorized -> apiError.detail ?: "Authentication required"
-            is AgentApiError.Problem -> apiError.detail ?: apiError.title
-            is AgentApiError.Decode -> "Unexpected response from Harold"
-            is AgentApiError.Transport -> "Could not reach Harold"
-            null -> error.message ?: "Request failed"
-        }
 }

@@ -1,70 +1,63 @@
 package harold.android.navigation
 
+import android.os.Bundle
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
-import androidx.navigation3.runtime.NavKey
-import javax.inject.Inject
+import androidx.savedstate.SavedStateRegistry
 import dagger.hilt.android.scopes.ActivityRetainedScoped
+import javax.inject.Inject
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 
-enum class StartGate {
-    Unknown,
-    Paired,
-    Unpaired,
-}
+private const val SAVED_STATE_KEY = "harold.navigation"
+private const val BACK_STACK_KEY = "back_stack"
+private val backStackSerializer = ListSerializer(AppRoute.serializer())
 
 /**
- * Owns the back stack for the activity. The start route is chosen once, after
- * the pairing gate resolves. Later moves are events from the screen that owns them.
+ * Owns the back stack for the activity. An empty stack means the pairing gate
+ * has not resolved yet. The start route is chosen once. Later moves are events
+ * from the screen that owns them.
  */
 @ActivityRetainedScoped
 class Navigator @Inject constructor() {
-    val backStack: SnapshotStateList<NavKey> = mutableStateListOf()
-
-    var startGate: StartGate = StartGate.Unknown
-        private set
+    val backStack: SnapshotStateList<AppRoute> = mutableStateListOf()
 
     private var pairingQueued: Boolean = false
 
-    fun chooseStart(route: NavKey) {
-        if (startGate != StartGate.Unknown) {
+    /**
+     * Saves the stack with the activity so it comes back after process death.
+     * The navigator itself already survives configuration changes.
+     */
+    fun attach(registry: SavedStateRegistry) {
+        val restored = registry.consumeRestoredStateForKey(SAVED_STATE_KEY)?.getString(BACK_STACK_KEY)
+        if (restored != null && backStack.isEmpty()) {
+            restore(restored)
+        }
+        registry.registerSavedStateProvider(SAVED_STATE_KEY) {
+            Bundle().apply { putString(BACK_STACK_KEY, encode()) }
+        }
+    }
+
+    fun start(paired: Boolean) {
+        if (backStack.isNotEmpty()) {
             return
         }
-        val gate = when (route) {
-            Chat -> StartGate.Paired
-            Shell -> StartGate.Unpaired
-            else -> return
-        }
-        startGate = gate
-        backStack.add(route)
-        if (pairingQueued) {
-            pairingQueued = false
-            openPairing()
-        }
+        replaceWith(if (paired) Chat else Shell)
     }
 
     fun showChat() {
-        if (startGate == StartGate.Unknown) {
-            chooseStart(Chat)
-            return
-        }
-        backStack.clear()
-        backStack.add(Chat)
+        replaceWith(Chat)
     }
 
     fun showShell() {
-        if (startGate == StartGate.Unknown) {
-            chooseStart(Shell)
+        if (backStack.singleOrNull() == Shell) {
             return
         }
-        if (backStack.size == 1 && backStack.last() == Shell) {
-            return
-        }
-        backStack.clear()
-        backStack.add(Shell)
+        replaceWith(Shell)
     }
 
     fun openPairing() {
-        if (startGate == StartGate.Unknown) {
+        if (backStack.isEmpty()) {
             pairingQueued = true
             return
         }
@@ -96,5 +89,27 @@ class Navigator @Inject constructor() {
         }
         backStack.removeAt(backStack.lastIndex)
         return true
+    }
+
+    internal fun encode(): String = Json.encodeToString(backStackSerializer, backStack.toList())
+
+    internal fun restore(encoded: String) {
+        val routes = runCatching { Json.decodeFromString(backStackSerializer, encoded) }
+            .getOrNull()
+            .orEmpty()
+        if (routes.isEmpty()) {
+            return
+        }
+        backStack.clear()
+        backStack.addAll(routes)
+    }
+
+    private fun replaceWith(root: AppRoute) {
+        backStack.clear()
+        backStack.add(root)
+        if (pairingQueued) {
+            pairingQueued = false
+            openPairing()
+        }
     }
 }

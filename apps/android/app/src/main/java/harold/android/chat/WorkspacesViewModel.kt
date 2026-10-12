@@ -9,8 +9,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import harold.android.network.AgentApiError
-import harold.android.network.AgentApiException
 import harold.android.user.UserRepository
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
@@ -54,14 +52,7 @@ class WorkspacesViewModel @Inject constructor(
 
         userRepository.listWorkspaces(paired.serverOrigin).fold(
             onSuccess = { collection ->
-                val rows = collection.items.map { workspace ->
-                    WorkspaceRow(
-                        id = workspace.id,
-                        name = workspace.name,
-                        path = workspace.path,
-                        state = workspace.state,
-                    )
-                }
+                val rows = collection.items.map { workspace -> workspace.toWorkspaceRow() }
 
                 _uiState.update {
                     WorkspacesUiState(
@@ -76,19 +67,10 @@ class WorkspacesViewModel @Inject constructor(
             onFailure = { error ->
                 _uiState.update {
                     WorkspacesUiState(
-                        loadState = WorkspacesLoadState.Error(errorMessage(error)),
+                        loadState = WorkspacesLoadState.Error(apiErrorMessage(error)),
                     )
                 }
             },
         )
     }
-
-    private fun errorMessage(error: Throwable): String =
-        when (val apiError = (error as? AgentApiException)?.error) {
-            is AgentApiError.Unauthorized -> apiError.detail ?: "Authentication required"
-            is AgentApiError.Problem -> apiError.detail ?: apiError.title
-            is AgentApiError.Decode -> "Unexpected response from Harold"
-            is AgentApiError.Transport -> "Could not reach Harold"
-            null -> error.message ?: "Request failed"
-        }
 }

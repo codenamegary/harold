@@ -3,9 +3,9 @@ package harold.android.chat
 import harold.android.contracts.AgentId
 import harold.android.contracts.CreateSessionResponse
 import javax.inject.Inject
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
 
 sealed interface SessionCommand {
     data class Open(val row: SessionRow) : SessionCommand
@@ -17,19 +17,23 @@ sealed interface SessionCommand {
     data class Deleted(val row: SessionRow) : SessionCommand
 }
 
+/**
+ * One-shot commands from the session routes to Chat. Each command is delivered
+ * once. Commands sent before Chat collects wait in the channel.
+ */
 interface SessionCommands {
-    val commands: SharedFlow<SessionCommand>
+    val commands: Flow<SessionCommand>
 
     fun emit(command: SessionCommand)
 }
 
 class DefaultSessionCommands @Inject constructor() : SessionCommands {
-    private val _commands = MutableSharedFlow<SessionCommand>(extraBufferCapacity = 16)
-    override val commands: SharedFlow<SessionCommand> = _commands.asSharedFlow()
+    private val channel = Channel<SessionCommand>(Channel.UNLIMITED)
+    override val commands: Flow<SessionCommand> = channel.receiveAsFlow()
 
     override fun emit(command: SessionCommand) {
-        check(_commands.tryEmit(command)) {
-            "Session command was dropped"
+        check(channel.trySend(command).isSuccess) {
+            "Session command channel is closed"
         }
     }
 }

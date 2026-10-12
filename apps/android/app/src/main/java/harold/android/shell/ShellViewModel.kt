@@ -10,9 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import harold.android.live.SessionOwner
-import harold.android.navigation.Chat
 import harold.android.navigation.Navigator
-import harold.android.navigation.Shell
 import harold.android.network.AgentApi
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
@@ -35,11 +33,7 @@ class ShellViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             sessionGateway.refresh()
-            val start = when (sessionGateway.pairedState.value) {
-                is PairedState.Paired -> Chat
-                PairedState.NotPaired -> Shell
-            }
-            navigator.chooseStart(start)
+            navigator.start(paired = sessionGateway.pairedState.value is PairedState.Paired)
         }
 
         viewModelScope.launch {

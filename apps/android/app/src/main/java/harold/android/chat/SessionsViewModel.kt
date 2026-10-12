@@ -3,13 +3,7 @@ package harold.android.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import harold.android.contracts.AgentSettings
-import harold.android.contracts.Session
-import harold.android.contracts.SessionState
-import harold.android.contracts.Workspace
 import harold.android.navigation.Navigator
-import harold.android.network.AgentApiError
-import harold.android.network.AgentApiException
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 import harold.android.user.UserRepository
@@ -70,7 +64,7 @@ class SessionsViewModel @Inject constructor(
                     sessionCommands.emit(SessionCommand.Deleted(row))
                 },
                 onFailure = { error ->
-                    _uiState.update { current -> current.copy(error = errorMessage(error)) }
+                    _uiState.update { current -> current.copy(error = apiErrorMessage(error)) }
                 },
             )
         }
@@ -83,26 +77,29 @@ class SessionsViewModel @Inject constructor(
             return
         }
 
-        val workspaces = userRepository.listWorkspaces(paired.serverOrigin)
+        val workspaceByPath = userRepository.listWorkspaces(paired.serverOrigin)
             .getOrNull()
             ?.items
             .orEmpty()
-        val agents = userRepository.listAgents(paired.serverOrigin)
+            .map { workspace -> workspace.toWorkspaceRow() }
+            .associateBy { workspace -> workspace.path }
+        val agentLabels = userRepository.listAgents(paired.serverOrigin)
             .getOrNull()
             ?.items
             .orEmpty()
+            .associate { agent -> agent.id to agent.displayName }
 
         userRepository.listSessions(paired.serverOrigin).fold(
             onSuccess = { collection ->
                 catalog = collection.items.map { session ->
-                    session.toRow(workspaces, agents)
+                    session.toSessionRow(workspaceByPath, agentLabels)
                 }
                 publish()
                 _uiState.update { current -> current.copy(loading = false, error = null) }
             },
             onFailure = { error ->
                 _uiState.update { current ->
-                    current.copy(loading = false, error = errorMessage(error))
+                    current.copy(loading = false, error = apiErrorMessage(error))
                 }
             },
         )
@@ -115,31 +112,4 @@ class SessionsViewModel @Inject constructor(
             .sortedByDescending { row -> row.updatedAt }
         _uiState.update { current -> current.copy(sessions = sessions) }
     }
-
-    private fun Session.toRow(
-        workspaces: List<Workspace>,
-        agents: List<AgentSettings>,
-    ): SessionRow {
-        val workspace = workspaces.firstOrNull { item -> item.path == cwd }
-        return SessionRow(
-            sessionId = sessionId,
-            name = title.ifBlank { sessionId },
-            cwd = cwd,
-            workspaceId = workspace?.id.orEmpty(),
-            workspaceLabel = workspace?.name ?: cwd,
-            agentId = agentId,
-            agentLabel = agents.firstOrNull { agent -> agent.id == agentId }?.displayName ?: agentId,
-            state = SessionState.Idle,
-            updatedAt = updatedAt,
-        )
-    }
-
-    private fun errorMessage(error: Throwable): String =
-        when (val apiError = (error as? AgentApiException)?.error) {
-            is AgentApiError.Unauthorized -> apiError.detail ?: "Authentication required"
-            is AgentApiError.Problem -> apiError.detail ?: apiError.title
-            is AgentApiError.Decode -> "Unexpected response from Harold"
-            is AgentApiError.Transport -> "Could not reach Harold"
-            null -> error.message ?: "Request failed"
-        }
 }

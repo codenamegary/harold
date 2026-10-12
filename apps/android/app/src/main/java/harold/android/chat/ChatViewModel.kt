@@ -38,13 +38,9 @@ import harold.android.contracts.ConfigValue
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.parseConfigOptions
-import harold.android.contracts.Session
 import harold.android.contracts.SessionState
-import harold.android.contracts.WorkspaceState
 import harold.android.contracts.catalogSessionKey
 import harold.android.contracts.toSummary
-import harold.android.network.AgentApiError
-import harold.android.network.AgentApiException
 import harold.android.network.AttachmentApi
 import harold.android.network.SessionConfigApi
 import harold.android.live.SessionOwner
@@ -76,8 +72,8 @@ class ChatViewModel @Inject constructor(
     private val openSessionRequests: OpenSessionRequests? = null,
     internal val voiceDictationController: VoiceDictationController,
     @PreviewDispatcher private val previewDispatcher: CoroutineDispatcher = Dispatchers.Default,
-    private val navigator: Navigator = Navigator(),
-    private val sessionCommands: SessionCommands = DefaultSessionCommands(),
+    private val navigator: Navigator,
+    private val sessionCommands: SessionCommands,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -234,7 +230,7 @@ class ChatViewModel @Inject constructor(
         }
         viewModelScope.launch {
             refreshCatalog()
-            publishDerivedSessionLists()
+            publishRecentSessions()
             _uiState.update { current ->
                 current.copy(recentSessionsLoading = false)
             }
@@ -243,77 +239,6 @@ class ChatViewModel @Inject constructor(
 
     fun hidePicker() {
         _uiState.update { current -> current.copy(pickerVisible = false) }
-    }
-
-    fun openSessionsList() {
-        hidePicker()
-        _uiState.update { current ->
-            current.copy(
-                sessionsListSearch = "",
-                sessionsListError = null,
-                sessionsListLoading = true,
-            )
-        }
-        viewModelScope.launch {
-            refreshCatalog()
-            publishDerivedSessionLists()
-            _uiState.update { current -> current.copy(sessionsListLoading = false) }
-        }
-    }
-
-    fun onSessionsSearchChanged(query: String) {
-        _uiState.update { current ->
-            current.copy(sessionsListSearch = query)
-        }
-        publishDerivedSessionLists()
-    }
-
-    fun selectSessionFromList(row: SessionRow) {
-        selectSession(row)
-    }
-
-    fun showCreateDialog() {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
-
-        _uiState.update { current -> current.copy(createDialogVisible = true) }
-
-        viewModelScope.launch {
-            val createState = loadCreateForm(paired.serverOrigin)
-            _uiState.update { current ->
-                current.copy(createState = createState)
-            }
-        }
-    }
-
-    fun hideCreateDialog() {
-        _uiState.update { current ->
-            current.copy(
-                createDialogVisible = false,
-                createState = CreateSessionUiState(),
-            )
-        }
-    }
-
-    fun onCreateWorkspaceChanged(workspaceId: String) {
-        _uiState.update { current ->
-            current.copy(
-                createState = current.createState.copy(
-                    selectedWorkspaceId = workspaceId,
-                    error = null,
-                ),
-            )
-        }
-    }
-
-    fun onCreateAgentChanged(agentId: AgentId) {
-        _uiState.update { current ->
-            current.copy(
-                createState = current.createState.copy(
-                    selectedAgentId = agentId,
-                    error = null,
-                ),
-            )
-        }
     }
 
     fun onComposerTextChanged(text: String) {
@@ -451,83 +376,11 @@ class ChatViewModel @Inject constructor(
         _uiState.update { current -> current.copy(voiceDictation = voiceDictation) }
     }
 
-    fun confirmNewSession() {
-        val createState = _uiState.value.createState
-        val workspaceId = createState.selectedWorkspaceId
-        val agentId = createState.selectedAgentId
-        val workspace = createState.workspaces.firstOrNull { row -> row.id == workspaceId }
-
-        if (workspaceId.isEmpty() || workspace == null) {
-            _uiState.update { current ->
-                current.copy(createState = current.createState.copy(error = "Choose a workspace"))
-            }
-            return
-        }
-
-        if (agentId == null) {
-            _uiState.update { current ->
-                current.copy(createState = current.createState.copy(error = "Choose an agent"))
-            }
-            return
-        }
-
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired
-        if (paired == null) {
-            _uiState.update { current ->
-                current.copy(createState = current.createState.copy(error = "Connect to Harold first"))
-            }
-            return
-        }
-
-        _uiState.update { current ->
-            current.copy(createState = current.createState.copy(submitting = true, error = null))
-        }
-
-        // Config options only exist once the agent has a session, so create it
-        // on confirm for the selectors to render before the first prompt.
-        viewModelScope.launch {
-            val result = userRepository.createSession(
-                serverOrigin = paired.serverOrigin,
-                body = CreateSessionBody(
-                    agentId = agentId,
-                    cwd = workspace.path,
-                ),
-            )
-
-            result.fold(
-                onSuccess = { created ->
-                    hideCreateDialog()
-                    openCreatedSession(created)
-                },
-                onFailure = { error ->
-                    if (agentNeedsLogin(paired.serverOrigin, agentId)) {
-                        hideCreateDialog()
-                        openPendingSession(workspace = workspace, agentId = agentId)
-                        return@fold
-                    }
-                    _uiState.update { current ->
-                        current.copy(
-                            createState = current.createState.copy(
-                                submitting = false,
-                                error = errorMessage(error),
-                            ),
-                        )
-                    }
-                },
-            )
-        }
-    }
-
     private suspend fun openCreatedSession(created: CreateSessionResponse) {
         rememberCreatedConfig(created)
-        activateSession(created.toSession().toSessionRow())
+        activateSession(created.toSession().toSessionRow(workspaceByPath, agentLabels))
         refreshCatalog()
     }
-
-    private suspend fun agentNeedsLogin(serverOrigin: String, agentId: AgentId): Boolean =
-        userRepository.getAgentAuth(serverOrigin = serverOrigin, agentId = agentId)
-            .getOrNull()
-            ?.status == AgentAuthStatus.NeedsAuth
 
     /**
      * The agent refused to create a session until it is signed in. Show its login panel on a
@@ -593,7 +446,7 @@ class ChatViewModel @Inject constructor(
                     }
                 },
                 onFailure = { error ->
-                    _uiState.update { current -> current.copy(composerError = errorMessage(error)) }
+                    _uiState.update { current -> current.copy(composerError = apiErrorMessage(error)) }
                 },
             )
             pendingCreateInFlight = false
@@ -758,7 +611,7 @@ class ChatViewModel @Inject constructor(
                     )
                 }
             },
-            onFailure = { error -> failAttachment(attachment.localId, errorMessage(error)) },
+            onFailure = { error -> failAttachment(attachment.localId, apiErrorMessage(error)) },
         )
     }
 
@@ -861,27 +714,6 @@ class ChatViewModel @Inject constructor(
         )
     }
 
-    fun deleteSession(row: SessionRow) {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
-
-        viewModelScope.launch {
-            userRepository.deleteSession(
-                serverOrigin = paired.serverOrigin,
-                agentId = row.agentId,
-                sessionId = row.sessionId,
-            ).fold(
-                onSuccess = {
-                    dropSession(row)
-                },
-                onFailure = { error ->
-                    _uiState.update { current ->
-                        current.copy(sessionsError = errorMessage(error))
-                    }
-                },
-            )
-        }
-    }
-
     fun selectSession(row: SessionRow) {
         viewModelScope.launch {
             activateSession(row)
@@ -919,7 +751,7 @@ class ChatViewModel @Inject constructor(
                     _uiState.update { current ->
                         current.copy(
                             authActionBusy = false,
-                            authError = errorMessage(error),
+                            authError = apiErrorMessage(error),
                         )
                     }
                 },
@@ -953,7 +785,7 @@ class ChatViewModel @Inject constructor(
                     _uiState.update { current ->
                         current.copy(
                             authActionBusy = false,
-                            authError = errorMessage(error),
+                            authError = apiErrorMessage(error),
                         )
                     }
                 },
@@ -1003,7 +835,7 @@ class ChatViewModel @Inject constructor(
                     _uiState.update { current ->
                         current.copy(
                             authActionBusy = false,
-                            authError = errorMessage(error),
+                            authError = apiErrorMessage(error),
                         )
                     }
                 },
@@ -1057,7 +889,7 @@ class ChatViewModel @Inject constructor(
                     _uiState.update { current ->
                         current.copy(
                             authPanelSubmitting = false,
-                            authError = errorMessage(error),
+                            authError = apiErrorMessage(error),
                         )
                     }
                 },
@@ -1144,7 +976,7 @@ class ChatViewModel @Inject constructor(
                     return
                 }
                 _uiState.update { current ->
-                    current.copy(authError = errorMessage(error))
+                    current.copy(authError = apiErrorMessage(error))
                 }
             },
         )
@@ -1270,12 +1102,7 @@ class ChatViewModel @Inject constructor(
         val agentsResult = userRepository.listAgents(paired.serverOrigin)
 
         val workspaces = workspacesResult.getOrNull()?.items.orEmpty().map { workspace ->
-            WorkspaceRow(
-                id = workspace.id,
-                name = workspace.name,
-                path = workspace.path,
-                state = workspace.state,
-            )
+            workspace.toWorkspaceRow()
         }
         workspaceByPath = workspaces.associateBy { workspace -> workspace.path }
         agentLabels = agentsResult.getOrNull()?.items.orEmpty()
@@ -1288,7 +1115,9 @@ class ChatViewModel @Inject constructor(
 
         sessionsResult.fold(
             onSuccess = { collection ->
-                catalog = collection.items.map { session -> session.toSessionRow() }
+                catalog = collection.items.map { session ->
+                    session.toSessionRow(workspaceByPath, agentLabels)
+                }
                 _uiState.update { current ->
                     current.copy(
                         sessions = catalog,
@@ -1296,7 +1125,7 @@ class ChatViewModel @Inject constructor(
                         sessionsError = null,
                     )
                 }
-                publishDerivedSessionLists()
+                publishRecentSessions()
                 syncActiveSessionsFromUiState()
                 restoreLastSession()
             },
@@ -1304,31 +1133,18 @@ class ChatViewModel @Inject constructor(
                 _uiState.update { current ->
                     current.copy(
                         sessionsLoading = false,
-                        sessionsError = errorMessage(error),
+                        sessionsError = apiErrorMessage(error),
                     )
                 }
             },
         )
     }
 
-    private fun publishDerivedSessionLists() {
-        val search = _uiState.value.sessionsListSearch.trim()
+    private fun publishRecentSessions() {
         val recent = catalog
             .sortedByDescending { row -> row.updatedAt }
             .take(RECENT_SESSIONS_LIMIT)
-        val list = if (search.isEmpty()) {
-            catalog.sortedByDescending { row -> row.updatedAt }
-        } else {
-            catalog
-                .filter { row -> row.name.contains(search, ignoreCase = true) }
-                .sortedByDescending { row -> row.updatedAt }
-        }
-        _uiState.update { current ->
-            current.copy(
-                recentSessions = recent,
-                sessionsList = list,
-            )
-        }
+        _uiState.update { current -> current.copy(recentSessions = recent) }
     }
 
     private suspend fun restoreLastSession() {
@@ -1355,30 +1171,6 @@ class ChatViewModel @Inject constructor(
             ?: return
         _uiState.update { current -> current.copy(selectedSession = row) }
         syncAttachmentGating()
-    }
-
-    private suspend fun loadCreateForm(serverOrigin: String): CreateSessionUiState {
-        val workspaces = userRepository.listWorkspaces(serverOrigin).getOrNull()?.items.orEmpty()
-            .map { workspace ->
-                WorkspaceRow(
-                    id = workspace.id,
-                    name = workspace.name,
-                    path = workspace.path,
-                    state = workspace.state,
-                )
-            }
-            .filter { workspace -> workspace.state == WorkspaceState.Available }
-
-        val agents = userRepository.listAgents(serverOrigin).getOrNull()?.items.orEmpty()
-            .filter { agent -> agent.enabled }
-            .map { agent -> AgentOption(id = agent.id, displayName = agent.displayName) }
-
-        return CreateSessionUiState(
-            workspaces = workspaces,
-            agents = agents,
-            selectedWorkspaceId = workspaces.firstOrNull()?.id.orEmpty(),
-            selectedAgentId = agents.firstOrNull()?.id,
-        )
     }
 
     private fun persistSelectedSession(sessionKey: String) {
@@ -1420,7 +1212,7 @@ class ChatViewModel @Inject constructor(
                 pickerVisible = false,
             )
         }
-        publishDerivedSessionLists()
+        publishRecentSessions()
         syncActiveSessionsFromUiState()
     }
 
@@ -1437,7 +1229,7 @@ class ChatViewModel @Inject constructor(
                 sessions = catalog,
             )
         }
-        publishDerivedSessionLists()
+        publishRecentSessions()
         syncActiveSessionsFromUiState()
     }
 
@@ -1476,30 +1268,6 @@ class ChatViewModel @Inject constructor(
             configOptions = parseConfigOptions(created.configOptions),
         )
     }
-
-    private fun Session.toSessionRow(): SessionRow {
-        val workspace = workspaceByPath[cwd]
-        return SessionRow(
-            sessionId = sessionId,
-            name = title.ifBlank { sessionId },
-            cwd = cwd,
-            workspaceId = workspace?.id.orEmpty(),
-            workspaceLabel = workspace?.name ?: cwd,
-            agentId = agentId,
-            agentLabel = agentLabels[agentId] ?: agentId,
-            state = SessionState.Idle,
-            updatedAt = updatedAt,
-        )
-    }
-
-    private fun errorMessage(error: Throwable): String =
-        when (val apiError = (error as? AgentApiException)?.error) {
-            is AgentApiError.Unauthorized -> apiError.detail ?: "Authentication required"
-            is AgentApiError.Problem -> apiError.detail ?: apiError.title
-            is AgentApiError.Decode -> "Unexpected response from Harold"
-            is AgentApiError.Transport -> "Could not reach Harold"
-            null -> error.message ?: "Request failed"
-        }
 
     override fun onCleared() {
         voiceDictationController.destroy()

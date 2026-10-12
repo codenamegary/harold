@@ -5,6 +5,8 @@ import harold.android.contracts.Session
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceState
 import harold.android.navigation.Chat
+import harold.android.network.AgentApiError
+import harold.android.network.AgentApiException
 import harold.android.session.PairedState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -88,6 +90,29 @@ class SessionsViewModelTest {
         assertTrue(viewModel.uiState.value.sessions.isEmpty())
         val deleted = commands.emitted.single() as SessionCommand.Deleted
         assertEquals(row.id, deleted.row.id)
+    }
+
+    @Test
+    fun deleteFailureKeepsTheRowAndShowsTheServerReason() = runTest {
+        val commands = RecordingSessionCommands()
+        val repository = RouteUserRepository(
+            workspaces = listOf(workspace()),
+            sessions = listOf(session("sess_01", "Alpha", "2026-08-03T00:00:00.000Z")),
+            agents = listOf(agent()),
+            deleteResult = Result.failure(
+                AgentApiException(
+                    AgentApiError.Problem(status = 409, title = "Conflict", detail = "Agent is disabled"),
+                ),
+            ),
+        )
+        val viewModel = viewModel(repository = repository, commands = commands)
+        val row = viewModel.uiState.value.sessions.single()
+
+        viewModel.delete(row)
+
+        assertEquals("Agent is disabled", viewModel.uiState.value.error)
+        assertEquals(listOf("sess_01"), viewModel.uiState.value.sessions.map { it.sessionId })
+        assertTrue(commands.emitted.isEmpty())
     }
 
     private fun viewModel(

@@ -6,6 +6,9 @@ import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceState
 import harold.android.navigation.Chat
+import harold.android.navigation.CreateSession
+import harold.android.network.AgentApiError
+import harold.android.network.AgentApiException
 import harold.android.session.PairedState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -15,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -66,6 +70,31 @@ class CreateSessionViewModelTest {
         assertEquals("sess_new", created.response.sessionId)
         assertEquals(listOf(Chat), navigator.backStack.toList())
         assertTrue(viewModel.uiState.value.submitting)
+    }
+
+    @Test
+    fun submitFailureStaysOnTheRouteWithTheServerReason() = runTest {
+        val commands = RecordingSessionCommands()
+        val navigator = testNavigator()
+        navigator.openCreateSession()
+        val viewModel = viewModel(
+            commands = commands,
+            navigator = navigator,
+            repository = repository(
+                createResult = Result.failure(
+                    AgentApiException(
+                        AgentApiError.Problem(status = 409, title = "ACP unavailable", detail = "Agent crashed"),
+                    ),
+                ),
+            ),
+        )
+
+        viewModel.submit()
+
+        assertEquals("Agent crashed", viewModel.uiState.value.error)
+        assertFalse(viewModel.uiState.value.submitting)
+        assertTrue(commands.emitted.isEmpty())
+        assertEquals(listOf(Chat, CreateSession), navigator.backStack.toList())
     }
 
     @Test

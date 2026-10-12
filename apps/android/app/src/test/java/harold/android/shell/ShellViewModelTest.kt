@@ -82,11 +82,13 @@ class ShellViewModelTest {
         val api = FakeAgentApi(
             Result.failure(AgentApiException(AgentApiError.Unauthorized("Authentication required"))),
         )
-        val viewModel = viewModel(session, FakeSessionOwner(), api)
+        val navigator = harold.android.navigation.Navigator()
+        val viewModel = viewModel(session, FakeSessionOwner(), api, navigator)
 
         assertEquals(1, session.clearLocalAccessCount)
         assertEquals(PairedState.NotPaired, session.pairedState.value)
         assertEquals("Not paired", viewModel.uiState.value.status)
+        assertEquals(listOf(harold.android.navigation.Shell), navigator.backStack.toList())
     }
 
     @Test
@@ -109,7 +111,14 @@ class ShellViewModelTest {
     fun clearsLocalAccessWhenTheStreamRejectsTheCredential() = runTest {
         val session = paired()
         val connection = FakeSessionOwner()
-        val viewModel = viewModel(session, connection, FakeAgentApi(Result.success(collectionOf(1))))
+        val navigator = harold.android.navigation.Navigator()
+        val viewModel = viewModel(
+            session,
+            connection,
+            FakeAgentApi(Result.success(collectionOf(1))),
+            navigator,
+        )
+        navigator.openSessions()
 
         connection.emit(ConnectionStatus.AuthFailed(detail = "Device revoked"))
 
@@ -117,6 +126,7 @@ class ShellViewModelTest {
         assertEquals(PairedState.NotPaired, session.pairedState.value)
         assertEquals("Not paired", viewModel.uiState.value.status)
         assertEquals(1, connection.disconnects)
+        assertEquals(listOf(harold.android.navigation.Shell), navigator.backStack.toList())
     }
 
     @Test
@@ -156,7 +166,6 @@ class ShellViewModelTest {
             navigator,
         )
 
-        assertEquals(harold.android.navigation.StartGate.Paired, navigator.startGate)
         assertEquals(listOf(harold.android.navigation.Chat), navigator.backStack.toList())
     }
 
@@ -170,7 +179,6 @@ class ShellViewModelTest {
             navigator,
         )
 
-        assertEquals(harold.android.navigation.StartGate.Unpaired, navigator.startGate)
         assertEquals(listOf(harold.android.navigation.Shell), navigator.backStack.toList())
     }
 
@@ -190,13 +198,11 @@ class ShellViewModelTest {
             navigator,
         )
 
-        assertEquals(harold.android.navigation.StartGate.Unknown, navigator.startGate)
         assertTrue(navigator.backStack.isEmpty())
 
         release.complete(Unit)
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(harold.android.navigation.StartGate.Paired, navigator.startGate)
         assertEquals(listOf(harold.android.navigation.Chat), navigator.backStack.toList())
     }
 

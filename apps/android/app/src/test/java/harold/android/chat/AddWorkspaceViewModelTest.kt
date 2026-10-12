@@ -27,6 +27,9 @@ import harold.android.contracts.RuntimeSettingsView
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceState
+import harold.android.navigation.Chat
+import harold.android.navigation.Navigator
+import harold.android.navigation.Workspaces
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.user.UserRepository
@@ -51,6 +54,7 @@ class AddWorkspaceViewModelTest {
     fun loadsAllowedRoots() = runTest(dispatcher) {
         val viewModel = AddWorkspaceViewModel(
             sessionGateway = fakeSession(),
+            navigator = Navigator(),
             userRepository = FakeAddUserRepository(),
         )
 
@@ -64,6 +68,7 @@ class AddWorkspaceViewModelTest {
     fun reportsEmptyRoots() = runTest(dispatcher) {
         val viewModel = AddWorkspaceViewModel(
             sessionGateway = fakeSession(),
+            navigator = Navigator(),
             userRepository = FakeAddUserRepository(allowedRoots = emptyList()),
         )
 
@@ -76,8 +81,13 @@ class AddWorkspaceViewModelTest {
     @Test
     fun selectingFolderAutofillsNameAndSubmitCreatesWorkspace() = runTest(dispatcher) {
         val repository = FakeAddUserRepository()
+        val navigator = Navigator()
+        navigator.start(paired = true)
+        navigator.openWorkspaces()
+        navigator.openAddWorkspace()
         val viewModel = AddWorkspaceViewModel(
             sessionGateway = fakeSession(),
+            navigator = navigator,
             userRepository = repository,
         )
 
@@ -97,13 +107,14 @@ class AddWorkspaceViewModelTest {
             listOf(CreateWorkspaceBody(name = "harold", path = "/home/ops/code/harold")),
             repository.createCalls,
         )
-        assertTrue(viewModel.uiState.value.created)
+        assertEquals(listOf(Chat, Workspaces), navigator.backStack.toList())
     }
 
     @Test
     fun folderSearchFiltersList() = runTest(dispatcher) {
         val viewModel = AddWorkspaceViewModel(
             sessionGateway = fakeSession(),
+            navigator = Navigator(),
             userRepository = FakeAddUserRepository(
                 folders = listOf(
                     FilesystemDirectory(name = "harold", path = "/home/ops/code/harold"),
@@ -125,6 +136,7 @@ class AddWorkspaceViewModelTest {
     fun folderLoadErrorBlocksSubmit() = runTest(dispatcher) {
         val viewModel = AddWorkspaceViewModel(
             sessionGateway = fakeSession(),
+            navigator = Navigator(),
             userRepository = FakeAddUserRepository(
                 foldersFailure = AgentApiException(AgentApiError.Transport(RuntimeException("boom"))),
             ),
