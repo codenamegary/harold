@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.3.0](https://github.com/codenamegary/harold/compare/v1.2.3...v1.3.0) (2026-10-13)
+
+
+### Features
+
+* **cli:** rename serve to start and run the daemon in the background ([#376](https://github.com/codenamegary/harold/issues/376)) ([14c27d0](https://github.com/codenamegary/harold/commit/14c27d07b585a5ce988ccbffa7d38c610e2c5974)), closes [#374](https://github.com/codenamegary/harold/issues/374)
+* **server:** warm up ACP agents in the background after listening ([#380](https://github.com/codenamegary/harold/issues/380)) ([f43fa35](https://github.com/codenamegary/harold/commit/f43fa35d5cbd3f8eda63761bb11c29dbcacadce0))
+
+
+### Bug Fixes
+
+* **android:** drop the operator console subtitle from the shell screen ([bd28213](https://github.com/codenamegary/harold/commit/bd28213cb5dc852a4ff70d5b5971693fc4fa495a))
+* **android:** use an icon back button on the pairing screen ([bd28213](https://github.com/codenamegary/harold/commit/bd28213cb5dc852a4ff70d5b5971693fc4fa495a))
+
+
+### Refactoring
+
+* **pairing:** reject the retired agent-server uri scheme as invalid ([bd28213](https://github.com/codenamegary/harold/commit/bd28213cb5dc852a4ff70d5b5971693fc4fa495a))
+* replace operator with user across code and docs ([bd28213](https://github.com/codenamegary/harold/commit/bd28213cb5dc852a4ff70d5b5971693fc4fa495a))
+
+
+### Documentation
+
+* **branding:** replace operator with user in branding pages ([bd28213](https://github.com/codenamegary/harold/commit/bd28213cb5dc852a4ff70d5b5971693fc4fa495a))
+* remove the ADRs and CONTEXT.md ([bd28213](https://github.com/codenamegary/harold/commit/bd28213cb5dc852a4ff70d5b5971693fc4fa495a))
+* remove the research notes ([bd28213](https://github.com/codenamegary/harold/commit/bd28213cb5dc852a4ff70d5b5971693fc4fa495a))
+
 ## [1.2.3](https://github.com/codenamegary/harold/compare/v1.2.2...v1.2.3) (2026-10-10)
 
 
