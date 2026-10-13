@@ -99,6 +99,7 @@ class ChatViewModel @Inject constructor(
     private var agentCapabilities: Map<AgentId, AgentCapabilityInventory?> = emptyMap()
     private var attachmentLocalIdCounter: Int = 0
     private var catalog: List<SessionRow> = emptyList()
+    private val titlePulledSessionIds = mutableSetOf<String>()
     private var authHydrateGeneration: Int = 0
     private var lastLiveWatchKey: String? = null
     private var lastAuthRequired: Boolean = false
@@ -1120,8 +1121,8 @@ class ChatViewModel @Inject constructor(
 
     /**
      * Session/list is the only title source for agents that never push
-     * session_info_update. Pull it once when a turn completes and the header
-     * still shows the raw ACP session id.
+     * session_info_update. Pull it once per session when a turn completes and
+     * the header still shows the raw ACP session id.
      */
     private suspend fun pullSelectedSessionTitle() {
         val selected = _uiState.value.selectedSession ?: return
@@ -1129,12 +1130,21 @@ class ChatViewModel @Inject constructor(
             return
         }
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        if (!titlePulledSessionIds.add(selected.id)) {
+            return
+        }
 
         userRepository.listSessions(paired.serverOrigin).onSuccess { collection ->
-            val titles = collection.items.associate { session ->
-                catalogSessionKey(session.agentId, session.sessionId) to session.title
+            val listed = collection.items.firstOrNull { session ->
+                catalogSessionKey(session.agentId, session.sessionId) == selected.id
+            } ?: return@onSuccess
+            if (listed.title.isBlank() || listed.title == listed.sessionId) {
+                return@onSuccess
             }
-            applySessionTitles(titles)
+            if (sessionOwner.sessionTitles.value.containsKey(selected.id)) {
+                return@onSuccess
+            }
+            applySessionTitles(mapOf(selected.id to listed.title))
         }
     }
 

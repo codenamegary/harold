@@ -3,13 +3,11 @@ package harold.android.live
 import harold.android.contracts.AgentId
 import harold.android.contracts.AttachmentReference
 import harold.android.contracts.ConfigOption
-import harold.android.contracts.ParsedSessionInfoUpdate
 import harold.android.contracts.SessionStreamClientMessage
 import harold.android.contracts.SessionStreamServerMessage
 import harold.android.contracts.catalogSessionKey
 import harold.android.contracts.parseAvailableCommands
 import harold.android.contracts.parseConfigOptions
-import harold.android.contracts.parseSessionInfoUpdate
 import harold.android.di.ApplicationScope
 import harold.android.live.composer.AvailableCommandsCatalog
 import harold.android.live.composer.SessionConfigCatalog
@@ -323,17 +321,6 @@ class DefaultSessionOwner @Inject constructor(
                     if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
                         return
                     }
-                    val sessionInfo = parseSessionInfoUpdate(message.update)
-                    if (sessionInfo != null) {
-                        if (sessionInfo is ParsedSessionInfoUpdate.Title) {
-                            applySessionTitleLocked(
-                                message.agentId,
-                                message.sessionId,
-                                sessionInfo.title,
-                            )
-                        }
-                        return
-                    }
                     val commands = parseAvailableCommands(message.update)
                     if (commands != null) {
                         commandsCatalog.remember(message.agentId, message.sessionId, commands)
@@ -468,8 +455,8 @@ class DefaultSessionOwner @Inject constructor(
                     }
                 }
                 is SessionStreamServerMessage.SessionInfo -> {
-                    // Renames for any session of the watched agent reach the
-                    // titles map, even when a different session is watched.
+                    // The server sends renames for every session to every
+                    // client, so this skips the watch filter.
                     applySessionTitleLocked(message.agentId, message.sessionId, message.title)
                 }
             }

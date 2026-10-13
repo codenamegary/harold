@@ -73,7 +73,23 @@ class AcpUpdateTest {
         assertEquals(
             ParsedAcpUpdate.Ignored,
             parseAcpUpdate(
-                JsonObject(mapOf("sessionUpdate" to JsonPrimitive("session_info_update"))),
+                JsonObject(mapOf("sessionUpdate" to JsonPrimitive("some_future_update"))),
+            ),
+        )
+    }
+
+    @Test
+    fun sessionInfoUpdatesNeverReachTheTranscript() {
+        // Titles arrive as the server's session_info frame, not this raw update.
+        assertEquals(
+            ParsedAcpUpdate.Ignored,
+            parseAcpUpdate(
+                JsonObject(
+                    mapOf(
+                        "sessionUpdate" to JsonPrimitive("session_info_update"),
+                        "title" to JsonPrimitive("Named by the agent"),
+                    ),
+                ),
             ),
         )
     }

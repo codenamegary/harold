@@ -161,6 +161,34 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun promptCompletionPullsTheListOnlyOncePerSessionWhenTheAgentNeverNamesIt() = runTest(dispatcher) {
+        val repository = ChatFakeUserRepository(
+            extraSessions = listOf(
+                session("sess_02", "sess_02", updatedAt = "2026-08-05T02:00:00.000Z"),
+            ),
+        )
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = sessionOwner,
+        )
+
+        advanceUntilIdle()
+        val callsAfterLoad = repository.listSessionsCalls
+
+        sessionOwner.completePrompt()
+        advanceUntilIdle()
+        sessionOwner.completePrompt()
+        advanceUntilIdle()
+        sessionOwner.completePrompt()
+        advanceUntilIdle()
+
+        assertEquals(callsAfterLoad + 1, repository.listSessionsCalls)
+        assertEquals("sess_02", viewModel.uiState.value.selectedSession?.name)
+    }
+
+    @Test
     fun promptCompletionLeavesAnAlreadyNamedHeaderAlone() = runTest(dispatcher) {
         val repository = ChatFakeUserRepository()
         val sessionOwner = ChatFakeSessionOwner()
@@ -1317,6 +1345,7 @@ private class ChatFakeUserRepository(
     var agentAuthOverride: harold.android.contracts.AgentAuth = agentAuth
     var createFailure: Throwable? = null
     var sessionsOverride: List<Session>? = null
+    var listSessionsCalls = 0
     private val createdSessions = mutableListOf<Session>()
     private val seed = extraSessions.ifEmpty {
         listOf(
@@ -1362,9 +1391,12 @@ private class ChatFakeUserRepository(
     override suspend fun listSessions(
         serverOrigin: String,
         cwd: String?,
-    ): Result<SessionCollection> = Result.success(
-        SessionCollection(items = sessionsOverride ?: (createdSessions + seed)),
-    )
+    ): Result<SessionCollection> {
+        listSessionsCalls += 1
+        return Result.success(
+            SessionCollection(items = sessionsOverride ?: (createdSessions + seed)),
+        )
+    }
 
     override suspend fun listAgents(serverOrigin: String) = Result.success(
         AgentSettingsCollection(

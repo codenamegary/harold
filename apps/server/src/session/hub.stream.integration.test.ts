@@ -669,4 +669,42 @@ describe("session hub stream integration", () => {
 
     await client.close()
   })
+
+  test("a connected client with no session open receives live renames", async () => {
+    const { app, config } = await bootTestApp({
+      whichFn,
+      fakeAcpOptions: {
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+        sessionNewSessionId: "hub-title-idle",
+        emitSessionInfoOnNew: true,
+      },
+    })
+    await enableAgent(app, "cursor", whichFn)
+
+    const { httpBase, wsUrl } = await getListeningBase(app, config)
+    const idle = await openStreamClient(wsUrl, app.deviceCredential.credential)
+
+    const createResponse = await fetch(`${httpBase}/v1/sessions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${app.deviceCredential.credential}`,
+      },
+      body: JSON.stringify({
+        agentId: "cursor",
+        cwd: "/tmp/hub-title-idle-project",
+      }),
+    })
+    expect(createResponse.status).toBe(201)
+
+    const sessionInfo = await idle.waitFor((message) => message.type === "session_info")
+    expect(sessionInfo).toMatchObject({
+      type: "session_info",
+      agentId: "cursor",
+      sessionId: "hub-title-idle",
+      title: "Renamed by the fake agent",
+    })
+
+    await idle.close()
+  })
 })

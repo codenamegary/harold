@@ -16,7 +16,6 @@ import { FastifyInstance } from "fastify"
 import { AcpSupervisor } from "../acp/supervisor/supervisor"
 import { AuthBroker } from "../agent/auth/broker"
 import { CommandsCache } from "./hub/commands.cache"
-import { SessionInfoCache } from "./hub/session.info.cache"
 import { SessionCwdCache } from "./hub/hub"
 import { agentAdvertisesSessionClose, agentAdvertisesSessionList } from "./session.acp.ready"
 import { makeDeleteAcpSession } from "./session.delete.acp.session.usecase"
@@ -25,6 +24,8 @@ import {
   ArchiveAcpSession,
   EnsureSupervisorReady,
   FindAgentSettings,
+  ForgetSessionTitle,
+  GetSessionTitle,
   IsArchivedAcpSession,
 } from "./session.ports"
 import {
@@ -52,7 +53,8 @@ export type SessionRouteDeps = Readonly<{
   ensureSupervisorReady: EnsureSupervisorReady
   cwdCache: SessionCwdCache
   commandsCache: CommandsCache
-  sessionInfoCache: SessionInfoCache
+  getSessionTitle: GetSessionTitle
+  forgetSessionTitle: ForgetSessionTitle
   isArchivedAcpSession: IsArchivedAcpSession
   archiveAcpSession: ArchiveAcpSession
   authBroker?: AuthBroker
@@ -65,7 +67,7 @@ export const registerSessionRoutes = (app: FastifyInstance, deps: SessionRouteDe
   const deleteAcpSession = makeDeleteAcpSession({
     archiveAcpSession: deps.archiveAcpSession,
     commandsCache: deps.commandsCache,
-    sessionInfoCache: deps.sessionInfoCache,
+    forgetSessionTitle: deps.forgetSessionTitle,
     ensureSupervisorReady: deps.ensureSupervisorReady,
     advertisesSessionClose: (agentId) => agentAdvertisesSessionClose(deps.acpSupervisor, agentId),
     closeAcpSession: (input) => deps.acpSupervisor.closeAcpSession(input),
@@ -176,7 +178,7 @@ export const registerSessionRoutes = (app: FastifyInstance, deps: SessionRouteDe
     })
 
     const items = visible.map((session) => {
-      const pushedTitle = deps.sessionInfoCache.get({
+      const pushedTitle = deps.getSessionTitle({
         agentId: session.agentId,
         sessionId: session.sessionId,
       })

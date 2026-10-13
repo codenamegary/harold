@@ -44,7 +44,7 @@ import { registerSessionStreamRoutes } from "../session/session.stream.routes"
 import { createAcpHubPromptSession } from "../session/hub/acp.hub.prompt"
 import { createSessionCwdCache, createSessionHub, SessionHub } from "../session/hub/hub"
 import { createCommandsCache } from "../session/hub/commands.cache"
-import { createSessionInfoCache } from "../session/hub/session.info.cache"
+import { createSessionTitleCache } from "../session/hub/session.title.cache"
 import { makeEnsureSupervisorReady } from "../session/session.acp.ready"
 import { makePromptAuthGate } from "../session/session.prompt.auth.gate.usecase"
 import { StartAcpAgent } from "../session/session.ports"
@@ -212,7 +212,7 @@ export const createServer = async ({
   const sessionHubRef: { current: SessionHub | null } = { current: null }
   const cwdCache = createSessionCwdCache()
   const commandsCache = createCommandsCache()
-  const sessionInfoCache = createSessionInfoCache()
+  const sessionTitleCache = createSessionTitleCache()
 
   const agentExists = (agentId: string) => agentSettings.hasAgentId(agentId)
 
@@ -322,7 +322,7 @@ export const createServer = async ({
   const sessionHub = createSessionHub({
     cwdCache,
     commandsCache,
-    sessionInfoCache,
+    sessionTitleCache,
     loadSession: async ({ agentId, sessionId, cwd }) => {
       const loaded = await acpSupervisor.loadSession({ agentId, sessionId, cwd })
       return loaded.ok ? { ok: true } : { ok: false, reason: loaded.reason }
@@ -388,7 +388,8 @@ export const createServer = async ({
     ensureSupervisorReady,
     cwdCache,
     commandsCache,
-    sessionInfoCache,
+    getSessionTitle: sessionTitleCache.getSessionTitle,
+    forgetSessionTitle: sessionTitleCache.forgetSessionTitle,
     isArchivedAcpSession: archivedAcpSessions.isArchived,
     archiveAcpSession: archivedAcpSessions.archive,
     authBroker,

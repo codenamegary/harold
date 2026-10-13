@@ -601,7 +601,7 @@ describe("session hub session info", () => {
     expect(infoIndex).toBeLessThan(subscribedIndex)
   })
 
-  test("live renames fan out to every subscriber of the agent, not other agents", async () => {
+  test("live renames reach every connected client, including idle ones and other agents", async () => {
     const cwdCache = createSessionCwdCache()
     cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
     cwdCache.remember({ agentId: "cursor", sessionId: "s2", cwd: "/tmp/b" })
@@ -641,8 +641,15 @@ describe("session hub session info", () => {
       },
     ])
     expect(b.messages.filter((m) => m.type === "session_info")).toHaveLength(1)
-    expect(c.messages.filter((m) => m.type === "session_info")).toHaveLength(0)
-    expect(idle.messages.filter((m) => m.type === "session_info")).toHaveLength(0)
+    expect(c.messages.filter((m) => m.type === "session_info")).toHaveLength(1)
+    expect(idle.messages.filter((m) => m.type === "session_info")).toEqual([
+      {
+        type: "session_info",
+        agentId: "cursor",
+        sessionId: "s1",
+        title: "Renamed by the agent",
+      },
+    ])
   })
 
   test("repeated titles are not rebroadcast and marker updates are ignored", async () => {

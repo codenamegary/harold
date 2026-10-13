@@ -867,7 +867,7 @@ class DefaultSessionOwnerTest {
     }
 
     @Test
-    fun rawSessionInfoUpdateSetsTitleWithoutTouchingTranscript() = runTest {
+    fun rawSessionInfoUpdateLeavesTitlesAndTranscriptAlone() = runTest {
         val factory = ScriptedSessionStreamFactory(
             listOf(holdOpen()),
         )
@@ -892,24 +892,7 @@ class DefaultSessionOwnerTest {
         )
         advanceUntilIdle()
 
-        assertEquals(mapOf("opencode:ses_02" to "Named by the agent"), owner.sessionTitles.value)
-        assertEquals(rowsBefore, owner.snapshot.value.transcript.rows)
-
-        factory.lastStream!!.emit(
-            SessionStreamServerMessage.SessionUpdate(
-                agentId = "opencode",
-                sessionId = "ses_02",
-                update = JsonObject(
-                    mapOf(
-                        "sessionUpdate" to JsonPrimitive("session_info_update"),
-                        "_meta" to JsonObject(mapOf("marker" to JsonPrimitive("retry"))),
-                    ),
-                ),
-            ),
-        )
-        advanceUntilIdle()
-
-        assertEquals(mapOf("opencode:ses_02" to "Named by the agent"), owner.sessionTitles.value)
+        assertTrue(owner.sessionTitles.value.isEmpty())
         assertEquals(rowsBefore, owner.snapshot.value.transcript.rows)
         owner.disconnect()
         advanceUntilIdle()

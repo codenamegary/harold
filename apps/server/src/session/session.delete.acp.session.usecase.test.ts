@@ -25,12 +25,8 @@ describe("makeDeleteAcpSession", () => {
           forgotten.push(params)
         },
       },
-      sessionInfoCache: {
-        remember: () => undefined,
-        get: () => undefined,
-        forget: (params) => {
-          forgottenTitles.push(params)
-        },
+      forgetSessionTitle: (params) => {
+        forgottenTitles.push(params)
       },
       ensureSupervisorReady: async () => ({ ok: true }),
       advertisesSessionClose: () => true,
@@ -64,11 +60,7 @@ describe("makeDeleteAcpSession", () => {
         get: () => undefined,
         forget: () => undefined,
       },
-      sessionInfoCache: {
-        remember: () => undefined,
-        get: () => undefined,
-        forget: () => undefined,
-      },
+      forgetSessionTitle: () => undefined,
       ensureSupervisorReady: async () => ({ ok: true }),
       advertisesSessionClose: () => false,
       closeAcpSession: async () => {
@@ -92,11 +84,7 @@ describe("makeDeleteAcpSession", () => {
         get: () => undefined,
         forget: () => undefined,
       },
-      sessionInfoCache: {
-        remember: () => undefined,
-        get: () => undefined,
-        forget: () => undefined,
-      },
+      forgetSessionTitle: () => undefined,
       ensureSupervisorReady: async () => ({
         ok: false,
         reason: "ACP supervisor failed to start",

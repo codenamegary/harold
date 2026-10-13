@@ -7,7 +7,8 @@ import { AUTH_GATED_PROMPT_MESSAGE } from "../../acp/auth.required"
 import { parseAvailableCommandsUpdate } from "./commands.available"
 import { CommandsCache, createCommandsCache } from "./commands.cache"
 import { parseSessionInfoUpdate } from "./session.info"
-import { createSessionInfoCache, SessionInfoCache } from "./session.info.cache"
+import { createSessionTitleCache, SessionTitleCache } from "./session.title.cache"
+import { makeApplySessionTitle } from "../session.apply.title.usecase"
 import { makePromptAuthGate, PromptAuthGate } from "../session.prompt.auth.gate.usecase"
 import {
   SessionHubCancelSession,
@@ -59,7 +60,7 @@ export type PendingClientRpc = {
 export type CreateSessionHubParams = {
   cwdCache: SessionCwdCache
   commandsCache?: CommandsCache
-  sessionInfoCache?: SessionInfoCache
+  sessionTitleCache?: SessionTitleCache
   loadSession: SessionHubLoadSession
   promptSession: SessionHubPromptSession
   cancelSession: SessionHubCancelSession
@@ -125,7 +126,7 @@ export const createSessionCwdCache = (): SessionCwdCache => {
 export const createSessionHub = ({
   cwdCache,
   commandsCache = createCommandsCache(),
-  sessionInfoCache = createSessionInfoCache(),
+  sessionTitleCache = createSessionTitleCache(),
   loadSession,
   promptSession,
   cancelSession,
@@ -216,47 +217,18 @@ export const createSessionHub = ({
     }
   }
 
-  const applySessionInfo = (params: {
-    agentId: AgentId
-    sessionId: string
-    title: string | null
-  }) => {
-    const current = sessionInfoCache.get({
-      agentId: params.agentId,
-      sessionId: params.sessionId,
-    })
-
-    if (params.title === null) {
-      if (current === undefined) {
-        return
-      }
-
-      sessionInfoCache.forget({ agentId: params.agentId, sessionId: params.sessionId })
-      fanOutToAgent(params.agentId, {
-        type: "session_info",
-        agentId: params.agentId,
-        sessionId: params.sessionId,
-        title: null,
-      })
-      return
+  const fanOutToAll = (message: SessionStreamServerMessage) => {
+    for (const subscriber of subscribers.values()) {
+      subscriber.sink.send(message)
     }
-
-    if (current === params.title) {
-      return
-    }
-
-    sessionInfoCache.remember({
-      agentId: params.agentId,
-      sessionId: params.sessionId,
-      title: params.title,
-    })
-    fanOutToAgent(params.agentId, {
-      type: "session_info",
-      agentId: params.agentId,
-      sessionId: params.sessionId,
-      title: params.title,
-    })
   }
+
+  const applySessionTitle = makeApplySessionTitle({
+    ...sessionTitleCache,
+    broadcastSessionTitle: ({ agentId, sessionId, title }) => {
+      fanOutToAll({ type: "session_info", agentId, sessionId, title })
+    },
+  })
 
   const ensureSubscribed = (params: {
     subscriberId: string
@@ -357,7 +329,7 @@ export const createSessionHub = ({
       })
     }
 
-    const cachedTitle = sessionInfoCache.get({
+    const cachedTitle = sessionTitleCache.getSessionTitle({
       agentId: params.agentId,
       sessionId: params.sessionId,
     })
@@ -548,7 +520,7 @@ export const createSessionHub = ({
 
       const sessionInfo = parseSessionInfoUpdate(update)
       if (sessionInfo !== null && sessionInfo.title !== undefined) {
-        applySessionInfo({ agentId, sessionId, title: sessionInfo.title })
+        applySessionTitle({ agentId, sessionId, title: sessionInfo.title })
       }
 
       fanOut(sessionKey(agentId, sessionId), {
