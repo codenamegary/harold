@@ -24,6 +24,8 @@ import {
   ArchiveAcpSession,
   EnsureSupervisorReady,
   FindAgentSettings,
+  ForgetSessionTitle,
+  GetSessionTitle,
   IsArchivedAcpSession,
 } from "./session.ports"
 import {
@@ -51,6 +53,8 @@ export type SessionRouteDeps = Readonly<{
   ensureSupervisorReady: EnsureSupervisorReady
   cwdCache: SessionCwdCache
   commandsCache: CommandsCache
+  getSessionTitle: GetSessionTitle
+  forgetSessionTitle: ForgetSessionTitle
   isArchivedAcpSession: IsArchivedAcpSession
   archiveAcpSession: ArchiveAcpSession
   authBroker?: AuthBroker
@@ -63,6 +67,7 @@ export const registerSessionRoutes = (app: FastifyInstance, deps: SessionRouteDe
   const deleteAcpSession = makeDeleteAcpSession({
     archiveAcpSession: deps.archiveAcpSession,
     commandsCache: deps.commandsCache,
+    forgetSessionTitle: deps.forgetSessionTitle,
     ensureSupervisorReady: deps.ensureSupervisorReady,
     advertisesSessionClose: (agentId) => agentAdvertisesSessionClose(deps.acpSupervisor, agentId),
     closeAcpSession: (input) => deps.acpSupervisor.closeAcpSession(input),
@@ -172,9 +177,17 @@ export const registerSessionRoutes = (app: FastifyInstance, deps: SessionRouteDe
       })
     })
 
+    const items = visible.map((session) => {
+      const pushedTitle = deps.getSessionTitle({
+        agentId: session.agentId,
+        sessionId: session.sessionId,
+      })
+      return pushedTitle === undefined ? session : { ...session, title: pushedTitle }
+    })
+
     return reply.status(200).send(
       SessionCollectionSchema.parse({
-        items: visible,
+        items,
       }),
     )
   })

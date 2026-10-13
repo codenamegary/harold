@@ -1,5 +1,6 @@
 package harold.android.live
 
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.JsonElement
 import harold.android.contracts.AgentId
@@ -15,6 +16,16 @@ interface SessionOwner {
     val connectionState: StateFlow<ConnectionState>
 
     val snapshot: StateFlow<SessionSnapshot>
+
+    /**
+     * Latest agent-pushed titles keyed by [harold.android.contracts.catalogSessionKey],
+     * covering every session the stream reported a rename for. Survives watch
+     * changes so session lists can follow renames.
+     */
+    val sessionTitles: StateFlow<Map<String, String>>
+
+    /** Emits after each prompt_complete frame for the watched session. */
+    val promptCompletions: Flow<Unit>
 
     fun connect(serverOrigin: String)
 

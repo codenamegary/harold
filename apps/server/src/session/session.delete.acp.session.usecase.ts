@@ -5,6 +5,7 @@ import {
   ArchiveAcpSession,
   CloseAcpSession,
   EnsureSupervisorReady,
+  ForgetSessionTitle,
 } from "./session.ports"
 
 export type DeleteAcpSessionResult = { ok: true } | { ok: false; reason: string }
@@ -17,6 +18,7 @@ export type DeleteAcpSessionInput = Readonly<{
 export type DeleteAcpSessionDeps = Readonly<{
   archiveAcpSession: ArchiveAcpSession
   commandsCache: CommandsCache
+  forgetSessionTitle: ForgetSessionTitle
   ensureSupervisorReady: EnsureSupervisorReady
   advertisesSessionClose: AdvertisesSessionClose
   closeAcpSession: CloseAcpSession
@@ -32,6 +34,10 @@ export const makeDeleteAcpSession =
       sessionId: input.sessionId,
     })
     deps.commandsCache.forget({
+      agentId: input.agentId,
+      sessionId: input.sessionId,
+    })
+    deps.forgetSessionTitle({
       agentId: input.agentId,
       sessionId: input.sessionId,
     })

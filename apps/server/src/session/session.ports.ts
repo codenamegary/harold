@@ -55,6 +55,20 @@ export type ArchiveAcpSession = (params: ArchivedAcpSessionKey) => void
 
 export type IsArchivedAcpSession = (params: ArchivedAcpSessionKey) => boolean
 
+// Agent-pushed session titles
+export type SessionTitleKey = {
+  agentId: AgentId
+  sessionId: string
+}
+
+export type GetSessionTitle = (params: SessionTitleKey) => string | undefined
+
+export type RememberSessionTitle = (params: SessionTitleKey & { title: string }) => void
+
+export type ForgetSessionTitle = (params: SessionTitleKey) => void
+
+export type BroadcastSessionTitle = (params: SessionTitleKey & { title: string | null }) => void
+
 // Prompt auth gating
 export type EnsureReadyForPrompt = (agentId: AgentId) => Promise<{ ok: true } | { ok: false }>
 

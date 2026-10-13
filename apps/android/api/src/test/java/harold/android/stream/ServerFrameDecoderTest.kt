@@ -161,4 +161,8 @@ private fun knownFrames(): List<KnownFrame> =
             }
             """.trimIndent(),
         ),
+        KnownFrame(
+            "session_info",
+            """{"type":"session_info","agentId":"cursor","sessionId":"sess_01","title":"Fix the auth flow"}""",
+        ),
     )

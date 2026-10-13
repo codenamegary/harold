@@ -3,6 +3,7 @@ package harold.android.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import harold.android.live.SessionOwner
 import harold.android.navigation.Navigator
 import harold.android.network.apiErrorMessage
 import harold.android.session.PairedState
@@ -28,6 +29,7 @@ class SessionsViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val sessionCommands: SessionCommands,
     private val navigator: Navigator,
+    private val sessionOwner: SessionOwner,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SessionsUiState())
     val uiState: StateFlow<SessionsUiState> = _uiState.asStateFlow()
@@ -37,6 +39,9 @@ class SessionsViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             load()
+        }
+        viewModelScope.launch {
+            sessionOwner.sessionTitles.collect(::applyTitles)
         }
     }
 
@@ -112,5 +117,15 @@ class SessionsViewModel @Inject constructor(
             .filter { row -> search.isEmpty() || row.name.contains(search, ignoreCase = true) }
             .sortedByDescending { row -> row.updatedAt }
         _uiState.update { current -> current.copy(sessions = sessions) }
+    }
+
+    private fun applyTitles(titles: Map<String, String>) {
+        if (titles.isEmpty()) {
+            return
+        }
+        catalog = catalog.map { row ->
+            titles[row.id]?.let { title -> row.copy(name = title) } ?: row
+        }
+        publish()
     }
 }

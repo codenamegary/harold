@@ -19,8 +19,11 @@ import harold.android.stream.ConnectionStatus
 import harold.android.testing.FakeSessionGateway
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -269,6 +272,11 @@ private class FakeSessionOwner : SessionOwner {
 
     private val _snapshot = MutableStateFlow(SessionSnapshot())
     override val snapshot: StateFlow<SessionSnapshot> = _snapshot.asStateFlow()
+
+    override val sessionTitles: StateFlow<Map<String, String>> =
+        MutableStateFlow<Map<String, String>>(emptyMap()).asStateFlow()
+
+    override val promptCompletions: Flow<Unit> = MutableSharedFlow<Unit>().asSharedFlow()
 
     val connects = mutableListOf<String>()
     var retries = 0

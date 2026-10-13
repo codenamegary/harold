@@ -171,4 +171,42 @@ describe("session stream contracts", () => {
       },
     })
   })
+
+  test("parses session_info frames with a title and with a null clear", () => {
+    expect(
+      SessionStreamServerMessageSchema.parse({
+        type: "session_info",
+        agentId: "cursor",
+        sessionId: "acp-1",
+        title: "Fix the auth flow",
+      }),
+    ).toEqual({
+      type: "session_info",
+      agentId: "cursor",
+      sessionId: "acp-1",
+      title: "Fix the auth flow",
+    })
+
+    expect(
+      SessionStreamServerMessageSchema.parse({
+        type: "session_info",
+        agentId: "cursor",
+        sessionId: "acp-1",
+        title: null,
+      }),
+    ).toEqual({
+      type: "session_info",
+      agentId: "cursor",
+      sessionId: "acp-1",
+      title: null,
+    })
+
+    expect(() =>
+      SessionStreamServerMessageSchema.parse({
+        type: "session_info",
+        agentId: "cursor",
+        sessionId: "acp-1",
+      }),
+    ).toThrow()
+  })
 })

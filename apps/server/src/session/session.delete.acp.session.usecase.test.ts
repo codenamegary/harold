@@ -14,6 +14,7 @@ describe("makeDeleteAcpSession", () => {
     })
 
     const forgotten: Array<{ agentId: typeof agentId; sessionId: string }> = []
+    const forgottenTitles: Array<{ agentId: typeof agentId; sessionId: string }> = []
 
     const deleteAcpSession = makeDeleteAcpSession({
       archiveAcpSession: () => undefined,
@@ -23,6 +24,9 @@ describe("makeDeleteAcpSession", () => {
         forget: (params) => {
           forgotten.push(params)
         },
+      },
+      forgetSessionTitle: (params) => {
+        forgottenTitles.push(params)
       },
       ensureSupervisorReady: async () => ({ ok: true }),
       advertisesSessionClose: () => true,
@@ -38,6 +42,7 @@ describe("makeDeleteAcpSession", () => {
 
     expect(result).toEqual({ ok: true })
     expect(forgotten).toEqual([{ agentId, sessionId: "sess-1" }])
+    expect(forgottenTitles).toEqual([{ agentId, sessionId: "sess-1" }])
     expect(closeStarted.value).toBe(true)
     expect(closeFinished.value).toBe(false)
 
@@ -55,6 +60,7 @@ describe("makeDeleteAcpSession", () => {
         get: () => undefined,
         forget: () => undefined,
       },
+      forgetSessionTitle: () => undefined,
       ensureSupervisorReady: async () => ({ ok: true }),
       advertisesSessionClose: () => false,
       closeAcpSession: async () => {
@@ -78,6 +84,7 @@ describe("makeDeleteAcpSession", () => {
         get: () => undefined,
         forget: () => undefined,
       },
+      forgetSessionTitle: () => undefined,
       ensureSupervisorReady: async () => ({
         ok: false,
         reason: "ACP supervisor failed to start",

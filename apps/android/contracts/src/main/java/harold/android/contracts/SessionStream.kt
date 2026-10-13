@@ -123,6 +123,14 @@ sealed interface SessionStreamServerMessage {
         val agentId: AgentId,
         val auth: AgentAuth,
     ) : SessionStreamServerMessage
+
+    @Serializable
+    @SerialName("session_info")
+    data class SessionInfo(
+        val agentId: AgentId,
+        val sessionId: String,
+        val title: String?,
+    ) : SessionStreamServerMessage
 }
 
 fun catalogSessionKey(agentId: AgentId, sessionId: String): String = "$agentId:$sessionId"

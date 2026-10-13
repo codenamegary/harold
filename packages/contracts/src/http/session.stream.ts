@@ -21,10 +21,7 @@ export const SessionStreamPromptSchema = z.strictObject({
   agentId: AgentIdSchema,
   sessionId: z.string().min(1),
   text: z.string().min(1).max(32_768),
-  attachments: z
-    .array(AttachmentReferenceSchema)
-    .max(MAX_ATTACHMENTS_PER_PROMPT)
-    .optional(),
+  attachments: z.array(AttachmentReferenceSchema).max(MAX_ATTACHMENTS_PER_PROMPT).optional(),
 })
 
 export const SessionStreamCancelSchema = z.strictObject({
@@ -116,6 +113,13 @@ export const SessionStreamAuthSessionUpdatedSchema = z.strictObject({
   auth: AgentAuthSchema,
 })
 
+export const SessionStreamSessionInfoSchema = z.strictObject({
+  type: z.literal("session_info"),
+  agentId: AgentIdSchema,
+  sessionId: z.string().min(1),
+  title: z.string().nullable(),
+})
+
 export const SessionStreamServerMessageSchema = z.discriminatedUnion("type", [
   SessionStreamSessionUpdateSchema,
   SessionStreamSessionConfigSchema,
@@ -126,6 +130,7 @@ export const SessionStreamServerMessageSchema = z.discriminatedUnion("type", [
   SessionStreamPromptCompleteSchema,
   SessionStreamCancelledSchema,
   SessionStreamAuthSessionUpdatedSchema,
+  SessionStreamSessionInfoSchema,
 ])
 
 export type SessionStreamClientMessage = z.infer<typeof SessionStreamClientMessageSchema>
