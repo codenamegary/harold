@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.2.0](https://github.com/codenamegary/harold/compare/harold-android-v1.1.2...harold-android-v1.2.0) (2026-10-13)
+
+
+### Features
+
+* **sessions:** show live agent session renames in headers and lists ([#396](https://github.com/codenamegary/harold/issues/396)) ([5bb0ac1](https://github.com/codenamegary/harold/commit/5bb0ac1323f8a240a6e841293b2ead5a4c781a3a))
+
+
+### Bug Fixes
+
+* **android:** create session on confirm, seed config from response ([#375](https://github.com/codenamegary/harold/issues/375)) ([f516ac5](https://github.com/codenamegary/harold/commit/f516ac539705a279073ade02e18621ff9502960a))
+* **android:** drop the operator console subtitle from the shell screen ([bd28213](https://github.com/codenamegary/harold/commit/bd28213cb5dc852a4ff70d5b5971693fc4fa495a))
+* **android:** use an icon back button on the pairing screen ([bd28213](https://github.com/codenamegary/harold/commit/bd28213cb5dc852a4ff70d5b5971693fc4fa495a))
+
+
+### Refactoring
+
+* **android:** adopt Hilt for dependency injection ([#392](https://github.com/codenamegary/harold/issues/392)) ([f7d1951](https://github.com/codenamegary/harold/commit/f7d1951dc1e55dd377a5772f0077281a21caae09))
+* **android:** migrate to Navigation 3 ([#394](https://github.com/codenamegary/harold/issues/394)) ([cdda092](https://github.com/codenamegary/harold/commit/cdda0922b3f63f2ac29dd3126e27c207088f5066))
+* **android:** retire deprecated build and Compose APIs ([#393](https://github.com/codenamegary/harold/issues/393)) ([478cfdd](https://github.com/codenamegary/harold/commit/478cfdda76283c63841ec0bb26aa73c6885074a7))
+* **android:** split the app into domain-named modules ([#395](https://github.com/codenamegary/harold/issues/395)) ([1b0f774](https://github.com/codenamegary/harold/commit/1b0f774e11787df94e53ffb251a57277e95b9f6e))
+* **pairing:** reject the retired agent-server uri scheme as invalid ([bd28213](https://github.com/codenamegary/harold/commit/bd28213cb5dc852a4ff70d5b5971693fc4fa495a))
+* replace operator with user across code and docs ([bd28213](https://github.com/codenamegary/harold/commit/bd28213cb5dc852a4ff70d5b5971693fc4fa495a))
+
+
+### Documentation
+
+* **branding:** replace operator with user in branding pages ([bd28213](https://github.com/codenamegary/harold/commit/bd28213cb5dc852a4ff70d5b5971693fc4fa495a))
+* remove the ADRs and CONTEXT.md ([bd28213](https://github.com/codenamegary/harold/commit/bd28213cb5dc852a4ff70d5b5971693fc4fa495a))
+* remove the research notes ([bd28213](https://github.com/codenamegary/harold/commit/bd28213cb5dc852a4ff70d5b5971693fc4fa495a))
+
+
+### CI
+
+* **workflows:** gate branch protection behind an always-reporting ci-ok job ([#379](https://github.com/codenamegary/harold/issues/379)) ([c29e8cd](https://github.com/codenamegary/harold/commit/c29e8cd143ee695b9c973898a075c9043ff9a440))
+
 ## [1.1.2](https://github.com/codenamegary/harold/compare/harold-android-v1.1.1...harold-android-v1.1.2) (2026-10-10)
 
 
