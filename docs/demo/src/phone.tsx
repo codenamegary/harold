@@ -1,38 +1,41 @@
 import { OffthreadVideo, staticFile } from "remotion"
+import { line } from "./theme"
 
-const screenWidth = 360
+const BEZEL = 10
 
-export const phoneFrameSize = (videoWidth: number, videoHeight: number) => {
+export const phoneFrameSize = (videoWidth: number, videoHeight: number, screenWidth: number) => {
   const height = Math.round((screenWidth * videoHeight) / videoWidth)
   return {
     screenWidth,
     screenHeight: height,
-    frameWidth: screenWidth + 20,
-    frameHeight: height + 20,
+    frameWidth: screenWidth + BEZEL * 2,
+    frameHeight: height + BEZEL * 2,
   }
 }
 
 export const PhoneFrame: React.FC<{
   videoWidth: number
   videoHeight: number
-}> = ({ videoWidth, videoHeight }) => {
-  const size = phoneFrameSize(videoWidth, videoHeight)
+  screenWidth: number
+}> = ({ videoWidth, videoHeight, screenWidth }) => {
+  const size = phoneFrameSize(videoWidth, videoHeight, screenWidth)
   return (
     <div
       style={{
         width: size.frameWidth,
         height: size.frameHeight,
-        borderRadius: 42,
+        borderRadius: 44,
         background: "#1A1F26",
-        padding: 10,
-        boxShadow: "0 30px 80px rgba(0,0,0,0.45)",
+        border: `1px solid ${line}`,
+        padding: BEZEL - 1,
+        boxShadow: "0 1px 0 rgba(255,255,255,0.05) inset, 0 40px 90px rgba(0,0,0,0.6)",
       }}
     >
       <div
         style={{
           width: size.screenWidth,
           height: size.screenHeight,
-          borderRadius: 32,
+          borderRadius: 34,
           overflow: "hidden",
           background: "#000",
         }}

@@ -4,8 +4,10 @@ Output terminal-pair.mp4
 Set Shell "bash"
 Set FontFamily "DejaVu Sans Mono"
 Set FontSize 14
-Set Width 1760
-Set Height 1280
+Set Rows 90
+Set Columns 80
+# Set Width 1760
+# Set Height 1280
 # Set WindowBar Colorful
 Set Padding 10
 Set TypingSpeed 100ms
@@ -21,9 +23,9 @@ Type "harold stop"
 Enter
 Sleep 3s
 
-Type "tmux attach -t harold-demo"
-Enter
-Sleep 1200ms
+#Type "tmux attach -t harold-demo"
+#Enter
+#Sleep 1200ms
 
 # Wipe the setup lines left in the buffer before recording resumes, so the
 # video opens clean. Runs in tmux if the attach succeeded, in bash if it did not.
@@ -43,4 +45,4 @@ Enter
 Sleep 3s
 
 # Hold the terminal open; the phone drive happens alongside this sleep.
-Sleep 100s
+#Sleep 100s

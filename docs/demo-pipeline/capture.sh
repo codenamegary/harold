@@ -17,6 +17,10 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
 MEDIA="$SCRIPT_DIR"
 PUBLIC="$ROOT/docs/demo/public"
+# Wall poster for the virtual-scene room. Repo copy keeps the folder
+# self-contained; fall back to the SDK asset if it is missing.
+POSTER="$MEDIA/virtualscene-poster.png"
+[[ -f "$POSTER" ]] || POSTER=/usr/lib/android-sdk/emulator/resources/poster.png
 MACRO_DIR=/usr/lib/android-sdk/emulator/resources/macros
 LOG=$MEDIA/capture.log
 MARKS=$MEDIA/marks.log
@@ -60,7 +64,7 @@ TOKEN=$(cat ~/.emulator_console_auth_token)
 
 log "camera_reset"
 emu "automation play ${MACRO_DIR}/Reset_position"
-emu "virtualscene-image wall /usr/lib/android-sdk/emulator/resources/poster.png"
+emu "virtualscene-image wall $POSTER"
 
 log "daemon_restart"
 harold stop >/dev/null 2>&1 || true
