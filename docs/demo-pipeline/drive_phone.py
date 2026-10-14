@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Drive the Harold Android app through the README demo flow (v2).
+"""Drive the Harold Android app through the README demo flow.
 
-Assumes the app was just cleared (unpaired) and is showing the Shell screen,
-and that the pairing QR is already on the virtual-scene wall poster.
-After Pair is tapped, plays Walk_to_image_room so the camera ends facing that poster.
+Assumes the app was just cleared (unpaired) and is showing the Shell screen.
+The back camera shows the composed QR clip, so pairing is a plain scan.
 Taps are located through UIAutomator dumps, never hard-coded.
+
+`--warm` taps Pair and waits for the video camera to produce its first
+frames (the first open after an emulator boot takes about 20 seconds), then
+backs out. Run it before screenrecord so the recording starts clean.
 """
 import os
 import re
@@ -18,10 +21,7 @@ PROMPT = os.environ.get("PROMPT", "Summarize this repo in one sentence")
 MODEL = os.environ.get("MODEL", "deepseek/DeepSeek V4.1 Flash")
 EFFORT_TARGET = os.environ.get("EFFORT_TARGET", "High")
 MARKS = os.environ.get("MARKS", "marks.log")
-WALK_MACRO = os.environ.get(
-    "WALK_MACRO",
-    "/usr/lib/android-sdk/emulator/resources/macros/Walk_to_image_room",
-)
+WARM_SECONDS = float(os.environ.get("WARM_SECONDS", "25"))
 START = time.time()
 
 
@@ -35,30 +35,6 @@ def adb(*args, timeout=30):
     return subprocess.run(
         ["adb", "-s", SERIAL, *args], capture_output=True, text=True, timeout=timeout
     )
-
-
-def console_port():
-    if SERIAL.startswith("emulator-"):
-        return SERIAL.split("-", 1)[1]
-    return "5554"
-
-
-def emu_console(command):
-    token_path = os.path.expanduser("~/.emulator_console_auth_token")
-    with open(token_path) as handle:
-        token = handle.read().strip()
-    payload = f"auth {token}\n{command}\nquit\n"
-    result = subprocess.run(
-        ["nc", "-q", "2", "localhost", console_port()],
-        input=payload,
-        capture_output=True,
-        text=True,
-        timeout=15,
-    )
-    output = result.stdout or ""
-    if result.returncode != 0 or "\nKO" in f"\n{output}":
-        raise RuntimeError(f"emulator console failed: {command}\n{output}{result.stderr}")
-    return output
 
 
 def dump_root():
@@ -183,16 +159,23 @@ def wait_for_transcript_reply(prompt, timeout=120.0):
     return None
 
 
+def warm():
+    """Open the camera once so the first-hit video warmup is out of the way."""
+    tap_text("Pair", timeout=25)
+    print(f"warming camera for {WARM_SECONDS:.0f}s", flush=True)
+    time.sleep(WARM_SECONDS)
+    adb("shell", "input", "keyevent", "KEYCODE_BACK")
+    time.sleep(1.5)
+    return 0
+
+
 def main():
     mark("driver_start")
 
     tap_text("Pair", timeout=25)
     mark("tap_pair")
-    # Walk_to_image_room is about 12s and ends facing the wall poster.
-    emu_console(f"automation play {WALK_MACRO}")
-    mark("walk_playing")
 
-    wait_for(text="New session", timeout=45)
+    wait_for(text="New session", timeout=60)
     mark("paired_chat_visible")
     time.sleep(1.2)
 
@@ -272,4 +255,6 @@ def main():
 
 
 if __name__ == "__main__":
+    if "--warm" in sys.argv:
+        sys.exit(warm())
     sys.exit(main())

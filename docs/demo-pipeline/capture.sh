@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Record the Harold phone demo.
 #
-# Starts the daemon, issues a pairing code, puts that QR on the emulator
-# wall, and screenrecords the app while drive_phone.py walks the UI.
-# The terminal is not recorded. Remotion draws the phone frame later and
-# plays this capture on the screen.
+# Boots the emulator with its back camera fed by a video file
+# (-camera-back videofile:). Before boot, compose_camera.mjs pastes the live
+# pairing QR over the QR panel in the staged clip and rotates the frame so the
+# camera preview lands upright. The terminal is not recorded; Remotion draws
+# the phone frame later and plays this capture on the screen.
+#
+# Needs emulator 36.5+ with the VideoPlayback feature (see README).
 #
 # Artifacts:
 #   docs/demo/public/phone.mp4
@@ -12,17 +15,17 @@
 set -euo pipefail
 
 SERIAL="${SERIAL:-emulator-5554}"
+AVD="${AVD:-agent_server_api34}"
+EMULATOR="${EMULATOR:-$HOME/android/emulator/emulator}"
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
 MEDIA="$SCRIPT_DIR"
 PUBLIC="$ROOT/docs/demo/public"
-# Wall poster for the virtual-scene room. Repo copy keeps the folder
-# self-contained; fall back to the SDK asset if it is missing.
-POSTER="$MEDIA/virtualscene-poster.png"
-[[ -f "$POSTER" ]] || POSTER=/usr/lib/android-sdk/emulator/resources/poster.png
-MACRO_DIR=/usr/lib/android-sdk/emulator/resources/macros
-LOG=$MEDIA/capture.log
-MARKS=$MEDIA/marks.log
+CAMERA_SOURCE="${CAMERA_SOURCE:-$MEDIA/virtual-qr-code-webcam.mp4}"
+CAMERA_FILE="$MEDIA/camera-live.mp4"
+EMULATOR_LOG="$MEDIA/emulator.log"
+LOG="$MEDIA/capture.log"
+MARKS="$MEDIA/marks.log"
 PROMPT="${PROMPT:-Summarize this repo in one sentence}"
 
 mkdir -p "$MEDIA" "$PUBLIC"
@@ -30,63 +33,34 @@ mkdir -p "$MEDIA" "$PUBLIC"
 : >"$MARKS"
 
 log() { printf '%s %s\n' "$(date +%s.%3N)" "$*" | tee -a "$LOG"; }
+die() { echo "capture.sh: $*" >&2; exit 1; }
 
-require_virtualscene() {
-  local pid cmdline found=0
-  for pid in $(pgrep -f 'qemu-system-x86_64' || true); do
-    cmdline=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)
-    case "$cmdline" in
-      *qemu-system-x86_64*-camera-back\ virtualscene*) found=1 ;;
-    esac
+for tool in harold adb node ffmpeg ffprobe python3; do
+  command -v "$tool" >/dev/null || die "$tool is not on PATH"
+done
+[[ -x "$EMULATOR" ]] || die "emulator not found at $EMULATOR (set EMULATOR)"
+[[ -f "$CAMERA_SOURCE" ]] || die "camera source not found at $CAMERA_SOURCE (set CAMERA_SOURCE)"
+
+stop_emulator() {
+  local pid
+  for pid in $(pgrep -f "qemu-system-x86_64 .*-avd $AVD" || true); do
+    kill "$pid" 2>/dev/null || true
   done
-  if [[ "$found" -ne 1 ]]; then
-    echo "capture.sh: the emulator back camera is not a virtual scene." >&2
-    echo "Relaunch with -camera-back virtualscene." >&2
-    exit 1
-  fi
+  for pid in $(pgrep -f "emulator -avd $AVD" || true); do
+    kill "$pid" 2>/dev/null || true
+  done
+  for _ in $(seq 1 30); do
+    pgrep -f "qemu-system-x86_64 .*-avd $AVD" >/dev/null || return 0
+    sleep 1
+  done
+  die "the $AVD emulator did not stop; kill it and retry"
 }
-
-emu() {
-  local reply
-  reply=$(printf 'auth %s\n%s\nquit\n' "$TOKEN" "$1" | nc -q 2 localhost "${SERIAL#emulator-}")
-  if printf '%s\n' "$reply" | grep -q '^KO'; then
-    echo "emulator console failed: $1" >&2
-    printf '%s\n' "$reply" >&2
-    exit 1
-  fi
-}
-
-require_virtualscene
-command -v harold >/dev/null || { echo "capture.sh: harold is not on PATH" >&2; exit 1; }
-command -v ffprobe >/dev/null || { echo "capture.sh: ffprobe is not on PATH" >&2; exit 1; }
-TOKEN=$(cat ~/.emulator_console_auth_token)
-
-log "camera_reset"
-emu "automation play ${MACRO_DIR}/Reset_position"
-emu "virtualscene-image wall $POSTER"
 
 log "daemon_restart"
 harold stop >/dev/null 2>&1 || true
 sleep 1
 harold start
 log "daemon_ready"
-
-adb -s "$SERIAL" reverse tcp:3847 tcp:3847 >/dev/null
-adb -s "$SERIAL" shell pm clear harold.android.debug >/dev/null
-adb -s "$SERIAL" shell pm grant harold.android.debug android.permission.CAMERA
-adb -s "$SERIAL" shell pm grant harold.android.debug android.permission.POST_NOTIFICATIONS
-
-adb -s "$SERIAL" shell settings put global sysui_demo_allowed 1
-adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command enter >/dev/null 2>&1 || true
-adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command clock -e hhmm 0941 >/dev/null 2>&1 || true
-adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command battery -e level 100 -e plugged false >/dev/null 2>&1 || true
-adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command network -e wifi show -e level 4 >/dev/null 2>&1 || true
-adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command notifications -e visible false >/dev/null 2>&1 || true
-
-adb -s "$SERIAL" shell am force-stop harold.android.debug
-adb -s "$SERIAL" shell monkey -p harold.android.debug -c android.intent.category.LAUNCHER 1 >/dev/null
-sleep 4
-log "app_ready"
 
 PAIR_JSON=$(harold pair --no-wait --json | tail -n 1)
 log "pair_issued"
@@ -105,10 +79,49 @@ log "pair_issued"
   ' "$PAIR_JSON" "$MEDIA/qr-live.png"
 ) >"$MEDIA/pair-code.txt"
 CODE=$(cat "$MEDIA/pair-code.txt")
-[[ -n "$CODE" ]] || { echo "no pairing code captured" >&2; exit 1; }
+[[ -n "$CODE" ]] || die "no pairing code captured"
 log "code_seen $CODE"
-emu "virtualscene-image wall ${MEDIA}/qr-live.png"
-log "poster_injected"
+
+log "camera_compose"
+node "$SCRIPT_DIR/compose_camera.mjs" "$CAMERA_SOURCE" "$MEDIA/qr-live.png" "$CAMERA_FILE"
+log "camera_composed"
+
+log "emulator_stop"
+stop_emulator
+log "emulator_boot"
+nohup "$EMULATOR" -avd "$AVD" -no-audio -gpu swiftshader_indirect -no-snapshot \
+  -feature VideoPlayback -camera-back "videofile:$CAMERA_FILE" >"$EMULATOR_LOG" 2>&1 &
+boot=""
+for _ in $(seq 1 150); do
+  boot=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
+  [[ "$boot" == "1" ]] && break
+  sleep 2
+done
+[[ "$boot" == "1" ]] || die "emulator did not finish booting (see $EMULATOR_LOG)"
+log "emulator_ready"
+
+adb -s "$SERIAL" reverse tcp:3847 tcp:3847 >/dev/null
+adb -s "$SERIAL" shell pm clear harold.android.debug >/dev/null
+adb -s "$SERIAL" shell pm grant harold.android.debug android.permission.CAMERA
+adb -s "$SERIAL" shell pm grant harold.android.debug android.permission.POST_NOTIFICATIONS
+
+adb -s "$SERIAL" shell settings put global sysui_demo_allowed 1
+adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command enter >/dev/null 2>&1 || true
+adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command clock -e hhmm 0941 >/dev/null 2>&1 || true
+adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command battery -e level 100 -e plugged false >/dev/null 2>&1 || true
+adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command network -e wifi show -e level 4 >/dev/null 2>&1 || true
+adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command notifications -e visible false >/dev/null 2>&1 || true
+
+adb -s "$SERIAL" shell am force-stop harold.android.debug
+adb -s "$SERIAL" shell monkey -p harold.android.debug -c android.intent.category.LAUNCHER 1 >/dev/null
+sleep 4
+log "app_ready"
+
+# The video camera buffers its first frames lazily: the first open after an
+# emulator boot shows black for ~20s. Warm it before recording so the QR is
+# visible as soon as the scanner opens.
+SERIAL="$SERIAL" python3 "$SCRIPT_DIR/drive_phone.py" --warm 2>&1 | tee -a "$LOG"
+log "camera_warm"
 
 # Native size. --size letterboxes the display and drops the frame rate.
 date +%s.%3N >"$MEDIA/screen-start"
