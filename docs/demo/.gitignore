@@ -3,8 +3,7 @@ dist
 .DS_Store
 .env
 
-# Ignore the output video from Git but not videos you import into src/.
+# Rendered output. public/phone.mp4 is versioned so the cut renders from a fresh clone.
 out
-public/phone.mp4
 
 build

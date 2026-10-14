@@ -14,9 +14,14 @@ Remotion cut for the site and the README. The terminal and the phone frame are d
 
 The cut is a short title card, the capture, then a four second end card. The lockup is one element: it shrinks from the title card into the header, and grows back for the end card.
 
+The phone capture and marks are committed under `public/`, so the cut renders offline from a fresh clone. Run the capture script only when you want a fresh recording.
+
 ```sh
-bash ../demo-pipeline/capture.sh
 bun install
+
+# Only needed for a new recording:
+bash ../demo-pipeline/capture.sh
+
 bun run dev
 bunx remotion render src/index.ts HaroldDemo out/harold.mp4
 ```

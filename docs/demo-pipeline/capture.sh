@@ -7,7 +7,6 @@
 # plays this capture on the screen.
 #
 # Artifacts:
-#   docs/demo-pipeline/phone-demo.mp4
 #   docs/demo/public/phone.mp4
 #   docs/demo/public/capture.json
 set -euo pipefail
@@ -127,11 +126,10 @@ log "driver_exit $DRIVER_STATUS"
 sleep 1
 adb -s "$SERIAL" shell pkill -INT screenrecord || true
 sleep 4
-adb -s "$SERIAL" pull /sdcard/demo.mp4 "$MEDIA/phone-demo.mp4" >/dev/null
+adb -s "$SERIAL" pull /sdcard/demo.mp4 "$PUBLIC/phone.mp4" >/dev/null
 log "phone_pulled"
-cp -f "$MEDIA/phone-demo.mp4" "$PUBLIC/phone.mp4"
 
-python3 - "$MARKS" "$MEDIA/screen-start" "$MEDIA/phone-demo.mp4" "$PUBLIC/capture.json" <<'PY'
+python3 - "$MARKS" "$MEDIA/screen-start" "$PUBLIC/phone.mp4" "$PUBLIC/capture.json" <<'PY'
 import json
 import subprocess
 import sys

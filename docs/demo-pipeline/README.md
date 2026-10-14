@@ -20,7 +20,7 @@ cd apps/android && ./gradlew :app:installDebug
 bash docs/demo-pipeline/capture.sh
 ```
 
-`capture.sh` writes `phone-demo.mp4` here, and copies it to `docs/demo/public/phone.mp4` with `docs/demo/public/capture.json`.
+`capture.sh` writes `docs/demo/public/phone.mp4` and `docs/demo/public/capture.json`. Both are committed, so the cut renders from a fresh clone without re-capturing.
 
 Preview or render from `docs/demo`:
 

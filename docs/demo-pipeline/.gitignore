@@ -3,3 +3,7 @@ pair-code.txt
 qr-live.png
 screen-start
 virtualscene-poster.png
+*.log
+
+# Legacy output from the removed ffmpeg compose pipeline.
+harold-demo.mp4
