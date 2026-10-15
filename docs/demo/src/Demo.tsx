@@ -34,10 +34,11 @@ const CAPTION_H = 60
 
 // After the device list the terminal has said its part: the phone takes
 // center stage this many seconds after pairing lands, at this screen
-// width, this far from the top of the frame.
+// width, this far from the top of the frame. The frame is allowed to run
+// off the bottom edge a little.
 const FOCUS_AFTER_PAIRED_SEC = 8
-const FOCUS_SCREEN_W = 400
-const FOCUS_TOP = 72
+const FOCUS_SCREEN_W = 480
+const FOCUS_TOP = 24
 
 // The lockup lives in the header during the walkthrough. On the title and
 // end cards it is the same element, three times the size and centred.
@@ -287,9 +288,9 @@ export const Demo: React.FC<DemoProps> = ({ events, videoWidth, videoHeight, cap
     interpolate(focus, [0, 1], [phoneLeft0, (1920 - size.frameWidth) / 2]),
   )
   const phoneTop = Math.round(interpolate(focus, [0, 1], [stage.contentTop, FOCUS_TOP]))
-  const terminalOpacity = interpolate(focus, [0, 1], [1, 0.32])
-  const terminalShift = interpolate(focus, [0, 1], [0, -56])
-  const terminalScale = interpolate(focus, [0, 1], [1, 0.94])
+  const terminalOpacity = interpolate(focus, [0, 1], [1, 0.22])
+  const terminalShift = interpolate(focus, [0, 1], [0, -72])
+  const terminalScale = interpolate(focus, [0, 1], [1, 0.8])
 
   return (
     <AbsoluteFill style={{ background: ink, color: paper }}>
