@@ -1,8 +1,10 @@
 import {
   AbsoluteFill,
+  Audio,
   Easing,
   interpolate,
   Sequence,
+  staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion"
@@ -153,12 +155,14 @@ const Tagline: React.FC<{ captureFrames: number }> = ({ captureFrames }) => {
   )
 }
 
-const Caption: React.FC<{ events: CaptureEvent[]; left: number; width: number; top: number }> = ({
-  events,
-  left,
-  width,
-  top,
-}) => {
+const Caption: React.FC<{
+  events: CaptureEvent[]
+  left: number
+  width: number
+  top: number
+  height: number
+  fontSize: number
+}> = ({ events, left, width, top, height, fontSize }) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const sec = frame / fps
@@ -175,13 +179,13 @@ const Caption: React.FC<{ events: CaptureEvent[]; left: number; width: number; t
         left,
         width,
         top,
-        height: CAPTION_H,
+        height,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         textAlign: "center",
         fontFamily: sansFamily,
-        fontSize: 24,
+        fontSize,
         fontWeight: 500,
         lineHeight: 1.25,
         color: body,
@@ -264,6 +268,7 @@ export const Demo: React.FC<DemoProps> = ({ events, videoWidth, videoHeight, cap
   const introFrames = Math.round(INTRO_SEC * fps)
   const captureFrames = Math.round(captureSec * fps)
   const captureEnd = introFrames + captureFrames
+  const totalFrames = captureEnd + Math.round(OUTRO_SEC * fps)
 
   // Once the terminal has printed the device list it has nothing left to
   // say: the phone zooms to center stage and the terminal recedes.
@@ -294,6 +299,18 @@ export const Demo: React.FC<DemoProps> = ({ events, videoWidth, videoHeight, cap
 
   return (
     <AbsoluteFill style={{ background: ink, color: paper }}>
+      <Audio
+        src={staticFile("music.mp3")}
+        loop
+        volume={(f) =>
+          interpolate(
+            f,
+            [0, 0.6 * fps, totalFrames - 3 * fps, totalFrames - 0.5 * fps],
+            [0, 1, 1, 0],
+            { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+          )
+        }
+      />
       <Sequence
         name="Walkthrough"
         from={introFrames}
@@ -331,9 +348,11 @@ export const Demo: React.FC<DemoProps> = ({ events, videoWidth, videoHeight, cap
           </div>
           <Caption
             events={events}
-            left={interpolate(focus, [0, 1], [columnLeft, 120])}
-            width={interpolate(focus, [0, 1], [columnWidth, 980])}
-            top={captionTop}
+            left={interpolate(focus, [0, 1], [columnLeft, 1250])}
+            width={interpolate(focus, [0, 1], [columnWidth, 570])}
+            top={interpolate(focus, [0, 1], [captionTop, 430])}
+            height={interpolate(focus, [0, 1], [CAPTION_H, 280])}
+            fontSize={interpolate(focus, [0, 1], [24, 40])}
           />
         </AbsoluteFill>
       </Sequence>
