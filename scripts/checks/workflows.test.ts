@@ -122,9 +122,11 @@ describe("ci.yml", () => {
     )
   })
 
-  test("smoke pins OpenCode free models to the zen endpoint", async () => {
+  test("smoke runs GLM through the z.ai coding plan provider with its own secret", async () => {
     const smoke = (await loadCi()).jobs?.smoke
     const step = (smoke?.steps ?? []).find((s) => s.run === "bun run test:smoke")
-    expect(step?.env?.OPENCODE_CONFIG_CONTENT).toContain("https://opencode.ai/zen/v1")
+    expect(step?.env?.OPENCODE_SMOKE_MODEL).toBe("zai-coding-plan/glm-5.3-flash")
+    // opencode's zai-coding-plan provider reads ZHIPU_API_KEY from the env.
+    expect(step?.env?.ZHIPU_API_KEY).toBe("${{ secrets.ZAI_CODING_API_KEY }}")
   })
 })

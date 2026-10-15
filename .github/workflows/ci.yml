@@ -242,12 +242,12 @@ jobs:
       - name: Run smoke tests
         env:
           HAROLD_RUN_SMOKE: "1"
-          OPENCODE_SMOKE_MODEL: opencode/mimo-v2.5-free
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          # Live models.dev catalog now points opencode at /inference/v1, which
-          # rejects the anonymous free-model key. Pin zen until that is fixed.
-          # See https://github.com/anomalyco/opencode/issues/54833
-          OPENCODE_CONFIG_CONTENT: '{"provider":{"opencode":{"options":{"baseURL":"https://opencode.ai/zen/v1"}}}}'
+          OPENCODE_SMOKE_MODEL: zai-coding-plan/glm-5.3-flash
+          # opencode's zai-coding-plan provider reads ZHIPU_API_KEY from the
+          # env; the value is the z.ai coding subscription key stored in the
+          # ZAI_CODING_API_KEY secret. Free OpenCode Zen models stopped
+          # working — see https://github.com/codenamegary/harold/issues/398
+          ZHIPU_API_KEY: ${{ secrets.ZAI_CODING_API_KEY }}
         run: bun run test:smoke
 
       - name: Upload opencode logs
