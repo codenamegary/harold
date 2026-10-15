@@ -9,7 +9,7 @@ The demo video pipeline, in two stages:
 
 What is kept and what is not:
 
-- **Kept, committed:** everything in `capture/` and `render/`, including the fixtures in `render/public/` (`phone.mp4`, `capture.json`, `music.mp3`) so a fresh clone renders offline.
-- **Not kept:** `work/`. Capture scratch, logs, renders, and spot-check stills all land there and are safe to delete at any time.
+- **Kept, committed:** everything in `capture/` and `render/`, the fixtures in `render/public/` (`phone.mp4`, `capture.json`, `music.mp3`) so a fresh clone renders offline, and the finished cut at `harold.mp4`.
+- **Not kept:** `work/`. Capture scratch, logs, preview renders, and spot-check stills all land there and are safe to delete at any time.
 
 See `capture/README.md` and `render/README.md` for the details. The runbook for running and debugging the capture is `.opencode/skills/compose-demo/SKILL.md`.

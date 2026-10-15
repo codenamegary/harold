@@ -27,12 +27,12 @@ bash docs/demo/capture/capture.sh
 
 `capture.sh` writes `docs/demo/render/public/phone.mp4` and `docs/demo/render/public/capture.json`. Both are committed, so the cut renders from a fresh clone without re-capturing.
 
-Preview or render from `docs/demo/render`:
+Preview or render from `docs/demo/render` (the render lands at `docs/demo/harold.mp4`, which is committed):
 
 ```sh
 bun install
 bun run dev
-bunx remotion render src/index.ts HaroldDemo ../work/render/harold.mp4
+bunx remotion render src/index.ts HaroldDemo ../harold.mp4
 ```
 
 ## How it works

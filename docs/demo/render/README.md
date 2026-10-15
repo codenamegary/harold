@@ -16,7 +16,7 @@ The cut is a short title card, the capture, then a four second end card. The loc
 
 The phone capture and marks are committed under `public/`, so the cut renders offline from a fresh clone. Run the capture script only when you want a fresh recording.
 
-Renders and spot-check stills go to `../work/render/` and are never committed.
+The finished cut renders to `../harold.mp4`, which is committed. Spot-check stills and the bundle go to `../work/render/` and stay out of git.
 
 ```sh
 bun install
@@ -25,7 +25,7 @@ bun install
 bash ../capture/capture.sh
 
 bun run dev
-bunx remotion render src/index.ts HaroldDemo ../work/render/harold.mp4
+bunx remotion render src/index.ts HaroldDemo ../harold.mp4
 ```
 
 `bun run dev` opens the studio so you can scrub the timeline.

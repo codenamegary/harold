@@ -95,7 +95,10 @@ f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
    spot-check still: `bun x remotion still HaroldDemo ../work/render/check.png
 --frame=<mid-walkthrough>` from `docs/demo/render`. Commit
    `docs/demo/render/public/phone.mp4` + `capture.json` only from a
-   fully successful run — never a failed one.
+   fully successful run — never a failed one. Then re-render the committed
+   cut so it shows the new capture:
+   `bun x remotion render src/index.ts HaroldDemo ../harold.mp4` from
+   `docs/demo/render`.
 
 ## Troubleshooting map
 
