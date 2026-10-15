@@ -153,6 +153,9 @@ sleep 4
 adb -s "$SERIAL" pull /sdcard/demo.mp4 "$PUBLIC/phone.mp4" >/dev/null
 log "phone_pulled"
 
+log "dead_space_cut"
+python3 "$SCRIPT_DIR/cut_dead_space.py" 2>&1 | tee -a "$LOG"
+
 python3 - "$MARKS" "$MEDIA/screen-start" "$PUBLIC/phone.mp4" "$PUBLIC/capture.json" <<'PY'
 import json
 import subprocess

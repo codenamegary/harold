@@ -32,6 +32,13 @@ export const OUTRO_SEC = 4
 const PHONE_SCREEN_W = 336
 const CAPTION_H = 60
 
+// After the device list the terminal has said its part: the phone takes
+// center stage this many seconds after pairing lands, at this screen
+// width, this far from the top of the frame.
+const FOCUS_AFTER_PAIRED_SEC = 8
+const FOCUS_SCREEN_W = 400
+const FOCUS_TOP = 72
+
 // The lockup lives in the header during the walkthrough. On the title and
 // end cards it is the same element, three times the size and centred.
 const LOCKUP = { markSize: 40, fontSize: 30, gap: 14, width: 144, height: 44 }
@@ -247,17 +254,42 @@ const Outro: React.FC = () => {
 export const Demo: React.FC<DemoProps> = ({ events, videoWidth, videoHeight, captureSec }) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
-  const size = phoneFrameSize(videoWidth, videoHeight, PHONE_SCREEN_W)
   const paired = events.find((event) => event.name === "paired_chat_visible")?.sec ?? 17.1
 
   const columnLeft = terminalBox.left + terminalBox.width
   const columnWidth = 1920 - stage.margin - columnLeft
-  const phoneLeft = Math.round(columnLeft + (columnWidth - size.frameWidth) / 2)
   const captionTop = stage.contentBottom - CAPTION_H
 
   const introFrames = Math.round(INTRO_SEC * fps)
   const captureFrames = Math.round(captureSec * fps)
   const captureEnd = introFrames + captureFrames
+
+  // Once the terminal has printed the device list it has nothing left to
+  // say: the phone zooms to center stage and the terminal recedes.
+  const focusAt = paired + FOCUS_AFTER_PAIRED_SEC
+  const relSec = (frame - introFrames) / fps
+  const focus = interpolate(relSec, [focusAt, focusAt + 0.9], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: ease,
+  })
+
+  const size = phoneFrameSize(
+    videoWidth,
+    videoHeight,
+    interpolate(focus, [0, 1], [PHONE_SCREEN_W, FOCUS_SCREEN_W]),
+  )
+  const phoneLeft0 = Math.round(
+    columnLeft +
+      (columnWidth - phoneFrameSize(videoWidth, videoHeight, PHONE_SCREEN_W).frameWidth) / 2,
+  )
+  const phoneLeft = Math.round(
+    interpolate(focus, [0, 1], [phoneLeft0, (1920 - size.frameWidth) / 2]),
+  )
+  const phoneTop = Math.round(interpolate(focus, [0, 1], [stage.contentTop, FOCUS_TOP]))
+  const terminalOpacity = interpolate(focus, [0, 1], [1, 0.32])
+  const terminalShift = interpolate(focus, [0, 1], [0, -56])
+  const terminalScale = interpolate(focus, [0, 1], [1, 0.94])
 
   return (
     <AbsoluteFill style={{ background: ink, color: paper }}>
@@ -277,15 +309,31 @@ export const Demo: React.FC<DemoProps> = ({ events, videoWidth, videoHeight, cap
             ),
           }}
         >
-          <Terminal pairedSec={paired} />
-          <div style={{ position: "absolute", left: phoneLeft, top: stage.contentTop }}>
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              opacity: terminalOpacity,
+              translate: `${terminalShift}px 0px`,
+              scale: `${terminalScale}`,
+              transformOrigin: "left center",
+            }}
+          >
+            <Terminal pairedSec={paired} />
+          </div>
+          <div style={{ position: "absolute", left: phoneLeft, top: phoneTop }}>
             <PhoneFrame
               videoWidth={videoWidth}
               videoHeight={videoHeight}
-              screenWidth={PHONE_SCREEN_W}
+              screenWidth={size.screenWidth}
             />
           </div>
-          <Caption events={events} left={columnLeft} width={columnWidth} top={captionTop} />
+          <Caption
+            events={events}
+            left={interpolate(focus, [0, 1], [columnLeft, 120])}
+            width={interpolate(focus, [0, 1], [columnWidth, 980])}
+            top={captionTop}
+          />
         </AbsoluteFill>
       </Sequence>
       <Sequence name="End card" from={captureEnd} premountFor={fps}>

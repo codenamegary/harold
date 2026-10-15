@@ -4,6 +4,7 @@ qr-live.png
 screen-start
 virtualscene-poster.png
 camera-live.mp4
+phone-raw.mp4
 *.log
 
 # Legacy output from the removed ffmpeg compose pipeline.

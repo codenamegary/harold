@@ -27,6 +27,10 @@ All under `docs/demo-pipeline/` unless noted:
   (`driver_start`, `tap_pair`, `paired_chat_visible`, `tap_new_session`,
   `config_visible`, `mode_plan`, `effort_set`, `prompt_typed`,
   `reply_visible`, ...). `--warm` opens and closes the scanner once.
+- `cut_dead_space.py` — measures frame-to-frame motion, cuts the frozen
+  scan stretch out of `phone.mp4`, remaps the marks to the shorter
+  timeline, and stashes the raw recording as `phone-raw.mp4`. Idempotent:
+  without the stash it defers to the cuts already in `capture.json`.
 
 ## Hardware facts that must not drift
 
@@ -74,14 +78,19 @@ f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
    step 2 and measure.
 4. **Full capture.** Run `capture.sh`. It exits non-zero if the driver
    fails; `docs/demo-pipeline/capture.log` and `driver.log` hold the marks.
-   `capture.json` must contain the full event set — see step 5.
+   `capture.json` must contain the full event set — see step 5 — and the
+   dead-space cut must have fired: `durationSec` shrinks by the removed
+   stretch (a frozen scan cuts ~20s; `rawEvents` holds the unshifted marks
+   and `cuts` the removed video ranges).
 5. **Remotion is in sync.** `docs/demo` reads `public/capture.json` at build
    time (`calculateMetadata`) and `src/steps.ts` maps mark names to
-   captions. Remotion needs no code change unless the driver's marks
-   changed. Validate: every event in `steps.ts` exists in `capture.json`,
-   `durationSec` is sane (~60-90s), and render a spot-check still:
-   `bun x remotion still HaroldDemo out/check.png --frame=<mid-walkthrough>`
-   from `docs/demo`. Commit `public/phone.mp4` + `capture.json` only from a
+   captions; `Demo.tsx` also zooms the phone over the dimmed terminal 8s
+   after the pairing mark. Remotion needs no code change unless the
+   driver's marks changed. Validate: every event in `steps.ts` exists in
+   `capture.json`, `durationSec` is sane (~90s after the cut), and render a
+   spot-check still: `bun x remotion still HaroldDemo out/check.png
+--frame=<mid-walkthrough>` from `docs/demo`. Commit
+   `public/phone.mp4` + `capture.json` only from a
    fully successful run — never a failed one.
 
 ## Troubleshooting map
