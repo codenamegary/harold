@@ -1,75 +1,71 @@
 {
-  "durationSec": 91.32,
+  "durationSec": 115.122,
   "width": 1080,
   "height": 2400,
   "events": [
     {
       "name": "driver_start",
-      "sec": 1.047
+      "sec": 1.027
     },
     {
       "name": "tap_pair",
-      "sec": 4.249
-    },
-    {
-      "name": "walk_playing",
-      "sec": 6.255
+      "sec": 3.991
     },
     {
       "name": "paired_chat_visible",
-      "sec": 17.113
+      "sec": 36.193
     },
     {
       "name": "tap_new_session",
-      "sec": 21.292
+      "sec": 40.252
     },
     {
       "name": "agent_selected",
-      "sec": 39.694
+      "sec": 59.444
     },
     {
       "name": "tap_continue",
-      "sec": 42.603
+      "sec": 62.99
     },
     {
       "name": "config_visible",
-      "sec": 47.761
+      "sec": 68.019
     },
     {
       "name": "model_sheet_open",
-      "sec": 54.143
+      "sec": 72.612
     },
     {
       "name": "model_picked",
-      "sec": 60.798
+      "sec": 78.937
     },
     {
       "name": "mode_plan",
-      "sec": 64.698
+      "sec": 82.784
     },
     {
       "name": "mode_build",
-      "sec": 65.851
+      "sec": 87.029
     },
     {
       "name": "effort_set",
-      "sec": 74.863
+      "sec": 96.4
     },
     {
       "name": "prompt_typed",
-      "sec": 84.361
+      "sec": 103.473
     },
     {
       "name": "tap_send",
-      "sec": 87.464
+      "sec": 106.32
     },
     {
       "name": "reply_visible",
-      "sec": 88.82
+      "sec": 112.622
     },
     {
       "name": "done",
-      "sec": 88.82
+      "sec": 112.622
     }
   ]
 }

@@ -175,7 +175,9 @@ def main():
     tap_text("Pair", timeout=25)
     mark("tap_pair")
 
-    wait_for(text="New session", timeout=60)
+    # The live QR enters the feed at 40s; a restarted playback reaches it
+    # ~42s into the scan.
+    wait_for(text="New session", timeout=90)
     mark("paired_chat_visible")
     time.sleep(1.2)
 

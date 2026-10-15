@@ -9,11 +9,14 @@
  * 1280x960 canvas: the viewfinder shows the scene upright, filling the
  * frame, with no aspect distortion.
  *
- * With a QR argument, the live pairing QR is first pasted over the QR panel
- * on screen before the geometry pass. The panel drifts through the opening
- * seconds of the clip, so the white panel is tracked per frame (connected
- * component search) and the QR is drawn into it; that path expects the
- * original 1920x1080 clip.
+ * With a QR argument, the live pairing QR is overlaid on the tracked panel
+ * position - but only after QR_AFTER_SECONDS of feed time. The first 40
+ * seconds play the clip untouched: the warm pass (25s of wall clock) scans
+ * that inert footage and finds nothing, so it burns no pairing code (codes
+ * are single-use) and triggers no decode-failure retry loop. The recorded
+ * run reaches the QR region and pairs on camera. The tracker expects the
+ * original 1920x1080 clip; the panel settles after its opening drift, and
+ * the overlay uses that settled box.
  *
  * Usage: node compose_camera.mjs <source.mp4> [qr.png] <out.mp4>
  */
@@ -63,6 +66,10 @@ const ENCODE = [
   "yuv420p",
 ]
 const TAIL = `tpad=stop_mode=clone:stop_duration=${TAIL_SECONDS}`
+
+// Feed seconds before the live QR appears. The warm pass scans for 25s of
+// wall clock, so playback never reaches this during warm.
+const QR_AFTER_SECONDS = 40
 
 const runFfmpeg = (args) => {
   const result = spawnSync("ffmpeg", args, { stdio: ["ignore", "inherit", "inherit"] })
@@ -119,12 +126,7 @@ if (srcW !== W || srcH !== H) {
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "harold-camera-"))
 try {
-  const rawIn = path.join(tmp, "in.rgb")
-  const rawOut = path.join(tmp, "out.rgb")
   const grayPath = path.join(tmp, "gray.raw")
-  const qrRaw = path.join(tmp, "qr.rgba")
-
-  runFfmpeg(["-v", "error", "-y", "-i", source, "-f", "rawvideo", "-pix_fmt", "rgb24", rawIn])
   runFfmpeg([
     "-v",
     "error",
@@ -139,14 +141,10 @@ try {
     "rawvideo",
     grayPath,
   ])
-  runFfmpeg(["-v", "error", "-y", "-i", qrPath, "-f", "rawvideo", "-pix_fmt", "rgba", qrRaw])
 
-  const frameBytes = W * H * 3
   const grayBytes = DET_W * DET_H
   const gray = fs.readFileSync(grayPath)
-  const qr = fs.readFileSync(qrRaw)
-  const qrSize = Math.round(Math.sqrt(qr.length / 4))
-  const frameCount = Math.floor(fs.statSync(rawIn).size / frameBytes)
+  const frameCount = Math.floor(gray.length / grayBytes)
 
   // Largest square-ish white blob near the middle of the frame = QR panel.
   const detectPanel = (frame) => {
@@ -204,69 +202,52 @@ try {
     ]
   }
 
-  const inFd = fs.openSync(rawIn, "r")
-  const outFd = fs.openSync(rawOut, "w")
-  const inFrame = Buffer.allocUnsafe(frameBytes)
-  const outFrame = Buffer.allocUnsafe(frameBytes)
   let lastBox = null
-
   for (let f = 0; f < frameCount; f++) {
-    fs.readSync(inFd, inFrame, 0, frameBytes, f * frameBytes)
     const box = detectPanel(gray.subarray(f * grayBytes, (f + 1) * grayBytes)) ?? lastBox
     if (box) lastBox = box
-    inFrame.copy(outFrame)
-    if (box) {
-      const [x1, y1, x2, y2] = box
-      const w = x2 - x1
-      const h = y2 - y1
-      // Erase the staged QR, then paste the live one inside the panel.
-      for (let y = Math.max(0, y1 - 2); y < Math.min(H, y2 + 2); y++) {
-        outFrame.fill(255, (y * W + Math.max(0, x1 - 2)) * 3, (y * W + Math.min(W, x2 + 2)) * 3)
-      }
-      const inset = Math.max(2, Math.round(Math.min(w, h) * 0.03))
-      const dstW = w - 2 * inset
-      const dstH = h - 2 * inset
-      const xMap = new Int32Array(dstW)
-      for (let x = 0; x < dstW; x++)
-        xMap[x] = Math.min(qrSize - 1, Math.floor(((x1 + inset + x - x1) * qrSize) / dstW))
-      for (let y = 0; y < dstH; y++) {
-        const sy = Math.min(qrSize - 1, Math.floor((y * qrSize) / dstH))
-        const srcRow = sy * qrSize * 4
-        const dstRow = ((y1 + inset + y) * W + (x1 + inset)) * 3
-        for (let x = 0; x < dstW; x++) {
-          const s = srcRow + xMap[x] * 4
-          const d = dstRow + x * 3
-          outFrame[d] = qr[s]
-          outFrame[d + 1] = qr[s + 1]
-          outFrame[d + 2] = qr[s + 2]
-        }
-      }
-    }
-    fs.writeSync(outFd, outFrame, 0, frameBytes)
-    if (f % 60 === 0) console.error(`compose_camera: frame ${f}/${frameCount}`)
   }
-  fs.closeSync(inFd)
-  fs.closeSync(outFd)
+  if (!lastBox) {
+    console.error("compose_camera: QR panel not found in source")
+    process.exit(1)
+  }
 
-  // Rotate the composite onto the camera's 4:3 canvas (counter-clockwise,
-  // so the emulator's 90-degree clockwise preview lands upright), then
-  // freeze the last frame for the tail.
+  // Source box -> canvas coords. transpose=2 (90 CCW) maps source (x, y)
+  // to rotated (y, W - x), then the cover scale k widens the rotated frame
+  // to CAM_W, then the crop takes the middle CAM_H band.
+  const k = CAM_W / srcH
+  const cropY = (srcW * k - CAM_H) / 2
+  const [sx1, sy1, sx2, sy2] = lastBox
+  const box = [
+    Math.round(sy1 * k),
+    Math.round((srcW - sx2) * k - cropY),
+    Math.round(sy2 * k),
+    Math.round((srcW - sx1) * k - cropY),
+  ]
+  const bw = Math.max(8, box[2] - box[0])
+  const bh = Math.max(8, box[3] - box[1])
+  console.error(`compose_camera: panel at ${box.join(",")} (${bw}x${bh})`)
+
+  const totalSeconds = Math.ceil(frameCount / FPS + TAIL_SECONDS) + 1
   runFfmpeg([
     "-v",
     "error",
     "-y",
-    "-f",
-    "rawvideo",
-    "-pix_fmt",
-    "rgb24",
-    "-s",
-    `${W}x${H}`,
-    "-r",
-    String(FPS),
     "-i",
-    rawOut,
-    "-vf",
-    `${GEOMETRY},${TAIL}`,
+    source,
+    "-loop",
+    "1",
+    "-t",
+    String(totalSeconds),
+    "-i",
+    qrPath,
+    "-filter_complex",
+    `[0:v]${GEOMETRY},${TAIL}[base];` +
+      `[1:v]scale=${bw}:${bh}[qr];` +
+      `[base][qr]overlay=${box[0]}:${box[1]}:enable='gte(t,${QR_AFTER_SECONDS})':shortest=1[vout]`,
+    "-map",
+    "[vout]",
+    "-shortest",
     ...ENCODE,
     "-movflags",
     "+faststart",

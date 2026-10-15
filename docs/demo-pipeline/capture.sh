@@ -119,9 +119,20 @@ log "app_ready"
 
 # The video camera buffers its first frames lazily: the first open after an
 # emulator boot shows black for ~20s. Warm it before recording so the QR is
-# visible as soon as the scanner opens.
+# visible as soon as the scanner opens. The feed shows the live QR only
+# after 40s of playback, so the 25s warm pass scans inert footage: it burns
+# no pairing code and triggers no decode-failure retries.
 SERIAL="$SERIAL" python3 "$SCRIPT_DIR/drive_phone.py" --warm 2>&1 | tee -a "$LOG"
 log "camera_warm"
+
+# Reset the app so the recorded run pairs on camera, with the camera
+# already warm.
+adb -s "$SERIAL" shell pm clear harold.android.debug >/dev/null
+adb -s "$SERIAL" shell pm grant harold.android.debug android.permission.CAMERA
+adb -s "$SERIAL" shell pm grant harold.android.debug android.permission.POST_NOTIFICATIONS
+adb -s "$SERIAL" shell monkey -p harold.android.debug -c android.intent.category.LAUNCHER 1 >/dev/null
+sleep 4
+log "app_reset"
 
 # Native size. --size letterboxes the display and drops the frame rate.
 date +%s.%3N >"$MEDIA/screen-start"
