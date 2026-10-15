@@ -34,7 +34,7 @@ const PROMPT_TIMEOUT_MS = 90_000
 const SESSION_CREATE_TIMEOUT_MS = 60_000
 const SESSION_DELETE_TIMEOUT_MS = 30_000
 
-const FREE_MODEL = process.env.OPENCODE_SMOKE_MODEL ?? "opencode/mimo-v2.5-free"
+const SMOKE_MODEL = process.env.OPENCODE_SMOKE_MODEL ?? "zai-coding-plan/glm-5.3-flash"
 
 const shouldRunSmoke = smokeRunRequested() && resolveOpenCodePath() !== undefined
 
@@ -69,16 +69,20 @@ const injectWithTimeout = async (
 
 describe("opencode ACP smoke", () => {
   test.skipIf(!shouldRunSmoke)(
-    "creates an OpenCode session, lists it, then completes a stream prompt on a free model",
+    "creates an OpenCode session, lists it, then completes a stream prompt on the z.ai coding plan model",
     async () => {
       const dataDir = await mkdtemp(path.join(os.tmpdir(), "harold-opencode-smoke-"))
       const workspaceDir = path.join(dataDir, "smoke-project")
       await mkdir(workspaceDir)
 
       const previousConfigContent = process.env.OPENCODE_CONFIG_CONTENT
-      process.env.OPENCODE_CONFIG_CONTENT = openCodeSmokeConfigContent(FREE_MODEL)
-      if (process.env.OPENCODE_API_KEY === "") {
-        delete process.env.OPENCODE_API_KEY
+      process.env.OPENCODE_CONFIG_CONTENT = openCodeSmokeConfigContent(SMOKE_MODEL)
+      // opencode's zai-coding-plan provider reads ZHIPU_API_KEY; an empty
+      // value from a missing secret must not shadow a local auth login.
+      for (const key of ["ZHIPU_API_KEY", "OPENCODE_API_KEY"]) {
+        if (process.env[key] === "") {
+          delete process.env[key]
+        }
       }
 
       const detectedPath = resolveOpenCodePath()

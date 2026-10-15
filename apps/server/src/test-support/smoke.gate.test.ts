@@ -1,13 +1,17 @@
 import { describe, expect, test } from "bun:test"
-import { openCodeSmokeConfigContent } from "./smoke.gate"
+import { ZAI_CODING_PLAN_BASE_URL, openCodeSmokeConfigContent } from "./smoke.gate"
 
 describe("openCodeSmokeConfigContent", () => {
-  test("pins the zen endpoint so the live catalog cannot send free models to /inference/v1", () => {
-    const parsed = JSON.parse(openCodeSmokeConfigContent("opencode/mimo-v2.5-free")) as {
+  test("pins the z.ai coding plan endpoint so live catalog drift cannot reroute smoke models", () => {
+    const parsed = JSON.parse(openCodeSmokeConfigContent("zai-coding-plan/glm-5.3-flash")) as {
       model: string
-      provider: { opencode: { options: { baseURL: string } } }
+      provider: { "zai-coding-plan": { options: { baseURL: string } } }
     }
-    expect(parsed.model).toBe("opencode/mimo-v2.5-free")
-    expect(parsed.provider.opencode.options.baseURL).toBe("https://opencode.ai/zen/v1")
+    expect(parsed.model).toBe("zai-coding-plan/glm-5.3-flash")
+    expect(parsed.provider["zai-coding-plan"].options.baseURL).toBe(ZAI_CODING_PLAN_BASE_URL)
+  })
+
+  test("keeps the coding plan endpoint on api.z.ai", () => {
+    expect(ZAI_CODING_PLAN_BASE_URL).toBe("https://api.z.ai/api/coding/paas/v4")
   })
 })

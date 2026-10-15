@@ -29,15 +29,15 @@ export const resolveCursorAgentPath = (): string | undefined => {
   }
 }
 
-export const OPENCODE_ZEN_BASE_URL = "https://opencode.ai/zen/v1"
+export const ZAI_CODING_PLAN_BASE_URL = "https://api.z.ai/api/coding/paas/v4"
 
 export const openCodeSmokeConfigContent = (model: string): string =>
   JSON.stringify({
     $schema: "https://opencode.ai/config.json",
     model,
     provider: {
-      opencode: {
-        options: { baseURL: OPENCODE_ZEN_BASE_URL },
+      "zai-coding-plan": {
+        options: { baseURL: ZAI_CODING_PLAN_BASE_URL },
       },
     },
   })
