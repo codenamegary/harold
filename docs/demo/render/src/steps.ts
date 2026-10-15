@@ -1,8 +1,9 @@
 import type { CaptureEvent } from "./Demo"
 
 // One short line under the phone per step of the walk. Keyed by the marks
-// drive_phone.py writes, so the copy lands when the screen changes. `offset`
-// shifts a caption off its mark, for steps the driver only marks at the end.
+// drive_phone.py writes at the moment each action starts, so the copy lands
+// when the screen changes. `offset` shifts a caption off its mark, for steps
+// the driver only marks at the end.
 type StepCopy = { event: string; text: string; offset?: number }
 
 const copy: StepCopy[] = [
@@ -12,9 +13,10 @@ const copy: StepCopy[] = [
   { event: "tap_new_session", text: "Start a new session" },
   { event: "config_visible", text: "Choose a model" },
   { event: "mode_plan", text: "Switch modes" },
-  { event: "effort_set", text: "Change thinking effort" },
-  // prompt_typed fires when the typing ends; the keyboard opens ~5.3s before.
-  { event: "prompt_typed", text: "Send a prompt", offset: -5.3 },
+  // Marked at the first tap of the effort chip, not when the target is reached.
+  { event: "effort_start", text: "Change thinking effort" },
+  // Marked when the Message field is tapped; the keyboard opens just after.
+  { event: "prompt_start", text: "Send a prompt" },
   { event: "reply_visible", text: "Winning." },
 ]
 

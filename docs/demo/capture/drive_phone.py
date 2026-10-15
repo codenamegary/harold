@@ -172,7 +172,7 @@ def warm():
 def main():
     mark("driver_start")
 
-    tap_text("Pair", timeout=25)
+    tap_text("Pair", timeout=25, settle=0)
     mark("tap_pair")
 
     # The live QR enters the feed at 40s; a restarted playback reaches it
@@ -213,12 +213,14 @@ def main():
         time.sleep(0.4)
     mark("model_picked")
 
-    # Mode: Build -> Plan -> Build (show the cycle, end on Build).
+    # Mode: Build -> Plan -> Build (show the cycle, end on Build). The mark
+    # lands on the tap so the caption leads the visible flip; the sleep only
+    # holds Plan on screen before tapping back.
     mode_node = await_desc("Mode:")
     mode_x, mode_y = bounds_center(mode_node.get("bounds"))
     adb("shell", "input", "tap", str(mode_x), str(mode_y))
-    time.sleep(1.6)
     mark("mode_plan")
+    time.sleep(1.6)
     adb("shell", "input", "tap", str(mode_x), str(mode_y))
     time.sleep(1.2)
     if "Build" not in chip_value("Mode:"):
@@ -226,8 +228,11 @@ def main():
     mark("mode_build")
 
     # Effort: for the demo model, three steps from Default land on High.
+    # effort_start marks the first tap; effort_set fires once the target
+    # value is confirmed, so captions key off the former.
     effort_node = await_desc("Thinking:")
     effort_x, effort_y = bounds_center(effort_node.get("bounds"))
+    mark("effort_start")
     for _ in range(3):
         adb("shell", "input", "tap", str(effort_x), str(effort_y))
         time.sleep(1.3)
@@ -236,7 +241,9 @@ def main():
     mark("effort_set")
     time.sleep(0.8)
 
-    # Prompt.
+    # Prompt. prompt_start marks the tap on the field; the keyboard opens
+    # just after and the typing follows.
+    mark("prompt_start")
     tap_text("Message", timeout=10, settle=0.8)
     adb("shell", "input", "text", PROMPT.replace(" ", "%s"))
     time.sleep(1.2)
