@@ -1,6 +1,6 @@
 ---
 name: compose-demo
-description: Run and debug the Harold phone demo capture pipeline (staged clip → emulator camera feed → pairing on camera → phone.mp4 → Remotion). Use when capturing or re-capturing docs/demo/public/phone.mp4, composing the camera feed with a live pairing QR, verifying the emulator camera pipeline, or updating the Remotion demo after a capture.
+description: Run and debug the Harold phone demo capture pipeline (staged clip → emulator camera feed → pairing on camera → phone.mp4 → Remotion). Use when capturing or re-capturing docs/demo/render/public/phone.mp4, composing the camera feed with a live pairing QR, verifying the emulator camera pipeline, or updating the Remotion demo after a capture.
 ---
 
 # Compose the demo capture
@@ -11,25 +11,28 @@ capturing frames. If a stage fails, fix the script, not the run.
 
 ## The deterministic pieces
 
-All under `docs/demo-pipeline/` unless noted:
+All under `docs/demo/capture/` unless noted:
 
 - `capture.sh` — the whole run: restarts the daemon, issues a pairing code,
   composes the feed, boots the emulator, warms the camera, resets the app,
   screen-records while `drive_phone.py` walks the pairing flow, pulls
-  `docs/demo/public/phone.mp4`, and writes `docs/demo/public/capture.json`.
-  Run it from the repo root: `bash docs/demo-pipeline/capture.sh`.
+  `docs/demo/render/public/phone.mp4`, and writes
+  `docs/demo/render/public/capture.json`. Run it from the repo root:
+  `bash docs/demo/capture/capture.sh`.
 - `compose_camera.mjs <source.mp4> [qr.png] <out.mp4>` — builds the camera
   feed: optional live-QR paste over the staged panel (per-frame connected-
   component tracking), then a geometry pass (rotate 90° CCW, cover-crop to
   1280x960), then a 120s freeze tail. With a QR arg the source must be the
   1920x1080 staged clip; without one, any aspect works.
-- `drive_phone.py` — the UI driver. Marks every step to `marks.log`
+- `drive_phone.py` — the UI driver. Marks every step to
+  `docs/demo/work/capture/marks.log`
   (`driver_start`, `tap_pair`, `paired_chat_visible`, `tap_new_session`,
   `config_visible`, `mode_plan`, `effort_set`, `prompt_typed`,
   `reply_visible`, ...). `--warm` opens and closes the scanner once.
 - `cut_dead_space.py` — measures frame-to-frame motion, cuts the frozen
   scan stretch out of `phone.mp4`, remaps the marks to the shorter
-  timeline, and stashes the raw recording as `phone-raw.mp4`. Idempotent:
+  timeline, and stashes the raw recording as
+  `docs/demo/work/capture/phone-raw.mp4`. Idempotent:
   without the stash it defers to the cuts already in `capture.json`.
 
 ## Hardware facts that must not drift
@@ -60,7 +63,8 @@ All under `docs/demo-pipeline/` unless noted:
 Verify in this order; each step gates the next.
 
 1. **Feed decodes offline, behind the gate.** After composing, extract
-   frames and read them (`ffmpeg -ss 10 -i camera-live.mp4 -frames:v 1
+   frames and read them
+   (`ffmpeg -ss 10 -i docs/demo/work/capture/camera-live.mp4 -frames:v 1
 f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
    After it (`-ss 50`, and the tail at `-ss 100`), the live QR is pasted
    over the panel, upright-in-file (the scene lies on its side), and jsQR
@@ -77,20 +81,20 @@ f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
    the emulator. No error UI means the analyzer never decoded — go back to
    step 2 and measure.
 4. **Full capture.** Run `capture.sh`. It exits non-zero if the driver
-   fails; `docs/demo-pipeline/capture.log` and `driver.log` hold the marks.
+   fails; `docs/demo/work/capture/capture.log` and `driver.log` hold the marks.
    `capture.json` must contain the full event set — see step 5 — and the
    dead-space cut must have fired: `durationSec` shrinks by the removed
    stretch (a frozen scan cuts ~20s; `rawEvents` holds the unshifted marks
    and `cuts` the removed video ranges).
-5. **Remotion is in sync.** `docs/demo` reads `public/capture.json` at build
+5. **Remotion is in sync.** `docs/demo/render` reads `public/capture.json` at build
    time (`calculateMetadata`) and `src/steps.ts` maps mark names to
    captions; `Demo.tsx` also zooms the phone over the dimmed terminal 8s
    after the pairing mark. Remotion needs no code change unless the
    driver's marks changed. Validate: every event in `steps.ts` exists in
    `capture.json`, `durationSec` is sane (~90s after the cut), and render a
-   spot-check still: `bun x remotion still HaroldDemo out/check.png
---frame=<mid-walkthrough>` from `docs/demo`. Commit
-   `public/phone.mp4` + `capture.json` only from a
+   spot-check still: `bun x remotion still HaroldDemo ../work/render/check.png
+--frame=<mid-walkthrough>` from `docs/demo/render`. Commit
+   `docs/demo/render/public/phone.mp4` + `capture.json` only from a
    fully successful run — never a failed one.
 
 ## Troubleshooting map

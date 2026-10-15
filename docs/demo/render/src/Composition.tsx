@@ -27,7 +27,7 @@ export const MyComposition = () => {
       calculateMetadata={async () => {
         const response = await fetch(staticFile("capture.json"))
         if (!response.ok) {
-          throw new Error("Missing public/capture.json. Run docs/demo-pipeline/capture.sh first.")
+          throw new Error("Missing public/capture.json. Run docs/demo/capture/capture.sh first.")
         }
         const capture = (await response.json()) as CaptureFile
         return {

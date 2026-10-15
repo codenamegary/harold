@@ -7,10 +7,10 @@ measures frame-to-frame motion, finds that dead run inside the scan window,
 cuts it out of phone.mp4, and remaps the marks in capture.json so captions
 and the terminal stay in sync.
 
-Idempotent: the raw recording is stashed next to the pipeline scripts as
-phone-raw.mp4. Re-running with the stash present re-detects from raw;
-without it (fresh clone) the cuts already recorded in capture.json win and
-the script is a no-op.
+Idempotent: the raw recording is stashed as `phone-raw.mp4` under
+`docs/demo/work/capture/` (never committed). Re-running with the stash
+present re-detects from raw; without it (fresh clone) the cuts already
+recorded in capture.json win and the script is a no-op.
 """
 import argparse
 import json
@@ -20,8 +20,8 @@ import sys
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-PUBLIC = SCRIPT_DIR.parent / "demo" / "public"
-RAW = SCRIPT_DIR / "phone-raw.mp4"
+PUBLIC = SCRIPT_DIR.parent / "render" / "public"
+RAW = SCRIPT_DIR.parent / "work" / "capture" / "phone-raw.mp4"
 
 SAMPLE_FPS = 4
 SAMPLE_W, SAMPLE_H = 120, 53

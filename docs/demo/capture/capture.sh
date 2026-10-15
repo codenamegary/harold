@@ -10,25 +10,31 @@
 # Needs emulator 36.5+ with the VideoPlayback feature (see README).
 #
 # Artifacts:
-#   docs/demo/public/phone.mp4
-#   docs/demo/public/capture.json
+#   docs/demo/render/public/phone.mp4
+#   docs/demo/render/public/capture.json
+#
+# Scratch (composed feed, logs, raw recording) goes to
+# docs/demo/work/capture/.
 set -euo pipefail
 
 SERIAL="${SERIAL:-emulator-5554}"
 AVD="${AVD:-agent_server_api34}"
 EMULATOR="${EMULATOR:-$HOME/android/emulator/emulator}"
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
-MEDIA="$SCRIPT_DIR"
-PUBLIC="$ROOT/docs/demo/public"
-CAMERA_SOURCE="${CAMERA_SOURCE:-$MEDIA/virtual-qr-code-webcam.mp4}"
-CAMERA_FILE="$MEDIA/camera-live.mp4"
-EMULATOR_LOG="$MEDIA/emulator.log"
-LOG="$MEDIA/capture.log"
-MARKS="$MEDIA/marks.log"
+DEMO=$(cd "$SCRIPT_DIR/.." && pwd)
+ROOT=$(cd "$DEMO/../.." && pwd)
+WORK="${WORK:-$DEMO/work/capture}"
+PUBLIC="$DEMO/render/public"
+CAMERA_SOURCE="${CAMERA_SOURCE:-$SCRIPT_DIR/assets/virtual-qr-code-webcam.mp4}"
+CAMERA_FILE="$WORK/camera-live.mp4"
+EMULATOR_LOG="$WORK/emulator.log"
+LOG="$WORK/capture.log"
+MARKS="$WORK/marks.log"
 PROMPT="${PROMPT:-Summarize this repo in one sentence}"
 
-mkdir -p "$MEDIA" "$PUBLIC"
+export PYTHONPYCACHEPREFIX="$WORK/pycache"
+
+mkdir -p "$WORK" "$PUBLIC"
 : >"$LOG"
 : >"$MARKS"
 
@@ -76,14 +82,14 @@ log "pair_issued"
     qr.toFile(process.argv[2], pairing.qrUri, { width: 1024, margin: 4 }).then(() => {
       process.stdout.write(pairing.code);
     });
-  ' "$PAIR_JSON" "$MEDIA/qr-live.png"
-) >"$MEDIA/pair-code.txt"
-CODE=$(cat "$MEDIA/pair-code.txt")
+  ' "$PAIR_JSON" "$WORK/qr-live.png"
+) >"$WORK/pair-code.txt"
+CODE=$(cat "$WORK/pair-code.txt")
 [[ -n "$CODE" ]] || die "no pairing code captured"
 log "code_seen $CODE"
 
 log "camera_compose"
-node "$SCRIPT_DIR/compose_camera.mjs" "$CAMERA_SOURCE" "$MEDIA/qr-live.png" "$CAMERA_FILE"
+node "$SCRIPT_DIR/compose_camera.mjs" "$CAMERA_SOURCE" "$WORK/qr-live.png" "$CAMERA_FILE"
 log "camera_composed"
 
 log "emulator_stop"
@@ -135,14 +141,14 @@ sleep 4
 log "app_reset"
 
 # Native size. --size letterboxes the display and drops the frame rate.
-date +%s.%3N >"$MEDIA/screen-start"
+date +%s.%3N >"$WORK/screen-start"
 adb -s "$SERIAL" shell screenrecord --bit-rate 12000000 --time-limit 180 /sdcard/demo.mp4 &
 sleep 1
 log "screenrecord_start"
 
 set +e
 SERIAL="$SERIAL" PROMPT="$PROMPT" MARKS="$MARKS" \
-  python3 "$SCRIPT_DIR/drive_phone.py" 2>&1 | tee "$MEDIA/driver.log"
+  python3 "$SCRIPT_DIR/drive_phone.py" 2>&1 | tee "$WORK/driver.log"
 DRIVER_STATUS=${PIPESTATUS[0]}
 set -e
 log "driver_exit $DRIVER_STATUS"
@@ -156,7 +162,7 @@ log "phone_pulled"
 log "dead_space_cut"
 python3 "$SCRIPT_DIR/cut_dead_space.py" 2>&1 | tee -a "$LOG"
 
-python3 - "$MARKS" "$MEDIA/screen-start" "$PUBLIC/phone.mp4" "$PUBLIC/capture.json" <<'PY'
+python3 - "$MARKS" "$WORK/screen-start" "$PUBLIC/phone.mp4" "$PUBLIC/capture.json" <<'PY'
 import json
 import subprocess
 import sys

@@ -22,7 +22,7 @@
   },
   "scripts": {
     "dev": "remotionb studio",
-    "build": "remotionb bundle",
+    "build": "remotionb bundle --out-dir=../work/render/bundle",
     "upgrade": "remotionb upgrade",
     "lint": "eslint src && tsc"
   }

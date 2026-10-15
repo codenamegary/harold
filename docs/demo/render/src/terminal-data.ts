@@ -7,7 +7,7 @@ export type TermItem =
   | { kind: "output"; at: number; segs: TermSeg[] }
   | { kind: "qr"; at: number; rowDelay: number }
 
-// Values from the recorded capture (docs/demo-pipeline/capture.log and
+// Values from the recorded capture (docs/demo/work/capture/capture.log and
 // pair-code.txt). The daemon block is copied verbatim from this machine;
 // expires is issued + 10 minutes (PAIRING_CODE_TTL_MS in
 // packages/core device.create.pairing.code.usecase).

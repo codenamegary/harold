@@ -1,9 +1,7 @@
-node_modules
-dist
-.DS_Store
 .env
 
-# Rendered output. public/phone.mp4 is versioned so the cut renders from a fresh clone.
-out
-
-build
+# Everything the pipeline generates that is not deliberately kept: capture
+# scratch and logs, renders, spot-check stills, bundle output. Safe to delete
+# at any time. The fixtures a fresh clone renders from are tracked in
+# render/public/ (phone.mp4, capture.json, music.mp3).
+work/

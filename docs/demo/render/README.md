@@ -1,6 +1,6 @@
-# Harold demo
+# Demo render
 
-Remotion cut for the site and the README. The terminal and the phone frame are drawn here. The phone screen is the recording from `docs/demo-pipeline/capture.sh`.
+Remotion cut for the site and the README. The terminal and the phone frame are drawn here. The phone screen is the recording from `docs/demo/capture/capture.sh`.
 
 | File               | Role                                                                      |
 | ------------------ | ------------------------------------------------------------------------- |
@@ -16,14 +16,16 @@ The cut is a short title card, the capture, then a four second end card. The loc
 
 The phone capture and marks are committed under `public/`, so the cut renders offline from a fresh clone. Run the capture script only when you want a fresh recording.
 
+Renders and spot-check stills go to `../work/render/` and are never committed.
+
 ```sh
 bun install
 
 # Only needed for a new recording:
-bash ../demo-pipeline/capture.sh
+bash ../capture/capture.sh
 
 bun run dev
-bunx remotion render src/index.ts HaroldDemo out/harold.mp4
+bunx remotion render src/index.ts HaroldDemo ../work/render/harold.mp4
 ```
 
 `bun run dev` opens the studio so you can scrub the timeline.
