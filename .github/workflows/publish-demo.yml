@@ -1,0 +1,86 @@
+name: publish-demo
+
+# Mirrors the committed demo video (docs/demo/harold.mp4) to the
+# harold.codenamegary.com server whenever the cut changes on main. The video
+# lives in the repo, so there is no build step — the workflow only uploads it.
+#
+# Reuses the same VPS secrets as release-android. The destination is the demo/
+# sibling of the downloads directory (VPS_DEST), so nginx picks the file up
+# with no restart.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/demo/harold.mp4"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-demo
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      VIDEO: docs/demo/harold.mp4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Check the committed video
+        run: |
+          set -euo pipefail
+          SIZE="$(stat -c%s "$VIDEO")"
+          # A git-lfs pointer or a truncated stub would slip through a
+          # path-triggered run and replace a good video on the server with
+          # garbage; refuse anything that cannot be the rendered cut.
+          if [ "$SIZE" -lt 1048576 ]; then
+            echo "::error::$VIDEO is $SIZE bytes; expected the rendered demo video"
+            exit 1
+          fi
+          {
+            echo "VIDEO_SIZE=$SIZE"
+            echo "VIDEO_SHA256=$(sha256sum "$VIDEO" | cut -d' ' -f1)"
+          } >> "$GITHUB_ENV"
+
+      - name: Push the video to the harold site
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_DEST: ${{ secrets.VPS_DEST }}
+        run: |
+          set -euo pipefail
+
+          # The demo directory is the sibling of the downloads directory that
+          # VPS_DEST points at, keeping both artifacts under public-harold.
+          # dirname absorbs any trailing slash in the secret.
+          DEMO_DEST="$(dirname "$VPS_DEST")/demo"
+
+          install -m 600 /dev/null id_ed25519
+          printf '%s\n' "$VPS_SSH_KEY" > id_ed25519
+          OPTS=(-i id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+          trap 'rm -f id_ed25519' EXIT
+
+          # Land under a temp name, then flip into place, so the site never
+          # serves a half-written file.
+          ssh "${OPTS[@]}" "$VPS_HOST" "mkdir -p '$DEMO_DEST'"
+          scp "${OPTS[@]}" "$VIDEO" "$VPS_HOST:$DEMO_DEST/.harold.mp4.tmp"
+          ssh "${OPTS[@]}" "$VPS_HOST" "cd '$DEMO_DEST' && mv .harold.mp4.tmp harold.mp4"
+
+          REMOTE_SHA256="$(ssh "${OPTS[@]}" "$VPS_HOST" "sha256sum '$DEMO_DEST/harold.mp4'" | cut -d' ' -f1)"
+          if [ "$REMOTE_SHA256" != "$VIDEO_SHA256" ]; then
+            echo "::error::Upload checksum mismatch: remote $REMOTE_SHA256, local $VIDEO_SHA256"
+            exit 1
+          fi
+
+          {
+            echo "### Demo video published"
+            echo
+            echo "- URL: https://harold.codenamegary.com/demo/harold.mp4"
+            echo "- Size: $VIDEO_SIZE bytes"
+            echo "- SHA-256: \`$VIDEO_SHA256\`"
+          } >> "$GITHUB_STEP_SUMMARY"
