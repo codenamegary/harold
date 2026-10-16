@@ -1,0 +1,151 @@
+{
+  "durationSec": 91.598,
+  "width": 1080,
+  "height": 2400,
+  "events": [
+    {
+      "name": "driver_start",
+      "sec": 0.6
+    },
+    {
+      "name": "tap_pair",
+      "sec": 3.4
+    },
+    {
+      "name": "paired_chat_visible",
+      "sec": 13.2
+    },
+    {
+      "name": "tap_new_session",
+      "sec": 15.6
+    },
+    {
+      "name": "agent_selected",
+      "sec": 33.3
+    },
+    {
+      "name": "tap_continue",
+      "sec": 36.6
+    },
+    {
+      "name": "config_visible",
+      "sec": 41.2
+    },
+    {
+      "name": "model_sheet_open",
+      "sec": 46.3
+    },
+    {
+      "name": "model_picked",
+      "sec": 53.2
+    },
+    {
+      "name": "mode_plan",
+      "sec": 57.5
+    },
+    {
+      "name": "mode_build",
+      "sec": 59.3
+    },
+    {
+      "name": "effort_start",
+      "sec": 65.7
+    },
+    {
+      "name": "effort_set",
+      "sec": 68.4
+    },
+    {
+      "name": "prompt_start",
+      "sec": 75.4
+    },
+    {
+      "name": "prompt_typed",
+      "sec": 82.0
+    },
+    {
+      "name": "tap_send",
+      "sec": 82.5
+    },
+    {
+      "name": "reply_visible",
+      "sec": 90.0
+    },
+    {
+      "name": "done",
+      "sec": 90.6
+    }
+  ],
+  "rawEvents": [
+    {
+      "name": "driver_start",
+      "sec": 1.027
+    },
+    {
+      "name": "tap_pair",
+      "sec": 3.991
+    },
+    {
+      "name": "paired_chat_visible",
+      "sec": 36.193
+    },
+    {
+      "name": "tap_new_session",
+      "sec": 40.252
+    },
+    {
+      "name": "agent_selected",
+      "sec": 59.444
+    },
+    {
+      "name": "tap_continue",
+      "sec": 62.99
+    },
+    {
+      "name": "config_visible",
+      "sec": 68.019
+    },
+    {
+      "name": "model_sheet_open",
+      "sec": 72.612
+    },
+    {
+      "name": "model_picked",
+      "sec": 78.937
+    },
+    {
+      "name": "mode_plan",
+      "sec": 82.784
+    },
+    {
+      "name": "mode_build",
+      "sec": 87.029
+    },
+    {
+      "name": "effort_set",
+      "sec": 96.4
+    },
+    {
+      "name": "prompt_typed",
+      "sec": 103.473
+    },
+    {
+      "name": "tap_send",
+      "sec": 106.32
+    },
+    {
+      "name": "reply_visible",
+      "sec": 112.622
+    },
+    {
+      "name": "done",
+      "sec": 112.622
+    }
+  ],
+  "cuts": [
+    {
+      "from": 13.0,
+      "to": 34.993
+    }
+  ]
+}
