@@ -134,3 +134,8 @@
 - [TAP] Send
 - Wait for the response from the agent to complete
 
+### Outro
+
+- Similar to the intro slide
+- CTA to install Harold
+- harold.codenamegary.com on the slide

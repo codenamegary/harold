@@ -1,4 +1,5 @@
-import { OffthreadVideo, staticFile } from "remotion"
+import { AbsoluteFill, Freeze, OffthreadVideo, staticFile } from "remotion"
+import { rippleColor, rippleDuration } from "./timeline"
 import { line } from "./theme"
 
 const BEZEL = 10
@@ -13,11 +14,44 @@ export const phoneFrameSize = (videoWidth: number, videoHeight: number, screenWi
   }
 }
 
+// [TAP] a quick ring blooms where the finger landed.
+const Ripple: React.FC<{ progress: number }> = ({ progress }) => (
+  <>
+    <div
+      style={{
+        position: "absolute",
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        border: `3px solid ${rippleColor}`,
+        translate: "-50% -50%",
+        scale: `${0.4 + progress * 0.9}`,
+        opacity: 0.85 * (1 - progress),
+      }}
+    />
+    <div
+      style={{
+        position: "absolute",
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        background: rippleColor,
+        translate: "-50% -50%",
+        scale: `${0.2 + progress * 0.6}`,
+        opacity: 0.28 * (1 - progress),
+      }}
+    />
+  </>
+)
+
 export const PhoneFrame: React.FC<{
   videoWidth: number
   videoHeight: number
   screenWidth: number
-}> = ({ videoWidth, videoHeight, screenWidth }) => {
+  captureFrame: number
+  blackOpacity: number
+  ripples: { at: number; progress: number; x: number; y: number }[]
+}> = ({ videoWidth, videoHeight, screenWidth, captureFrame, blackOpacity, ripples }) => {
   const size = phoneFrameSize(videoWidth, videoHeight, screenWidth)
   return (
     <div
@@ -33,6 +67,7 @@ export const PhoneFrame: React.FC<{
     >
       <div
         style={{
+          position: "relative",
           width: size.screenWidth,
           height: size.screenHeight,
           borderRadius: 34,
@@ -40,11 +75,30 @@ export const PhoneFrame: React.FC<{
           background: "#000",
         }}
       >
-        <OffthreadVideo
-          src={staticFile("phone.mp4")}
-          style={{ width: size.screenWidth, height: size.screenHeight }}
-        />
+        <Freeze frame={Math.round(captureFrame)}>
+          <OffthreadVideo
+            src={staticFile("phone.mp4")}
+            muted
+            style={{ width: size.screenWidth, height: size.screenHeight }}
+          />
+        </Freeze>
+        <AbsoluteFill style={{ background: "#000", opacity: blackOpacity }} />
+        {ripples.map((ripple, index) => (
+          <div
+            key={index}
+            style={{
+              position: "absolute",
+              left: ripple.x * size.screenWidth,
+              top: ripple.y * size.screenHeight,
+            }}
+          >
+            <Ripple progress={ripple.progress} />
+          </div>
+        ))}
       </div>
     </div>
   )
 }
+
+export const rippleProgress = (sec: number, at: number): number =>
+  Math.min(1, Math.max(0, (sec - at) / rippleDuration))

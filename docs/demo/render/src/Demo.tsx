@@ -1,7 +1,6 @@
 import {
   AbsoluteFill,
   Audio,
-  Easing,
   interpolate,
   Sequence,
   staticFile,
@@ -10,357 +9,319 @@ import {
 } from "remotion"
 import { monoFamily, sansFamily } from "./fonts"
 import { Mark } from "./mark"
-import { PhoneFrame, phoneFrameSize } from "./phone"
-import { stepsFrom } from "./steps"
-import { Terminal, terminalBox } from "./terminal"
-import { body, ink, inkOnLime, lime, mute, paper, stage } from "./theme"
+import { PhoneFrame, phoneFrameSize, rippleProgress } from "./phone"
+import { Terminal } from "./terminal"
+import {
+  buildTimeline,
+  captureAt,
+  channel,
+  phoneBlack,
+  phoneCenterX,
+  phoneTop,
+  phoneWidth,
+  termContentZoom,
+  termHeight,
+  termLeft,
+  termOpacity,
+  termScale,
+  termTop,
+  termWidth,
+  termX,
+  totalSec,
+  type Caption,
+  type DemoProps,
+} from "./timeline"
+import { ink, inkOnLime, lime, line, mute, paper } from "./theme"
 
-export type CaptureEvent = {
-  name: string
-  sec: number
-}
+const CTA = "bun install -g @codenamegary/harold@latest"
+const SUBTITLE = "Hark! The Harold Agents Sing"
 
-export type DemoProps = {
-  events: CaptureEvent[]
-  videoWidth: number
-  videoHeight: number
-  captureSec: number
-}
+const ease = (progress: number) => interpolate(progress, [0, 1], [0, 1])
 
-// Title card before the phone recording, end card after it.
-export const INTRO_SEC = 2.8
-export const OUTRO_SEC = 4
-
-const PHONE_SCREEN_W = 336
-const CAPTION_H = 60
-
-// After the device list the terminal has said its part: the phone takes
-// center stage this many seconds after pairing lands, at this screen
-// width, this far from the top of the frame. The frame is allowed to run
-// off the bottom edge a little.
-const FOCUS_AFTER_PAIRED_SEC = 8
-const FOCUS_SCREEN_W = 480
-const FOCUS_TOP = 24
-
-// The lockup lives in the header during the walkthrough. On the title and
-// end cards it is the same element, three times the size and centred.
-const LOCKUP = { markSize: 40, fontSize: 30, gap: 14, width: 144, height: 44 }
-const CARD_SCALE = 3
-const cardLeft = (1920 - LOCKUP.width * CARD_SCALE) / 2
-const cardTop = 434
-const CARD_LINE_TOP = cardTop + LOCKUP.height * CARD_SCALE + 44
-const MOVE = 0.6
-
-const ease = Easing.bezier(0.16, 1, 0.3, 1)
-
-const Brand: React.FC<{ captureEndSec: number }> = ({ captureEndSec }) => {
-  const frame = useCurrentFrame()
-  const { fps } = useVideoConfig()
-  const sec = frame / fps
-  // 0 = card (big, centred), 1 = header (small, top left).
-  const t = interpolate(
-    sec,
-    [INTRO_SEC - MOVE, INTRO_SEC, captureEndSec - MOVE + 0.1, captureEndSec + 0.1],
-    [0, 1, 1, 0],
-    { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: ease },
-  )
-  const left = interpolate(t, [0, 1], [cardLeft, stage.margin])
-  const top = interpolate(t, [0, 1], [cardTop, stage.headerTop])
-  const scale = interpolate(t, [0, 1], [CARD_SCALE, 1])
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left,
-        top,
-        width: LOCKUP.width,
-        height: LOCKUP.height,
-        display: "flex",
-        alignItems: "center",
-        gap: LOCKUP.gap,
-        fontFamily: sansFamily,
-        transformOrigin: "left top",
-        scale: `${scale}`,
-        opacity: interpolate(frame, [0, 0.6 * fps], [0, 1], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-          easing: ease,
-        }),
-      }}
-    >
-      <Mark size={LOCKUP.markSize} />
-      <span
-        style={{
-          fontSize: LOCKUP.fontSize,
-          fontWeight: 600,
-          color: paper,
-          letterSpacing: "-0.01em",
-          whiteSpace: "nowrap",
-        }}
-      >
-        Harold
-      </span>
-    </div>
-  )
-}
-
-const Tagline: React.FC<{ captureFrames: number }> = ({ captureFrames }) => {
-  const frame = useCurrentFrame()
-  const { fps } = useVideoConfig()
-  const introFrames = Math.round(INTRO_SEC * fps)
-  const onCard = frame < introFrames
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: onCard ? 0 : "auto",
-        right: onCard ? 0 : stage.margin,
-        top: onCard ? CARD_LINE_TOP : stage.headerTop,
-        height: onCard ? "auto" : LOCKUP.height,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontFamily: sansFamily,
-        fontSize: onCard ? 36 : 22,
-        color: mute,
-        opacity: onCard
-          ? interpolate(
-              frame,
-              [0.5 * fps, 1.1 * fps, (INTRO_SEC - MOVE - 0.5) * fps, (INTRO_SEC - MOVE) * fps],
-              [0, 1, 1, 0],
-              { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-            )
-          : interpolate(
-              frame,
-              [
-                introFrames,
-                introFrames + 0.5 * fps,
-                introFrames + captureFrames - 0.5 * fps,
-                introFrames + captureFrames,
-              ],
-              [0, 1, 1, 0],
-              { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-            ),
-        translate: onCard
-          ? `0px ${interpolate(frame, [0.5 * fps, 1.1 * fps], [10, 0], {
-              extrapolateLeft: "clamp",
-              extrapolateRight: "clamp",
-              easing: ease,
-            })}px`
-          : "0px 0px",
-      }}
-    >
-      Your agents, anywhere.
-    </div>
-  )
-}
-
-const Caption: React.FC<{
-  events: CaptureEvent[]
-  left: number
-  width: number
-  top: number
-  height: number
-  fontSize: number
-}> = ({ events, left, width, top, height, fontSize }) => {
-  const frame = useCurrentFrame()
-  const { fps } = useVideoConfig()
-  const sec = frame / fps
-  const steps = stepsFrom(events)
-  const current = [...steps].reverse().find((step) => step.at <= sec)
-  if (current === undefined) {
-    return null
-  }
-  const since = (sec - current.at) * fps
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left,
-        width,
-        top,
-        height,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        textAlign: "center",
-        fontFamily: sansFamily,
-        fontSize,
-        fontWeight: 500,
-        lineHeight: 1.25,
-        color: body,
-        opacity: interpolate(since, [0, 0.35 * fps], [0, 1], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-          easing: Easing.out(Easing.quad),
-        }),
-        translate: `0px ${interpolate(since, [0, 0.35 * fps], [8, 0], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-          easing: Easing.out(Easing.quad),
-        })}px`,
-      }}
-    >
-      {current.text}
-    </div>
-  )
-}
-
-const Outro: React.FC = () => {
-  const frame = useCurrentFrame()
-  const { fps } = useVideoConfig()
-  const reveal = (from: number) =>
-    interpolate(frame, [from * fps, (from + 0.6) * fps], [0, 1], {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-      easing: ease,
-    })
-  const lift = (from: number) =>
-    `0px ${interpolate(frame, [from * fps, (from + 0.6) * fps], [14, 0], {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-      easing: ease,
-    })}px`
-  return (
-    <AbsoluteFill style={{ alignItems: "center", fontFamily: sansFamily }}>
-      <div
-        style={{
-          position: "absolute",
-          top: CARD_LINE_TOP - 4,
-          fontFamily: monoFamily,
-          fontSize: 30,
-          fontWeight: 500,
-          color: inkOnLime,
-          background: lime,
-          padding: "16px 28px",
-          borderRadius: 12,
-          opacity: reveal(0.35),
-          translate: lift(0.35),
-        }}
-      >
-        npm install -g @codenamegary/harold
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          top: CARD_LINE_TOP + 96,
-          fontSize: 24,
-          color: mute,
-          opacity: reveal(0.55),
-          translate: lift(0.55),
-        }}
-      >
-        github.com/codenamegary/harold
-      </div>
-    </AbsoluteFill>
-  )
-}
-
-export const Demo: React.FC<DemoProps> = ({ events, videoWidth, videoHeight, captureSec }) => {
-  const frame = useCurrentFrame()
-  const { fps } = useVideoConfig()
-  const paired = events.find((event) => event.name === "paired_chat_visible")?.sec ?? 17.1
-
-  const columnLeft = terminalBox.left + terminalBox.width
-  const columnWidth = 1920 - stage.margin - columnLeft
-  const captionTop = stage.contentBottom - CAPTION_H
-
-  const introFrames = Math.round(INTRO_SEC * fps)
-  const captureFrames = Math.round(captureSec * fps)
-  const captureEnd = introFrames + captureFrames
-  const totalFrames = captureEnd + Math.round(OUTRO_SEC * fps)
-
-  // Once the terminal has printed the device list it has nothing left to
-  // say: the phone zooms to center stage and the terminal recedes.
-  const focusAt = paired + FOCUS_AFTER_PAIRED_SEC
-  const relSec = (frame - introFrames) / fps
-  const focus = interpolate(relSec, [focusAt, focusAt + 0.9], [0, 1], {
+const reveal = (frame: number, fps: number, from: number) =>
+  interpolate(frame, [from * fps, (from + 0.6) * fps], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
     easing: ease,
   })
 
-  const size = phoneFrameSize(
-    videoWidth,
-    videoHeight,
-    interpolate(focus, [0, 1], [PHONE_SCREEN_W, FOCUS_SCREEN_W]),
-  )
-  const phoneLeft0 = Math.round(
-    columnLeft +
-      (columnWidth - phoneFrameSize(videoWidth, videoHeight, PHONE_SCREEN_W).frameWidth) / 2,
-  )
-  const phoneLeft = Math.round(
-    interpolate(focus, [0, 1], [phoneLeft0, (1920 - size.frameWidth) / 2]),
-  )
-  const phoneTop = Math.round(interpolate(focus, [0, 1], [stage.contentTop, FOCUS_TOP]))
-  const terminalOpacity = interpolate(focus, [0, 1], [1, 0.22])
-  const terminalShift = interpolate(focus, [0, 1], [0, -72])
-  const terminalScale = interpolate(focus, [0, 1], [1, 0.8])
+const lift = (frame: number, fps: number, from: number) =>
+  `0px ${interpolate(frame, [from * fps, (from + 0.6) * fps], [18, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: ease,
+  })}px`
 
+// The intro and outro share one slide: logo, subtitle, install command.
+const Slide: React.FC<{ showSite: boolean; intro: boolean }> = ({ showSite, intro }) => {
+  const frame = useCurrentFrame()
+  const { fps } = useVideoConfig()
+  // The outro card counts frames from its own sequence start; the intro is
+  // the composition open. Same choreography either way.
+  const first = 0.25
+  const step = 0.3
+  const site = showSite ? (
+    <div
+      style={{
+        marginTop: 34,
+        fontSize: 26,
+        color: mute,
+        opacity: reveal(frame, fps, first + step * 3),
+        translate: lift(frame, fps, first + step * 3),
+      }}
+    >
+      harold.codenamegary.com
+    </div>
+  ) : null
   return (
-    <AbsoluteFill style={{ background: ink, color: paper }}>
-      <Audio
-        src={staticFile("music.mp3")}
-        loop
-        volume={(f) =>
-          interpolate(
-            f,
-            [0, 0.6 * fps, totalFrames - 3 * fps, totalFrames - 0.5 * fps],
-            [0, 1, 1, 0],
-            { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-          )
-        }
-      />
-      <Sequence
-        name="Walkthrough"
-        from={introFrames}
-        durationInFrames={captureFrames}
-        premountFor={fps}
-      >
-        <AbsoluteFill
+    <AbsoluteFill
+      style={{
+        background: intro ? ink : undefined,
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: sansFamily,
+      }}
+    >
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <div
           style={{
-            opacity: interpolate(
-              frame - introFrames,
-              [0, 0.5 * fps, captureFrames - 0.5 * fps, captureFrames],
-              [0, 1, 1, 0],
-              { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-            ),
+            opacity: reveal(frame, fps, first),
+            translate: lift(frame, fps, first),
           }}
         >
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              opacity: terminalOpacity,
-              translate: `${terminalShift}px 0px`,
-              scale: `${terminalScale}`,
-              transformOrigin: "left center",
-            }}
-          >
-            <Terminal pairedSec={paired} />
-          </div>
-          <div style={{ position: "absolute", left: phoneLeft, top: phoneTop }}>
-            <PhoneFrame
-              videoWidth={videoWidth}
-              videoHeight={videoHeight}
-              screenWidth={size.screenWidth}
-            />
-          </div>
-          <Caption
-            events={events}
-            left={interpolate(focus, [0, 1], [columnLeft, 1250])}
-            width={interpolate(focus, [0, 1], [columnWidth, 570])}
-            top={interpolate(focus, [0, 1], [captionTop, 430])}
-            height={interpolate(focus, [0, 1], [CAPTION_H, 280])}
-            fontSize={interpolate(focus, [0, 1], [24, 40])}
-          />
-        </AbsoluteFill>
+          <Mark size={132} />
+        </div>
+        <div
+          style={{
+            marginTop: 30,
+            fontSize: 68,
+            fontWeight: 600,
+            color: paper,
+            letterSpacing: "-0.02em",
+            opacity: reveal(frame, fps, first + step),
+            translate: lift(frame, fps, first + step),
+          }}
+        >
+          Harold
+        </div>
+        <div
+          style={{
+            marginTop: 16,
+            fontSize: 30,
+            color: mute,
+            opacity: reveal(frame, fps, first + step * 2),
+            translate: lift(frame, fps, first + step * 2),
+          }}
+        >
+          {SUBTITLE}
+        </div>
+        <div
+          style={{
+            marginTop: 44,
+            fontFamily: monoFamily,
+            fontSize: 27,
+            fontWeight: 500,
+            color: inkOnLime,
+            background: lime,
+            padding: "18px 30px",
+            borderRadius: 14,
+            boxShadow: `0 0 0 1px ${line}`,
+            opacity: reveal(frame, fps, first + step * 3),
+            translate: lift(frame, fps, first + step * 3),
+          }}
+        >
+          {CTA}
+        </div>
+        {site}
+      </div>
+    </AbsoluteFill>
+  )
+}
+
+const IntroCard: React.FC = () => {
+  const frame = useCurrentFrame()
+  const { fps } = useVideoConfig()
+  // The card sits over the stage and fades away as the terminal zooms in.
+  const opacity = interpolate(frame, [2.95 * fps, 3.55 * fps], [1, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: ease,
+  })
+  if (opacity === 0) {
+    return null
+  }
+  return (
+    <AbsoluteFill style={{ opacity }}>
+      <Slide showSite={false} intro />
+    </AbsoluteFill>
+  )
+}
+
+const OutroCard: React.FC<{ from: number }> = ({ from }) => {
+  const { fps } = useVideoConfig()
+  return (
+    <Sequence from={Math.round(from * fps)} premountFor={fps}>
+      <AbsoluteFill style={{ background: ink }}>
+        <Slide showSite intro={false} />
+      </AbsoluteFill>
+    </Sequence>
+  )
+}
+
+const TerminalStage: React.FC<{ timeline: ReturnType<typeof buildTimeline> }> = ({ timeline }) => {
+  const frame = useCurrentFrame()
+  const { fps } = useVideoConfig()
+  const sec = frame / fps
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: channel(termLeft, sec),
+        top: channel(termTop, sec),
+        width: channel(termWidth, sec),
+        height: channel(termHeight, sec),
+        opacity: channel(termOpacity, sec),
+        translate: `${channel(termX, sec)}px 0px`,
+        scale: `${channel(termScale, sec)}`,
+        transformOrigin: "50% 16%",
+      }}
+    >
+      <Terminal
+        items={timeline.terminal}
+        contentZoom={channel(termContentZoom, sec)}
+        boxHeight={channel(termHeight, sec)}
+      />
+    </div>
+  )
+}
+
+const PhoneStage: React.FC<{
+  timeline: ReturnType<typeof buildTimeline>
+  videoWidth: number
+  videoHeight: number
+}> = ({ timeline, videoWidth, videoHeight }) => {
+  const frame = useCurrentFrame()
+  const { fps } = useVideoConfig()
+  const sec = frame / fps
+  const screenWidth = channel(phoneWidth, sec)
+  const size = phoneFrameSize(videoWidth, videoHeight, screenWidth)
+  const left = channel(phoneCenterX, sec) - size.frameWidth / 2
+  const top = channel(phoneTop, sec)
+  const active = timeline.ripples
+    .map((ripple) => ({ ...ripple, progress: rippleProgress(sec, ripple.at) }))
+    .filter((ripple) => ripple.progress > 0 && ripple.progress < 1)
+  return (
+    <div style={{ position: "absolute", left, top }}>
+      <PhoneFrame
+        videoWidth={videoWidth}
+        videoHeight={videoHeight}
+        screenWidth={screenWidth}
+        captureFrame={captureAt(sec) * fps}
+        blackOpacity={channel(phoneBlack, sec)}
+        ripples={active}
+      />
+    </div>
+  )
+}
+
+// [CAP] one classy line at the bottom of the stage: fades in with a lift,
+// holds, fades out.
+const CaptionView: React.FC<{ caption: Caption; sec: number }> = ({ caption, sec }) => {
+  const { at, hold, text } = caption
+  const since = sec - at
+  const total = hold + 0.85
+  if (since < 0 || since > total) {
+    return null
+  }
+  const opacity =
+    since < 0.35
+      ? interpolate(since, [0, 0.35], [0, 1], { easing: ease })
+      : interpolate(since, [total - 0.5, total], [1, 0], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+          easing: ease,
+        })
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 64,
+        display: "flex",
+        justifyContent: "center",
+        pointerEvents: "none",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          fontFamily: sansFamily,
+          fontSize: 33,
+          fontWeight: 500,
+          color: paper,
+          background: "rgba(8, 10, 13, 0.72)",
+          border: `1px solid ${line}`,
+          borderRadius: 999,
+          padding: "16px 34px",
+          opacity,
+          translate: `0px ${interpolate(since, [0, 0.35], [10, 0], {
+            extrapolateLeft: "clamp",
+            extrapolateRight: "clamp",
+            easing: ease,
+          })}px`,
+        }}
+      >
+        {text}
+      </div>
+    </div>
+  )
+}
+
+const Music: React.FC<{ endSec: number }> = ({ endSec }) => {
+  const { fps } = useVideoConfig()
+  const totalFrames = Math.round(totalSec(endSec) * fps)
+  return (
+    <Audio
+      src={staticFile("music.mp3")}
+      loop
+      volume={(frame) =>
+        interpolate(
+          frame,
+          [0, 0.8 * fps, totalFrames - 3 * fps, totalFrames - 0.3 * fps],
+          [0, 0.55, 0.55, 0],
+          { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+        )
+      }
+    />
+  )
+}
+
+export const Demo: React.FC<DemoProps> = ({ videoWidth, videoHeight, captureSec }) => {
+  const frame = useCurrentFrame()
+  const { fps } = useVideoConfig()
+  const sec = frame / fps
+  const timeline = buildTimeline(captureSec)
+  return (
+    <AbsoluteFill style={{ background: ink, color: paper }}>
+      <Music endSec={timeline.endSec} />
+      <TerminalStage timeline={timeline} />
+      <PhoneStage timeline={timeline} videoWidth={videoWidth} videoHeight={videoHeight} />
+      {timeline.captions.map((caption) => (
+        <CaptionView key={caption.at} caption={caption} sec={sec} />
+      ))}
+      {/* Scheduled sound effects, one short Sequence each. */}
+      {timeline.sounds.map((sound, index) => (
+        <Sequence key={index} from={Math.round(sound.at * fps)}>
+          <Audio src={staticFile(`sfx/${sound.name}.wav`)} volume={sound.volume} />
+        </Sequence>
+      ))}
+      <Sequence from={Math.round(timeline.voiceWavAt * fps)}>
+        <Audio src={staticFile("voice-input.wav")} volume={0.85} />
       </Sequence>
-      <Sequence name="End card" from={captureEnd} premountFor={fps}>
-        <Outro />
-      </Sequence>
-      <Tagline captureFrames={captureFrames} />
-      <Brand captureEndSec={captureEnd / fps} />
+      <IntroCard />
+      <OutroCard from={timeline.endSec - 0.15} />
     </AbsoluteFill>
   )
 }

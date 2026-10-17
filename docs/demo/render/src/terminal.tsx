@@ -2,8 +2,8 @@ import { useCurrentFrame, useVideoConfig } from "remotion"
 import { monoFamily, sansFamily } from "./fonts"
 import { Mark } from "./mark"
 import { qrModules, qrSize } from "./qr-matrix"
-import { promptSegs, transcript, type TermSeg } from "./terminal-data"
-import { body, dim, lime, lineSoft, panel, stage, termBg } from "./theme"
+import { promptSegs, type TermItem, type TermSeg } from "./terminal-data"
+import { body, dim, lime, lineSoft, panel, termBg } from "./theme"
 
 const FONT_SIZE = 22
 const LINE_H = 32
@@ -17,14 +17,6 @@ const PAD_Y = 24
 const QR_MODULE = 7
 const QR_QUIET = 3
 const QR_BOX = (qrSize + QR_QUIET * 2) * QR_MODULE
-
-export const terminalBox = {
-  left: stage.margin,
-  top: stage.contentTop,
-  width: stage.terminalWidth,
-  height: stage.contentBottom - stage.contentTop,
-}
-const INNER_H = terminalBox.height - BAR_H - PAD_Y * 2
 
 type Visible =
   | { kind: "command"; typed: string; typing: boolean; height: number }
@@ -113,11 +105,20 @@ const Qr: React.FC<{ rows: number }> = ({ rows }) => {
   )
 }
 
-export const Terminal: React.FC<{ pairedSec: number }> = ({ pairedSec }) => {
+/**
+ * The terminal window. Positioned entirely by its parent (the stage animates
+ * it between the close-up, the receded edge, and the split-screen half);
+ * `contentZoom` magnifies the transcript onto its last lines, pinned to the
+ * bottom, for the pairing scene.
+ */
+export const Terminal: React.FC<{
+  items: TermItem[]
+  contentZoom: number
+  boxHeight: number
+}> = ({ items, contentZoom, boxHeight }) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const sec = frame / fps
-  const items = transcript(pairedSec)
 
   const visible: Visible[] = []
   for (const item of items) {
@@ -144,10 +145,13 @@ export const Terminal: React.FC<{ pairedSec: number }> = ({ pairedSec }) => {
     }
   }
 
-  // A terminal scrolls: once the transcript is taller than the window the
-  // content pins to the bottom, like the real thing after a screenful.
   const contentH = visible.reduce((total, item) => total + item.height, 0)
-  const shift = Math.max(0, contentH - INNER_H)
+  const innerH = boxHeight - BAR_H - PAD_Y * 2
+  // At zoom 1 a terminal scrolls: the content pins to the bottom once it
+  // outgrows the window. Zoomed, the bottom edge itself is the anchor, so the
+  // last line stays put while the history overflows the top.
+  const zoomed = contentZoom > 1.001
+  const shift = zoomed ? 0 : Math.max(0, contentH - innerH)
   const last = visible[visible.length - 1]
   const cursor =
     last !== undefined && last.kind === "command" ? (
@@ -158,10 +162,7 @@ export const Terminal: React.FC<{ pairedSec: number }> = ({ pairedSec }) => {
     <div
       style={{
         position: "absolute",
-        left: terminalBox.left,
-        top: terminalBox.top,
-        width: terminalBox.width,
-        height: terminalBox.height,
+        inset: 0,
         borderRadius: 16,
         background: termBg,
         fontFamily: monoFamily,
@@ -221,7 +222,13 @@ export const Terminal: React.FC<{ pairedSec: number }> = ({ pairedSec }) => {
           position: "relative",
         }}
       >
-        <div style={{ translate: `0px ${-shift}px` }}>
+        <div
+          style={{
+            translate: `0px ${-shift}px`,
+            scale: zoomed ? `${contentZoom}` : undefined,
+            transformOrigin: "50% 100%",
+          }}
+        >
           {visible.map((item, index) => {
             if (item.kind === "command") {
               return (
