@@ -11,14 +11,3 @@ export const body = "#C4CAD3"
 export const mute = "#8C96A5"
 export const dim = "#5D6674"
 export const termBg = "#0B0E12"
-
-export const fps = 30
-
-// Shared stage layout for the 1920x1080 frame.
-export const stage = {
-  margin: 80,
-  headerTop: 56,
-  contentTop: 148,
-  contentBottom: 1000,
-  terminalWidth: 1100,
-}

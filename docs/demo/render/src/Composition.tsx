@@ -1,6 +1,6 @@
 import { Composition, staticFile } from "remotion"
-import { Demo, INTRO_SEC, OUTRO_SEC, type DemoProps } from "./Demo"
-import { fps } from "./theme"
+import { Demo } from "./Demo"
+import { FPS, INTRO_SEC, OUTRO_SEC, totalSec, type DemoProps } from "./timeline"
 
 type CaptureFile = {
   durationSec: number
@@ -14,8 +14,8 @@ export const MyComposition = () => {
     <Composition
       id="HaroldDemo"
       component={Demo}
-      durationInFrames={fps * 30}
-      fps={fps}
+      durationInFrames={FPS * 30}
+      fps={FPS}
       width={1920}
       height={1080}
       defaultProps={{
@@ -31,10 +31,7 @@ export const MyComposition = () => {
         }
         const capture = (await response.json()) as CaptureFile
         return {
-          durationInFrames: Math.max(
-            1,
-            Math.round((INTRO_SEC + capture.durationSec + OUTRO_SEC) * fps),
-          ),
+          durationInFrames: Math.max(1, Math.round(totalSec(capture.durationSec) * FPS)),
           props: {
             events: capture.events,
             videoWidth: capture.width,

@@ -2,29 +2,24 @@ import { useCurrentFrame, useVideoConfig } from "remotion"
 import { monoFamily, sansFamily } from "./fonts"
 import { Mark } from "./mark"
 import { qrModules, qrSize } from "./qr-matrix"
-import { promptSegs, transcript, type TermSeg } from "./terminal-data"
-import { body, dim, lime, lineSoft, panel, stage, termBg } from "./theme"
+import { promptSegs, type TermItem, type TermSeg } from "./terminal-data"
+import { body, dim, lime, lineSoft, panel, termBg } from "./theme"
 
-const FONT_SIZE = 22
-const LINE_H = 32
+// Sized so the entire transcript - commands, status block, pairing block,
+// QR, and the waiting line - fits the stage window without a single scroll
+// step: lines print downward and nothing ever moves.
+const FONT_SIZE = 19
+const LINE_H = 25
 const CHAR_W = FONT_SIZE * 0.6
-const BAR_H = 48
-const PAD_X = 32
-const PAD_Y = 24
+const BAR_H = 44
+const PAD_X = 24
+const PAD_Y = 18
 
 // The QR is drawn as squares from the decoded module grid. Three quiet
 // modules on each side keep it readable by a phone camera.
-const QR_MODULE = 7
+const QR_MODULE = 6
 const QR_QUIET = 3
 const QR_BOX = (qrSize + QR_QUIET * 2) * QR_MODULE
-
-export const terminalBox = {
-  left: stage.margin,
-  top: stage.contentTop,
-  width: stage.terminalWidth,
-  height: stage.contentBottom - stage.contentTop,
-}
-const INNER_H = terminalBox.height - BAR_H - PAD_Y * 2
 
 type Visible =
   | { kind: "command"; typed: string; typing: boolean; height: number }
@@ -113,11 +108,15 @@ const Qr: React.FC<{ rows: number }> = ({ rows }) => {
   )
 }
 
-export const Terminal: React.FC<{ pairedSec: number }> = ({ pairedSec }) => {
+/**
+ * The terminal window. Positioned entirely by its parent (the stage zooms it
+ * for the close-up and slides it out after pairing); the transcript itself is
+ * top-anchored and never scrolls.
+ */
+export const Terminal: React.FC<{ items: TermItem[] }> = ({ items }) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const sec = frame / fps
-  const items = transcript(pairedSec)
 
   const visible: Visible[] = []
   for (const item of items) {
@@ -125,11 +124,15 @@ export const Terminal: React.FC<{ pairedSec: number }> = ({ pairedSec }) => {
       break
     }
     if (item.kind === "command") {
-      const chars = Math.min(item.text.length, Math.floor((sec - item.at) * item.cps))
+      const typeAt = item.typeAt ?? item.at
+      const chars = Math.min(
+        item.text.length,
+        Math.max(0, Math.floor((sec - typeAt) * item.cps)),
+      )
       visible.push({
         kind: "command",
         typed: item.text.slice(0, chars),
-        typing: chars < item.text.length,
+        typing: sec >= typeAt && chars < item.text.length,
         height: LINE_H,
       })
       continue
@@ -144,10 +147,6 @@ export const Terminal: React.FC<{ pairedSec: number }> = ({ pairedSec }) => {
     }
   }
 
-  // A terminal scrolls: once the transcript is taller than the window the
-  // content pins to the bottom, like the real thing after a screenful.
-  const contentH = visible.reduce((total, item) => total + item.height, 0)
-  const shift = Math.max(0, contentH - INNER_H)
   const last = visible[visible.length - 1]
   const cursor =
     last !== undefined && last.kind === "command" ? (
@@ -158,10 +157,7 @@ export const Terminal: React.FC<{ pairedSec: number }> = ({ pairedSec }) => {
     <div
       style={{
         position: "absolute",
-        left: terminalBox.left,
-        top: terminalBox.top,
-        width: terminalBox.width,
-        height: terminalBox.height,
+        inset: 0,
         borderRadius: 16,
         background: termBg,
         fontFamily: monoFamily,
@@ -203,13 +199,13 @@ export const Terminal: React.FC<{ pairedSec: number }> = ({ pairedSec }) => {
             alignItems: "center",
             gap: 10,
             fontFamily: sansFamily,
-            fontSize: 15,
+            fontSize: 14,
             fontWeight: 500,
             color: dim,
             pointerEvents: "none",
           }}
         >
-          <Mark size={16} />
+          <Mark size={15} />
           codenamegary@harold: ~
         </div>
       </div>
@@ -221,29 +217,27 @@ export const Terminal: React.FC<{ pairedSec: number }> = ({ pairedSec }) => {
           position: "relative",
         }}
       >
-        <div style={{ translate: `0px ${-shift}px` }}>
-          {visible.map((item, index) => {
-            if (item.kind === "command") {
-              return (
-                <div key={index} style={{ height: LINE_H, lineHeight: `${LINE_H}px` }}>
-                  <Prompt />
-                  <Seg seg={{ text: item.typed, color: body }} />
-                  {index === visible.length - 1 ? cursor : null}
-                </div>
-              )
-            }
-            if (item.kind === "output") {
-              return (
-                <div key={index} style={{ height: LINE_H, lineHeight: `${LINE_H}px` }}>
-                  {item.segs.map((seg, segIndex) => (
-                    <Seg key={segIndex} seg={seg} />
-                  ))}
-                </div>
-              )
-            }
-            return <Qr key={index} rows={item.rows} />
-          })}
-        </div>
+        {visible.map((item, index) => {
+          if (item.kind === "command") {
+            return (
+              <div key={index} style={{ height: LINE_H, lineHeight: `${LINE_H}px` }}>
+                <Prompt />
+                <Seg seg={{ text: item.typed, color: body }} />
+                {index === visible.length - 1 ? cursor : null}
+              </div>
+            )
+          }
+          if (item.kind === "output") {
+            return (
+              <div key={index} style={{ height: LINE_H, lineHeight: `${LINE_H}px` }}>
+                {item.segs.map((seg, segIndex) => (
+                  <Seg key={segIndex} seg={seg} />
+                ))}
+              </div>
+            )
+          }
+          return <Qr key={index} rows={item.rows} />
+        })}
       </div>
     </div>
   )

@@ -1,151 +1,255 @@
 {
-  "durationSec": 91.598,
+  "durationSec": 201.111,
   "width": 1080,
   "height": 2400,
   "events": [
     {
       "name": "driver_start",
-      "sec": 0.6
+      "sec": 1.024
     },
     {
       "name": "tap_pair",
-      "sec": 3.4
+      "sec": 3.411
     },
     {
       "name": "paired_chat_visible",
-      "sec": 13.2
+      "sec": 14.2
+    },
+    {
+      "name": "session_menu_open",
+      "sec": 15.4
+    },
+    {
+      "name": "session_history_selected",
+      "sec": 32.286
     },
     {
       "name": "tap_new_session",
-      "sec": 15.6
+      "sec": 40.456
     },
     {
       "name": "agent_selected",
-      "sec": 33.3
+      "sec": 60.906
     },
     {
       "name": "tap_continue",
-      "sec": 36.6
+      "sec": 63.723
     },
     {
       "name": "config_visible",
-      "sec": 41.2
-    },
-    {
-      "name": "model_sheet_open",
-      "sec": 46.3
+      "sec": 66.315
     },
     {
       "name": "model_picked",
-      "sec": 53.2
+      "sec": 83.421
     },
     {
       "name": "mode_plan",
-      "sec": 57.5
+      "sec": 85.695
     },
     {
       "name": "mode_build",
-      "sec": 59.3
+      "sec": 92.061
     },
     {
       "name": "effort_start",
-      "sec": 65.7
+      "sec": 94.251
     },
     {
       "name": "effort_set",
-      "sec": 68.4
+      "sec": 98.149
     },
     {
       "name": "prompt_start",
-      "sec": 75.4
+      "sec": 98.949
     },
     {
       "name": "prompt_typed",
-      "sec": 82.0
+      "sec": 108.368
+    },
+    {
+      "name": "attach_photo_start",
+      "sec": 108.368
+    },
+    {
+      "name": "photo_attached",
+      "sec": 120.824
+    },
+    {
+      "name": "attach_file_start",
+      "sec": 121.825
+    },
+    {
+      "name": "file_attached",
+      "sec": 129.533
     },
     {
       "name": "tap_send",
-      "sec": 82.5
+      "sec": 133.261
     },
     {
       "name": "reply_visible",
-      "sec": 90.0
+      "sec": 154.333
+    },
+    {
+      "name": "voice_play_start",
+      "sec": 156.333
+    },
+    {
+      "name": "voice_open",
+      "sec": 156.937
+    },
+    {
+      "name": "voice_expanded",
+      "sec": 165.633
+    },
+    {
+      "name": "voice_play_done",
+      "sec": 176.714
+    },
+    {
+      "name": "voice_transcript",
+      "sec": 176.715
+    },
+    {
+      "name": "tap_voice_send",
+      "sec": 181.353
+    },
+    {
+      "name": "voice_reply_visible",
+      "sec": 198.466
     },
     {
       "name": "done",
-      "sec": 90.6
+      "sec": 198.466
     }
   ],
   "rawEvents": [
     {
       "name": "driver_start",
-      "sec": 1.027
+      "sec": 1.024
     },
     {
       "name": "tap_pair",
-      "sec": 3.991
+      "sec": 3.411
     },
     {
       "name": "paired_chat_visible",
-      "sec": 36.193
+      "sec": 33.051
+    },
+    {
+      "name": "session_menu_open",
+      "sec": 34.251
+    },
+    {
+      "name": "session_history_selected",
+      "sec": 51.137
     },
     {
       "name": "tap_new_session",
-      "sec": 40.252
+      "sec": 59.307
     },
     {
       "name": "agent_selected",
-      "sec": 59.444
+      "sec": 79.757
     },
     {
       "name": "tap_continue",
-      "sec": 62.99
+      "sec": 82.574
     },
     {
       "name": "config_visible",
-      "sec": 68.019
-    },
-    {
-      "name": "model_sheet_open",
-      "sec": 72.612
+      "sec": 85.166
     },
     {
       "name": "model_picked",
-      "sec": 78.937
+      "sec": 102.272
     },
     {
       "name": "mode_plan",
-      "sec": 82.784
+      "sec": 104.546
     },
     {
       "name": "mode_build",
-      "sec": 87.029
+      "sec": 110.912
+    },
+    {
+      "name": "effort_start",
+      "sec": 113.102
     },
     {
       "name": "effort_set",
-      "sec": 96.4
+      "sec": 117.0
+    },
+    {
+      "name": "prompt_start",
+      "sec": 117.8
     },
     {
       "name": "prompt_typed",
-      "sec": 103.473
+      "sec": 127.219
+    },
+    {
+      "name": "attach_photo_start",
+      "sec": 127.219
+    },
+    {
+      "name": "photo_attached",
+      "sec": 139.675
+    },
+    {
+      "name": "attach_file_start",
+      "sec": 140.676
+    },
+    {
+      "name": "file_attached",
+      "sec": 148.384
     },
     {
       "name": "tap_send",
-      "sec": 106.32
+      "sec": 152.112
     },
     {
       "name": "reply_visible",
-      "sec": 112.622
+      "sec": 173.184
+    },
+    {
+      "name": "voice_play_start",
+      "sec": 175.184
+    },
+    {
+      "name": "voice_open",
+      "sec": 175.788
+    },
+    {
+      "name": "voice_expanded",
+      "sec": 184.484
+    },
+    {
+      "name": "voice_play_done",
+      "sec": 195.565
+    },
+    {
+      "name": "voice_transcript",
+      "sec": 195.566
+    },
+    {
+      "name": "tap_voice_send",
+      "sec": 200.204
+    },
+    {
+      "name": "voice_reply_visible",
+      "sec": 217.317
     },
     {
       "name": "done",
-      "sec": 112.622
+      "sec": 217.317
     }
   ],
   "cuts": [
     {
       "from": 13.0,
-      "to": 34.993
+      "to": 31.851
     }
   ]
 }
