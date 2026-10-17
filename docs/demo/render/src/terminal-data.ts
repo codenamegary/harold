@@ -3,7 +3,7 @@ import { dim, lime, paper } from "./theme"
 export type TermSeg = { text: string; color?: string; bold?: boolean }
 
 export type TermItem =
-  | { kind: "command"; at: number; text: string; cps: number }
+  | { kind: "command"; at: number; typeAt?: number; text: string; cps: number }
   | { kind: "output"; at: number; segs: TermSeg[] }
   | { kind: "qr"; at: number; rowDelay: number }
 

@@ -5,16 +5,19 @@ import { qrModules, qrSize } from "./qr-matrix"
 import { promptSegs, type TermItem, type TermSeg } from "./terminal-data"
 import { body, dim, lime, lineSoft, panel, termBg } from "./theme"
 
-const FONT_SIZE = 22
-const LINE_H = 32
+// Sized so the entire transcript - commands, status block, pairing block,
+// QR, and the waiting line - fits the stage window without a single scroll
+// step: lines print downward and nothing ever moves.
+const FONT_SIZE = 19
+const LINE_H = 25
 const CHAR_W = FONT_SIZE * 0.6
-const BAR_H = 48
-const PAD_X = 32
-const PAD_Y = 24
+const BAR_H = 44
+const PAD_X = 24
+const PAD_Y = 18
 
 // The QR is drawn as squares from the decoded module grid. Three quiet
 // modules on each side keep it readable by a phone camera.
-const QR_MODULE = 7
+const QR_MODULE = 6
 const QR_QUIET = 3
 const QR_BOX = (qrSize + QR_QUIET * 2) * QR_MODULE
 
@@ -106,16 +109,11 @@ const Qr: React.FC<{ rows: number }> = ({ rows }) => {
 }
 
 /**
- * The terminal window. Positioned entirely by its parent (the stage animates
- * it between the close-up, the receded edge, and the split-screen half);
- * `contentZoom` magnifies the transcript onto its last lines, pinned to the
- * bottom, for the pairing scene.
+ * The terminal window. Positioned entirely by its parent (the stage zooms it
+ * for the close-up and slides it out after pairing); the transcript itself is
+ * top-anchored and never scrolls.
  */
-export const Terminal: React.FC<{
-  items: TermItem[]
-  contentZoom: number
-  boxHeight: number
-}> = ({ items, contentZoom, boxHeight }) => {
+export const Terminal: React.FC<{ items: TermItem[] }> = ({ items }) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const sec = frame / fps
@@ -126,11 +124,15 @@ export const Terminal: React.FC<{
       break
     }
     if (item.kind === "command") {
-      const chars = Math.min(item.text.length, Math.floor((sec - item.at) * item.cps))
+      const typeAt = item.typeAt ?? item.at
+      const chars = Math.min(
+        item.text.length,
+        Math.max(0, Math.floor((sec - typeAt) * item.cps)),
+      )
       visible.push({
         kind: "command",
         typed: item.text.slice(0, chars),
-        typing: chars < item.text.length,
+        typing: sec >= typeAt && chars < item.text.length,
         height: LINE_H,
       })
       continue
@@ -145,13 +147,6 @@ export const Terminal: React.FC<{
     }
   }
 
-  const contentH = visible.reduce((total, item) => total + item.height, 0)
-  const innerH = boxHeight - BAR_H - PAD_Y * 2
-  // At zoom 1 a terminal scrolls: the content pins to the bottom once it
-  // outgrows the window. Zoomed, the bottom edge itself is the anchor, so the
-  // last line stays put while the history overflows the top.
-  const zoomed = contentZoom > 1.001
-  const shift = zoomed ? 0 : Math.max(0, contentH - innerH)
   const last = visible[visible.length - 1]
   const cursor =
     last !== undefined && last.kind === "command" ? (
@@ -204,13 +199,13 @@ export const Terminal: React.FC<{
             alignItems: "center",
             gap: 10,
             fontFamily: sansFamily,
-            fontSize: 15,
+            fontSize: 14,
             fontWeight: 500,
             color: dim,
             pointerEvents: "none",
           }}
         >
-          <Mark size={16} />
+          <Mark size={15} />
           codenamegary@harold: ~
         </div>
       </div>
@@ -222,35 +217,27 @@ export const Terminal: React.FC<{
           position: "relative",
         }}
       >
-        <div
-          style={{
-            translate: `0px ${-shift}px`,
-            scale: zoomed ? `${contentZoom}` : undefined,
-            transformOrigin: "50% 100%",
-          }}
-        >
-          {visible.map((item, index) => {
-            if (item.kind === "command") {
-              return (
-                <div key={index} style={{ height: LINE_H, lineHeight: `${LINE_H}px` }}>
-                  <Prompt />
-                  <Seg seg={{ text: item.typed, color: body }} />
-                  {index === visible.length - 1 ? cursor : null}
-                </div>
-              )
-            }
-            if (item.kind === "output") {
-              return (
-                <div key={index} style={{ height: LINE_H, lineHeight: `${LINE_H}px` }}>
-                  {item.segs.map((seg, segIndex) => (
-                    <Seg key={segIndex} seg={seg} />
-                  ))}
-                </div>
-              )
-            }
-            return <Qr key={index} rows={item.rows} />
-          })}
-        </div>
+        {visible.map((item, index) => {
+          if (item.kind === "command") {
+            return (
+              <div key={index} style={{ height: LINE_H, lineHeight: `${LINE_H}px` }}>
+                <Prompt />
+                <Seg seg={{ text: item.typed, color: body }} />
+                {index === visible.length - 1 ? cursor : null}
+              </div>
+            )
+          }
+          if (item.kind === "output") {
+            return (
+              <div key={index} style={{ height: LINE_H, lineHeight: `${LINE_H}px` }}>
+                {item.segs.map((seg, segIndex) => (
+                  <Seg key={segIndex} seg={seg} />
+                ))}
+              </div>
+            )
+          }
+          return <Qr key={index} rows={item.rows} />
+        })}
       </div>
     </div>
   )

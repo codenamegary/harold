@@ -19,13 +19,10 @@ import {
   phoneCenterX,
   phoneTop,
   phoneWidth,
-  termContentZoom,
-  termHeight,
-  termLeft,
+  TERM_BOX,
+  TERM_ORIGIN,
   termOpacity,
   termScale,
-  termTop,
-  termWidth,
   termX,
   totalSec,
   type Caption,
@@ -176,21 +173,17 @@ const TerminalStage: React.FC<{ timeline: ReturnType<typeof buildTimeline> }> = 
     <div
       style={{
         position: "absolute",
-        left: channel(termLeft, sec),
-        top: channel(termTop, sec),
-        width: channel(termWidth, sec),
-        height: channel(termHeight, sec),
+        left: TERM_BOX.left,
+        top: TERM_BOX.top,
+        width: TERM_BOX.width,
+        height: TERM_BOX.height,
         opacity: channel(termOpacity, sec),
         translate: `${channel(termX, sec)}px 0px`,
         scale: `${channel(termScale, sec)}`,
-        transformOrigin: "50% 16%",
+        transformOrigin: TERM_ORIGIN,
       }}
     >
-      <Terminal
-        items={timeline.terminal}
-        contentZoom={channel(termContentZoom, sec)}
-        boxHeight={channel(termHeight, sec)}
-      />
+      <Terminal items={timeline.terminal} />
     </div>
   )
 }

@@ -4,18 +4,21 @@ Remotion cut for the site and the README. The terminal is drawn here; the phone
 screen is the recording from `docs/demo/capture/capture.sh`.
 
 The cut follows docs/demo/script-prompt.md: an intro slide, a terminal-only
-opening scene (types `harold start` and `harold pair`, prints the pairing QR),
-a split-screen pairing scene (terminal zoomed on "waiting for device…" on the
-left, the phone's camera scanning that QR on the right), then the phone alone
-for session history, new session, model/mode/effort, a drafted prompt with
-photo and file attachments, the text reply, and voice input with its reply.
-It ends on an outro slide with the install command and the site URL.
+opening scene (types `harold start` and prints the server status, zoomed in
+close and fixed in place), then the pairing flow - the terminal zooms out to
+sit fully in frame on the left, the phone slides in to the right of it, the
+terminal types `harold pair` and prints the QR for the recorded pairing code,
+the phone taps Pair and its camera scans that QR, landing on `Device paired.`.
+Only then does the terminal slide out and the phone take center stage for
+session history, new session, model/mode/effort, a drafted prompt with photo
+and file attachments, the text reply, and voice input with its reply. It ends
+on an outro slide with the install command and the site URL.
 
 | File               | Role                                                                     |
 | ------------------ | ------------------------------------------------------------------------ |
 | `Demo.tsx`         | Stage assembly: intro/outro slides, terminal stage, phone stage, captions |
 | `timeline.ts`      | The master clock: phone time-remap, layout keyframes, taps, keystrokes, captions, sounds |
-| `terminal.tsx`     | Terminal window, type-on commands, scrolling, QR drawn from the grid      |
+| `terminal.tsx`     | Terminal window, type-on commands, QR drawn from the grid (no scrolling: the whole transcript fits) |
 | `terminal-data.ts` | Terminal copy (status block, pairing block) from the recorded run         |
 | `qr-rows.ts`       | The live pairing QR of the recorded run as half-block rows                |
 | `qr-matrix.ts`     | Decodes those rows into a module grid so the QR renders as crisp squares  |
@@ -36,7 +39,7 @@ Three routines run through the walkthrough, matching the script:
 The phone video is remapped, never re-timed by hand: two short holds give the
 captions room (before the Pair tap and before the session dropdown) and one 3x
 sprint skips the scanner warm-up. Everything else plays 1:1, so capture marks
-map linearly (render = capture + 19.5s). `voice-input.wav` plays over the voice
+map linearly (render = capture + 12.1s). `voice-input.wav` plays over the voice
 scene, the same audio the emulator heard as microphone input.
 
 The phone capture and marks are committed under `public/`, so the cut renders

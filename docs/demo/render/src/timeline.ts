@@ -16,28 +16,33 @@ export const OUTRO_SEC = 4.2
 
 // --- Master clock -----------------------------------------------------------
 //
-// Scene 1 is the terminal alone, zoomed in close: it types `harold start`,
-// prints the server status, then `harold pair` and the QR. The phone then
-// slides in and plays the capture from its own second zero. Two holds give
-// the captions room to breathe (before the Pair tap and before the session
-// dropdown tap) and one 3x sprint skips the scanner warm-up so the camera
-// scene reads in about three seconds. Once the phone has settled after the
-// last hold, one second of capture is one second of video, so capture marks
-// map linearly (render = capture + 19.5).
+// Scene 1 is the terminal, zoomed in close: it types `harold start` and
+// prints the server status, fixed in place the whole time. When the pairing
+// flow starts the terminal zooms out to sit fully in frame on the left - and
+// never moves again until pairing is done - while the phone slides in to the
+// right of it. The QR prints, the phone taps Pair, the camera scans, the
+// device pairs. Only then does the terminal slide out and the phone take
+// center stage for the rest of the walk.
 //
-//   render 16.3 - 19.2    phone slides in, capture plays 0 -> 2.9
-//   render 19.2 - 21.6    hold on "Not paired"     [CAP] Pair with your agents
-//   render 21.6 - 22.5    Pair tap, scanner opens
-//   render 22.5 - 24.3    scanner warm-up          (capture 3.8 -> 9.2 at 3x)
-//   render 24.3 - 30.45   scan lands, split scene  capture 9.2 -> 15.35
-//   render 30.45 - 34.9   hold on paired home      [CAP] Achievement unlocked
-//   render 34.9 -> end    capture 15.4 -> end, 1:1
+// Two short holds give the captions room to breathe (before the Pair tap and
+// before the session dropdown tap) and one 3x sprint skips the scanner
+// warm-up so the camera scene reads in about three seconds. Everything else
+// is 1:1, so capture marks map linearly (render = capture + 12.1).
+//
+//   render  8.8 - 11.7    phone slides in, capture plays 0 -> 2.9
+//   render 11.7 - 14.2    hold on "Not paired"     [CAP] Pair with your agents
+//   render 14.2 - 15.1    Pair tap, scanner opens
+//   render 15.1 - 16.9    scanner warm-up          (capture 3.8 -> 9.2 at 3x)
+//   render 16.9 - 23.05   scan lands, device pairs capture 9.2 -> 15.35
+//   render 23.05 - 27.5   hold on paired home      [CAP] Achievement unlocked
+//   render 27.5 -> end    capture 15.4 -> end, 1:1
 
-const PHONE_IN_AT = 16.3
-const TAP_HOLD_END = 21.6
-const SPRINT_END = 24.3
-const SPLIT_END = 30.45
-const DROPDOWN_HOLD_END = 34.9
+const PHONE_IN_AT = 8.8
+const TAP_HOLD_END = 14.2
+const SPRINT_END = 16.9
+const PAIRED_HOLD_END = 23.05
+const REcede_AT = 22.8
+const DROPDOWN_HOLD_END = 27.5
 const RESUME_CAPTURE_AT = 15.4
 const PAIRED_CAPTURE_AT = 12.7
 const SCANNER_WARM_END_CAPTURE_AT = 9.2
@@ -52,18 +57,18 @@ type PlaySegment = {
 type HoldSegment = { kind: "hold"; from: number; to: number; captureAt: number }
 
 const segments: (PlaySegment | HoldSegment)[] = [
-  { kind: "play", from: PHONE_IN_AT, to: 19.2, captureFrom: 0, rate: 1 },
-  { kind: "hold", from: 19.2, to: TAP_HOLD_END, captureAt: 2.9 },
-  { kind: "play", from: TAP_HOLD_END, to: 22.5, captureFrom: 2.9, rate: 1 },
-  { kind: "play", from: 22.5, to: SPRINT_END, captureFrom: 3.8, rate: 3 },
+  { kind: "play", from: PHONE_IN_AT + 0.6, to: 11.7, captureFrom: 0, rate: 1 },
+  { kind: "hold", from: 11.7, to: TAP_HOLD_END, captureAt: 2.9 },
+  { kind: "play", from: TAP_HOLD_END, to: 15.1, captureFrom: 2.9, rate: 1 },
+  { kind: "play", from: 15.1, to: SPRINT_END, captureFrom: 3.8, rate: 3 },
   {
     kind: "play",
     from: SPRINT_END,
-    to: SPLIT_END,
+    to: PAIRED_HOLD_END,
     captureFrom: SCANNER_WARM_END_CAPTURE_AT,
     rate: 1,
   },
-  { kind: "hold", from: SPLIT_END, to: DROPDOWN_HOLD_END, captureAt: 15.35 },
+  { kind: "hold", from: PAIRED_HOLD_END, to: DROPDOWN_HOLD_END, captureAt: 15.35 },
   {
     kind: "play",
     from: DROPDOWN_HOLD_END,
@@ -133,124 +138,74 @@ export const channel = (keyframes: Keyframes, sec: number): number => {
   return keyframes[keyframes.length - 1][1]
 }
 
-// Terminal stage channels. The scene 1 close-up zooms the whole box (very
-// close on the prompt); the split scene instead grows the box onto the left
-// half and zooms the transcript content onto its last lines.
+// Terminal stage: one fixed box for the whole first act. The close-up is a
+// pure scale on that box; after pairing the box slides out to the left.
+// The origin sits at the top-left so the close-up keeps the title bar and
+// the prompt labels in frame.
+export const TERM_BOX = { left: 60, top: 112, width: 920, height: 920 }
+export const TERM_ORIGIN = "0% 6%"
+
 export const termScale: Keyframes = [
   [0, 1],
   [3.3, 1],
   [4.0, 2.35],
-  [5.7, 2.35],
-  [6.25, 1],
-  [15.6, 1],
-  [17.4, 0.42],
-  [22.1, 0.42],
-  [23.3, 1],
-  [30.5, 1],
-  [32.3, 0.42],
+  [8.8, 2.35],
+  [9.8, 1],
 ]
 export const termOpacity: Keyframes = [
   [0, 1],
-  [15.6, 1],
-  [17.4, 0.16],
-  [22.1, 0.16],
-  [23.3, 1],
-  [30.5, 1],
-  [32.3, 0.16],
+  [REcede_AT, 1],
+  [REcede_AT + 1.8, 0],
 ]
 export const termX: Keyframes = [
   [0, 0],
-  [15.6, 0],
-  [17.4, -780],
-  [22.1, -780],
-  [23.3, 0],
-  [30.5, 0],
-  [32.3, -780],
-]
-export const termLeft: Keyframes = [
-  [0, 80],
-  [23.3, -60],
-  [30.5, -60],
-  [32.3, 80],
-]
-export const termTop: Keyframes = [
-  [0, 148],
-  [23.3, 120],
-  [30.5, 120],
-  [32.3, 148],
-]
-export const termWidth: Keyframes = [
-  [0, 1100],
-  [23.3, 900],
-  [30.5, 900],
-  [32.3, 1100],
-]
-export const termHeight: Keyframes = [
-  [0, 852],
-  [23.3, 840],
-  [30.5, 840],
-  [32.3, 852],
-]
-// Transcript zoom: 1 everywhere except the split scene, where the content
-// pins to its bottom edge and the camera-facing lines fill the frame.
-export const termContentZoom: Keyframes = [
-  [0, 1],
-  [22.1, 1],
-  [23.3, 1.55],
-  [27.9, 1.55],
-  [29.3, 1],
+  [REcede_AT, 0],
+  [REcede_AT + 1.8, -1120],
 ]
 
-// Phone stage channels: center stage for scene 2, the right half of the
-// split while the camera pairs, then center again for the rest of the walk.
+// Phone stage channels: joins at the pairing flow, to the right of the fully
+// framed terminal, and only takes center stage once pairing is done.
 export const phoneWidth: Keyframes = [
-  [PHONE_IN_AT, 450],
-  [22.2, 450],
-  [23.4, 400],
-  [30.5, 400],
-  [32.3, 450],
+  [PHONE_IN_AT, 380],
+  [REcede_AT, 380],
+  [REcede_AT + 1.8, 450],
 ]
 export const phoneCenterX: Keyframes = [
   [PHONE_IN_AT, 2440],
-  [18.0, 960],
-  [22.2, 960],
-  [23.4, 1245],
-  [30.5, 1245],
-  [32.3, 960],
+  [PHONE_IN_AT + 1.7, 1460],
+  [REcede_AT, 1460],
+  [REcede_AT + 1.8, 960],
 ]
 export const phoneTop: Keyframes = [
-  [PHONE_IN_AT, 30],
-  [22.2, 30],
-  [23.4, 85],
-  [30.5, 85],
-  [32.3, 30],
+  [PHONE_IN_AT, 108],
+  [REcede_AT, 108],
+  [REcede_AT + 1.8, 30],
 ]
 // The screen starts black and fades the app in as the phone settles.
 export const phoneBlack: Keyframes = [
   [PHONE_IN_AT, 1],
-  [PHONE_IN_AT + 0.9, 0],
+  [PHONE_IN_AT + 1.0, 0],
 ]
 
 // --- Terminal transcript ----------------------------------------------------
 
 const transcript = (pairedRenderSec: number): TermItem[] => {
   const items: TermItem[] = [
-    // Bare prompt with a blinking caret from the first frame.
-    { kind: "command", at: 0, text: "", cps: 1 },
-    { kind: "command", at: 4.6, text: "harold start", cps: 12 },
+    // The prompt sits ready from the first frame; typing starts at typeAt.
+    { kind: "command", at: 0, typeAt: 4.6, text: "harold start", cps: 12 },
   ]
   statusSegs.forEach((segs, index) => {
     items.push({ kind: "output", at: 5.95 + index * 0.2, segs })
   })
-  items.push({ kind: "command", at: 9.4, text: "harold pair", cps: 10 })
+  items.push({ kind: "command", at: 9.3, text: "harold pair", cps: 10 })
   pairSegs.forEach((segs, index) => {
-    items.push({ kind: "output", at: 10.85 + index * 0.2, segs })
+    items.push({ kind: "output", at: 10.75 + index * 0.2, segs })
   })
-  items.push({ kind: "qr", at: 12.1, rowDelay: 0.045 })
-  items.push({ kind: "output", at: 13.55, segs: [{ text: "" }] })
+  items.push({ kind: "qr", at: 12.0, rowDelay: 0.025 })
+  items.push({ kind: "output", at: 13.25, segs: [{ text: "" }] })
   items.push({
     kind: "output",
-    at: 13.75,
+    at: 13.45,
     segs: [{ text: "Waiting for a device to scan..." }],
   })
   items.push({
@@ -316,17 +271,17 @@ type CaptionSpec = { at: number; hold: number; text: string }
 
 const captionSpecs: CaptionSpec[] = [
   { at: 3.9, hold: 2.6, text: "Start Harold wherever you run your agents" },
-  { at: 8.7, hold: 2.4, text: "Generate a secure temporary pairing code" },
-  { at: 15.6, hold: 1.6, text: "Harold'ing..." },
-  { at: 18.4, hold: 2.4, text: "Pair with your agents" },
-  { at: 30.7, hold: 2.6, text: "Achievement Unlocked: Work from Couch" },
-  { at: 34.2, hold: 2.4, text: "Access your agent session history" },
-  { at: 57.2, hold: 2.4, text: "Start a new session" },
-  { at: 86.4, hold: 2.4, text: "Model list from your Agent" },
-  { at: 102.8, hold: 2.6, text: "Toggle modes supported by your agent" },
-  { at: 110.9, hold: 2.4, text: "Adjust thinking effort" },
-  { at: 117.3, hold: 2.6, text: "Send a text Prompt" },
-  { at: 127.6, hold: 2.6, text: "Attachments" },
+  { at: 8.3, hold: 1.6, text: "Generate a secure temporary pairing code" },
+  { at: 10.9, hold: 1.4, text: "Harold'ing..." },
+  { at: 13.3, hold: 2.2, text: "Pair with your agents" },
+  { at: 23.0, hold: 2.6, text: "Achievement Unlocked: Work from Couch" },
+  { at: 25.2, hold: 2.4, text: "Access your agent session history" },
+  { at: 49.8, hold: 2.4, text: "Start a new session" },
+  { at: 78.7, hold: 2.4, text: "Model list from your Agent" },
+  { at: 94.0, hold: 2.6, text: "Toggle modes supported by your agent" },
+  { at: 102.1, hold: 2.4, text: "Adjust thinking effort" },
+  { at: 109.2, hold: 2.6, text: "Send a text Prompt" },
+  { at: 118.8, hold: 2.6, text: "Attachments" },
 ]
 
 export type Caption = CaptionSpec
@@ -340,7 +295,7 @@ export type Sound = { at: number; name: SoundName; volume: number }
 // The virtual microphone: capture rewinds voice-input.wav into the emulator
 // just before the voice button tap. Played so the words land just after the
 // audio, the way real dictation reads.
-const VOICE_WAV_AT = 179.5
+const VOICE_WAV_AT = 172.1
 
 // --- Timeline ---------------------------------------------------------------
 
@@ -366,9 +321,9 @@ export const buildTimeline = (captureDurationSec: number): Timeline => {
   }
   sounds.push({ at: 5.62, name: "enter", volume: 1 })
   for (let index = 0; index < 11; index += 1) {
-    sounds.push({ at: 9.4 + index / 10, name: "key", volume: 1 })
+    sounds.push({ at: 9.3 + index / 10, name: "key", volume: 1 })
   }
-  sounds.push({ at: 10.52, name: "enter", volume: 1 })
+  sounds.push({ at: 10.44, name: "enter", volume: 1 })
   // [KR] on the phone: the model search, then the drafted prompt.
   for (let index = 0; index < MODEL_SEARCH_TEXT.length; index += 1) {
     sounds.push({ at: renderAt(74.8 + index * 0.14), name: "key", volume: 0.8 })
