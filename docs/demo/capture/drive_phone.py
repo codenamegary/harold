@@ -7,7 +7,13 @@ Taps are located through UIAutomator dumps, never hard-coded.
 
 `--warm` taps Pair and waits for the video camera to produce its first
 frames (the first open after an emulator boot takes about 20 seconds), then
-backs out. Run it before screenrecord so the recording starts clean.
+backs out. Run it before recording so the recording starts clean.
+
+The walk is recorded in segments: screenrecord runs only while something is
+happening on screen. `rec_start`/`rec_stop` bracket every scene, and the pure
+waits (the scanner decoding the QR, sessions loading, the agent streaming a
+reply) happen with recording off. stitch_segments.py concatenates the
+segments afterwards and remaps the marks onto the stitched timeline.
 
 The recorded run shows session history, creates a new session, changes the
 model/mode/effort, drafts a prompt with a photo and file attachment, sends
@@ -66,6 +72,54 @@ def mark(name):
     with open(MARKS, "a") as handle:
         handle.write(f"{name} {time.time():.3f}\n")
     print(f"[{time.time() - START:6.1f}s] {name}", flush=True)
+
+
+# --- Segmented recording -----------------------------------------------------
+#
+# screenrecord only runs while something is happening on screen. Every
+# rec_start/rec_end pair is marked with its wall time so stitch_segments.py
+# can map the other marks onto the stitched video: a segment is anchored to
+# its rec_end (SIGINT finalization is near-instant), so it covers
+# [rec_end - duration, rec_end] of wall time.
+
+_rec_index = 0
+_recording = False
+
+
+def rec_start():
+    """Start a screenrecord segment. No-op while one is already running."""
+    global _rec_index, _recording
+    if _recording:
+        return
+    _rec_index += 1
+    name = f"{_rec_index:03d}"
+    mark(f"rec_start_{name}")
+    subprocess.Popen(
+        [
+            "adb", "-s", SERIAL, "shell", "screenrecord",
+            "--bit-rate", "12000000", "--time-limit", "300",
+            f"/sdcard/harold-demo-{name}.mp4",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    _recording = True
+    # The encoder needs a beat before frames land; keep this dead zone clear
+    # of interactions so nothing is clipped off the head of the segment.
+    time.sleep(0.8)
+
+
+def rec_stop():
+    """Finalize the current segment. No-op if recording is already off."""
+    global _recording
+    if not _recording:
+        return
+    name = f"{_rec_index:03d}"
+    mark(f"rec_end_{name}")
+    adb("shell", "pkill", "-INT", "screenrecord")
+    # Give screenrecord a moment to write the moov atom.
+    time.sleep(1.2)
+    _recording = False
 
 
 def adb(*args, timeout=30):
@@ -386,6 +440,7 @@ def voice_scene():
     if transcript is None:
         mark("voice_transcript_timeout")
         print("no voice transcript detected", file=sys.stderr)
+        rec_start()
         return None
     mark("voice_play_done")
     mark("voice_transcript")
@@ -394,10 +449,16 @@ def voice_scene():
 
     tap_send_button()
     mark("tap_voice_send")
+    time.sleep(1.0)
+    # The reply streams for a while; that wait never needs to be on camera.
+    rec_stop()
     if not wait_for_agent_turn(transcript):
         mark("voice_reply_timeout")
         print("no voice reply detected in time", file=sys.stderr)
+        rec_start()
         return None
+    rec_start()
+    time.sleep(2.5)
     mark("voice_reply_visible")
     return transcript
 
@@ -415,24 +476,36 @@ def warm():
 def main():
     mark("driver_start")
 
+    # ── Launch and pair. The scan's decode wait is the longest dead stretch
+    # in the walk: record the scanner opening, then go off-camera until the
+    # feed reaches the live QR and pairing lands.
+    rec_start()
     tap_text("Pair", timeout=25, settle=0)
     mark("tap_pair")
-
-    # The live QR enters the feed at 40s; a restarted playback reaches it
-    # ~42s into the scan. The session selector is present on the paired chat
-    # whether or not the app restored a previous session.
+    time.sleep(2.5)
+    rec_stop()
     wait_for(desc="Select session:", substring=True, timeout=90)
+
+    # ── Paired home settles, then session history: dropdown, rows, pick.
+    rec_start()
+    time.sleep(1.0)
     mark("paired_chat_visible")
-    time.sleep(1.2)
 
     # Session history: open the header dropdown and pick the most recent row.
-    mark("session_menu_open")
     tap_first_recent_session()
-    wait_for_chat()
-    mark("session_history_selected")
     time.sleep(1.5)
+    # The session keeps loading behind the composer; finish that off-camera.
+    rec_stop()
+    wait_for_chat()
 
-    # New session from the same dropdown.
+    rec_start()
+    time.sleep(0.8)
+    mark("session_history_selected")
+    rec_stop()
+
+    # ── New session from the same dropdown, then the whole create form.
+    rec_start()
+    mark("session_menu_open")
     open_session_menu()
     tap_text("New session", timeout=10)
     mark("tap_new_session")
@@ -449,11 +522,16 @@ def main():
     mark("agent_selected")
     tap_text("Continue", timeout=10)
     mark("tap_continue")
-
-    # The session is created on Continue; its config options seed the composer.
-    await_desc("Model:", timeout=25)
-    mark("config_visible")
     time.sleep(0.8)
+    # Creating the session is a spinner; keep only the beat, not the wait.
+    rec_stop()
+    await_desc("Model:", timeout=25)
+
+    # ── Composer: model, mode, effort, prompt, attachments, send. One long
+    # segment - it is all interaction, with the script's pauses left intact.
+    rec_start()
+    time.sleep(0.8)
+    mark("config_visible")
 
     # Model: open the sheet, search, and pick.
     pick_model(MODEL)
@@ -513,17 +591,25 @@ def main():
 
     tap_send_button()
     mark("tap_send")
-
+    # Show "Thinking" and the first streamed lines, then cut the rest of the
+    # stream and land on the finished reply.
+    time.sleep(4.0)
+    rec_stop()
     if not wait_for_agent_turn(PROMPT):
         mark("reply_timeout")
         print("no transcript reply detected in time", file=sys.stderr)
+        rec_start()
         return 1
+    rec_start()
+    time.sleep(2.5)
     mark("reply_visible")
-    time.sleep(2.0)
+    time.sleep(1.0)
 
     if voice_scene() is None:
         return 1
-    time.sleep(2.5)
+    time.sleep(1.5)
+    rec_stop()
+    time.sleep(0.5)
     mark("done")
     return 0
 

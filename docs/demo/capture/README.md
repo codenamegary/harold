@@ -1,13 +1,13 @@
 # Demo capture
 
-`capture.sh` records the phone demo. It starts Harold, issues a pairing code, bakes the live QR into a staged clip, plays that clip through the emulator camera, and screenrecords the app pairing on camera. Remotion plays that recording in a phone frame next to a simulated terminal that runs `harold start` and `harold pair`, QR included.
+`capture.sh` records the phone demo. It starts Harold, issues a pairing code, bakes the live QR into a staged clip, plays that clip through the emulator camera, and records the app pairing on camera in segments (recording pauses across the pure waits). Remotion plays that recording in a phone frame next to a simulated terminal that runs `harold start` and `harold pair`, QR included.
 
 | File                 | Role                                                                             |
 | -------------------- | -------------------------------------------------------------------------------- |
-| `capture.sh`         | Start the daemon, pair, compose the feed, boot the emulator, record, write marks |
+| `capture.sh`         | Start the daemon, pair, compose the feed, boot the emulator, pull segments, stitch |
 | `compose_camera.mjs` | Overlay the live QR on the tracked panel after a 40s gate, crop to 1280x960      |
-| `drive_phone.py`     | Walk the app: pair, session history, new session, model, mode, effort, attachments, text and voice chat |
-| `cut_dead_space.py`  | Detect the frozen scan stretch, cut it out of phone.mp4, remap the marks         |
+| `drive_phone.py`     | Walk the app pair → session history → new session → model/mode/effort → attachments → text and voice chat, recording scene by scene |
+| `stitch_segments.py` | Concatenate the recorded segments into phone.mp4 and remap the marks onto the stitched timeline |
 | `push_assets.sh`     | Install missing demo photos and `cat-diary.txt` on the emulator                  |
 | `audio-env-shim.c`   | Restore the WAV audio driver variables that the emulator wrapper strips          |
 
@@ -45,9 +45,9 @@ The staged clip (`assets/virtual-qr-code-webcam.mp4`) shows a laptop running `ha
 
 The emulator microphone is fed by its built-in WAV audio driver. `capture.sh` converts `assets/voice-input.wav` to the driver's 44.1 kHz stereo S16 format, adds a short lead-in and a long silence tail, and compiles `audio-env-shim.c`. The emulator wrapper strips `QEMU_*` variables, so the shim restores the WAV driver selection inside QEMU. The windowed emulator starts with the host microphone gated off even with `-allow-host-audio`, so before the voice scene `drive_phone.py` sends `avd hostmicon` and `avd rewindaudio` to the emulator console. Vosk then transcribes the speech exactly as it would a real microphone. The app preloads the Vosk model at process start, so the capture does not open a separate warm-up microphone stream.
 
-The scanner then sits on the frozen feed until pairing lands, and that dead stretch is cut: `cut_dead_space.py` measures frame-to-frame motion, finds the frozen run inside the scan window, trims it out of `phone.mp4` (keeping the QR on screen for a moment and a beat before pairing), and remaps the marks in `capture.json` to the shorter timeline. The raw recording is stashed as `work/capture/phone-raw.mp4` so the cut can be re-run; without it the script is a no-op. In the cut, once the terminal has printed the device list it dims and slides left while the phone zooms to center stage (`Demo.tsx` keys that off the pairing mark).
+The scanner then sits on the frozen feed until pairing lands. Nothing like that stays in the recording: the walk is captured in segments. `drive_phone.py` runs screenrecord only while something is happening on screen - `rec_start`/`rec_stop` bracket every scene, and the pure waits (the scanner decoding the QR, sessions loading, the agent streaming a reply, the session-creation spinner) happen with recording off. `stitch_segments.py` pairs up the `rec_start_NNN`/`rec_end_NNN` marks, concatenates the segments (anchoring each to its `rec_end`, since screenrecord finalizes within a fraction of a second of SIGINT), re-encodes to `phone.mp4`, and rewrites `capture.json` onto the stitched timeline. Marks fired in an unrecorded gap clamp to the start of the next segment, and the removed wall ranges are kept in `capture.json` under `cuts`.
 
-`capture.json` stores the video size and the UI marks, counted from the start of the screen recording. The simulated terminal follows those marks: it prints `Device paired.` when the phone lands on the paired chat. The caption under the phone changes on the same marks (`steps.ts`). A short title card opens the cut and a four second install card closes it.
+`capture.json` stores the video size and the UI marks, mapped onto the stitched timeline. The simulated terminal follows those marks: it prints `Device paired.` when the phone lands on the paired chat, and the stage layout (terminal zoom, phone position) is driven by the same clock (`timeline.ts`). A short title card opens the cut and a four second install card closes it.
 
 The QR in the terminal is the real pairing QR from the recorded run. `qr-rows.ts` holds the CLI's half-block output and `qr-matrix.ts` decodes it into a module grid, so the video draws squares instead of relying on font glyphs. The code has long expired, so scanning it does nothing.
 

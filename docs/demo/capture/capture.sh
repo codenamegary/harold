@@ -7,10 +7,17 @@
 # camera preview lands upright. The terminal is not recorded; Remotion draws
 # the phone frame later and plays this capture on the screen.
 #
+# The walk is recorded in segments: drive_phone.py runs screenrecord only
+# while something is happening on screen and leaves the pure waits (scanner
+# decode, reply streaming, spinners) unrecorded. Afterwards
+# stitch_segments.py concatenates the segments into phone.mp4 and rebuilds
+# capture.json on the stitched timeline.
+#
 # Once booted, push_assets.sh copies the demo photos and cat diary onto the
 # emulator, skipping files it already has. The emulator microphone reads a
 # converted copy of assets/voice-input.wav through its built-in WAV audio
-# driver; drive_phone.py rewinds that file at the voice scene.
+# driver; drive_phone.py rewinds that file at the voice scene. The wav is
+# microphone input only - it never lands in the recording or the video.
 #
 # Needs emulator 36.5+ with the VideoPlayback feature and a C compiler for
 # the audio shim (see README).
@@ -19,7 +26,7 @@
 #   docs/demo/render/public/phone.mp4
 #   docs/demo/render/public/capture.json
 #
-# Scratch (composed feed, logs, raw recording) goes to
+# Scratch (composed feed, logs, per-segment recordings) goes to
 # docs/demo/work/capture/.
 set -euo pipefail
 
@@ -31,6 +38,7 @@ DEMO=$(cd "$SCRIPT_DIR/.." && pwd)
 ROOT=$(cd "$DEMO/../.." && pwd)
 WORK="${WORK:-$DEMO/work/capture}"
 PUBLIC="$DEMO/render/public"
+SEGMENTS="$WORK/segments"
 CAMERA_SOURCE="${CAMERA_SOURCE:-$SCRIPT_DIR/assets/virtual-qr-code-webcam.mp4}"
 CAMERA_FILE="$WORK/camera-live.mp4"
 # The emulator's videofile camera silently fails on long paths. This worktree
@@ -50,7 +58,7 @@ AUDIO_SHIM="$SHORT_TMP/harold-audio-env-shim.so"
 
 export PYTHONPYCACHEPREFIX="$WORK/pycache"
 
-mkdir -p "$WORK" "$PUBLIC" "$SHORT_TMP"
+mkdir -p "$WORK" "$PUBLIC" "$SHORT_TMP" "$SEGMENTS"
 : >"$LOG"
 : >"$MARKS"
 
@@ -65,10 +73,9 @@ done
 [[ -f "$VOICE_INPUT" ]] || die "voice input not found at $VOICE_INPUT (set VOICE_INPUT)"
 [[ -f "$AUDIO_SHIM_SOURCE" ]] || die "audio shim source not found at $AUDIO_SHIM_SOURCE"
 
-# The dead-space cutter prefers work/capture/phone-raw.mp4 when it exists.
-# A previous run leaves that stash behind; remove it so this run cuts the
-# recording it just made instead of replaying the old one.
-rm -f "$WORK/phone-raw.mp4"
+# Segments from a previous run would corrupt this run's stitch; clear both
+# sides before the driver starts.
+rm -f "$SEGMENTS"/harold-demo-*.mp4
 
 # The emulator's WAV audio driver reads a canonical 44.1 kHz stereo S16 file.
 # Add a short lead-in and a long silence tail: the lead-in lets the voice UI
@@ -166,6 +173,9 @@ adb -s "$SERIAL" shell monkey -p harold.android.debug -c android.intent.category
 sleep 4
 log "app_ready"
 
+# Stale device-side segments would otherwise ride along in the pull.
+adb -s "$SERIAL" shell 'rm -f /sdcard/harold-demo-*.mp4' >/dev/null
+
 # The video camera buffers its first frames lazily: the first open after an
 # emulator boot shows black for ~20s. Warm it before recording so the QR is
 # visible as soon as the scanner opens. The feed shows the live QR only
@@ -189,12 +199,8 @@ adb -s "$SERIAL" shell monkey -p harold.android.debug -c android.intent.category
 sleep 4
 log "app_reset"
 
-# Native size. --size letterboxes the display and drops the frame rate.
-date +%s.%3N >"$WORK/screen-start"
-adb -s "$SERIAL" shell screenrecord --bit-rate 12000000 --time-limit 600 /sdcard/demo.mp4 &
-sleep 1
-log "screenrecord_start"
-
+# Segmented capture: drive_phone.py starts and stops screenrecord around
+# each scene, so nothing ever records a bare wait.
 set +e
 SERIAL="$SERIAL" PROMPT="$PROMPT" MARKS="$MARKS" \
   python3 "$SCRIPT_DIR/drive_phone.py" 2>&1 | tee "$WORK/driver.log"
@@ -202,68 +208,17 @@ DRIVER_STATUS=${PIPESTATUS[0]}
 set -e
 log "driver_exit $DRIVER_STATUS"
 
-sleep 1
-adb -s "$SERIAL" shell pkill -INT screenrecord || true
-sleep 4
-adb -s "$SERIAL" pull /sdcard/demo.mp4 "$PUBLIC/phone.mp4" >/dev/null
-log "phone_pulled"
+# Pull every segment the driver recorded, then stitch them into phone.mp4
+# and rebuild capture.json on the stitched timeline.
+for remote in $(adb -s "$SERIAL" shell ls /sdcard/harold-demo-\*.mp4 2>/dev/null | tr -d '\r'); do
+  adb -s "$SERIAL" pull "$remote" "$SEGMENTS/" >/dev/null
+done
+SEG_COUNT=$(ls "$SEGMENTS"/harold-demo-*.mp4 2>/dev/null | wc -l)
+[[ "$SEG_COUNT" -gt 0 ]] || die "no segments pulled from $SERIAL"
+log "segments_pulled $SEG_COUNT"
 
-# Write the raw marks before cutting: cut_dead_space.py needs the new
-# tap_pair/paired_chat_visible window, then rewrites capture.json with the
-# shortened timeline.
-python3 - "$MARKS" "$WORK/screen-start" "$PUBLIC/phone.mp4" "$PUBLIC/capture.json" <<'PY'
-import json
-import subprocess
-import sys
-
-marks_path, start_path, video_path, out_path = sys.argv[1:5]
-start = float(open(start_path).read().strip())
-events = []
-for line in open(marks_path):
-    line = line.strip()
-    if not line:
-        continue
-    name, ts = line.split()
-    events.append({"name": name, "sec": round(float(ts) - start, 3)})
-
-probe = subprocess.check_output(
-    [
-        "ffprobe",
-        "-v",
-        "error",
-        "-select_streams",
-        "v:0",
-        "-show_entries",
-        "stream=width,height:format=duration",
-        "-of",
-        "json",
-        video_path,
-    ]
-)
-meta = json.loads(probe)
-stream = meta["streams"][0]
-duration = round(float(meta["format"]["duration"]), 3)
-# Marks are wall-clock. The file can end before the last poll, so keep
-# every caption inside the recording.
-for event in events:
-    if event["sec"] > duration - 2.5:
-        event["sec"] = round(max(0, duration - 2.5), 3)
-payload = {
-    "durationSec": duration,
-    "width": int(stream["width"]),
-    "height": int(stream["height"]),
-    "events": events,
-}
-with open(out_path, "w") as handle:
-    json.dump(payload, handle, indent=2)
-    handle.write("\n")
-print(
-    f"capture.json {payload['width']}x{payload['height']} {payload['durationSec']}s {len(events)} events"
-)
-PY
-
-log "dead_space_cut"
-python3 "$SCRIPT_DIR/cut_dead_space.py" 2>&1 | tee -a "$LOG"
+log "stitch"
+python3 "$SCRIPT_DIR/stitch_segments.py" 2>&1 | tee -a "$LOG"
 
 adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command exit >/dev/null 2>&1 || true
 log "capture_complete"

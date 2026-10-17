@@ -292,11 +292,6 @@ export type SoundName = "key" | "enter" | "tap" | "ping"
 
 export type Sound = { at: number; name: SoundName; volume: number }
 
-// The virtual microphone: capture rewinds voice-input.wav into the emulator
-// just before the voice button tap. Played so the words land just after the
-// audio, the way real dictation reads.
-const VOICE_WAV_AT = 172.1
-
 // --- Timeline ---------------------------------------------------------------
 
 export type Timeline = {
@@ -304,7 +299,6 @@ export type Timeline = {
   ripples: Ripple[]
   captions: Caption[]
   sounds: Sound[]
-  voiceWavAt: number
   endSec: number
 }
 
@@ -350,7 +344,6 @@ export const buildTimeline = (captureDurationSec: number): Timeline => {
     })),
     captions: captionSpecs,
     sounds: sounds.sort((a, b) => a.at - b.at),
-    voiceWavAt: VOICE_WAV_AT,
     endSec: captureEndSec(captureDurationSec),
   }
 }

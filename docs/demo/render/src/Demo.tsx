@@ -310,9 +310,6 @@ export const Demo: React.FC<DemoProps> = ({ videoWidth, videoHeight, captureSec 
           <Audio src={staticFile(`sfx/${sound.name}.wav`)} volume={sound.volume} />
         </Sequence>
       ))}
-      <Sequence from={Math.round(timeline.voiceWavAt * fps)}>
-        <Audio src={staticFile("voice-input.wav")} volume={0.85} />
-      </Sequence>
       <IntroCard />
       <OutroCard from={timeline.endSec - 0.15} />
     </AbsoluteFill>

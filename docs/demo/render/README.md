@@ -39,8 +39,9 @@ Three routines run through the walkthrough, matching the script:
 The phone video is remapped, never re-timed by hand: two short holds give the
 captions room (before the Pair tap and before the session dropdown) and one 3x
 sprint skips the scanner warm-up. Everything else plays 1:1, so capture marks
-map linearly (render = capture + 12.1s). `voice-input.wav` plays over the voice
-scene, the same audio the emulator heard as microphone input.
+map linearly (render = capture + 12.1s). The rendered cut is silent on the
+phone screen itself: `voice-input.wav` exists only as the emulator's
+microphone feed during capture and is never played in the video.
 
 The phone capture and marks are committed under `public/`, so the cut renders
 offline from a fresh clone. Run the capture script only when you want a fresh

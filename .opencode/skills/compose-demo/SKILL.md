@@ -33,16 +33,18 @@ All under `docs/demo/capture/` unless noted:
   `session_history_selected`, `tap_new_session`, `config_visible`,
   `mode_plan`, `effort_set`, `prompt_typed`, `photo_attached`,
   `file_attached`, `reply_visible`, `voice_play_start`, `voice_transcript`,
-  `tap_voice_send`, `voice_reply_visible`, ...). `--warm` opens and closes
+  `tap_voice_send`, `voice_reply_visible`, plus a `rec_start_NNN`/`rec_end_NNN`
+  pair per recorded segment). `--warm` opens and closes
   the scanner once.
 - `audio-env-shim.c` — sets `QEMU_AUDIO_DRV=wav` and the WAV input/output
   paths inside QEMU, because the emulator wrapper strips `QEMU_*` variables.
   `capture.sh` compiles it to `/tmp/opencode/harold-audio-env-shim.so`.
-- `cut_dead_space.py` — measures frame-to-frame motion, cuts the frozen
-  scan stretch out of `phone.mp4`, remaps the marks to the shorter
-  timeline, and stashes the raw recording as
-  `docs/demo/work/capture/phone-raw.mp4`. Idempotent:
-  without the stash it defers to the cuts already in `capture.json`.
+- `stitch_segments.py` — pairs up the `rec_start_NNN`/`rec_end_NNN` marks,
+  concatenates the per-segment recordings (each anchored to its `rec_end`),
+  re-encodes `docs/demo/render/public/phone.mp4`, and rewrites
+  `capture.json` onto the stitched timeline. Marks fired while recording was
+  off clamp to the start of the next segment; the removed wall ranges are
+  kept under `cuts`.
 - `push_assets.sh` — extracts `assets/cats.zip` into the capture work
   directory and pushes only photos missing from `/sdcard/DCIM/Camera`
   (same name and size are skipped). It also pushes `assets/cat-diary.txt`
@@ -120,10 +122,12 @@ f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
    fails; `docs/demo/work/capture/capture.log` and `driver.log` hold the marks.
    `capture.json` must contain the full event set — session history,
    attachments, text reply, `voice_play_start`, `voice_transcript`,
-   `tap_voice_send`, `voice_reply_visible` — and the dead-space cut must
-   have fired: `durationSec` shrinks by the removed stretch (a frozen scan
-   cuts ~19s; `rawEvents` holds the unshifted marks and `cuts` the removed
-   video ranges). `capture.log` must show `assets_ready`;
+   `tap_voice_send`, `voice_reply_visible` — and the stitch must have fired:
+   `durationSec` is far shorter than wall time (~100-120s of video from
+   ~180s of wall clock; `rawEvents` holds the wall-clock marks, `cuts` the
+   unrecorded ranges, and every paired `rec_start_NNN`/`rec_end_NNN` has a
+   pulled `harold-demo-NNN.mp4` in `work/capture/segments/`).
+   `capture.log` must show `assets_ready`;
    `/sdcard/DCIM/Camera` must hold the zip's 17 photos,
    `/sdcard/Download` must hold `cat-diary.txt`, and a second
    `push_assets.sh` run reports 0 pushed.
@@ -134,11 +138,10 @@ f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
    sent, the QEMU process has `QEMU_AUDIO_DRV=wav` and holds
    `/tmp/opencode/harold-qemu-in.wav` open, and no voice warm-up fixture ran.
 6. **Remotion is in sync.** `docs/demo/render` reads `public/capture.json` at build
-   time (`calculateMetadata`) and `src/steps.ts` maps mark names to
-   captions; `Demo.tsx` also zooms the phone over the dimmed terminal 8s
-   after the pairing mark. Remotion needs no code change unless the
-   driver's marks changed. Validate: every event in `steps.ts` exists in
-   `capture.json`, `durationSec` is sane (~200s after the cut), and render a
+   time (`calculateMetadata`); `src/timeline.ts` holds the stage choreography
+   and the per-tap positions, which are tuned to a specific capture. After a
+   fresh capture, re-check the `tapSpecs` and caption times against the new
+   marks and frames. Validate: `durationSec` is sane, and render a
    spot-check still: `bun x remotion still HaroldDemo ../work/render/check.png
 --frame=<mid-walkthrough>` from `docs/demo/render`. Commit
    `docs/demo/render/public/phone.mp4` + `capture.json` only from a
