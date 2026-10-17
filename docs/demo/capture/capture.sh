@@ -7,6 +7,9 @@
 # camera preview lands upright. The terminal is not recorded; Remotion draws
 # the phone frame later and plays this capture on the screen.
 #
+# Once booted, push_assets.sh copies the demo photos and cat diary onto the
+# emulator, skipping files it already has.
+#
 # Needs emulator 36.5+ with the VideoPlayback feature (see README).
 #
 # Artifacts:
@@ -107,6 +110,8 @@ done
 log "emulator_ready"
 
 adb -s "$SERIAL" reverse tcp:3847 tcp:3847 >/dev/null
+SERIAL="$SERIAL" WORK="$WORK" bash "$SCRIPT_DIR/push_assets.sh" 2>&1 | tee -a "$LOG"
+log "assets_ready"
 adb -s "$SERIAL" shell pm clear harold.android.debug >/dev/null
 adb -s "$SERIAL" shell pm grant harold.android.debug android.permission.CAMERA
 adb -s "$SERIAL" shell pm grant harold.android.debug android.permission.POST_NOTIFICATIONS

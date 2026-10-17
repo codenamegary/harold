@@ -8,8 +8,9 @@
 | `compose_camera.mjs` | Overlay the live QR on the tracked panel after a 40s gate, crop to 1280x960      |
 | `drive_phone.py`     | Walk the app: pair, new session, model, mode, effort, send a prompt              |
 | `cut_dead_space.py`  | Detect the frozen scan stretch, cut it out of phone.mp4, remap the marks         |
+| `push_assets.sh`     | Install missing demo photos and `cat-diary.txt` on the emulator                  |
 
-`assets/virtual-qr-code-webcam.mp4` is the staged clip the camera feed is composed from.
+`assets/virtual-qr-code-webcam.mp4` is the staged clip the camera feed is composed from. `assets/cats.zip` holds the demo photos that `capture.sh` installs in the camera roll, and `assets/cat-diary.txt` is the document it installs in Downloads for file attachments.
 
 ## What is kept and what is not
 
@@ -39,7 +40,7 @@ bunx remotion render src/index.ts HaroldDemo ../harold.mp4
 
 The staged clip (`assets/virtual-qr-code-webcam.mp4`) shows a laptop running `harold pair`. `compose_camera.mjs` tracks the QR panel on the laptop screen per frame and pastes the real pairing QR over it, then rotates the clip 90 degrees counter-clockwise and cover-crops it onto a 1280x960 canvas. That canvas is what the emulator's videofile camera streams at: it stretches any file onto its 4:3 streams (preview 1280x960, analysis 640x480), so anything else arrives squashed and unscannable. The emulator shows frames rotated 90 degrees clockwise (`hw.camera.back.orientation=90`), which the counter-clockwise authoring cancels. A 120 second freeze tail keeps the QR on screen after the 7 second clip ends.
 
-`capture.sh` boots the emulator with `-feature VideoPlayback -camera-back videofile:docs/demo/work/capture/camera-live.mp4`. The first camera open after boot is black for 15-25 seconds, so the driver opens the scanner once (`--warm`) before recording. That warm scan must not pair: pairing codes are single-use, and a failing claim puts the app into a retry loop that wedges the emulator. The composed feed keeps the live QR out of the first 40 seconds. The warm pass scans inert footage and finds nothing; the recorded scan reaches the QR region and pairs on camera with a warm camera.
+`capture.sh` boots the emulator with `-feature VideoPlayback -camera-back videofile:docs/demo/work/capture/camera-live.mp4`. Once it has booted, `push_assets.sh` extracts `assets/cats.zip` to `work/capture/photos`, pushes every photo the emulator does not already have to `/sdcard/DCIM/Camera`, and pushes `assets/cat-diary.txt` to `/sdcard/Download`. It compares file name and size, so rerunning the capture does not stack up duplicate copies. A MediaStore rescan makes the photos visible to the Android photo picker and gallery, and the document visible to the file attachment picker. The first camera open after boot is black for 15-25 seconds, so the driver opens the scanner once (`--warm`) before recording. That warm scan must not pair: pairing codes are single-use, and a failing claim puts the app into a retry loop that wedges the emulator. The composed feed keeps the live QR out of the first 40 seconds. The warm pass scans inert footage and finds nothing; the recorded scan reaches the QR region and pairs on camera with a warm camera.
 
 The scanner then sits on the frozen feed until pairing lands, and that dead stretch is cut: `cut_dead_space.py` measures frame-to-frame motion, finds the frozen run inside the scan window, trims it out of `phone.mp4` (keeping the QR on screen for a moment and a beat before pairing), and remaps the marks in `capture.json` to the shorter timeline. The raw recording is stashed as `work/capture/phone-raw.mp4` so the cut can be re-run; without it the script is a no-op. In the cut, once the terminal has printed the device list it dims and slides left while the phone zooms to center stage (`Demo.tsx` keys that off the pairing mark).
 

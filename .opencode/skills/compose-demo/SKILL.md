@@ -14,8 +14,9 @@ capturing frames. If a stage fails, fix the script, not the run.
 All under `docs/demo/capture/` unless noted:
 
 - `capture.sh` — the whole run: restarts the daemon, issues a pairing code,
-  composes the feed, boots the emulator, warms the camera, resets the app,
-  screen-records while `drive_phone.py` walks the pairing flow, pulls
+  composes the feed, boots the emulator, seeds its gallery and Downloads from
+  `assets/`, warms the camera, resets the app, screen-records while
+  `drive_phone.py` walks the pairing flow, pulls
   `docs/demo/render/public/phone.mp4`, and writes
   `docs/demo/render/public/capture.json`. Run it from the repo root:
   `bash docs/demo/capture/capture.sh`.
@@ -34,6 +35,12 @@ All under `docs/demo/capture/` unless noted:
   timeline, and stashes the raw recording as
   `docs/demo/work/capture/phone-raw.mp4`. Idempotent:
   without the stash it defers to the cuts already in `capture.json`.
+- `push_assets.sh` — extracts `assets/cats.zip` into the capture work
+  directory and pushes only photos missing from `/sdcard/DCIM/Camera`
+  (same name and size are skipped). It also pushes `assets/cat-diary.txt`
+  to `/sdcard/Download` the same way, then rescans MediaStore so the photo
+  and file pickers see everything. Safe to rerun; it does not make
+  duplicate copies.
 
 ## Hardware facts that must not drift
 
@@ -85,7 +92,10 @@ f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
    `capture.json` must contain the full event set — see step 5 — and the
    dead-space cut must have fired: `durationSec` shrinks by the removed
    stretch (a frozen scan cuts ~20s; `rawEvents` holds the unshifted marks
-   and `cuts` the removed video ranges).
+   and `cuts` the removed video ranges). `capture.log` must show
+   `assets_ready`; `/sdcard/DCIM/Camera` must hold the zip's 17 photos,
+   `/sdcard/Download` must hold `cat-diary.txt`, and a second
+   `push_assets.sh` run reports 0 pushed.
 5. **Remotion is in sync.** `docs/demo/render` reads `public/capture.json` at build
    time (`calculateMetadata`) and `src/steps.ts` maps mark names to
    captions; `Demo.tsx` also zooms the phone over the dimmed terminal 8s
