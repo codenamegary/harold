@@ -2,63 +2,121 @@
 
 **Hark! The Harold Agents Sing**
 
-Harold is a local host process. It speaks HTTP and WebSocket to user
-clients through the Device API, and ACP over stdio to agent child processes.
-The paired Android app is the remote client; the `harold` CLI is the local
-user tooling.
+Liberate your agents, work from the couch.
 
-## Layout
+Harold is an agent ACP proxy and the slickest Android agent app experience. Run Harold alongside your agents, wherever they are, whatever they are, and talk to them with the Harold app.
 
-| Path                 | What lives there                            |
-| -------------------- | ------------------------------------------- |
-| `apps/server`        | The host process and Device API             |
-| `apps/cli`           | The `harold` CLI                            |
-| `apps/android`       | Paired device app                           |
-| `packages/contracts` | Wire contracts shared by server and clients |
+### The Harold Experience
 
-## Install
+https://github.com/user-attachments/assets/5dc549a7-99e0-4198-aca5-9b34fce9496f
 
-Requires [Bun](https://bun.sh). The package is
-[`@codenamegary/harold`](https://www.npmjs.com/package/@codenamegary/harold);
-its command is `harold`.
+## Quickstart
 
-```sh
-# first run, no install
-npx @codenamegary/harold setup
+1. Install Harold wherever your agents are.
 
-# daily use
-npm install -g @codenamegary/harold
-harold start
+    Requires [Bun](https://bun.sh).
+
+```bash
+bun install -g @codenamegary/harold
+harold setup # enable your agents, pick your connection method
+harold start # start the Harold proxy
+harold pair  # generate a code and show a QR code
 ```
 
-`harold start` runs the daemon in the background and returns to the shell;
-`harold stop` stops it. Setup starts the daemon the same way.
+2. Download and install the Harold app for Android.
 
-Never run bare `npx harold`. That name belongs to an unrelated dormant
-package on npm.
+    [https://harold.codenamegary.com](https://harold.codenamegary.com)
 
-### Android app
+3. Launch the app, hit `pair` and scan the QR code from your terminal.
 
-Download `harold-android-<version>.apk` from the latest
-[`harold-android-v*` release](https://github.com/codenamegary/harold/releases)
-and open it on the phone. Android asks once to allow installs from your
-browser. Later releases install over the top.
+## Connecting to Harold
 
-Each release lists the APK SHA-256 and the signing certificate SHA-256. To
-check a download on a computer with the Android SDK:
+Harold is a proxy, you can point to it just like any other server that supports http and websockets. Harold only needs to know what endpoint you've setup to embed it in the QR code, though you can also pair manually using the generated code. You can connect via...
+
+- Point a DNS record at the IP where you're running Harold
+- or Tailscale
+- or ngrok
+- or reverse tunnel from your Harold machine through a VPS...
+
+```bash
+#!/usr/bin/env bash
+# Runs on your Harold host - reverse-SSH Harold to a VPS with a public IP and/or DNS record
+
+set -euo pipefail
+
+REMOTE_HOST="${PUBLIC_HOST_USERNAME:-user@your-hostname.com}"
+SSH_KEY="${PUBLIC_HOST_KEY:-$HOME/.ssh/your-hostname.com.key}"
+LOCAL_PORT="${HAROLD_TUNNEL_LOCAL_PORT:-3847}"
+REMOTE_PORT="${HAROLD_TUNNEL_REMOTE_PORT:-3847}"
+STATUS_URL="http://127.0.0.1:${LOCAL_PORT}/v1/status"
+PUBLIC_URL="${AGENT_TUNNEL_PUBLIC_URL:-https://your-hostname.com/v1/status}" # For embedding in pairing QR codes
+
+if [[ ! -f "$SSH_KEY" ]]; then
+  echo "SSH key not found: $SSH_KEY" >&2
+  exit 1
+fi
+
+if ! curl -fsS --max-time 2 "$STATUS_URL" >/dev/null; then
+  echo "Harold is not reachable at $STATUS_URL" >&2
+  echo "Start Harold locally before opening the tunnel." >&2
+  exit 1
+fi
+
+echo "Tunneling ${REMOTE_HOST}:0.0.0.0:${REMOTE_PORT} -> 127.0.0.1:${LOCAL_PORT}"
+echo "Public check: $PUBLIC_URL"
+echo "Ctrl-C to stop."
+echo
+
+exec ssh \
+  -i "$SSH_KEY" \
+  -o BatchMode=yes \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=3 \
+  -N \
+  -R "0.0.0.0:${REMOTE_PORT}:127.0.0.1:${LOCAL_PORT}" \
+  "$REMOTE_HOST"
+```
+## Harold cli
+
+```
+> harold
+
+Usage: harold [options] [command]
+
+Hark! The Harold Agents Sing - Access your agents on Android from anywhere.
+
+Options:
+  -V, --version      output the version number
+  -h, --help         display help for command
+
+Commands:
+  start              start the Harold daemon in the background
+  setup [options]    configure agents, a workspace, reachability, and pairing
+  status             show Harold status summary and live daemon state
+  stop               stop the running Harold daemon
+  agent              list, enable, disable, and probe agents
+  pair [options]     pair a device by scanning a QR code
+  device             manage paired devices
+  workspace          manage registered workspaces
+  logs [options]     tail the Harold daemon log
+  connect [options]  verify and persist the advertised endpoint devices pair against
+```
+
+## Android app
+
+Download `harold-android-<version>.apk` from the latest [harold-android-v* release](https://harold.codenamegary.com) and open it on the phone. Android asks once to allow installs from your browser.
+
+Verify an APK on a computer with the Android SDK:
 
 ```sh
 sha256sum harold-android-<version>.apk
 apksigner verify --print-certs harold-android-<version>.apk
 ```
 
-If you installed an older debug-signed build of `harold.android`, uninstall
-it once before the first release install. The signatures differ, so Android
-refuses to update it in place.
-
 ## Run from source
 
-Requires [Bun](https://bun.sh).
+Requires [Bun](https://bun.sh). Clone the repo and then...
 
 ```sh
 bun install
@@ -66,12 +124,9 @@ bun run dev start
 ```
 
 `bun run dev` runs the CLI. Pass it any command: `bun run dev setup`,
-`bun run dev status`, `bun run dev stop`. With no command it prints the
-command surface. `harold start` leaves the daemon running in the background.
+`bun run dev status`, `bun run dev stop`.
 
-The Device API listens on `127.0.0.1:3847`. Every route except
-`GET /v1/status` and the pairing claim requires a device credential
-(`Authorization: Bearer`). Pair a device with `harold pair` to get one.
+The Harold API listens on `127.0.0.1:3847`. Every route except `GET /v1/status` and the pairing claim requires a device credential (`Authorization: Bearer`). Pair a device with `harold pair` to get one.
 
 ## Configuration
 
@@ -80,34 +135,3 @@ The Device API listens on `127.0.0.1:3847`. Every route except
 | `HAROLD_HOST`     | `127.0.0.1` | Loopback bind address                |
 | `HAROLD_PORT`     | `3847`      | Device API port                      |
 | `HAROLD_DATA_DIR` | `~/.harold` | Database, logs, and runtime settings |
-
-## Releases
-
-release-please watches two packages and opens a separate release PR for
-each.
-
-- `apps/cli`: `feat`/`fix` commits touching `apps/cli` open a release PR
-  for `@codenamegary/harold`. Merging it tags `vX.Y.Z`, publishes to npm
-  with provenance (`publish-cli`), and smoke tests
-  `npx @codenamegary/harold --version`.
-- `apps/android`: `feat`/`fix` commits touching `apps/android` open a
-  release PR that bumps `versionName`. Merging it tags
-  `harold-android-vX.Y.Z` and runs `release-android`, which builds the
-  signed APK and attaches it to the GitHub Release. To rebuild the APK for
-  an existing release, dispatch `release-android` with the tag.
-
-The npm bundle embeds the server, so a server-only change ships to npm
-only through a CLI release: make the commit touch `apps/cli` (or pair it
-with one) so release-please counts it.
-
-## Checks
-
-```sh
-bun run check                                   # lint, typecheck, tests
-cd apps/android && ./gradlew testDebugUnitTest  # Android unit tests
-```
-
-## Docs
-
-- [docs/branding](docs/branding) holds logo and brand explorations.
-- [docs/research](docs/research) holds research notes.
