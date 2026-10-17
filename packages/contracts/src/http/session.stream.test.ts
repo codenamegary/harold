@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test"
 import {
+  ExtensionReplyBodySchema,
+  PermissionReplyBodySchema,
   SessionStreamClientMessageSchema,
   SessionStreamServerMessageSchema,
+  extensionRepliesPath,
+  permissionRepliesPath,
+  sessionCancelPath,
+  sessionEventsPath,
+  sessionPromptsPath,
 } from "./session.stream"
 
 describe("session stream contracts", () => {
@@ -206,6 +213,55 @@ describe("session stream contracts", () => {
         type: "session_info",
         agentId: "cursor",
         sessionId: "acp-1",
+      }),
+    ).toThrow()
+  })
+})
+
+describe("session stream REST paths", () => {
+  test("builds the events, prompts, and cancel paths with encoded ids", () => {
+    expect(sessionEventsPath("acp:1/two", { agentId: "cursor" })).toBe(
+      "/v1/sessions/acp%3A1%2Ftwo/events?agentId=cursor",
+    )
+    expect(sessionPromptsPath("acp:1/two", { agentId: "cursor" })).toBe(
+      "/v1/sessions/acp%3A1%2Ftwo/prompts?agentId=cursor",
+    )
+    expect(sessionCancelPath("acp:1/two", { agentId: "cursor" })).toBe(
+      "/v1/sessions/acp%3A1%2Ftwo/cancel?agentId=cursor",
+    )
+  })
+
+  test("builds permission and extension reply paths with an encoded request id", () => {
+    expect(permissionRepliesPath("req:1/two")).toBe("/v1/permissions/req%3A1%2Ftwo/replies")
+    expect(extensionRepliesPath("req:1/two")).toBe("/v1/extensions/req%3A1%2Ftwo/replies")
+  })
+})
+
+describe("PermissionReplyBodySchema", () => {
+  test("parses only the optionId body", () => {
+    expect(PermissionReplyBodySchema.parse({ optionId: "allow-once" })).toEqual({
+      optionId: "allow-once",
+    })
+
+    expect(() => PermissionReplyBodySchema.parse({ optionId: "" })).toThrow()
+    expect(() =>
+      PermissionReplyBodySchema.parse({
+        type: "permission_reply",
+        optionId: "allow-once",
+      }),
+    ).toThrow()
+  })
+})
+
+describe("ExtensionReplyBodySchema", () => {
+  test("parses an opaque result body and rejects the WS envelope", () => {
+    const body = { result: { outcome: { outcome: "skipped" } } }
+    expect(ExtensionReplyBodySchema.parse(body)).toEqual(body)
+
+    expect(() =>
+      ExtensionReplyBodySchema.parse({
+        requestId: "req-1",
+        result: { outcome: { outcome: "skipped" } },
       }),
     ).toThrow()
   })
