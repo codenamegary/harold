@@ -240,11 +240,11 @@ const tapSpecs: TapSpec[] = [
   { at: 69.3, x: 391, y: 1934 }, // Model chip
   { at: 74.2, x: 327, y: 1484 }, // Search models
   { at: 79.2, x: 540, y: 1313 }, // deepseek/DeepSeek V4.1 Flash
-  { at: 84.6, x: 620, y: 1934 }, // Mode chip -> Plan
-  { at: 86.3, x: 620, y: 1934 }, // Mode chip -> Build
-  { at: 92.7, x: 830, y: 1934 }, // Thinking chip
-  { at: 94.2, x: 830, y: 1934 },
-  { at: 95.7, x: 830, y: 1934 },
+  { at: 84.6, x: 822, y: 1934 }, // Mode chip -> Plan
+  { at: 86.3, x: 822, y: 1934 }, // Mode chip -> Build
+  { at: 92.7, x: 978, y: 1934 }, // Thinking chip
+  { at: 94.2, x: 978, y: 1934 },
+  { at: 95.7, x: 978, y: 1934 },
   { at: 99.8, x: 176, y: 2074 }, // Message field
   { at: 109.4, x: 274, y: 1391 }, // Attach photo
   { at: 114.3, x: 902, y: 817 }, // third cat photo
