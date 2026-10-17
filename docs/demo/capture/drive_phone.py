@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Drive the Harold Android app through the README demo flow.
+"""Drive the Harold Android app through the demo flow.
 
 Assumes the app was just cleared (unpaired) and is showing the Shell screen.
 The back camera shows the composed QR clip, so pairing is a plain scan.
@@ -8,21 +8,58 @@ Taps are located through UIAutomator dumps, never hard-coded.
 `--warm` taps Pair and waits for the video camera to produce its first
 frames (the first open after an emulator boot takes about 20 seconds), then
 backs out. Run it before screenrecord so the recording starts clean.
+
+The recorded run shows session history, creates a new session, changes the
+model/mode/effort, drafts a prompt with a photo and file attachment, sends
+it, then opens voice input and plays `voice-input.wav` into the emulator's
+virtual microphone.
 """
 import os
 import re
+import shlex
+import socket
 import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ET
 
 SERIAL = os.environ.get("SERIAL", "emulator-5554")
-PROMPT = os.environ.get("PROMPT", "Summarize this repo in one sentence")
+PROMPT = os.environ.get("PROMPT", "Do you think my cat's behaviour is strange?")
 MODEL = os.environ.get("MODEL", "deepseek/DeepSeek V4.1 Flash")
 EFFORT_TARGET = os.environ.get("EFFORT_TARGET", "High")
 MARKS = os.environ.get("MARKS", "marks.log")
 WARM_SECONDS = float(os.environ.get("WARM_SECONDS", "25"))
 START = time.time()
+
+UI_LABELS = {
+    "New session",
+    "Select session",
+    "Disconnect from server",
+    "Message",
+    "Chat with an agent",
+    "GENERAL",
+    "provider/model",
+    "mode",
+    "AGENT",
+    "Thinking",
+    "Stop",
+    "Harold",
+}
+
+VOICE_LABELS = {
+    "Start speaking…",
+    "Voice input",
+    "Cancel",
+    "Mute voice input",
+    "Unmute voice input",
+    "Switch to keyboard input",
+    "Expand voice input",
+    "Collapse voice input",
+    "Send message",
+    "Browse commands",
+    "/",
+    "Start voice input over",
+}
 
 
 def mark(name):
@@ -70,6 +107,20 @@ def find(root, text=None, desc=None, substring=False):
             if (desc in value) if substring else (value == desc):
                 return node
     return None
+
+
+def find_all(root, text=None, desc=None, substring=False):
+    matches = []
+    for node in root.iter("node"):
+        if text is not None:
+            value = node.get("text") or ""
+            if (text in value) if substring else (value == text):
+                matches.append(node)
+        if desc is not None:
+            value = node.get("content-desc") or ""
+            if (desc in value) if substring else (value == desc):
+                matches.append(node)
+    return matches
 
 
 def wait_for(text=None, desc=None, substring=False, timeout=20.0, poll=0.4):
@@ -126,6 +177,12 @@ def tap_until_value(prefix, target, tries=6, settle=1.4):
     raise TimeoutError(f"{prefix!r} never reached {target!r} (last: {chip_value(prefix)!r})")
 
 
+def type_text(text):
+    """Type into the focused field, quoting the apostrophe for the device shell."""
+    escaped = shlex.quote(text.replace(" ", "%s"))
+    adb("shell", "input", "text", escaped)
+
+
 def select_agent(name):
     row_names = ("Cursor", "OpenCode", "pi ACP")
     root = dump_root()
@@ -139,24 +196,210 @@ def select_agent(name):
     time.sleep(0.6)
 
 
-def wait_for_transcript_reply(prompt, timeout=120.0):
-    """Wait until a text node beyond our prompt looks like a reply."""
-    ui_labels = {
-        "New session", "Select session", "Disconnect from server", "Message",
-        "Chat with an agent", "GENERAL", "provider/model", "mode", "AGENT",
-        "Thinking", "Stop", "Harold",
-    }
+def open_session_menu():
+    tap(wait_for(desc="Select session:", substring=True, timeout=15))
+    wait_for(text="New session", timeout=10)
+
+
+def tap_first_recent_session(timeout=15.0):
+    """Tap the most recent session row in the open session dropdown."""
+    open_session_menu()
     deadline = time.time() + timeout
     while time.time() < deadline:
         root = dump_root()
-        for node in root.iter("node"):
-            value = (node.get("text") or "").strip()
-            if not value or value == prompt or value in ui_labels:
-                continue
-            if len(value) > 100 and not value.startswith(("3 tool calls", "tool calls")):
-                return value
+        new_session = find(root, text="New session")
+        see_all = find(root, text="See all sessions…")
+        if new_session is not None and see_all is not None:
+            new_y = bounds_center(new_session.get("bounds"))[1]
+            see_y = bounds_center(see_all.get("bounds"))[1]
+            rows = []
+            for node in root.iter("node"):
+                value = (node.get("text") or "").strip()
+                if not value or value in {"New session", "Loading…", "See all sessions…"}:
+                    continue
+                center = bounds_center(node.get("bounds"))
+                if center and new_y < center[1] < see_y:
+                    rows.append((center[1], center[0], node))
+            if rows:
+                rows.sort(key=lambda row: (row[0], row[1]))
+                tap(rows[0][2])
+                return
+        time.sleep(0.5)
+    raise TimeoutError("no recent sessions in the session dropdown")
+
+
+def wait_for_chat(timeout=20.0):
+    wait_for(desc="Model:", substring=True, timeout=timeout)
+    wait_for(text="Message", timeout=timeout)
+
+
+def pick_model(model, timeout=15.0):
+    tap(wait_for(desc="Model:", substring=True, timeout=10))
+    wait_for(text="Search models", timeout=10)
+    tap_text("Search models", timeout=5, settle=0.5)
+    adb("shell", "input", "text", "deepseek")
+    time.sleep(1.2)
+    tap_text(model, timeout=timeout, settle=0.8)
+    deadline = time.time() + 10
+    while time.time() < deadline and find(dump_root(), text="Search models") is not None:
+        time.sleep(0.4)
+
+
+def wait_for_photo_picker(timeout=20.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        root = dump_root()
+        thumbs = find_all(root, desc="Photo taken on", substring=True)
+        if len(thumbs) >= 3:
+            return thumbs
+        time.sleep(0.5)
+    raise TimeoutError("photo picker never showed three thumbnails")
+
+
+def tap_third_photo():
+    thumbs = wait_for_photo_picker()
+
+    def position(node):
+        x, y = bounds_center(node.get("bounds"))
+        return (y, x)
+
+    thumbs.sort(key=position)
+    tap(thumbs[2], settle=0.8)
+
+
+def tap_add_button():
+    tap(wait_for(text="Add (", substring=True, timeout=10), settle=1.0)
+
+
+def wait_for_attached_photo(timeout=15.0):
+    wait_for(desc="Remove ", substring=True, timeout=timeout)
+
+
+def wait_for_file_picker(timeout=20.0):
+    return wait_for(text="cat-diary.txt", timeout=timeout)
+
+
+def wait_for_agent_turn(prompt, timeout=300.0):
+    """Wait for the agent run to start and then stay finished for a beat."""
+    start = time.time()
+    saw_running = False
+    while time.time() - start < timeout:
+        root = dump_root()
+        if find(root, desc="Cancel run") is not None or find(root, text="Replying") is not None:
+            saw_running = True
+            break
+        if time.time() - start > 6.0:
+            for node in root.iter("node"):
+                value = (node.get("text") or "").strip()
+                if (
+                    value
+                    and value != prompt
+                    and value not in UI_LABELS
+                    and len(value) >= 30
+                ):
+                    saw_running = True
+                    break
+        if saw_running:
+            break
+        time.sleep(0.8)
+
+    if not saw_running:
+        return False
+
+    # The composer can briefly stop showing its cancel button between tool
+    # calls, so require a few quiet polls before calling the turn done.
+    quiet = 0
+    while time.time() - start < timeout:
+        root = dump_root()
+        running = (
+            find(root, desc="Cancel run") is not None
+            or find(root, text="Replying") is not None
+        )
+        if running:
+            quiet = 0
+        else:
+            quiet += 1
+            if quiet >= 3:
+                return True
         time.sleep(1.0)
+    return False
+
+
+def rewind_audio():
+    """Enable the emulator microphone and restart the WAV input from sample 0."""
+    match = re.search(r"-(\d+)$", SERIAL)
+    port = int(match.group(1)) if match else 5554
+    token_path = os.path.expanduser("~/.emulator_console_auth_token")
+    try:
+        token = open(token_path).read().strip()
+    except OSError:
+        token = ""
+
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=3) as console:
+            console.settimeout(1.0)
+            if token:
+                console.sendall(f"auth {token}\n".encode())
+                time.sleep(0.1)
+            # The windowed emulator starts with the host mic gated off even
+            # with -allow-host-audio. Turn it on before the stream opens.
+            console.sendall(b"avd hostmicon\n")
+            time.sleep(0.2)
+            console.sendall(b"avd rewindaudio\n")
+            time.sleep(0.3)
+    except OSError as error:
+        raise RuntimeError(f"could not prepare the emulator WAV input: {error}") from error
+    print("  enabled and rewound the WAV microphone input", flush=True)
+
+
+def wait_for_voice_transcript(timeout=40.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        for node in dump_root().iter("node"):
+            value = (node.get("text") or "").strip()
+            if not value or value in VOICE_LABELS:
+                continue
+            if value in {"›_", "/"} or re.match(r"^\d{1,2}:\d{2}$", value):
+                continue
+            return value
+        time.sleep(0.5)
     return None
+
+
+def voice_scene():
+    # Restart the WAV before opening voice mode. The lead-in silence in the
+    # converted file covers the UI transition and Vosk model warmup.
+    mark("voice_play_start")
+    rewind_audio()
+    mark("voice_open")
+    tap_desc("Dictate with voice", timeout=15)
+    wait_for(text="Start speaking…", timeout=15)
+    wait_for(desc="Mute voice input", timeout=20)
+    time.sleep(0.8)
+
+    mark("voice_expanded")
+    tap_desc("Expand voice input", timeout=10)
+    wait_for(desc="Collapse voice input", timeout=10)
+    time.sleep(0.8)
+
+    transcript = wait_for_voice_transcript(timeout=40)
+    if transcript is None:
+        mark("voice_transcript_timeout")
+        print("no voice transcript detected", file=sys.stderr)
+        return None
+    mark("voice_play_done")
+    mark("voice_transcript")
+    print(f"voice transcript: {transcript[:120]}", flush=True)
+    time.sleep(1.0)
+
+    tap_send_button()
+    mark("tap_voice_send")
+    if not wait_for_agent_turn(transcript):
+        mark("voice_reply_timeout")
+        print("no voice reply detected in time", file=sys.stderr)
+        return None
+    mark("voice_reply_visible")
+    return transcript
 
 
 def warm():
@@ -176,11 +419,21 @@ def main():
     mark("tap_pair")
 
     # The live QR enters the feed at 40s; a restarted playback reaches it
-    # ~42s into the scan.
-    wait_for(text="New session", timeout=90)
+    # ~42s into the scan. The session selector is present on the paired chat
+    # whether or not the app restored a previous session.
+    wait_for(desc="Select session:", substring=True, timeout=90)
     mark("paired_chat_visible")
     time.sleep(1.2)
 
+    # Session history: open the header dropdown and pick the most recent row.
+    mark("session_menu_open")
+    tap_first_recent_session()
+    wait_for_chat()
+    mark("session_history_selected")
+    time.sleep(1.5)
+
+    # New session from the same dropdown.
+    open_session_menu()
     tap_text("New session", timeout=10)
     mark("tap_new_session")
 
@@ -202,15 +455,8 @@ def main():
     mark("config_visible")
     time.sleep(0.8)
 
-    # Model: open the sheet and pick.
-    tap_desc("Model:", timeout=10, substring=True)
-    wait_for(text="Search models", timeout=10)
-    mark("model_sheet_open")
-    time.sleep(0.9)
-    tap_text(MODEL, timeout=10, settle=0.8)
-    deadline = time.time() + 8
-    while time.time() < deadline and find(dump_root(), text="Search models") is not None:
-        time.sleep(0.4)
+    # Model: open the sheet, search, and pick.
+    pick_model(MODEL)
     mark("model_picked")
 
     # Mode: Build -> Plan -> Build (show the cycle, end on Build). The mark
@@ -220,9 +466,9 @@ def main():
     mode_x, mode_y = bounds_center(mode_node.get("bounds"))
     adb("shell", "input", "tap", str(mode_x), str(mode_y))
     mark("mode_plan")
-    time.sleep(1.6)
+    time.sleep(2.0)
     adb("shell", "input", "tap", str(mode_x), str(mode_y))
-    time.sleep(1.2)
+    time.sleep(2.0)
     if "Build" not in chip_value("Mode:"):
         tap_until_value("Mode:", "Build", tries=3)
     mark("mode_build")
@@ -235,29 +481,48 @@ def main():
     mark("effort_start")
     for _ in range(3):
         adb("shell", "input", "tap", str(effort_x), str(effort_y))
-        time.sleep(1.3)
+        time.sleep(1.2)
     if chip_value("Thinking:") != EFFORT_TARGET:
         tap_until_value("Thinking:", EFFORT_TARGET, tries=4)
     mark("effort_set")
     time.sleep(0.8)
 
-    # Prompt. prompt_start marks the tap on the field; the keyboard opens
-    # just after and the typing follows.
+    # Prompt. prompt_start marks the tap on the field; typing leaves it drafted.
     mark("prompt_start")
     tap_text("Message", timeout=10, settle=0.8)
-    adb("shell", "input", "text", PROMPT.replace(" ", "%s"))
-    time.sleep(1.2)
+    type_text(PROMPT)
+    time.sleep(2.0)
     mark("prompt_typed")
+
+    # Photo attachment: third thumbnail, then Add (1).
+    mark("attach_photo_start")
+    tap_desc("Attach photo", timeout=10)
+    tap_third_photo()
+    tap_add_button()
+    wait_for_attached_photo()
+    mark("photo_attached")
+    time.sleep(1.0)
+
+    # File attachment: cat-diary.txt from Recent files.
+    mark("attach_file_start")
+    tap_desc("Attach files", timeout=10)
+    tap(wait_for_file_picker(), settle=1.0)
+    wait_for(desc="Remove cat-diary.txt", timeout=10)
+    mark("file_attached")
+    time.sleep(1.0)
+
     tap_send_button()
     mark("tap_send")
 
-    reply = wait_for_transcript_reply(PROMPT)
-    if reply is None:
+    if not wait_for_agent_turn(PROMPT):
         mark("reply_timeout")
         print("no transcript reply detected in time", file=sys.stderr)
         return 1
     mark("reply_visible")
-    print(f"reply: {reply[:120]}")
+    time.sleep(2.0)
+
+    if voice_scene() is None:
+        return 1
     time.sleep(2.5)
     mark("done")
     return 0

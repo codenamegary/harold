@@ -8,9 +8,12 @@
 # the phone frame later and plays this capture on the screen.
 #
 # Once booted, push_assets.sh copies the demo photos and cat diary onto the
-# emulator, skipping files it already has.
+# emulator, skipping files it already has. The emulator microphone reads a
+# converted copy of assets/voice-input.wav through its built-in WAV audio
+# driver; drive_phone.py rewinds that file at the voice scene.
 #
-# Needs emulator 36.5+ with the VideoPlayback feature (see README).
+# Needs emulator 36.5+ with the VideoPlayback feature and a C compiler for
+# the audio shim (see README).
 #
 # Artifacts:
 #   docs/demo/render/public/phone.mp4
@@ -30,36 +33,65 @@ WORK="${WORK:-$DEMO/work/capture}"
 PUBLIC="$DEMO/render/public"
 CAMERA_SOURCE="${CAMERA_SOURCE:-$SCRIPT_DIR/assets/virtual-qr-code-webcam.mp4}"
 CAMERA_FILE="$WORK/camera-live.mp4"
+# The emulator's videofile camera silently fails on long paths. This worktree
+# path is longer than the main checkout's, so give the emulator a short copy.
+SHORT_TMP="${HAROLD_TMP:-/tmp/opencode}"
+CAMERA_FEED="$SHORT_TMP/harold-camera-live.mp4"
 EMULATOR_LOG="$WORK/emulator.log"
 LOG="$WORK/capture.log"
 MARKS="$WORK/marks.log"
-PROMPT="${PROMPT:-Summarize this repo in one sentence}"
+DEFAULT_PROMPT="Do you think my cat's behaviour is strange?"
+PROMPT="${PROMPT:-$DEFAULT_PROMPT}"
+VOICE_INPUT="${VOICE_INPUT:-$SCRIPT_DIR/assets/voice-input.wav}"
+VOICE_WAV="$SHORT_TMP/harold-qemu-in.wav"
+VOICE_WAV_OUT="$SHORT_TMP/harold-qemu-out.wav"
+AUDIO_SHIM_SOURCE="$SCRIPT_DIR/audio-env-shim.c"
+AUDIO_SHIM="$SHORT_TMP/harold-audio-env-shim.so"
 
 export PYTHONPYCACHEPREFIX="$WORK/pycache"
 
-mkdir -p "$WORK" "$PUBLIC"
+mkdir -p "$WORK" "$PUBLIC" "$SHORT_TMP"
 : >"$LOG"
 : >"$MARKS"
 
 log() { printf '%s %s\n' "$(date +%s.%3N)" "$*" | tee -a "$LOG"; }
 die() { echo "capture.sh: $*" >&2; exit 1; }
 
-for tool in harold adb node ffmpeg ffprobe python3; do
+for tool in harold adb node ffmpeg ffprobe python3 cc; do
   command -v "$tool" >/dev/null || die "$tool is not on PATH"
 done
 [[ -x "$EMULATOR" ]] || die "emulator not found at $EMULATOR (set EMULATOR)"
 [[ -f "$CAMERA_SOURCE" ]] || die "camera source not found at $CAMERA_SOURCE (set CAMERA_SOURCE)"
+[[ -f "$VOICE_INPUT" ]] || die "voice input not found at $VOICE_INPUT (set VOICE_INPUT)"
+[[ -f "$AUDIO_SHIM_SOURCE" ]] || die "audio shim source not found at $AUDIO_SHIM_SOURCE"
+
+# The dead-space cutter prefers work/capture/phone-raw.mp4 when it exists.
+# A previous run leaves that stash behind; remove it so this run cuts the
+# recording it just made instead of replaying the old one.
+rm -f "$WORK/phone-raw.mp4"
+
+# The emulator's WAV audio driver reads a canonical 44.1 kHz stereo S16 file.
+# Add a short lead-in and a long silence tail: the lead-in lets the voice UI
+# settle before speech starts, and the tail gives Vosk time to endpoint
+# before the looping file starts the phrase again.
+log "voice_prepare"
+ffmpeg -hide_banner -loglevel error -y -i "$VOICE_INPUT" \
+  -af "adelay=1500:all=1,apad=pad_dur=30" \
+  -ar 44100 -ac 2 -c:a pcm_s16le -map_metadata -1 -fflags +bitexact \
+  "$VOICE_WAV"
+cc -shared -fPIC -O2 -o "$AUDIO_SHIM" "$AUDIO_SHIM_SOURCE"
+log "voice_prepared"
 
 stop_emulator() {
   local pid
-  for pid in $(pgrep -f "qemu-system-x86_64 .*-avd $AVD" || true); do
+  for pid in $(pgrep -f "qemu-system-x86_64.*-avd $AVD" || true); do
     kill "$pid" 2>/dev/null || true
   done
   for pid in $(pgrep -f "emulator -avd $AVD" || true); do
     kill "$pid" 2>/dev/null || true
   done
   for _ in $(seq 1 30); do
-    pgrep -f "qemu-system-x86_64 .*-avd $AVD" >/dev/null || return 0
+    pgrep -f "qemu-system-x86_64.*-avd $AVD" >/dev/null || return 0
     sleep 1
   done
   die "the $AVD emulator did not stop; kill it and retry"
@@ -93,13 +125,18 @@ log "code_seen $CODE"
 
 log "camera_compose"
 node "$SCRIPT_DIR/compose_camera.mjs" "$CAMERA_SOURCE" "$WORK/qr-live.png" "$CAMERA_FILE"
+cp "$CAMERA_FILE" "$CAMERA_FEED"
 log "camera_composed"
 
 log "emulator_stop"
 stop_emulator
 log "emulator_boot"
-nohup "$EMULATOR" -avd "$AVD" -no-audio -gpu swiftshader_indirect -no-snapshot \
-  -feature VideoPlayback -camera-back "videofile:$CAMERA_FILE" >"$EMULATOR_LOG" 2>&1 &
+LD_PRELOAD="$AUDIO_SHIM" \
+HAROLD_WAV_IN="$VOICE_WAV" \
+HAROLD_WAV_OUT="$VOICE_WAV_OUT" \
+nohup "$EMULATOR" -avd "$AVD" -allow-host-audio \
+  -gpu swiftshader_indirect -no-snapshot \
+  -feature VideoPlayback -camera-back "videofile:$CAMERA_FEED" >"$EMULATOR_LOG" 2>&1 &
 boot=""
 for _ in $(seq 1 150); do
   boot=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
@@ -115,6 +152,7 @@ log "assets_ready"
 adb -s "$SERIAL" shell pm clear harold.android.debug >/dev/null
 adb -s "$SERIAL" shell pm grant harold.android.debug android.permission.CAMERA
 adb -s "$SERIAL" shell pm grant harold.android.debug android.permission.POST_NOTIFICATIONS
+adb -s "$SERIAL" shell pm grant harold.android.debug android.permission.RECORD_AUDIO
 
 adb -s "$SERIAL" shell settings put global sysui_demo_allowed 1
 adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command enter >/dev/null 2>&1 || true
@@ -141,13 +179,19 @@ log "camera_warm"
 adb -s "$SERIAL" shell pm clear harold.android.debug >/dev/null
 adb -s "$SERIAL" shell pm grant harold.android.debug android.permission.CAMERA
 adb -s "$SERIAL" shell pm grant harold.android.debug android.permission.POST_NOTIFICATIONS
+adb -s "$SERIAL" shell pm grant harold.android.debug android.permission.RECORD_AUDIO
+
+# VoskSpeechRecognitionClient preloads the bundled model when the app process
+# starts, so the recorded voice scene does not pay the unpack cost. Do not
+# open a throwaway microphone stream here: force-stopping one leaves the
+# emulator's WAV input unable to feed the next stream.
 adb -s "$SERIAL" shell monkey -p harold.android.debug -c android.intent.category.LAUNCHER 1 >/dev/null
 sleep 4
 log "app_reset"
 
 # Native size. --size letterboxes the display and drops the frame rate.
 date +%s.%3N >"$WORK/screen-start"
-adb -s "$SERIAL" shell screenrecord --bit-rate 12000000 --time-limit 180 /sdcard/demo.mp4 &
+adb -s "$SERIAL" shell screenrecord --bit-rate 12000000 --time-limit 600 /sdcard/demo.mp4 &
 sleep 1
 log "screenrecord_start"
 
@@ -164,9 +208,9 @@ sleep 4
 adb -s "$SERIAL" pull /sdcard/demo.mp4 "$PUBLIC/phone.mp4" >/dev/null
 log "phone_pulled"
 
-log "dead_space_cut"
-python3 "$SCRIPT_DIR/cut_dead_space.py" 2>&1 | tee -a "$LOG"
-
+# Write the raw marks before cutting: cut_dead_space.py needs the new
+# tap_pair/paired_chat_visible window, then rewrites capture.json with the
+# shortened timeline.
 python3 - "$MARKS" "$WORK/screen-start" "$PUBLIC/phone.mp4" "$PUBLIC/capture.json" <<'PY'
 import json
 import subprocess
@@ -217,6 +261,9 @@ print(
     f"capture.json {payload['width']}x{payload['height']} {payload['durationSec']}s {len(events)} events"
 )
 PY
+
+log "dead_space_cut"
+python3 "$SCRIPT_DIR/cut_dead_space.py" 2>&1 | tee -a "$LOG"
 
 adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command exit >/dev/null 2>&1 || true
 log "capture_complete"

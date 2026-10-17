@@ -14,10 +14,12 @@ capturing frames. If a stage fails, fix the script, not the run.
 All under `docs/demo/capture/` unless noted:
 
 - `capture.sh` — the whole run: restarts the daemon, issues a pairing code,
-  composes the feed, boots the emulator, seeds its gallery and Downloads from
-  `assets/`, warms the camera, resets the app, screen-records while
-  `drive_phone.py` walks the pairing flow, pulls
-  `docs/demo/render/public/phone.mp4`, and writes
+  composes the feed, converts `assets/voice-input.wav` for the emulator's WAV
+  audio driver, compiles `audio-env-shim.c`, boots the emulator, seeds its
+  gallery and Downloads from `assets/`, warms the camera, resets the app,
+  screen-records while `drive_phone.py` walks pairing → session history → new
+  session → model/mode/effort → prompt/attachments → text chat → voice chat,
+  pulls `docs/demo/render/public/phone.mp4`, and writes
   `docs/demo/render/public/capture.json`. Run it from the repo root:
   `bash docs/demo/capture/capture.sh`.
 - `compose_camera.mjs <source.mp4> [qr.png] <out.mp4>` — builds the camera
@@ -27,9 +29,15 @@ All under `docs/demo/capture/` unless noted:
   1920x1080 staged clip; without one, any aspect works.
 - `drive_phone.py` — the UI driver. Marks every step to
   `docs/demo/work/capture/marks.log`
-  (`driver_start`, `tap_pair`, `paired_chat_visible`, `tap_new_session`,
-  `config_visible`, `mode_plan`, `effort_set`, `prompt_typed`,
-  `reply_visible`, ...). `--warm` opens and closes the scanner once.
+  (`driver_start`, `tap_pair`, `paired_chat_visible`, `session_menu_open`,
+  `session_history_selected`, `tap_new_session`, `config_visible`,
+  `mode_plan`, `effort_set`, `prompt_typed`, `photo_attached`,
+  `file_attached`, `reply_visible`, `voice_play_start`, `voice_transcript`,
+  `tap_voice_send`, `voice_reply_visible`, ...). `--warm` opens and closes
+  the scanner once.
+- `audio-env-shim.c` — sets `QEMU_AUDIO_DRV=wav` and the WAV input/output
+  paths inside QEMU, because the emulator wrapper strips `QEMU_*` variables.
+  `capture.sh` compiles it to `/tmp/opencode/harold-audio-env-shim.so`.
 - `cut_dead_space.py` — measures frame-to-frame motion, cuts the frozen
   scan stretch out of `phone.mp4`, remaps the marks to the shorter
   timeline, and stashes the raw recording as
@@ -45,9 +53,30 @@ All under `docs/demo/capture/` unless noted:
 ## Hardware facts that must not drift
 
 - Emulator: `~/android/emulator/emulator` (36.5+, has videofile camera),
-  AVD `agent_server_api34`, flags `-no-audio -gpu swiftshader_indirect
+  AVD `agent_server_api34`, flags `-allow-host-audio -gpu swiftshader_indirect
 -no-snapshot -feature VideoPlayback -camera-back videofile:/abs/path.mp4`.
   Bare absolute path; `file=` prefix fails. Feed must have no audio track.
+- The videofile camera silently fails to open when its path is too long. A
+  path under this worktree (~107 chars) is long enough to fail; copy the
+  composed feed to `/tmp/opencode/harold-camera-live.mp4` before boot. The
+  QEMU process must hold that file open (`lsof -p <qemu> | grep
+  harold-camera`), otherwise the preview is black.
+- The microphone is the emulator's built-in WAV driver. `capture.sh` writes
+  `/tmp/opencode/harold-qemu-in.wav` at 44.1 kHz stereo S16 with a 1.5s
+  lead-in and a 30s silence tail, then boots with
+  `LD_PRELOAD=/tmp/opencode/harold-audio-env-shim.so
+  HAROLD_WAV_IN=... HAROLD_WAV_OUT=... -allow-host-audio`. The wrapper
+  strips `QEMU_*`, so the shim sets `QEMU_AUDIO_DRV=wav`,
+  `QEMU_WAV_IN_PATH`, and `QEMU_WAV_PATH` inside QEMU.
+- The windowed emulator starts with the host microphone gated off even with
+  `-allow-host-audio`. Before the voice scene, send `avd hostmicon` and then
+  `avd rewindaudio` on the emulator console (`auth` with
+  `~/.emulator_console_auth_token` first). Without `hostmicon`, Vosk sees
+  silence and the transcript times out.
+- Do not use a throwaway microphone warm-up (the debug voice fixture).
+  Force-stopping it can leave the WAV input unable to feed the next stream.
+  The app preloads the Vosk model when its process starts, so no warm-up is
+  needed.
 - Camera streams are 4:3 (preview 1280x960, analysis 640x480). The videofile
   is stretched onto whatever stream size is requested, so any non-4:3 file
   is squashed (a 9:16 file renders ~2.4x anisotropic — QRs stop decoding).
@@ -84,24 +113,32 @@ f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
    the QR's white quiet zone from a seed and compare the panel's aspect to
    the file frame's (0.999 = perfect; 0.44 = the old squash).
 3. **Pairing lands.** After tapping Pair and ~45s: `uiautomator dump` must
-   contain "New session", and `~/.harold/harold.log` must show requests from
-   the emulator. No error UI means the analyzer never decoded — go back to
-   step 2 and measure.
+   contain a `Select session:` content description, and
+   `~/.harold/harold.log` must show requests from the emulator. No error UI
+   means the analyzer never decoded — go back to step 2 and measure.
 4. **Full capture.** Run `capture.sh`. It exits non-zero if the driver
    fails; `docs/demo/work/capture/capture.log` and `driver.log` hold the marks.
-   `capture.json` must contain the full event set — see step 5 — and the
-   dead-space cut must have fired: `durationSec` shrinks by the removed
-   stretch (a frozen scan cuts ~20s; `rawEvents` holds the unshifted marks
-   and `cuts` the removed video ranges). `capture.log` must show
-   `assets_ready`; `/sdcard/DCIM/Camera` must hold the zip's 17 photos,
+   `capture.json` must contain the full event set — session history,
+   attachments, text reply, `voice_play_start`, `voice_transcript`,
+   `tap_voice_send`, `voice_reply_visible` — and the dead-space cut must
+   have fired: `durationSec` shrinks by the removed stretch (a frozen scan
+   cuts ~19s; `rawEvents` holds the unshifted marks and `cuts` the removed
+   video ranges). `capture.log` must show `assets_ready`;
+   `/sdcard/DCIM/Camera` must hold the zip's 17 photos,
    `/sdcard/Download` must hold `cat-diary.txt`, and a second
    `push_assets.sh` run reports 0 pushed.
-5. **Remotion is in sync.** `docs/demo/render` reads `public/capture.json` at build
+5. **Voice landed.** `driver.log` must print a non-empty
+   `voice transcript:` line, and the last frame of `phone.mp4` must show the
+   completed reply (no "Replying" label and no stop button). If the
+   transcript is empty, confirm `avd hostmicon` and `avd rewindaudio` were
+   sent, the QEMU process has `QEMU_AUDIO_DRV=wav` and holds
+   `/tmp/opencode/harold-qemu-in.wav` open, and no voice warm-up fixture ran.
+6. **Remotion is in sync.** `docs/demo/render` reads `public/capture.json` at build
    time (`calculateMetadata`) and `src/steps.ts` maps mark names to
    captions; `Demo.tsx` also zooms the phone over the dimmed terminal 8s
    after the pairing mark. Remotion needs no code change unless the
    driver's marks changed. Validate: every event in `steps.ts` exists in
-   `capture.json`, `durationSec` is sane (~90s after the cut), and render a
+   `capture.json`, `durationSec` is sane (~200s after the cut), and render a
    spot-check still: `bun x remotion still HaroldDemo ../work/render/check.png
 --frame=<mid-walkthrough>` from `docs/demo/render`. Commit
    `docs/demo/render/public/phone.mp4` + `capture.json` only from a
@@ -121,7 +158,18 @@ f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
 - Scanner retries and the emulator wedges to a black screen → a failing
   claim loops decode→error→reopen; never let the warm scan hit a live or
   stale-but-valid-looking QR.
-- Black viewfinder at scan time → first-open warmup; the warm pass handles
-  it, don't record before `camera_warm`.
+- Black viewfinder at scan time → first-open warmup or the camera feed was
+  never opened. Check `lsof -p <qemu> | grep harold-camera`; if QEMU does
+  not hold the file, the `videofile:` path is too long. Use the short
+  `/tmp/opencode/harold-camera-live.mp4` copy. The warm pass handles the
+  first-open warmup, don't record before `camera_warm`.
+- Voice scene opens, mic shows listening, but no transcript → check
+  `avd hostmicon` and `avd rewindaudio` were sent, the QEMU process has
+  `QEMU_AUDIO_DRV=wav` and holds `/tmp/opencode/harold-qemu-in.wav` open,
+  and no voice warm-up fixture ran. The windowed emulator keeps the host
+  mic gated off until `hostmicon`.
+- Voice reply still streaming at the end of `phone.mp4` → the driver's
+  completion check needs three quiet polls; if it returns early, inspect
+  `wait_for_agent_turn` and the app's "Replying"/`Cancel run` signals.
 - Pair code expired (~10 min) → reissue and recompose; capture.sh does both
   in order, so prefer a fresh full run over hand-patching.
