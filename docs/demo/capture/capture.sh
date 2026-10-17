@@ -19,6 +19,10 @@
 # driver; drive_phone.py rewinds that file at the voice scene. The wav is
 # microphone input only - it never lands in the recording or the video.
 #
+# Before the emulator boots, seed_sessions.sh gives OpenCode the five recent
+# sessions the phone's session menu shows, reusing them when they are already
+# the newest. That keeps the history scene deterministic.
+#
 # Needs emulator 36.5+ with the VideoPlayback feature and a C compiler for
 # the audio shim (see README).
 #
@@ -65,7 +69,7 @@ mkdir -p "$WORK" "$PUBLIC" "$SHORT_TMP" "$SEGMENTS"
 log() { printf '%s %s\n' "$(date +%s.%3N)" "$*" | tee -a "$LOG"; }
 die() { echo "capture.sh: $*" >&2; exit 1; }
 
-for tool in harold adb node ffmpeg ffprobe python3 cc; do
+for tool in harold opencode adb node ffmpeg ffprobe python3 cc; do
   command -v "$tool" >/dev/null || die "$tool is not on PATH"
 done
 [[ -x "$EMULATOR" ]] || die "emulator not found at $EMULATOR (set EMULATOR)"
@@ -109,6 +113,12 @@ harold stop >/dev/null 2>&1 || true
 sleep 1
 harold start
 log "daemon_ready"
+
+# The phone's session menu shows the five most recent agent sessions. Seed
+# them before pairing so the history scene always shows the demo titles.
+log "sessions_seed_start"
+SEED_LOG="$WORK/session-seed.log" bash "$SCRIPT_DIR/seed_sessions.sh" 2>&1 | tee -a "$LOG"
+log "sessions_seeded"
 
 PAIR_JSON=$(harold pair --no-wait --json | tail -n 1)
 log "pair_issued"

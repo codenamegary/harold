@@ -13,15 +13,21 @@ capturing frames. If a stage fails, fix the script, not the run.
 
 All under `docs/demo/capture/` unless noted:
 
-- `capture.sh` — the whole run: restarts the daemon, issues a pairing code,
-  composes the feed, converts `assets/voice-input.wav` for the emulator's WAV
-  audio driver, compiles `audio-env-shim.c`, boots the emulator, seeds its
-  gallery and Downloads from `assets/`, warms the camera, resets the app,
-  screen-records while `drive_phone.py` walks pairing → session history → new
-  session → model/mode/effort → prompt/attachments → text chat → voice chat,
-  pulls `docs/demo/render/public/phone.mp4`, and writes
+- `capture.sh` — the whole run: restarts the daemon, seeds OpenCode session
+  history, issues a pairing code, composes the feed, converts
+  `assets/voice-input.wav` for the emulator's WAV audio driver, compiles
+  `audio-env-shim.c`, boots the emulator, seeds its gallery and Downloads from
+  `assets/`, warms the camera, resets the app, screen-records while
+  `drive_phone.py` walks pairing → session history → new session →
+  model/mode/effort → prompt/attachments → text chat → voice chat, pulls
+  `docs/demo/render/public/phone.mp4`, and writes
   `docs/demo/render/public/capture.json`. Run it from the repo root:
   `bash docs/demo/capture/capture.sh`.
+- `seed_sessions.sh` — creates the five OpenCode sessions the phone's session
+  menu shows, with `opencode run --title`. It declares the titles newest
+  first, creates them oldest first, and skips the work when the five newest
+  sessions already match. Sessions are created in the main checkout so they
+  survive worktree removal.
 - `compose_camera.mjs <source.mp4> [qr.png] <out.mp4>` — builds the camera
   feed: optional live-QR paste over the staged panel (per-frame connected-
   component tracking), then a geometry pass (rotate 90° CCW, cover-crop to
@@ -127,9 +133,11 @@ f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
    ~180s of wall clock; `rawEvents` holds the wall-clock marks, `cuts` the
    unrecorded ranges, and every paired `rec_start_NNN`/`rec_end_NNN` has a
    pulled `harold-demo-NNN.mp4` in `work/capture/segments/`).
-   `capture.log` must show `assets_ready`;
-   `/sdcard/DCIM/Camera` must hold the zip's 17 photos,
-   `/sdcard/Download` must hold `cat-diary.txt`, and a second
+   `capture.log` must show `sessions_seeded` and `assets_ready`, and the
+   session menu must show exactly "Cat Therapist near me", "Does KGB use
+   cats?", "Why does my cat hate me?", "Cat treat safe for humans?", and
+   "Russian for dummies", newest first. `/sdcard/DCIM/Camera` must hold the
+   zip's 17 photos, `/sdcard/Download` must hold `cat-diary.txt`, and a second
    `push_assets.sh` run reports 0 pushed.
 5. **Voice landed.** `driver.log` must print a non-empty
    `voice transcript:` line, and the last frame of `phone.mp4` must show the
@@ -152,6 +160,10 @@ f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
 
 ## Troubleshooting map
 
+- Session menu shows unrelated titles or duplicate demo titles → run
+  `bash docs/demo/capture/seed_sessions.sh` and read its stderr; it checks the
+  global OpenCode session list, reseeds when the five newest do not match, and
+  leaves the per-run prompt output in `work/capture/session-seed.log`.
 - Scanner open but never pairs, no error UI → feed geometry or decode;
   re-run step 1's jsQR check at 640x480.
 - Driver dies on `not found text='Pair'` → the warm pass paired; the QR

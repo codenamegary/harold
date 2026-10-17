@@ -5,6 +5,7 @@
 | File                 | Role                                                                             |
 | -------------------- | -------------------------------------------------------------------------------- |
 | `capture.sh`         | Start the daemon, pair, compose the feed, boot the emulator, pull segments, stitch |
+| `seed_sessions.sh`   | Seed the five recent OpenCode sessions the phone's session menu shows             |
 | `compose_camera.mjs` | Overlay the live QR on the tracked panel after a 40s gate, crop to 1280x960      |
 | `drive_phone.py`     | Walk the app pair → session history → new session → model/mode/effort → attachments → text and voice chat, recording scene by scene |
 | `stitch_segments.py` | Concatenate the recorded segments into phone.mp4 and remap the marks onto the stitched timeline |
@@ -12,6 +13,8 @@
 | `audio-env-shim.c`   | Restore the WAV audio driver variables that the emulator wrapper strips          |
 
 `assets/virtual-qr-code-webcam.mp4` is the staged clip the camera feed is composed from. `assets/cats.zip` holds the demo photos that `capture.sh` installs in the camera roll, and `assets/cat-diary.txt` is the document it installs in Downloads for file attachments. `assets/voice-input.wav` is the speech the emulator's microphone hears during the voice scene.
+
+Before pairing, `seed_sessions.sh` creates five OpenCode sessions with fixed titles via `opencode run --title`. The phone's session menu lists the five most recent sessions newest first, so it shows exactly those titles, in this order: "Cat Therapist near me", "Does KGB use cats?", "Why does my cat hate me?", "Cat treat safe for humans?", and "Russian for dummies". Existing history is reused when those five are already the newest sessions, so repeated captures do not add duplicate rows. The sessions live in the main checkout rather than the worktree running the capture, so they still load after that worktree is removed.
 
 ## What is kept and what is not
 
