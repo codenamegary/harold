@@ -65,6 +65,29 @@ describe("makeRuntimeSettingsFileStore", () => {
     expect(() => makeRuntimeSettingsFileStore({ dataDir })).toThrow(/Invalid settings\.yml/)
   })
 
+  test("loads a wildcard bind host", async () => {
+    const dataDir = await createTempDataDir()
+    const filePath = path.join(dataDir, settingsFileName)
+    await writeFile(
+      filePath,
+      YAML.stringify({
+        advertisedUrl: "http://10.0.0.236:3847",
+        advertisedUrlEnabled: true,
+        bindHost: "0.0.0.0",
+        bindPort: 3847,
+        logLevel: "info",
+        logPath: null,
+        allowedRoots: [],
+      }),
+      "utf8",
+    )
+
+    const store = makeRuntimeSettingsFileStore({ dataDir })
+
+    expect(store.get().bindHost).toBe("0.0.0.0")
+    expect(store.get().advertisedUrl).toBe("http://10.0.0.236:3847")
+  })
+
   test("refuses to load invalid schema", async () => {
     const dataDir = await createTempDataDir()
     const filePath = path.join(dataDir, settingsFileName)
@@ -73,7 +96,7 @@ describe("makeRuntimeSettingsFileStore", () => {
       YAML.stringify({
         advertisedUrl: null,
         advertisedUrlEnabled: true,
-        bindHost: "0.0.0.0",
+        bindHost: "harold.local",
         bindPort: 3847,
         logLevel: "info",
         logPath: null,

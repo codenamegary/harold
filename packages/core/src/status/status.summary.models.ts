@@ -24,6 +24,16 @@ export type LocalApi = Readonly<{
   port: number
 }>
 
+/**
+ * The URL the host uses to reach its own daemon. Wildcard binds are not
+ * dialable, so they map to the matching loopback address.
+ */
+export const localApiUrl = (api: LocalApi): string => {
+  const host = api.host === "0.0.0.0" ? "127.0.0.1" : api.host === "::" ? "::1" : api.host
+  const formattedHost = host.includes(":") ? `[${host}]` : host
+  return `http://${formattedHost}:${api.port}`
+}
+
 export type AdvertisedEndpoint = Readonly<{
   url: string | null
   enabled: boolean

@@ -15,6 +15,26 @@ export const isIpv4Address = (value: string): boolean => {
   return parts.length === 4 && parts.every((part) => ipv4Octet.test(part))
 }
 
+const ipv4FirstOctet = (value: string): number => Number(value.split(".")[0] ?? 0)
+const ipv4SecondOctet = (value: string): number => Number(value.split(".")[1] ?? 0)
+
+export const isPrivateIpv4Address = (value: string): boolean => {
+  if (!isIpv4Address(value)) {
+    return false
+  }
+
+  const first = ipv4FirstOctet(value)
+  const second = ipv4SecondOctet(value)
+
+  return (
+    first === 10 ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168) ||
+    (first === 169 && second === 254) ||
+    (first === 100 && second >= 64 && second <= 127)
+  )
+}
+
 export const isIpv6Address = (value: string): boolean => {
   if (value.length === 0 || value.includes("[") || value.includes("]")) {
     return false
@@ -50,6 +70,26 @@ export const isIpv6Address = (value: string): boolean => {
     return /^[0-9a-fA-F]{1,4}$/.test(part)
   })
 }
+
+const firstIpv6Hextet = (value: string): number => {
+  const head = value.split(":")[0] ?? ""
+  return head === "" ? 0 : Number.parseInt(head, 16)
+}
+
+export const isUniqueLocalIpv6Address = (value: string): boolean =>
+  isIpv6Address(value) && (firstIpv6Hextet(value) & 0xfe00) === 0xfc00
+
+export const isLinkLocalIpv6Address = (value: string): boolean =>
+  isIpv6Address(value) && (firstIpv6Hextet(value) & 0xffc0) === 0xfe80
+
+export const BindHostSchema = z
+  .string()
+  .min(1)
+  .refine((value) => isIpv4Address(value) || isIpv6Address(value), {
+    message: "must be an IPv4 or IPv6 address",
+  })
+
+export type BindHost = z.infer<typeof BindHostSchema>
 
 export const HttpsAbsoluteUrlSchema = z
   .string()
@@ -107,7 +147,23 @@ export const isLoopbackHostname = (hostname: string): boolean =>
   hostname === "::1" ||
   (isIpv4Address(hostname) && hostname.split(".")[0] === "127")
 
-export const isHttpLoopbackUrl = (value: string): boolean => {
+const privateHostnameSuffixes = [".local", ".internal", ".home.arpa", ".lan", ".localhost"] as const
+
+export const isPrivateHostname = (hostname: string): boolean => {
+  const host = hostname.toLowerCase().replace(/\.$/, "")
+
+  if (isIpv4Address(host)) {
+    return isPrivateIpv4Address(host)
+  }
+
+  if (isIpv6Address(host)) {
+    return isUniqueLocalIpv6Address(host) || isLinkLocalIpv6Address(host)
+  }
+
+  return !host.includes(".") || privateHostnameSuffixes.some((suffix) => host.endsWith(suffix))
+}
+
+export const isHttpLocalUrl = (value: string): boolean => {
   if (!value.startsWith("http://")) {
     return false
   }
@@ -135,7 +191,7 @@ export const isHttpLoopbackUrl = (value: string): boolean => {
     if (rest !== "" && !/^:\d{1,5}$/.test(rest)) {
       return false
     }
-    return isLoopbackHostname(host)
+    return isLoopbackHostname(host) || isPrivateHostname(host)
   }
 
   const hostPort = authority.split(":")
@@ -152,24 +208,24 @@ export const isHttpLoopbackUrl = (value: string): boolean => {
     return false
   }
 
-  return isLoopbackHostname(host)
+  return isLoopbackHostname(host) || isPrivateHostname(host)
 }
 
 /**
- * Reachability rule (#313): a non-loopback advertised endpoint must be https,
- * while http stays allowed on loopback hosts for local development.
+ * Reachability rule: a public advertised endpoint must be https, while http
+ * stays allowed on loopback and private-network hosts for trusted LANs.
  */
 export const AdvertisedUrlSchema = z
   .string()
   .min(1)
-  .refine((value) => HttpsAbsoluteUrlSchema.safeParse(value).success || isHttpLoopbackUrl(value), {
-    message: "must be an absolute https URL, or an http URL on a loopback host",
+  .refine((value) => HttpsAbsoluteUrlSchema.safeParse(value).success || isHttpLocalUrl(value), {
+    message: "must be an absolute https URL, or an http URL on a loopback or private-network host",
   })
 
 export const RuntimeSettingsSchema = z.strictObject({
   advertisedUrl: AdvertisedUrlSchema.nullable(),
   advertisedUrlEnabled: z.boolean().default(true),
-  bindHost: z.literal("127.0.0.1"),
+  bindHost: BindHostSchema,
   bindPort: z.number().int().nonnegative().max(65535),
   logLevel: LogLevelSchema,
   // `null` means the daemon writes to the default log file under the data dir
@@ -182,7 +238,7 @@ export const RuntimeSettingsSchema = z.strictObject({
 export const UpdateRuntimeSettingsBodySchema = z.strictObject({
   advertisedUrl: z.union([AdvertisedUrlSchema, z.null(), z.literal("")]).optional(),
   advertisedUrlEnabled: z.boolean().optional(),
-  bindHost: z.literal("127.0.0.1").optional(),
+  bindHost: BindHostSchema.optional(),
   bindPort: z.number().int().nonnegative().max(65535).optional(),
   logLevel: LogLevelSchema.optional(),
   logPath: z.union([z.string().min(1), z.null()]).optional(),
@@ -197,7 +253,7 @@ export const RuntimeSettingsOverridesSchema = z.strictObject({
 })
 
 export const RuntimeSettingsEffectiveSchema = z.strictObject({
-  bindHost: z.literal("127.0.0.1"),
+  bindHost: BindHostSchema,
   bindPort: z.number().int().nonnegative().max(65535),
   logPath: z.string().min(1).nullable(),
 })

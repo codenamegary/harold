@@ -1,6 +1,7 @@
 import { Status, StatusSchema } from "contracts/http/status"
 import {
   GetAcpStatus,
+  GetBindAddress,
   GetBindPort,
   GetServerStartedAt,
   GetServerState,
@@ -11,6 +12,7 @@ export type GetStatusDeps = Readonly<{
   getVersion: GetServerVersion
   getServerState: GetServerState
   getStartedAt: GetServerStartedAt
+  getBindAddress: GetBindAddress
   getBindPort: GetBindPort
   getAcpStatus: GetAcpStatus
 }>
@@ -23,7 +25,7 @@ export const makeGetStatus =
     StatusSchema.parse({
       version: deps.getVersion(),
       state: deps.getServerState(),
-      bindAddress: "127.0.0.1",
+      bindAddress: deps.getBindAddress(),
       port: deps.getBindPort(),
       startedAt: deps.getStartedAt(),
       acp: deps.getAcpStatus(),

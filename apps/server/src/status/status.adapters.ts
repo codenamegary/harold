@@ -20,6 +20,10 @@ export const composeServerGetStatus = (deps: ComposeServerStatusDeps) =>
     getVersion: () => deps.runtime.version,
     getServerState: () => deps.runtime.getState(),
     getStartedAt: () => deps.runtime.startedAt,
+    getBindAddress: () => {
+      const address = deps.app.server.address()
+      return typeof address === "object" && address !== null ? address.address : deps.config.host
+    },
     getBindPort: () => {
       const address = deps.app.server.address()
       return typeof address === "object" && address !== null ? address.port : deps.config.port

@@ -61,7 +61,17 @@ describe("makeVerifyAdvertisedEndpoint", () => {
     expect(deps.requestedUrls).toEqual(["http://127.0.0.1:3847/v1/status"])
   })
 
-  test("rejects an http advertised endpoint on a non-loopback host before fetching", async () => {
+  test("accepts an http advertised endpoint on a private network host", async () => {
+    const deps = makeDeps()
+    const verifyAdvertisedEndpoint = makeVerifyAdvertisedEndpoint(deps)
+
+    const result = await verifyAdvertisedEndpoint("http://192.168.1.10:3847")
+
+    expect(result.ok).toBe(true)
+    expect(deps.requestedUrls).toEqual(["http://192.168.1.10:3847/v1/status"])
+  })
+
+  test("rejects an http advertised endpoint on a public host before fetching", async () => {
     const deps = makeDeps()
     const verifyAdvertisedEndpoint = makeVerifyAdvertisedEndpoint(deps)
 
@@ -72,7 +82,7 @@ describe("makeVerifyAdvertisedEndpoint", () => {
       error: {
         kind: "invalid_scheme",
         detail:
-          '"http://agents.example.com" must be an absolute https URL, or an http URL on a loopback host',
+          '"http://agents.example.com" must be an absolute https URL, or an http URL on a loopback or private-network host',
       },
     })
     expect(deps.requestedUrls).toEqual([])
@@ -142,7 +152,7 @@ describe("makeVerifyAdvertisedEndpoint", () => {
       ok: true,
       response: {
         status: 200,
-        body: JSON.stringify({ ...statusDocument, bindAddress: "0.0.0.0" }),
+        body: JSON.stringify({ ...statusDocument, bindAddress: "harold.local" }),
       },
     })
     const verifyAdvertisedEndpoint = makeVerifyAdvertisedEndpoint(deps)

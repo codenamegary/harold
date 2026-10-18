@@ -177,7 +177,10 @@ const guideCustom = (deps: { detection: RecipeDetection; writeLine: WriteLine })
 
   writeLine("Custom: bring any endpoint that proxies to Harold.")
   writeLine(`  Detection: ${detection.detail}.`)
-  writeLine("  Non-loopback endpoints must be https; http is allowed on loopback hosts only.")
+  writeLine(
+    "  Public endpoints must use https; http is allowed on loopback and private-network hosts.",
+  )
+  writeLine("  For a trusted LAN without TLS, run `harold connect --lan`.")
   writeLine("  Use --check to verify without persisting, then persist:")
   writeLine("  harold connect --advertised-url https://harold.example.com")
 }

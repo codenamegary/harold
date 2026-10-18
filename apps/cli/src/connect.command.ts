@@ -1,9 +1,17 @@
 import { Command } from "commander"
 import pc from "picocolors"
-import { ReachabilityFailure } from "core/reachability/models"
+import {
+  AdvertisedUrlSchema,
+  BindHost,
+  isIpv4Address,
+  isIpv6Address,
+  isLoopbackHostname,
+} from "contracts/http/runtime-settings"
+import { ReachabilityFailure, VerifiedAdvertisedEndpoint } from "core/reachability/models"
 import { FetchStatusEndpoint } from "core/reachability/ports"
 import { makeNodeFetchStatusEndpoint } from "core/reachability/node.adapters"
 import { makeVerifyAdvertisedEndpoint } from "core/reachability/verify.usecase"
+import { localApiUrl } from "core/status/summary.models"
 import { parseConfig } from "server/config"
 import { makeCanonicalizePath } from "server/filesystem/node-adapters"
 import {
@@ -16,17 +24,20 @@ import {
   makeUpdateRuntimeSettings,
   UpdateRuntimeSettingsDeps,
 } from "server/runtime-settings/update.usecase"
+import { detectLanAddress } from "./lan.address"
 import { findConnectRecipe, recipeIds, WhichLookup, WriteLine } from "./connect.recipes"
 
 export type ConnectOptions = Readonly<{
   advertisedUrl?: string
   recipe?: string
   check?: boolean
+  lan?: boolean | string
 }>
 
 export type ConnectColors = Readonly<{
   green: (text: string) => string
   red: (text: string) => string
+  yellow: (text: string) => string
   dim: (text: string) => string
 }>
 
@@ -36,12 +47,15 @@ export type ConnectDeps = Readonly<{
   which: WhichLookup
   writeLine: WriteLine
   colors: ConnectColors
+  port: number
+  localUrl: string
+  detectLanAddress: () => string | null
 }>
 
 /**
- * Connect only patches advertisedUrl and advertisedUrlEnabled, so the
- * workspace ports the shared update use case requires are unreachable here.
- * They fail loudly instead of reporting an empty workspace list if that
+ * Connect only patches advertisedUrl, advertisedUrlEnabled, and bindHost, so
+ * the workspace ports the shared update use case requires are unreachable
+ * here. They fail loudly instead of reporting an empty workspace list if that
  * invariant ever breaks.
  */
 const listAllWorkspacesGuard: UpdateRuntimeSettingsDeps["listAllWorkspaces"] = () => {
@@ -78,12 +92,36 @@ const renderChecks = (params: {
 
 const settingsFilePath = (dataDir: string): string => `${dataDir}/${settingsFileName}`
 
+const hostForUrl = (host: string): string =>
+  host.includes(":") && !host.startsWith("[") ? `[${host}]` : host
+
+const bindHostForLanAddress = (address: string): BindHost =>
+  isIpv4Address(address) || isIpv6Address(address) ? address : "0.0.0.0"
+
+const isCleartextLanUrl = (url: string): boolean => {
+  if (!url.startsWith("http://")) {
+    return false
+  }
+  const hostname = new URL(url).hostname.replace(/^\[|\]$/g, "")
+  return !isLoopbackHostname(hostname)
+}
+
 export const runConnect = async (params: {
   options: ConnectOptions
   dataDir: string
   deps: ConnectDeps
 }): Promise<number> => {
   const { options, dataDir, deps } = params
+
+  if (options.lan !== undefined && options.advertisedUrl !== undefined) {
+    deps.writeLine(deps.colors.red("Choose either --lan or --advertised-url, not both."))
+    return 1
+  }
+
+  if (options.lan !== undefined && options.recipe !== undefined) {
+    deps.writeLine(deps.colors.red("Choose either --lan or --recipe, not both."))
+    return 1
+  }
 
   if (options.recipe !== undefined) {
     const recipe = findConnectRecipe(options.recipe)
@@ -110,33 +148,101 @@ export const runConnect = async (params: {
     }
   }
 
-  if (options.advertisedUrl === undefined) {
-    deps.writeLine("Nothing to connect to yet.")
-    deps.writeLine(`Pass --advertised-url <url>, or start from a recipe: ${recipeIds.join(", ")}.`)
-    return 1
+  const isLan = options.lan !== undefined
+  let advertisedUrl: string
+  let bindHost: BindHost | undefined
+
+  if (isLan) {
+    const explicit = typeof options.lan === "string" && options.lan.trim() !== ""
+    const requested = explicit ? options.lan.trim() : deps.detectLanAddress()
+
+    if (requested === null || requested === "") {
+      deps.writeLine(
+        deps.colors.red("Could not detect a LAN address. Pass --lan <address> to choose one."),
+      )
+      return 1
+    }
+
+    advertisedUrl = `http://${hostForUrl(requested)}:${deps.port}`
+    const validated = AdvertisedUrlSchema.safeParse(advertisedUrl)
+    if (!validated.success) {
+      deps.writeLine(
+        deps.colors.red(
+          `Could not use ${requested}: expected a private-network address, not a public or unspecified one.`,
+        ),
+      )
+      return 1
+    }
+
+    const hostname = new URL(advertisedUrl).hostname.replace(/^\[|\]$/g, "")
+    if (isLoopbackHostname(hostname)) {
+      deps.writeLine(
+        deps.colors.red(
+          `Could not use ${requested}: --lan needs an address your phone can reach, not loopback.`,
+        ),
+      )
+      return 1
+    }
+
+    bindHost = explicit ? bindHostForLanAddress(requested) : "0.0.0.0"
+  } else {
+    if (options.advertisedUrl === undefined) {
+      deps.writeLine("Nothing to connect to yet.")
+      deps.writeLine(
+        `Pass --advertised-url <url>, --lan, or start from a recipe: ${recipeIds.join(", ")}.`,
+      )
+      return 1
+    }
+
+    advertisedUrl = options.advertisedUrl
   }
 
   const verifyAdvertisedEndpoint = makeVerifyAdvertisedEndpoint({
     fetchStatus: deps.fetchStatus,
   })
-  const result = await verifyAdvertisedEndpoint(options.advertisedUrl)
 
-  if (!result.ok) {
-    deps.writeLine(
-      deps.colors.red(
-        `Could not verify ${options.advertisedUrl}: ${renderReachabilityFailure(result.error)}`,
-      ),
-    )
+  const verify = async (url: string) => {
+    const result = await verifyAdvertisedEndpoint(url)
+    if (!result.ok) {
+      deps.writeLine(
+        deps.colors.red(`Could not verify ${url}: ${renderReachabilityFailure(result.error)}`),
+      )
+    }
+    return result
+  }
+
+  const direct = await verify(advertisedUrl)
+  let verified: VerifiedAdvertisedEndpoint
+  let restartAfterSave = false
+
+  if (direct.ok) {
+    verified = direct.value
+  } else if (isLan && !options.check) {
+    const fallback = await verify(deps.localUrl)
+    if (!fallback.ok) {
+      return 1
+    }
+    verified = fallback.value
+    restartAfterSave = true
+  } else {
     return 1
   }
 
-  deps.writeLine(deps.colors.green(`Verified ${result.value.advertisedUrl}`))
+  if (verified.advertisedUrl === advertisedUrl) {
+    deps.writeLine(deps.colors.green(`Verified ${advertisedUrl}`))
+  } else {
+    deps.writeLine(deps.colors.green(`Harold is reachable on ${verified.advertisedUrl}`))
+    deps.writeLine(
+      deps.colors.dim(`The LAN endpoint ${advertisedUrl} will work after the bind change.`),
+    )
+  }
+
   for (const line of renderChecks({
-    statusUrl: result.value.statusUrl,
-    statusCode: result.value.httpStatus,
-    version: result.value.status.version,
-    state: result.value.status.state,
-    activeSessions: result.value.status.acp.activeSessions,
+    statusUrl: verified.statusUrl,
+    statusCode: verified.httpStatus,
+    version: verified.status.version,
+    state: verified.status.state,
+    activeSessions: verified.status.acp.activeSessions,
   })) {
     deps.writeLine(line)
   }
@@ -155,7 +261,11 @@ export const runConnect = async (params: {
     deleteWorkspace: deleteWorkspaceGuard,
   })
   const updated = await updateRuntimeSettings({
-    body: { advertisedUrl: options.advertisedUrl, advertisedUrlEnabled: true },
+    body: {
+      advertisedUrl,
+      advertisedUrlEnabled: true,
+      ...(bindHost === undefined ? {} : { bindHost }),
+    },
     force: false,
   })
 
@@ -164,9 +274,33 @@ export const runConnect = async (params: {
     return 1
   }
 
-  deps.writeLine(deps.colors.green(`Saved advertised URL to ${settingsFilePath(dataDir)}`))
+  deps.writeLine(
+    deps.colors.green(
+      `Saved ${isLan ? "LAN endpoint" : "advertised URL"} to ${settingsFilePath(dataDir)}`,
+    ),
+  )
   deps.writeLine(`  advertisedUrl: ${updated.value.settings.advertisedUrl}`)
+  if (bindHost !== undefined) {
+    deps.writeLine(`  bindHost: ${updated.value.settings.bindHost}`)
+  }
   deps.writeLine(`  advertisedUrlEnabled: ${updated.value.settings.advertisedUrlEnabled}`)
+
+  if (isCleartextLanUrl(advertisedUrl)) {
+    deps.writeLine(
+      deps.colors.yellow(
+        "Warning: this endpoint is unencrypted HTTP. Use it only on a trusted network.",
+      ),
+    )
+  }
+
+  if (isLan && restartAfterSave) {
+    deps.writeLine("Restart Harold to apply the bind change:")
+    deps.writeLine("  harold stop && harold start")
+    deps.writeLine(
+      `If ${advertisedUrl} still fails, allow port ${deps.port} through the host firewall.`,
+    )
+  }
+
   deps.writeLine("Run `harold pair` next to print a phone-ready QR code for this endpoint.")
   return 0
 }
@@ -178,9 +312,10 @@ export const makeConnectCommand = (): Command => {
   command
     .option(
       "-u, --advertised-url <url>",
-      "advertised endpoint URL (https, or http on a loopback host)",
+      "advertised endpoint URL (https, or http on a loopback or private-network host)",
     )
     .option("-r, --recipe <name>", `reachability recipe (${recipeIds.join(", ")})`)
+    .option("--lan [address]", "serve a trusted LAN over http: bind the address and advertise it")
     .option("--check", "verify the endpoint without persisting it")
 
   command.action(async (options: ConnectOptions) => {
@@ -198,6 +333,9 @@ export const makeConnectCommand = (): Command => {
         which: (binary) => Bun.which(binary) !== null,
         writeLine: (line) => console.log(line),
         colors: pc,
+        port: config.port,
+        localUrl: localApiUrl({ host: config.host, port: config.port }),
+        detectLanAddress,
       },
     })
   })

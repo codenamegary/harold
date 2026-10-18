@@ -27,6 +27,7 @@ import {
 } from "core/daemon-state/read.live.usecase"
 import { makeStopLiveDaemon, StopLiveDaemon } from "core/daemon-state/stop.usecase"
 import { makeNodeFetchStatusEndpoint } from "core/reachability/node.adapters"
+import { localApiUrl } from "core/status/summary.models"
 import { parseConfig } from "server/config"
 import { openDatabase } from "server/database"
 import { assembleDeviceSlice } from "server/device"
@@ -37,6 +38,7 @@ import { assembleWorkspaceSlice } from "server/workspace"
 import { disableAgent, enableAgent, openAgentCli } from "./agent.command"
 import { ConnectDeps, runConnect } from "./connect.command"
 import { connectRecipes } from "./connect.recipes"
+import { detectLanAddress } from "./lan.address"
 import {
   StartBackgroundDaemon,
   makeBunSpawnBackgroundDaemon,
@@ -208,13 +210,16 @@ export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): P
       which,
       writeLine,
       colors: pc,
+      port: config.port,
+      localUrl: localApiUrl({ host: config.host, port: config.port }),
+      detectLanAddress,
     }
 
     // The device slice shares the wizard's settings store so the pairing
     // step sees an advertised URL persisted earlier in the same run.
     const deviceSlice = assembleDeviceSlice({
       database,
-      loopbackEndpoint: `http://${config.host}:${config.port}`,
+      loopbackEndpoint: localApiUrl({ host: config.host, port: config.port }),
       getAdvertisedEndpointSettings: () => {
         const settings = settingsStore.get()
         return {

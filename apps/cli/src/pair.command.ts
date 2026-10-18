@@ -9,6 +9,7 @@ import { formatPairingQrUri } from "contracts/pairing/qr-uri"
 import { CreatePairingCodeResult } from "core/device/create.pairing.code.usecase"
 import { DeviceError } from "core/device/errors"
 import { GetPairingCodeById } from "core/device/ports"
+import { localApiUrl } from "core/status/summary.models"
 import { parseConfig } from "server/config"
 import { AgentDatabase, openDatabase } from "server/database"
 import { assembleDeviceSlice, DeviceSlice } from "server/device"
@@ -31,7 +32,7 @@ const openPairCommandContext = (): PairCommandContext => {
   })
   const slice = assembleDeviceSlice({
     database,
-    loopbackEndpoint: `http://${config.host}:${config.port}`,
+    loopbackEndpoint: localApiUrl({ host: config.host, port: config.port }),
     getAdvertisedEndpointSettings: () => {
       const settings = runtimeSettingsStore.get()
       return {

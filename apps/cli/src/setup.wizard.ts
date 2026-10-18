@@ -301,7 +301,7 @@ const reachabilityStep = async (deps: SetupWizardDeps, options: SetupOptions): P
   for (;;) {
     const entered = await deps.prompts.text({
       message: "Advertised URL for your phone",
-      placeholder: "https://harold.example.com",
+      placeholder: "https://harold.example.com or http://192.168.1.10:3847",
     })
     if (deps.prompts.isCancel(entered)) {
       return false
@@ -310,7 +310,7 @@ const reachabilityStep = async (deps: SetupWizardDeps, options: SetupOptions): P
     const advertisedUrl = entered.trim()
     if (advertisedUrl === "") {
       deps.prompts.info(
-        "Skipped reachability. Run `harold connect --advertised-url <url>` when it is ready.",
+        "Skipped reachability. Run `harold connect --advertised-url <url>` or `harold connect --lan` when it is ready.",
       )
       return true
     }

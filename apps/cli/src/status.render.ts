@@ -1,6 +1,6 @@
 import { Status } from "contracts/http/status"
 import { DaemonNotRunning, ReadLiveDaemonStateResult } from "core/daemon-state/read.live.usecase"
-import { StatusSummary } from "core/status/summary.models"
+import { localApiUrl, StatusSummary } from "core/status/summary.models"
 
 export type StatusColors = Readonly<{
   green: (text: string) => string
@@ -42,7 +42,7 @@ const formatAgentSummary = (agents: StatusSummary["agents"]): string => {
 export const renderStatusSummary = (summary: StatusSummary): string =>
   renderRows([
     ["data dir", summary.dataDir],
-    ["local api", `http://${summary.localApi.host}:${summary.localApi.port}`],
+    ["local api", localApiUrl(summary.localApi)],
     ["advertised endpoint", formatAdvertisedEndpoint(summary.advertisedEndpoint)],
     ["agents", formatAgentSummary(summary.agents)],
     ["workspaces", String(summary.workspaces)],

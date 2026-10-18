@@ -20,8 +20,14 @@ describe("parseConfig", () => {
     expect(config.port).toBe(4000)
   })
 
-  test("HAROLD_HOST must be loopback", () => {
-    expect(() => parseConfig({ HAROLD_HOST: "0.0.0.0" })).toThrow()
+  test("HAROLD_HOST accepts wildcard and private bind addresses", () => {
+    expect(parseConfig({ HAROLD_HOST: "0.0.0.0" }).host).toBe("0.0.0.0")
+    expect(parseConfig({ HAROLD_HOST: "10.0.0.236" }).host).toBe("10.0.0.236")
+    expect(parseConfig({ HAROLD_HOST: "::" }).host).toBe("::")
+  })
+
+  test("HAROLD_HOST rejects a hostname", () => {
+    expect(() => parseConfig({ HAROLD_HOST: "harold.local" })).toThrow()
   })
 
   test("HAROLD_DATA_DIR overrides the default data dir", () => {

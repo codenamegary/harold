@@ -1,10 +1,11 @@
 import os from "node:os"
 import path from "node:path"
 import { z } from "zod"
+import { BindHostSchema } from "contracts/http/runtime-settings"
 import { expandHomePath } from "core/filesystem/expand.home.path"
 
 export const ConfigSchema = z.object({
-  host: z.literal("127.0.0.1"),
+  host: BindHostSchema,
   port: z.coerce.number().int().nonnegative(),
   dataDir: z.string().min(1),
 })
@@ -14,7 +15,7 @@ export type Config = z.infer<typeof ConfigSchema>
 const defaultDataDir = path.join(os.homedir(), ".harold")
 
 const EnvSchema = z.object({
-  HAROLD_HOST: z.literal("127.0.0.1").default("127.0.0.1"),
+  HAROLD_HOST: BindHostSchema.default("127.0.0.1"),
   HAROLD_PORT: z.coerce.number().int().nonnegative().default(3847),
   HAROLD_DATA_DIR: z.string().min(1).optional(),
 })

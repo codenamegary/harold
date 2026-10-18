@@ -1,4 +1,4 @@
-import { StatusSummary } from "core/status/summary.models"
+import { localApiUrl, StatusSummary } from "core/status/summary.models"
 import { makeGetStatusSummary } from "core/status/summary.usecase"
 import { Config } from "server/config"
 import { openDatabase } from "server/database"
@@ -82,7 +82,7 @@ export const readRunningView = (config: Config): RunningView => {
     )
     const devices = assembleDeviceSlice({
       database,
-      loopbackEndpoint: `http://${config.host}:${config.port}`,
+      loopbackEndpoint: localApiUrl({ host: config.host, port: config.port }),
       getAdvertisedEndpointSettings: () => {
         const settings = settingsStore.get()
         return {
