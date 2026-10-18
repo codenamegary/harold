@@ -60,7 +60,8 @@ describe("pull request triggers", () => {
     for (const [file, workflow] of await loadWorkflows()) {
       for (const event of ["pull_request", "pull_request_target"]) {
         const trigger = workflow.on?.[event]
-        if (trigger === undefined) continue
+        // A bare `pull_request:` key parses to null, not undefined.
+        if (!trigger) continue
         if (trigger.paths !== undefined) violations.push(`${file}: ${event} has paths`)
         if (trigger["paths-ignore"] !== undefined)
           violations.push(`${file}: ${event} has paths-ignore`)
@@ -71,10 +72,15 @@ describe("pull request triggers", () => {
 })
 
 describe("ci.yml", () => {
-  test("runs on every pull request to main", async () => {
+  test("runs on every pull request regardless of base branch", async () => {
+    // Stacked PRs target other PR branches, not main. A branches filter on
+    // the pull_request trigger skips them entirely — no check runs at all —
+    // so branch protection cannot gate them. Defined covers a bare
+    // `pull_request:` (parses to null, meaning unfiltered); a missing
+    // trigger parses to undefined and fails.
     const trigger = (await loadCi()).on?.pull_request
     expect(trigger).toBeDefined()
-    expect(trigger?.branches).toContain("main")
+    expect(trigger?.branches).toBeUndefined()
   })
 
   test("gates every other job behind ci-ok", async () => {

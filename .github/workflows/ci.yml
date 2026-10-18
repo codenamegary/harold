@@ -10,9 +10,10 @@ on:
   push:
     branches:
       - main
+  # No branches filter here: stacked PRs target other PR branches, and a
+  # base-branch filter skips them entirely. Push stays filtered to main so
+  # branches with open PRs do not double-run CI.
   pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
