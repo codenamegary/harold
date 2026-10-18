@@ -10,7 +10,8 @@ import { CreateSessionResponseSchema } from "contracts/http/session"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
 import { enableAgent } from "../test-support/test.app"
 import { bootTestApp } from "../test-support/test.harness"
-import { boundStreamUrl, openStreamClient } from "../test-support/session.stream.smoke"
+import { sessionEventsPath } from "contracts/http/session.stream"
+import { openSseStream } from "test-support/session-stream"
 
 const whichFn: WhichFn = (binaryName) =>
   binaryName === "agent" ? "/usr/local/bin/agent" : undefined
@@ -18,6 +19,19 @@ const whichFn: WhichFn = (binaryName) =>
 const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
   authorization: `Bearer ${app.deviceCredential.credential}`,
 })
+
+const eventsUrl = (app: { server: { address: () => unknown } }, sessionId: string) => {
+  const address = app.server.address()
+  if (
+    address === null ||
+    typeof address !== "object" ||
+    !("port" in address) ||
+    typeof address.port !== "number"
+  ) {
+    throw new Error("expected bound server address")
+  }
+  return `http://127.0.0.1:${address.port}${sessionEventsPath(sessionId, { agentId: "cursor" })}`
+}
 
 const promptsUrl = (sessionId: string) =>
   `/v1/sessions/${encodeURIComponent(sessionId)}/prompts?agentId=cursor`
@@ -58,8 +72,10 @@ describe("POST /v1/sessions/:sessionId/prompts", () => {
     await app.listen({ host: config.host, port: 0 })
 
     const created = await createSession(app, "/tmp/cmd-http-project")
-    const client = await openStreamClient(boundStreamUrl(app), app.deviceCredential.credential)
-    client.send({ type: "subscribe", agentId: "cursor", sessionId: created.sessionId })
+    const client = await openSseStream({
+      url: eventsUrl(app, created.sessionId),
+      credential: app.deviceCredential.credential,
+    })
     await client.waitFor((message) => message.type === "subscribed")
 
     const response = await app.inject({
@@ -161,8 +177,10 @@ describe("POST /v1/sessions/:sessionId/prompts", () => {
     await app.listen({ host: config.host, port: 0 })
 
     const created = await createSession(app, "/tmp/cmd-http-att")
-    const client = await openStreamClient(boundStreamUrl(app), app.deviceCredential.credential)
-    client.send({ type: "subscribe", agentId: "cursor", sessionId: created.sessionId })
+    const client = await openSseStream({
+      url: eventsUrl(app, created.sessionId),
+      credential: app.deviceCredential.credential,
+    })
     await client.waitFor((message) => message.type === "subscribed")
 
     const response = await app.inject({
@@ -207,8 +225,10 @@ describe("POST /v1/sessions/:sessionId/prompts", () => {
     await app.listen({ host: config.host, port: 0 })
 
     const created = await createSession(app, "/tmp/cmd-http-auth")
-    const client = await openStreamClient(boundStreamUrl(app), app.deviceCredential.credential)
-    client.send({ type: "subscribe", agentId: "cursor", sessionId: created.sessionId })
+    const client = await openSseStream({
+      url: eventsUrl(app, created.sessionId),
+      credential: app.deviceCredential.credential,
+    })
     await client.waitFor((message) => message.type === "subscribed")
 
     const response = await app.inject({
@@ -251,8 +271,10 @@ describe("POST /v1/sessions/:sessionId/cancel", () => {
     await app.listen({ host: config.host, port: 0 })
 
     const created = await createSession(app, "/tmp/cmd-http-cancel")
-    const client = await openStreamClient(boundStreamUrl(app), app.deviceCredential.credential)
-    client.send({ type: "subscribe", agentId: "cursor", sessionId: created.sessionId })
+    const client = await openSseStream({
+      url: eventsUrl(app, created.sessionId),
+      credential: app.deviceCredential.credential,
+    })
     await client.waitFor((message) => message.type === "subscribed")
 
     const response = await app.inject({
@@ -300,8 +322,10 @@ describe("POST /v1/permissions/:requestId/replies", () => {
     await app.listen({ host: config.host, port: 0 })
 
     const created = await createSession(app, "/tmp/cmd-http-perm")
-    const client = await openStreamClient(boundStreamUrl(app), app.deviceCredential.credential)
-    client.send({ type: "subscribe", agentId: "cursor", sessionId: created.sessionId })
+    const client = await openSseStream({
+      url: eventsUrl(app, created.sessionId),
+      credential: app.deviceCredential.credential,
+    })
     await client.waitFor((message) => message.type === "subscribed")
 
     const promptResponse = await app.inject({

@@ -41,6 +41,7 @@ import {
 import { SpawnAgentProcessFn } from "../acp/supervisor/supervisor.ports"
 import { spawnAgentProcess } from "../acp/supervisor/supervisor.process.adapters"
 import { registerSessionStreamRoutes } from "../session/session.stream.routes"
+import { registerSessionStreamSseRoutes } from "../session/session.stream.sse.routes"
 import { registerSessionCommandsRoutes } from "../session/session.commands.routes"
 import { createAcpPromptTurn } from "../session/hub/acp.hub.prompt"
 import { createSessionCwdCache, createSessionHub, SessionHub } from "../session/hub/hub"
@@ -83,6 +84,8 @@ export type CreateServerOptions = {
   /** Test seam: replaces the supervisor's agent start used by session routes. */
   startAcpAgentFn?: StartAcpAgent
   wsAuthFrameTimeoutMs?: number
+  /** Interval for SSE `: ping` heartbeat comments on session event streams. */
+  sseHeartbeatMs?: number
   logStream?: Writable
   logLevel?: LogLevel
   runtimeSettingsStore?: RuntimeSettingsFileStore
@@ -138,6 +141,7 @@ export const createServer = async ({
   spawnAgentProcessFn,
   startAcpAgentFn,
   wsAuthFrameTimeoutMs,
+  sseHeartbeatMs,
   logStream,
   logLevel,
   runtimeSettingsStore: providedRuntimeSettingsStore,
@@ -375,6 +379,13 @@ export const createServer = async ({
   })
 
   registerSessionCommandsRoutes(app, { sessionHub })
+
+  registerSessionStreamSseRoutes(app, {
+    sessionHub,
+    cwdCache,
+    touchDeviceLastSeen: device.touchDeviceLastSeen,
+    ...(sseHeartbeatMs === undefined ? {} : { sseHeartbeatMs }),
+  })
 
   registerStatusRoutes(app, runtime, config, acpSupervisor)
   const runtimeStatusService = createRuntimeStatusService({

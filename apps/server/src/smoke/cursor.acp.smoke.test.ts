@@ -10,12 +10,12 @@ import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
 import {
-  boundStreamUrl,
   createSmokeLogCapture,
   drainPrompt,
   failWithLogs,
   openStreamClient,
   seedSmokeDevice,
+  smokeCommands,
 } from "../test-support/session.stream.smoke"
 import { allowWorkspaceRoots } from "../test-support/test.app"
 import {
@@ -100,14 +100,14 @@ describe("cursor ACP smoke", () => {
         const listed = SessionCollectionSchema.parse(JSON.parse(listResponse.body))
         expect(listed.items.some((item) => item.sessionId === session.sessionId)).toBe(true)
 
-        const client = await openStreamClient(boundStreamUrl(app), device.credential)
+        const commands = smokeCommands({ app, credential: device.credential })
+        const client = await openStreamClient({
+          app,
+          credential: device.credential,
+          agentId: "cursor",
+          sessionId: session.sessionId,
+        })
         try {
-          client.send({
-            type: "subscribe",
-            agentId: "cursor",
-            sessionId: session.sessionId,
-          })
-
           const subscribed = await client.waitFor(
             (message) => message.type === "subscribed" || message.type === "error",
             SUBSCRIBE_TIMEOUT_MS,
@@ -121,8 +121,7 @@ describe("cursor ACP smoke", () => {
             sessionId: session.sessionId,
           })
 
-          client.send({
-            type: "prompt",
+          await commands.prompt({
             agentId: "cursor",
             sessionId: session.sessionId,
             text: "Reply with the single word pong and nothing else.",
@@ -131,6 +130,7 @@ describe("cursor ACP smoke", () => {
           await drainPrompt({
             logCapture,
             client,
+            commands,
             deadlineMs: Date.now() + PROMPT_TIMEOUT_MS,
           })
 

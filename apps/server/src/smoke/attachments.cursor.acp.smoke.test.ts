@@ -12,7 +12,12 @@ import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
 import { allowWorkspaceRoots } from "../test-support/test.app"
-import { createSmokeLogCapture, seedSmokeDevice } from "../test-support/session.stream.smoke"
+import {
+  createSmokeLogCapture,
+  openStreamClient,
+  seedSmokeDevice,
+  smokeCommands,
+} from "../test-support/session.stream.smoke"
 import {
   hasCursorAuth,
   resolveCursorAgentPath,
@@ -124,142 +129,6 @@ const uploadImage = (
   })
 }
 
-const boundStreamUrl = (app: { server: { address: () => unknown } }): string => {
-  const address = app.server.address()
-  if (address === null || typeof address === "string") {
-    throw new Error("expected bound server address")
-  }
-  return `ws://127.0.0.1:${address.port}/v1/sessions/stream`
-}
-
-type StreamClient = {
-  messages: Array<{ type: string; [key: string]: unknown }>
-  waitFor: (
-    predicate: (message: Record<string, unknown>) => boolean,
-    timeoutMs?: number,
-  ) => Promise<Record<string, unknown>>
-  send: (message: unknown) => void
-  close: () => Promise<void>
-}
-
-const openStreamClient = (wsUrl: string, credential: string): Promise<StreamClient> =>
-  new Promise((resolve, reject) => {
-    const ws = new WebSocket(wsUrl, {
-      headers: { authorization: `Bearer ${credential}` },
-    })
-    const messages: Array<Record<string, unknown>> = []
-    const waiters: Array<{
-      predicate: (message: Record<string, unknown>) => boolean
-      resolve: (message: Record<string, unknown>) => void
-      reject: (error: Error) => void
-      timer: ReturnType<typeof setTimeout>
-    }> = []
-
-    const describeMessages = () =>
-      messages
-        .map((message) =>
-          message.type === "error" ? `error:${String(message.message)}` : String(message.type),
-        )
-        .join(", ")
-
-    const failWaiters = (error: Error) => {
-      for (const waiter of waiters) {
-        clearTimeout(waiter.timer)
-        waiter.reject(error)
-      }
-      waiters.splice(0, waiters.length)
-    }
-
-    const notify = (message: Record<string, unknown>) => {
-      messages.push(message)
-      const matched = waiters.filter((waiter) => waiter.predicate(message))
-      for (const waiter of matched) {
-        clearTimeout(waiter.timer)
-        const index = waiters.indexOf(waiter)
-        if (index >= 0) {
-          waiters.splice(index, 1)
-        }
-        waiter.resolve(message)
-      }
-    }
-
-    const timer = setTimeout(() => {
-      ws.close()
-      reject(new Error("timeout opening session stream"))
-    }, 5_000)
-
-    ws.addEventListener("open", () => {
-      clearTimeout(timer)
-      resolve({
-        messages,
-        send: (message) => {
-          ws.send(JSON.stringify(message))
-        },
-        waitFor: (predicate, timeoutMs = 5_000) =>
-          new Promise((waitResolve, waitReject) => {
-            const existing = messages.find(predicate)
-            if (existing !== undefined) {
-              waitResolve(existing)
-              return
-            }
-            const waiterTimer = setTimeout(() => {
-              waitReject(
-                new Error(
-                  `timeout waiting for stream message after ${timeoutMs}ms. received: ${describeMessages()}`,
-                ),
-              )
-            }, timeoutMs)
-            waiters.push({
-              predicate,
-              resolve: waitResolve,
-              reject: waitReject,
-              timer: waiterTimer,
-            })
-          }),
-        close: () =>
-          new Promise((closeResolve) => {
-            if (ws.readyState === WebSocket.CLOSED) {
-              closeResolve()
-              return
-            }
-            ws.addEventListener("close", () => closeResolve())
-            ws.close()
-          }),
-      })
-    })
-
-    ws.addEventListener("message", (event) => {
-      const raw = websocketRawDataText(event.data)
-      try {
-        notify(JSON.parse(raw) as Record<string, unknown>)
-      } catch (error: unknown) {
-        const reason = error instanceof Error ? error.message : "parse failed"
-        failWaiters(new Error(`invalid session stream message: ${reason}. raw=${raw}`))
-      }
-    })
-
-    ws.addEventListener("unexpected-response", (_req, res) => {
-      clearTimeout(timer)
-      reject(new Error(`unexpected response ${res.statusCode}`))
-    })
-  })
-
-const websocketRawDataText = (data: unknown): string => {
-  if (typeof data === "string") {
-    return data
-  }
-  if (Array.isArray(data)) {
-    return Buffer.concat(data).toString("utf8")
-  }
-  if (data instanceof ArrayBuffer) {
-    return Buffer.from(data).toString("utf8")
-  }
-  if (Buffer.isBuffer(data)) {
-    return data.toString("utf8")
-  }
-  return Buffer.from(data as ArrayBufferLike).toString("utf8")
-}
-
 const permissionAllowOptionId = (params: Record<string, unknown>): string => {
   const options = (params.options as Array<Record<string, unknown>>) ?? []
   const allow = options.find((option) => {
@@ -365,14 +234,14 @@ describe("cursor attachment smoke", () => {
           true,
         )
 
-        const client = await openStreamClient(boundStreamUrl(app), device.credential)
+        const commands = smokeCommands({ app, credential: device.credential })
+        const client = await openStreamClient({
+          app,
+          credential: device.credential,
+          agentId: "cursor",
+          sessionId: session.sessionId,
+        })
         try {
-          client.send({
-            type: "subscribe",
-            agentId: "cursor",
-            sessionId: session.sessionId,
-          })
-
           const subscribed = await client.waitFor(
             (message) => message.type === "subscribed" || message.type === "error",
             SUBSCRIBE_TIMEOUT_MS,
@@ -381,8 +250,7 @@ describe("cursor attachment smoke", () => {
             throw new Error(`subscribe failed: ${String(subscribed.message)}`)
           }
 
-          client.send({
-            type: "prompt",
+          await commands.prompt({
             agentId: "cursor",
             sessionId: session.sessionId,
             text: "An image is attached. Look at its color. Reply with the single word red if the image is red, or the color name you see. Nothing else.",
@@ -425,8 +293,7 @@ describe("cursor attachment smoke", () => {
             }
             if (message.type === "permission_request") {
               handledRequestIds.add(String(message.requestId))
-              client.send({
-                type: "permission_reply",
+              await commands.replyPermission({
                 requestId: message.requestId,
                 optionId: permissionAllowOptionId(message.params as Record<string, unknown>),
               })
@@ -434,11 +301,7 @@ describe("cursor attachment smoke", () => {
             }
             if (message.type === "extension_request") {
               handledRequestIds.add(String(message.requestId))
-              client.send({
-                type: "extension_reply",
-                requestId: message.requestId,
-                result: {},
-              })
+              await commands.replyExtension({ requestId: message.requestId, result: {} })
             }
           }
 

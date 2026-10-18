@@ -1,14 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { CreateSessionResponseSchema } from "contracts/http/session"
-import {
-  SessionStreamClientMessage,
-  SessionStreamServerMessage,
-  SessionStreamServerMessageSchema,
-} from "contracts/http/session.stream"
-import { WebSocket } from "ws"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
+import { createSessionCommands, openSseStream } from "test-support/session-stream"
 import { Config } from "../config/config"
-import { eventDataText } from "../test/event.data.text"
 import { enableAgent } from "../test-support/test.app"
 import { bootTestApp } from "../test-support/test.harness"
 
@@ -34,99 +28,14 @@ const getListeningBase = async (
 
   return {
     httpBase: `http://${config.host}:${address.port}`,
-    wsUrl: `ws://${config.host}:${address.port}/v1/sessions/stream`,
   }
 }
 
-type StreamClient = {
-  ws: WebSocket
-  messages: SessionStreamServerMessage[]
-  waitFor: (
-    predicate: (message: SessionStreamServerMessage) => boolean,
-    timeoutMs?: number,
-  ) => Promise<SessionStreamServerMessage>
-  send: (message: SessionStreamClientMessage) => void
-  close: () => Promise<void>
-}
+const eventsUrl = (httpBase: string, sessionId: string) =>
+  `${httpBase}/v1/sessions/${encodeURIComponent(sessionId)}/events?agentId=cursor`
 
-const openStreamClient = (wsUrl: string, credential: string): Promise<StreamClient> =>
-  new Promise((resolve, reject) => {
-    const ws = new WebSocket(wsUrl, {
-      headers: { authorization: `Bearer ${credential}` },
-    })
-    const messages: SessionStreamServerMessage[] = []
-    const waiters: Array<{
-      predicate: (message: SessionStreamServerMessage) => boolean
-      resolve: (message: SessionStreamServerMessage) => void
-      reject: (error: Error) => void
-      timer: ReturnType<typeof setTimeout>
-    }> = []
-
-    const notify = (message: SessionStreamServerMessage) => {
-      messages.push(message)
-      const matched = waiters.filter((waiter) => waiter.predicate(message))
-      for (const waiter of matched) {
-        clearTimeout(waiter.timer)
-        const index = waiters.indexOf(waiter)
-        if (index >= 0) {
-          waiters.splice(index, 1)
-        }
-        waiter.resolve(message)
-      }
-    }
-
-    const timer = setTimeout(() => {
-      ws.close()
-      reject(new Error("timeout opening session stream"))
-    }, 5_000)
-
-    ws.addEventListener("open", () => {
-      clearTimeout(timer)
-      resolve({
-        ws,
-        messages,
-        send: (message) => {
-          ws.send(JSON.stringify(message))
-        },
-        waitFor: (predicate, timeoutMs = 5_000) =>
-          new Promise((waitResolve, waitReject) => {
-            const existing = messages.find(predicate)
-            if (existing !== undefined) {
-              waitResolve(existing)
-              return
-            }
-
-            const waiterTimer = setTimeout(() => {
-              waitReject(new Error("timeout waiting for stream message"))
-            }, timeoutMs)
-            waiters.push({
-              predicate,
-              resolve: waitResolve,
-              reject: waitReject,
-              timer: waiterTimer,
-            })
-          }),
-        close: () =>
-          new Promise((closeResolve) => {
-            if (ws.readyState === WebSocket.CLOSED) {
-              closeResolve()
-              return
-            }
-            ws.addEventListener("close", () => closeResolve())
-            ws.close()
-          }),
-      })
-    })
-
-    ws.addEventListener("message", (event) => {
-      notify(SessionStreamServerMessageSchema.parse(JSON.parse(eventDataText(event.data))))
-    })
-
-    ws.addEventListener("unexpected-response", (_req, res) => {
-      clearTimeout(timer)
-      reject(new Error(`unexpected response ${res.statusCode}`))
-    })
-  })
+const openEvents = (httpBase: string, sessionId: string, credential: string) =>
+  openSseStream({ url: eventsUrl(httpBase, sessionId), credential })
 
 describe("session hub stream integration", () => {
   test("two clients mirror load replay, live updates, prompt/cancel, and permission first-wins", async () => {
@@ -144,7 +53,11 @@ describe("session hub stream integration", () => {
     })
     await enableAgent(app, "cursor", whichFn)
 
-    const { httpBase, wsUrl } = await getListeningBase(app, config)
+    const { httpBase } = await getListeningBase(app, config)
+    const commands = createSessionCommands({
+      httpBase,
+      credential: app.deviceCredential.credential,
+    })
 
     const createResponse = await fetch(`${httpBase}/v1/sessions`, {
       method: "POST",
@@ -161,14 +74,8 @@ describe("session hub stream integration", () => {
     const created = CreateSessionResponseSchema.parse(await createResponse.json())
     expect(created.sessionId).toBe("hub-stream-1")
 
-    const clientA = await openStreamClient(wsUrl, app.deviceCredential.credential)
-    const clientB = await openStreamClient(wsUrl, app.deviceCredential.credential)
-
-    clientA.send({
-      type: "subscribe",
-      agentId: "cursor",
-      sessionId: created.sessionId,
-    })
+    const clientA = await openEvents(httpBase, created.sessionId, app.deviceCredential.credential)
+    const clientB = await openEvents(httpBase, created.sessionId, app.deviceCredential.credential)
 
     const subscribedA = await clientA.waitFor((message) => message.type === "subscribed")
     expect(subscribedA).toMatchObject({
@@ -178,19 +85,13 @@ describe("session hub stream integration", () => {
     })
     expect(clientA.messages.some((message) => message.type === "error")).toBe(false)
 
-    clientB.send({
-      type: "subscribe",
-      agentId: "cursor",
-      sessionId: created.sessionId,
-    })
     await clientB.waitFor((message) => message.type === "subscribed")
     expect(clientB.messages.some((message) => message.type === "error")).toBe(false)
 
     const liveBeforeA = clientA.messages.filter((m) => m.type === "session_update").length
     const liveBeforeB = clientB.messages.filter((m) => m.type === "session_update").length
 
-    clientA.send({
-      type: "prompt",
+    await commands.prompt({
       agentId: "cursor",
       sessionId: created.sessionId,
       text: "hello hub",
@@ -205,16 +106,8 @@ describe("session hub stream integration", () => {
     }
     expect(permissionA.requestId).toBe(permissionB.requestId)
 
-    clientA.send({
-      type: "permission_reply",
-      requestId: permissionA.requestId,
-      optionId: "allow-once",
-    })
-    clientB.send({
-      type: "permission_reply",
-      requestId: permissionB.requestId,
-      optionId: "reject-once",
-    })
+    await commands.replyPermission({ requestId: permissionA.requestId, optionId: "allow-once" })
+    await commands.replyPermission({ requestId: permissionB.requestId, optionId: "reject-once" })
 
     await clientA.waitFor(
       (message) =>
@@ -234,11 +127,7 @@ describe("session hub stream integration", () => {
       liveBeforeB,
     )
 
-    clientA.send({
-      type: "cancel",
-      agentId: "cursor",
-      sessionId: created.sessionId,
-    })
+    await commands.cancel({ agentId: "cursor", sessionId: created.sessionId })
 
     await clientA.close()
     await clientB.close()
@@ -257,7 +146,11 @@ describe("session hub stream integration", () => {
     })
     await enableAgent(app, "cursor", whichFn)
 
-    const { httpBase, wsUrl } = await getListeningBase(app, config)
+    const { httpBase } = await getListeningBase(app, config)
+    const commands = createSessionCommands({
+      httpBase,
+      credential: app.deviceCredential.credential,
+    })
 
     const createResponse = await fetch(`${httpBase}/v1/sessions`, {
       method: "POST",
@@ -273,12 +166,7 @@ describe("session hub stream integration", () => {
     expect(createResponse.status).toBe(201)
     const created = CreateSessionResponseSchema.parse(await createResponse.json())
 
-    const client = await openStreamClient(wsUrl, app.deviceCredential.credential)
-    client.send({
-      type: "subscribe",
-      agentId: "cursor",
-      sessionId: created.sessionId,
-    })
+    const client = await openEvents(httpBase, created.sessionId, app.deviceCredential.credential)
 
     const subscribed = await client.waitFor(
       (message) => message.type === "subscribed" || message.type === "error",
@@ -289,8 +177,7 @@ describe("session hub stream integration", () => {
       sessionId: created.sessionId,
     })
 
-    client.send({
-      type: "prompt",
+    await commands.prompt({
       agentId: "cursor",
       sessionId: created.sessionId,
       text: "hello new session",
@@ -314,7 +201,7 @@ describe("session hub stream integration", () => {
     })
     await enableAgent(app, "cursor", whichFn)
 
-    const { httpBase, wsUrl } = await getListeningBase(app, config)
+    const { httpBase } = await getListeningBase(app, config)
 
     const createResponse = await fetch(`${httpBase}/v1/sessions`, {
       method: "POST",
@@ -330,21 +217,19 @@ describe("session hub stream integration", () => {
     expect(createResponse.status).toBe(201)
     const created = CreateSessionResponseSchema.parse(await createResponse.json())
 
-    const firstClient = await openStreamClient(wsUrl, app.deviceCredential.credential)
-    firstClient.send({
-      type: "subscribe",
-      agentId: "cursor",
-      sessionId: created.sessionId,
-    })
+    const firstClient = await openEvents(
+      httpBase,
+      created.sessionId,
+      app.deviceCredential.credential,
+    )
     await firstClient.waitFor((message) => message.type === "subscribed")
     await firstClient.close()
 
-    const secondClient = await openStreamClient(wsUrl, app.deviceCredential.credential)
-    secondClient.send({
-      type: "subscribe",
-      agentId: "cursor",
-      sessionId: created.sessionId,
-    })
+    const secondClient = await openEvents(
+      httpBase,
+      created.sessionId,
+      app.deviceCredential.credential,
+    )
 
     const replayUpdate = await secondClient.waitFor(
       (message) =>
@@ -381,7 +266,7 @@ describe("session hub stream integration", () => {
       })
       await enableAgent(app, "cursor", whichFn)
 
-      const { httpBase, wsUrl } = await getListeningBase(app, config)
+      const { httpBase } = await getListeningBase(app, config)
 
       const createResponse = await fetch(`${httpBase}/v1/sessions`, {
         method: "POST",
@@ -397,19 +282,8 @@ describe("session hub stream integration", () => {
       expect(createResponse.status).toBe(201)
       const created = CreateSessionResponseSchema.parse(await createResponse.json())
 
-      const clientA = await openStreamClient(wsUrl, app.deviceCredential.credential)
-      const clientB = await openStreamClient(wsUrl, app.deviceCredential.credential)
-
-      clientA.send({
-        type: "subscribe",
-        agentId: "cursor",
-        sessionId: created.sessionId,
-      })
-      clientB.send({
-        type: "subscribe",
-        agentId: "cursor",
-        sessionId: created.sessionId,
-      })
+      const clientA = await openEvents(httpBase, created.sessionId, app.deviceCredential.credential)
+      const clientB = await openEvents(httpBase, created.sessionId, app.deviceCredential.credential)
       await clientA.waitFor((message) => message.type === "subscribed")
       await clientB.waitFor((message) => message.type === "subscribed")
 
@@ -442,67 +316,6 @@ describe("session hub stream integration", () => {
   )
 
   test(
-    "prompt and cancel without a subscription error with Not subscribed to session",
-    async () => {
-      const { app, config } = await bootTestApp({
-        whichFn,
-        fakeAcpOptions: {
-          capabilities: { loadSession: true, sessionClose: true, sessionList: true },
-          sessionNewSessionId: "hub-stream-unsub-1",
-          sessionLoadSessionId: "hub-stream-unsub-1",
-        },
-      })
-      await enableAgent(app, "cursor", whichFn)
-
-      const { httpBase, wsUrl } = await getListeningBase(app, config)
-
-      const createResponse = await fetch(`${httpBase}/v1/sessions`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${app.deviceCredential.credential}`,
-        },
-        body: JSON.stringify({
-          agentId: "cursor",
-          cwd: "/tmp/hub-stream-unsub",
-        }),
-      })
-      expect(createResponse.status).toBe(201)
-      const created = CreateSessionResponseSchema.parse(await createResponse.json())
-
-      const client = await openStreamClient(wsUrl, app.deviceCredential.credential)
-
-      client.send({
-        type: "prompt",
-        agentId: "cursor",
-        sessionId: created.sessionId,
-        text: "no subscription yet",
-      })
-      const promptError = await client.waitFor((message) => message.type === "error")
-      expect(promptError).toMatchObject({
-        type: "error",
-        message: "Not subscribed to session",
-      })
-
-      client.send({
-        type: "cancel",
-        agentId: "cursor",
-        sessionId: created.sessionId,
-      })
-      await client.waitFor(
-        (message) =>
-          message.type === "error" && client.messages.filter((m) => m.type === "error").length >= 2,
-      )
-
-      expect(client.messages.some((message) => message.type === "prompt_complete")).toBe(false)
-      expect(client.messages.some((message) => message.type === "cancelled")).toBe(false)
-
-      await client.close()
-    },
-    { timeout: 30_000 },
-  )
-
-  test(
     "prompt auth_required opens host-login and errors without prompt_complete",
     async () => {
       const { app, config } = await bootTestApp({
@@ -516,7 +329,11 @@ describe("session hub stream integration", () => {
       })
       await enableAgent(app, "cursor", whichFn)
 
-      const { httpBase, wsUrl } = await getListeningBase(app, config)
+      const { httpBase } = await getListeningBase(app, config)
+      const commands = createSessionCommands({
+        httpBase,
+        credential: app.deviceCredential.credential,
+      })
 
       const createResponse = await fetch(`${httpBase}/v1/sessions`, {
         method: "POST",
@@ -532,20 +349,10 @@ describe("session hub stream integration", () => {
       expect(createResponse.status).toBe(201)
       const created = CreateSessionResponseSchema.parse(await createResponse.json())
 
-      const client = await openStreamClient(wsUrl, app.deviceCredential.credential)
-      client.send({
-        type: "subscribe",
-        agentId: "cursor",
-        sessionId: created.sessionId,
-      })
+      const client = await openEvents(httpBase, created.sessionId, app.deviceCredential.credential)
       await client.waitFor((message) => message.type === "subscribed")
 
-      client.send({
-        type: "prompt",
-        agentId: "cursor",
-        sessionId: created.sessionId,
-        text: "needs auth",
-      })
+      await commands.prompt({ agentId: "cursor", sessionId: created.sessionId, text: "needs auth" })
 
       const authUpdated = await client.waitFor((message) => message.type === "auth_session_updated")
       expect(authUpdated).toMatchObject({
@@ -616,7 +423,7 @@ describe("session hub stream integration", () => {
     })
     await enableAgent(app, "cursor", whichFn)
 
-    const { httpBase, wsUrl } = await getListeningBase(app, config)
+    const { httpBase } = await getListeningBase(app, config)
 
     const createResponse = await fetch(`${httpBase}/v1/sessions`, {
       method: "POST",
@@ -632,12 +439,7 @@ describe("session hub stream integration", () => {
     expect(createResponse.status).toBe(201)
     const created = CreateSessionResponseSchema.parse(await createResponse.json())
 
-    const client = await openStreamClient(wsUrl, app.deviceCredential.credential)
-    client.send({
-      type: "subscribe",
-      agentId: "cursor",
-      sessionId: created.sessionId,
-    })
+    const client = await openEvents(httpBase, created.sessionId, app.deviceCredential.credential)
 
     const commandsUpdate = await client.waitFor(
       (message) =>
@@ -686,7 +488,7 @@ describe("session hub stream integration", () => {
     })
     await enableAgent(app, "cursor", whichFn)
 
-    const { httpBase, wsUrl } = await getListeningBase(app, config)
+    const { httpBase } = await getListeningBase(app, config)
 
     const createResponse = await fetch(`${httpBase}/v1/sessions`, {
       method: "POST",
@@ -702,12 +504,7 @@ describe("session hub stream integration", () => {
     expect(createResponse.status).toBe(201)
     const created = CreateSessionResponseSchema.parse(await createResponse.json())
 
-    const client = await openStreamClient(wsUrl, app.deviceCredential.credential)
-    client.send({
-      type: "subscribe",
-      agentId: "cursor",
-      sessionId: created.sessionId,
-    })
+    const client = await openEvents(httpBase, created.sessionId, app.deviceCredential.credential)
 
     const sessionInfo = await client.waitFor((message) => message.type === "session_info")
     expect(sessionInfo).toMatchObject({
@@ -729,43 +526,5 @@ describe("session hub stream integration", () => {
     expect(sessionInfoIndex).toBeLessThan(subscribedIndex)
 
     await client.close()
-  })
-
-  test("a connected client with no session open receives live renames", async () => {
-    const { app, config } = await bootTestApp({
-      whichFn,
-      fakeAcpOptions: {
-        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
-        sessionNewSessionId: "hub-title-idle",
-        emitSessionInfoOnNew: true,
-      },
-    })
-    await enableAgent(app, "cursor", whichFn)
-
-    const { httpBase, wsUrl } = await getListeningBase(app, config)
-    const idle = await openStreamClient(wsUrl, app.deviceCredential.credential)
-
-    const createResponse = await fetch(`${httpBase}/v1/sessions`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({
-        agentId: "cursor",
-        cwd: "/tmp/hub-title-idle-project",
-      }),
-    })
-    expect(createResponse.status).toBe(201)
-
-    const sessionInfo = await idle.waitFor((message) => message.type === "session_info")
-    expect(sessionInfo).toMatchObject({
-      type: "session_info",
-      agentId: "cursor",
-      sessionId: "hub-title-idle",
-      title: "Renamed by the fake agent",
-    })
-
-    await idle.close()
   })
 })

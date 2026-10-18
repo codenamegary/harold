@@ -2,20 +2,25 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { eq } from "drizzle-orm"
 import { UnauthorizedProblemSchema, ConflictProblemSchema } from "contracts/http/error"
 import { DeviceCollectionSchema, DEVICES_PATH, devicePath } from "contracts/http/device"
+import { CreateSessionResponseSchema } from "contracts/http/session"
+import { sessionEventsPath } from "contracts/http/session.stream"
 import { WorkspaceSchema } from "contracts/http/workspace"
+import { WhichFn } from "core/agent-settings/resolve-agent-path"
 import { createLogCapture, assertSecretFreeLogs } from "test-support/second-client/log-capture"
 import { getListeningEndpoints } from "test-support/second-client/endpoint"
 import { claimPairingCode, createPairingCode, pairDevice } from "test-support/second-client/pairing"
 import { createSecondClient } from "test-support/second-client"
-import { closeWebSocket, waitForSocketClose } from "test-support/second-client/streams"
 import { bootTestApp } from "../test-support/test.harness"
-import { createWorkspaceDir } from "../test-support/test.app"
+import { createWorkspaceDir, enableAgent } from "../test-support/test.app"
 import { clearDevicePresence } from "./device.presence"
 import { pairingCodes } from "../persistence/schema/pairing-codes"
 
 afterEach(async () => {
   clearDevicePresence()
 })
+
+const whichFn: WhichFn = (binaryName) =>
+  binaryName === "agent" ? "/usr/local/bin/agent" : undefined
 
 const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 5_000) => {
   const startedAt = Date.now()
@@ -32,8 +37,15 @@ describe("second-client journey", () => {
     const logCapture = createLogCapture()
     const { app, config, dataDir } = await bootTestApp({
       logStream: logCapture.stream,
+      whichFn,
+      fakeAcpOptions: {
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+        sessionNewSessionId: "journey-1",
+        sessionLoadSessionId: "journey-1",
+      },
     })
-    const { httpBase, wsUrl } = await getListeningEndpoints({
+    await enableAgent(app, "cursor", whichFn)
+    const { httpBase } = await getListeningEndpoints({
       app,
       host: config.host,
     })
@@ -46,7 +58,6 @@ describe("second-client journey", () => {
 
     const firstClient = createSecondClient({
       httpBase,
-      wsUrl,
       deviceId: paired.deviceId,
       credential: paired.credential,
     })
@@ -78,7 +89,18 @@ describe("second-client journey", () => {
     const workspace = WorkspaceSchema.parse(await workspaceResponse.json())
     expect(workspace.name).toBe("Journey workspace")
 
-    const deviceWs = await reconnected.openEventStream()
+    const createSessionResponse = await reconnected.fetch("/v1/sessions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ agentId: "cursor", cwd: workspaceDir }),
+    })
+    expect(createSessionResponse.status).toBe(201)
+    const created = CreateSessionResponseSchema.parse(await createSessionResponse.json())
+
+    const deviceStream = await reconnected.openEventStream({
+      agentId: "cursor",
+      sessionId: created.sessionId,
+    })
     await waitFor(async () => {
       const online = DeviceCollectionSchema.parse(
         await (
@@ -99,16 +121,14 @@ describe("second-client journey", () => {
     const onlineEntry = online.items.find((item) => item.id === paired.deviceId)
     expect(onlineEntry?.state).toBe("online")
 
-    const closePromise = waitForSocketClose(deviceWs)
+    const endPromise = deviceStream.waitForEnd()
     const revokeResponse = await fetch(`${httpBase}${devicePath(paired.deviceId)}`, {
       method: "DELETE",
       headers: { authorization: `Bearer ${app.deviceCredential.credential}` },
     })
     expect(revokeResponse.status).toBe(204)
 
-    const closed = await closePromise
-    expect(closed.code).toBe(1008)
-    expect(closed.reason).toBe("unauthorized")
+    await endPromise
 
     const listedAfterRevoke = DeviceCollectionSchema.parse(
       await (
@@ -125,15 +145,12 @@ describe("second-client journey", () => {
     expect(httpDenied.status).toBe(401)
     UnauthorizedProblemSchema.parse(await httpDenied.json())
 
-    const reopenResponse = await fetch(`${httpBase}/v1/sessions/stream`, {
-      headers: {
-        connection: "upgrade",
-        upgrade: "websocket",
-        "sec-websocket-version": "13",
-        "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==",
-        authorization: `Bearer ${paired.credential}`,
+    const reopenResponse = await fetch(
+      `${httpBase}${sessionEventsPath(created.sessionId, { agentId: "cursor" })}`,
+      {
+        headers: { authorization: `Bearer ${paired.credential}` },
       },
-    })
+    )
     expect(reopenResponse.status).toBe(401)
     UnauthorizedProblemSchema.parse(await reopenResponse.json())
 
@@ -142,8 +159,6 @@ describe("second-client journey", () => {
       credential: paired.credential,
       pairingCode: paired.pairingCode,
     })
-
-    await closeWebSocket(deviceWs)
   })
 
   test("recovery: claimed and expired codes return structured errors, regenerate succeeds", async () => {

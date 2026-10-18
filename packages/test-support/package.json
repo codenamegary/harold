@@ -13,7 +13,8 @@
     "./second-client/pairing": "./src/second-client/second.client.pairing.ts",
     "./second-client/streams": "./src/second-client/second.client.streams.ts",
     "./second-client/endpoint": "./src/second-client/second.client.endpoint.ts",
-    "./second-client/log-capture": "./src/second-client/log.capture.ts"
+    "./second-client/log-capture": "./src/second-client/log.capture.ts",
+    "./session-stream": "./src/session-stream/session.stream.client.ts"
   },
   "scripts": {
     "lint": "oxlint --deny-warnings",

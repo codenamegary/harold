@@ -9,14 +9,14 @@ import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
 import {
-  boundStreamUrl,
-  drainPrompt,
   createSmokeLogCapture,
+  drainPrompt,
   failWithLogs,
   openStreamClient,
   readLogsBody,
   seedSmokeDevice,
   SmokeLogCapture,
+  smokeCommands,
 } from "../test-support/session.stream.smoke"
 const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
   authorization: `Bearer ${app.deviceCredential.credential}`,
@@ -159,14 +159,14 @@ describe("opencode ACP smoke", () => {
         const listed = SessionCollectionSchema.parse(JSON.parse(listResponse.body))
         expect(listed.items.some((item) => item.sessionId === session.sessionId)).toBe(true)
 
-        const client = await openStreamClient(boundStreamUrl(app), device.credential)
+        const commands = smokeCommands({ app, credential: device.credential })
+        const client = await openStreamClient({
+          app,
+          credential: device.credential,
+          agentId: "opencode",
+          sessionId: session.sessionId,
+        })
         try {
-          client.send({
-            type: "subscribe",
-            agentId: "opencode",
-            sessionId: session.sessionId,
-          })
-
           const subscribed = await client.waitFor(
             (message) => message.type === "subscribed" || message.type === "error",
             SUBSCRIBE_TIMEOUT_MS,
@@ -180,8 +180,7 @@ describe("opencode ACP smoke", () => {
             sessionId: session.sessionId,
           })
 
-          client.send({
-            type: "prompt",
+          await commands.prompt({
             agentId: "opencode",
             sessionId: session.sessionId,
             text: "Reply with the single word pong and nothing else.",
@@ -190,6 +189,7 @@ describe("opencode ACP smoke", () => {
           await drainPrompt({
             logCapture,
             client,
+            commands,
             deadlineMs: Date.now() + PROMPT_TIMEOUT_MS,
           })
 
