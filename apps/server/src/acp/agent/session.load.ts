@@ -1,4 +1,5 @@
 import { SessionConfigSchema } from "contracts/http/config.options"
+import { isAcpAuthRequiredError } from "../auth.required"
 import { sanitizeFailureReason } from "../sanitize.failure.reason"
 import { AcpOperationContext } from "../transport/json.rpc.transport"
 import { AgentMethodTable } from "./method.table"
@@ -114,6 +115,7 @@ export const createSessionLoadHandler = (): AgentMethodHandler<"session/load"> =
       return {
         ok: false,
         reason: sanitizeFailureReason(error, "session/load failed"),
+        ...(isAcpAuthRequiredError(error) ? { authRequired: true } : {}),
       }
     }
   }

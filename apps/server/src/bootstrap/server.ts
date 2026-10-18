@@ -42,13 +42,13 @@ import { SpawnAgentProcessFn } from "../acp/supervisor/supervisor.ports"
 import { spawnAgentProcess } from "../acp/supervisor/supervisor.process.adapters"
 import { registerSessionStreamRoutes } from "../session/session.stream.routes"
 import { registerSessionCommandsRoutes } from "../session/session.commands.routes"
-import { createAcpHubPromptSession } from "../session/hub/acp.hub.prompt"
+import { createAcpPromptTurn } from "../session/hub/acp.hub.prompt"
 import { createSessionCwdCache, createSessionHub, SessionHub } from "../session/hub/hub"
 import { createCommandsCache } from "../session/hub/commands.cache"
 import { createSessionTitleCache } from "../session/hub/session.title.cache"
-import { makeEnsureSupervisorReady } from "../session/session.acp.ready"
-import { makePromptAuthGate } from "../session/session.prompt.auth.gate.usecase"
-import { StartAcpAgent } from "../session/session.ports"
+import { makeEnsureSessionBound, makeEnsureSupervisorReady } from "../session/session.acp.ready"
+import { makeAcceptPrompt, makeCompletePromptTurn } from "../session/session.prompt.gate.usecase"
+import { SessionHubLoadSession, StartAcpAgent } from "../session/session.ports"
 import { registerAuthMiddleware } from "../auth/middleware"
 import { redactPairingCodeInUrl } from "core/device/redact.pairing.code.in.url"
 import { FetchRegistryFn } from "core/agent-settings/ports"
@@ -299,7 +299,18 @@ export const createServer = async ({
     getAllowedRoots,
   })
 
-  const promptSession = createAcpHubPromptSession({
+  const loadHubSession: SessionHubLoadSession = async ({ agentId, sessionId, cwd }) => {
+    const loaded = await acpSupervisor.loadSession({ agentId, sessionId, cwd })
+    return loaded.ok
+      ? { ok: true }
+      : {
+          ok: false,
+          reason: loaded.reason,
+          ...(loaded.authRequired === true ? { authRequired: true } : {}),
+        }
+  }
+
+  const runPromptTurn = createAcpPromptTurn({
     startPrompt: (params) => acpSupervisor.startPromptAcpSession(params),
     resolveAttachment: async ({ sessionId, reference }) => {
       const workspaceRoot = acpSupervisor.getSessionBindingRegistry().getWorkspaceRoot(sessionId)
@@ -311,40 +322,44 @@ export const createServer = async ({
         reference,
       })
     },
-    advertisesPromptCapability: ({ agentId, kind }) => {
-      const inventory = acpSupervisor.getCapabilityInventory(agentId)
-      if (kind === "image") {
-        return inventoryAdvertisesPromptImage(inventory)
-      }
-      return inventoryAdvertisesEmbeddedContext(inventory)
-    },
   })
 
   const sessionHub = createSessionHub({
     cwdCache,
     commandsCache,
     sessionTitleCache,
-    loadSession: async ({ agentId, sessionId, cwd }) => {
-      const loaded = await acpSupervisor.loadSession({ agentId, sessionId, cwd })
-      return loaded.ok ? { ok: true } : { ok: false, reason: loaded.reason }
-    },
-    promptSession,
+    loadSession: loadHubSession,
+    runPromptTurn,
+    acceptPrompt: makeAcceptPrompt({
+      advertisesPromptCapability: ({ agentId, kind }) => {
+        const inventory = acpSupervisor.getCapabilityInventory(agentId)
+        if (kind === "image") {
+          return inventoryAdvertisesPromptImage(inventory)
+        }
+        return inventoryAdvertisesEmbeddedContext(inventory)
+      },
+      ensureReadyForPrompt: async (agentId) => {
+        const ready = await authBroker.ensureReadyForPrompt(agentId)
+        return ready.ok ? { ok: true } : { ok: false }
+      },
+      ensureSessionBound: makeEnsureSessionBound({
+        isSessionBound: (sessionId) =>
+          acpSupervisor.getSessionBindingRegistry().getBinding(sessionId) !== undefined,
+        ensureSupervisorReady,
+        loadSession: loadHubSession,
+      }),
+    }),
+    completePromptTurn: makeCompletePromptTurn({
+      ensureSessionFromChallenge: async (agentId) => {
+        await authBroker.ensureSessionFromChallenge(agentId)
+      },
+    }),
     cancelSession: async ({ sessionId }) => {
       const cancelled = await acpSupervisor.cancelAcpSession({
         acpSessionId: sessionId,
       })
       return cancelled.ok ? { ok: true } : { ok: false, reason: cancelled.reason }
     },
-    promptGate: makePromptAuthGate({
-      promptSession,
-      ensureReadyForPrompt: async (agentId) => {
-        const ready = await authBroker.ensureReadyForPrompt(agentId)
-        return ready.ok ? { ok: true } : { ok: false }
-      },
-      ensureSessionFromChallenge: async (agentId) => {
-        await authBroker.ensureSessionFromChallenge(agentId)
-      },
-    }),
   })
   sessionHubRef.current = sessionHub
 

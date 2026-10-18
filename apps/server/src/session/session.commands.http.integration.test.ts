@@ -143,6 +143,56 @@ describe("POST /v1/sessions/:sessionId/prompts", () => {
     )
   })
 
+  test("returns 202 and the stream reports attachment resolution failures", async () => {
+    const { app, config } = await bootTestApp({
+      whichFn,
+      fakeAcpOptions: {
+        capabilities: {
+          loadSession: true,
+          sessionClose: true,
+          sessionList: true,
+          promptImage: true,
+        },
+        sessionNewSessionId: "cmd-http-att",
+        sessionLoadSessionId: "cmd-http-att",
+      },
+    })
+    await enableAgent(app, "cursor", whichFn)
+    await app.listen({ host: config.host, port: 0 })
+
+    const created = await createSession(app, "/tmp/cmd-http-att")
+    const client = await openStreamClient(boundStreamUrl(app), app.deviceCredential.credential)
+    client.send({ type: "subscribe", agentId: "cursor", sessionId: created.sessionId })
+    await client.waitFor((message) => message.type === "subscribed")
+
+    const response = await app.inject({
+      headers: authHeaders(app),
+      method: "POST",
+      url: promptsUrl(created.sessionId),
+      payload: {
+        text: "look",
+        attachments: [
+          {
+            kind: "image",
+            name: "shot.png",
+            mimeType: "image/png",
+            path: "/tmp/cmd-http-att/.harold/attachments/missing.png",
+          },
+        ],
+      },
+    })
+    expect(response.statusCode).toBe(202)
+
+    const error = await client.waitFor((message) => message.type === "error")
+    expect(error).toMatchObject({
+      type: "error",
+      message: "Attachment is no longer available: shot.png",
+    })
+    expect(client.messages.some((message) => message.type === "prompt_complete")).toBe(false)
+
+    await client.close()
+  }, 30_000)
+
   test("auth at the RPC returns 202 and the stream reports the gated error", async () => {
     const { app, config } = await bootTestApp({
       whichFn,

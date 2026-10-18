@@ -4,6 +4,8 @@ export type FakeAcpCapabilities = {
   loadSession: boolean
   sessionClose: boolean
   sessionList: boolean
+  promptImage: boolean
+  promptEmbeddedContext: boolean
 }
 
 export type FakeAcpConfig = FakeAcpCapabilities & {
@@ -86,6 +88,8 @@ export const readFakeAcpConfig = (
   loadSession: parseBooleanEnv(env.FAKE_ACP_LOAD_SESSION, false),
   sessionClose: parseBooleanEnv(env.FAKE_ACP_SESSION_CLOSE, false),
   sessionList: parseBooleanEnv(env.FAKE_ACP_SESSION_LIST, true),
+  promptImage: parseBooleanEnv(env.FAKE_ACP_PROMPT_IMAGE, false),
+  promptEmbeddedContext: parseBooleanEnv(env.FAKE_ACP_PROMPT_EMBEDDED_CONTEXT, false),
   sessionNewSessionId: env.FAKE_ACP_SESSION_NEW_SESSION_ID,
   sessionLoadSessionId: readEnvString(env, "FAKE_ACP_SESSION_LOAD_SESSION_ID", "fake-session-load"),
   configOptions: parseConfigOptionsEnv(env.FAKE_ACP_CONFIG_OPTIONS),
@@ -171,6 +175,8 @@ export const fakeAcpEnvFromCapabilities = (options: FakeAcpEnvOptions): Record<s
   FAKE_ACP_LOAD_SESSION: String(options.capabilities?.loadSession ?? false),
   FAKE_ACP_SESSION_CLOSE: String(options.capabilities?.sessionClose ?? false),
   FAKE_ACP_SESSION_LIST: String(options.capabilities?.sessionList ?? true),
+  FAKE_ACP_PROMPT_IMAGE: String(options.capabilities?.promptImage ?? false),
+  FAKE_ACP_PROMPT_EMBEDDED_CONTEXT: String(options.capabilities?.promptEmbeddedContext ?? false),
   ...stringEnv("FAKE_ACP_SESSION_NEW_SESSION_ID", options.sessionNewSessionId),
   ...stringEnv("FAKE_ACP_SESSION_LOAD_SESSION_ID", options.sessionLoadSessionId),
   ...(options.configOptions === undefined

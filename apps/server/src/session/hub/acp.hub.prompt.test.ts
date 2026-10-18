@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createAcpHubPromptSession } from "./acp.hub.prompt"
+import { createAcpPromptTurn } from "./acp.hub.prompt"
 import { createSessionCwdCache, createSessionHub, SessionStreamSink } from "./hub"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
 
@@ -18,19 +18,29 @@ const collectSink = (): {
   }
 }
 
-const noAttachmentsDeps = () => ({
-  resolveAttachment: async () => null,
-  advertisesPromptCapability: () => false,
+const okPromptDeps = () => ({
+  acceptPrompt: async () => ({ ok: true as const }),
+  completePromptTurn: async ({
+    outcome,
+  }: {
+    outcome: { ok: true } | { ok: false; reason: string }
+  }) => outcome,
 })
 
-describe("createAcpHubPromptSession", () => {
-  test("resolves the start result before the turn completes and hands back the outcome", async () => {
+const completedStartPrompt = () => async () => ({
+  ok: true as const,
+  turnId: "turn-1",
+  completion: Promise.resolve({ ok: true as const, result: { stopReason: "end_turn" } }),
+})
+
+describe("createAcpPromptTurn", () => {
+  test("awaits the ACP completion and resolves the mapped outcome", async () => {
     let resolveCompletion:
       | ((result: { ok: true; result: { stopReason: string } }) => void)
       | undefined
 
-    const promptSession = createAcpHubPromptSession({
-      ...noAttachmentsDeps(),
+    const turn = createAcpPromptTurn({
+      resolveAttachment: async () => null,
       startPrompt: async () => ({
         ok: true as const,
         turnId: "turn-1",
@@ -40,33 +50,26 @@ describe("createAcpHubPromptSession", () => {
       }),
     })
 
-    const started = await promptSession({
+    let settled = false
+    const outcome = turn({
       agentId: "opencode",
       sessionId: "s1",
       text: "hello",
-    })
-    expect(started.ok).toBe(true)
-    if (!started.ok) {
-      throw new Error("expected the prompt to start")
-    }
-
-    let completed = false
-    const completion = started.completion.then((outcome) => {
-      completed = true
-      return outcome
+    }).then((result) => {
+      settled = true
+      return result
     })
 
     await Promise.resolve()
-    expect(completed).toBe(false)
+    expect(settled).toBe(false)
 
     resolveCompletion?.({ ok: true, result: { stopReason: "end_turn" } })
-    expect(await completion).toEqual({ ok: true })
-    expect(completed).toBe(true)
+    expect(await outcome).toEqual({ ok: true })
   })
 
-  test("resolves the completion with ACP prompt failure reasons", async () => {
-    const promptSession = createAcpHubPromptSession({
-      ...noAttachmentsDeps(),
+  test("resolves the outcome with ACP prompt failure reasons", async () => {
+    const turn = createAcpPromptTurn({
+      resolveAttachment: async () => null,
       startPrompt: async () => ({
         ok: true as const,
         turnId: "turn-1",
@@ -77,19 +80,24 @@ describe("createAcpHubPromptSession", () => {
       }),
     })
 
-    const started = await promptSession({
-      agentId: "cursor",
-      sessionId: "s1",
-      text: "hello",
-    })
-    expect(started.ok).toBe(true)
-    if (!started.ok) {
-      throw new Error("expected the prompt to start")
-    }
-
-    expect(await started.completion).toEqual({
+    expect(await turn({ agentId: "cursor", sessionId: "s1", text: "hello" })).toEqual({
       ok: false,
       reason: "session/prompt failed: boom",
+    })
+  })
+
+  test("resolves the outcome with prompt-start failures", async () => {
+    const turn = createAcpPromptTurn({
+      resolveAttachment: async () => null,
+      startPrompt: async () => ({
+        ok: false as const,
+        reason: "not bound",
+      }),
+    })
+
+    expect(await turn({ agentId: "cursor", sessionId: "s1", text: "hello" })).toEqual({
+      ok: false,
+      reason: "not bound",
     })
   })
 
@@ -104,8 +112,8 @@ describe("createAcpHubPromptSession", () => {
     const hub = createSessionHub({
       cwdCache,
       loadSession: async () => ({ ok: true }),
-      promptSession: createAcpHubPromptSession({
-        ...noAttachmentsDeps(),
+      runPromptTurn: createAcpPromptTurn({
+        resolveAttachment: async () => null,
         startPrompt: async () => ({
           ok: true as const,
           turnId: "turn-1",
@@ -114,6 +122,7 @@ describe("createAcpHubPromptSession", () => {
           }),
         }),
       }),
+      ...okPromptDeps(),
       cancelSession: async () => ({ ok: true }),
     })
 
@@ -130,16 +139,13 @@ describe("createAcpHubPromptSession", () => {
       sessionId: "s1",
       text: "hello",
     })
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      throw new Error("expected the prompt to start")
-    }
+    expect(result).toEqual({ ok: true })
 
     await Promise.resolve()
     expect(sink.messages.some((message) => message.type === "prompt_complete")).toBe(false)
 
     resolveCompletion?.({ ok: true, result: { stopReason: "end_turn" } })
-    await result.completion
+    await hub.awaitPromptTurns()
 
     expect(sink.messages.some((message) => message.type === "prompt_complete")).toBe(true)
   })
@@ -151,7 +157,8 @@ describe("createAcpHubPromptSession", () => {
     const hub = createSessionHub({
       cwdCache,
       loadSession: async () => ({ ok: true }),
-      promptSession: createAcpHubPromptSession({
+      runPromptTurn: createAcpPromptTurn({
+        resolveAttachment: async () => null,
         startPrompt: async () => ({
           ok: true as const,
           turnId: "turn-1",
@@ -161,6 +168,7 @@ describe("createAcpHubPromptSession", () => {
           }),
         }),
       }),
+      ...okPromptDeps(),
       cancelSession: async () => ({ ok: true }),
     })
 
@@ -177,11 +185,8 @@ describe("createAcpHubPromptSession", () => {
       sessionId: "s1",
       text: "hello",
     })
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      throw new Error("expected the prompt to start")
-    }
-    await result.completion
+    expect(result).toEqual({ ok: true })
+    await hub.awaitPromptTurns()
 
     expect(sink.messages.some((message) => message.type === "prompt_complete")).toBe(false)
     expect(
@@ -192,13 +197,7 @@ describe("createAcpHubPromptSession", () => {
   })
 })
 
-describe("createAcpHubPromptSession with attachments", () => {
-  const baseStartPrompt = () => async () => ({
-    ok: true as const,
-    turnId: "turn-1",
-    completion: Promise.resolve({ ok: true as const, result: { stopReason: "end_turn" } }),
-  })
-
+describe("createAcpPromptTurn with attachments", () => {
   const ref = {
     kind: "image" as const,
     name: "shot.png",
@@ -209,17 +208,16 @@ describe("createAcpHubPromptSession with attachments", () => {
   test("maps an image attachment to an ACP image content block with base64 data", async () => {
     const prompts: unknown[] = []
     const bytes = new Uint8Array([137, 80, 78, 71])
-    const promptSession = createAcpHubPromptSession({
+    const turn = createAcpPromptTurn({
       startPrompt: async ({ prompt }) => {
         prompts.push(prompt)
-        return baseStartPrompt()()
+        return completedStartPrompt()()
       },
       resolveAttachment: async ({ reference }) => ({ reference, bytes }),
-      advertisesPromptCapability: () => true,
     })
 
     expect(
-      promptSession({ agentId: "a", sessionId: "s1", text: "look", attachments: [ref] }),
+      turn({ agentId: "a", sessionId: "s1", text: "look", attachments: [ref] }),
     ).resolves.toMatchObject({ ok: true })
 
     expect(prompts[0]).toEqual([
@@ -234,20 +232,19 @@ describe("createAcpHubPromptSession with attachments", () => {
 
   test("maps a file attachment to a resource_link content block", async () => {
     const prompts: unknown[] = []
-    const promptSession = createAcpHubPromptSession({
+    const turn = createAcpPromptTurn({
       startPrompt: async ({ prompt }) => {
         prompts.push(prompt)
-        return baseStartPrompt()()
+        return completedStartPrompt()()
       },
       resolveAttachment: async ({ reference }) => ({
         reference,
         bytes: new Uint8Array([1]),
       }),
-      advertisesPromptCapability: () => true,
     })
 
     expect(
-      promptSession({
+      turn({
         agentId: "a",
         sessionId: "s1",
         text: "read",
@@ -272,61 +269,18 @@ describe("createAcpHubPromptSession with attachments", () => {
     ])
   })
 
-  test("rejects an image when the agent lacks promptCapabilities.image", async () => {
-    const startPrompt = baseStartPrompt()
-    const promptSession = createAcpHubPromptSession({
-      startPrompt,
-      resolveAttachment: async ({ reference }) => reference,
-      advertisesPromptCapability: ({ kind }) => kind !== "image",
-    })
-
-    expect(
-      promptSession({ agentId: "a", sessionId: "s1", text: "look", attachments: [ref] }),
-    ).resolves.toEqual({
-      ok: false,
-      reason: "Agent does not advertise promptCapabilities.image — cannot attach shot.png",
-    })
-  })
-
-  test("rejects a file when the agent lacks promptCapabilities.embeddedContext", async () => {
-    const promptSession = createAcpHubPromptSession({
-      startPrompt: baseStartPrompt(),
-      resolveAttachment: async ({ reference }) => ({
-        reference,
-        bytes: new Uint8Array(),
-      }),
-      advertisesPromptCapability: () => false,
-    })
-
-    expect(
-      promptSession({
-        agentId: "a",
-        sessionId: "s1",
-        text: "read",
-        attachments: [
-          { kind: "file", name: "notes.md", mimeType: "text/markdown", path: "/tmp/x.md" },
-        ],
-      }),
-    ).resolves.toEqual({
-      ok: false,
-      reason:
-        "Agent does not advertise promptCapabilities.embeddedContext — cannot attach notes.md",
-    })
-  })
-
   test("rejects a prompt when an attachment no longer resolves", async () => {
     let startPromptCalls = 0
-    const promptSession = createAcpHubPromptSession({
+    const turn = createAcpPromptTurn({
       startPrompt: async () => {
         startPromptCalls += 1
-        return baseStartPrompt()()
+        return completedStartPrompt()()
       },
       resolveAttachment: async () => null,
-      advertisesPromptCapability: () => true,
     })
 
     expect(
-      promptSession({ agentId: "a", sessionId: "s1", text: "look", attachments: [ref] }),
+      turn({ agentId: "a", sessionId: "s1", text: "look", attachments: [ref] }),
     ).resolves.toEqual({
       ok: false,
       reason: "Attachment is no longer available: shot.png",

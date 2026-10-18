@@ -3,19 +3,22 @@ import { AgentId } from "contracts/http/agent-settings"
 import { AttachmentReference } from "contracts/http/attachments"
 import { SessionConfig } from "contracts/http/config.options"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
-import { AUTH_GATED_PROMPT_MESSAGE } from "../../acp/auth.required"
+import { sanitizeFailureReason } from "../../acp/sanitize.failure.reason"
 import { parseAvailableCommandsUpdate } from "./commands.available"
 import { CommandsCache, createCommandsCache } from "./commands.cache"
 import { parseSessionInfoUpdate } from "./session.info"
 import { createSessionTitleCache, SessionTitleCache } from "./session.title.cache"
+import { createPromptQueue } from "./prompt.queue"
 import { makeApplySessionTitle } from "../session.apply.title.usecase"
-import { makePromptAuthGate, PromptAuthGate } from "../session.prompt.auth.gate.usecase"
+import { PromptAccept, PromptCompleteTurn } from "../session.prompt.gate.usecase"
 import {
+  SessionCommandError,
   SessionHubCancelSession,
   SessionHubLoadSession,
-  SessionHubPromptSession,
-  SessionPromptOutcome,
+  SessionPromptTurn,
 } from "../session.ports"
+
+export type { SessionCommandError }
 
 export type SessionKey = `${AgentId}:${string}`
 
@@ -47,19 +50,13 @@ export type BeginClientRpcResult =
   | { readonly ok: true; readonly value: unknown }
   | { readonly ok: false; readonly error: BeginClientRpcError }
 
-/** Why a session command (prompt/cancel) was refused. */
-export type SessionCommandError =
-  | { readonly kind: "unknown_session"; readonly reason: string }
-  | { readonly kind: "auth_gated"; readonly reason: string }
-  | { readonly kind: "rejected"; readonly reason: string }
-
 /**
- * Fast prompt-start outcome. Mid-turn progress and completion are not part of
- * this result: the hub fans `prompt_complete` (or an `error` event on failure)
- * to the session group when `completion` settles.
+ * Prompt submission result. Turn progress and completion are not part of this
+ * result: the hub queues accepted prompts and fans `prompt_complete` (or an
+ * `error` event on failure) to the session group when the turn settles.
  */
 export type SessionPromptCommandResult =
-  | { readonly ok: true; readonly completion: Promise<SessionPromptOutcome> }
+  | { readonly ok: true }
   | { readonly ok: false; readonly error: SessionCommandError }
 
 export type SessionCancelCommandResult =
@@ -85,11 +82,11 @@ export type CreateSessionHubParams = {
   commandsCache?: CommandsCache
   sessionTitleCache?: SessionTitleCache
   loadSession: SessionHubLoadSession
-  promptSession: SessionHubPromptSession
+  runPromptTurn: SessionPromptTurn
+  acceptPrompt: PromptAccept
+  completePromptTurn: PromptCompleteTurn
   cancelSession: SessionHubCancelSession
   createRequestId?: () => string
-  /** Overrides the default auth-free prompt gate composed from promptSession. */
-  promptGate?: PromptAuthGate
 }
 
 export type SessionHub = {
@@ -133,6 +130,8 @@ export type SessionHub = {
   }) => Promise<unknown>
   resolvePermissionReply: (params: { requestId: string; optionId: string }) => ResolveReplyResult
   resolveExtensionReply: (params: { requestId: string; result: unknown }) => ResolveReplyResult
+  /** Awaits every queued/in-flight prompt turn. Lifecycle and test seam. */
+  awaitPromptTurns: () => Promise<void>
 }
 
 export const createSessionCwdCache = (): SessionCwdCache => {
@@ -151,16 +150,16 @@ export const createSessionHub = ({
   commandsCache = createCommandsCache(),
   sessionTitleCache = createSessionTitleCache(),
   loadSession,
-  promptSession,
+  runPromptTurn,
+  acceptPrompt,
+  completePromptTurn,
   cancelSession,
   createRequestId = () => crypto.randomUUID(),
-  promptGate,
 }: CreateSessionHubParams): SessionHub => {
   const subscribers = new Map<string, SessionHubSubscriber>()
   const subscribersBySession = new Map<SessionKey, Set<string>>()
   const replayTargetBySession = new Map<SessionKey, string>()
   const pendingById = new Map<string, PendingClientRpc>()
-  const runGatedPrompt = promptGate ?? makePromptAuthGate({ promptSession })
 
   const sendError = (
     subscriber: SessionHubSubscriber,
@@ -252,6 +251,42 @@ export const createSessionHub = ({
       fanOutToAll({ type: "session_info", agentId, sessionId, title })
     },
   })
+
+  type PromptJob = {
+    agentId: AgentId
+    sessionId: string
+    text: string
+    attachments?: ReadonlyArray<AttachmentReference>
+  }
+
+  const executePromptTurn = async (job: PromptJob): Promise<void> => {
+    const key = sessionKey(job.agentId, job.sessionId)
+    const ref = { agentId: job.agentId, sessionId: job.sessionId }
+    try {
+      const outcome = await runPromptTurn({
+        agentId: job.agentId,
+        sessionId: job.sessionId,
+        text: job.text,
+        ...(job.attachments !== undefined && job.attachments.length > 0
+          ? { attachments: job.attachments }
+          : {}),
+      })
+      const settled = await completePromptTurn({ agentId: job.agentId, outcome })
+      if (settled.ok) {
+        fanOut(key, { type: "prompt_complete", ...ref })
+        return
+      }
+      fanOut(key, { type: "error", message: settled.reason, ...ref })
+    } catch (error: unknown) {
+      fanOut(key, {
+        type: "error",
+        message: sanitizeFailureReason(error, "Prompt turn failed"),
+        ...ref,
+      })
+    }
+  }
+
+  const promptQueue = createPromptQueue<PromptJob>({ execute: executePromptTurn })
 
   const loadForSubscriber = async (params: {
     subscriber: SessionHubSubscriber
@@ -476,40 +511,31 @@ export const createSessionHub = ({
       await subscribeInternal(params)
     },
     prompt: async ({ agentId, sessionId, text, attachments }) => {
-      if (cwdCache.get({ agentId, sessionId }) === undefined) {
+      const cwd = cwdCache.get({ agentId, sessionId })
+      if (cwd === undefined) {
         return {
           ok: false,
           error: { kind: "unknown_session", reason: "Unknown session cwd" },
         }
       }
 
-      const started = await runGatedPrompt({
+      const accepted = await acceptPrompt({
+        agentId,
+        sessionId,
+        cwd,
+        ...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}),
+      })
+      if (!accepted.ok) {
+        return accepted
+      }
+
+      promptQueue.enqueue({
         agentId,
         sessionId,
         text,
         ...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}),
       })
-      if (!started.ok) {
-        return started.error.kind === "AUTH_GATED"
-          ? {
-              ok: false,
-              error: { kind: "auth_gated", reason: AUTH_GATED_PROMPT_MESSAGE },
-            }
-          : { ok: false, error: { kind: "rejected", reason: started.error.reason } }
-      }
-
-      const key = sessionKey(agentId, sessionId)
-      return {
-        ok: true,
-        completion: started.completion.then((outcome) => {
-          if (outcome.ok) {
-            fanOut(key, { type: "prompt_complete", agentId, sessionId })
-          } else {
-            fanOut(key, { type: "error", message: outcome.reason, agentId, sessionId })
-          }
-          return outcome
-        }),
-      }
+      return { ok: true }
     },
     cancel: async ({ agentId, sessionId }) => {
       if (cwdCache.get({ agentId, sessionId }) === undefined) {
@@ -593,5 +619,6 @@ export const createSessionHub = ({
         },
       }),
     resolveExtensionReply: ({ requestId, result }) => settlePending(requestId, result),
+    awaitPromptTurns: () => promptQueue.awaitIdle(),
   }
 }
