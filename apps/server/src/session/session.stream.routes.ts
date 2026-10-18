@@ -12,7 +12,7 @@ import { websocketRawDataText } from "../auth/websocket.raw.data.text"
 import { touchDeviceLastSeenTolerant } from "../device/device.connection.lifecycle"
 import { FindDeviceByCredentialHash, TouchDeviceLastSeen } from "core/device/ports"
 import { registerDevicePresence } from "../device/device.presence"
-import { SessionHub } from "./hub/hub"
+import { SessionHub, sessionKey } from "./hub/hub"
 
 export const SESSIONS_STREAM_PATH = "/v1/sessions/stream"
 
@@ -182,9 +182,19 @@ export const registerSessionStreamRoutes = (
                   sessionId: message.sessionId,
                 })
                 return
-              case "prompt":
-                await params.sessionHub.prompt({
-                  subscriberId,
+              case "prompt": {
+                const key = sessionKey(message.agentId, message.sessionId)
+                if (params.sessionHub.getSubscriberSession(subscriberId) !== key) {
+                  sendJson(socket, {
+                    type: "error",
+                    message: "Not subscribed to session",
+                    agentId: message.agentId,
+                    sessionId: message.sessionId,
+                  })
+                  return
+                }
+
+                const result = await params.sessionHub.prompt({
                   agentId: message.agentId,
                   sessionId: message.sessionId,
                   text: message.text,
@@ -192,14 +202,42 @@ export const registerSessionStreamRoutes = (
                     ? { attachments: message.attachments }
                     : {}),
                 })
+                if (!result.ok) {
+                  sendJson(socket, {
+                    type: "error",
+                    message: result.error.reason,
+                    agentId: message.agentId,
+                    sessionId: message.sessionId,
+                  })
+                }
                 return
-              case "cancel":
-                await params.sessionHub.cancel({
-                  subscriberId,
+              }
+              case "cancel": {
+                const key = sessionKey(message.agentId, message.sessionId)
+                if (params.sessionHub.getSubscriberSession(subscriberId) !== key) {
+                  sendJson(socket, {
+                    type: "error",
+                    message: "Not subscribed to session",
+                    agentId: message.agentId,
+                    sessionId: message.sessionId,
+                  })
+                  return
+                }
+
+                const result = await params.sessionHub.cancel({
                   agentId: message.agentId,
                   sessionId: message.sessionId,
                 })
+                if (!result.ok) {
+                  sendJson(socket, {
+                    type: "error",
+                    message: result.error.reason,
+                    agentId: message.agentId,
+                    sessionId: message.sessionId,
+                  })
+                }
                 return
+              }
               case "permission_reply":
                 params.sessionHub.resolvePermissionReply({
                   requestId: message.requestId,

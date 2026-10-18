@@ -1,13 +1,13 @@
 import { AcpSessionPromptStartResult } from "../../acp/supervisor/models"
 import { AttachmentKind, AttachmentReference } from "contracts/http/attachments"
-import { SessionHubPromptSession } from "../session.ports"
+import { SessionPromptTurn } from "../session.ports"
 
 export type ResolvedAttachment = {
   reference: AttachmentReference
   bytes: Uint8Array
 }
 
-export type CreateAcpHubPromptSessionParams = {
+export type CreateAcpPromptTurnParams = {
   startPrompt: (params: {
     acpSessionId: string
     prompt: unknown
@@ -22,14 +22,6 @@ export type CreateAcpHubPromptSessionParams = {
     sessionId: string
     reference: AttachmentReference
   }) => Promise<ResolvedAttachment | null>
-  /**
-   * Capability gate. `image` maps to promptCapabilities.image,
-   * `file` to promptCapabilities.embeddedContext.
-   */
-  advertisesPromptCapability: (params: {
-    agentId: string
-    kind: AttachmentKind
-  }) => boolean
 }
 
 const CAPABILITY_LABELS: Record<AttachmentKind, string> = {
@@ -37,8 +29,7 @@ const CAPABILITY_LABELS: Record<AttachmentKind, string> = {
   file: "promptCapabilities.embeddedContext",
 }
 
-export const attachmentCapabilityFor = (kind: AttachmentKind): string =>
-  CAPABILITY_LABELS[kind]
+export const attachmentCapabilityFor = (kind: AttachmentKind): string => CAPABILITY_LABELS[kind]
 
 /**
  * ACP v1 content blocks. Image blocks embed base64 `data` — agents decode
@@ -52,7 +43,7 @@ export const buildPromptBlocks = async (
   text: string,
   attachments: ReadonlyArray<AttachmentReference> | undefined,
   deps: {
-    resolveAttachment: CreateAcpHubPromptSessionParams["resolveAttachment"]
+    resolveAttachment: CreateAcpPromptTurnParams["resolveAttachment"]
     sessionId: string
   },
 ): Promise<{ ok: true; blocks: unknown[] } | { ok: false; reason: string }> => {
@@ -88,21 +79,8 @@ export const buildPromptBlocks = async (
   return { ok: true, blocks }
 }
 
-export const createAcpHubPromptSession = (
-  params: CreateAcpHubPromptSessionParams,
-): SessionHubPromptSession => {
-  return async ({ sessionId, agentId, text, attachments }) => {
-    for (const reference of attachments ?? []) {
-      if (
-        !params.advertisesPromptCapability({ agentId, kind: reference.kind })
-      ) {
-        return {
-          ok: false,
-          reason: `Agent does not advertise ${CAPABILITY_LABELS[reference.kind]} — cannot attach ${reference.name}`,
-        }
-      }
-    }
-
+export const createAcpPromptTurn = (params: CreateAcpPromptTurnParams): SessionPromptTurn => {
+  return async ({ sessionId, text, attachments }) => {
     const built = await buildPromptBlocks(text, attachments, {
       resolveAttachment: params.resolveAttachment,
       sessionId,
@@ -124,14 +102,12 @@ export const createAcpHubPromptSession = (
     }
 
     const completion = await started.completion
-    if (!completion.ok) {
-      return {
-        ok: false,
-        reason: completion.reason,
-        ...(completion.authRequired === true ? { authRequired: true } : {}),
-      }
-    }
-
-    return { ok: true }
+    return completion.ok
+      ? { ok: true }
+      : {
+          ok: false,
+          reason: completion.reason,
+          ...(completion.authRequired === true ? { authRequired: true } : {}),
+        }
   }
 }

@@ -25,6 +25,18 @@ export const permissionRepliesPath = (requestId: string) =>
 export const extensionRepliesPath = (requestId: string) =>
   `${EXTENSIONS_PATH}/${encodeURIComponent(requestId)}/replies`
 
+export const SessionCommandParamsSchema = z.strictObject({
+  sessionId: z.string().min(1),
+})
+
+export const SessionCommandQuerySchema = z.strictObject({
+  agentId: AgentIdSchema,
+})
+
+export const ReplyParamsSchema = z.strictObject({
+  requestId: z.string().min(1),
+})
+
 export const SessionStreamSubscribeSchema = z.strictObject({
   type: z.literal("subscribe"),
   agentId: AgentIdSchema,
@@ -168,3 +180,6 @@ export type SessionStreamClientMessage = z.infer<typeof SessionStreamClientMessa
 export type SessionStreamServerMessage = z.infer<typeof SessionStreamServerMessageSchema>
 export type PermissionReplyBody = z.infer<typeof PermissionReplyBodySchema>
 export type ExtensionReplyBody = z.infer<typeof ExtensionReplyBodySchema>
+export type SessionCommandParams = z.infer<typeof SessionCommandParamsSchema>
+export type SessionCommandQuery = z.infer<typeof SessionCommandQuerySchema>
+export type ReplyParams = z.infer<typeof ReplyParamsSchema>

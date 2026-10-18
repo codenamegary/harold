@@ -2,6 +2,7 @@ import {
   ConflictProblemSchema,
   NotFoundProblemSchema,
   PROBLEM_TYPES,
+  UnprocessableProblemSchema,
   ValidationProblemSchema,
 } from "contracts/http/error"
 import { sanitizeAcpErrorMessage } from "../acp/sanitize.error"
@@ -89,9 +90,7 @@ export const buildAuthRequiredProblem = (
     detail,
   })
 
-export const buildTurnInProgressProblem = (
-  detail = "A turn is already running for this session",
-) =>
+export const buildTurnInProgressProblem = (detail = "A turn is already running for this session") =>
   ConflictProblemSchema.parse({
     type: PROBLEM_TYPES.conflict,
     title: "Turn already in progress",
@@ -130,5 +129,29 @@ export const buildPermissionValidationProblem = (detail: string) =>
     status: 400,
     code: "validation.request.invalid",
     errors: [{ pointer: "#/optionId", code: "validation.permission.option.invalid" }],
+    detail,
+  })
+
+export const buildSessionCommandRejectedProblem = (detail: string) =>
+  UnprocessableProblemSchema.parse({
+    type: PROBLEM_TYPES.unprocessable,
+    title: "Session command rejected",
+    status: 422,
+    detail: sanitizeAcpErrorMessage(detail),
+  })
+
+export const buildExtensionNotFoundProblem = (detail = "Unknown extension request") =>
+  NotFoundProblemSchema.parse({
+    type: PROBLEM_TYPES.notFound,
+    title: "Extension request not found",
+    status: 404,
+    detail,
+  })
+
+export const buildExtensionConflictProblem = (detail = "Extension request already resolved") =>
+  ConflictProblemSchema.parse({
+    type: PROBLEM_TYPES.conflict,
+    title: "Extension request conflict",
+    status: 409,
     detail,
   })

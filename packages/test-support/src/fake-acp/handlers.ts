@@ -256,6 +256,14 @@ const handleInitialize = (request: JsonRpcRequest, config: FakeAcpConfig): Handl
     protocolVersion: 1,
     agentCapabilities: {
       loadSession: config.loadSession,
+      ...(config.promptImage || config.promptEmbeddedContext
+        ? {
+            promptCapabilities: {
+              ...(config.promptImage ? { image: true } : {}),
+              ...(config.promptEmbeddedContext ? { embeddedContext: true } : {}),
+            },
+          }
+        : {}),
       sessionCapabilities: {
         ...(config.sessionClose ? { close: {} } : {}),
         ...(config.sessionList ? { list: {} } : {}),

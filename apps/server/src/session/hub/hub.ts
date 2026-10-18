@@ -3,18 +3,22 @@ import { AgentId } from "contracts/http/agent-settings"
 import { AttachmentReference } from "contracts/http/attachments"
 import { SessionConfig } from "contracts/http/config.options"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
-import { AUTH_GATED_PROMPT_MESSAGE } from "../../acp/auth.required"
+import { sanitizeFailureReason } from "../../acp/sanitize.failure.reason"
 import { parseAvailableCommandsUpdate } from "./commands.available"
 import { CommandsCache, createCommandsCache } from "./commands.cache"
 import { parseSessionInfoUpdate } from "./session.info"
 import { createSessionTitleCache, SessionTitleCache } from "./session.title.cache"
+import { createPromptQueue } from "./prompt.queue"
 import { makeApplySessionTitle } from "../session.apply.title.usecase"
-import { makePromptAuthGate, PromptAuthGate } from "../session.prompt.auth.gate.usecase"
+import { PromptAccept, PromptCompleteTurn } from "../session.prompt.gate.usecase"
 import {
+  SessionCommandError,
   SessionHubCancelSession,
   SessionHubLoadSession,
-  SessionHubPromptSession,
+  SessionPromptTurn,
 } from "../session.ports"
+
+export type { SessionCommandError }
 
 export type SessionKey = `${AgentId}:${string}`
 
@@ -46,6 +50,22 @@ export type BeginClientRpcResult =
   | { readonly ok: true; readonly value: unknown }
   | { readonly ok: false; readonly error: BeginClientRpcError }
 
+/**
+ * Prompt submission result. Turn progress and completion are not part of this
+ * result: the hub queues accepted prompts and fans `prompt_complete` (or an
+ * `error` event on failure) to the session group when the turn settles.
+ */
+export type SessionPromptCommandResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly error: SessionCommandError }
+
+export type SessionCancelCommandResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly error: SessionCommandError }
+
+/** First reply wins; the second sees `already_settled`, unknown ids see `unknown`. */
+export type ResolveReplyResult = "settled" | "already_settled" | "unknown"
+
 export type PendingClientRpc = {
   readonly requestId: string
   readonly agentId: AgentId
@@ -62,16 +82,17 @@ export type CreateSessionHubParams = {
   commandsCache?: CommandsCache
   sessionTitleCache?: SessionTitleCache
   loadSession: SessionHubLoadSession
-  promptSession: SessionHubPromptSession
+  runPromptTurn: SessionPromptTurn
+  acceptPrompt: PromptAccept
+  completePromptTurn: PromptCompleteTurn
   cancelSession: SessionHubCancelSession
   createRequestId?: () => string
-  /** Overrides the default auth-free prompt gate composed from promptSession. */
-  promptGate?: PromptAuthGate
 }
 
 export type SessionHub = {
   addSubscriber: (subscriber: SessionHubSubscriber) => void
   removeSubscriber: (subscriberId: string) => void
+  getSubscriberSession: (subscriberId: string) => SessionKey | null
   subscribe: (params: {
     subscriberId: string
     agentId: AgentId
@@ -83,13 +104,12 @@ export type SessionHub = {
     sessionId: string
   }) => Promise<void>
   prompt: (params: {
-    subscriberId: string
     agentId: AgentId
     sessionId: string
     text: string
     attachments?: ReadonlyArray<AttachmentReference>
-  }) => Promise<void>
-  cancel: (params: { subscriberId: string; agentId: AgentId; sessionId: string }) => Promise<void>
+  }) => Promise<SessionPromptCommandResult>
+  cancel: (params: { agentId: AgentId; sessionId: string }) => Promise<SessionCancelCommandResult>
   handleSessionUpdate: (params: { agentId: AgentId; sessionId: string; update: unknown }) => void
   handleSessionConfig: (params: {
     agentId: AgentId
@@ -108,8 +128,10 @@ export type SessionHub = {
     method: string
     params: unknown
   }) => Promise<unknown>
-  resolvePermissionReply: (params: { requestId: string; optionId: string }) => void
-  resolveExtensionReply: (params: { requestId: string; result: unknown }) => void
+  resolvePermissionReply: (params: { requestId: string; optionId: string }) => ResolveReplyResult
+  resolveExtensionReply: (params: { requestId: string; result: unknown }) => ResolveReplyResult
+  /** Awaits every queued/in-flight prompt turn. Lifecycle and test seam. */
+  awaitPromptTurns: () => Promise<void>
 }
 
 export const createSessionCwdCache = (): SessionCwdCache => {
@@ -128,16 +150,16 @@ export const createSessionHub = ({
   commandsCache = createCommandsCache(),
   sessionTitleCache = createSessionTitleCache(),
   loadSession,
-  promptSession,
+  runPromptTurn,
+  acceptPrompt,
+  completePromptTurn,
   cancelSession,
   createRequestId = () => crypto.randomUUID(),
-  promptGate,
 }: CreateSessionHubParams): SessionHub => {
   const subscribers = new Map<string, SessionHubSubscriber>()
   const subscribersBySession = new Map<SessionKey, Set<string>>()
   const replayTargetBySession = new Map<SessionKey, string>()
   const pendingById = new Map<string, PendingClientRpc>()
-  const runGatedPrompt = promptGate ?? makePromptAuthGate({ promptSession })
 
   const sendError = (
     subscriber: SessionHubSubscriber,
@@ -230,27 +252,41 @@ export const createSessionHub = ({
     },
   })
 
-  const ensureSubscribed = (params: {
-    subscriberId: string
+  type PromptJob = {
     agentId: AgentId
     sessionId: string
-  }): SessionHubSubscriber | undefined => {
-    const subscriber = subscribers.get(params.subscriberId)
-    if (subscriber === undefined) {
-      return undefined
-    }
-
-    const key = sessionKey(params.agentId, params.sessionId)
-    if (subscriber.sessionKey !== key) {
-      sendError(subscriber, "Not subscribed to session", {
-        agentId: params.agentId,
-        sessionId: params.sessionId,
-      })
-      return undefined
-    }
-
-    return subscriber
+    text: string
+    attachments?: ReadonlyArray<AttachmentReference>
   }
+
+  const executePromptTurn = async (job: PromptJob): Promise<void> => {
+    const key = sessionKey(job.agentId, job.sessionId)
+    const ref = { agentId: job.agentId, sessionId: job.sessionId }
+    try {
+      const outcome = await runPromptTurn({
+        agentId: job.agentId,
+        sessionId: job.sessionId,
+        text: job.text,
+        ...(job.attachments !== undefined && job.attachments.length > 0
+          ? { attachments: job.attachments }
+          : {}),
+      })
+      const settled = await completePromptTurn({ agentId: job.agentId, outcome })
+      if (settled.ok) {
+        fanOut(key, { type: "prompt_complete", ...ref })
+        return
+      }
+      fanOut(key, { type: "error", message: settled.reason, ...ref })
+    } catch (error: unknown) {
+      fanOut(key, {
+        type: "error",
+        message: sanitizeFailureReason(error, "Prompt turn failed"),
+        ...ref,
+      })
+    }
+  }
+
+  const promptQueue = createPromptQueue<PromptJob>({ execute: executePromptTurn })
 
   const loadForSubscriber = async (params: {
     subscriber: SessionHubSubscriber
@@ -425,15 +461,36 @@ export const createSessionHub = ({
     return result.value
   }
 
-  const settlePending = (requestId: string, result: unknown) => {
+  const SETTLED_REQUEST_MEMORY = 256
+  const settledRequestIds = new Set<string>()
+  const settledRequestOrder: string[] = []
+
+  const rememberSettled = (requestId: string) => {
+    settledRequestIds.add(requestId)
+    settledRequestOrder.push(requestId)
+    while (settledRequestOrder.length > SETTLED_REQUEST_MEMORY) {
+      const evicted = settledRequestOrder.shift()
+      if (evicted !== undefined) {
+        settledRequestIds.delete(evicted)
+      }
+    }
+  }
+
+  const settlePending = (requestId: string, result: unknown): ResolveReplyResult => {
     const pending = pendingById.get(requestId)
-    if (pending === undefined || pending.settled) {
-      return
+    if (pending === undefined) {
+      return settledRequestIds.has(requestId) ? "already_settled" : "unknown"
+    }
+
+    if (pending.settled) {
+      return "already_settled"
     }
 
     pending.settled = true
     pendingById.delete(requestId)
+    rememberSettled(requestId)
     pending.resolve(result)
+    return "settled"
   }
 
   return {
@@ -448,69 +505,57 @@ export const createSessionHub = ({
       detachFromSession(subscriber)
       subscribers.delete(subscriberId)
     },
+    getSubscriberSession: (subscriberId) => subscribers.get(subscriberId)?.sessionKey ?? null,
     subscribe: subscribeInternal,
     switchSession: async (params) => {
       await subscribeInternal(params)
     },
-    prompt: async (params) => {
-      const subscriber = ensureSubscribed(params)
-      if (subscriber === undefined) {
-        return
-      }
-
-      const result = await runGatedPrompt({
-        agentId: params.agentId,
-        sessionId: params.sessionId,
-        text: params.text,
-        ...(params.attachments !== undefined && params.attachments.length > 0
-          ? { attachments: params.attachments }
-          : {}),
-      })
-      if (!result.ok) {
-        if (result.error.kind === "AUTH_GATED") {
-          sendError(subscriber, AUTH_GATED_PROMPT_MESSAGE, {
-            agentId: params.agentId,
-            sessionId: params.sessionId,
-          })
-          return
+    prompt: async ({ agentId, sessionId, text, attachments }) => {
+      const cwd = cwdCache.get({ agentId, sessionId })
+      if (cwd === undefined) {
+        return {
+          ok: false,
+          error: { kind: "unknown_session", reason: "Unknown session cwd" },
         }
-
-        sendError(subscriber, result.error.reason, {
-          agentId: params.agentId,
-          sessionId: params.sessionId,
-        })
-        return
       }
 
-      fanOut(sessionKey(params.agentId, params.sessionId), {
-        type: "prompt_complete",
-        agentId: params.agentId,
-        sessionId: params.sessionId,
+      const accepted = await acceptPrompt({
+        agentId,
+        sessionId,
+        cwd,
+        ...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}),
       })
+      if (!accepted.ok) {
+        return accepted
+      }
+
+      promptQueue.enqueue({
+        agentId,
+        sessionId,
+        text,
+        ...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}),
+      })
+      return { ok: true }
     },
-    cancel: async (params) => {
-      const subscriber = ensureSubscribed(params)
-      if (subscriber === undefined) {
-        return
+    cancel: async ({ agentId, sessionId }) => {
+      if (cwdCache.get({ agentId, sessionId }) === undefined) {
+        return {
+          ok: false,
+          error: { kind: "unknown_session", reason: "Unknown session cwd" },
+        }
       }
 
-      const result = await cancelSession({
-        agentId: params.agentId,
-        sessionId: params.sessionId,
-      })
+      const result = await cancelSession({ agentId, sessionId })
       if (!result.ok) {
-        sendError(subscriber, result.reason, {
-          agentId: params.agentId,
-          sessionId: params.sessionId,
-        })
-        return
+        return { ok: false, error: { kind: "rejected", reason: result.reason } }
       }
 
-      fanOut(sessionKey(params.agentId, params.sessionId), {
+      fanOut(sessionKey(agentId, sessionId), {
         type: "cancelled",
-        agentId: params.agentId,
-        sessionId: params.sessionId,
+        agentId,
+        sessionId,
       })
+      return { ok: true }
     },
     handleSessionUpdate: ({ agentId, sessionId, update }) => {
       const commandsUpdate = parseAvailableCommandsUpdate(update)
@@ -566,16 +611,14 @@ export const createSessionHub = ({
         }),
         "extension request missing method",
       ),
-    resolvePermissionReply: ({ requestId, optionId }) => {
+    resolvePermissionReply: ({ requestId, optionId }) =>
       settlePending(requestId, {
         outcome: {
           outcome: "selected",
           optionId,
         },
-      })
-    },
-    resolveExtensionReply: ({ requestId, result }) => {
-      settlePending(requestId, result)
-    },
+      }),
+    resolveExtensionReply: ({ requestId, result }) => settlePending(requestId, result),
+    awaitPromptTurns: () => promptQueue.awaitIdle(),
   }
 }

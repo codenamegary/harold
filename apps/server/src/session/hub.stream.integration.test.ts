@@ -442,6 +442,67 @@ describe("session hub stream integration", () => {
   )
 
   test(
+    "prompt and cancel without a subscription error with Not subscribed to session",
+    async () => {
+      const { app, config } = await bootTestApp({
+        whichFn,
+        fakeAcpOptions: {
+          capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+          sessionNewSessionId: "hub-stream-unsub-1",
+          sessionLoadSessionId: "hub-stream-unsub-1",
+        },
+      })
+      await enableAgent(app, "cursor", whichFn)
+
+      const { httpBase, wsUrl } = await getListeningBase(app, config)
+
+      const createResponse = await fetch(`${httpBase}/v1/sessions`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${app.deviceCredential.credential}`,
+        },
+        body: JSON.stringify({
+          agentId: "cursor",
+          cwd: "/tmp/hub-stream-unsub",
+        }),
+      })
+      expect(createResponse.status).toBe(201)
+      const created = CreateSessionResponseSchema.parse(await createResponse.json())
+
+      const client = await openStreamClient(wsUrl, app.deviceCredential.credential)
+
+      client.send({
+        type: "prompt",
+        agentId: "cursor",
+        sessionId: created.sessionId,
+        text: "no subscription yet",
+      })
+      const promptError = await client.waitFor((message) => message.type === "error")
+      expect(promptError).toMatchObject({
+        type: "error",
+        message: "Not subscribed to session",
+      })
+
+      client.send({
+        type: "cancel",
+        agentId: "cursor",
+        sessionId: created.sessionId,
+      })
+      await client.waitFor(
+        (message) =>
+          message.type === "error" && client.messages.filter((m) => m.type === "error").length >= 2,
+      )
+
+      expect(client.messages.some((message) => message.type === "prompt_complete")).toBe(false)
+      expect(client.messages.some((message) => message.type === "cancelled")).toBe(false)
+
+      await client.close()
+    },
+    { timeout: 30_000 },
+  )
+
+  test(
     "prompt auth_required opens host-login and errors without prompt_complete",
     async () => {
       const { app, config } = await bootTestApp({

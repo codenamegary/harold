@@ -5,6 +5,7 @@ import {
   NotFoundProblemSchema,
   PROBLEM_TYPES,
   ProblemDetailsSchema,
+  UnprocessableProblemSchema,
   ValidationProblemSchema,
 } from "./error"
 
@@ -14,6 +15,7 @@ describe("PROBLEM_TYPES", () => {
     expect(PROBLEM_TYPES.internalError).toBe("https://harold.local/problems/internal-error")
     expect(PROBLEM_TYPES.notFound).toBe("https://harold.local/problems/not-found")
     expect(PROBLEM_TYPES.conflict).toBe("https://harold.local/problems/conflict")
+    expect(PROBLEM_TYPES.unprocessable).toBe("https://harold.local/problems/unprocessable")
   })
 })
 
@@ -106,6 +108,29 @@ describe("ConflictProblemSchema", () => {
   })
 })
 
+describe("UnprocessableProblemSchema", () => {
+  test("accepts an unprocessable problem with detail", () => {
+    const problem = {
+      type: PROBLEM_TYPES.unprocessable,
+      title: "Session command rejected",
+      status: 422,
+      detail: "Attachment is no longer available: shot.png",
+    }
+
+    expect(UnprocessableProblemSchema.parse(problem)).toEqual(problem)
+  })
+
+  test("rejects a conflict-type problem through the unprocessable schema", () => {
+    expect(() =>
+      UnprocessableProblemSchema.parse({
+        type: PROBLEM_TYPES.conflict,
+        title: "Session command rejected",
+        status: 422,
+      }),
+    ).toThrow()
+  })
+})
+
 describe("ProblemDetailsSchema", () => {
   test("parses validation and internal problems by type", () => {
     const validation = {
@@ -140,5 +165,15 @@ describe("ProblemDetailsSchema", () => {
 
     expect(ProblemDetailsSchema.parse(notFound)).toEqual(notFound)
     expect(ProblemDetailsSchema.parse(conflict)).toEqual(conflict)
+  })
+
+  test("parses unprocessable problems by type", () => {
+    const unprocessable = {
+      type: PROBLEM_TYPES.unprocessable,
+      title: "Session command rejected",
+      status: 422,
+    }
+
+    expect(ProblemDetailsSchema.parse(unprocessable)).toEqual(unprocessable)
   })
 })

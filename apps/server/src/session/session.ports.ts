@@ -31,13 +31,34 @@ export type SessionHubLoadSession = (params: {
   agentId: AgentId
   sessionId: string
   cwd: string
-}) => Promise<{ ok: true } | { ok: false; reason: string }>
+}) => Promise<{ ok: true } | { ok: false; reason: string; authRequired?: boolean }>
 
-export type SessionHubPromptSession = (params: {
+/** Outcome of a full prompt turn. */
+export type SessionPromptOutcome =
+  | { ok: true }
+  | { ok: false; reason: string; authRequired?: boolean }
+
+/**
+ * Runs a full prompt turn to completion: resolves attachment blocks, sends
+ * `session/prompt`, and resolves with the turn outcome. Failures are values,
+ * never exceptions.
+ */
+export type SessionPromptTurn = (params: {
   agentId: AgentId
   sessionId: string
   text: string
   attachments?: ReadonlyArray<AttachmentReference>
+}) => Promise<SessionPromptOutcome>
+
+/**
+ * Bind upsert for prompts: guarantees the session is bound to a running agent,
+ * loading it when needed. An already-bound session is left untouched. Fails
+ * only when the binding cannot be established.
+ */
+export type EnsureSessionBound = (params: {
+  agentId: AgentId
+  sessionId: string
+  cwd: string
 }) => Promise<{ ok: true } | { ok: false; reason: string; authRequired?: boolean }>
 
 export type SessionHubCancelSession = (params: {
@@ -73,3 +94,9 @@ export type BroadcastSessionTitle = (params: SessionTitleKey & { title: string |
 export type EnsureReadyForPrompt = (agentId: AgentId) => Promise<{ ok: true } | { ok: false }>
 
 export type EnsureSessionFromChallenge = (agentId: AgentId) => Promise<void>
+
+/** Why a session command (prompt/cancel) was refused. */
+export type SessionCommandError =
+  | { readonly kind: "unknown_session"; readonly reason: string }
+  | { readonly kind: "auth_gated"; readonly reason: string }
+  | { readonly kind: "rejected"; readonly reason: string }

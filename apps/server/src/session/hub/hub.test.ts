@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import { createSessionCwdCache, createSessionHub, SessionStreamSink } from "./hub"
-import { makePromptAuthGate } from "../session.prompt.auth.gate.usecase"
+import { AUTH_GATED_PROMPT_MESSAGE } from "../../acp/auth.required"
+import {
+  makeCompletePromptTurn,
+  PromptAccept,
+  PromptCompleteTurn,
+} from "../session.prompt.gate.usecase"
 import { createCommandsCache } from "./commands.cache"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
 
@@ -19,6 +24,21 @@ const collectSink = (): {
   }
 }
 
+const okPromptTurn = () => async () => ({ ok: true as const })
+
+const okAcceptPrompt = (): PromptAccept => async () => ({ ok: true })
+
+const okCompletePromptTurn =
+  (): PromptCompleteTurn =>
+  async ({ outcome }) =>
+    outcome
+
+const okPromptDeps = () => ({
+  runPromptTurn: okPromptTurn(),
+  acceptPrompt: okAcceptPrompt(),
+  completePromptTurn: okCompletePromptTurn(),
+})
+
 describe("session hub", () => {
   test("loads with cached cwd, fans out live updates to both subscribers, and routes load replay to one", async () => {
     const cwdCache = createSessionCwdCache()
@@ -36,7 +56,7 @@ describe("session hub", () => {
         })
         return { ok: true }
       },
-      promptSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
       cancelSession: async () => ({ ok: true }),
     })
 
@@ -73,7 +93,7 @@ describe("session hub", () => {
     const hub = createSessionHub({
       cwdCache,
       loadSession: async () => ({ ok: true }),
-      promptSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
       cancelSession: async () => ({ ok: true }),
     })
 
@@ -115,7 +135,7 @@ describe("session hub", () => {
       cwdCache,
       createRequestId: () => `req-${++requestIds.next}`,
       loadSession: async () => ({ ok: true }),
-      promptSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
       cancelSession: async () => ({ ok: true }),
     })
 
@@ -143,6 +163,131 @@ describe("session hub", () => {
     })
   })
 
+  test("reply settlement reports settled, already_settled, and unknown", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+
+    const requestIds = { next: 0 }
+    const hub = createSessionHub({
+      cwdCache,
+      createRequestId: () => `req-${++requestIds.next}`,
+      loadSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const a = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    const pending = hub.requestPermission({
+      agentId: "cursor",
+      sessionId: "s1",
+      params: { toolCall: { toolCallId: "t1", name: "edit" } },
+    })
+
+    expect(hub.resolvePermissionReply({ requestId: "req-1", optionId: "allow-once" })).toBe(
+      "settled",
+    )
+    expect(hub.resolvePermissionReply({ requestId: "req-1", optionId: "reject-once" })).toBe(
+      "already_settled",
+    )
+    expect(hub.resolvePermissionReply({ requestId: "req-missing", optionId: "x" })).toBe("unknown")
+    await pending
+  })
+
+  test("extension reply settlement reports settled, already_settled, and unknown", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+
+    const requestIds = { next: 0 }
+    const hub = createSessionHub({
+      cwdCache,
+      createRequestId: () => `req-${++requestIds.next}`,
+      loadSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const a = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    const pending = hub.requestExtensionRpc({
+      agentId: "cursor",
+      sessionId: "s1",
+      method: "cursor/ask_question",
+      params: { question: "?" },
+    })
+
+    expect(hub.resolveExtensionReply({ requestId: "req-1", result: { ok: true } })).toBe("settled")
+    expect(hub.resolveExtensionReply({ requestId: "req-1", result: { ok: false } })).toBe(
+      "already_settled",
+    )
+    expect(hub.resolveExtensionReply({ requestId: "req-missing", result: {} })).toBe("unknown")
+    expect(pending).resolves.toEqual({ ok: true })
+  })
+
+  test("cancel reports unknown_session and rejected failures", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
+      cancelSession: async () => ({ ok: false, reason: "session/cancel failed: boom" }),
+    })
+
+    const a = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    expect(await hub.cancel({ agentId: "cursor", sessionId: "s1" })).toEqual({
+      ok: false,
+      error: { kind: "rejected", reason: "session/cancel failed: boom" },
+    })
+    expect(await hub.cancel({ agentId: "cursor", sessionId: "nope" })).toEqual({
+      ok: false,
+      error: { kind: "unknown_session", reason: "Unknown session cwd" },
+    })
+    expect(a.messages.some((m) => m.type === "cancelled")).toBe(false)
+  })
+
+  test("prompt is accepted before the turn completes", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+
+    let releaseTurn: (() => void) | undefined
+    let turnStarted = false
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
+      runPromptTurn: async () => {
+        turnStarted = true
+        await new Promise<void>((resolve) => {
+          releaseTurn = resolve
+        })
+        return { ok: true }
+      },
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const a = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    const result = await hub.prompt({ agentId: "cursor", sessionId: "s1", text: "hello" })
+    expect(result).toEqual({ ok: true })
+    expect(turnStarted).toBe(true)
+    expect(a.messages.some((m) => m.type === "prompt_complete")).toBe(false)
+
+    releaseTurn?.()
+    await hub.awaitPromptTurns()
+    expect(a.messages.some((m) => m.type === "prompt_complete")).toBe(true)
+  })
+
   test("prompt_complete and cancelled fan out to session subscribers", async () => {
     const cwdCache = createSessionCwdCache()
     cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
@@ -150,7 +295,7 @@ describe("session hub", () => {
     const hub = createSessionHub({
       cwdCache,
       loadSession: async () => ({ ok: true }),
-      promptSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
       cancelSession: async () => ({ ok: true }),
     })
 
@@ -161,42 +306,228 @@ describe("session hub", () => {
     await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
     await hub.subscribe({ subscriberId: "b", agentId: "cursor", sessionId: "s1" })
 
-    await hub.prompt({
-      subscriberId: "a",
+    const result = await hub.prompt({
       agentId: "cursor",
       sessionId: "s1",
       text: "hello",
     })
+    expect(result).toEqual({ ok: true })
+    await hub.awaitPromptTurns()
+
     expect(a.messages.some((m) => m.type === "prompt_complete")).toBe(true)
     expect(b.messages.some((m) => m.type === "prompt_complete")).toBe(true)
 
-    await hub.cancel({
-      subscriberId: "b",
+    const cancelResult = await hub.cancel({
       agentId: "cursor",
       sessionId: "s1",
     })
+    expect(cancelResult).toEqual({ ok: true })
     expect(a.messages.some((m) => m.type === "cancelled")).toBe(true)
     expect(b.messages.some((m) => m.type === "cancelled")).toBe(true)
   })
 
-  test("auth gate blocks prompt and fans auth_session_updated to agent subscribers", async () => {
+  test("prompt on an unknown session reports unknown_session", async () => {
+    const hub = createSessionHub({
+      cwdCache: createSessionCwdCache(),
+      loadSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const result = await hub.prompt({
+      agentId: "cursor",
+      sessionId: "nope",
+      text: "hello",
+    })
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: "unknown_session", reason: "Unknown session cwd" },
+    })
+  })
+
+  test("prompt refusal stops before the turn is queued", async () => {
     const cwdCache = createSessionCwdCache()
     cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
-    cwdCache.remember({ agentId: "cursor", sessionId: "s2", cwd: "/tmp/b" })
+
+    let turns = 0
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
+      runPromptTurn: async () => {
+        turns += 1
+        return { ok: true }
+      },
+      acceptPrompt: async ({ attachments }) =>
+        attachments !== undefined
+          ? {
+              ok: false,
+              error: {
+                kind: "rejected",
+                reason:
+                  "Agent does not advertise promptCapabilities.image — cannot attach shot.png",
+              },
+            }
+          : { ok: false, error: { kind: "auth_gated", reason: AUTH_GATED_PROMPT_MESSAGE } },
+      completePromptTurn: okCompletePromptTurn(),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    expect(await hub.prompt({ agentId: "cursor", sessionId: "s1", text: "needs auth" })).toEqual({
+      ok: false,
+      error: { kind: "auth_gated", reason: AUTH_GATED_PROMPT_MESSAGE },
+    })
+    expect(
+      await hub.prompt({
+        agentId: "cursor",
+        sessionId: "s1",
+        text: "look",
+        attachments: [
+          {
+            kind: "image",
+            name: "shot.png",
+            mimeType: "image/png",
+            path: "/tmp/a/.harold/attachments/att_1.png",
+          },
+        ],
+      }),
+    ).toEqual({
+      ok: false,
+      error: {
+        kind: "rejected",
+        reason: "Agent does not advertise promptCapabilities.image — cannot attach shot.png",
+      },
+    })
+
+    expect(turns).toBe(0)
+  })
+
+  test("mid-turn prompt failure fans an error to session subscribers", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
+      runPromptTurn: async () => ({ ok: false, reason: "session/prompt failed: boom" }),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const a = collectSink()
+    const b = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    hub.addSubscriber({ id: "b", sink: b.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+    await hub.subscribe({ subscriberId: "b", agentId: "cursor", sessionId: "s1" })
+
+    const result = await hub.prompt({
+      agentId: "cursor",
+      sessionId: "s1",
+      text: "hello",
+    })
+    expect(result).toEqual({ ok: true })
+    await hub.awaitPromptTurns()
+
+    const failure = (m: SessionStreamServerMessage) =>
+      m.type === "error" && m.message === "session/prompt failed: boom"
+    expect(a.messages.some(failure)).toBe(true)
+    expect(b.messages.some(failure)).toBe(true)
+    expect(a.messages.some((m) => m.type === "prompt_complete")).toBe(false)
+    expect(b.messages.some((m) => m.type === "prompt_complete")).toBe(false)
+  })
+
+  test("concurrent prompts each run their own turn", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+
+    const started: string[] = []
+    const releases: Array<() => void> = []
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
+      runPromptTurn: async ({ text }) => {
+        started.push(text)
+        await new Promise<void>((resolve) => {
+          releases.push(resolve)
+        })
+        return { ok: true }
+      },
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const a = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    expect(await hub.prompt({ agentId: "cursor", sessionId: "s1", text: "first" })).toEqual({
+      ok: true,
+    })
+    expect(await hub.prompt({ agentId: "cursor", sessionId: "s1", text: "second" })).toEqual({
+      ok: true,
+    })
+
+    expect(started).toEqual(["first", "second"])
+
+    for (const release of releases) {
+      release()
+    }
+    await hub.awaitPromptTurns()
+    expect(a.messages.filter((m) => m.type === "prompt_complete")).toHaveLength(2)
+  })
+
+  test("auth-gated turn outcomes run the challenge and fan the gated error", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
 
     let challenges = 0
     const hub = createSessionHub({
       cwdCache,
       loadSession: async () => ({ ok: true }),
-      promptSession: async () => ({ ok: true }),
-      cancelSession: async () => ({ ok: true }),
-      promptGate: makePromptAuthGate({
-        promptSession: async () => ({ ok: true }),
-        ensureReadyForPrompt: async () => ({ ok: false }),
+      runPromptTurn: async () => ({
+        ok: false,
+        reason: "Authentication required",
+        authRequired: true,
+      }),
+      acceptPrompt: okAcceptPrompt(),
+      completePromptTurn: makeCompletePromptTurn({
         ensureSessionFromChallenge: async () => {
           challenges += 1
         },
       }),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const a = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    const result = await hub.prompt({
+      agentId: "cursor",
+      sessionId: "s1",
+      text: "hello",
+    })
+    expect(result).toEqual({ ok: true })
+    await hub.awaitPromptTurns()
+
+    expect(challenges).toBe(1)
+    expect(a.messages.some((m) => m.type === "prompt_complete")).toBe(false)
+    expect(
+      a.messages.some((m) => m.type === "error" && m.message === AUTH_GATED_PROMPT_MESSAGE),
+    ).toBe(true)
+  })
+
+  test("broadcastAuthSessionUpdated reaches agent subscribers", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+    cwdCache.remember({ agentId: "cursor", sessionId: "s2", cwd: "/tmp/b" })
+
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
+      cancelSession: async () => ({ ok: true }),
     })
 
     const a = collectSink()
@@ -205,21 +536,6 @@ describe("session hub", () => {
     hub.addSubscriber({ id: "b", sink: b.sink, sessionKey: null })
     await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
     await hub.subscribe({ subscriberId: "b", agentId: "cursor", sessionId: "s2" })
-
-    await hub.prompt({
-      subscriberId: "a",
-      agentId: "cursor",
-      sessionId: "s1",
-      text: "hello",
-    })
-
-    expect(a.messages.some((m) => m.type === "prompt_complete")).toBe(false)
-    expect(
-      a.messages.some(
-        (m) => m.type === "error" && m.message.includes("Agent authentication required"),
-      ),
-    ).toBe(true)
-    expect(challenges).toBe(0)
 
     hub.broadcastAuthSessionUpdated({
       agentId: "cursor",
@@ -241,49 +557,6 @@ describe("session hub", () => {
     expect(b.messages.some((m) => m.type === "auth_session_updated")).toBe(true)
   })
 
-  test("prompt authRequired opens challenge and errors without prompt_complete", async () => {
-    const cwdCache = createSessionCwdCache()
-    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
-
-    let challenges = 0
-    const hub = createSessionHub({
-      cwdCache,
-      loadSession: async () => ({ ok: true }),
-      promptSession: async () => ({ ok: true }),
-      cancelSession: async () => ({ ok: true }),
-      promptGate: makePromptAuthGate({
-        promptSession: async () => ({
-          ok: false,
-          reason: "Authentication required",
-          authRequired: true,
-        }),
-        ensureReadyForPrompt: async () => ({ ok: true }),
-        ensureSessionFromChallenge: async () => {
-          challenges += 1
-        },
-      }),
-    })
-
-    const a = collectSink()
-    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
-    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
-
-    await hub.prompt({
-      subscriberId: "a",
-      agentId: "cursor",
-      sessionId: "s1",
-      text: "hello",
-    })
-
-    expect(challenges).toBe(1)
-    expect(a.messages.some((m) => m.type === "prompt_complete")).toBe(false)
-    expect(
-      a.messages.some(
-        (m) => m.type === "error" && m.message.includes("Agent authentication required"),
-      ),
-    ).toBe(true)
-  })
-
   test("caches commands with no subscriber and snapshots them to the joiner before subscribed", async () => {
     const cwdCache = createSessionCwdCache()
     cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/proj" })
@@ -297,7 +570,7 @@ describe("session hub", () => {
       cwdCache,
       commandsCache,
       loadSession: async () => ({ ok: true }),
-      promptSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
       cancelSession: async () => ({ ok: true }),
     })
 
@@ -339,7 +612,7 @@ describe("session hub", () => {
     const hub = createSessionHub({
       cwdCache,
       loadSession: async () => ({ ok: true }),
-      promptSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
       cancelSession: async () => ({ ok: true }),
     })
 
@@ -383,7 +656,7 @@ describe("session hub", () => {
     const hub = createSessionHub({
       cwdCache,
       loadSession: async () => ({ ok: true }),
-      promptSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
       cancelSession: async () => ({ ok: true }),
     })
 
@@ -425,7 +698,7 @@ describe("session hub", () => {
       cwdCache,
       commandsCache,
       loadSession: async () => ({ ok: true }),
-      promptSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
       cancelSession: async () => ({ ok: true }),
     })
 
@@ -464,7 +737,7 @@ describe("session hub config options", () => {
     const hub = createSessionHub({
       cwdCache,
       loadSession: async () => ({ ok: true }),
-      promptSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
       cancelSession: async () => ({ ok: true }),
     })
 
@@ -510,7 +783,7 @@ describe("session hub config options", () => {
         })
         return { ok: true }
       },
-      promptSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
       cancelSession: async () => ({ ok: true }),
     })
 
@@ -544,7 +817,7 @@ describe("session hub config options", () => {
         })
         return { ok: true }
       },
-      promptSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
       cancelSession: async () => ({ ok: true }),
     })
 
@@ -572,7 +845,7 @@ describe("session hub session info", () => {
     const hub = createSessionHub({
       cwdCache,
       loadSession: async () => ({ ok: true }),
-      promptSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
       cancelSession: async () => ({ ok: true }),
     })
 
@@ -610,7 +883,7 @@ describe("session hub session info", () => {
     const hub = createSessionHub({
       cwdCache,
       loadSession: async () => ({ ok: true }),
-      promptSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
       cancelSession: async () => ({ ok: true }),
     })
 
@@ -659,7 +932,7 @@ describe("session hub session info", () => {
     const hub = createSessionHub({
       cwdCache,
       loadSession: async () => ({ ok: true }),
-      promptSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
       cancelSession: async () => ({ ok: true }),
     })
 
@@ -693,7 +966,7 @@ describe("session hub session info", () => {
     const hub = createSessionHub({
       cwdCache,
       loadSession: async () => ({ ok: true }),
-      promptSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
       cancelSession: async () => ({ ok: true }),
     })
 
