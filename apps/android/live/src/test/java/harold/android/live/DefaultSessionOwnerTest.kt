@@ -7,10 +7,11 @@ import harold.android.contracts.AuthSessionStatus
 import harold.android.contracts.AuthShowMessageLevel
 import harold.android.contracts.AuthStep
 import harold.android.contracts.ConfigOptionValue
+import harold.android.contracts.PromptRequestBody
 import harold.android.contracts.SelectOption
 import harold.android.contracts.SessionState
-import harold.android.contracts.SessionStreamClientMessage
 import harold.android.contracts.SessionStreamServerMessage
+import harold.android.network.SessionCommandApi
 import harold.android.stream.ConnectionStatus
 import harold.android.stream.DisconnectCause
 import harold.android.stream.SessionStream
@@ -23,6 +24,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
@@ -34,7 +36,23 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class DefaultSessionOwnerTest {
     @Test
-    fun opensASingleSessionStreamOnConnect() = runTest {
+    fun opensASingleEventStreamForTheWatchTarget() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(liveThen(DisconnectCause.Protocol("stop"))),
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+
+        assertEquals(1, factory.openCount)
+        assertEquals(listOf("cursor" to "sess_01"), factory.openedTargets)
+        assertEquals(ConnectionStatus.TransportError("stop"), owner.connectionState.value.status)
+    }
+
+    @Test
+    fun waitsForAWatchTargetBeforeOpeningAStream() = runTest {
         val factory = ScriptedSessionStreamFactory(
             listOf(liveThen(DisconnectCause.Protocol("stop"))),
         )
@@ -43,8 +61,13 @@ class DefaultSessionOwnerTest {
         owner.connect(ORIGIN)
         advanceUntilIdle()
 
+        assertEquals(0, factory.openCount)
+        assertEquals(ConnectionStatus.Connecting, owner.connectionState.value.status)
+
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+
         assertEquals(1, factory.openCount)
-        assertEquals(ConnectionStatus.TransportError("stop"), owner.connectionState.value.status)
     }
 
     @Test
@@ -58,6 +81,7 @@ class DefaultSessionOwnerTest {
         val owner = owner(factory)
 
         owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
         advanceUntilIdle()
 
         assertEquals(2, factory.openCount)
@@ -74,6 +98,7 @@ class DefaultSessionOwnerTest {
         val owner = owner(factory)
 
         owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
         advanceUntilIdle()
 
         assertEquals(listOf(0L, 250L, 750L, 1_750L, 3_750L), factory.openedAt)
@@ -94,6 +119,7 @@ class DefaultSessionOwnerTest {
         val owner = owner(factory)
 
         owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
         advanceUntilIdle()
 
         assertEquals(listOf(0L, 250L, 750L, 1_000L, 1_500L), factory.openedAt)
@@ -107,6 +133,7 @@ class DefaultSessionOwnerTest {
         val owner = owner(factory)
 
         owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
         advanceUntilIdle()
 
         assertEquals(1, factory.openCount)
@@ -127,6 +154,7 @@ class DefaultSessionOwnerTest {
         val owner = owner(factory)
 
         owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
         advanceUntilIdle()
         owner.retry()
         advanceUntilIdle()
@@ -136,47 +164,42 @@ class DefaultSessionOwnerTest {
     }
 
     @Test
-    fun watchSendsSubscribeOnTheOpenSocket() = runTest {
+    fun watchingADifferentSessionReopensImmediatelyWithoutBackoff() = runTest {
         val factory = ScriptedSessionStreamFactory(
-            listOf(holdOpen()),
+            listOf(holdOpen(), holdOpen()),
         )
         val owner = owner(factory)
 
         owner.connect(ORIGIN)
-        advanceUntilIdle()
         owner.watch("cursor", "sess_01")
         advanceUntilIdle()
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
 
+        assertEquals(2, factory.openCount)
         assertEquals(
-            listOf(
-                SessionStreamClientMessage.Subscribe(agentId = "cursor", sessionId = "sess_01"),
-            ),
-            factory.lastStream!!.sent,
+            listOf("cursor" to "sess_01", "cursor" to "sess_02"),
+            factory.openedTargets,
         )
+        assertEquals(listOf(0L, 0L), factory.openedAt)
         owner.disconnect()
         advanceUntilIdle()
     }
 
     @Test
-    fun watchSwitchUsesSwitchAfterSubscribe() = runTest {
+    fun watchingTheSameTargetAgainDoesNotReopen() = runTest {
         val factory = ScriptedSessionStreamFactory(
             listOf(holdOpen()),
         )
         val owner = owner(factory)
 
         owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
         advanceUntilIdle()
         owner.watch("cursor", "sess_01")
-        owner.watch("cursor", "sess_02")
         advanceUntilIdle()
 
-        assertEquals(
-            listOf(
-                SessionStreamClientMessage.Subscribe(agentId = "cursor", sessionId = "sess_01"),
-                SessionStreamClientMessage.Switch(agentId = "cursor", sessionId = "sess_02"),
-            ),
-            factory.lastStream!!.sent,
-        )
+        assertEquals(1, factory.openCount)
         owner.disconnect()
         advanceUntilIdle()
     }
@@ -200,8 +223,9 @@ class DefaultSessionOwnerTest {
         assertEquals(0, owner.snapshot.value.transcript.rows.size)
         assertEquals(SessionState.Offline, owner.snapshot.value.transcript.sessionState)
         assertEquals(
-            SessionStreamClientMessage.Subscribe(agentId = "cursor", sessionId = "sess_01"),
-            factory.lastStream!!.sent.single(),
+            "a retryable disconnect re-opens the same watched session",
+            listOf("cursor" to "sess_01", "cursor" to "sess_01"),
+            factory.openedTargets,
         )
 
         factory.lastStream!!.emit(
@@ -238,6 +262,7 @@ class DefaultSessionOwnerTest {
         val owner = owner(factory)
 
         owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
         owner.disconnect()
         advanceUntilIdle()
 
@@ -256,8 +281,10 @@ class DefaultSessionOwnerTest {
         val owner = owner(factory)
 
         owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
         advanceUntilIdle()
         owner.connect("http://192.168.1.20:8787")
+        owner.watch("cursor", "sess_01")
         advanceUntilIdle()
 
         assertEquals(2, factory.openCount)
@@ -378,24 +405,22 @@ class DefaultSessionOwnerTest {
     }
 
     @Test
-    fun promptBeforeSubscribeSendsAfterSubscribed() = runTest {
+    fun promptBeforeSubscribeIsHeldAndPostedAfterSubscribed() = runTest {
         val factory = ScriptedSessionStreamFactory(
             listOf(holdOpen()),
         )
-        val owner = owner(factory)
+        val commands = ScriptedCommandApi()
+        val owner = owner(factory, commands)
 
         owner.connect(ORIGIN)
         owner.watch("cursor", "sess_01")
         advanceUntilIdle()
 
-        owner.prompt("hello")
+        val accepted = owner.prompt("hello")
         advanceUntilIdle()
 
-        assertTrue(
-            factory.lastStream!!.sent.none { message ->
-                message is SessionStreamClientMessage.Prompt
-            },
-        )
+        assertTrue(accepted.isSuccess)
+        assertTrue(commands.prompts.isEmpty())
         assertEquals(
             "hello",
             (owner.snapshot.value.transcript.rows.first() as TranscriptUserRow).text,
@@ -406,8 +431,80 @@ class DefaultSessionOwnerTest {
         )
         advanceUntilIdle()
 
-        val prompt = factory.lastStream!!.sent.filterIsInstance<SessionStreamClientMessage.Prompt>().single()
-        assertEquals("hello", prompt.text)
+        assertEquals(
+            listOf(ScriptedCommandApi.PromptCall(agentId = "cursor", sessionId = "sess_01", text = "hello")),
+            commands.prompts,
+        )
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun promptWhileLivePostsImmediately() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(holdOpen()),
+        )
+        val commands = ScriptedCommandApi()
+        val owner = owner(factory, commands)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.Subscribed(agentId = "cursor", sessionId = "sess_01"),
+        )
+        advanceUntilIdle()
+
+        val result = owner.prompt("hello")
+        advanceUntilIdle()
+
+        assertTrue(result.isSuccess)
+        assertEquals(
+            listOf(ScriptedCommandApi.PromptCall(agentId = "cursor", sessionId = "sess_01", text = "hello")),
+            commands.prompts,
+        )
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun promptWithoutAWatchTargetFailsExplicitly() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(holdOpen()),
+        )
+        val commands = ScriptedCommandApi()
+        val owner = owner(factory, commands)
+
+        owner.connect(ORIGIN)
+        advanceUntilIdle()
+
+        val result = owner.prompt("hello")
+
+        assertTrue(result.isFailure)
+        assertTrue(commands.prompts.isEmpty())
+        assertTrue(owner.snapshot.value.transcript.rows.isEmpty())
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun promptFailureSurfacesToTheCaller() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            listOf(holdOpen()),
+        )
+        val commands = ScriptedCommandApi()
+        commands.promptResult = Result.failure(IllegalStateException("rejected"))
+        val owner = owner(factory, commands)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.Subscribed(agentId = "cursor", sessionId = "sess_01"),
+        )
+        advanceUntilIdle()
+
+        assertTrue(owner.prompt("hello").isFailure)
         owner.disconnect()
         advanceUntilIdle()
     }
@@ -417,7 +514,8 @@ class DefaultSessionOwnerTest {
         val factory = ScriptedSessionStreamFactory(
             listOf(holdOpen()),
         )
-        val owner = owner(factory)
+        val commands = ScriptedCommandApi()
+        val owner = owner(factory, commands)
 
         owner.connect(ORIGIN)
         owner.watch("cursor", "sess_02")
@@ -448,16 +546,12 @@ class DefaultSessionOwnerTest {
         advanceUntilIdle()
 
         assertEquals("fake-tool", owner.snapshot.value.pendingPermission?.toolName)
-        owner.replyPermission("perm_01", "allow-once")
+        val replyResult = owner.replyPermission("perm_01", "allow-once")
         advanceUntilIdle()
 
+        assertTrue(replyResult.isSuccess)
         assertNull(owner.snapshot.value.pendingPermission)
-        assertTrue(
-            factory.lastStream!!.sent.any { message ->
-                message is SessionStreamClientMessage.PermissionReply &&
-                    message.optionId == "allow-once"
-            },
-        )
+        assertEquals(listOf("perm_01" to "allow-once"), commands.permissionReplies)
         owner.disconnect()
         advanceUntilIdle()
     }
@@ -985,9 +1079,13 @@ class DefaultSessionOwnerTest {
         advanceUntilIdle()
     }
 
-    private fun TestScope.owner(factory: SessionStreamFactory): DefaultSessionOwner =
+    private fun TestScope.owner(
+        factory: SessionStreamFactory,
+        commands: ScriptedCommandApi = ScriptedCommandApi(),
+    ): DefaultSessionOwner =
         DefaultSessionOwner(
             streamFactory = factory,
+            commandApi = commands,
             scope = this,
         )
 
@@ -1114,13 +1212,20 @@ private class ScriptedSessionStreamFactory(
     var openCount = 0
         private set
     val openedAt = mutableListOf<Long>()
+    val openedTargets = mutableListOf<Pair<String, String>>()
     var lastStream: ScriptedSessionStream? = null
         private set
 
-    override fun open(serverOrigin: String, handlers: SessionStreamHandlers): SessionStream {
+    override fun open(
+        serverOrigin: String,
+        agentId: String,
+        sessionId: String,
+        handlers: SessionStreamHandlers,
+    ): SessionStream {
         val index = openCount
         openCount += 1
         openedAt += now()
+        openedTargets += agentId to sessionId
         val script = scripts.getOrElse(index) { scripts.last() }
         val stream = ScriptedSessionStream(handlers)
         lastStream = stream
@@ -1141,15 +1246,56 @@ private class ScriptedSessionStreamFactory(
 private class ScriptedSessionStream(
     private val handlers: SessionStreamHandlers,
 ) : SessionStream {
-    val sent = mutableListOf<SessionStreamClientMessage>()
-
-    override fun send(message: SessionStreamClientMessage) {
-        sent += message
-    }
-
     override fun close() = Unit
 
     fun emit(message: SessionStreamServerMessage) {
         handlers.onMessage(message)
+    }
+}
+
+private class ScriptedCommandApi : SessionCommandApi {
+    data class PromptCall(val agentId: String, val sessionId: String, val text: String)
+
+    val prompts = mutableListOf<PromptCall>()
+    val cancels = mutableListOf<Pair<String, String>>()
+    val permissionReplies = mutableListOf<Pair<String, String>>()
+    val extensionReplies = mutableListOf<Pair<String, JsonElement>>()
+    var promptResult: Result<Unit> = Result.success(Unit)
+
+    override suspend fun prompt(
+        serverOrigin: String,
+        agentId: String,
+        sessionId: String,
+        body: PromptRequestBody,
+    ): Result<Unit> {
+        prompts += PromptCall(agentId = agentId, sessionId = sessionId, text = body.text)
+        return promptResult
+    }
+
+    override suspend fun cancel(
+        serverOrigin: String,
+        agentId: String,
+        sessionId: String,
+    ): Result<Unit> {
+        cancels += agentId to sessionId
+        return Result.success(Unit)
+    }
+
+    override suspend fun replyPermission(
+        serverOrigin: String,
+        requestId: String,
+        optionId: String,
+    ): Result<Unit> {
+        permissionReplies += requestId to optionId
+        return Result.success(Unit)
+    }
+
+    override suspend fun replyExtension(
+        serverOrigin: String,
+        requestId: String,
+        result: JsonElement,
+    ): Result<Unit> {
+        extensionReplies += requestId to result
+        return Result.success(Unit)
     }
 }

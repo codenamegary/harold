@@ -39,13 +39,24 @@ interface SessionOwner {
      */
     fun watch(agentId: AgentId?, sessionId: String?)
 
-    fun prompt(text: String, attachments: List<AttachmentReference> = emptyList())
+    /**
+     * Sends the prompt over REST. When the transcript is not yet live (the
+     * stream has not delivered `subscribed`), the prompt is held and posted
+     * once it is; the returned result reports acceptance, not delivery.
+     */
+    suspend fun prompt(
+        text: String,
+        attachments: List<AttachmentReference> = emptyList(),
+    ): Result<Unit>
 
-    fun cancel()
+    /** Posts a cancel for the watched session. */
+    suspend fun cancel(): Result<Unit>
 
-    fun replyPermission(requestId: String, optionId: String)
+    /** Posts a permission reply and clears the pending permission optimistically. */
+    suspend fun replyPermission(requestId: String, optionId: String): Result<Unit>
 
-    fun replyExtension(requestId: String, result: JsonElement)
+    /** Posts an extension reply and clears the pending extension optimistically. */
+    suspend fun replyExtension(requestId: String, result: JsonElement): Result<Unit>
 
     /**
      * Seeds a session's config selectors from data the client already has (the

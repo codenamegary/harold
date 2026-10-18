@@ -15,11 +15,8 @@ import harold.android.session.DefaultSessionGateway
 import harold.android.session.SessionGateway
 import harold.android.user.DefaultUserRepository
 import harold.android.user.UserRepository
-import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 import okhttp3.OkHttpClient
-
-private const val WEB_SOCKET_PING_SECONDS = 20L
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -43,7 +40,6 @@ abstract class AuthModule {
         fun authenticatedClient(credentialHolder: CredentialHolder): OkHttpClient =
             OkHttpClient.Builder()
                 .addInterceptor(BearerAuthInterceptor(credentialHolder::current))
-                .pingInterval(WEB_SOCKET_PING_SECONDS, TimeUnit.SECONDS)
                 .build()
 
         @Provides

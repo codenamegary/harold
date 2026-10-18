@@ -502,7 +502,14 @@ class ChatViewModel @Inject constructor(
                 pendingAttachments = emptyList(),
             )
         }
-        sessionOwner.prompt(prompt, references)
+        viewModelScope.launch {
+            sessionOwner.prompt(prompt, references)
+                .onFailure { error ->
+                    _uiState.update { current ->
+                        current.copy(composerError = error.message ?: "Prompt failed")
+                    }
+                }
+        }
     }
 
     /** Picker intake: bytes are read by the screen, previews decode off-main. */
@@ -669,7 +676,18 @@ class ChatViewModel @Inject constructor(
                 ),
             )
         }
-        sessionOwner.replyPermission(requestId = active.id, optionId = optionId)
+        viewModelScope.launch {
+            sessionOwner.replyPermission(requestId = active.id, optionId = optionId)
+                .onFailure { error ->
+                    _uiState.update { current ->
+                        current.copy(
+                            permissionUiState = current.permissionUiState.copy(
+                                error = error.message ?: "Reply failed",
+                            ),
+                        )
+                    }
+                }
+        }
     }
 
     fun submitCancel() {
@@ -681,9 +699,16 @@ class ChatViewModel @Inject constructor(
         _uiState.update { current ->
             current.copy(cancelSubmitting = true, cancelError = null)
         }
-        sessionOwner.cancel()
-        _uiState.update { current ->
-            current.copy(cancelSubmitting = false)
+        viewModelScope.launch {
+            sessionOwner.cancel()
+                .onFailure { error ->
+                    _uiState.update { current ->
+                        current.copy(cancelError = error.message ?: "Cancel failed")
+                    }
+                }
+            _uiState.update { current ->
+                current.copy(cancelSubmitting = false)
+            }
         }
     }
 
@@ -718,15 +743,31 @@ class ChatViewModel @Inject constructor(
         _uiState.update { current ->
             current.copy(extensionUiState = current.extensionUiState.copy(submitting = true))
         }
-        sessionOwner.replyExtension(requestId = request.requestId, result = parsed)
+        viewModelScope.launch {
+            sessionOwner.replyExtension(requestId = request.requestId, result = parsed)
+                .onFailure { error ->
+                    _uiState.update { current ->
+                        current.copy(
+                            extensionUiState = current.extensionUiState.copy(
+                                error = error.message ?: "Reply failed",
+                            ),
+                        )
+                    }
+                }
+            _uiState.update { current ->
+                current.copy(extensionUiState = current.extensionUiState.copy(submitting = false))
+            }
+        }
     }
 
     fun skipExtension() {
         val request = _uiState.value.extensionUiState.request ?: return
-        sessionOwner.replyExtension(
-            requestId = request.requestId,
-            result = JsonObject(emptyMap()),
-        )
+        viewModelScope.launch {
+            sessionOwner.replyExtension(
+                requestId = request.requestId,
+                result = JsonObject(emptyMap()),
+            )
+        }
     }
 
     fun selectSession(row: SessionRow) {
