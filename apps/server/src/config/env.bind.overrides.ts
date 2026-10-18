@@ -1,11 +1,10 @@
 import { z } from "zod"
-
-const EnvBindHostSchema = z.literal("127.0.0.1")
+import { BindHost, BindHostSchema } from "contracts/http/runtime-settings"
 
 const EnvBindPortSchema = z.coerce.number().int().nonnegative().max(65535)
 
 export type EnvBindOverrides = {
-  bindHost?: "127.0.0.1"
+  bindHost?: BindHost
   bindPort?: number
 }
 
@@ -13,7 +12,7 @@ export const readEnvBindOverrides = (env: Record<string, string | undefined>): E
   const overrides: EnvBindOverrides = {}
 
   if (env.HAROLD_HOST !== undefined) {
-    overrides.bindHost = EnvBindHostSchema.parse(env.HAROLD_HOST)
+    overrides.bindHost = BindHostSchema.parse(env.HAROLD_HOST)
   }
 
   if (env.HAROLD_PORT !== undefined) {

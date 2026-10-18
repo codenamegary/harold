@@ -6,6 +6,7 @@ const makeDeps = (overrides: Partial<GetStatusDeps> = {}): GetStatusDeps => ({
   getVersion: () => "0.2.1",
   getServerState: () => "online",
   getStartedAt: () => "2026-01-01T00:00:00.000Z",
+  getBindAddress: () => "127.0.0.1",
   getBindPort: () => 3847,
   getAcpStatus: () => ({ state: "ready", activeSessions: 2 }),
   ...overrides,
@@ -23,6 +24,12 @@ describe("makeGetStatus", () => {
       startedAt: "2026-01-01T00:00:00.000Z",
       acp: { state: "ready", activeSessions: 2 },
     })
+  })
+
+  test("reports a wildcard bind address when the server listens on the LAN", () => {
+    const getStatus = makeGetStatus(makeDeps({ getBindAddress: () => "0.0.0.0" }))
+
+    expect(getStatus().bindAddress).toBe("0.0.0.0")
   })
 
   test("reads live runtime and ACP state on every call", () => {

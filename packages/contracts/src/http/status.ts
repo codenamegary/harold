@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { TimestampSchema } from "./primitives"
+import { BindHostSchema } from "./runtime-settings"
 
 export const HaroldStateSchema = z.enum(["starting", "online", "shutting_down", "offline"])
 
@@ -10,7 +11,7 @@ export const AcpStateSchema = z.enum(["stopped", "starting", "ready", "error"])
 export const StatusSchema = z.strictObject({
   version: z.string().min(1),
   state: HaroldStateSchema,
-  bindAddress: z.literal("127.0.0.1"),
+  bindAddress: BindHostSchema,
   port: z.number().int().positive(),
   startedAt: TimestampSchema,
   acp: z.strictObject({

@@ -250,7 +250,7 @@ describe("PATCH /v1/settings/runtime", () => {
     expect(body.errors[0]?.pointer).toBe("#")
   })
 
-  test("returns Problem+JSON for non-loopback bind host", async () => {
+  test("accepts a wildcard bind host and sets restartRequired", async () => {
     const { app } = await createTestApp()
 
     const response = await app.inject({
@@ -258,6 +258,24 @@ describe("PATCH /v1/settings/runtime", () => {
       method: "PATCH",
       url: "/v1/settings/runtime",
       payload: { bindHost: "0.0.0.0" },
+    })
+
+    const body = UpdateRuntimeSettingsResponseSchema.parse(JSON.parse(response.body))
+
+    expect(response.statusCode).toBe(200)
+    expect(body.settings.bindHost).toBe("0.0.0.0")
+    expect(body.effective.bindHost).toBe("127.0.0.1")
+    expect(body.restartRequired).toBe(true)
+  })
+
+  test("returns Problem+JSON for a bind host that is not an IP address", async () => {
+    const { app } = await createTestApp()
+
+    const response = await app.inject({
+      headers: authHeaders(app),
+      method: "PATCH",
+      url: "/v1/settings/runtime",
+      payload: { bindHost: "harold.local" },
     })
 
     const body = ValidationProblemSchema.parse(JSON.parse(response.body))

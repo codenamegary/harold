@@ -18,7 +18,7 @@ export type VerifyAdvertisedEndpoint = (
 
 const invalidSchemeFailure = (advertisedUrl: string): ReachabilityFailure => ({
   kind: "invalid_scheme",
-  detail: `"${advertisedUrl}" must be an absolute https URL, or an http URL on a loopback host`,
+  detail: `"${advertisedUrl}" must be an absolute https URL, or an http URL on a loopback or private-network host`,
 })
 
 const is2xx = (status: number): boolean => status >= 200 && status <= 299
@@ -27,8 +27,8 @@ const is2xx = (status: number): boolean => status >= 200 && status <= 299
  * Verifies an advertised endpoint the way a device would: resolve the
  * `GET /v1/status` URL, fetch it through the injected port, require 2xx, and
  * parse the body with the Status contract. Validation reuses the shared
- * reachability rule in `contracts/http/runtime-settings` (#313): https
- * everywhere, http only on loopback hosts.
+ * reachability rule in `contracts/http/runtime-settings`: https everywhere,
+ * http only on loopback and private-network hosts.
  */
 export const makeVerifyAdvertisedEndpoint =
   (deps: VerifyAdvertisedEndpointDeps): VerifyAdvertisedEndpoint =>

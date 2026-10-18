@@ -78,13 +78,45 @@ describe("RuntimeSettingsSchema", () => {
     ).toThrow()
   })
 
-  test("rejects http advertised URL on a non-loopback local address", () => {
-    expect(
-      RuntimeSettingsSchema.safeParse({
-        ...validSettings,
-        advertisedUrl: "http://192.168.1.10:3847",
-      }).success,
-    ).toBe(false)
+  test("accepts http advertised URLs on private network hosts", () => {
+    const urls = [
+      "http://10.0.0.236:3847",
+      "http://172.16.4.2:3847",
+      "http://192.168.1.10:3847",
+      "http://169.254.10.20:3847",
+      "http://100.64.0.9:3847",
+      "http://[fd00::1]:3847",
+      "http://[fe80::1]:3847",
+      "http://harold.local:3847",
+      "http://harold.internal:3847",
+      "http://harold.home.arpa:3847",
+      "http://harold:3847",
+    ]
+
+    for (const advertisedUrl of urls) {
+      expect(
+        RuntimeSettingsSchema.safeParse({
+          ...validSettings,
+          advertisedUrl,
+        }).success,
+      ).toBe(true)
+    }
+  })
+
+  test("rejects http advertised URLs on public hosts", () => {
+    for (const advertisedUrl of [
+      "http://agents.example.com",
+      "http://8.8.8.8:3847",
+      "http://0.0.0.0:3847",
+      "http://[::]:3847",
+    ]) {
+      expect(
+        RuntimeSettingsSchema.safeParse({
+          ...validSettings,
+          advertisedUrl,
+        }).success,
+      ).toBe(false)
+    }
   })
 
   test("rejects malformed loopback http advertised URL", () => {
@@ -105,11 +137,22 @@ describe("RuntimeSettingsSchema", () => {
     ).toThrow()
   })
 
-  test("rejects non-loopback bind host", () => {
+  test("accepts wildcard and private bind hosts", () => {
+    for (const bindHost of ["0.0.0.0", "::", "10.0.0.236", "192.168.1.10", "fd00::1"]) {
+      expect(
+        RuntimeSettingsSchema.safeParse({
+          ...validSettings,
+          bindHost,
+        }).success,
+      ).toBe(true)
+    }
+  })
+
+  test("rejects a bind host that is not an IP address", () => {
     expect(() =>
       RuntimeSettingsSchema.parse({
         ...validSettings,
-        bindHost: "0.0.0.0",
+        bindHost: "harold.local",
       }),
     ).toThrow()
   })
@@ -157,7 +200,15 @@ describe("UpdateRuntimeSettingsBodySchema", () => {
     })
   })
 
-  test("rejects non-loopback http advertised URL patch", () => {
+  test("accepts private network http advertised URL patch", () => {
+    expect(
+      UpdateRuntimeSettingsBodySchema.parse({ advertisedUrl: "http://192.168.1.10:3847" }),
+    ).toEqual({
+      advertisedUrl: "http://192.168.1.10:3847",
+    })
+  })
+
+  test("rejects public http advertised URL patch", () => {
     expect(
       UpdateRuntimeSettingsBodySchema.safeParse({
         advertisedUrl: "http://agents.example.com",

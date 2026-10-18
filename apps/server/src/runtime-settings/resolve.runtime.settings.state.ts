@@ -1,4 +1,5 @@
 import {
+  BindHost,
   RuntimeSettings,
   RuntimeSettingsEffective,
   RuntimeSettingsOverrides,
@@ -14,7 +15,7 @@ export type ResolveEffectiveBindInput = {
 }
 
 export type ResolveEffectiveBindResult = {
-  bindHost: "127.0.0.1"
+  bindHost: BindHost
   bindPort: number
   overrides: RuntimeSettingsOverrides
 }
@@ -25,14 +26,12 @@ export const resolveEffectiveBind = (
   const { persisted, envOverrides } = input
   const overrides: RuntimeSettingsOverrides = {}
 
-  const bindHost =
-    envOverrides.bindHost === undefined ? persisted.bindHost : envOverrides.bindHost
+  const bindHost = envOverrides.bindHost === undefined ? persisted.bindHost : envOverrides.bindHost
   if (envOverrides.bindHost !== undefined) {
     overrides.bindHost = "env"
   }
 
-  const bindPort =
-    envOverrides.bindPort === undefined ? persisted.bindPort : envOverrides.bindPort
+  const bindPort = envOverrides.bindPort === undefined ? persisted.bindPort : envOverrides.bindPort
   if (envOverrides.bindPort !== undefined) {
     overrides.bindPort = "env"
   }

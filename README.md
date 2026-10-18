@@ -36,7 +36,8 @@ Harold is a proxy, you can point to it just like any other http server. Harold o
 - Point a DNS record at the IP where you're running Harold
 - or Tailscale
 - or ngrok
-- or reverse tunnel from your Harold machine through a VPS...
+- or reverse tunnel from your Harold machine through a VPS
+- or a trusted local network over plain HTTP (see below)
 
 ```bash
 #!/usr/bin/env bash
@@ -77,6 +78,26 @@ exec ssh \
   -R "0.0.0.0:${REMOTE_PORT}:127.0.0.1:${LOCAL_PORT}" \
   "$REMOTE_HOST"
 ```
+
+### Trusted local network over HTTP
+
+Harold binds loopback by default. To reach it from a phone on the same trusted
+network without a TLS proxy:
+
+```bash
+HAROLD_HOST=0.0.0.0 harold start
+harold connect --lan    # detects the LAN address and persists bindHost + advertisedUrl
+harold pair
+```
+
+Pass an address explicitly with `harold connect --lan 192.168.1.10`. The command
+only accepts private-network addresses, never public ones. If Harold was already
+running on the default loopback bind, it saves the settings and prints the
+restart command.
+
+Plain HTTP sends the device credential and session traffic in cleartext. Use it
+only on a network you trust. For public access, use HTTPS through Tailscale, a
+reverse proxy, or a tunnel.
 
 ## Harold cli
 
@@ -133,6 +154,6 @@ The Harold API listens on `127.0.0.1:3847`. Every route except `GET /v1/status` 
 
 | Variable          | Default     | Meaning                              |
 | ----------------- | ----------- | ------------------------------------ |
-| `HAROLD_HOST`     | `127.0.0.1` | Loopback bind address                |
+| `HAROLD_HOST`     | `127.0.0.1` | Bind address (`0.0.0.0` for the LAN) |
 | `HAROLD_PORT`     | `3847`      | Device API port                      |
 | `HAROLD_DATA_DIR` | `~/.harold` | Database, logs, and runtime settings |

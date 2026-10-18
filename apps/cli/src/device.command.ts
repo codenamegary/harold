@@ -1,5 +1,6 @@
 import { Command } from "commander"
 import pc from "picocolors"
+import { localApiUrl } from "core/status/summary.models"
 import { parseConfig } from "server/config"
 import { AgentDatabase, openDatabase } from "server/database"
 import { assembleDeviceSlice, DeviceSlice } from "server/device"
@@ -20,7 +21,7 @@ const openDeviceCommandContext = (): DeviceCommandContext => {
   })
   const slice = assembleDeviceSlice({
     database,
-    loopbackEndpoint: `http://${config.host}:${config.port}`,
+    loopbackEndpoint: localApiUrl({ host: config.host, port: config.port }),
     getAdvertisedEndpointSettings: () => {
       const settings = runtimeSettingsStore.get()
       return {

@@ -16,7 +16,14 @@ describe("readEnvBindOverrides", () => {
     })
   })
 
-  test("rejects non-loopback host", () => {
-    expect(() => readEnvBindOverrides({ HAROLD_HOST: "0.0.0.0" })).toThrow()
+  test("reads wildcard and private bind host overrides", () => {
+    expect(readEnvBindOverrides({ HAROLD_HOST: "0.0.0.0" })).toEqual({ bindHost: "0.0.0.0" })
+    expect(readEnvBindOverrides({ HAROLD_HOST: "10.0.0.236" })).toEqual({
+      bindHost: "10.0.0.236",
+    })
+  })
+
+  test("rejects a hostname", () => {
+    expect(() => readEnvBindOverrides({ HAROLD_HOST: "harold.local" })).toThrow()
   })
 })
