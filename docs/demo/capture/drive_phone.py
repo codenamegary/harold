@@ -35,7 +35,9 @@ MODEL = os.environ.get("MODEL", "deepseek/DeepSeek V4.1 Flash")
 EFFORT_TARGET = os.environ.get("EFFORT_TARGET", "High")
 MARKS = os.environ.get("MARKS", "marks.log")
 WARM_SECONDS = float(os.environ.get("WARM_SECONDS", "25"))
-START = time.time()
+# Marks are durations, not wall-clock dates. A monotonic clock keeps them
+# ordered even if the host clock is adjusted during the walk.
+START = time.monotonic()
 
 UI_LABELS = {
     "New session",
@@ -69,9 +71,10 @@ VOICE_LABELS = {
 
 
 def mark(name):
+    now = time.monotonic()
     with open(MARKS, "a") as handle:
-        handle.write(f"{name} {time.time():.3f}\n")
-    print(f"[{time.time() - START:6.1f}s] {name}", flush=True)
+        handle.write(f"{name} {now:.3f}\n")
+    print(f"[{now - START:6.1f}s] {name}", flush=True)
 
 
 # --- Segmented recording -----------------------------------------------------

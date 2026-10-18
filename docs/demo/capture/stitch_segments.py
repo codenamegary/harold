@@ -31,17 +31,44 @@ def probe(path):
     out = subprocess.check_output(
         [
             "ffprobe", "-v", "error", "-select_streams", "v:0",
-            "-show_entries", "stream=width,height:format=duration",
+            "-show_entries", "stream=width,height,duration:format=duration",
             "-of", "json", str(path),
         ],
         text=True,
     )
     meta = json.loads(out)
+    stream = meta["streams"][0]
+    duration = meta.get("format", {}).get("duration") or stream.get("duration") or 0
     return {
-        "duration": float(meta["format"]["duration"]),
-        "width": int(meta["streams"][0]["width"]),
-        "height": int(meta["streams"][0]["height"]),
+        "duration": float(duration),
+        "width": int(stream["width"]),
+        "height": int(stream["height"]),
     }
+
+
+def hold_frame(path, duration, out):
+    """Extend a single-frame recording to the wall time it was on screen.
+
+    screenrecord sometimes finalizes a short, static segment with one frame
+    and no duration. Loop that frame as a PNG instead of asking ffmpeg to
+    stream-loop a zero-duration video, which never finishes.
+    """
+    frame = out.with_suffix(".png")
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-i", str(path), "-frames:v", "1", str(frame)],
+        check=True,
+    )
+    subprocess.run(
+        [
+            "ffmpeg", "-v", "error", "-y",
+            "-loop", "1", "-i", str(frame),
+            "-t", f"{duration:.3f}", "-r", "30", "-an",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+            "-pix_fmt", "yuv420p", str(out),
+        ],
+        check=True,
+    )
+    frame.unlink(missing_ok=True)
 
 
 def read_marks():
@@ -85,19 +112,28 @@ def main():
     # video_from is the wall time at the segment's video second 0 and offset
     # is the segment's start on the stitched timeline.
     layout = []
+    held = []
     offset = 0.0
     for index, wall_from, wall_to in windows:
         path = SEGMENTS / f"harold-demo-{index:03d}.mp4"
         if not path.exists():
             sys.exit(f"stitch_segments: missing segment {path}")
         duration = probe(path)["duration"]
-        layout.append((wall_from, wall_to, wall_to - duration, duration, offset))
+        if duration < 0.1:
+            # A static short scene can finalize as one frame with no
+            # duration. Hold that frame for the wall time it was recorded.
+            duration = wall_to - wall_from
+            fixed = SEGMENTS / f"harold-demo-{index:03d}-held.mp4"
+            hold_frame(path, duration, fixed)
+            held.append(fixed)
+            path = fixed
+        layout.append((wall_from, wall_to, wall_to - duration, duration, offset, path))
         offset += duration
     total = offset
 
     def map_wall(t):
         """Wall time (seconds since driver_start) -> stitched video time."""
-        for wall_from, wall_to, video_from, duration, seg_offset in layout:
+        for wall_from, wall_to, video_from, duration, seg_offset, _ in layout:
             if wall_from > t:
                 return seg_offset  # fired in a gap: next segment picks it up
             if t <= wall_to:
@@ -122,10 +158,7 @@ def main():
     # faststart output instead of trusting stream-copy timestamps.
     concat_list = PUBLIC / ".phone-concat.txt"
     concat_list.write_text(
-        "".join(
-            f"file '{(SEGMENTS / f'harold-demo-{index:03d}.mp4').resolve()}'\n"
-            for index, *_ in windows
-        )
+        "".join(f"file '{path.resolve()}'\n" for *_, path in layout)
     )
     out = PUBLIC / "phone.mp4"
     subprocess.run(
@@ -138,6 +171,8 @@ def main():
         check=True,
     )
     concat_list.unlink()
+    for path in held:
+        path.unlink(missing_ok=True)
 
     meta = probe(out)
     raw_events = [
@@ -148,7 +183,7 @@ def main():
     # Unrecorded wall ranges, for provenance.
     cuts = []
     cursor = 0.0
-    for wall_from, wall_to, _, _, _ in layout:
+    for wall_from, wall_to, *_ in layout:
         if wall_from > cursor:
             cuts.append({"from": round(cursor, 3), "to": round(wall_from, 3)})
         cursor = wall_to

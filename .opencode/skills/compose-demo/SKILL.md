@@ -25,9 +25,9 @@ All under `docs/demo/capture/` unless noted:
   `bash docs/demo/capture/capture.sh`.
 - `seed_sessions.sh` — creates the five OpenCode sessions the phone's session
   menu shows, with `opencode run --title`. It declares the titles newest
-  first, creates them oldest first, and skips the work when the five newest
-  sessions already match. Sessions are created in the main checkout so they
-  survive worktree removal.
+  first, creates them oldest first, pins their stored update times in display
+  order, and skips the work when the five newest sessions already match.
+  Sessions are created in the main checkout so they survive worktree removal.
 - `compose_camera.mjs <source.mp4> [qr.png] <out.mp4>` — builds the camera
   feed: optional live-QR paste over the staged panel (per-frame connected-
   component tracking), then a geometry pass (rotate 90° CCW, cover-crop to
@@ -48,9 +48,10 @@ All under `docs/demo/capture/` unless noted:
 - `stitch_segments.py` — pairs up the `rec_start_NNN`/`rec_end_NNN` marks,
   concatenates the per-segment recordings (each anchored to its `rec_end`),
   re-encodes `docs/demo/render/public/phone.mp4`, and rewrites
-  `capture.json` onto the stitched timeline. Marks fired while recording was
-  off clamp to the start of the next segment; the removed wall ranges are
-  kept under `cuts`.
+  `capture.json` onto the stitched timeline. A short static segment that
+  finalizes as one frame with no duration is held for its recorded wall time.
+  Marks fired while recording was off clamp to the start of the next segment;
+  the removed wall ranges are kept under `cuts`.
 - `push_assets.sh` — extracts `assets/cats.zip` into the capture work
   directory and pushes only photos missing from `/sdcard/DCIM/Camera`
   (same name and size are skipped). It also pushes `assets/cat-diary.txt`
