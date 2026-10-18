@@ -23,8 +23,7 @@
     "./http/filesystem.browse": "./src/http/filesystem.browse.ts",
     "./http/attachments": "./src/http/attachments.ts",
     "./pairing/qr-uri": "./src/pairing/qr-uri.ts",
-    "./events/primitives": "./src/events/primitives.ts",
-    "./events/stream.auth": "./src/events/stream.auth.ts"
+    "./events/primitives": "./src/events/primitives.ts"
   },
   "scripts": {
     "lint": "oxlint --deny-warnings",

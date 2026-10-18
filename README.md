@@ -14,7 +14,7 @@ https://github.com/user-attachments/assets/5dc549a7-99e0-4198-aca5-9b34fce9496f
 
 1. Install Harold wherever your agents are.
 
-    Requires [Bun](https://bun.sh).
+   Requires [Bun](https://bun.sh).
 
 ```bash
 bun install -g @codenamegary/harold
@@ -25,13 +25,13 @@ harold pair  # generate a code and show a QR code
 
 2. Download and install the Harold app for Android.
 
-    [https://harold.codenamegary.com](https://harold.codenamegary.com)
+   [https://harold.codenamegary.com](https://harold.codenamegary.com)
 
 3. Launch the app, hit `pair` and scan the QR code from your terminal.
 
 ## Connecting to Harold
 
-Harold is a proxy, you can point to it just like any other server that supports http and websockets. Harold only needs to know what endpoint you've setup to embed it in the QR code, though you can also pair manually using the generated code. You can connect via...
+Harold is a proxy, you can point to it just like any other http server. Harold only needs to know what endpoint you've setup to embed it in the QR code, though you can also pair manually using the generated code. You can connect via...
 
 - Point a DNS record at the IP where you're running Harold
 - or Tailscale
@@ -77,6 +77,7 @@ exec ssh \
   -R "0.0.0.0:${REMOTE_PORT}:127.0.0.1:${LOCAL_PORT}" \
   "$REMOTE_HOST"
 ```
+
 ## Harold cli
 
 ```

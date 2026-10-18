@@ -74,7 +74,7 @@ describe("reverse-proxy recipe", () => {
     expect(text).toContain("harold connect --advertised-url https://")
   })
 
-  test("mentions the WebSocket upgrade the session stream needs", () => {
+  test("keeps session event streams unbuffered through nginx", () => {
     if (recipe === undefined) throw new Error("reverse-proxy recipe missing")
     const { lines, writeLine } = collectLines()
 
@@ -83,7 +83,10 @@ describe("reverse-proxy recipe", () => {
       writeLine,
     })
 
-    expect(output(lines)).toContain("Upgrade")
+    const text = output(lines)
+    expect(text).toContain("proxy_buffering off")
+    expect(text).toContain("X-Accel-Buffering")
+    expect(text).not.toContain("Upgrade")
   })
 })
 
@@ -186,6 +189,7 @@ describe("cloudflared recipe", () => {
     expect(text).toContain("cloudflared tunnel --url http://127.0.0.1:3847")
     expect(text).toContain("trycloudflare.com")
     expect(text).toContain("cloudflared tunnel create")
+    expect(text).toContain("heartbeat")
   })
 })
 

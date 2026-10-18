@@ -44,7 +44,7 @@ The application id was renamed to `harold.android` (formerly `server.agent.andro
 
 ## Transport
 
-Every build type allows cleartext HTTP and WebSocket traffic, so the app can pair with a LAN host over `http://`. One network security config in `src/main` sets this. No trust-all TLS.
+Every build type allows cleartext HTTP traffic, so the app can pair with a LAN host over `http://`. One network security config in `src/main` sets this. No trust-all TLS.
 
 ## Debug and release builds
 
@@ -68,15 +68,18 @@ credential as `Authorization: Bearer`.
 The credential never appears in a URL or a log line.
 
 - HTTP: `GET /v1/workspaces?limit=1` proves the path from the shell.
-- Session stream: `/v1/sessions/stream` over WebSocket while paired. Bearer
-  travels on the HTTP Upgrade. There is no browser-style `auth` first message.
-  Subscribe/switch only when a chat is selected. Presence Online is this open
-  socket.
+- Session events: `GET /v1/sessions/:sessionId/events?agentId=…` as SSE while a
+  chat is selected. Opening the stream is the subscribe; switching sessions
+  closes it and opens another. Presence Online is this open stream. The server
+  sends `: ping` heartbeats every 25 s; roughly 75 s of silence is treated as a
+  retryable disconnect.
+- Commands: prompts, cancels, and permission/extension replies are REST POSTs,
+  independent of the stream.
 
 Reconnect uses `min(250 * 2^(attempt - 1), 4000)` ms with no jitter. A rejected
-credential (HTTP `401`, or close `1008` with reason `unauthorized`) stops
+credential (HTTP `401` on the stream or a command) stops
 auto-retry, clears the local credential, and returns the user to pairing.
-Every other close, slow consumer included, keeps reconnecting.
+Every other disconnect, slow consumer included, keeps reconnecting.
 
 ## CI
 
