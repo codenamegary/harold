@@ -1,6 +1,5 @@
 import Fastify, { FastifyInstance, FastifyRequest } from "fastify"
 import { Writable } from "node:stream"
-import websocket from "@fastify/websocket"
 import multipart from "@fastify/multipart"
 import { z } from "zod"
 import { LogLevel } from "contracts/http/runtime-settings"
@@ -40,7 +39,6 @@ import {
 } from "../acp/agent/inventory"
 import { SpawnAgentProcessFn } from "../acp/supervisor/supervisor.ports"
 import { spawnAgentProcess } from "../acp/supervisor/supervisor.process.adapters"
-import { registerSessionStreamRoutes } from "../session/session.stream.routes"
 import { registerSessionStreamSseRoutes } from "../session/session.stream.sse.routes"
 import { registerSessionCommandsRoutes } from "../session/session.commands.routes"
 import { createAcpPromptTurn } from "../session/hub/acp.hub.prompt"
@@ -83,7 +81,6 @@ export type CreateServerOptions = {
   spawnAgentProcessFn?: SpawnAgentProcessFn
   /** Test seam: replaces the supervisor's agent start used by session routes. */
   startAcpAgentFn?: StartAcpAgent
-  wsAuthFrameTimeoutMs?: number
   /** Interval for SSE `: ping` heartbeat comments on session event streams. */
   sseHeartbeatMs?: number
   logStream?: Writable
@@ -140,7 +137,6 @@ export const createServer = async ({
   acpSupervisor: providedAcpSupervisor,
   spawnAgentProcessFn,
   startAcpAgentFn,
-  wsAuthFrameTimeoutMs,
   sseHeartbeatMs,
   logStream,
   logLevel,
@@ -154,12 +150,6 @@ export const createServer = async ({
   const spawnFn = spawnAgentProcessFn ?? spawnAgentProcess
 
   registerErrorHandler(app)
-
-  await app.register(websocket, {
-    options: {
-      perMessageDeflate: false,
-    },
-  })
 
   await app.register(multipart, {
     limits: {
@@ -369,13 +359,6 @@ export const createServer = async ({
 
   authBroker.subscribe(({ agentId, auth }) => {
     sessionHub.broadcastAuthSessionUpdated({ agentId, auth })
-  })
-
-  registerSessionStreamRoutes(app, {
-    findDeviceByCredentialHash: device.findDeviceByCredentialHash,
-    touchDeviceLastSeen: device.touchDeviceLastSeen,
-    sessionHub,
-    wsAuthFrameTimeoutMs,
   })
 
   registerSessionCommandsRoutes(app, { sessionHub })

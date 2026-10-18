@@ -7,7 +7,6 @@ import {
   claimPairingCodePath,
 } from "contracts/http/pairing-code"
 import { eq } from "drizzle-orm"
-import { WebSocket } from "ws"
 import { bootTestApp, seedTestDevice } from "../test-support/test.harness"
 import { devices } from "../persistence/schema/devices"
 import { Config } from "../config/config"
@@ -28,7 +27,6 @@ const getListeningHttpBase = async (
 
   return {
     httpBase: `http://${config.host}:${address.port}`,
-    wsUrl: `ws://${config.host}:${address.port}/v1/sessions/stream`,
   }
 }
 
@@ -44,13 +42,6 @@ const createPairingCode = async (httpBase: string, credential: string) => {
   return CreatePairingCodeResponseSchema.parse(await createResponse.json())
 }
 
-const websocketUpgradeHeaders = {
-  connection: "upgrade",
-  upgrade: "websocket",
-  "sec-websocket-version": "13",
-  "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==",
-}
-
 const expectUnauthorized = async (response: Response) => {
   expect(response.status).toBe(401)
   expect(response.headers.get("www-authenticate")).toBe(BEARER_CHALLENGE)
@@ -58,43 +49,6 @@ const expectUnauthorized = async (response: Response) => {
   const problem = UnauthorizedProblemSchema.parse(await response.json())
   expect(problem.status).toBe(401)
 }
-
-const waitForCloseCode = (wsUrl: string) =>
-  new Promise<number>((resolve, reject) => {
-    const ws = new WebSocket(wsUrl)
-    const timer = setTimeout(() => {
-      ws.close()
-      reject(new Error("timeout waiting for close"))
-    }, 2_000)
-
-    ws.addEventListener("close", (event) => {
-      clearTimeout(timer)
-      resolve(event.code)
-    })
-
-    ws.addEventListener("unexpected-response", (_req, res) => {
-      clearTimeout(timer)
-      reject(new Error(`unexpected response ${res.statusCode}`))
-    })
-  })
-
-const waitForOpen = (wsUrl: string, headers?: Record<string, string>) =>
-  new Promise<boolean>((resolve, reject) => {
-    const ws = new WebSocket(wsUrl, { headers })
-    const timer = setTimeout(() => {
-      ws.close()
-      reject(new Error("timeout waiting for open"))
-    }, 2_000)
-    ws.addEventListener("open", () => {
-      clearTimeout(timer)
-      ws.close()
-      resolve(true)
-    })
-    ws.addEventListener("unexpected-response", (_req, res) => {
-      clearTimeout(timer)
-      reject(new Error(`unexpected response ${res.statusCode}`))
-    })
-  })
 
 describe("device-only HTTP edge", () => {
   test("unauthenticated request on loopback is rejected on protected routes", async () => {
@@ -171,89 +125,5 @@ describe("device-only HTTP edge", () => {
     })
     expect(claimResponse.status).toBe(201)
     ClaimPairingCodeResponseSchema.parse(await claimResponse.json())
-  })
-})
-
-describe("device auth WebSocket", () => {
-  test("loopback without Bearer and without auth frame fails closed", async () => {
-    const { app, config } = await bootTestApp({ wsAuthFrameTimeoutMs: 200 })
-    const { wsUrl } = await getListeningHttpBase(app, config)
-
-    expect(await waitForCloseCode(wsUrl)).toBe(1008)
-  })
-
-  test("Upgrade Authorization Bearer unlocks event stream", async () => {
-    const { app, config, database } = await bootTestApp()
-    const { wsUrl } = await getListeningHttpBase(app, config)
-    const { credential } = seedTestDevice(database)
-
-    expect(await waitForOpen(wsUrl, authHeaders(credential))).toBe(true)
-  })
-
-  test("bad Upgrade Bearer rejects with 401 challenge", async () => {
-    const { app, config } = await bootTestApp()
-    const { httpBase } = await getListeningHttpBase(app, config)
-
-    const response = await fetch(`${httpBase}/v1/sessions/stream`, {
-      headers: {
-        ...websocketUpgradeHeaders,
-        authorization: "Bearer bad-credential",
-      },
-    })
-
-    expect(response.status).toBe(401)
-    expect(response.headers.get("www-authenticate")).toBe(BEARER_CHALLENGE)
-    UnauthorizedProblemSchema.parse(await response.json())
-  })
-
-  test("first-message auth frame unlocks stream", async () => {
-    const { app, config, database } = await bootTestApp({ wsAuthFrameTimeoutMs: 2_000 })
-    const { wsUrl } = await getListeningHttpBase(app, config)
-    const { credential } = seedTestDevice(database)
-
-    const opened = await new Promise<boolean>((resolve, reject) => {
-      const ws = new WebSocket(wsUrl)
-      const timer = setTimeout(() => {
-        ws.close()
-        reject(new Error("timeout waiting for auth"))
-      }, 2_000)
-
-      ws.addEventListener("open", () => {
-        ws.send(
-          JSON.stringify({
-            type: "auth",
-            authorization: `Bearer ${credential}`,
-          }),
-        )
-        setTimeout(() => {
-          if (ws.readyState === WebSocket.OPEN) {
-            clearTimeout(timer)
-            ws.close()
-            resolve(true)
-          }
-        }, 100)
-      })
-
-      ws.addEventListener("close", (event) => {
-        if (event.code === 1008) {
-          clearTimeout(timer)
-          reject(new Error("closed unauthorized"))
-        }
-      })
-
-      ws.addEventListener("unexpected-response", (_req, res) => {
-        clearTimeout(timer)
-        reject(new Error(`unexpected response ${res.statusCode}`))
-      })
-    })
-
-    expect(opened).toBe(true)
-  })
-
-  test("missing first-message auth fails closed", async () => {
-    const { app, config } = await bootTestApp({ wsAuthFrameTimeoutMs: 200 })
-    const { wsUrl } = await getListeningHttpBase(app, config)
-
-    expect(await waitForCloseCode(wsUrl)).toBe(1008)
   })
 })

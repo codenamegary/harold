@@ -83,13 +83,14 @@ const guideReverseProxy = (deps: { detection: RecipeDetection; writeLine: WriteL
   writeLine("    location / {")
   writeLine(`      proxy_pass http://${localHaroldAddress};`)
   writeLine("      proxy_http_version 1.1;")
-  writeLine("      proxy_set_header Upgrade $http_upgrade;")
-  writeLine('      proxy_set_header Connection "upgrade";')
   writeLine("      proxy_set_header Host $host;")
+  writeLine("      proxy_buffering off;")
   writeLine("    }")
   writeLine("  }")
   writeLine("")
-  writeLine("The Upgrade headers keep the WebSocket session stream working.")
+  writeLine("proxy_buffering off keeps session events (text/event-stream) arriving as they")
+  writeLine("happen; Harold also sends X-Accel-Buffering: no, which disables nginx")
+  writeLine("buffering on its own.")
 
   connectHint(writeLine, "https://harold.example.com")
 }
@@ -150,6 +151,11 @@ const guideCloudflared = (deps: { detection: RecipeDetection; writeLine: WriteLi
   writeLine("  cloudflared tunnel create harold")
   writeLine("  cloudflared tunnel route dns harold harold.example.com")
   writeLine(`  cloudflared tunnel run --url http://${localHaroldAddress} harold`)
+  writeLine("")
+  writeLine("text/event-stream passes through unbuffered. Harold sends a heartbeat")
+  writeLine("every 25 s, which also keeps Cloudflare's ~100 s idle timeout from")
+  writeLine("cutting an otherwise quiet stream. ngrok and tailscale serve/funnel")
+  writeLine("stream text/event-stream unbuffered as-is.")
 
   connectHint(writeLine, "https://harold.example.com")
 }

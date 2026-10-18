@@ -5,7 +5,6 @@ import {
   ReplyParamsSchema,
   SessionCommandParamsSchema,
   SessionCommandQuerySchema,
-  SessionStreamClientMessageSchema,
   SessionStreamServerMessageSchema,
   extensionRepliesPath,
   permissionRepliesPath,
@@ -15,19 +14,7 @@ import {
 } from "./session.stream"
 
 describe("session stream contracts", () => {
-  test("parses subscribe and session_update frames", () => {
-    expect(
-      SessionStreamClientMessageSchema.parse({
-        type: "subscribe",
-        agentId: "cursor",
-        sessionId: "acp-1",
-      }),
-    ).toEqual({
-      type: "subscribe",
-      agentId: "cursor",
-      sessionId: "acp-1",
-    })
-
+  test("parses a session_update frame", () => {
     expect(
       SessionStreamServerMessageSchema.parse({
         type: "session_update",
@@ -85,16 +72,7 @@ describe("session stream contracts", () => {
     ).toThrow()
   })
 
-  test("rejects subscribe without sessionId", () => {
-    expect(() =>
-      SessionStreamClientMessageSchema.parse({
-        type: "subscribe",
-        agentId: "cursor",
-      }),
-    ).toThrow()
-  })
-
-  test("parses extension_request and extension_reply frames", () => {
+  test("parses an extension_request frame", () => {
     expect(
       SessionStreamServerMessageSchema.parse({
         type: "extension_request",
@@ -107,18 +85,6 @@ describe("session stream contracts", () => {
     ).toMatchObject({
       type: "extension_request",
       method: "cursor/ask_question",
-    })
-
-    expect(
-      SessionStreamClientMessageSchema.parse({
-        type: "extension_reply",
-        requestId: "req-1",
-        result: { outcome: { outcome: "skipped" } },
-      }),
-    ).toEqual({
-      type: "extension_reply",
-      requestId: "req-1",
-      result: { outcome: { outcome: "skipped" } },
     })
   })
 

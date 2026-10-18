@@ -1,5 +1,4 @@
 import { z } from "zod"
-import { AttachmentReferenceSchema, MAX_ATTACHMENTS_PER_PROMPT } from "./attachments"
 import { AgentAuthSchema } from "./agent-auth"
 import { AgentId, AgentIdSchema } from "./agent-settings"
 import { SessionConfigSchema } from "./config.options"
@@ -36,53 +35,6 @@ export const SessionCommandQuerySchema = z.strictObject({
 export const ReplyParamsSchema = z.strictObject({
   requestId: z.string().min(1),
 })
-
-export const SessionStreamSubscribeSchema = z.strictObject({
-  type: z.literal("subscribe"),
-  agentId: AgentIdSchema,
-  sessionId: z.string().min(1),
-})
-
-export const SessionStreamSwitchSchema = z.strictObject({
-  type: z.literal("switch"),
-  agentId: AgentIdSchema,
-  sessionId: z.string().min(1),
-})
-
-export const SessionStreamPromptSchema = z.strictObject({
-  type: z.literal("prompt"),
-  agentId: AgentIdSchema,
-  sessionId: z.string().min(1),
-  text: z.string().min(1).max(32_768),
-  attachments: z.array(AttachmentReferenceSchema).max(MAX_ATTACHMENTS_PER_PROMPT).optional(),
-})
-
-export const SessionStreamCancelSchema = z.strictObject({
-  type: z.literal("cancel"),
-  agentId: AgentIdSchema,
-  sessionId: z.string().min(1),
-})
-
-export const SessionStreamPermissionReplySchema = z.strictObject({
-  type: z.literal("permission_reply"),
-  requestId: z.string().min(1),
-  optionId: z.string().min(1),
-})
-
-export const SessionStreamExtensionReplySchema = z.strictObject({
-  type: z.literal("extension_reply"),
-  requestId: z.string().min(1),
-  result: z.unknown(),
-})
-
-export const SessionStreamClientMessageSchema = z.discriminatedUnion("type", [
-  SessionStreamSubscribeSchema,
-  SessionStreamSwitchSchema,
-  SessionStreamPromptSchema,
-  SessionStreamCancelSchema,
-  SessionStreamPermissionReplySchema,
-  SessionStreamExtensionReplySchema,
-])
 
 /** REST body for POST /v1/permissions/:requestId/replies. */
 export const PermissionReplyBodySchema = z.strictObject({
@@ -176,7 +128,6 @@ export const SessionStreamServerMessageSchema = z.discriminatedUnion("type", [
   SessionStreamSessionInfoSchema,
 ])
 
-export type SessionStreamClientMessage = z.infer<typeof SessionStreamClientMessageSchema>
 export type SessionStreamServerMessage = z.infer<typeof SessionStreamServerMessageSchema>
 export type PermissionReplyBody = z.infer<typeof PermissionReplyBodySchema>
 export type ExtensionReplyBody = z.infer<typeof ExtensionReplyBodySchema>

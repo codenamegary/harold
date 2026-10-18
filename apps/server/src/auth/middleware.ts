@@ -27,8 +27,6 @@ const sendUnauthorized = (reply: FastifyReply) =>
     .type("application/problem+json")
     .send(buildUnauthorizedProblem())
 
-const SESSIONS_STREAM_PATH = "/v1/sessions/stream"
-
 const touchDeviceLastSeenForPrincipal = (params: {
   principal: Principal
   touchDeviceLastSeen: TouchDeviceLastSeen
@@ -61,10 +59,7 @@ export const registerAuthMiddleware = (app: FastifyInstance, deps: AuthMiddlewar
     const rejectPresentedInvalid =
       authResult.credentialPresented && authResult.principal.kind === "unauthenticated"
 
-    if (
-      isOpenRoute({ method: request.method, routerPath }) ||
-      routerPath === SESSIONS_STREAM_PATH
-    ) {
+    if (isOpenRoute({ method: request.method, routerPath })) {
       if (rejectPresentedInvalid) {
         return sendUnauthorized(reply)
       }
