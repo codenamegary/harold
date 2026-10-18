@@ -10,8 +10,9 @@ import harold.android.network.AttachmentApi
 import harold.android.network.DefaultAgentApi
 import harold.android.network.DefaultPairingApi
 import harold.android.network.PairingApi
+import harold.android.network.SessionCommandApi
 import harold.android.network.SessionConfigApi
-import harold.android.stream.OkHttpSessionStreamFactory
+import harold.android.stream.OkHttpSseSessionStreamFactory
 import harold.android.stream.SessionStreamFactory
 import javax.inject.Singleton
 import okhttp3.OkHttpClient
@@ -38,7 +39,11 @@ abstract class ApiModule {
 
     @Binds
     @Singleton
-    abstract fun sessionStreamFactory(impl: OkHttpSessionStreamFactory): SessionStreamFactory
+    abstract fun sessionCommandApi(impl: DefaultAgentApi): SessionCommandApi
+
+    @Binds
+    @Singleton
+    abstract fun sessionStreamFactory(impl: OkHttpSseSessionStreamFactory): SessionStreamFactory
 
     companion object {
         @Provides
@@ -60,8 +65,8 @@ abstract class ApiModule {
 
         @Provides
         @Singleton
-        fun okHttpSessionStreamFactory(
+        fun okHttpSseSessionStreamFactory(
             @AuthenticatedClient client: OkHttpClient,
-        ): OkHttpSessionStreamFactory = OkHttpSessionStreamFactory(client = client)
+        ): OkHttpSseSessionStreamFactory = OkHttpSseSessionStreamFactory(client = client)
     }
 }

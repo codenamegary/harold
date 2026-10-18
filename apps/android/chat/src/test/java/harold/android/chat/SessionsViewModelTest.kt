@@ -225,16 +225,18 @@ private class SessionsFakeSessionOwner : SessionOwner {
 
     override fun watch(agentId: AgentId?, sessionId: String?) = Unit
 
-    override fun prompt(
+    override suspend fun prompt(
         text: String,
         attachments: List<AttachmentReference>,
-    ) = Unit
+    ): Result<Unit> = Result.success(Unit)
 
-    override fun cancel() = Unit
+    override suspend fun cancel(): Result<Unit> = Result.success(Unit)
 
-    override fun replyPermission(requestId: String, optionId: String) = Unit
+    override suspend fun replyPermission(requestId: String, optionId: String): Result<Unit> =
+        Result.success(Unit)
 
-    override fun replyExtension(requestId: String, result: JsonElement) = Unit
+    override suspend fun replyExtension(requestId: String, result: JsonElement): Result<Unit> =
+        Result.success(Unit)
 
     override fun rememberConfig(
         agentId: AgentId,

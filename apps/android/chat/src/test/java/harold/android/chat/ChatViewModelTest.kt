@@ -1273,25 +1273,32 @@ private class ChatFakeSessionOwner : SessionOwner {
         }
     }
 
-    override fun prompt(text: String, attachments: List<AttachmentReference>) {
+    override suspend fun prompt(
+        text: String,
+        attachments: List<AttachmentReference>,
+    ): Result<Unit> {
         prompts += text
         val turnId = "turn-${prompts.size}"
         _snapshot.update { current ->
             current.copy(transcript = beginUserTurn(current.transcript, turnId, text))
         }
+        return Result.success(Unit)
     }
 
-    override fun cancel() {
+    override suspend fun cancel(): Result<Unit> {
         cancels += 1
+        return Result.success(Unit)
     }
 
-    override fun replyPermission(requestId: String, optionId: String) {
+    override suspend fun replyPermission(requestId: String, optionId: String): Result<Unit> {
         permissionReplies += requestId to optionId
         _snapshot.update { current -> current.copy(pendingPermission = null) }
+        return Result.success(Unit)
     }
 
-    override fun replyExtension(requestId: String, result: JsonElement) {
+    override suspend fun replyExtension(requestId: String, result: JsonElement): Result<Unit> {
         _snapshot.update { current -> current.copy(extension = null) }
+        return Result.success(Unit)
     }
 
     override fun rememberConfig(agentId: AgentId, sessionId: String, configOptions: List<ConfigOption>) {

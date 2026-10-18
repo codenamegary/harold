@@ -13,7 +13,7 @@ import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AgentCapabilityInventoryEntry
 import harold.android.contracts.AttachmentKind
 import harold.android.contracts.AttachmentReference
-import harold.android.contracts.SessionStreamClientMessage
+import harold.android.contracts.PromptRequestBody
 
 class ComposerCapabilitiesTest {
     private fun inventory(vararg entries: Pair<String, Boolean>): AgentCapabilityInventory =
@@ -93,10 +93,8 @@ class ComposerCapabilitiesTest {
 
 class AttachmentContractsTest {
     @Test
-    fun promptMessageSerializesAttachmentReferences() {
-        val message = SessionStreamClientMessage.Prompt(
-            agentId = "claude-code",
-            sessionId = "session-1",
+    fun promptRequestBodySerializesAttachmentReferences() {
+        val body = PromptRequestBody(
             text = "Summarize this",
             attachments = listOf(
                 AttachmentReference(
@@ -109,12 +107,11 @@ class AttachmentContractsTest {
         )
 
         val encoded = Json.encodeToString(
-            SessionStreamClientMessage.serializer(),
-            message,
+            PromptRequestBody.serializer(),
+            body,
         )
         val element = Json.parseToJsonElement(encoded).jsonObject
 
-        assertEquals("prompt", element["type"]?.toString()?.removeSurrounding("\""))
         val attachments = requireNotNull(element["attachments"]).jsonArray
         assertTrue(attachments.size == 1)
         val first = attachments.first().jsonObject
@@ -127,20 +124,14 @@ class AttachmentContractsTest {
     }
 
     @Test
-    fun promptMessageDefaultsToNoAttachments() {
-        val message = SessionStreamClientMessage.Prompt(
-            agentId = "claude-code",
-            sessionId = "session-1",
-            text = "hello",
-        )
-
+    fun promptRequestBodyDefaultsToNoAttachments() {
         val encoded = Json.encodeToString(
-            SessionStreamClientMessage.serializer(),
-            message,
+            PromptRequestBody.serializer(),
+            PromptRequestBody(text = "hello"),
         )
         val element = Json.parseToJsonElement(encoded).jsonObject
 
-        assertEquals("prompt", element["type"]?.toString()?.removeSurrounding("\""))
+        assertEquals("hello", (element["text"] as JsonPrimitive).content)
         assertEquals(null, element["attachments"])
     }
 

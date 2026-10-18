@@ -14,10 +14,12 @@ import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectoryCollection
+import harold.android.contracts.PromptRequestBody
 import harold.android.contracts.RuntimeSettingsView
 import harold.android.contracts.SessionCollection
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
+import kotlinx.serialization.json.JsonElement
 
 sealed interface AgentApiError {
     /** Terminal: the credential is missing, revoked, or rejected. */
@@ -132,5 +134,38 @@ interface SessionConfigApi {
         sessionId: String,
         configId: String,
         value: ConfigValue,
+    ): Result<Unit>
+}
+
+/**
+ * Command surface for the watched session: prompts and cancels go to
+ * `/v1/sessions/:id/prompts|cancel`, permission and extension replies go to
+ * `/v1/permissions|extensions/:requestId/replies`. Commands are independent
+ * of the SSE event stream — each call succeeds or fails on its own.
+ */
+interface SessionCommandApi {
+    suspend fun prompt(
+        serverOrigin: String,
+        agentId: AgentId,
+        sessionId: String,
+        body: PromptRequestBody,
+    ): Result<Unit>
+
+    suspend fun cancel(
+        serverOrigin: String,
+        agentId: AgentId,
+        sessionId: String,
+    ): Result<Unit>
+
+    suspend fun replyPermission(
+        serverOrigin: String,
+        requestId: String,
+        optionId: String,
+    ): Result<Unit>
+
+    suspend fun replyExtension(
+        serverOrigin: String,
+        requestId: String,
+        result: JsonElement,
     ): Result<Unit>
 }

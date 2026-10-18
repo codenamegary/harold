@@ -4,52 +4,27 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
+/**
+ * REST body for `POST /v1/sessions/:sessionId/prompts`. The watched session
+ * travels in the path and the `agentId` query parameter, not the body.
+ */
 @Serializable
-sealed interface SessionStreamClientMessage {
-    @Serializable
-    @SerialName("subscribe")
-    data class Subscribe(
-        val agentId: AgentId,
-        val sessionId: String,
-    ) : SessionStreamClientMessage
+data class PromptRequestBody(
+    val text: String,
+    val attachments: List<AttachmentReference> = emptyList(),
+)
 
-    @Serializable
-    @SerialName("switch")
-    data class Switch(
-        val agentId: AgentId,
-        val sessionId: String,
-    ) : SessionStreamClientMessage
+/** REST body for `POST /v1/permissions/:requestId/replies`. */
+@Serializable
+data class PermissionReplyBody(
+    val optionId: String,
+)
 
-    @Serializable
-    @SerialName("prompt")
-    data class Prompt(
-        val agentId: AgentId,
-        val sessionId: String,
-        val text: String,
-        val attachments: List<AttachmentReference> = emptyList(),
-    ) : SessionStreamClientMessage
-
-    @Serializable
-    @SerialName("cancel")
-    data class Cancel(
-        val agentId: AgentId,
-        val sessionId: String,
-    ) : SessionStreamClientMessage
-
-    @Serializable
-    @SerialName("permission_reply")
-    data class PermissionReply(
-        val requestId: String,
-        val optionId: String,
-    ) : SessionStreamClientMessage
-
-    @Serializable
-    @SerialName("extension_reply")
-    data class ExtensionReply(
-        val requestId: String,
-        val result: JsonElement,
-    ) : SessionStreamClientMessage
-}
+/** REST body for `POST /v1/extensions/:requestId/replies`. */
+@Serializable
+data class ExtensionReplyBody(
+    val result: JsonElement,
+)
 
 @Serializable
 sealed interface SessionStreamServerMessage {

@@ -1,6 +1,7 @@
 package harold.android.contracts
 
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
@@ -455,6 +456,58 @@ class ContractDecodingTest {
                 """.trimIndent(),
             )
         }
+    }
+
+    @Test
+    fun promptRequestBodySerializesAttachments() {
+        val encoded = HaroldJson.encodeToString(
+            PromptRequestBody.serializer(),
+            PromptRequestBody(
+                text = "Summarize this",
+                attachments = listOf(
+                    AttachmentReference(
+                        kind = AttachmentKind.Image,
+                        name = "shot.png",
+                        mimeType = "image/png",
+                        path = "/ws/.harold/attachments/att_1.png",
+                    ),
+                ),
+            ),
+        )
+
+        val element = HaroldJson.parseToJsonElement(encoded).jsonObject
+        assertEquals("Summarize this", element["text"]?.jsonPrimitive?.content)
+        val attachments = requireNotNull(element["attachments"]).jsonArray
+        val first = attachments.single().jsonObject
+        assertEquals("image", first["kind"]?.jsonPrimitive?.content)
+        assertEquals("shot.png", first["name"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun promptRequestBodyOmitsAttachmentsWhenEmpty() {
+        val encoded = HaroldJson.encodeToString(
+            PromptRequestBody.serializer(),
+            PromptRequestBody(text = "hello"),
+        )
+
+        val element = HaroldJson.parseToJsonElement(encoded).jsonObject
+        assertEquals("hello", element["text"]?.jsonPrimitive?.content)
+        assertNull(element["attachments"])
+    }
+
+    @Test
+    fun replyBodiesSerializeTheirPayloads() {
+        val permission = HaroldJson.encodeToString(
+            PermissionReplyBody.serializer(),
+            PermissionReplyBody(optionId = "allow-once"),
+        )
+        assertEquals("""{"optionId":"allow-once"}""", permission)
+
+        val extension = HaroldJson.encodeToString(
+            ExtensionReplyBody.serializer(),
+            ExtensionReplyBody(result = kotlinx.serialization.json.JsonPrimitive("done")),
+        )
+        assertEquals("""{"result":"done"}""", extension)
     }
 
     private fun assertThrowsSerialization(block: () -> Unit) {

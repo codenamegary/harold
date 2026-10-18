@@ -3,6 +3,7 @@ package harold.android.network
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.HttpUrl
@@ -27,11 +28,14 @@ import harold.android.contracts.ConflictProblem
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.CreateWorkspaceBody
+import harold.android.contracts.ExtensionReplyBody
 import harold.android.contracts.FilesystemDirectoryCollection
 import harold.android.contracts.InternalProblem
 import harold.android.contracts.ItemCollection
 import harold.android.contracts.NotFoundProblem
+import harold.android.contracts.PermissionReplyBody
 import harold.android.contracts.ProblemDetails
+import harold.android.contracts.PromptRequestBody
 import harold.android.contracts.RuntimeSettingsView
 import harold.android.contracts.Session
 import harold.android.contracts.SessionCollection
@@ -42,7 +46,64 @@ import harold.android.contracts.WorkspaceCollection
 class DefaultAgentApi(
     private val client: OkHttpClient,
     private val json: Json = HaroldJson,
-) : AgentApi, AttachmentApi, SessionConfigApi {
+) : AgentApi, AttachmentApi, SessionConfigApi, SessionCommandApi {
+    override suspend fun prompt(
+        serverOrigin: String,
+        agentId: AgentId,
+        sessionId: String,
+        body: PromptRequestBody,
+    ): Result<Unit> = request(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/sessions/$sessionId/prompts",
+        query = mapOf("agentId" to agentId),
+        method = "POST",
+        body = json.encodeToString(PromptRequestBody.serializer(), body),
+        decode = { Unit },
+    )
+
+    override suspend fun cancel(
+        serverOrigin: String,
+        agentId: AgentId,
+        sessionId: String,
+    ): Result<Unit> = request(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/sessions/$sessionId/cancel",
+        query = mapOf("agentId" to agentId),
+        method = "POST",
+        // OkHttp requires a POST body; the server ignores it.
+        body = "{}",
+        decode = { Unit },
+    )
+
+    override suspend fun replyPermission(
+        serverOrigin: String,
+        requestId: String,
+        optionId: String,
+    ): Result<Unit> = request(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/permissions/$requestId/replies",
+        query = emptyMap(),
+        method = "POST",
+        body = json.encodeToString(PermissionReplyBody.serializer(), PermissionReplyBody(optionId)),
+        decode = { Unit },
+    )
+
+    override suspend fun replyExtension(
+        serverOrigin: String,
+        requestId: String,
+        result: JsonElement,
+    ): Result<Unit> = request(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/extensions/$requestId/replies",
+        query = emptyMap(),
+        method = "POST",
+        body = json.encodeToString(
+            ExtensionReplyBody.serializer(),
+            ExtensionReplyBody(result = result),
+        ),
+        decode = { Unit },
+    )
+
     override suspend fun listWorkspaces(
         serverOrigin: String,
         limit: Int,

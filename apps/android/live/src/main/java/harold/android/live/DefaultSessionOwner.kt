@@ -3,7 +3,7 @@ package harold.android.live
 import harold.android.contracts.AgentId
 import harold.android.contracts.AttachmentReference
 import harold.android.contracts.ConfigOption
-import harold.android.contracts.SessionStreamClientMessage
+import harold.android.contracts.PromptRequestBody
 import harold.android.contracts.SessionStreamServerMessage
 import harold.android.contracts.catalogSessionKey
 import harold.android.contracts.parseAvailableCommands
@@ -11,6 +11,7 @@ import harold.android.contracts.parseConfigOptions
 import harold.android.di.ApplicationScope
 import harold.android.live.composer.AvailableCommandsCatalog
 import harold.android.live.composer.SessionConfigCatalog
+import harold.android.network.SessionCommandApi
 import harold.android.stream.ConnectionSignal
 import harold.android.stream.ConnectionState
 import harold.android.stream.ConnectionStatus
@@ -37,13 +38,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import kotlinx.serialization.json.JsonElement
 
 /**
- * One socket, one unbounded inbox, one pump. Chat never sees a raw frame.
+ * One event stream, one unbounded inbox, one pump. Chat never sees a raw
+ * frame. Commands do not travel on the stream: they are REST calls through
+ * [SessionCommandApi], so each one succeeds or fails on its own.
  */
 class DefaultSessionOwner @Inject constructor(
     private val streamFactory: SessionStreamFactory,
+    private val commandApi: SessionCommandApi,
     @ApplicationScope private val scope: CoroutineScope,
 ) : SessionOwner {
     private val lock = Any()
@@ -74,9 +79,26 @@ class DefaultSessionOwner @Inject constructor(
     private var stream: SessionStream? = null
     private var watchAgentId: AgentId? = null
     private var watchSessionId: String? = null
-    private var subscribedKey: String? = null
     private var pendingPrompt: String? = null
     private var turnSerial: Int = 0
+
+    /**
+     * Wakes the connect loop whenever the watch target changes. Conflated: a
+     * change arriving mid-backoff or mid-read is picked up at the next wait
+     * point, and a stale notification is ignored when the loop already
+     * reopened for the new target.
+     */
+    private val watchChanges = Channel<Unit>(capacity = Channel.CONFLATED)
+
+    private data class WatchTarget(val agentId: AgentId, val sessionId: String)
+
+    private fun currentWatchTarget(): WatchTarget? {
+        synchronized(lock) {
+            val agentId = watchAgentId ?: return null
+            val sessionId = watchSessionId ?: return null
+            return WatchTarget(agentId = agentId, sessionId = sessionId)
+        }
+    }
 
     override fun connect(serverOrigin: String) {
         val movedServer = this.serverOrigin?.let { it != serverOrigin } ?: false
@@ -85,7 +107,6 @@ class DefaultSessionOwner @Inject constructor(
         loop?.cancel()
         stream?.close()
         stream = null
-        subscribedKey = null
 
         if (movedServer) {
             _connectionState.value = ConnectionState()
@@ -119,7 +140,6 @@ class DefaultSessionOwner @Inject constructor(
             pendingPrompt = null
             watchAgentId = null
             watchSessionId = null
-            subscribedKey = null
             commandsCatalog.clear()
             configCatalog.clear()
             _sessionTitles.value = emptyMap()
@@ -132,25 +152,34 @@ class DefaultSessionOwner @Inject constructor(
         val normalizedSession = sessionId?.takeIf { it.isNotEmpty() }
         synchronized(lock) {
             if (watchAgentId == agentId && watchSessionId == normalizedSession) {
-                // Same target. Resend subscribe if the socket just came up.
-            } else {
-                replaceInboxLocked()
-                pendingPrompt = null
-                watchAgentId = agentId
-                watchSessionId = normalizedSession
-                _snapshot.value = emptyLiveSnapshotLocked(reconnecting = false)
+                // Same target: the reconnect loop re-opens with it, so there
+                // is nothing to resend on a fresh stream.
+                return
             }
+            replaceInboxLocked()
+            pendingPrompt = null
+            watchAgentId = agentId
+            watchSessionId = normalizedSession
+            _snapshot.value = emptyLiveSnapshotLocked(reconnecting = false)
         }
-        sendSubscribeForTarget()
+        watchChanges.trySend(Unit)
     }
 
-    override fun prompt(text: String, attachments: List<AttachmentReference>) {
+    override suspend fun prompt(text: String, attachments: List<AttachmentReference>): Result<Unit> {
         val agentId: AgentId
         val sessionId: String
+        val origin: String
         val live: Boolean
         synchronized(lock) {
-            agentId = watchAgentId ?: return
-            sessionId = watchSessionId ?: return
+            val targetAgent = watchAgentId
+                ?: return Result.failure(IllegalStateException("No session is being watched"))
+            val targetSession = watchSessionId
+                ?: return Result.failure(IllegalStateException("No session is being watched"))
+            val targetOrigin = serverOrigin
+                ?: return Result.failure(IllegalStateException("Not connected to a server"))
+            agentId = targetAgent
+            sessionId = targetSession
+            origin = targetOrigin
             val turnId = nextTurnIdLocked()
             _snapshot.update { current ->
                 current.copy(
@@ -168,35 +197,33 @@ class DefaultSessionOwner @Inject constructor(
                 pendingPrompt = text
             }
         }
-        if (live) {
-            stream?.send(
-                SessionStreamClientMessage.Prompt(
-                    agentId = agentId,
-                    sessionId = sessionId,
-                    text = text,
-                    attachments = attachments,
-                ),
-            )
+        if (!live) {
+            // Held until `subscribed`; the flush posts it on the command API.
+            return Result.success(Unit)
         }
+        return commandApi.prompt(origin, agentId, sessionId, PromptRequestBody(text, attachments))
     }
 
-    override fun cancel() {
+    override suspend fun cancel(): Result<Unit> {
         val agentId: AgentId
         val sessionId: String
+        val origin: String
         synchronized(lock) {
-            agentId = watchAgentId ?: return
-            sessionId = watchSessionId ?: return
+            origin = serverOrigin
+                ?: return Result.failure(IllegalStateException("Not connected to a server"))
+            agentId = watchAgentId
+                ?: return Result.failure(IllegalStateException("No session is being watched"))
+            sessionId = watchSessionId
+                ?: return Result.failure(IllegalStateException("No session is being watched"))
         }
-        stream?.send(
-            SessionStreamClientMessage.Cancel(
-                agentId = agentId,
-                sessionId = sessionId,
-            ),
-        )
+        return commandApi.cancel(origin, agentId, sessionId)
     }
 
-    override fun replyPermission(requestId: String, optionId: String) {
+    override suspend fun replyPermission(requestId: String, optionId: String): Result<Unit> {
+        val origin: String
         synchronized(lock) {
+            origin = serverOrigin
+                ?: return Result.failure(IllegalStateException("Not connected to a server"))
             _snapshot.update { current ->
                 current.copy(
                     transcript = applyPermissionResolved(current.transcript),
@@ -204,26 +231,19 @@ class DefaultSessionOwner @Inject constructor(
                 )
             }
         }
-        stream?.send(
-            SessionStreamClientMessage.PermissionReply(
-                requestId = requestId,
-                optionId = optionId,
-            ),
-        )
+        return commandApi.replyPermission(origin, requestId, optionId)
     }
 
-    override fun replyExtension(requestId: String, result: JsonElement) {
+    override suspend fun replyExtension(requestId: String, result: JsonElement): Result<Unit> {
+        val origin: String
         synchronized(lock) {
+            origin = serverOrigin
+                ?: return Result.failure(IllegalStateException("Not connected to a server"))
             _snapshot.update { current ->
                 current.copy(extension = null)
             }
         }
-        stream?.send(
-            SessionStreamClientMessage.ExtensionReply(
-                requestId = requestId,
-                result = result,
-            ),
-        )
+        return commandApi.replyExtension(origin, requestId, result)
     }
 
     override fun rememberConfig(agentId: AgentId, sessionId: String, configOptions: List<ConfigOption>) {
@@ -262,8 +282,14 @@ class DefaultSessionOwner @Inject constructor(
         while (currentCoroutineContext().isActive) {
             applyConnection(ConnectionSignal.ConnectRequested)
 
+            val target = currentWatchTarget() ?: run {
+                // The events URL carries the session, so there is no stream
+                // to open until something is watched.
+                watchChanges.receive()
+                continue
+            }
+
             if (reconnect) {
-                subscribedKey = null
                 synchronized(lock) {
                     replaceInboxLocked()
                     pendingPrompt = null
@@ -274,23 +300,41 @@ class DefaultSessionOwner @Inject constructor(
             val closed = CompletableDeferred<DisconnectCause>()
             val active = streamFactory.open(
                 serverOrigin = serverOrigin,
+                agentId = target.agentId,
+                sessionId = target.sessionId,
                 handlers = SessionStreamHandlers(
                     onMessage = ::enqueueFrame,
                     onOpen = { applyConnection(ConnectionSignal.Connected) },
-                    onDisconnect = { cause ->
-                        if (!closed.isCompleted) {
-                            closed.complete(cause)
-                        }
-                    },
+                    onDisconnect = { cause -> closed.complete(cause) },
                 ),
             )
             stream = active
-            sendSubscribeForTarget()
 
-            val cause = closed.await()
+            // Wait for a disconnect or a watch change; a stale notification
+            // (the loop already reopened for the new target) keeps waiting.
+            var disconnectCause: DisconnectCause? = null
+            while (disconnectCause == null) {
+                val event = select {
+                    closed.onAwait { it }
+                    watchChanges.onReceive { null }
+                }
+                if (event != null) {
+                    disconnectCause = event
+                } else if (currentWatchTarget() != target) {
+                    break
+                }
+            }
+
             active.close()
             stream = null
-            applyConnection(ConnectionSignal.Disconnected(cause))
+
+            if (disconnectCause == null) {
+                // Watch target changed: re-open immediately, no backoff.
+                reconnect = false
+                continue
+            }
+
+            applyConnection(ConnectionSignal.Disconnected(disconnectCause))
 
             val status = _connectionState.value.status
             if (status !is ConnectionStatus.Reconnecting) {
@@ -369,13 +413,17 @@ class DefaultSessionOwner @Inject constructor(
                     val queued = pendingPrompt
                     pendingPrompt = null
                     if (queued != null) {
-                        stream?.send(
-                            SessionStreamClientMessage.Prompt(
-                                agentId = message.agentId,
-                                sessionId = message.sessionId,
-                                text = queued,
-                            ),
-                        )
+                        val origin = serverOrigin
+                        if (origin != null) {
+                            scope.launch {
+                                commandApi.prompt(
+                                    origin,
+                                    message.agentId,
+                                    message.sessionId,
+                                    PromptRequestBody(queued),
+                                )
+                            }
+                        }
                     }
                 }
                 is SessionStreamServerMessage.PromptComplete -> {
@@ -463,31 +511,6 @@ class DefaultSessionOwner @Inject constructor(
         }
     }
 
-    private fun sendSubscribeForTarget() {
-        val agentId: AgentId
-        val sessionId: String
-        val active: SessionStream
-        val nextKey: String
-        val useSwitch: Boolean
-        synchronized(lock) {
-            agentId = watchAgentId ?: return
-            sessionId = watchSessionId ?: return
-            active = stream ?: return
-            nextKey = catalogSessionKey(agentId, sessionId)
-            if (subscribedKey == nextKey) {
-                return
-            }
-            useSwitch = subscribedKey != null
-            subscribedKey = nextKey
-        }
-        val message = if (useSwitch) {
-            SessionStreamClientMessage.Switch(agentId = agentId, sessionId = sessionId)
-        } else {
-            SessionStreamClientMessage.Subscribe(agentId = agentId, sessionId = sessionId)
-        }
-        active.send(message)
-    }
-
     private fun startPump() {
         val channel = inbox
         pump = scope.launch {
@@ -515,7 +538,6 @@ class DefaultSessionOwner @Inject constructor(
         pendingPrompt = null
         watchAgentId = null
         watchSessionId = null
-        subscribedKey = null
         if (clearCatalog) {
             commandsCatalog.clear()
             configCatalog.clear()
