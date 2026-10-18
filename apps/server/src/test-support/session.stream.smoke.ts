@@ -2,14 +2,14 @@ import { Writable } from "node:stream"
 import { createServer } from "../bootstrap/server"
 import { seedTestDevice, TestDeviceCredential } from "./test.harness"
 import { toLogTailEntry } from "core/logs/tail.usecase"
-import {
-  SessionStreamClientMessage,
-  SessionStreamServerMessage,
-  SessionStreamServerMessageSchema,
-} from "contracts/http/session.stream"
+import { sessionEventsPath } from "contracts/http/session.stream"
 import { z } from "zod"
-import { WebSocket } from "ws"
-import { websocketRawDataText } from "../auth/websocket.raw.data.text"
+import {
+  createSessionCommands,
+  openSseStream,
+  SessionCommands,
+  SseStream,
+} from "test-support/session-stream"
 
 /**
  * Seeds a device row for a directly-created server app and exposes its
@@ -57,11 +57,10 @@ export const permissionAllowOptionId = (params: unknown): string => {
   return first.optionId
 }
 
-export const boundStreamUrl = (app: { server: { address: () => unknown } }): string => {
+export const boundHttpBase = (app: { server: { address: () => unknown } }): string => {
   const address = app.server.address()
   if (
     address === null ||
-    typeof address === "string" ||
     typeof address !== "object" ||
     !("port" in address) ||
     typeof address.port !== "number"
@@ -69,119 +68,33 @@ export const boundStreamUrl = (app: { server: { address: () => unknown } }): str
     throw new Error("expected bound server address")
   }
 
-  return `ws://127.0.0.1:${address.port}/v1/sessions/stream`
+  return `http://127.0.0.1:${address.port}`
 }
 
-export type StreamClient = {
-  messages: SessionStreamServerMessage[]
-  waitFor: (
-    predicate: (message: SessionStreamServerMessage) => boolean,
-    timeoutMs?: number,
-  ) => Promise<SessionStreamServerMessage>
-  send: (message: SessionStreamClientMessage) => void
-  close: () => Promise<void>
-}
+export type StreamClient = SseStream
 
-export const openStreamClient = (wsUrl: string, credential: string): Promise<StreamClient> =>
-  new Promise((resolve, reject) => {
-    const ws = new WebSocket(wsUrl, {
-      headers: { authorization: `Bearer ${credential}` },
-    })
-    const messages: SessionStreamServerMessage[] = []
-    const waiters: Array<{
-      predicate: (message: SessionStreamServerMessage) => boolean
-      resolve: (message: SessionStreamServerMessage) => void
-      reject: (error: Error) => void
-      timer: ReturnType<typeof setTimeout>
-    }> = []
+/** Opens the session event stream for a smoke run (opening the stream subscribes). */
+export const openStreamClient = (params: {
+  app: { server: { address: () => unknown } }
+  credential: string
+  agentId: string
+  sessionId: string
+}): Promise<SseStream> =>
+  openSseStream({
+    url: `${boundHttpBase(params.app)}${sessionEventsPath(params.sessionId, {
+      agentId: params.agentId,
+    })}`,
+    credential: params.credential,
+  })
 
-    const describeMessages = () =>
-      messages
-        .map((message) => (message.type === "error" ? `error:${message.message}` : message.type))
-        .join(", ")
-
-    const failWaiters = (error: Error) => {
-      for (const waiter of waiters) {
-        clearTimeout(waiter.timer)
-        waiter.reject(error)
-      }
-      waiters.splice(0, waiters.length)
-    }
-
-    const notify = (message: SessionStreamServerMessage) => {
-      messages.push(message)
-      const matched = waiters.filter((waiter) => waiter.predicate(message))
-      for (const waiter of matched) {
-        clearTimeout(waiter.timer)
-        const index = waiters.indexOf(waiter)
-        if (index >= 0) {
-          waiters.splice(index, 1)
-        }
-        waiter.resolve(message)
-      }
-    }
-
-    const timer = setTimeout(() => {
-      ws.close()
-      reject(new Error("timeout opening session stream"))
-    }, 5_000)
-
-    ws.addEventListener("open", () => {
-      clearTimeout(timer)
-      resolve({
-        messages,
-        send: (message) => {
-          ws.send(JSON.stringify(message))
-        },
-        waitFor: (predicate, timeoutMs = 5_000) =>
-          new Promise((waitResolve, waitReject) => {
-            const existing = messages.find(predicate)
-            if (existing !== undefined) {
-              waitResolve(existing)
-              return
-            }
-
-            const waiterTimer = setTimeout(() => {
-              waitReject(
-                new Error(
-                  `timeout waiting for stream message after ${timeoutMs}ms. received: ${describeMessages()}`,
-                ),
-              )
-            }, timeoutMs)
-            waiters.push({
-              predicate,
-              resolve: waitResolve,
-              reject: waitReject,
-              timer: waiterTimer,
-            })
-          }),
-        close: () =>
-          new Promise((closeResolve) => {
-            if (ws.readyState === WebSocket.CLOSED) {
-              closeResolve()
-              return
-            }
-            ws.addEventListener("close", () => closeResolve())
-            ws.close()
-          }),
-      })
-    })
-
-    ws.on("message", (data) => {
-      try {
-        notify(SessionStreamServerMessageSchema.parse(JSON.parse(websocketRawDataText(data))))
-      } catch (error: unknown) {
-        const reason = error instanceof Error ? error.message : "parse failed"
-        failWaiters(
-          new Error(`invalid session stream message: ${reason}. raw=${websocketRawDataText(data)}`),
-        )
-      }
-    })
-
-    ws.once("unexpected-response", (_req, res) => {
-      clearTimeout(timer)
-      reject(new Error(`unexpected response ${res.statusCode}`))
-    })
+/** REST commands for a smoke run against the bound app. */
+export const smokeCommands = (params: {
+  app: { server: { address: () => unknown } }
+  credential: string
+}): SessionCommands =>
+  createSessionCommands({
+    httpBase: boundHttpBase(params.app),
+    credential: params.credential,
   })
 
 export type SmokeLogCapture = Readonly<{
@@ -227,12 +140,14 @@ export const failWithLogs = (
   throw new Error(`${label}\nstream messages: ${JSON.stringify(client.messages)}\nlogs:\n${logs}`)
 }
 
+/** Answers permission and extension requests until the prompt completes or fails. */
 export const drainPrompt = async (params: {
   logCapture: SmokeLogCapture
   client: StreamClient
+  commands: SessionCommands
   deadlineMs: number
 }): Promise<void> => {
-  const { logCapture, client, deadlineMs } = params
+  const { logCapture, client, commands, deadlineMs } = params
   const handledRequestIds = new Set<string>()
 
   const next = async (): Promise<void> => {
@@ -263,21 +178,30 @@ export const drainPrompt = async (params: {
 
     if (message.type === "permission_request") {
       handledRequestIds.add(message.requestId)
-      client.send({
-        type: "permission_reply",
+      const reply = await commands.replyPermission({
         requestId: message.requestId,
         optionId: permissionAllowOptionId(message.params),
       })
+      if (reply.status !== 204) {
+        failWithLogs(
+          logCapture,
+          client,
+          `permission reply failed: ${reply.status} ${await reply.text()}`,
+        )
+      }
       return next()
     }
 
     if (message.type === "extension_request") {
       handledRequestIds.add(message.requestId)
-      client.send({
-        type: "extension_reply",
-        requestId: message.requestId,
-        result: {},
-      })
+      const reply = await commands.replyExtension({ requestId: message.requestId, result: {} })
+      if (reply.status !== 204) {
+        failWithLogs(
+          logCapture,
+          client,
+          `extension reply failed: ${reply.status} ${await reply.text()}`,
+        )
+      }
       return next()
     }
 

@@ -1,14 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { CreateSessionResponseSchema } from "contracts/http/session"
-import {
-  SessionStreamClientMessage,
-  SessionStreamServerMessage,
-  SessionStreamServerMessageSchema,
-} from "contracts/http/session.stream"
-import { WebSocket } from "ws"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
+import { openSseStream } from "test-support/session-stream"
 import { Config } from "../config/config"
-import { eventDataText } from "../test/event.data.text"
 import { enableAgent } from "../test-support/test.app"
 import { bootTestApp } from "../test-support/test.harness"
 
@@ -30,101 +24,13 @@ const getListeningBase = async (
 
   return {
     httpBase: `http://${config.host}:${address.port}`,
-    wsUrl: `ws://${config.host}:${address.port}/v1/sessions/stream`,
   }
 }
 
-type StreamClient = {
-  ws: WebSocket
-  messages: SessionStreamServerMessage[]
-  waitFor: (
-    predicate: (message: SessionStreamServerMessage) => boolean,
-    timeoutMs?: number,
-  ) => Promise<SessionStreamServerMessage>
-  send: (message: SessionStreamClientMessage) => void
-  close: () => Promise<void>
-}
+const eventsUrl = (httpBase: string, sessionId: string) =>
+  `${httpBase}/v1/sessions/${encodeURIComponent(sessionId)}/events?agentId=cursor`
 
-const openStreamClient = (wsUrl: string, credential: string): Promise<StreamClient> =>
-  new Promise((resolve, reject) => {
-    const ws = new WebSocket(wsUrl, {
-      headers: { authorization: `Bearer ${credential}` },
-    })
-    const messages: SessionStreamServerMessage[] = []
-    const waiters: Array<{
-      predicate: (message: SessionStreamServerMessage) => boolean
-      resolve: (message: SessionStreamServerMessage) => void
-      reject: (error: Error) => void
-      timer: ReturnType<typeof setTimeout>
-    }> = []
-
-    const notify = (message: SessionStreamServerMessage) => {
-      messages.push(message)
-      const matched = waiters.filter((waiter) => waiter.predicate(message))
-      for (const waiter of matched) {
-        clearTimeout(waiter.timer)
-        const index = waiters.indexOf(waiter)
-        if (index >= 0) {
-          waiters.splice(index, 1)
-        }
-        waiter.resolve(message)
-      }
-    }
-
-    const timer = setTimeout(() => {
-      ws.close()
-      reject(new Error("timeout opening session stream"))
-    }, 5_000)
-
-    ws.addEventListener("open", () => {
-      clearTimeout(timer)
-      resolve({
-        ws,
-        messages,
-        send: (message) => {
-          ws.send(JSON.stringify(message))
-        },
-        waitFor: (predicate, timeoutMs = 5_000) =>
-          new Promise((waitResolve, waitReject) => {
-            const existing = messages.find(predicate)
-            if (existing !== undefined) {
-              waitResolve(existing)
-              return
-            }
-
-            const waiterTimer = setTimeout(() => {
-              waitReject(new Error("timeout waiting for stream message"))
-            }, timeoutMs)
-            waiters.push({
-              predicate,
-              resolve: waitResolve,
-              reject: waitReject,
-              timer: waiterTimer,
-            })
-          }),
-        close: () =>
-          new Promise((closeResolve) => {
-            if (ws.readyState === WebSocket.CLOSED) {
-              closeResolve()
-              return
-            }
-            ws.addEventListener("close", () => closeResolve())
-            ws.close()
-          }),
-      })
-    })
-
-    ws.addEventListener("message", (event) => {
-      notify(SessionStreamServerMessageSchema.parse(JSON.parse(eventDataText(event.data))))
-    })
-
-    ws.addEventListener("unexpected-response", (_req, res) => {
-      clearTimeout(timer)
-      reject(new Error(`unexpected response ${res.statusCode}`))
-    })
-  })
-
-describe("session config stream integration", () => {
+describe("session hub config stream integration", () => {
   test("session/load delivers config to the joiner and a PUT fans the new state to every subscriber", async () => {
     const fakeConfigOptions = [
       {
@@ -163,7 +69,7 @@ describe("session config stream integration", () => {
     })
     await enableAgent(app, "cursor", whichFn)
 
-    const { httpBase, wsUrl } = await getListeningBase(app, config)
+    const { httpBase } = await getListeningBase(app, config)
 
     const createResponse = await fetch(`${httpBase}/v1/sessions`, {
       method: "POST",
@@ -179,11 +85,9 @@ describe("session config stream integration", () => {
     expect(createResponse.status).toBe(201)
     const created = CreateSessionResponseSchema.parse(await createResponse.json())
 
-    const subscriber = await openStreamClient(wsUrl, app.deviceCredential.credential)
-    subscriber.send({
-      type: "subscribe",
-      agentId: "cursor",
-      sessionId: created.sessionId,
+    const subscriber = await openSseStream({
+      url: eventsUrl(httpBase, created.sessionId),
+      credential: app.deviceCredential.credential,
     })
     await subscriber.waitFor((message) => message.type === "subscribed")
 

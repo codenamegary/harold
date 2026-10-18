@@ -1,6 +1,5 @@
 export type ListeningEndpoints = {
   httpBase: string
-  wsUrl: string
 }
 
 export type ListenableApp = {
@@ -25,6 +24,5 @@ export const getListeningEndpoints = async (params: {
 
   return {
     httpBase: `http://${params.host}:${address.port}`,
-    wsUrl: `ws://${params.host}:${address.port}/v1/sessions/stream`,
   }
 }

@@ -12,14 +12,21 @@ import {
   deleteDevicePath,
   devicePath,
 } from "contracts/http/device"
-import { WebSocket } from "ws"
+import { CreateSessionResponseSchema } from "contracts/http/session"
+import { sessionEventsPath } from "contracts/http/session.stream"
+import { WhichFn } from "core/agent-settings/resolve-agent-path"
+import { openSseStream } from "test-support/session-stream"
 import { bootTestApp } from "../test-support/test.harness"
+import { enableAgent } from "../test-support/test.app"
 import { Config } from "../config/config"
 import { clearDevicePresence } from "./device.presence"
 
 const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
   authorization: `Bearer ${app.deviceCredential.credential}`,
 })
+
+const whichFn: WhichFn = (binaryName) =>
+  binaryName === "agent" ? "/usr/local/bin/agent" : undefined
 
 afterEach(async () => {
   clearDevicePresence()
@@ -40,7 +47,6 @@ const getListeningBase = async (
 
   return {
     httpBase: `http://${config.host}:${address.port}`,
-    wsUrl: `ws://${config.host}:${address.port}/v1/sessions/stream`,
   }
 }
 
@@ -69,43 +75,22 @@ const pairDevice = async (
   return ClaimPairingCodeResponseSchema.parse(await claimResponse.json())
 }
 
-const openDeviceStream = (wsUrl: string, credential: string): Promise<WebSocket> =>
-  new Promise((resolve, reject) => {
-    const ws = new WebSocket(wsUrl, {
-      headers: { authorization: `Bearer ${credential}` },
-    })
-    const timer = setTimeout(() => {
-      ws.close()
-      reject(new Error("timeout opening device stream"))
-    }, 2_000)
-
-    ws.addEventListener("open", () => {
-      clearTimeout(timer)
-      resolve(ws)
-    })
-
-    ws.addEventListener("unexpected-response", (_req, res) => {
-      clearTimeout(timer)
-      reject(new Error(`unexpected response ${res.statusCode}`))
-    })
+const createSession = async (
+  app: { deviceCredential: { credential: string } },
+  httpBase: string,
+  cwd: string,
+) => {
+  const response = await fetch(`${httpBase}/v1/sessions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...authHeaders(app),
+    },
+    body: JSON.stringify({ agentId: "cursor", cwd }),
   })
-
-const waitForClose = (ws: WebSocket): Promise<{ code: number; reason: string }> =>
-  new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error("timeout waiting for socket close"))
-    }, 2_000)
-
-    ws.addEventListener("close", (event) => {
-      clearTimeout(timer)
-      resolve({ code: event.code, reason: String(event.reason) })
-    })
-
-    if (ws.readyState === WebSocket.CLOSED) {
-      clearTimeout(timer)
-      reject(new Error("socket already closed before waitForClose"))
-    }
-  })
+  expect(response.status).toBe(201)
+  return CreateSessionResponseSchema.parse(await response.json())
+}
 
 const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 5_000) => {
   const startedAt = Date.now()
@@ -118,16 +103,28 @@ const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 
 }
 
 describe("device revoke", () => {
-  test("DELETE revokes device, closes WS, blocks credential", async () => {
-    const { app, config } = await bootTestApp()
-    const { httpBase, wsUrl } = await getListeningBase(app, config)
+  test("DELETE revokes device, ends the event stream, blocks credential", async () => {
+    const { app, config } = await bootTestApp({
+      whichFn,
+      fakeAcpOptions: {
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+        sessionNewSessionId: "revoke-1",
+        sessionLoadSessionId: "revoke-1",
+      },
+    })
+    await enableAgent(app, "cursor", whichFn)
+    const { httpBase } = await getListeningBase(app, config)
     const paired = await pairDevice(
       httpBase,
       { name: "To revoke", platform: "android" },
       app.deviceCredential.credential,
     )
+    const created = await createSession(app, httpBase, "/tmp/revoke-project")
 
-    const deviceWs = await openDeviceStream(wsUrl, paired.credential)
+    const deviceStream = await openSseStream({
+      url: `${httpBase}${sessionEventsPath(created.sessionId, { agentId: "cursor" })}`,
+      credential: paired.credential,
+    })
     await waitFor(async () => {
       const online = DeviceCollectionSchema.parse(
         await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
@@ -135,7 +132,7 @@ describe("device revoke", () => {
       return online.items[0]?.state === "online"
     })
 
-    const closePromise = waitForClose(deviceWs)
+    const endPromise = deviceStream.waitForEnd()
 
     const revokeResponse = await fetch(`${httpBase}${devicePath(paired.device.id)}`, {
       method: "DELETE",
@@ -144,9 +141,7 @@ describe("device revoke", () => {
     expect(revokeResponse.status).toBe(204)
     expect(await revokeResponse.text()).toBe("")
 
-    const closed = await closePromise
-    expect(closed.code).toBe(1008)
-    expect(closed.reason).toBe("unauthorized")
+    await endPromise
 
     const httpDenied = await fetch(`${httpBase}/v1/workspaces`, {
       headers: { authorization: `Bearer ${paired.credential}` },
@@ -154,15 +149,12 @@ describe("device revoke", () => {
     expect(httpDenied.status).toBe(401)
     UnauthorizedProblemSchema.parse(await httpDenied.json())
 
-    const reopenResponse = await fetch(`${httpBase}/v1/sessions/stream`, {
-      headers: {
-        connection: "upgrade",
-        upgrade: "websocket",
-        "sec-websocket-version": "13",
-        "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==",
-        authorization: `Bearer ${paired.credential}`,
+    const reopenResponse = await fetch(
+      `${httpBase}${sessionEventsPath(created.sessionId, { agentId: "cursor" })}`,
+      {
+        headers: { authorization: `Bearer ${paired.credential}` },
       },
-    })
+    )
     expect(reopenResponse.status).toBe(401)
     UnauthorizedProblemSchema.parse(await reopenResponse.json())
 

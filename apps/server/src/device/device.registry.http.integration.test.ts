@@ -6,14 +6,22 @@ import {
   claimPairingCodePath,
 } from "contracts/http/pairing-code"
 import { DeviceCollectionSchema, DEVICES_PATH } from "contracts/http/device"
-import { WebSocket } from "ws"
+import { UnauthorizedProblemSchema } from "contracts/http/error"
+import { CreateSessionResponseSchema } from "contracts/http/session"
+import { sessionEventsPath } from "contracts/http/session.stream"
+import { WhichFn } from "core/agent-settings/resolve-agent-path"
+import { openSseStream } from "test-support/session-stream"
 import { bootTestApp } from "../test-support/test.harness"
+import { enableAgent } from "../test-support/test.app"
 import { Config } from "../config/config"
 import { clearDevicePresence } from "./device.presence"
 
 const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
   authorization: `Bearer ${app.deviceCredential.credential}`,
 })
+
+const whichFn: WhichFn = (binaryName) =>
+  binaryName === "agent" ? "/usr/local/bin/agent" : undefined
 
 afterEach(async () => {
   clearDevicePresence()
@@ -34,7 +42,6 @@ const getListeningBase = async (
 
   return {
     httpBase: `http://${config.host}:${address.port}`,
-    wsUrl: `ws://${config.host}:${address.port}/v1/sessions/stream`,
   }
 }
 
@@ -63,55 +70,22 @@ const pairDevice = async (
   return ClaimPairingCodeResponseSchema.parse(await claimResponse.json())
 }
 
-const openHostStream = (wsUrl: string): Promise<WebSocket> =>
-  new Promise((resolve, reject) => {
-    const ws = new WebSocket(wsUrl)
-    const timer = setTimeout(() => {
-      ws.close()
-      reject(new Error("timeout opening host stream"))
-    }, 2_000)
-
-    ws.addEventListener("open", () => {
-      clearTimeout(timer)
-      resolve(ws)
-    })
-
-    ws.addEventListener("unexpected-response", (_req, res) => {
-      clearTimeout(timer)
-      reject(new Error(`unexpected response ${res.statusCode}`))
-    })
+const createSession = async (
+  app: { deviceCredential: { credential: string } },
+  httpBase: string,
+  cwd: string,
+) => {
+  const response = await fetch(`${httpBase}/v1/sessions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...authHeaders(app),
+    },
+    body: JSON.stringify({ agentId: "cursor", cwd }),
   })
-
-const openDeviceStream = (wsUrl: string, credential: string): Promise<WebSocket> =>
-  new Promise((resolve, reject) => {
-    const ws = new WebSocket(wsUrl, {
-      headers: { authorization: `Bearer ${credential}` },
-    })
-    const timer = setTimeout(() => {
-      ws.close()
-      reject(new Error("timeout opening device stream"))
-    }, 2_000)
-
-    ws.addEventListener("open", () => {
-      clearTimeout(timer)
-      resolve(ws)
-    })
-
-    ws.addEventListener("unexpected-response", (_req, res) => {
-      clearTimeout(timer)
-      reject(new Error(`unexpected response ${res.statusCode}`))
-    })
-  })
-
-const closeSocket = (ws: WebSocket): Promise<void> =>
-  new Promise((resolve) => {
-    if (ws.readyState === WebSocket.CLOSED) {
-      resolve()
-      return
-    }
-    ws.addEventListener("close", () => resolve())
-    ws.close()
-  })
+  expect(response.status).toBe(201)
+  return CreateSessionResponseSchema.parse(await response.json())
+}
 
 const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 5_000) => {
   const startedAt = Date.now()
@@ -173,17 +147,29 @@ describe("device registry and presence", () => {
     )
   })
 
-  test("list state follows real WS presence for connect/disconnect", async () => {
-    const { app, config } = await bootTestApp()
-    const { httpBase, wsUrl } = await getListeningBase(app, config)
+  test("list state follows SSE stream presence for connect/disconnect", async () => {
+    const { app, config } = await bootTestApp({
+      whichFn,
+      fakeAcpOptions: {
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+        sessionNewSessionId: "registry-presence-1",
+        sessionLoadSessionId: "registry-presence-1",
+      },
+    })
+    await enableAgent(app, "cursor", whichFn)
+    const { httpBase } = await getListeningBase(app, config)
     const paired = await pairDevice(httpBase, {}, app.deviceCredential.credential)
+    const created = await createSession(app, httpBase, "/tmp/registry-presence")
 
     const beforeConnect = DeviceCollectionSchema.parse(
       await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
     )
     expect(beforeConnect.items[0]?.state).toBe("offline")
 
-    const deviceWs = await openDeviceStream(wsUrl, paired.credential)
+    const deviceStream = await openSseStream({
+      url: `${httpBase}${sessionEventsPath(created.sessionId, { agentId: "cursor" })}`,
+      credential: paired.credential,
+    })
     await waitFor(async () => {
       const online = DeviceCollectionSchema.parse(
         await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
@@ -198,7 +184,7 @@ describe("device registry and presence", () => {
     )
     expect(onlineFilter.items).toHaveLength(1)
 
-    await closeSocket(deviceWs)
+    await deviceStream.close()
     await waitFor(async () => {
       const offline = DeviceCollectionSchema.parse(
         await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
@@ -207,11 +193,14 @@ describe("device registry and presence", () => {
     })
   })
 
-  test("host streams do not mark devices online", async () => {
+  test("unauthenticated stream requests are rejected and do not mark devices online", async () => {
     const { app, config } = await bootTestApp()
-    const { httpBase, wsUrl } = await getListeningBase(app, config)
+    const { httpBase } = await getListeningBase(app, config)
     const paired = await pairDevice(httpBase, {}, app.deviceCredential.credential)
-    const host = await openHostStream(wsUrl)
+
+    const response = await fetch(`${httpBase}/v1/sessions/s1/events?agentId=cursor`)
+    expect(response.status).toBe(401)
+    UnauthorizedProblemSchema.parse(await response.json())
 
     await new Promise((resolve) => setTimeout(resolve, 100))
 
@@ -220,8 +209,6 @@ describe("device registry and presence", () => {
     )
     expect(listed.items[0]?.id).toBe(paired.device.id)
     expect(listed.items[0]?.state).toBe("offline")
-
-    await closeSocket(host)
   })
 
   test("authenticated device HTTP updates lastSeenAt without flipping online", async () => {

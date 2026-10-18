@@ -1,24 +1,21 @@
-import { WebSocket } from "ws"
+import { SseStream } from "../session-stream/session.stream.client"
 import { openDeviceEventStream } from "./second.client.streams"
 
 export type SecondClient = {
   httpBase: string
-  wsUrl: string
   deviceId: string
   credential: string
   fetch: (path: string, init?: RequestInit) => Promise<Response>
-  openEventStream: () => Promise<WebSocket>
+  openEventStream: (input: { agentId: string; sessionId: string }) => Promise<SseStream>
   reconnect: () => SecondClient
 }
 
 export const createSecondClient = (params: {
   httpBase: string
-  wsUrl: string
   deviceId: string
   credential: string
 }): SecondClient => ({
   httpBase: params.httpBase,
-  wsUrl: params.wsUrl,
   deviceId: params.deviceId,
   credential: params.credential,
   fetch: (path, init) => {
@@ -29,7 +26,12 @@ export const createSecondClient = (params: {
       headers,
     })
   },
-  openEventStream: () =>
-    openDeviceEventStream({ wsUrl: params.wsUrl, credential: params.credential }),
+  openEventStream: ({ agentId, sessionId }) =>
+    openDeviceEventStream({
+      httpBase: params.httpBase,
+      credential: params.credential,
+      agentId,
+      sessionId,
+    }),
   reconnect: () => createSecondClient(params),
 })
