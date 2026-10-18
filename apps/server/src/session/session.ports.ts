@@ -33,12 +33,25 @@ export type SessionHubLoadSession = (params: {
   cwd: string
 }) => Promise<{ ok: true } | { ok: false; reason: string }>
 
+/** Outcome of a full prompt turn. */
+export type SessionPromptOutcome =
+  | { ok: true }
+  | { ok: false; reason: string; authRequired?: boolean }
+
+/**
+ * Fast prompt-start result: validation passed and the agent accepted the turn.
+ * The turn itself completes in the background via `completion`.
+ */
+export type SessionPromptStartResult =
+  | { ok: true; completion: Promise<SessionPromptOutcome> }
+  | { ok: false; reason: string; authRequired?: boolean }
+
 export type SessionHubPromptSession = (params: {
   agentId: AgentId
   sessionId: string
   text: string
   attachments?: ReadonlyArray<AttachmentReference>
-}) => Promise<{ ok: true } | { ok: false; reason: string; authRequired?: boolean }>
+}) => Promise<SessionPromptStartResult>
 
 export type SessionHubCancelSession = (params: {
   agentId: AgentId

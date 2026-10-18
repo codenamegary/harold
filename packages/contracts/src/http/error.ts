@@ -5,6 +5,7 @@ export const PROBLEM_TYPES = {
   internalError: "https://harold.local/problems/internal-error",
   notFound: "https://harold.local/problems/not-found",
   conflict: "https://harold.local/problems/conflict",
+  unprocessable: "https://harold.local/problems/unprocessable",
   unauthorized: "https://harold.local/problems/unauthorized",
   workspaceActiveSessions: "https://harold.local/problems/workspace-has-active-sessions",
   allowedRootHasWorkspaces: "https://harold.local/problems/allowed-root-has-workspaces",
@@ -52,6 +53,11 @@ export const ConflictProblemSchema = z.strictObject({
   type: z.literal(PROBLEM_TYPES.conflict),
 })
 
+export const UnprocessableProblemSchema = z.strictObject({
+  ...InternalProblemFieldsSchema.shape,
+  type: z.literal(PROBLEM_TYPES.unprocessable),
+})
+
 export const UnauthorizedProblemSchema = z.strictObject({
   ...InternalProblemFieldsSchema.shape,
   type: z.literal(PROBLEM_TYPES.unauthorized),
@@ -84,6 +90,7 @@ export const ProblemDetailsSchema = z.discriminatedUnion("type", [
   InternalProblemSchema,
   NotFoundProblemSchema,
   ConflictProblemSchema,
+  UnprocessableProblemSchema,
   UnauthorizedProblemSchema,
   WorkspaceActiveSessionsProblemSchema,
   AllowedRootHasWorkspacesProblemSchema,
@@ -94,6 +101,7 @@ export type ValidationProblem = z.infer<typeof ValidationProblemSchema>
 export type InternalProblem = z.infer<typeof InternalProblemSchema>
 export type NotFoundProblem = z.infer<typeof NotFoundProblemSchema>
 export type ConflictProblem = z.infer<typeof ConflictProblemSchema>
+export type UnprocessableProblem = z.infer<typeof UnprocessableProblemSchema>
 export type UnauthorizedProblem = z.infer<typeof UnauthorizedProblemSchema>
 export type WorkspaceActiveSessionsProblem = z.infer<typeof WorkspaceActiveSessionsProblemSchema>
 export type AllowedRootHasWorkspacesProblem = z.infer<typeof AllowedRootHasWorkspacesProblemSchema>

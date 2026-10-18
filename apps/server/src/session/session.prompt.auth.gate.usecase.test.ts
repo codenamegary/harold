@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { AgentIdSchema } from "contracts/http/agent-settings"
 import { AttachmentReference } from "contracts/http/attachments"
+import { AUTH_GATED_PROMPT_MESSAGE } from "../acp/auth.required"
 import { makePromptAuthGate } from "./session.prompt.auth.gate.usecase"
 
 const agentId = AgentIdSchema.parse("cursor")
@@ -12,23 +13,114 @@ const attachment: AttachmentReference = {
   path: "/tmp/ws/.harold/attachments/att_1.md",
 }
 
-const okPrompt = () => async () => ({ ok: true as const })
+const okPrompt = () => async () => ({
+  ok: true as const,
+  completion: Promise.resolve({ ok: true as const }),
+})
 
 describe("makePromptAuthGate", () => {
-  test("runs the prompt and returns ok when auth is ready", async () => {
+  test("runs the prompt and returns ok with the turn completion when auth is ready", async () => {
     const prompts: Array<{ text: string }> = []
     const promptAuthGate = makePromptAuthGate({
       promptSession: async (input) => {
         prompts.push({ text: input.text })
-        return { ok: true }
+        return {
+          ok: true as const,
+          completion: Promise.resolve({ ok: true as const }),
+        }
       },
       ensureReadyForPrompt: async () => ({ ok: true }),
     })
 
     const result = await promptAuthGate({ agentId, sessionId: "s1", text: "hello" })
 
-    expect(result).toEqual({ ok: true })
+    expect(result).toMatchObject({ ok: true })
+    if (!result.ok) {
+      throw new Error("expected the prompt to start")
+    }
+    expect(await result.completion).toEqual({ ok: true })
     expect(prompts).toEqual([{ text: "hello" }])
+  })
+
+  test("passes completion failures through to the caller", async () => {
+    const promptAuthGate = makePromptAuthGate({
+      promptSession: async () => ({
+        ok: true as const,
+        completion: Promise.resolve({
+          ok: false as const,
+          reason: "session/prompt failed: late boom",
+        }),
+      }),
+      ensureReadyForPrompt: async () => ({ ok: true }),
+    })
+
+    const result = await promptAuthGate({ agentId, sessionId: "s1", text: "hello" })
+
+    expect(result).toMatchObject({ ok: true })
+    if (!result.ok) {
+      throw new Error("expected the prompt to start")
+    }
+    expect(await result.completion).toEqual({
+      ok: false,
+      reason: "session/prompt failed: late boom",
+    })
+  })
+
+  test("runs the challenge and rewrites the completion when the turn reports authRequired", async () => {
+    let challenges = 0
+    const promptAuthGate = makePromptAuthGate({
+      promptSession: async () => ({
+        ok: true as const,
+        completion: Promise.resolve({
+          ok: false as const,
+          reason: "Authentication required",
+          authRequired: true,
+        }),
+      }),
+      ensureReadyForPrompt: async () => ({ ok: true }),
+      ensureSessionFromChallenge: async () => {
+        challenges += 1
+      },
+    })
+
+    const result = await promptAuthGate({ agentId, sessionId: "s1", text: "hello" })
+
+    expect(result).toMatchObject({ ok: true })
+    if (!result.ok) {
+      throw new Error("expected the prompt to start")
+    }
+    expect(await result.completion).toEqual({
+      ok: false,
+      reason: AUTH_GATED_PROMPT_MESSAGE,
+      authRequired: true,
+    })
+    expect(challenges).toBe(1)
+  })
+
+  test("reports turn authRequired unchanged when no challenge hook exists", async () => {
+    const promptAuthGate = makePromptAuthGate({
+      promptSession: async () => ({
+        ok: true as const,
+        completion: Promise.resolve({
+          ok: false as const,
+          reason: "Authentication required",
+          authRequired: true,
+        }),
+      }),
+      ensureReadyForPrompt: async () => ({ ok: true }),
+    })
+
+    const result = await promptAuthGate({ agentId, sessionId: "s1", text: "hello" })
+
+    expect(result).toMatchObject({ ok: true })
+    if (!result.ok) {
+      throw new Error("expected the prompt to start")
+    }
+    expect(await result.completion).toEqual({
+      ok: false,
+      reason: "Authentication required",
+      authRequired: true,
+    })
   })
 
   test("returns AUTH_GATED without prompting when the ready check fails", async () => {
@@ -37,7 +129,10 @@ describe("makePromptAuthGate", () => {
     const promptAuthGate = makePromptAuthGate({
       promptSession: async () => {
         prompted = true
-        return { ok: true }
+        return {
+          ok: true as const,
+          completion: Promise.resolve({ ok: true as const }),
+        }
       },
       ensureReadyForPrompt: async () => ({ ok: false }),
       ensureSessionFromChallenge: async () => {
@@ -114,7 +209,7 @@ describe("makePromptAuthGate", () => {
 
     const result = await promptAuthGate({ agentId, sessionId: "s1", text: "hello" })
 
-    expect(result).toEqual({ ok: true })
+    expect(result).toMatchObject({ ok: true })
   })
 
   test("forwards non-empty attachments and drops empty ones", async () => {
@@ -122,7 +217,10 @@ describe("makePromptAuthGate", () => {
     const promptAuthGate = makePromptAuthGate({
       promptSession: async (input) => {
         seen.push(input.attachments)
-        return { ok: true }
+        return {
+          ok: true as const,
+          completion: Promise.resolve({ ok: true as const }),
+        }
       },
     })
 

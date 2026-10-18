@@ -14,6 +14,7 @@ import {
   SessionHubCancelSession,
   SessionHubLoadSession,
   SessionHubPromptSession,
+  SessionPromptOutcome,
 } from "../session.ports"
 
 export type SessionKey = `${AgentId}:${string}`
@@ -46,6 +47,28 @@ export type BeginClientRpcResult =
   | { readonly ok: true; readonly value: unknown }
   | { readonly ok: false; readonly error: BeginClientRpcError }
 
+/** Why a session command (prompt/cancel) was refused. */
+export type SessionCommandError =
+  | { readonly kind: "unknown_session"; readonly reason: string }
+  | { readonly kind: "auth_gated"; readonly reason: string }
+  | { readonly kind: "rejected"; readonly reason: string }
+
+/**
+ * Fast prompt-start outcome. Mid-turn progress and completion are not part of
+ * this result: the hub fans `prompt_complete` (or an `error` event on failure)
+ * to the session group when `completion` settles.
+ */
+export type SessionPromptCommandResult =
+  | { readonly ok: true; readonly completion: Promise<SessionPromptOutcome> }
+  | { readonly ok: false; readonly error: SessionCommandError }
+
+export type SessionCancelCommandResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly error: SessionCommandError }
+
+/** First reply wins; the second sees `already_settled`, unknown ids see `unknown`. */
+export type ResolveReplyResult = "settled" | "already_settled" | "unknown"
+
 export type PendingClientRpc = {
   readonly requestId: string
   readonly agentId: AgentId
@@ -72,6 +95,7 @@ export type CreateSessionHubParams = {
 export type SessionHub = {
   addSubscriber: (subscriber: SessionHubSubscriber) => void
   removeSubscriber: (subscriberId: string) => void
+  getSubscriberSession: (subscriberId: string) => SessionKey | null
   subscribe: (params: {
     subscriberId: string
     agentId: AgentId
@@ -83,13 +107,12 @@ export type SessionHub = {
     sessionId: string
   }) => Promise<void>
   prompt: (params: {
-    subscriberId: string
     agentId: AgentId
     sessionId: string
     text: string
     attachments?: ReadonlyArray<AttachmentReference>
-  }) => Promise<void>
-  cancel: (params: { subscriberId: string; agentId: AgentId; sessionId: string }) => Promise<void>
+  }) => Promise<SessionPromptCommandResult>
+  cancel: (params: { agentId: AgentId; sessionId: string }) => Promise<SessionCancelCommandResult>
   handleSessionUpdate: (params: { agentId: AgentId; sessionId: string; update: unknown }) => void
   handleSessionConfig: (params: {
     agentId: AgentId
@@ -108,8 +131,8 @@ export type SessionHub = {
     method: string
     params: unknown
   }) => Promise<unknown>
-  resolvePermissionReply: (params: { requestId: string; optionId: string }) => void
-  resolveExtensionReply: (params: { requestId: string; result: unknown }) => void
+  resolvePermissionReply: (params: { requestId: string; optionId: string }) => ResolveReplyResult
+  resolveExtensionReply: (params: { requestId: string; result: unknown }) => ResolveReplyResult
 }
 
 export const createSessionCwdCache = (): SessionCwdCache => {
@@ -229,28 +252,6 @@ export const createSessionHub = ({
       fanOutToAll({ type: "session_info", agentId, sessionId, title })
     },
   })
-
-  const ensureSubscribed = (params: {
-    subscriberId: string
-    agentId: AgentId
-    sessionId: string
-  }): SessionHubSubscriber | undefined => {
-    const subscriber = subscribers.get(params.subscriberId)
-    if (subscriber === undefined) {
-      return undefined
-    }
-
-    const key = sessionKey(params.agentId, params.sessionId)
-    if (subscriber.sessionKey !== key) {
-      sendError(subscriber, "Not subscribed to session", {
-        agentId: params.agentId,
-        sessionId: params.sessionId,
-      })
-      return undefined
-    }
-
-    return subscriber
-  }
 
   const loadForSubscriber = async (params: {
     subscriber: SessionHubSubscriber
@@ -425,15 +426,36 @@ export const createSessionHub = ({
     return result.value
   }
 
-  const settlePending = (requestId: string, result: unknown) => {
+  const SETTLED_REQUEST_MEMORY = 256
+  const settledRequestIds = new Set<string>()
+  const settledRequestOrder: string[] = []
+
+  const rememberSettled = (requestId: string) => {
+    settledRequestIds.add(requestId)
+    settledRequestOrder.push(requestId)
+    while (settledRequestOrder.length > SETTLED_REQUEST_MEMORY) {
+      const evicted = settledRequestOrder.shift()
+      if (evicted !== undefined) {
+        settledRequestIds.delete(evicted)
+      }
+    }
+  }
+
+  const settlePending = (requestId: string, result: unknown): ResolveReplyResult => {
     const pending = pendingById.get(requestId)
-    if (pending === undefined || pending.settled) {
-      return
+    if (pending === undefined) {
+      return settledRequestIds.has(requestId) ? "already_settled" : "unknown"
+    }
+
+    if (pending.settled) {
+      return "already_settled"
     }
 
     pending.settled = true
     pendingById.delete(requestId)
+    rememberSettled(requestId)
     pending.resolve(result)
+    return "settled"
   }
 
   return {
@@ -448,69 +470,66 @@ export const createSessionHub = ({
       detachFromSession(subscriber)
       subscribers.delete(subscriberId)
     },
+    getSubscriberSession: (subscriberId) => subscribers.get(subscriberId)?.sessionKey ?? null,
     subscribe: subscribeInternal,
     switchSession: async (params) => {
       await subscribeInternal(params)
     },
-    prompt: async (params) => {
-      const subscriber = ensureSubscribed(params)
-      if (subscriber === undefined) {
-        return
-      }
-
-      const result = await runGatedPrompt({
-        agentId: params.agentId,
-        sessionId: params.sessionId,
-        text: params.text,
-        ...(params.attachments !== undefined && params.attachments.length > 0
-          ? { attachments: params.attachments }
-          : {}),
-      })
-      if (!result.ok) {
-        if (result.error.kind === "AUTH_GATED") {
-          sendError(subscriber, AUTH_GATED_PROMPT_MESSAGE, {
-            agentId: params.agentId,
-            sessionId: params.sessionId,
-          })
-          return
+    prompt: async ({ agentId, sessionId, text, attachments }) => {
+      if (cwdCache.get({ agentId, sessionId }) === undefined) {
+        return {
+          ok: false,
+          error: { kind: "unknown_session", reason: "Unknown session cwd" },
         }
-
-        sendError(subscriber, result.error.reason, {
-          agentId: params.agentId,
-          sessionId: params.sessionId,
-        })
-        return
       }
 
-      fanOut(sessionKey(params.agentId, params.sessionId), {
-        type: "prompt_complete",
-        agentId: params.agentId,
-        sessionId: params.sessionId,
+      const started = await runGatedPrompt({
+        agentId,
+        sessionId,
+        text,
+        ...(attachments !== undefined && attachments.length > 0 ? { attachments } : {}),
       })
+      if (!started.ok) {
+        return started.error.kind === "AUTH_GATED"
+          ? {
+              ok: false,
+              error: { kind: "auth_gated", reason: AUTH_GATED_PROMPT_MESSAGE },
+            }
+          : { ok: false, error: { kind: "rejected", reason: started.error.reason } }
+      }
+
+      const key = sessionKey(agentId, sessionId)
+      return {
+        ok: true,
+        completion: started.completion.then((outcome) => {
+          if (outcome.ok) {
+            fanOut(key, { type: "prompt_complete", agentId, sessionId })
+          } else {
+            fanOut(key, { type: "error", message: outcome.reason, agentId, sessionId })
+          }
+          return outcome
+        }),
+      }
     },
-    cancel: async (params) => {
-      const subscriber = ensureSubscribed(params)
-      if (subscriber === undefined) {
-        return
+    cancel: async ({ agentId, sessionId }) => {
+      if (cwdCache.get({ agentId, sessionId }) === undefined) {
+        return {
+          ok: false,
+          error: { kind: "unknown_session", reason: "Unknown session cwd" },
+        }
       }
 
-      const result = await cancelSession({
-        agentId: params.agentId,
-        sessionId: params.sessionId,
-      })
+      const result = await cancelSession({ agentId, sessionId })
       if (!result.ok) {
-        sendError(subscriber, result.reason, {
-          agentId: params.agentId,
-          sessionId: params.sessionId,
-        })
-        return
+        return { ok: false, error: { kind: "rejected", reason: result.reason } }
       }
 
-      fanOut(sessionKey(params.agentId, params.sessionId), {
+      fanOut(sessionKey(agentId, sessionId), {
         type: "cancelled",
-        agentId: params.agentId,
-        sessionId: params.sessionId,
+        agentId,
+        sessionId,
       })
+      return { ok: true }
     },
     handleSessionUpdate: ({ agentId, sessionId, update }) => {
       const commandsUpdate = parseAvailableCommandsUpdate(update)
@@ -566,16 +585,13 @@ export const createSessionHub = ({
         }),
         "extension request missing method",
       ),
-    resolvePermissionReply: ({ requestId, optionId }) => {
+    resolvePermissionReply: ({ requestId, optionId }) =>
       settlePending(requestId, {
         outcome: {
           outcome: "selected",
           optionId,
         },
-      })
-    },
-    resolveExtensionReply: ({ requestId, result }) => {
-      settlePending(requestId, result)
-    },
+      }),
+    resolveExtensionReply: ({ requestId, result }) => settlePending(requestId, result),
   }
 }

@@ -41,6 +41,7 @@ import {
 import { SpawnAgentProcessFn } from "../acp/supervisor/supervisor.ports"
 import { spawnAgentProcess } from "../acp/supervisor/supervisor.process.adapters"
 import { registerSessionStreamRoutes } from "../session/session.stream.routes"
+import { registerSessionCommandsRoutes } from "../session/session.commands.routes"
 import { createAcpHubPromptSession } from "../session/hub/acp.hub.prompt"
 import { createSessionCwdCache, createSessionHub, SessionHub } from "../session/hub/hub"
 import { createCommandsCache } from "../session/hub/commands.cache"
@@ -357,6 +358,8 @@ export const createServer = async ({
     sessionHub,
     wsAuthFrameTimeoutMs,
   })
+
+  registerSessionCommandsRoutes(app, { sessionHub })
 
   registerStatusRoutes(app, runtime, config, acpSupervisor)
   const runtimeStatusService = createRuntimeStatusService({

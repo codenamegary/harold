@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test"
 import {
   ExtensionReplyBodySchema,
   PermissionReplyBodySchema,
+  ReplyParamsSchema,
+  SessionCommandParamsSchema,
+  SessionCommandQuerySchema,
   SessionStreamClientMessageSchema,
   SessionStreamServerMessageSchema,
   extensionRepliesPath,
@@ -250,6 +253,25 @@ describe("PermissionReplyBodySchema", () => {
         optionId: "allow-once",
       }),
     ).toThrow()
+  })
+})
+
+describe("session command route params and query", () => {
+  test("parses the path params and the agentId query", () => {
+    expect(SessionCommandParamsSchema.parse({ sessionId: "acp-1" })).toEqual({
+      sessionId: "acp-1",
+    })
+    expect(SessionCommandQuerySchema.parse({ agentId: "cursor" })).toEqual({
+      agentId: "cursor",
+    })
+    expect(ReplyParamsSchema.parse({ requestId: "req-1" })).toEqual({
+      requestId: "req-1",
+    })
+
+    expect(() => SessionCommandParamsSchema.parse({ sessionId: "" })).toThrow()
+    expect(() => SessionCommandQuerySchema.parse({})).toThrow()
+    expect(() => ReplyParamsSchema.parse({ requestId: "" })).toThrow()
+    expect(() => SessionCommandQuerySchema.parse({ agentId: "cursor", extra: true })).toThrow()
   })
 })
 

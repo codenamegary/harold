@@ -24,7 +24,7 @@ const noAttachmentsDeps = () => ({
 })
 
 describe("createAcpHubPromptSession", () => {
-  test("awaits ACP session/prompt completion before returning ok", async () => {
+  test("resolves the start result before the turn completes and hands back the outcome", async () => {
     let resolveCompletion:
       | ((result: { ok: true; result: { stopReason: string } }) => void)
       | undefined
@@ -40,25 +40,31 @@ describe("createAcpHubPromptSession", () => {
       }),
     })
 
-    let settled = false
-    const pending = promptSession({
+    const started = await promptSession({
       agentId: "opencode",
       sessionId: "s1",
       text: "hello",
-    }).then((result) => {
-      settled = true
-      return result
+    })
+    expect(started.ok).toBe(true)
+    if (!started.ok) {
+      throw new Error("expected the prompt to start")
+    }
+
+    let completed = false
+    const completion = started.completion.then((outcome) => {
+      completed = true
+      return outcome
     })
 
     await Promise.resolve()
-    expect(settled).toBe(false)
+    expect(completed).toBe(false)
 
     resolveCompletion?.({ ok: true, result: { stopReason: "end_turn" } })
-    expect(pending).resolves.toEqual({ ok: true })
-    expect(settled).toBe(true)
+    expect(await completion).toEqual({ ok: true })
+    expect(completed).toBe(true)
   })
 
-  test("returns ACP prompt failure reasons to the hub", async () => {
+  test("resolves the completion with ACP prompt failure reasons", async () => {
     const promptSession = createAcpHubPromptSession({
       ...noAttachmentsDeps(),
       startPrompt: async () => ({
@@ -71,13 +77,17 @@ describe("createAcpHubPromptSession", () => {
       }),
     })
 
-    expect(
-      promptSession({
-        agentId: "cursor",
-        sessionId: "s1",
-        text: "hello",
-      }),
-    ).resolves.toEqual({
+    const started = await promptSession({
+      agentId: "cursor",
+      sessionId: "s1",
+      text: "hello",
+    })
+    expect(started.ok).toBe(true)
+    if (!started.ok) {
+      throw new Error("expected the prompt to start")
+    }
+
+    expect(await started.completion).toEqual({
       ok: false,
       reason: "session/prompt failed: boom",
     })
@@ -115,23 +125,26 @@ describe("createAcpHubPromptSession", () => {
       sessionId: "s1",
     })
 
-    const promptDone = hub.prompt({
-      subscriberId: "web",
+    const result = await hub.prompt({
       agentId: "opencode",
       sessionId: "s1",
       text: "hello",
     })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error("expected the prompt to start")
+    }
 
     await Promise.resolve()
     expect(sink.messages.some((message) => message.type === "prompt_complete")).toBe(false)
 
     resolveCompletion?.({ ok: true, result: { stopReason: "end_turn" } })
-    await promptDone
+    await result.completion
 
     expect(sink.messages.some((message) => message.type === "prompt_complete")).toBe(true)
   })
 
-  test("hub emits error when ACP prompt completion fails", async () => {
+  test("hub emits error to session subscribers when ACP prompt completion fails", async () => {
     const cwdCache = createSessionCwdCache()
     cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/ws" })
 
@@ -159,12 +172,16 @@ describe("createAcpHubPromptSession", () => {
       sessionId: "s1",
     })
 
-    await hub.prompt({
-      subscriberId: "web",
+    const result = await hub.prompt({
       agentId: "cursor",
       sessionId: "s1",
       text: "hello",
     })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error("expected the prompt to start")
+    }
+    await result.completion
 
     expect(sink.messages.some((message) => message.type === "prompt_complete")).toBe(false)
     expect(
@@ -203,7 +220,7 @@ describe("createAcpHubPromptSession with attachments", () => {
 
     expect(
       promptSession({ agentId: "a", sessionId: "s1", text: "look", attachments: [ref] }),
-    ).resolves.toEqual({ ok: true })
+    ).resolves.toMatchObject({ ok: true })
 
     expect(prompts[0]).toEqual([
       { type: "text", text: "look" },
@@ -243,7 +260,7 @@ describe("createAcpHubPromptSession with attachments", () => {
           },
         ],
       }),
-    ).resolves.toEqual({ ok: true })
+    ).resolves.toMatchObject({ ok: true })
 
     expect(prompts[0]).toEqual([
       { type: "text", text: "read" },

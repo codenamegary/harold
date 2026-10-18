@@ -1,9 +1,11 @@
 import { AgentId } from "contracts/http/agent-settings"
 import { AttachmentReference } from "contracts/http/attachments"
+import { AUTH_GATED_PROMPT_MESSAGE } from "../acp/auth.required"
 import {
   EnsureReadyForPrompt,
   EnsureSessionFromChallenge,
   SessionHubPromptSession,
+  SessionPromptOutcome,
 } from "./session.ports"
 
 export type PromptAuthGateError =
@@ -11,7 +13,7 @@ export type PromptAuthGateError =
   | { readonly kind: "PROMPT_FAILED"; readonly reason: string }
 
 export type PromptAuthGateResult =
-  | { readonly ok: true }
+  | { readonly ok: true; readonly completion: Promise<SessionPromptOutcome> }
   | { readonly ok: false; readonly error: PromptAuthGateError }
 
 export type PromptAuthGateInput = Readonly<{
@@ -61,5 +63,19 @@ export const makePromptAuthGate =
       return { ok: false, error: { kind: "PROMPT_FAILED", reason: result.reason } }
     }
 
-    return { ok: true }
+    return {
+      ok: true,
+      completion: result.completion.then(async (outcome) => {
+        if (outcome.ok || outcome.authRequired !== true) {
+          return outcome
+        }
+
+        if (deps.ensureSessionFromChallenge === undefined) {
+          return outcome
+        }
+
+        await deps.ensureSessionFromChallenge(input.agentId)
+        return { ok: false, reason: AUTH_GATED_PROMPT_MESSAGE, authRequired: true }
+      }),
+    }
   }

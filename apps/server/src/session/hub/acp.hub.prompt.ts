@@ -26,10 +26,7 @@ export type CreateAcpHubPromptSessionParams = {
    * Capability gate. `image` maps to promptCapabilities.image,
    * `file` to promptCapabilities.embeddedContext.
    */
-  advertisesPromptCapability: (params: {
-    agentId: string
-    kind: AttachmentKind
-  }) => boolean
+  advertisesPromptCapability: (params: { agentId: string; kind: AttachmentKind }) => boolean
 }
 
 const CAPABILITY_LABELS: Record<AttachmentKind, string> = {
@@ -37,8 +34,7 @@ const CAPABILITY_LABELS: Record<AttachmentKind, string> = {
   file: "promptCapabilities.embeddedContext",
 }
 
-export const attachmentCapabilityFor = (kind: AttachmentKind): string =>
-  CAPABILITY_LABELS[kind]
+export const attachmentCapabilityFor = (kind: AttachmentKind): string => CAPABILITY_LABELS[kind]
 
 /**
  * ACP v1 content blocks. Image blocks embed base64 `data` — agents decode
@@ -93,9 +89,7 @@ export const createAcpHubPromptSession = (
 ): SessionHubPromptSession => {
   return async ({ sessionId, agentId, text, attachments }) => {
     for (const reference of attachments ?? []) {
-      if (
-        !params.advertisesPromptCapability({ agentId, kind: reference.kind })
-      ) {
+      if (!params.advertisesPromptCapability({ agentId, kind: reference.kind })) {
         return {
           ok: false,
           reason: `Agent does not advertise ${CAPABILITY_LABELS[reference.kind]} — cannot attach ${reference.name}`,
@@ -123,15 +117,18 @@ export const createAcpHubPromptSession = (
       }
     }
 
-    const completion = await started.completion
-    if (!completion.ok) {
-      return {
-        ok: false,
-        reason: completion.reason,
-        ...(completion.authRequired === true ? { authRequired: true } : {}),
-      }
+    return {
+      ok: true,
+      completion: started.completion.then((completion) => {
+        if (completion.ok) {
+          return { ok: true }
+        }
+        return {
+          ok: false,
+          reason: completion.reason,
+          ...(completion.authRequired === true ? { authRequired: true } : {}),
+        }
+      }),
     }
-
-    return { ok: true }
   }
 }
