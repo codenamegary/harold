@@ -13,6 +13,7 @@ describe("makeAcceptPrompt", () => {
   test("refuses an attachment the agent lacks a prompt capability for", async () => {
     const acceptPrompt = makeAcceptPrompt({
       advertisesPromptCapability: ({ kind }) => kind !== "image",
+      ensureReadyForPrompt: async () => ({ ok: true }),
       ensureSessionBound: async () => ({ ok: true }),
     })
 
@@ -54,6 +55,7 @@ describe("makeAcceptPrompt", () => {
     const boundWith: Array<{ agentId: string; sessionId: string; cwd: string }> = []
     const acceptPrompt = makeAcceptPrompt({
       advertisesPromptCapability: () => true,
+      ensureReadyForPrompt: async () => ({ ok: true }),
       ensureSessionBound: async (params) => {
         boundWith.push(params)
         return { ok: false, reason: "ACP supervisor is not ready" }
@@ -70,6 +72,7 @@ describe("makeAcceptPrompt", () => {
   test("maps auth-required bind failures to auth_gated", async () => {
     const acceptPrompt = makeAcceptPrompt({
       advertisesPromptCapability: () => true,
+      ensureReadyForPrompt: async () => ({ ok: true }),
       ensureSessionBound: async () => ({
         ok: false,
         reason: "session/load failed: Authentication required",
@@ -103,7 +106,11 @@ describe("makeAcceptPrompt", () => {
 
 describe("makeCompletePromptTurn", () => {
   test("passes successful and non-auth failures through untouched", async () => {
-    const completePromptTurn = makeCompletePromptTurn({})
+    const completePromptTurn = makeCompletePromptTurn({
+      ensureSessionFromChallenge: async () => {
+        throw new Error("challenge must not run")
+      },
+    })
 
     expect(await completePromptTurn({ agentId: "cursor", outcome: { ok: true } })).toEqual({
       ok: true,
@@ -169,16 +176,5 @@ describe("makeCompletePromptTurn", () => {
       authRequired: true,
     })
     expect(challenges).toBe(1)
-  })
-
-  test("returns the gated outcome even when no challenge handler is wired", async () => {
-    const completePromptTurn = makeCompletePromptTurn({})
-
-    expect(
-      await completePromptTurn({
-        agentId: "cursor",
-        outcome: { ok: false, reason: "Authentication required", authRequired: true },
-      }),
-    ).toEqual({ ok: false, reason: AUTH_GATED_PROMPT_MESSAGE, authRequired: true })
   })
 })

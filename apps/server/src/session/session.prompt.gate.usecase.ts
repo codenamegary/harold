@@ -16,7 +16,7 @@ export type PromptAcceptDeps = Readonly<{
    * `file` to promptCapabilities.embeddedContext.
    */
   advertisesPromptCapability: (params: { agentId: AgentId; kind: AttachmentKind }) => boolean
-  ensureReadyForPrompt?: EnsureReadyForPrompt
+  ensureReadyForPrompt: EnsureReadyForPrompt
   ensureSessionBound: EnsureSessionBound
 }>
 
@@ -51,11 +51,9 @@ export const makeAcceptPrompt =
       }
     }
 
-    if (deps.ensureReadyForPrompt !== undefined) {
-      const ready = await deps.ensureReadyForPrompt(input.agentId)
-      if (!ready.ok) {
-        return { ok: false, error: { kind: "auth_gated", reason: AUTH_GATED_PROMPT_MESSAGE } }
-      }
+    const ready = await deps.ensureReadyForPrompt(input.agentId)
+    if (!ready.ok) {
+      return { ok: false, error: { kind: "auth_gated", reason: AUTH_GATED_PROMPT_MESSAGE } }
     }
 
     const bound = await deps.ensureSessionBound({
@@ -77,7 +75,7 @@ export const makeAcceptPrompt =
   }
 
 export type PromptCompleteTurnDeps = Readonly<{
-  ensureSessionFromChallenge?: EnsureSessionFromChallenge
+  ensureSessionFromChallenge: EnsureSessionFromChallenge
 }>
 
 /**
@@ -94,11 +92,6 @@ export const makeCompletePromptTurn = (deps: PromptCompleteTurnDeps): PromptComp
   const challengeByAgent = new Map<AgentId, Promise<void>>()
 
   const runChallengeOnce = async (agentId: AgentId): Promise<void> => {
-    const challenge = deps.ensureSessionFromChallenge
-    if (challenge === undefined) {
-      return
-    }
-
     const inFlight = challengeByAgent.get(agentId)
     if (inFlight !== undefined) {
       await inFlight
@@ -107,7 +100,7 @@ export const makeCompletePromptTurn = (deps: PromptCompleteTurnDeps): PromptComp
 
     const run = (async () => {
       try {
-        await challenge(agentId)
+        await deps.ensureSessionFromChallenge(agentId)
       } finally {
         challengeByAgent.delete(agentId)
       }
