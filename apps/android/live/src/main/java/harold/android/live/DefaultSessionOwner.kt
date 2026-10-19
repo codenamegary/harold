@@ -101,6 +101,16 @@ class DefaultSessionOwner @Inject constructor(
     }
 
     override fun connect(serverOrigin: String) {
+        if (this.serverOrigin == serverOrigin && loop?.isActive == true) {
+            // Already connecting/live/reconnecting toward this server: tearing
+            // the loop down would kill a healthy stream. `retry()` only lands
+            // here when the loop has stopped (AuthFailed/TransportError).
+            synchronized(lock) {
+                ensurePumpLocked()
+            }
+            return
+        }
+
         val movedServer = this.serverOrigin?.let { it != serverOrigin } ?: false
 
         this.serverOrigin = serverOrigin
@@ -315,41 +325,49 @@ class DefaultSessionOwner @Inject constructor(
 
             // Wait for a disconnect or a watch change; a stale notification
             // (the loop already reopened for the new target) keeps waiting.
-            var disconnectCause: DisconnectCause? = null
-            while (disconnectCause == null) {
-                val event = select {
-                    closed.onAwait { it }
-                    watchChanges.onReceive { null }
+            try {
+                var disconnectCause: DisconnectCause? = null
+                while (disconnectCause == null) {
+                    val event = select {
+                        closed.onAwait { it }
+                        watchChanges.onReceive { null }
+                    }
+                    if (event != null) {
+                        disconnectCause = event
+                    } else if (currentWatchTarget() != target) {
+                        break
+                    }
                 }
-                if (event != null) {
-                    disconnectCause = event
-                } else if (currentWatchTarget() != target) {
-                    break
+
+                if (disconnectCause == null) {
+                    // Watch target changed: re-open immediately, no backoff.
+                    reconnect = false
+                    continue
+                }
+
+                applyConnection(ConnectionSignal.Disconnected(disconnectCause))
+
+                val status = _connectionState.value.status
+                if (status !is ConnectionStatus.Reconnecting) {
+                    synchronized(lock) {
+                        pump?.cancel()
+                        pump = null
+                    }
+                    return
+                }
+
+                delay(ReconnectPolicy.delayMillis(status.attempt))
+                reconnect = true
+            } finally {
+                // Runs on every exit: watch change, disconnect, terminal
+                // status, or loop cancellation mid-wait. Without it a
+                // cancelled iteration leaks the open stream (and its server
+                // side hub subscriber) until the socket dies on its own.
+                active.close()
+                if (stream === active) {
+                    stream = null
                 }
             }
-
-            active.close()
-            stream = null
-
-            if (disconnectCause == null) {
-                // Watch target changed: re-open immediately, no backoff.
-                reconnect = false
-                continue
-            }
-
-            applyConnection(ConnectionSignal.Disconnected(disconnectCause))
-
-            val status = _connectionState.value.status
-            if (status !is ConnectionStatus.Reconnecting) {
-                synchronized(lock) {
-                    pump?.cancel()
-                    pump = null
-                }
-                return
-            }
-
-            delay(ReconnectPolicy.delayMillis(status.attempt))
-            reconnect = true
         }
     }
 
