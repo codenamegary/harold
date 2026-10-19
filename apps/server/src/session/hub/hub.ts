@@ -6,6 +6,7 @@ import { SessionStreamServerMessage } from "contracts/http/session.stream"
 import { sanitizeFailureReason } from "../../acp/sanitize.failure.reason"
 import { parseAvailableCommandsUpdate } from "./commands.available"
 import { CommandsCache, createCommandsCache } from "./commands.cache"
+import { ConfigOptionsCache, createConfigOptionsCache } from "./config.cache"
 import { parseSessionInfoUpdate } from "./session.info"
 import { createSessionTitleCache, SessionTitleCache } from "./session.title.cache"
 import { createPromptQueue } from "./prompt.queue"
@@ -80,6 +81,7 @@ export type PendingClientRpc = {
 export type CreateSessionHubParams = {
   cwdCache: SessionCwdCache
   commandsCache?: CommandsCache
+  configCache?: ConfigOptionsCache
   sessionTitleCache?: SessionTitleCache
   loadSession: SessionHubLoadSession
   runPromptTurn: SessionPromptTurn
@@ -148,6 +150,7 @@ export const createSessionCwdCache = (): SessionCwdCache => {
 export const createSessionHub = ({
   cwdCache,
   commandsCache = createCommandsCache(),
+  configCache = createConfigOptionsCache(),
   sessionTitleCache = createSessionTitleCache(),
   loadSession,
   runPromptTurn,
@@ -341,6 +344,24 @@ export const createSessionHub = ({
 
     const key = sessionKey(params.agentId, params.sessionId)
     attachToSession(subscriber, key)
+
+    // Config advertised before this stream opened (create time, a previous
+    // connection) would otherwise never reach the subscriber: agents only
+    // re-emit config while loading a session, and a resident session does not
+    // reload. Sent ahead of the load so a fresh frame from the replay is the
+    // last one the client sees.
+    const cachedConfig = configCache.get({
+      agentId: params.agentId,
+      sessionId: params.sessionId,
+    })
+    if (cachedConfig !== undefined) {
+      subscriber.sink.send({
+        type: "session_config",
+        agentId: params.agentId,
+        sessionId: params.sessionId,
+        configOptions: cachedConfig,
+      })
+    }
 
     const loaded = await loadForSubscriber({
       subscriber,
@@ -576,6 +597,7 @@ export const createSessionHub = ({
       })
     },
     handleSessionConfig: ({ agentId, sessionId, configOptions }) => {
+      configCache.remember({ agentId, sessionId, configOptions })
       fanOut(sessionKey(agentId, sessionId), {
         type: "session_config",
         agentId,

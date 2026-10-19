@@ -17,9 +17,13 @@ import harold.android.stream.DisconnectCause
 import harold.android.stream.SessionStream
 import harold.android.stream.SessionStreamFactory
 import harold.android.stream.SessionStreamHandlers
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -62,12 +66,57 @@ class DefaultSessionOwnerTest {
         advanceUntilIdle()
 
         assertEquals(0, factory.openCount)
-        assertEquals(ConnectionStatus.Connecting, owner.connectionState.value.status)
+        // Nothing is watched, so there is no stream to open and the status
+        // must not claim to be connecting.
+        assertEquals(ConnectionStatus.Idle, owner.connectionState.value.status)
 
         owner.watch("cursor", "sess_01")
         advanceUntilIdle()
 
         assertEquals(1, factory.openCount)
+    }
+
+    @Test
+    fun keepsTheLiveStreamAcrossRedundantConnects() = runTest {
+        val factory = ScriptedSessionStreamFactory(listOf(holdOpen()))
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+
+        owner.connect(ORIGIN)
+        advanceUntilIdle()
+
+        assertEquals(1, factory.openCount)
+        assertEquals(ConnectionStatus.Live, owner.connectionState.value.status)
+
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun closesTheStreamWhenTheLoopIsCancelled() = runTest {
+        val loopScope = CoroutineScope(Job() + StandardTestDispatcher(testScheduler))
+        val factory = ScriptedSessionStreamFactory(listOf(holdOpen()))
+        val owner = DefaultSessionOwner(
+            streamFactory = factory,
+            commandApi = ScriptedCommandApi(),
+            scope = loopScope,
+        )
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+
+        val stream = requireNotNull(factory.lastStream)
+        assertFalse(stream.closed)
+
+        // The loop dies at its wait point, not through a clean disconnect.
+        loopScope.cancel()
+        advanceUntilIdle()
+
+        assertTrue(stream.closed)
     }
 
     @Test
@@ -1246,7 +1295,12 @@ private class ScriptedSessionStreamFactory(
 private class ScriptedSessionStream(
     private val handlers: SessionStreamHandlers,
 ) : SessionStream {
-    override fun close() = Unit
+    var closed = false
+        private set
+
+    override fun close() {
+        closed = true
+    }
 
     fun emit(message: SessionStreamServerMessage) {
         handlers.onMessage(message)

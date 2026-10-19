@@ -15,6 +15,7 @@ describe("makeDeleteAcpSession", () => {
 
     const forgotten: Array<{ agentId: typeof agentId; sessionId: string }> = []
     const forgottenTitles: Array<{ agentId: typeof agentId; sessionId: string }> = []
+    const forgottenConfigs: Array<{ agentId: typeof agentId; sessionId: string }> = []
 
     const deleteAcpSession = makeDeleteAcpSession({
       archiveAcpSession: () => undefined,
@@ -23,6 +24,13 @@ describe("makeDeleteAcpSession", () => {
         get: () => undefined,
         forget: (params) => {
           forgotten.push(params)
+        },
+      },
+      configCache: {
+        remember: () => undefined,
+        get: () => undefined,
+        forget: (params) => {
+          forgottenConfigs.push(params)
         },
       },
       forgetSessionTitle: (params) => {
@@ -43,6 +51,7 @@ describe("makeDeleteAcpSession", () => {
     expect(result).toEqual({ ok: true })
     expect(forgotten).toEqual([{ agentId, sessionId: "sess-1" }])
     expect(forgottenTitles).toEqual([{ agentId, sessionId: "sess-1" }])
+    expect(forgottenConfigs).toEqual([{ agentId, sessionId: "sess-1" }])
     expect(closeStarted.value).toBe(true)
     expect(closeFinished.value).toBe(false)
 
@@ -56,6 +65,11 @@ describe("makeDeleteAcpSession", () => {
     const deleteAcpSession = makeDeleteAcpSession({
       archiveAcpSession: () => undefined,
       commandsCache: {
+        remember: () => undefined,
+        get: () => undefined,
+        forget: () => undefined,
+      },
+      configCache: {
         remember: () => undefined,
         get: () => undefined,
         forget: () => undefined,
@@ -80,6 +94,11 @@ describe("makeDeleteAcpSession", () => {
     const deleteAcpSession = makeDeleteAcpSession({
       archiveAcpSession: () => undefined,
       commandsCache: {
+        remember: () => undefined,
+        get: () => undefined,
+        forget: () => undefined,
+      },
+      configCache: {
         remember: () => undefined,
         get: () => undefined,
         forget: () => undefined,

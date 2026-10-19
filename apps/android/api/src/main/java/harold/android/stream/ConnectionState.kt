@@ -47,6 +47,9 @@ sealed interface ConnectionSignal {
 
     data object Connected : ConnectionSignal
 
+    /** No session is watched, so no stream can open. Not a connection attempt. */
+    data object Idle : ConnectionSignal
+
     data class Disconnected(
         val cause: DisconnectCause,
     ) : ConnectionSignal
@@ -57,6 +60,8 @@ fun reduce(state: ConnectionState, signal: ConnectionSignal): ConnectionState =
         ConnectionSignal.ConnectRequested -> state.copy(status = ConnectionStatus.Connecting)
 
         ConnectionSignal.Connected -> state.copy(status = ConnectionStatus.Live, attempt = 0)
+
+        ConnectionSignal.Idle -> state.copy(status = ConnectionStatus.Idle, attempt = 0)
 
         is ConnectionSignal.Disconnected -> when (val cause = signal.cause) {
             is DisconnectCause.Unauthorized ->
