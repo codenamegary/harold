@@ -1,12 +1,11 @@
 import { Composition, staticFile } from "remotion"
 import { Demo } from "./Demo"
-import { FPS, INTRO_SEC, OUTRO_SEC, totalSec, type DemoProps } from "./timeline"
+import { FPS, totalSec, type CaptureSlice } from "./timeline"
 
 type CaptureFile = {
-  durationSec: number
   width: number
   height: number
-  events: DemoProps["events"]
+  slices: CaptureSlice[]
 }
 
 export const MyComposition = () => {
@@ -19,10 +18,9 @@ export const MyComposition = () => {
       width={1920}
       height={1080}
       defaultProps={{
-        events: [],
+        slices: [],
         videoWidth: 1080,
         videoHeight: 2400,
-        captureSec: 30 - INTRO_SEC - OUTRO_SEC,
       }}
       calculateMetadata={async () => {
         const response = await fetch(staticFile("capture.json"))
@@ -31,12 +29,11 @@ export const MyComposition = () => {
         }
         const capture = (await response.json()) as CaptureFile
         return {
-          durationInFrames: Math.max(1, Math.round(totalSec(capture.durationSec) * FPS)),
+          durationInFrames: Math.max(1, Math.round(totalSec(capture.slices) * FPS)),
           props: {
-            events: capture.events,
+            slices: capture.slices,
             videoWidth: capture.width,
             videoHeight: capture.height,
-            captureSec: capture.durationSec,
           },
         }
       }}
