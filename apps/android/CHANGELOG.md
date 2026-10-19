@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.3.0](https://github.com/codenamegary/harold/compare/harold-android-v1.2.0...harold-android-v1.3.0) (2026-10-19)
+
+
+### Features
+
+* **android:** resume session streams after Doze without replaying ([#425](https://github.com/codenamegary/harold/issues/425)) ([f7fa9d8](https://github.com/codenamegary/harold/commit/f7fa9d8abd17ca4f79636750aafb28243f366c6c))
+* **android:** SSE events + REST commands session transport ([#416](https://github.com/codenamegary/harold/issues/416)) ([bc303c4](https://github.com/codenamegary/harold/commit/bc303c470164556feda77bc6a24873a82599e441))
+
+
+### Bug Fixes
+
+* **android:** keep the session stream healthy across connects and loop exits ([c12554c](https://github.com/codenamegary/harold/commit/c12554ca903a0cf1981a3119fb185eb41bf7c400))
+* **android:** park the session stream idle when nothing is watched ([c12554c](https://github.com/codenamegary/harold/commit/c12554ca903a0cf1981a3119fb185eb41bf7c400))
+* **server:** resend session config options to stream subscribers ([c12554c](https://github.com/codenamegary/harold/commit/c12554ca903a0cf1981a3119fb185eb41bf7c400))
+
 ## [1.2.0](https://github.com/codenamegary/harold/compare/harold-android-v1.1.2...harold-android-v1.2.0) (2026-10-13)
 
 
