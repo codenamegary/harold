@@ -769,6 +769,41 @@ describe("session hub config options", () => {
     expect(c.messages.filter((m) => m.type === "session_config")).toHaveLength(0)
   })
 
+  test("a session that advertised config before any subscriber resends it on subscribe", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+
+    const hub = createSessionHub({
+      cwdCache,
+      // A resident session loads without the agent re-emitting config, so the
+      // subscriber's only copy is the one the hub cached at advertise time.
+      loadSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    hub.handleSessionConfig({
+      agentId: "cursor",
+      sessionId: "s1",
+      configOptions: sampleConfig,
+    })
+
+    const a = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    const configIndex = a.messages.findIndex((m) => m.type === "session_config")
+    const subscribedIndex = a.messages.findIndex((m) => m.type === "subscribed")
+    expect(configIndex).toBeGreaterThanOrEqual(0)
+    expect(configIndex).toBeLessThan(subscribedIndex)
+    expect(a.messages[configIndex]).toMatchObject({
+      type: "session_config",
+      agentId: "cursor",
+      sessionId: "s1",
+      configOptions: sampleConfig,
+    })
+  })
+
   test("config captured during load reaches the joiner before subscribed", async () => {
     const cwdCache = createSessionCwdCache()
     cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
