@@ -46,6 +46,7 @@ import { createAcpPromptTurn } from "../session/hub/acp.hub.prompt"
 import { createSessionCwdCache, createSessionHub, SessionHub } from "../session/hub/hub"
 import { createCommandsCache } from "../session/hub/commands.cache"
 import { createConfigOptionsCache } from "../session/hub/config.cache"
+import { createSessionEventLog } from "../session/hub/event.log"
 import { createSessionTitleCache } from "../session/hub/session.title.cache"
 import { makeEnsureSessionBound, makeEnsureSupervisorReady } from "../session/session.acp.ready"
 import { makeAcceptPrompt, makeCompletePromptTurn } from "../session/session.prompt.gate.usecase"
@@ -210,6 +211,7 @@ export const createServer = async ({
   const cwdCache = createSessionCwdCache()
   const commandsCache = createCommandsCache()
   const configCache = createConfigOptionsCache()
+  const eventLog = createSessionEventLog()
   const sessionTitleCache = createSessionTitleCache()
 
   const agentExists = (agentId: string) => agentSettings.hasAgentId(agentId)
@@ -325,6 +327,7 @@ export const createServer = async ({
     cwdCache,
     commandsCache,
     configCache,
+    eventLog,
     sessionTitleCache,
     loadSession: loadHubSession,
     runPromptTurn,
@@ -405,6 +408,7 @@ export const createServer = async ({
     cwdCache,
     commandsCache,
     configCache,
+    eventLog,
     getSessionTitle: sessionTitleCache.getSessionTitle,
     forgetSessionTitle: sessionTitleCache.forgetSessionTitle,
     isArchivedAcpSession: archivedAcpSessions.isArchived,

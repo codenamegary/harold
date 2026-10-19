@@ -34,6 +34,20 @@ interface SessionOwner {
     fun disconnect()
 
     /**
+     * Marks the start of a background period. The next [onForeground] can
+     * compare the stream's last frame time to tell a surviving socket from
+     * one frozen through Doze.
+     */
+    fun onBackground()
+
+    /**
+     * A cheap resume check. If the watched stream received nothing while
+     * backgrounded, it is closed and reopened immediately. A stream that
+     * received a heartbeat or frame is left alone.
+     */
+    fun onForeground()
+
+    /**
      * Drain the inbox, empty the live snapshot, then subscribe when
      * [sessionId] is a real session. Null or blank [sessionId] means no session yet.
      */

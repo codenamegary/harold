@@ -7,6 +7,7 @@ import { sanitizeFailureReason } from "../../acp/sanitize.failure.reason"
 import { parseAvailableCommandsUpdate } from "./commands.available"
 import { CommandsCache, createCommandsCache } from "./commands.cache"
 import { ConfigOptionsCache, createConfigOptionsCache } from "./config.cache"
+import { createSessionEventLog, SessionEventLog } from "./event.log"
 import { parseSessionInfoUpdate } from "./session.info"
 import { createSessionTitleCache, SessionTitleCache } from "./session.title.cache"
 import { createPromptQueue } from "./prompt.queue"
@@ -35,8 +36,10 @@ export type SessionCwdCache = {
 export const sessionKey = (agentId: AgentId, sessionId: string): SessionKey =>
   `${agentId}:${sessionId}`
 
+export type SessionStreamSendOptions = Readonly<{ cursor?: string }>
+
 export type SessionStreamSink = {
-  send: (message: SessionStreamServerMessage) => void
+  send: (message: SessionStreamServerMessage, options?: SessionStreamSendOptions) => void
 }
 
 export type SessionHubSubscriber = {
@@ -83,6 +86,7 @@ export type CreateSessionHubParams = {
   commandsCache?: CommandsCache
   configCache?: ConfigOptionsCache
   sessionTitleCache?: SessionTitleCache
+  eventLog?: SessionEventLog
   loadSession: SessionHubLoadSession
   runPromptTurn: SessionPromptTurn
   acceptPrompt: PromptAccept
@@ -99,11 +103,14 @@ export type SessionHub = {
     subscriberId: string
     agentId: AgentId
     sessionId: string
+    /** SSE Last-Event-ID: a valid cursor resumes without a full replay. */
+    lastEventId?: string
   }) => Promise<void>
   switchSession: (params: {
     subscriberId: string
     agentId: AgentId
     sessionId: string
+    lastEventId?: string
   }) => Promise<void>
   prompt: (params: {
     agentId: AgentId
@@ -152,6 +159,7 @@ export const createSessionHub = ({
   commandsCache = createCommandsCache(),
   configCache = createConfigOptionsCache(),
   sessionTitleCache = createSessionTitleCache(),
+  eventLog = createSessionEventLog(),
   loadSession,
   runPromptTurn,
   acceptPrompt,
@@ -215,13 +223,34 @@ export const createSessionHub = ({
     subscribersBySession.set(key, set)
   }
 
+  const refForSessionKey = (key: SessionKey): { agentId: AgentId; sessionId: string } => {
+    const separator = key.indexOf(":")
+    return {
+      agentId: key.slice(0, separator),
+      sessionId: key.slice(separator + 1),
+    }
+  }
+
+  const refForMessage = (
+    message: SessionStreamServerMessage,
+  ): { agentId: AgentId; sessionId: string } | undefined => {
+    if (message.type === "session_info") {
+      return { agentId: message.agentId, sessionId: message.sessionId }
+    }
+    return undefined
+  }
+
   const fanOut = (key: SessionKey, message: SessionStreamServerMessage) => {
     const replayTarget = replayTargetBySession.get(key)
     if (replayTarget !== undefined) {
+      // Replay events rebuild one subscriber's snapshot; they are not live
+      // deltas, so they must not enter the resume log.
       const subscriber = subscribers.get(replayTarget)
       subscriber?.sink.send(message)
       return
     }
+
+    const cursor = eventLog.append({ ...refForSessionKey(key), message })
 
     const ids = subscribersBySession.get(key)
     if (ids === undefined) {
@@ -229,7 +258,7 @@ export const createSessionHub = ({
     }
 
     for (const id of ids) {
-      subscribers.get(id)?.sink.send(message)
+      subscribers.get(id)?.sink.send(message, { cursor })
     }
   }
 
@@ -243,8 +272,18 @@ export const createSessionHub = ({
   }
 
   const fanOutToAll = (message: SessionStreamServerMessage) => {
+    const ref = refForMessage(message)
+    const key = ref === undefined ? undefined : sessionKey(ref.agentId, ref.sessionId)
+    const cursor = ref === undefined ? undefined : eventLog.append({ ...ref, message })
+
     for (const subscriber of subscribers.values()) {
-      subscriber.sink.send(message)
+      // A cursor is only meaningful to the subscriber watching that session;
+      // other streams must not adopt it as their Last-Event-ID.
+      const options =
+        cursor !== undefined && key !== undefined && subscriber.sessionKey === key
+          ? { cursor }
+          : undefined
+      subscriber.sink.send(message, options)
     }
   }
 
@@ -336,6 +375,7 @@ export const createSessionHub = ({
     subscriberId: string
     agentId: AgentId
     sessionId: string
+    lastEventId?: string
   }) => {
     const subscriber = subscribers.get(params.subscriberId)
     if (subscriber === undefined) {
@@ -344,6 +384,34 @@ export const createSessionHub = ({
 
     const key = sessionKey(params.agentId, params.sessionId)
     attachToSession(subscriber, key)
+
+    const ref = { agentId: params.agentId, sessionId: params.sessionId }
+    const catchUp =
+      params.lastEventId === undefined
+        ? null
+        : eventLog.catchUp({ ...ref, cursor: params.lastEventId })
+    if (catchUp !== null) {
+      for (const entry of catchUp) {
+        subscriber.sink.send(entry.message, { cursor: entry.cursor })
+      }
+      subscriber.sink.send(
+        {
+          type: "subscribed",
+          agentId: params.agentId,
+          sessionId: params.sessionId,
+        },
+        { cursor: eventLog.currentCursor(ref) },
+      )
+      return
+    }
+
+    // A missing or stale cursor starts a full replay. The reset tells the
+    // client to discard its cached transcript before the replay events land.
+    subscriber.sink.send({
+      type: "stream_reset",
+      agentId: params.agentId,
+      sessionId: params.sessionId,
+    })
 
     // Config advertised before this stream opened (create time, a previous
     // connection) would otherwise never reach the subscriber: agents only
@@ -399,11 +467,14 @@ export const createSessionHub = ({
       })
     }
 
-    subscriber.sink.send({
-      type: "subscribed",
-      agentId: params.agentId,
-      sessionId: params.sessionId,
-    })
+    subscriber.sink.send(
+      {
+        type: "subscribed",
+        agentId: params.agentId,
+        sessionId: params.sessionId,
+      },
+      { cursor: eventLog.currentCursor(ref) },
+    )
   }
 
   const beginClientRpc = (params: {

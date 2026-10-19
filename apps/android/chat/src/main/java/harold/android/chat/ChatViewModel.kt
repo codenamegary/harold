@@ -216,11 +216,16 @@ class ChatViewModel @Inject constructor(
     }
 
     fun onResume() {
+        sessionOwner.onForeground()
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
         sessionForegroundCoordinator?.setServerOrigin(paired.serverOrigin)
         viewModelScope.launch {
             refreshCatalog()
         }
+    }
+
+    fun onBackground() {
+        sessionOwner.onBackground()
     }
 
     fun dismissNotificationPermissionPrompt() {

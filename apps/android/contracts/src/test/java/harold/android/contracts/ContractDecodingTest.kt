@@ -208,6 +208,25 @@ class ContractDecodingTest {
     }
 
     @Test
+    fun decodesStreamResetMessage() {
+        val message = HaroldJson.decodeFromString(
+            SessionStreamServerMessage.serializer(),
+            """
+            {
+              "type": "stream_reset",
+              "agentId": "cursor",
+              "sessionId": "sess_01"
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals(
+            SessionStreamServerMessage.StreamReset(agentId = "cursor", sessionId = "sess_01"),
+            message,
+        )
+    }
+
+    @Test
     fun decodesSession() {
         val session = HaroldJson.decodeFromString(
             Session.serializer(),

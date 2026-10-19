@@ -7,21 +7,42 @@ import {
   PromptCompleteTurn,
 } from "../session.prompt.gate.usecase"
 import { createCommandsCache } from "./commands.cache"
+import { createSessionEventLog } from "./event.log"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
+
+type SentFrame = {
+  message: SessionStreamServerMessage
+  cursor?: string
+}
 
 const collectSink = (): {
   sink: SessionStreamSink
   messages: SessionStreamServerMessage[]
+  frames: SentFrame[]
 } => {
   const messages: SessionStreamServerMessage[] = []
+  const frames: SentFrame[] = []
   return {
     messages,
+    frames,
     sink: {
-      send: (message) => {
+      send: (message, options) => {
         messages.push(message)
+        frames.push({
+          message,
+          ...(options?.cursor === undefined ? {} : { cursor: options.cursor }),
+        })
       },
     },
   }
+}
+
+const subscribedCursor = (frames: ReadonlyArray<SentFrame>): string => {
+  const subscribed = frames.findLast((frame) => frame.message.type === "subscribed")
+  if (subscribed?.cursor === undefined) {
+    throw new Error("expected subscribed to carry a cursor")
+  }
+  return subscribed.cursor
 }
 
 const okPromptTurn = () => async () => ({ ok: true as const })
@@ -1025,5 +1046,234 @@ describe("session hub session info", () => {
     hub.addSubscriber({ id: "b", sink: b.sink, sessionKey: null })
     await hub.subscribe({ subscriberId: "b", agentId: "cursor", sessionId: "s1" })
     expect(b.messages.filter((m) => m.type === "session_info")).toHaveLength(0)
+  })
+
+  test("resume with a valid cursor skips load and replays only missed events in order", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+
+    let loadCount = 0
+    const hub = createSessionHub({
+      cwdCache,
+      eventLog: createSessionEventLog({ createEpoch: () => "epoch" }),
+      loadSession: async () => {
+        loadCount += 1
+        return { ok: true }
+      },
+      ...okPromptDeps(),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const first = collectSink()
+    hub.addSubscriber({ id: "a", sink: first.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    expect(loadCount).toBe(1)
+    expect(first.messages[0]?.type).toBe("stream_reset")
+    const cursor = subscribedCursor(first.frames)
+
+    hub.handleSessionUpdate({
+      agentId: "cursor",
+      sessionId: "s1",
+      update: { sessionUpdate: "agent_message_chunk", text: "one" },
+    })
+    hub.handleSessionUpdate({
+      agentId: "cursor",
+      sessionId: "s1",
+      update: { sessionUpdate: "agent_message_chunk", text: "two" },
+    })
+    hub.handleSessionUpdate({
+      agentId: "cursor",
+      sessionId: "s1",
+      update: { sessionUpdate: "agent_message_chunk", text: "three" },
+    })
+
+    const liveCursors = first.frames
+      .filter((frame) => frame.message.type === "session_update")
+      .map((frame) => frame.cursor)
+    expect(liveCursors).toEqual(["epoch:1", "epoch:2", "epoch:3"])
+
+    hub.removeSubscriber("a")
+
+    const resumed = collectSink()
+    hub.addSubscriber({ id: "b", sink: resumed.sink, sessionKey: null })
+    await hub.subscribe({
+      subscriberId: "b",
+      agentId: "cursor",
+      sessionId: "s1",
+      lastEventId: cursor,
+    })
+
+    expect(loadCount).toBe(1)
+    expect(resumed.messages.some((message) => message.type === "stream_reset")).toBe(false)
+    expect(
+      resumed.messages
+        .filter((message) => message.type === "session_update")
+        .map((message) => (message.update as { text?: string }).text),
+    ).toEqual(["one", "two", "three"])
+    expect(resumed.messages.map((message) => message.type)).toEqual([
+      "session_update",
+      "session_update",
+      "session_update",
+      "subscribed",
+    ])
+    expect(
+      resumed.frames
+        .filter((frame) => frame.message.type === "session_update")
+        .map((frame) => frame.cursor),
+    ).toEqual(["epoch:1", "epoch:2", "epoch:3"])
+    expect(subscribedCursor(resumed.frames)).toBe("epoch:3")
+  })
+
+  test("resume with a stale cursor falls back to a full replay", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+
+    let loadCount = 0
+    const hub = createSessionHub({
+      cwdCache,
+      eventLog: createSessionEventLog({ capacity: 1, createEpoch: () => "epoch" }),
+      loadSession: async ({ sessionId }) => {
+        loadCount += 1
+        hub.handleSessionUpdate({
+          agentId: "cursor",
+          sessionId,
+          update: { sessionUpdate: "agent_message_chunk", text: "replayed" },
+        })
+        return { ok: true }
+      },
+      ...okPromptDeps(),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const first = collectSink()
+    hub.addSubscriber({ id: "a", sink: first.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+    const staleCursor = subscribedCursor(first.frames)
+
+    hub.handleSessionUpdate({
+      agentId: "cursor",
+      sessionId: "s1",
+      update: { sessionUpdate: "agent_message_chunk", text: "one" },
+    })
+    hub.handleSessionUpdate({
+      agentId: "cursor",
+      sessionId: "s1",
+      update: { sessionUpdate: "agent_message_chunk", text: "two" },
+    })
+
+    hub.removeSubscriber("a")
+
+    const replayed = collectSink()
+    hub.addSubscriber({ id: "b", sink: replayed.sink, sessionKey: null })
+    await hub.subscribe({
+      subscriberId: "b",
+      agentId: "cursor",
+      sessionId: "s1",
+      lastEventId: staleCursor,
+    })
+
+    expect(loadCount).toBe(2)
+    expect(replayed.messages[0]?.type).toBe("stream_reset")
+    expect(
+      replayed.messages.some(
+        (message) =>
+          message.type === "session_update" &&
+          (message.update as { text?: string }).text === "replayed",
+      ),
+    ).toBe(true)
+    expect(replayed.messages.at(-1)?.type).toBe("subscribed")
+    expect(subscribedCursor(replayed.frames)).toBe("epoch:2")
+  })
+
+  test("resume with a valid cursor does not resend cached commands or config", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+
+    const hub = createSessionHub({
+      cwdCache,
+      eventLog: createSessionEventLog({ createEpoch: () => "epoch" }),
+      commandsCache: createCommandsCache(),
+      loadSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const commands = {
+      sessionUpdate: "available_commands_update",
+      availableCommands: [{ name: "web", description: "Search" }],
+    }
+    hub.handleSessionUpdate({ agentId: "cursor", sessionId: "s1", update: commands })
+    hub.handleSessionConfig({
+      agentId: "cursor",
+      sessionId: "s1",
+      configOptions: [
+        {
+          id: "model",
+          name: "Model",
+          category: "model",
+          type: "select",
+          currentValue: "m1",
+          options: [{ value: "m1", name: "M1" }],
+        },
+      ],
+    })
+
+    const first = collectSink()
+    hub.addSubscriber({ id: "a", sink: first.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+    expect(first.messages.some((message) => message.type === "session_config")).toBe(true)
+    expect(first.messages.some((message) => message.type === "session_update")).toBe(true)
+    const cursor = subscribedCursor(first.frames)
+
+    hub.removeSubscriber("a")
+
+    const resumed = collectSink()
+    hub.addSubscriber({ id: "b", sink: resumed.sink, sessionKey: null })
+    await hub.subscribe({
+      subscriberId: "b",
+      agentId: "cursor",
+      sessionId: "s1",
+      lastEventId: cursor,
+    })
+
+    expect(resumed.messages.map((message) => message.type)).toEqual(["subscribed"])
+  })
+
+  test("resume catches up a title rename that happened while disconnected", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+
+    const hub = createSessionHub({
+      cwdCache,
+      eventLog: createSessionEventLog({ createEpoch: () => "epoch" }),
+      loadSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const first = collectSink()
+    hub.addSubscriber({ id: "a", sink: first.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+    const cursor = subscribedCursor(first.frames)
+    hub.removeSubscriber("a")
+
+    hub.handleSessionUpdate({ agentId: "cursor", sessionId: "s1", update: rename("Picked up") })
+
+    const resumed = collectSink()
+    hub.addSubscriber({ id: "b", sink: resumed.sink, sessionKey: null })
+    await hub.subscribe({
+      subscriberId: "b",
+      agentId: "cursor",
+      sessionId: "s1",
+      lastEventId: cursor,
+    })
+
+    expect(resumed.messages).toContainEqual({
+      type: "session_info",
+      agentId: "cursor",
+      sessionId: "s1",
+      title: "Picked up",
+    })
   })
 })

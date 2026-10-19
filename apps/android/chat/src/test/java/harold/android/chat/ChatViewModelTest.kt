@@ -87,6 +87,23 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun resumeSignalsTheSessionOwnerProbe() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = sessionOwner,
+        )
+        advanceUntilIdle()
+
+        viewModel.onResume()
+        viewModel.onBackground()
+
+        assertEquals(1, sessionOwner.foregroundProbes)
+        assertEquals(1, sessionOwner.backgroundMarks)
+    }
+
+    @Test
     fun loadsSessionsAndRestoresLastSession() = runTest(dispatcher) {
         val repository = ChatFakeUserRepository()
         val sessionOwner = ChatFakeSessionOwner()
@@ -1227,6 +1244,10 @@ private class ChatFakeSessionOwner : SessionOwner {
         private set
     var target: Pair<String, String>? = null
         private set
+    var foregroundProbes = 0
+        private set
+    var backgroundMarks = 0
+        private set
 
     fun publish(snapshot: SessionSnapshot) {
         _snapshot.value = snapshot
@@ -1247,6 +1268,14 @@ private class ChatFakeSessionOwner : SessionOwner {
         disconnects += 1
         target = null
         _snapshot.value = SessionSnapshot()
+    }
+
+    override fun onBackground() {
+        backgroundMarks += 1
+    }
+
+    override fun onForeground() {
+        foregroundProbes += 1
     }
 
     override fun watch(agentId: AgentId?, sessionId: String?) {

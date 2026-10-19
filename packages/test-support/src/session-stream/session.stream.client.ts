@@ -9,6 +9,10 @@ import {
 
 export type SseStream = {
   messages: SessionStreamServerMessage[]
+  /** Frames paired with the SSE `id:` cursor, when the server sent one. */
+  events: Array<{ message: SessionStreamServerMessage; id: string | null }>
+  /** Cursor of the last frame that carried an `id:` field. */
+  lastEventId: string | null
   /** Number of `: ping` heartbeat comments received. */
   heartbeats: number
   waitFor: (
@@ -35,11 +39,13 @@ const describeMessages = (messages: SessionStreamServerMessage[]): string =>
 export const openSseStream = (params: {
   url: string
   credential?: string
+  lastEventId?: string
   openTimeoutMs?: number
 }): Promise<SseStream> =>
   new Promise((resolve, reject) => {
     const controller = new AbortController()
     const messages: SessionStreamServerMessage[] = []
+    const events: Array<{ message: SessionStreamServerMessage; id: string | null }> = []
     let ended = false
     let opened = false
     const waiters: Array<{
@@ -73,8 +79,12 @@ export const openSseStream = (params: {
       }
     }
 
-    const notify = (message: SessionStreamServerMessage) => {
+    const notify = (message: SessionStreamServerMessage, id: string | null) => {
       messages.push(message)
+      events.push({ message, id })
+      if (id !== null) {
+        client.lastEventId = id
+      }
       const matched = waiters.filter((waiter) => waiter.predicate(message))
       for (const waiter of matched) {
         clearTimeout(waiter.timer)
@@ -88,6 +98,8 @@ export const openSseStream = (params: {
 
     const client: SseStream = {
       messages,
+      events,
+      lastEventId: null,
       heartbeats: 0,
       waitFor: (predicate, timeoutMs = defaultWaitTimeoutMs) =>
         new Promise((waitResolve, waitReject) => {
@@ -139,6 +151,9 @@ export const openSseStream = (params: {
     if (params.credential !== undefined) {
       headers.authorization = `Bearer ${params.credential}`
     }
+    if (params.lastEventId !== undefined) {
+      headers["last-event-id"] = params.lastEventId
+    }
 
     const openTimeoutMs = params.openTimeoutMs ?? defaultOpenTimeoutMs
     const openTimer = setTimeout(() => {
@@ -166,17 +181,22 @@ export const openSseStream = (params: {
         const decoder = new TextDecoder()
         let buffer = ""
         let dataLines: string[] = []
+        let eventId: string | null = null
         const handleLine = (line: string) => {
           if (line === "") {
             if (dataLines.length > 0) {
               const payload = dataLines.join("\n")
               dataLines = []
+              const id = eventId
+              eventId = null
               try {
-                notify(SessionStreamServerMessageSchema.parse(JSON.parse(payload)))
+                notify(SessionStreamServerMessageSchema.parse(JSON.parse(payload)), id)
               } catch (error: unknown) {
                 const reason = error instanceof Error ? error.message : "parse failed"
                 failWaiters(new Error(`invalid sse message: ${reason}. raw=${payload}`))
               }
+            } else {
+              eventId = null
             }
             return
           }
@@ -184,6 +204,10 @@ export const openSseStream = (params: {
             if (line.slice(1).trim() === "ping") {
               client.heartbeats += 1
             }
+            return
+          }
+          if (line.startsWith("id:")) {
+            eventId = line.slice(3).replace(/^ /, "")
             return
           }
           if (line.startsWith("data:")) {

@@ -223,6 +223,10 @@ private class SessionsFakeSessionOwner : SessionOwner {
 
     override fun disconnect() = Unit
 
+    override fun onBackground() = Unit
+
+    override fun onForeground() = Unit
+
     override fun watch(agentId: AgentId?, sessionId: String?) = Unit
 
     override suspend fun prompt(
