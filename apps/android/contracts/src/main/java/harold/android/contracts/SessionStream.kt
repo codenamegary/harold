@@ -36,6 +36,18 @@ sealed interface SessionStreamServerMessage {
         val update: JsonElement,
     ) : SessionStreamServerMessage
 
+    /**
+     * A full replay follows. The client was missing a resume cursor or sent a
+     * stale one, so it must discard the cached transcript before folding the
+     * replay events that arrive next.
+     */
+    @Serializable
+    @SerialName("stream_reset")
+    data class StreamReset(
+        val agentId: AgentId,
+        val sessionId: String,
+    ) : SessionStreamServerMessage
+
     @Serializable
     @SerialName("session_config")
     data class SessionConfig(

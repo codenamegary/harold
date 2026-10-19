@@ -63,6 +63,14 @@ class ShellViewModel @Inject constructor(
         navigator.openPairing()
     }
 
+    fun onForeground() {
+        sessionOwner.onForeground()
+    }
+
+    fun onBackground() {
+        sessionOwner.onBackground()
+    }
+
     fun onRetryClick() {
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
 

@@ -1,4 +1,5 @@
 import Fastify, { FastifyInstance, FastifyRequest } from "fastify"
+import path from "node:path"
 import { Writable } from "node:stream"
 import multipart from "@fastify/multipart"
 import { z } from "zod"
@@ -46,6 +47,8 @@ import { createAcpPromptTurn } from "../session/hub/acp.hub.prompt"
 import { createSessionCwdCache, createSessionHub, SessionHub } from "../session/hub/hub"
 import { createCommandsCache } from "../session/hub/commands.cache"
 import { createConfigOptionsCache } from "../session/hub/config.cache"
+import { createConfigOptionsFileCache } from "../session/hub/config.cache.file"
+import { createSessionEventLog } from "../session/hub/event.log"
 import { createSessionTitleCache } from "../session/hub/session.title.cache"
 import { makeEnsureSessionBound, makeEnsureSupervisorReady } from "../session/session.acp.ready"
 import { makeAcceptPrompt, makeCompletePromptTurn } from "../session/session.prompt.gate.usecase"
@@ -209,7 +212,10 @@ export const createServer = async ({
   const sessionHubRef: { current: SessionHub | null } = { current: null }
   const cwdCache = createSessionCwdCache()
   const commandsCache = createCommandsCache()
-  const configCache = createConfigOptionsCache()
+  const configCache = createConfigOptionsCache(
+    createConfigOptionsFileCache(path.join(config.dataDir, "session-config-cache.json")),
+  )
+  const eventLog = createSessionEventLog()
   const sessionTitleCache = createSessionTitleCache()
 
   const agentExists = (agentId: string) => agentSettings.hasAgentId(agentId)
@@ -325,6 +331,7 @@ export const createServer = async ({
     cwdCache,
     commandsCache,
     configCache,
+    eventLog,
     sessionTitleCache,
     loadSession: loadHubSession,
     runPromptTurn,
@@ -405,6 +412,7 @@ export const createServer = async ({
     cwdCache,
     commandsCache,
     configCache,
+    eventLog,
     getSessionTitle: sessionTitleCache.getSessionTitle,
     forgetSessionTitle: sessionTitleCache.forgetSessionTitle,
     isArchivedAcpSession: archivedAcpSessions.isArchived,

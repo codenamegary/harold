@@ -13,18 +13,35 @@ export type ConfigOptionsCache = {
   forget: (params: { agentId: AgentId; sessionId: string }) => void
 }
 
+export type ConfigOptionsSnapshot = Readonly<Record<string, SessionConfig>>
+
+export type CreateConfigOptionsCacheParams = {
+  /** Restored from disk after a daemon restart. */
+  initial?: ConfigOptionsSnapshot
+  /** Called after every change so a persistent adapter can save the snapshot. */
+  onChange?: (snapshot: ConfigOptionsSnapshot) => void
+}
+
 const cacheKey = (agentId: AgentId, sessionId: string): string => `${agentId}:${sessionId}`
 
-export const createConfigOptionsCache = (): ConfigOptionsCache => {
-  const byKey = new Map<string, SessionConfig>()
+export const createConfigOptionsCache = (
+  params: CreateConfigOptionsCacheParams = {},
+): ConfigOptionsCache => {
+  const byKey = new Map<string, SessionConfig>(Object.entries(params.initial ?? {}))
+  const notify = () => {
+    params.onChange?.(Object.fromEntries(byKey))
+  }
 
   return {
     remember: ({ agentId, sessionId, configOptions }) => {
       byKey.set(cacheKey(agentId, sessionId), configOptions)
+      notify()
     },
     get: ({ agentId, sessionId }) => byKey.get(cacheKey(agentId, sessionId)),
     forget: ({ agentId, sessionId }) => {
-      byKey.delete(cacheKey(agentId, sessionId))
+      if (byKey.delete(cacheKey(agentId, sessionId))) {
+        notify()
+      }
     },
   }
 }

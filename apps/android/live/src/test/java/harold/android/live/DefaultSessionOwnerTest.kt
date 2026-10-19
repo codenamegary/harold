@@ -25,7 +25,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -117,6 +119,173 @@ class DefaultSessionOwnerTest {
         advanceUntilIdle()
 
         assertTrue(stream.closed)
+    }
+
+    @Test
+    fun foregroundProbeReopensAStreamThatReceivedNothingWhileBackgrounded() = runTest {
+        val factory = ScriptedSessionStreamFactory(listOf(holdOpen(), holdOpen()))
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+        val first = requireNotNull(factory.lastStream)
+
+        owner.onBackground()
+        owner.onForeground()
+        advanceUntilIdle()
+
+        assertTrue(first.closed)
+        assertEquals(2, factory.openCount)
+        assertEquals(ConnectionStatus.Live, owner.connectionState.value.status)
+        assertEquals(listOf(null, null), factory.openedEventIds)
+
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun foregroundKeepsAStreamThatReceivedFramesWhileBackgrounded() = runTest {
+        val factory = ScriptedSessionStreamFactory(listOf(holdOpen()))
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+        val stream = requireNotNull(factory.lastStream)
+
+        owner.onBackground()
+        stream.emit(
+            SessionStreamServerMessage.Subscribed(agentId = "cursor", sessionId = "sess_01"),
+        )
+        advanceUntilIdle()
+        owner.onForeground()
+        advanceUntilIdle()
+
+        assertFalse(stream.closed)
+        assertEquals(1, factory.openCount)
+
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun reconnectSendsTheLastAppliedCursor() = runTest {
+        val factory = ScriptedSessionStreamFactory(listOf(holdOpen(), holdOpen()))
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.Subscribed(agentId = "cursor", sessionId = "sess_01"),
+            cursor = "epoch:4",
+        )
+        advanceUntilIdle()
+        factory.lastStream!!.disconnect(DisconnectCause.Retryable("closed"))
+        advanceUntilIdle()
+
+        assertEquals(2, factory.openCount)
+        assertEquals(listOf(null, "epoch:4"), factory.openedEventIds)
+
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun reconnectKeepsTheTranscriptUntilTheServerSendsAReset() = runTest {
+        val factory = ScriptedSessionStreamFactory(listOf(holdOpen(), holdOpen()))
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionUpdate(
+                agentId = "cursor",
+                sessionId = "sess_01",
+                update = JsonObject(
+                    mapOf(
+                        "sessionUpdate" to JsonPrimitive("user_message_chunk"),
+                        "text" to JsonPrimitive("before the gap"),
+                    ),
+                ),
+            ),
+            cursor = "epoch:1",
+        )
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.Subscribed(agentId = "cursor", sessionId = "sess_01"),
+            cursor = "epoch:1",
+        )
+        advanceUntilIdle()
+        assertEquals(1, owner.snapshot.value.transcript.rows.size)
+
+        factory.lastStream!!.disconnect(DisconnectCause.Retryable("closed"))
+        advanceUntilIdle()
+
+        assertEquals(2, factory.openCount)
+        assertTrue(owner.snapshot.value.reconnecting)
+        assertEquals(1, owner.snapshot.value.transcript.rows.size)
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.StreamReset(agentId = "cursor", sessionId = "sess_01"),
+        )
+        advanceUntilIdle()
+
+        assertTrue(owner.snapshot.value.transcript.rows.isEmpty())
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionUpdate(
+                agentId = "cursor",
+                sessionId = "sess_01",
+                update = JsonObject(
+                    mapOf(
+                        "sessionUpdate" to JsonPrimitive("user_message_chunk"),
+                        "text" to JsonPrimitive("replayed"),
+                    ),
+                ),
+            ),
+        )
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.Subscribed(agentId = "cursor", sessionId = "sess_01"),
+            cursor = "epoch:9",
+        )
+        advanceUntilIdle()
+
+        assertEquals(1, owner.snapshot.value.transcript.rows.size)
+        assertTrue(owner.snapshot.value.transcript.live)
+        assertFalse(owner.snapshot.value.reconnecting)
+
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun foregroundSkipsTheRemainingReconnectBackoff() = runTest {
+        val factory = ScriptedSessionStreamFactory(
+            scripts = listOf(
+                closedWith(DisconnectCause.Retryable("refused")),
+                holdOpen(),
+            ),
+            now = { testScheduler.currentTime },
+        )
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        runCurrent()
+
+        advanceTimeBy(100)
+        owner.onForeground()
+        runCurrent()
+
+        assertEquals(listOf(0L, 100L), factory.openedAt)
+        assertEquals(ConnectionStatus.Live, owner.connectionState.value.status)
+
+        owner.disconnect()
+        advanceUntilIdle()
     }
 
     @Test
@@ -430,6 +599,8 @@ class DefaultSessionOwnerTest {
         }
 
         owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+
         factory.lastStream!!.emit(
             SessionStreamServerMessage.SessionUpdate(
                 agentId = "cursor",
@@ -1262,6 +1433,7 @@ private class ScriptedSessionStreamFactory(
         private set
     val openedAt = mutableListOf<Long>()
     val openedTargets = mutableListOf<Pair<String, String>>()
+    val openedEventIds = mutableListOf<String?>()
     var lastStream: ScriptedSessionStream? = null
         private set
 
@@ -1269,12 +1441,14 @@ private class ScriptedSessionStreamFactory(
         serverOrigin: String,
         agentId: String,
         sessionId: String,
+        lastEventId: String?,
         handlers: SessionStreamHandlers,
     ): SessionStream {
         val index = openCount
         openCount += 1
         openedAt += now()
         openedTargets += agentId to sessionId
+        openedEventIds += lastEventId
         val script = scripts.getOrElse(index) { scripts.last() }
         val stream = ScriptedSessionStream(handlers)
         lastStream = stream
@@ -1297,13 +1471,21 @@ private class ScriptedSessionStream(
 ) : SessionStream {
     var closed = false
         private set
+    private var frameAtNanos: Long? = null
 
     override fun close() {
         closed = true
     }
 
-    fun emit(message: SessionStreamServerMessage) {
-        handlers.onMessage(message)
+    override fun lastFrameAtNanos(): Long? = frameAtNanos
+
+    fun emit(message: SessionStreamServerMessage, cursor: String? = null) {
+        frameAtNanos = (frameAtNanos ?: 0L) + 1
+        handlers.onMessage(message, cursor)
+    }
+
+    fun disconnect(cause: DisconnectCause) {
+        handlers.onDisconnect(cause)
     }
 }
 

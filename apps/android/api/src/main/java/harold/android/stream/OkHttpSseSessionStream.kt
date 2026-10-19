@@ -4,6 +4,7 @@ import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 import okhttp3.Call
 import okhttp3.OkHttpClient
@@ -16,7 +17,7 @@ private const val HTTP_UNAUTHORIZED = 401
 private const val HTTP_FORBIDDEN = 403
 
 data class SessionStreamHandlers(
-    val onMessage: (SessionStreamServerMessage) -> Unit,
+    val onMessage: (SessionStreamServerMessage, cursor: String?) -> Unit,
     val onOpen: () -> Unit = {},
     val onDisconnect: (DisconnectCause) -> Unit = {},
 )
@@ -24,19 +25,27 @@ data class SessionStreamHandlers(
 /** A read-only server-sent-events stream for one session. */
 interface SessionStream {
     fun close()
+
+    /**
+     * Monotonic timestamp of the last received line (heartbeats included), or
+     * null before the first byte. The owner compares it across a background
+     * period to tell a surviving socket from one frozen through Doze.
+     */
+    fun lastFrameAtNanos(): Long?
 }
 
 fun interface SessionStreamFactory {
     /**
      * Opens `GET /v1/sessions/:sessionId/events?agentId=…`. Opening the
      * stream is the subscribe: the server replays the session and sends
-     * `subscribed` last. Changing the watched session means closing this
-     * stream and opening another.
+     * `subscribed` last. A [lastEventId] asks the server to send only events
+     * after that cursor instead of replaying the session.
      */
     fun open(
         serverOrigin: String,
         agentId: AgentId,
         sessionId: String,
+        lastEventId: String?,
         handlers: SessionStreamHandlers,
     ): SessionStream
 }
@@ -63,10 +72,12 @@ class OkHttpSseSessionStreamFactory(
         serverOrigin: String,
         agentId: AgentId,
         sessionId: String,
+        lastEventId: String?,
         handlers: SessionStreamHandlers,
     ): SessionStream {
         val finished = AtomicBoolean(false)
         val intentionalClose = AtomicBoolean(false)
+        val lastFrameAtNanos = AtomicLong(NO_FRAME)
 
         fun finish(cause: DisconnectCause) {
             if (intentionalClose.get()) {
@@ -82,6 +93,7 @@ class OkHttpSseSessionStreamFactory(
             finish(DisconnectCause.Retryable("invalid server origin"))
             return object : SessionStream {
                 override fun close() = Unit
+                override fun lastFrameAtNanos(): Long? = null
             }
         }
 
@@ -94,6 +106,11 @@ class OkHttpSseSessionStreamFactory(
         val request = Request.Builder()
             .url(url)
             .header("Accept", "text/event-stream")
+            .apply {
+                if (lastEventId != null) {
+                    header("Last-Event-ID", lastEventId)
+                }
+            }
             .build()
         val call = streamClient.newCall(request)
 
@@ -107,7 +124,7 @@ class OkHttpSseSessionStreamFactory(
                         !response.isSuccessful ->
                             finish(DisconnectCause.Retryable("HTTP ${response.code}"))
 
-                        else -> readEvents(response, call, handlers, ::finish)
+                        else -> readEvents(response, call, handlers, lastFrameAtNanos, ::finish)
                     }
                 }
             } catch (error: Throwable) {
@@ -120,6 +137,9 @@ class OkHttpSseSessionStreamFactory(
                 intentionalClose.set(true)
                 call.cancel()
             }
+
+            override fun lastFrameAtNanos(): Long? =
+                lastFrameAtNanos.get().takeIf { it != NO_FRAME }
         }
     }
 
@@ -127,8 +147,10 @@ class OkHttpSseSessionStreamFactory(
         response: Response,
         call: Call,
         handlers: SessionStreamHandlers,
+        lastFrameAtNanos: AtomicLong,
         finish: (DisconnectCause) -> Unit,
     ) {
+        lastFrameAtNanos.set(System.nanoTime())
         handlers.onOpen()
         val source = response.body?.source()
         if (source == null) {
@@ -147,9 +169,10 @@ class OkHttpSseSessionStreamFactory(
                 finish(DisconnectCause.Retryable("stream ended"))
                 return
             }
-            val data = parser.feed(line) ?: continue
-            when (val outcome = frameDecoder.decode(data)) {
-                is FrameOutcome.Decoded -> handlers.onMessage(outcome.message)
+            lastFrameAtNanos.set(System.nanoTime())
+            val event = parser.feed(line) ?: continue
+            when (val outcome = frameDecoder.decode(event.data)) {
+                is FrameOutcome.Decoded -> handlers.onMessage(outcome.message, event.id)
 
                 is FrameOutcome.UnknownFrame -> Unit
 
@@ -170,6 +193,8 @@ class OkHttpSseSessionStreamFactory(
     }
 
     companion object {
+        private const val NO_FRAME = Long.MIN_VALUE
+
         /**
          * Three server heartbeat windows (the daemon pings every 25 s): one
          * lost ping must not kill a healthy stream, a dead one is detected

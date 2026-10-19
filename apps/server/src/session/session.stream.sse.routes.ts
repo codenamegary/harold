@@ -47,6 +47,8 @@ export const registerSessionStreamSseRoutes = (
     const query = SessionCommandQuerySchema.parse(request.query)
     const agentId = query.agentId
     const sessionId = routeParams.sessionId
+    const lastEventIdHeader = request.headers["last-event-id"]
+    const lastEventId = Array.isArray(lastEventIdHeader) ? lastEventIdHeader[0] : lastEventIdHeader
 
     const principal = getRequestPrincipal(request)
     if (principal === undefined) {
@@ -122,16 +124,22 @@ export const registerSessionStreamSseRoutes = (
       id: subscriberId,
       sessionKey: null,
       sink: {
-        send: (message) => {
+        send: (message, options) => {
           if (reply.raw.writableEnded || reply.raw.destroyed) {
             return
           }
-          reply.raw.write(`data: ${JSON.stringify(message)}\n\n`)
+          const idLine = options?.cursor === undefined ? "" : `id: ${options.cursor}\n`
+          reply.raw.write(`${idLine}data: ${JSON.stringify(message)}\n\n`)
         },
       },
     })
 
-    await params.sessionHub.subscribe({ subscriberId, agentId, sessionId })
+    await params.sessionHub.subscribe({
+      subscriberId,
+      agentId,
+      sessionId,
+      ...(lastEventId === undefined ? {} : { lastEventId }),
+    })
     if (params.sessionHub.getSubscriberSession(subscriberId) === null) {
       // Subscribe failed: the hub already flushed an error event to the stream.
       reply.raw.end()

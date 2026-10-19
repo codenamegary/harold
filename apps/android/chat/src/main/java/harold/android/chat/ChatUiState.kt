@@ -147,10 +147,13 @@ data class ChatUiState(
         get() = selectedSession?.sessionId?.isEmpty() == true
 
     val composerBlockedMessage: String?
-        get() = if (isPendingNewSession) {
-            PENDING_SESSION_MESSAGE
-        } else {
-            composerBlockedMessage(effectiveSessionState)
+        get() = when {
+            isPendingNewSession -> PENDING_SESSION_MESSAGE
+            // The reconnect banner already explains why the composer is
+            // locked. Showing the Offline message too just adds a red line
+            // under the transcript while the replay is still streaming.
+            streamReconnecting -> null
+            else -> composerBlockedMessage(effectiveSessionState)
         }
 
     val showComposerCancel: Boolean
