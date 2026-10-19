@@ -280,14 +280,17 @@ class DefaultSessionOwner @Inject constructor(
         var reconnect = false
 
         while (currentCoroutineContext().isActive) {
-            applyConnection(ConnectionSignal.ConnectRequested)
-
-            val target = currentWatchTarget() ?: run {
+            val target = currentWatchTarget()
+            if (target == null) {
                 // The events URL carries the session, so there is no stream
-                // to open until something is watched.
+                // to open until something is watched. Park idle instead of
+                // claiming a connection attempt that cannot start.
+                applyConnection(ConnectionSignal.Idle)
                 watchChanges.receive()
                 continue
             }
+
+            applyConnection(ConnectionSignal.ConnectRequested)
 
             if (reconnect) {
                 synchronized(lock) {

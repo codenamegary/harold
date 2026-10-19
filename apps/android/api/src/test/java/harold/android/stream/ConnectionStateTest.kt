@@ -53,6 +53,13 @@ class ConnectionStateTest {
     }
 
     @Test
+    fun parksIdleWhenAsked() {
+        val state = reduce(live(), ConnectionSignal.Idle)
+
+        assertEquals(ConnectionStatus.Idle, state.status)
+    }
+
+    @Test
     fun treatsUnauthorizedAsTerminal() {
         val state = reduce(
             live(),

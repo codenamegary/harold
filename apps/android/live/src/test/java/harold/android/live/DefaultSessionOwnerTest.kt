@@ -62,7 +62,9 @@ class DefaultSessionOwnerTest {
         advanceUntilIdle()
 
         assertEquals(0, factory.openCount)
-        assertEquals(ConnectionStatus.Connecting, owner.connectionState.value.status)
+        // Nothing is watched, so there is no stream to open and the status
+        // must not claim to be connecting.
+        assertEquals(ConnectionStatus.Idle, owner.connectionState.value.status)
 
         owner.watch("cursor", "sess_01")
         advanceUntilIdle()
