@@ -101,6 +101,19 @@ describe("GET /v1/sessions/:sessionId/events", () => {
   }, 30_000)
 
   test("resumes from a valid cursor without replaying the session", async () => {
+    const configOptions = [
+      {
+        id: "model",
+        name: "Model",
+        category: "model",
+        type: "select",
+        currentValue: "m1",
+        options: [
+          { value: "m1", name: "M1" },
+          { value: "m2", name: "M2" },
+        ],
+      },
+    ]
     const { app, config } = await bootTestApp({
       whichFn,
       fakeAcpOptions: {
@@ -108,6 +121,7 @@ describe("GET /v1/sessions/:sessionId/events", () => {
         sessionNewSessionId: "sse-resume-1",
         sessionLoadSessionId: "sse-resume-1",
         emitLoadReplayUpdates: true,
+        configOptions,
       },
     })
     await enableAgent(app, "cursor", whichFn)
@@ -147,6 +161,14 @@ describe("GET /v1/sessions/:sessionId/events", () => {
     ).toBe(false)
     const subscribed = resumed.events.find((event) => event.message.type === "subscribed")
     expect(subscribed?.id).not.toBeNull()
+    const resumedConfig = resumed.messages.filter((message) => message.type === "session_config")
+    expect(resumedConfig).toHaveLength(1)
+    expect(resumedConfig[0]).toMatchObject({
+      type: "session_config",
+      agentId: "cursor",
+      sessionId: created.sessionId,
+      configOptions,
+    })
 
     await resumed.close()
   }, 30_000)

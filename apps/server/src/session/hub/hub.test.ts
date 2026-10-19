@@ -1186,7 +1186,7 @@ describe("session hub session info", () => {
     expect(subscribedCursor(replayed.frames)).toBe("epoch:2")
   })
 
-  test("resume with a valid cursor does not resend cached commands or config", async () => {
+  test("resume resends cached config and commands after catch-up", async () => {
     const cwdCache = createSessionCwdCache()
     cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
 
@@ -1203,21 +1203,18 @@ describe("session hub session info", () => {
       sessionUpdate: "available_commands_update",
       availableCommands: [{ name: "web", description: "Search" }],
     }
+    const config = [
+      {
+        id: "model",
+        name: "Model",
+        category: "model",
+        type: "select" as const,
+        currentValue: "m1",
+        options: [{ value: "m1", name: "M1" }],
+      },
+    ]
     hub.handleSessionUpdate({ agentId: "cursor", sessionId: "s1", update: commands })
-    hub.handleSessionConfig({
-      agentId: "cursor",
-      sessionId: "s1",
-      configOptions: [
-        {
-          id: "model",
-          name: "Model",
-          category: "model",
-          type: "select",
-          currentValue: "m1",
-          options: [{ value: "m1", name: "M1" }],
-        },
-      ],
-    })
+    hub.handleSessionConfig({ agentId: "cursor", sessionId: "s1", configOptions: config })
 
     const first = collectSink()
     hub.addSubscriber({ id: "a", sink: first.sink, sessionKey: null })
@@ -1226,6 +1223,11 @@ describe("session hub session info", () => {
     expect(first.messages.some((message) => message.type === "session_update")).toBe(true)
     const cursor = subscribedCursor(first.frames)
 
+    hub.handleSessionUpdate({
+      agentId: "cursor",
+      sessionId: "s1",
+      update: { sessionUpdate: "agent_message_chunk", text: "missed" },
+    })
     hub.removeSubscriber("a")
 
     const resumed = collectSink()
@@ -1237,7 +1239,24 @@ describe("session hub session info", () => {
       lastEventId: cursor,
     })
 
-    expect(resumed.messages.map((message) => message.type)).toEqual(["subscribed"])
+    expect(resumed.messages.map((message) => message.type)).toEqual([
+      "session_update",
+      "session_config",
+      "session_update",
+      "subscribed",
+    ])
+    expect(resumed.messages[0]).toMatchObject({
+      type: "session_update",
+      update: { sessionUpdate: "agent_message_chunk", text: "missed" },
+    })
+    expect(resumed.messages[1]).toMatchObject({
+      type: "session_config",
+      configOptions: config,
+    })
+    expect(resumed.messages[2]).toMatchObject({
+      type: "session_update",
+      update: commands,
+    })
   })
 
   test("resume catches up a title rename that happened while disconnected", async () => {

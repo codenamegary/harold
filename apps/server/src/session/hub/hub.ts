@@ -371,6 +371,47 @@ export const createSessionHub = ({
     return true
   }
 
+  const sendCachedConfig = (
+    subscriber: SessionHubSubscriber,
+    ref: { agentId: AgentId; sessionId: string },
+  ) => {
+    const cachedConfig = configCache.get(ref)
+    if (cachedConfig === undefined) {
+      return
+    }
+    subscriber.sink.send({
+      type: "session_config",
+      agentId: ref.agentId,
+      sessionId: ref.sessionId,
+      configOptions: cachedConfig,
+    })
+  }
+
+  const sendCachedCommandsAndTitle = (
+    subscriber: SessionHubSubscriber,
+    ref: { agentId: AgentId; sessionId: string },
+  ) => {
+    const cachedCommands = commandsCache.get(ref)
+    if (cachedCommands !== undefined) {
+      subscriber.sink.send({
+        type: "session_update",
+        agentId: ref.agentId,
+        sessionId: ref.sessionId,
+        update: cachedCommands,
+      })
+    }
+
+    const cachedTitle = sessionTitleCache.getSessionTitle(ref)
+    if (cachedTitle !== undefined) {
+      subscriber.sink.send({
+        type: "session_info",
+        agentId: ref.agentId,
+        sessionId: ref.sessionId,
+        title: cachedTitle,
+      })
+    }
+  }
+
   const subscribeInternal = async (params: {
     subscriberId: string
     agentId: AgentId
@@ -394,6 +435,11 @@ export const createSessionHub = ({
       for (const entry of catchUp) {
         subscriber.sink.send(entry.message, { cursor: entry.cursor })
       }
+      // Snapshots are idempotent, not transcript deltas. Resending them after
+      // catch-up rebuilds a client whose process or reset left them empty
+      // without paying for a loadSession replay.
+      sendCachedConfig(subscriber, ref)
+      sendCachedCommandsAndTitle(subscriber, ref)
       subscriber.sink.send(
         {
           type: "subscribed",
@@ -418,18 +464,7 @@ export const createSessionHub = ({
     // re-emit config while loading a session, and a resident session does not
     // reload. Sent ahead of the load so a fresh frame from the replay is the
     // last one the client sees.
-    const cachedConfig = configCache.get({
-      agentId: params.agentId,
-      sessionId: params.sessionId,
-    })
-    if (cachedConfig !== undefined) {
-      subscriber.sink.send({
-        type: "session_config",
-        agentId: params.agentId,
-        sessionId: params.sessionId,
-        configOptions: cachedConfig,
-      })
-    }
+    sendCachedConfig(subscriber, ref)
 
     const loaded = await loadForSubscriber({
       subscriber,
@@ -441,31 +476,7 @@ export const createSessionHub = ({
       return
     }
 
-    const cachedCommands = commandsCache.get({
-      agentId: params.agentId,
-      sessionId: params.sessionId,
-    })
-    if (cachedCommands !== undefined) {
-      subscriber.sink.send({
-        type: "session_update",
-        agentId: params.agentId,
-        sessionId: params.sessionId,
-        update: cachedCommands,
-      })
-    }
-
-    const cachedTitle = sessionTitleCache.getSessionTitle({
-      agentId: params.agentId,
-      sessionId: params.sessionId,
-    })
-    if (cachedTitle !== undefined) {
-      subscriber.sink.send({
-        type: "session_info",
-        agentId: params.agentId,
-        sessionId: params.sessionId,
-        title: cachedTitle,
-      })
-    }
+    sendCachedCommandsAndTitle(subscriber, ref)
 
     subscriber.sink.send(
       {
