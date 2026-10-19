@@ -649,7 +649,7 @@ fun ChatScreen(
                     Text(
                         text = message,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.testTag("composer_blocked_message"),
                     )
                 }
