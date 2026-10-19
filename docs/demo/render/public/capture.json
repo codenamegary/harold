@@ -1,255 +1,534 @@
 {
-  "durationSec": 201.111,
   "width": 1080,
   "height": 2400,
-  "events": [
+  "slices": [
     {
-      "name": "driver_start",
-      "sec": 1.024
+      "name": "pair_idle",
+      "file": "slices/001-pair_idle.mp4",
+      "durationSec": 2.301,
+      "width": 1080,
+      "height": 2400,
+      "still": true,
+      "taps": []
     },
     {
-      "name": "tap_pair",
-      "sec": 3.411
+      "name": "pair_tap",
+      "file": "slices/002-pair_tap.mp4",
+      "durationSec": 3.961,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 540,
+          "y": 2205,
+          "atSec": 3.516
+        }
+      ]
     },
     {
-      "name": "paired_chat_visible",
-      "sec": 14.2
+      "name": "scanner_open",
+      "file": "slices/003-scanner_open.mp4",
+      "durationSec": 2.313,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": []
     },
     {
-      "name": "session_menu_open",
-      "sec": 15.4
+      "name": "scan_wait",
+      "file": "slices/004-scan_wait.mp4",
+      "durationSec": 16.829,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": []
     },
     {
-      "name": "session_history_selected",
-      "sec": 32.286
-    },
-    {
-      "name": "tap_new_session",
-      "sec": 40.456
-    },
-    {
-      "name": "agent_selected",
-      "sec": 60.906
-    },
-    {
-      "name": "tap_continue",
-      "sec": 63.723
-    },
-    {
-      "name": "config_visible",
-      "sec": 66.315
-    },
-    {
-      "name": "model_picked",
-      "sec": 83.421
-    },
-    {
-      "name": "mode_plan",
-      "sec": 85.695
-    },
-    {
-      "name": "mode_build",
-      "sec": 92.061
-    },
-    {
-      "name": "effort_start",
-      "sec": 94.251
-    },
-    {
-      "name": "effort_set",
-      "sec": 98.149
-    },
-    {
-      "name": "prompt_start",
-      "sec": 98.949
-    },
-    {
-      "name": "prompt_typed",
-      "sec": 108.368
-    },
-    {
-      "name": "attach_photo_start",
-      "sec": 108.368
-    },
-    {
-      "name": "photo_attached",
-      "sec": 120.824
-    },
-    {
-      "name": "attach_file_start",
-      "sec": 121.825
-    },
-    {
-      "name": "file_attached",
-      "sec": 129.533
-    },
-    {
-      "name": "tap_send",
-      "sec": 133.261
-    },
-    {
-      "name": "reply_visible",
-      "sec": 154.333
-    },
-    {
-      "name": "voice_play_start",
-      "sec": 156.333
-    },
-    {
-      "name": "voice_open",
-      "sec": 156.937
-    },
-    {
-      "name": "voice_expanded",
-      "sec": 165.633
-    },
-    {
-      "name": "voice_play_done",
-      "sec": 176.714
-    },
-    {
-      "name": "voice_transcript",
-      "sec": 176.715
-    },
-    {
-      "name": "tap_voice_send",
-      "sec": 181.353
-    },
-    {
-      "name": "voice_reply_visible",
-      "sec": 198.466
-    },
-    {
-      "name": "done",
-      "sec": 198.466
-    }
-  ],
-  "rawEvents": [
-    {
-      "name": "driver_start",
-      "sec": 1.024
-    },
-    {
-      "name": "tap_pair",
-      "sec": 3.411
-    },
-    {
-      "name": "paired_chat_visible",
-      "sec": 33.051
+      "name": "paired",
+      "file": "slices/005-paired.mp4",
+      "durationSec": 5.801,
+      "width": 1080,
+      "height": 2400,
+      "still": true,
+      "taps": []
     },
     {
       "name": "session_menu_open",
-      "sec": 34.251
+      "file": "slices/006-session_menu_open.mp4",
+      "durationSec": 6.143,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 498,
+          "y": 211,
+          "atSec": 3.067
+        }
+      ]
     },
     {
-      "name": "session_history_selected",
-      "sec": 51.137
+      "name": "session_pick",
+      "file": "slices/007-session_pick.mp4",
+      "durationSec": 4.06,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 410,
+          "y": 491,
+          "atSec": 2.97
+        }
+      ]
     },
     {
-      "name": "tap_new_session",
-      "sec": 59.307
+      "name": "session_chat",
+      "file": "slices/008-session_chat.mp4",
+      "durationSec": 3.953,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": []
     },
     {
-      "name": "agent_selected",
-      "sec": 79.757
+      "name": "session_menu_reopen",
+      "file": "slices/009-session_menu_reopen.mp4",
+      "durationSec": 5.255,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 498,
+          "y": 211,
+          "atSec": 3.013
+        }
+      ]
     },
     {
-      "name": "tap_continue",
-      "sec": 82.574
+      "name": "new_session",
+      "file": "slices/010-new_session.mp4",
+      "durationSec": 4.711,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 410,
+          "y": 364,
+          "atSec": 2.947
+        }
+      ]
     },
     {
-      "name": "config_visible",
-      "sec": 85.166
+      "name": "workspace_sites",
+      "file": "slices/011-workspace_sites.mp4",
+      "durationSec": 3.175,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 540,
+          "y": 507,
+          "atSec": 2.978
+        }
+      ]
     },
     {
-      "name": "model_picked",
-      "sec": 102.272
+      "name": "workspace_harold",
+      "file": "slices/012-workspace_harold.mp4",
+      "durationSec": 3.013,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 126,
+          "y": 801,
+          "atSec": 2.968
+        }
+      ]
+    },
+    {
+      "name": "agent_open",
+      "file": "slices/013-agent_open.mp4",
+      "durationSec": 4.553,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 540,
+          "y": 707,
+          "atSec": 2.953
+        }
+      ]
+    },
+    {
+      "name": "agent_pick",
+      "file": "slices/014-agent_pick.mp4",
+      "durationSec": 3.039,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 159,
+          "y": 1001,
+          "atSec": 2.956
+        }
+      ]
+    },
+    {
+      "name": "continue",
+      "file": "slices/015-continue.mp4",
+      "durationSec": 3.151,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 540,
+          "y": 886,
+          "atSec": 2.959
+        }
+      ]
+    },
+    {
+      "name": "session_create_wait",
+      "file": "slices/016-session_create_wait.mp4",
+      "durationSec": 1.881,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": []
+    },
+    {
+      "name": "model_open",
+      "file": "slices/017-model_open.mp4",
+      "durationSec": 4.86,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 384,
+          "y": 1934,
+          "atSec": 3.043
+        }
+      ]
+    },
+    {
+      "name": "model_search",
+      "file": "slices/018-model_search.mp4",
+      "durationSec": 6.037,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 327,
+          "y": 1484,
+          "atSec": 2.986
+        }
+      ]
+    },
+    {
+      "name": "model_pick",
+      "file": "slices/019-model_pick.mp4",
+      "durationSec": 4.996,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 540,
+          "y": 1313,
+          "atSec": 3.01
+        }
+      ]
     },
     {
       "name": "mode_plan",
-      "sec": 104.546
+      "file": "slices/020-mode_plan.mp4",
+      "durationSec": 1.941,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 827,
+          "y": 1934,
+          "atSec": 0.801
+        }
+      ]
     },
     {
       "name": "mode_build",
-      "sec": 110.912
+      "file": "slices/021-mode_build.mp4",
+      "durationSec": 3.905,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 827,
+          "y": 1934,
+          "atSec": 0.805
+        }
+      ]
     },
     {
-      "name": "effort_start",
-      "sec": 113.102
+      "name": "effort_1",
+      "file": "slices/022-effort_1.mp4",
+      "durationSec": 1.37,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 976,
+          "y": 1934,
+          "atSec": 0.8
+        }
+      ]
     },
     {
-      "name": "effort_set",
-      "sec": 117.0
+      "name": "effort_2",
+      "file": "slices/023-effort_2.mp4",
+      "durationSec": 1.69,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 976,
+          "y": 1934,
+          "atSec": 0.8
+        }
+      ]
     },
     {
-      "name": "prompt_start",
-      "sec": 117.8
+      "name": "effort_3",
+      "file": "slices/024-effort_3.mp4",
+      "durationSec": 1.475,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 976,
+          "y": 1934,
+          "atSec": 0.801
+        }
+      ]
     },
     {
-      "name": "prompt_typed",
-      "sec": 127.219
+      "name": "prompt_focus",
+      "file": "slices/025-prompt_focus.mp4",
+      "durationSec": 3.398,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 176,
+          "y": 2074,
+          "atSec": 2.968
+        }
+      ]
     },
     {
-      "name": "attach_photo_start",
-      "sec": 127.219
+      "name": "prompt_type",
+      "file": "slices/026-prompt_type.mp4",
+      "durationSec": 6.609,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": []
     },
     {
-      "name": "photo_attached",
-      "sec": 139.675
+      "name": "photo_open",
+      "file": "slices/027-photo_open.mp4",
+      "durationSec": 6.249,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 274,
+          "y": 1391,
+          "atSec": 3.016
+        }
+      ]
     },
     {
-      "name": "attach_file_start",
-      "sec": 140.676
+      "name": "photo_pick",
+      "file": "slices/028-photo_pick.mp4",
+      "durationSec": 3.265,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 902,
+          "y": 817,
+          "atSec": 3.043
+        }
+      ]
     },
     {
-      "name": "file_attached",
-      "sec": 148.384
+      "name": "photo_add",
+      "file": "slices/029-photo_add.mp4",
+      "durationSec": 7.229,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 922,
+          "y": 2242,
+          "atSec": 2.972
+        }
+      ]
     },
     {
-      "name": "tap_send",
-      "sec": 152.112
+      "name": "file_open",
+      "file": "slices/030-file_open.mp4",
+      "durationSec": 6.212,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 411,
+          "y": 1391,
+          "atSec": 2.999
+        }
+      ]
     },
     {
-      "name": "reply_visible",
-      "sec": 173.184
+      "name": "file_pick",
+      "file": "slices/031-file_pick.mp4",
+      "durationSec": 7.132,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 299,
+          "y": 605,
+          "atSec": 2.985
+        }
+      ]
     },
     {
-      "name": "voice_play_start",
-      "sec": 175.184
+      "name": "send",
+      "file": "slices/032-send.mp4",
+      "durationSec": 6.712,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 943,
+          "y": 1391,
+          "atSec": 2.961
+        }
+      ]
+    },
+    {
+      "name": "reply_wait",
+      "file": "slices/033-reply_wait.mp4",
+      "durationSec": 13.759,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": []
+    },
+    {
+      "name": "reply",
+      "file": "slices/034-reply.mp4",
+      "durationSec": 4.302,
+      "width": 1080,
+      "height": 2400,
+      "still": true,
+      "taps": []
     },
     {
       "name": "voice_open",
-      "sec": 175.788
+      "file": "slices/035-voice_open.mp4",
+      "durationSec": 10.095,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 806,
+          "y": 2211,
+          "atSec": 2.982
+        }
+      ]
     },
     {
-      "name": "voice_expanded",
-      "sec": 184.484
-    },
-    {
-      "name": "voice_play_done",
-      "sec": 195.565
+      "name": "voice_expand",
+      "file": "slices/036-voice_expand.mp4",
+      "durationSec": 8.134,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 274,
+          "y": 2211,
+          "atSec": 4.168
+        }
+      ]
     },
     {
       "name": "voice_transcript",
-      "sec": 195.566
+      "file": "slices/037-voice_transcript.mp4",
+      "durationSec": 4.069,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": []
     },
     {
-      "name": "tap_voice_send",
-      "sec": 200.204
+      "name": "voice_send",
+      "file": "slices/038-voice_send.mp4",
+      "durationSec": 4.232,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 975,
+          "y": 2242,
+          "atSec": 3.342
+        }
+      ]
     },
     {
-      "name": "voice_reply_visible",
-      "sec": 217.317
+      "name": "voice_reply_wait",
+      "file": "slices/039-voice_reply_wait.mp4",
+      "durationSec": 22.217,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": []
     },
     {
-      "name": "done",
-      "sec": 217.317
-    }
-  ],
-  "cuts": [
-    {
-      "from": 13.0,
-      "to": 31.851
+      "name": "voice_reply",
+      "file": "slices/040-voice_reply.mp4",
+      "durationSec": 3.301,
+      "width": 1080,
+      "height": 2400,
+      "still": true,
+      "taps": []
     }
   ]
 }

@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
-# Seed the emulator with the demo assets.
+# Seed the factory-reset emulator with the demo assets.
 #
-# cats.zip is extracted into the capture work directory and its photos are
-# pushed to DCIM/Camera. cat-diary.txt is pushed to Download so the app's file
-# attachment picker can select it. A file is pushed only when the emulator
-# does not already hold a file with the same name and size. A MediaStore scan
-# follows so the Android photo picker, file picker, and gallery can see the
-# files. Safe to run on every capture: existing files are skipped, so repeated
-# runs do not stack up copies.
+# capture.sh boots the AVD with -wipe-data, so the emulator starts with no
+# prior photos, downloads, app data, or permissions. cats.zip is extracted
+# into the capture work directory and its photos are pushed to DCIM/Camera;
+# cat-diary.txt is pushed to Download. A MediaStore scan follows so the Android
+# photo picker, file picker, and gallery see the deployed assets.
 set -euo pipefail
 
 SERIAL="${SERIAL:-emulator-5554}"
@@ -28,7 +26,16 @@ for tool in adb unzip; do
 done
 [[ -f "$ARCHIVE" ]] || die "photo archive not found at $ARCHIVE (set PHOTOS_ARCHIVE)"
 [[ -f "$DOCUMENT" ]] || die "document not found at $DOCUMENT (set DOCUMENT_SOURCE)"
-adb -s "$SERIAL" get-state >/dev/null 2>&1 || die "$SERIAL is not available"
+
+# The first boot after -wipe-data can briefly drop adb while system services
+# and package manager settle. Wait for the device instead of failing the run.
+state=""
+for _ in $(seq 1 60); do
+  state=$(adb -s "$SERIAL" get-state 2>/dev/null | tr -d '\r' || true)
+  [[ "$state" == "device" ]] && break
+  sleep 1
+done
+[[ "$state" == "device" ]] || die "$SERIAL is not available (adb state: ${state:-none})"
 
 # Single-quote a remote path for the adb shell command line.
 shell_quote() {

@@ -1,6 +1,6 @@
 ---
 name: compose-demo
-description: Run and debug the Harold phone demo capture pipeline (staged clip → emulator camera feed → pairing on camera → phone.mp4 → Remotion). Use when capturing or re-capturing docs/demo/render/public/phone.mp4, composing the camera feed with a live pairing QR, verifying the emulator camera pipeline, or updating the Remotion demo after a capture.
+description: Run and debug the Harold phone demo capture pipeline (staged clip → emulator camera feed → pairing on camera → slices → Remotion). Use when capturing or re-capturing docs/demo/render/public/slices/, composing the camera feed with a live pairing QR, verifying the emulator camera pipeline, or updating the Remotion demo after a capture.
 ---
 
 # Compose the demo capture
@@ -13,15 +13,21 @@ capturing frames. If a stage fails, fix the script, not the run.
 
 All under `docs/demo/capture/` unless noted:
 
-- `capture.sh` — the whole run: restarts the daemon, seeds OpenCode session
-  history, issues a pairing code, composes the feed, converts
+- `capture.sh` — the whole run: stops any running Harold, recreates the demo
+  data dir `~/.harold-demo` from `~/.harold/harold.db` (agents/workspaces
+  kept, devices/pairing codes cleared), starts the source daemon on
+  127.0.0.1:3847 with `bun run dev` (so the server matches the debug app),
+  seeds OpenCode session history with `SEED_MODEL` (default
+  `deepseek/deepseek-flash`), issues a pairing code, composes the feed, converts
   `assets/voice-input.wav` for the emulator's WAV audio driver, compiles
-  `audio-env-shim.c`, boots the emulator, seeds its gallery and Downloads from
-  `assets/`, warms the camera, resets the app, screen-records while
-  `drive_phone.py` walks pairing → session history → new session →
-  model/mode/effort → prompt/attachments → text chat → voice chat, pulls
-  `docs/demo/render/public/phone.mp4`, and writes
-  `docs/demo/render/public/capture.json`. Run it from the repo root:
+  `audio-env-shim.c`, boots the emulator with `-wipe-data` (factory reset),
+  seeds its gallery and Downloads from `assets/`, builds and installs the app,
+  resets the app, screen-records one named slice
+  per action while `drive_phone.py` walks pairing → session history → new
+  session → model/mode/effort → prompt/attachments → text chat → voice chat,
+  pulls the slices, and builds `docs/demo/render/public/capture.json`. It
+  derives `apps/android/local.properties` from the SDK before the install, so
+  the installed app matches the source server. Run it from the repo root:
   `bash docs/demo/capture/capture.sh`.
 - `seed_sessions.sh` — creates the five OpenCode sessions the phone's session
   menu shows, with `opencode run --title`. It declares the titles newest
@@ -33,37 +39,37 @@ All under `docs/demo/capture/` unless noted:
   component tracking), then a geometry pass (rotate 90° CCW, cover-crop to
   1280x960), then a 120s freeze tail. With a QR arg the source must be the
   1920x1080 staged clip; without one, any aspect works.
-- `drive_phone.py` — the UI driver. Marks every step to
-  `docs/demo/work/capture/marks.log`
-  (`driver_start`, `tap_pair`, `paired_chat_visible`, `session_menu_open`,
-  `session_history_selected`, `tap_new_session`, `config_visible`,
-  `mode_plan`, `effort_set`, `prompt_typed`, `photo_attached`,
-  `file_attached`, `reply_visible`, `voice_play_start`, `voice_transcript`,
-  `tap_voice_send`, `voice_reply_visible`, plus a `rec_start_NNN`/`rec_end_NNN`
-  pair per recorded segment). `--warm` opens and closes
-  the scanner once.
+- `drive_phone.py` — the UI driver. Starts one screenrecord slice per action
+  under `/data/local/tmp` (outside the media pickers), writes the slice
+  manifest to `docs/demo/work/capture/slices.json`, and marks
+  taps plus step names in `docs/demo/work/capture/marks.log`. `--warm` is a
+  manual camera warm-up; the capture does not use it.
 - `audio-env-shim.c` — sets `QEMU_AUDIO_DRV=wav` and the WAV input/output
   paths inside QEMU, because the emulator wrapper strips `QEMU_*` variables.
   `capture.sh` compiles it to `/tmp/opencode/harold-audio-env-shim.so`.
-- `stitch_segments.py` — pairs up the `rec_start_NNN`/`rec_end_NNN` marks,
-  concatenates the per-segment recordings (each anchored to its `rec_end`),
-  re-encodes `docs/demo/render/public/phone.mp4`, and rewrites
-  `capture.json` onto the stitched timeline. A short static segment that
-  finalizes as one frame with no duration is held for its recorded wall time.
-  Marks fired while recording was off clamp to the start of the next segment;
-  the removed wall ranges are kept under `cuts`.
+- `build_capture.py` — reads the slice manifest and tap marks, re-encodes each
+  slice into `docs/demo/render/public/slices/`, and writes `capture.json`
+  with each slice's file, duration, size, `still` flag, and taps. A short
+  static slice that finalizes as one frame is marked `still` and held for its
+  recorded wall time.
 - `push_assets.sh` — extracts `assets/cats.zip` into the capture work
-  directory and pushes only photos missing from `/sdcard/DCIM/Camera`
-  (same name and size are skipped). It also pushes `assets/cat-diary.txt`
-  to `/sdcard/Download` the same way, then rescans MediaStore so the photo
-  and file pickers see everything. Safe to rerun; it does not make
-  duplicate copies.
+  directory, pushes its 17 photos to `/sdcard/DCIM/Camera`, and pushes
+  `cat-diary.txt` to `/sdcard/Download`, then rescans MediaStore so the photo
+  picker, file picker, and gallery see the demo files. The emulator was wiped
+  at boot, so there is no prior media to sweep.
 
 ## Hardware facts that must not drift
 
 - Emulator: `~/android/emulator/emulator` (36.5+, has videofile camera),
-  AVD `agent_server_api34`, flags `-allow-host-audio -gpu swiftshader_indirect
--no-snapshot -feature VideoPlayback -camera-back videofile:/abs/path.mp4`.
+  AVD `agent_server_api34`, flags `-wipe-data -allow-host-audio
+-gpu swiftshader_indirect -no-snapshot -feature VideoPlayback
+-camera-back videofile:/abs/path.mp4`. `-wipe-data` is the asset cleanup:
+  it resets installed apps, settings, permissions, and emulated storage.
+- The wipe also resets the emulator to light mode. `capture.sh` runs
+  `cmd uimode night yes` after boot and verifies `Night mode: yes` before the
+  app launch; the demo must stay dark. It also sets
+  `hide_error_dialogs=1` because the slow first boot can ANR Pixel Launcher
+  and leave a system dialog over the pair screen.
   Bare absolute path; `file=` prefix fails. Feed must have no audio track.
 - The videofile camera silently fails to open when its path is too long. A
   path under this worktree (~107 chars) is long enough to fail; copy the
@@ -91,16 +97,17 @@ All under `docs/demo/capture/` unless noted:
   is squashed (a 9:16 file renders ~2.4x anisotropic — QRs stop decoding).
 - `hw.camera.back.orientation=90`: the app rotates preview 90° clockwise, so
   the file is authored rotated 90° counter-clockwise (compose does this).
-- First camera open after boot is black ~15-25s; later opens ~2s. The warm
-  pass absorbs this. Its scan must not pair: pairing codes are single-use
-  (`pairing_code_claimed` on re-claim), and a failing claim puts the app
-  into a retry loop that hammers the camera until the emulator wedges. The
-  feed solves both: compose gates the live QR to after 40s of feed time, so
-  the 25s warm pass scans inert footage (the staged clip's decorative QR
-  never decodes), and the recorded scan reaches the QR region and pairs on
-  camera.
-- Pairing codes live 10 minutes; capture.sh issues one right before
-  composing. `adb reverse tcp:3847 tcp:3847` must be set after every boot.
+- First camera open after boot is black ~15-25s; later opens ~2s. The capture
+  records that startup in `scanner_open` and Remotion trims it. Pairing codes
+  are single-use (`pairing_code_claimed` on re-claim), so do not run a warm
+  scan against the live QR. The composed feed keeps the live QR out of the
+  first 40 seconds; the recorded scanner may reach it, and that is the scan.
+- The demo daemon uses `HAROLD_DATA_DIR=~/.harold-demo`,
+  `bindHost=127.0.0.1`, `bindPort=3847`, and
+  `advertisedUrl=http://127.0.0.1:3847`. The real `~/.harold` is stopped
+  first and read only for agents/workspaces. Pairing codes live 10 minutes;
+  `capture.sh` issues one right before composing. `adb reverse tcp:3847
+  tcp:3847` must be set after every boot.
 - Kill the emulator with bracketed patterns (`pkill -f '[q]emu-system'`).
 
 ## The verification loop
@@ -121,41 +128,47 @@ f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
    upright, filling the frame, undistorted. Measure if unsure: flood-fill
    the QR's white quiet zone from a seed and compare the panel's aspect to
    the file frame's (0.999 = perfect; 0.44 = the old squash).
-3. **Pairing lands.** After tapping Pair and ~45s: `uiautomator dump` must
+3. **Pairing lands.** After tapping Pair and up to ~90s: `uiautomator dump` must
    contain a `Select session:` content description, and
-   `~/.harold/harold.log` must show requests from the emulator. No error UI
+   `~/.harold-demo/harold.log` must show requests from the emulator. No error UI
    means the analyzer never decoded — go back to step 2 and measure.
 4. **Full capture.** Run `capture.sh`. It exits non-zero if the driver
-   fails; `docs/demo/work/capture/capture.log` and `driver.log` hold the marks.
-   `capture.json` must contain the full event set — session history,
-   attachments, text reply, `voice_play_start`, `voice_transcript`,
-   `tap_voice_send`, `voice_reply_visible` — and the stitch must have fired:
-   `durationSec` is far shorter than wall time (~100-120s of video from
-   ~180s of wall clock; `rawEvents` holds the wall-clock marks, `cuts` the
-   unrecorded ranges, and every paired `rec_start_NNN`/`rec_end_NNN` has a
-   pulled `harold-demo-NNN.mp4` in `work/capture/segments/`).
-   `capture.log` must show `sessions_seeded` and `assets_ready`, and the
-   session menu must show exactly "Cat Therapist near me", "Does KGB use
+   fails; `docs/demo/work/capture/capture.log` and `driver.log` hold the
+   progress. `capture.log` must show `daemon_shutdown`, `daemon_home`,
+   `daemon_ready`, `emulator_dark_mode`, `sessions_seeded`,
+   `android_installed`, `slices_pulled`, and `build_capture`;
+   `android-build.log` must show `BUILD SUCCESSFUL`. The seed
+   log must show `seeded sessions use {"id":"deepseek-flash","providerID":"deepseek"}`.
+   `capture.json` must list the full slice set: `pair_idle`,
+   `pair_tap`, `scan_wait`, `paired`, `session_menu_open`, `session_pick`,
+   `session_chat`, `session_menu_reopen`, `new_session`, `workspace_harold`,
+   `agent_open`, `agent_pick`, `continue`, `session_create_wait`, `model_open`,
+   `model_search`, `model_pick`, `mode_plan`, `mode_build`, `effort_1..3`,
+   `prompt_focus`, `prompt_type`, `photo_open`, `photo_pick`, `photo_add`,
+   `file_open`, `file_pick`, `send`, `reply_wait`, `reply`, `voice_open`,
+   `voice_expand`, `voice_transcript`, `voice_send`, `voice_reply_wait`, and
+   `voice_reply` (plus `workspace_sites` when the picker shows it). Every
+   listed slice must have an mp4 in `docs/demo/render/public/slices/`.
+   The session menu must show exactly "Cat Therapist near me", "Does KGB use
    cats?", "Why does my cat hate me?", "Cat treat safe for humans?", and
    "Russian for dummies", newest first. `/sdcard/DCIM/Camera` must hold the
-   zip's 17 photos, `/sdcard/Download` must hold `cat-diary.txt`, and a second
-   `push_assets.sh` run reports 0 pushed.
+   zip's 17 photos, `/sdcard/Download` must hold `cat-diary.txt`, and the
+   assets step must report 18 pushed onto the wiped emulator.
 5. **Voice landed.** `driver.log` must print a non-empty
-   `voice transcript:` line, and the last frame of `phone.mp4` must show the
-   completed reply (no "Replying" label and no stop button). If the
-   transcript is empty, confirm `avd hostmicon` and `avd rewindaudio` were
-   sent, the QEMU process has `QEMU_AUDIO_DRV=wav` and holds
+   `voice transcript:` line, and the last frame of the `voice_reply` slice
+   must show the completed reply (no "Replying" label and no stop button).
+   If the transcript is empty, confirm `avd hostmicon` and `avd rewindaudio`
+   were sent, the QEMU process has `QEMU_AUDIO_DRV=wav` and holds
    `/tmp/opencode/harold-qemu-in.wav` open, and no voice warm-up fixture ran.
-6. **Remotion is in sync.** `docs/demo/render` reads `public/capture.json` at build
-   time (`calculateMetadata`); `src/timeline.ts` holds the stage choreography
-   and the per-tap positions, which are tuned to a specific capture. After a
-   fresh capture, re-check the `tapSpecs` and caption times against the new
-   marks and frames. Validate: `durationSec` is sane, and render a
-   spot-check still: `bun x remotion still HaroldDemo ../work/render/check.png
+6. **Remotion is in sync.** `docs/demo/render` reads `public/capture.json` at
+   build time (`calculateMetadata`); `src/timeline.ts` holds the slice edit in
+   `PAIR_STEPS`/`WALK_STEPS`. After a fresh capture, check the slice names and
+   durations, then render a spot-check still:
+   `bun x remotion still HaroldDemo ../work/render/check.png
 --frame=<mid-walkthrough>` from `docs/demo/render`. Commit
-   `docs/demo/render/public/phone.mp4` + `capture.json` only from a
-   fully successful run — never a failed one. Then re-render the committed
-   cut so it shows the new capture:
+   `docs/demo/render/public/slices/` + `capture.json` only from a fully
+   successful run — never a failed one. Then re-render the committed cut so
+   it shows the new capture:
    `bun x remotion render src/index.ts HaroldDemo ../harold.mp4` from
    `docs/demo/render`.
 
@@ -167,25 +180,39 @@ f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
   leaves the per-run prompt output in `work/capture/session-seed.log`.
 - Scanner open but never pairs, no error UI → feed geometry or decode;
   re-run step 1's jsQR check at 640x480.
-- Driver dies on `not found text='Pair'` → the warm pass paired; the QR
-  time gate (40s) is missing from the compose.
-- Scanner shows "Pairing code has already been claimed" → the warm scan
-  reached the QR region; the gate must exceed the warm wall clock (25s).
+- Driver dies on `not found text='Pair'` → the app was not on the home
+  screen. Check `android_installed` and the app launch; the capture launches
+  the app once and gives it four seconds.
+- Scanner shows "Pairing code has already been claimed" → a previous scan
+  or manual warm scan already claimed the code. Issue a fresh code and
+  rerun; do not run a warm scan against the live QR.
 - Scanner retries and the emulator wedges to a black screen → a failing
-  claim loops decode→error→reopen; never let the warm scan hit a live or
-  stale-but-valid-looking QR.
+  claim loops decode→error→reopen. Use a fresh code and confirm `adb reverse`
+  is set for the recorded run.
 - Black viewfinder at scan time → first-open warmup or the camera feed was
-  never opened. Check `lsof -p <qemu> | grep harold-camera`; if QEMU does
-  not hold the file, the `videofile:` path is too long. Use the short
-  `/tmp/opencode/harold-camera-live.mp4` copy. The warm pass handles the
-  first-open warmup, don't record before `camera_warm`.
+  never opened. `scanner_open` records the warmup; check
+  `lsof -p <qemu> | grep harold-camera`; if QEMU does not hold the file, the
+  `videofile:` path is too long. Use the short
+  `/tmp/opencode/harold-camera-live.mp4` copy. The capture no longer warms
+  separately, so there is no `camera_warm` log.
 - Voice scene opens, mic shows listening, but no transcript → check
   `avd hostmicon` and `avd rewindaudio` were sent, the QEMU process has
   `QEMU_AUDIO_DRV=wav` and holds `/tmp/opencode/harold-qemu-in.wav` open,
   and no voice warm-up fixture ran. The windowed emulator keeps the host
   mic gated off until `hostmicon`.
-- Voice reply still streaming at the end of `phone.mp4` → the driver's
-  completion check needs three quiet polls; if it returns early, inspect
-  `wait_for_agent_turn` and the app's "Replying"/`Cancel run` signals.
+- App sits in reconnect retries, or the composer chips say `provider/model`
+  and `mode` → the installed app and source server are different revisions,
+  or the app is not reaching the demo daemon. Check `capture.log` for
+  `android_installed` and `android-build.log` for `BUILD SUCCESSFUL`. Check
+  `~/.harold-demo/settings.yml` for `127.0.0.1:3847`, `adb reverse --list`,
+  and that the demo daemon, not the real one, is running. Then rerun the
+  capture. The script builds and installs the debug app from this checkout
+  before pairing.
+- Voice reply still streaming at the end of the `voice_reply` slice → the
+  driver's completion check needs three quiet polls; if it returns early,
+  inspect `wait_for_agent_turn` and the app's "Replying"/`Cancel run` signals.
+- `build_capture.py` reports a missing slice or the render throws
+  `capture.json is missing slice ...` → the driver did not record that action.
+  Check `driver.log` and the manifest, then re-run the capture.
 - Pair code expired (~10 min) → reissue and recompose; capture.sh does both
   in order, so prefer a fresh full run over hand-patching.

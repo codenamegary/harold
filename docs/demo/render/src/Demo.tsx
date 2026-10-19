@@ -12,8 +12,8 @@ import { Mark } from "./mark"
 import { PhoneFrame, phoneFrameSize, rippleProgress } from "./phone"
 import { Terminal } from "./terminal"
 import {
+  activeClip,
   buildTimeline,
-  captureAt,
   channel,
   phoneBlack,
   phoneCenterX,
@@ -24,7 +24,6 @@ import {
   termOpacity,
   termScale,
   termX,
-  totalSec,
   type Caption,
   type DemoProps,
 } from "./timeline"
@@ -209,7 +208,8 @@ const PhoneStage: React.FC<{
         videoWidth={videoWidth}
         videoHeight={videoHeight}
         screenWidth={screenWidth}
-        captureFrame={captureAt(sec) * fps}
+        clip={activeClip(timeline.clips, sec)}
+        sec={sec}
         blackOpacity={channel(phoneBlack, sec)}
         ripples={active}
       />
@@ -272,9 +272,8 @@ const CaptionView: React.FC<{ caption: Caption; sec: number }> = ({ caption, sec
   )
 }
 
-const Music: React.FC<{ endSec: number }> = ({ endSec }) => {
-  const { fps } = useVideoConfig()
-  const totalFrames = Math.round(totalSec(endSec) * fps)
+const Music: React.FC = () => {
+  const { fps, durationInFrames } = useVideoConfig()
   return (
     <Audio
       src={staticFile("music.mp3")}
@@ -282,7 +281,7 @@ const Music: React.FC<{ endSec: number }> = ({ endSec }) => {
       volume={(frame) =>
         interpolate(
           frame,
-          [0, 0.8 * fps, totalFrames - 3 * fps, totalFrames - 0.3 * fps],
+          [0, 0.8 * fps, durationInFrames - 3 * fps, durationInFrames - 0.3 * fps],
           [0, 0.55, 0.55, 0],
           { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
         )
@@ -291,14 +290,14 @@ const Music: React.FC<{ endSec: number }> = ({ endSec }) => {
   )
 }
 
-export const Demo: React.FC<DemoProps> = ({ videoWidth, videoHeight, captureSec }) => {
+export const Demo: React.FC<DemoProps> = ({ slices, videoWidth, videoHeight }) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const sec = frame / fps
-  const timeline = buildTimeline(captureSec)
+  const timeline = buildTimeline(slices)
   return (
     <AbsoluteFill style={{ background: ink, color: paper }}>
-      <Music endSec={timeline.endSec} />
+      <Music />
       <TerminalStage timeline={timeline} />
       <PhoneStage timeline={timeline} videoWidth={videoWidth} videoHeight={videoHeight} />
       {timeline.captions.map((caption) => (

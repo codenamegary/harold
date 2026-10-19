@@ -5,21 +5,22 @@ Assumes the app was just cleared (unpaired) and is showing the Shell screen.
 The back camera shows the composed QR clip, so pairing is a plain scan.
 Taps are located through UIAutomator dumps, never hard-coded.
 
-`--warm` taps Pair and waits for the video camera to produce its first
-frames (the first open after an emulator boot takes about 20 seconds), then
-backs out. Run it before recording so the recording starts clean.
+`--warm` is a manual camera warm-up for debugging. capture.sh does not use
+it: the recorded scanner slices include the first-open startup and Remotion
+trims it. Do not point a warm scan at a live pairing QR; codes are single-use.
 
-The walk is recorded in segments: screenrecord runs only while something is
-happening on screen. `rec_start`/`rec_stop` bracket every scene, and the pure
-waits (the scanner decoding the QR, sessions loading, the agent streaming a
-reply) happen with recording off. stitch_segments.py concatenates the
-segments afterwards and remaps the marks onto the stitched timeline.
+The walk is recorded as named slices: one screenrecord file per action, from
+the tap through the wait for the UI to settle. The slice manifest and the tap
+marks let build_capture.py write capture.json, and Remotion schedules the
+slices. There is no stitched video, so changing the pace only changes the
+Remotion timeline.
 
 The recorded run shows session history, creates a new session, changes the
 model/mode/effort, drafts a prompt with a photo and file attachment, sends
 it, then opens voice input and plays `voice-input.wav` into the emulator's
 virtual microphone.
 """
+import json
 import os
 import re
 import shlex
@@ -28,12 +29,14 @@ import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ET
+from contextlib import contextmanager
 
 SERIAL = os.environ.get("SERIAL", "emulator-5554")
 PROMPT = os.environ.get("PROMPT", "Do you think my cat's behaviour is strange?")
-MODEL = os.environ.get("MODEL", "deepseek/DeepSeek V4.1 Flash")
+MODEL = os.environ.get("MODEL", "deepseek/DeepSeek V4.1 Flash 1017")
 EFFORT_TARGET = os.environ.get("EFFORT_TARGET", "High")
 MARKS = os.environ.get("MARKS", "marks.log")
+SLICES = os.environ.get("SLICES", "slices.json")
 WARM_SECONDS = float(os.environ.get("WARM_SECONDS", "25"))
 # Marks are durations, not wall-clock dates. A monotonic clock keeps them
 # ordered even if the host clock is adjusted during the walk.
@@ -77,52 +80,83 @@ def mark(name):
     print(f"[{now - START:6.1f}s] {name}", flush=True)
 
 
-# --- Segmented recording -----------------------------------------------------
+# --- Slice recording ---------------------------------------------------------
 #
-# screenrecord only runs while something is happening on screen. Every
-# rec_start/rec_end pair is marked with its wall time so stitch_segments.py
-# can map the other marks onto the stitched video: a segment is anchored to
-# its rec_end (SIGINT finalization is near-instant), so it covers
-# [rec_end - duration, rec_end] of wall time.
+# One screenrecord file per action: the tap, the wait for the UI to settle,
+# and nothing else. build_capture.py turns the files plus the tap marks into
+# capture.json, and Remotion schedules the slices. Timing changes happen in
+# Remotion, so there is no stitched video and no re-capture for a new pace.
 
-_rec_index = 0
-_recording = False
+_slice_index = 0
+_current_slice = None
+_slices = []
 
 
-def rec_start():
-    """Start a screenrecord segment. No-op while one is already running."""
-    global _rec_index, _recording
-    if _recording:
-        return
-    _rec_index += 1
-    name = f"{_rec_index:03d}"
-    mark(f"rec_start_{name}")
+def write_manifest():
+    with open(SLICES, "w") as handle:
+        json.dump(_slices, handle, indent=2)
+        handle.write("\n")
+
+
+def slice_start(name):
+    """Start a named screenrecord slice and let the encoder settle."""
+    global _slice_index, _current_slice
+    if _current_slice is not None:
+        raise RuntimeError(f"slice {_current_slice['name']} is still recording")
+    _slice_index += 1
+    filename = f"{_slice_index:03d}-{name}.mp4"
+    started = time.monotonic()
+    mark(f"slice_start_{name}")
     subprocess.Popen(
         [
             "adb", "-s", SERIAL, "shell", "screenrecord",
             "--bit-rate", "12000000", "--time-limit", "300",
-            f"/sdcard/harold-demo-{name}.mp4",
+            f"/data/local/tmp/harold-demo-{filename}",
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    _recording = True
+    _current_slice = {
+        "index": _slice_index,
+        "name": name,
+        "file": filename,
+        "started": started,
+    }
     # The encoder needs a beat before frames land; keep this dead zone clear
-    # of interactions so nothing is clipped off the head of the segment.
+    # of interactions so nothing is clipped off the head of the slice.
     time.sleep(0.8)
 
 
-def rec_stop():
-    """Finalize the current segment. No-op if recording is already off."""
-    global _recording
-    if not _recording:
+def slice_stop():
+    """Finalize the current slice. No-op if no slice is open."""
+    global _current_slice
+    if _current_slice is None:
         return
-    name = f"{_rec_index:03d}"
-    mark(f"rec_end_{name}")
+    current = _current_slice
+    current["ended"] = time.monotonic()
+    mark(f"slice_end_{current['name']}")
     adb("shell", "pkill", "-INT", "screenrecord")
     # Give screenrecord a moment to write the moov atom.
     time.sleep(1.2)
-    _recording = False
+    _current_slice = None
+    _slices.append(current)
+    write_manifest()
+
+
+@contextmanager
+def recorded(name):
+    slice_start(name)
+    try:
+        yield
+    finally:
+        slice_stop()
+
+
+def mark_tap(x, y):
+    if _current_slice is None:
+        return
+    with open(MARKS, "a") as handle:
+        handle.write(f"tap {time.monotonic():.3f} {x} {y}\n")
 
 
 def adb(*args, timeout=30):
@@ -187,15 +221,39 @@ def wait_for(text=None, desc=None, substring=False, timeout=20.0, poll=0.4):
         if node is not None:
             return node
         time.sleep(poll)
-    raise TimeoutError(f"not found text={text!r} desc={desc!r} substring={substring}")
+    folder = os.path.dirname(MARKS) or "."
+    shot = os.path.join(folder, "timeout.png")
+    with open(shot, "wb") as handle:
+        subprocess.run(
+            ["adb", "-s", SERIAL, "exec-out", "screencap", "-p"],
+            stdout=handle,
+        )
+    logcat = os.path.join(folder, "timeout.logcat")
+    with open(logcat, "wb") as handle:
+        subprocess.run(["adb", "-s", SERIAL, "logcat", "-d"], stdout=handle)
+    raise TimeoutError(
+        f"not found text={text!r} desc={desc!r} substring={substring}; "
+        f"see {shot} and {logcat}"
+    )
+
+
+def tap_point(x, y, settle=0.6, label=None):
+    mark_tap(x, y)
+    adb("shell", "input", "tap", str(x), str(y))
+    suffix = f" ({label!r})" if label else ""
+    print(f"  tap at {x},{y}{suffix}")
+    if settle:
+        time.sleep(settle)
 
 
 def tap(node, settle=0.6):
     x, y = bounds_center(node.get("bounds"))
-    adb("shell", "input", "tap", str(x), str(y))
-    print(f"  tap at {x},{y} ({node.get('text') or node.get('content-desc') or 'row'!r})")
-    if settle:
-        time.sleep(settle)
+    tap_point(
+        x,
+        y,
+        settle,
+        node.get("text") or node.get("content-desc") or "row",
+    )
 
 
 def tap_text(text, timeout=20.0, settle=0.6):
@@ -229,8 +287,7 @@ def tap_until_value(prefix, target, tries=6, settle=1.4):
             return True
         node = await_desc(prefix)
         x, y = bounds_center(node.get("bounds"))
-        adb("shell", "input", "tap", str(x), str(y))
-        time.sleep(settle)
+        tap_point(x, y, settle)
     raise TimeoutError(f"{prefix!r} never reached {target!r} (last: {chip_value(prefix)!r})")
 
 
@@ -240,17 +297,13 @@ def type_text(text):
     adb("shell", "input", "text", escaped)
 
 
-def select_agent(name):
+def current_agent_name():
     row_names = ("Cursor", "OpenCode", "pi ACP")
     root = dump_root()
     current = next((text for text in row_names if find(root, text=text) is not None), None)
     if current is None:
         raise TimeoutError("no agent row found")
-    if current != name:
-        tap_text(current, timeout=8)
-        time.sleep(0.6)
-    tap_text(name, timeout=8)
-    time.sleep(0.6)
+    return current
 
 
 def open_session_menu():
@@ -258,9 +311,8 @@ def open_session_menu():
     wait_for(text="New session", timeout=10)
 
 
-def tap_first_recent_session(timeout=15.0):
+def tap_first_recent_row(timeout=15.0):
     """Tap the most recent session row in the open session dropdown."""
-    open_session_menu()
     deadline = time.time() + timeout
     while time.time() < deadline:
         root = dump_root()
@@ -288,18 +340,6 @@ def tap_first_recent_session(timeout=15.0):
 def wait_for_chat(timeout=20.0):
     wait_for(desc="Model:", substring=True, timeout=timeout)
     wait_for(text="Message", timeout=timeout)
-
-
-def pick_model(model, timeout=15.0):
-    tap(wait_for(desc="Model:", substring=True, timeout=10))
-    wait_for(text="Search models", timeout=10)
-    tap_text("Search models", timeout=5, settle=0.5)
-    adb("shell", "input", "text", "deepseek")
-    time.sleep(1.2)
-    tap_text(model, timeout=timeout, settle=0.8)
-    deadline = time.time() + 10
-    while time.time() < deadline and find(dump_root(), text="Search models") is not None:
-        time.sleep(0.4)
 
 
 def wait_for_photo_picker(timeout=20.0):
@@ -428,41 +468,48 @@ def voice_scene():
     # converted file covers the UI transition and Vosk model warmup.
     mark("voice_play_start")
     rewind_audio()
-    mark("voice_open")
-    tap_desc("Dictate with voice", timeout=15)
-    wait_for(text="Start speaking…", timeout=15)
-    wait_for(desc="Mute voice input", timeout=20)
-    time.sleep(0.8)
 
-    mark("voice_expanded")
-    tap_desc("Expand voice input", timeout=10)
-    wait_for(desc="Collapse voice input", timeout=10)
-    time.sleep(0.8)
+    with recorded("voice_open"):
+        mark("voice_open")
+        tap_desc("Dictate with voice", timeout=15)
+        wait_for(text="Start speaking…", timeout=15)
+        wait_for(desc="Mute voice input", timeout=20)
+        time.sleep(0.8)
 
-    transcript = wait_for_voice_transcript(timeout=40)
+    with recorded("voice_expand"):
+        mark("voice_expanded")
+        tap_desc("Expand voice input", timeout=10)
+        wait_for(desc="Collapse voice input", timeout=10)
+        time.sleep(0.8)
+
+    transcript = None
+    with recorded("voice_transcript"):
+        transcript = wait_for_voice_transcript(timeout=40)
+        if transcript is None:
+            mark("voice_transcript_timeout")
+            print("no voice transcript detected", file=sys.stderr)
+        else:
+            mark("voice_play_done")
+            mark("voice_transcript")
+            print(f"voice transcript: {transcript[:120]}", flush=True)
+            time.sleep(1.0)
     if transcript is None:
-        mark("voice_transcript_timeout")
-        print("no voice transcript detected", file=sys.stderr)
-        rec_start()
         return None
-    mark("voice_play_done")
-    mark("voice_transcript")
-    print(f"voice transcript: {transcript[:120]}", flush=True)
-    time.sleep(1.0)
 
-    tap_send_button()
-    mark("tap_voice_send")
-    time.sleep(1.0)
-    # The reply streams for a while; that wait never needs to be on camera.
-    rec_stop()
-    if not wait_for_agent_turn(transcript):
-        mark("voice_reply_timeout")
-        print("no voice reply detected in time", file=sys.stderr)
-        rec_start()
-        return None
-    rec_start()
-    time.sleep(2.5)
-    mark("voice_reply_visible")
+    with recorded("voice_send"):
+        tap_send_button()
+        mark("tap_voice_send")
+        time.sleep(1.0)
+
+    with recorded("voice_reply_wait"):
+        if not wait_for_agent_turn(transcript):
+            mark("voice_reply_timeout")
+            print("no voice reply detected in time", file=sys.stderr)
+            return None
+
+    with recorded("voice_reply"):
+        time.sleep(2.5)
+        mark("voice_reply_visible")
     return transcript
 
 
@@ -479,139 +526,173 @@ def warm():
 def main():
     mark("driver_start")
 
-    # ── Launch and pair. The scan's decode wait is the longest dead stretch
-    # in the walk: record the scanner opening, then go off-camera until the
-    # feed reaches the live QR and pairing lands.
-    rec_start()
-    tap_text("Pair", timeout=25, settle=0)
-    mark("tap_pair")
-    time.sleep(2.5)
-    rec_stop()
-    wait_for(desc="Select session:", substring=True, timeout=90)
+    # ── Pairing: idle screen, Pair tap, scan wait, paired home. Each slice is
+    # one action, so Remotion can trim or stretch the beats independently.
+    with recorded("pair_idle"):
+        time.sleep(1.5)
 
-    # ── Paired home settles, then session history: dropdown, rows, pick.
-    rec_start()
-    time.sleep(1.0)
-    mark("paired_chat_visible")
+    with recorded("pair_tap"):
+        tap_text("Pair", timeout=25, settle=0)
+        mark("tap_pair")
+        time.sleep(0.8)
 
-    # Session history: open the header dropdown and pick the most recent row.
-    tap_first_recent_session()
-    time.sleep(1.5)
-    # The session keeps loading behind the composer; finish that off-camera.
-    rec_stop()
-    wait_for_chat()
+    # CameraX retries its camera validation for about ten seconds on the
+    # emulator. Keep that startup in its own slice so the scan slice starts
+    # with the scanner already on screen.
+    with recorded("scanner_open"):
+        wait_for(text="Pair device", timeout=30)
 
-    rec_start()
-    time.sleep(0.8)
-    mark("session_history_selected")
-    rec_stop()
+    with recorded("scan_wait"):
+        wait_for(desc="Select session:", substring=True, timeout=120)
 
-    # ── New session from the same dropdown, then the whole create form.
-    rec_start()
-    mark("session_menu_open")
-    open_session_menu()
-    tap_text("New session", timeout=10)
-    mark("tap_new_session")
+    with recorded("paired"):
+        time.sleep(5.0)
+        mark("paired_chat_visible")
 
-    # Create screen: workspace -> harold, agent -> OpenCode, Continue.
-    wait_for(text="Continue", timeout=15)
+    # ── Session history: open the dropdown, pick the newest row, let the chat
+    # load, then open the menu again for a new session.
+    with recorded("session_menu_open"):
+        open_session_menu()
+
+    with recorded("session_pick"):
+        tap_first_recent_row()
+        time.sleep(0.8)
+
+    with recorded("session_chat"):
+        wait_for_chat(timeout=45)
+        time.sleep(1.5)
+        mark("session_history_selected")
+
+    with recorded("session_menu_reopen"):
+        mark("session_menu_open")
+        open_session_menu()
+
+    with recorded("new_session"):
+        tap_text("New session", timeout=10)
+        mark("tap_new_session")
+        wait_for(text="Continue", timeout=15)
+
+    # ── Create screen: workspace -> harold, agent -> OpenCode, Continue.
     root = dump_root()
     if find(root, text="sites") is not None:
-        tap_text("sites", timeout=8)
+        with recorded("workspace_sites"):
+            tap_text("sites", timeout=8)
+            time.sleep(0.6)
+
+    with recorded("workspace_harold"):
+        tap_text("harold", timeout=8)
         time.sleep(0.6)
-    tap_text("harold", timeout=8)
-    time.sleep(0.6)
-    select_agent("OpenCode")
-    mark("agent_selected")
-    tap_text("Continue", timeout=10)
-    mark("tap_continue")
-    time.sleep(0.8)
-    # Creating the session is a spinner; keep only the beat, not the wait.
-    rec_stop()
-    await_desc("Model:", timeout=25)
 
-    # ── Composer: model, mode, effort, prompt, attachments, send. One long
-    # segment - it is all interaction, with the script's pauses left intact.
-    rec_start()
-    time.sleep(0.8)
-    mark("config_visible")
+    current_agent = current_agent_name()
+    with recorded("agent_open"):
+        tap_text(current_agent, timeout=8)
+        wait_for(text="OpenCode", timeout=10)
 
-    # Model: open the sheet, search, and pick.
-    pick_model(MODEL)
-    mark("model_picked")
+    with recorded("agent_pick"):
+        tap_text("OpenCode", timeout=8)
+        time.sleep(0.6)
+        mark("agent_selected")
 
-    # Mode: Build -> Plan -> Build (show the cycle, end on Build). The mark
-    # lands on the tap so the caption leads the visible flip; the sleep only
-    # holds Plan on screen before tapping back.
+    with recorded("continue"):
+        tap_text("Continue", timeout=10)
+        mark("tap_continue")
+        time.sleep(0.8)
+
+    with recorded("session_create_wait"):
+        await_desc("Model:", timeout=60)
+
+    # ── Composer: model, mode, effort, prompt, attachments.
+    with recorded("model_open"):
+        tap(wait_for(desc="Model:", substring=True, timeout=10))
+        wait_for(text="Search models", timeout=10)
+
+    with recorded("model_search"):
+        tap_text("Search models", timeout=5, settle=0.5)
+        adb("shell", "input", "text", "deepseek")
+        time.sleep(1.2)
+
+    with recorded("model_pick"):
+        tap_text(MODEL, timeout=15, settle=0.8)
+        deadline = time.time() + 10
+        while time.time() < deadline and find(dump_root(), text="Search models") is not None:
+            time.sleep(0.4)
+        mark("model_picked")
+
     mode_node = await_desc("Mode:")
     mode_x, mode_y = bounds_center(mode_node.get("bounds"))
-    adb("shell", "input", "tap", str(mode_x), str(mode_y))
-    mark("mode_plan")
-    time.sleep(2.0)
-    adb("shell", "input", "tap", str(mode_x), str(mode_y))
-    time.sleep(2.0)
-    if "Build" not in chip_value("Mode:"):
-        tap_until_value("Mode:", "Build", tries=3)
-    mark("mode_build")
+    with recorded("mode_plan"):
+        mark("mode_plan")
+        tap_point(mode_x, mode_y, settle=2.0)
 
-    # Effort: for the demo model, three steps from Default land on High.
-    # effort_start marks the first tap; effort_set fires once the target
-    # value is confirmed, so captions key off the former.
+    with recorded("mode_build"):
+        tap_point(mode_x, mode_y, settle=2.0)
+        if "Build" not in chip_value("Mode:"):
+            tap_until_value("Mode:", "Build", tries=3)
+        mark("mode_build")
+
     effort_node = await_desc("Thinking:")
     effort_x, effort_y = bounds_center(effort_node.get("bounds"))
     mark("effort_start")
-    for _ in range(3):
-        adb("shell", "input", "tap", str(effort_x), str(effort_y))
-        time.sleep(1.2)
+    for step in range(1, 4):
+        with recorded(f"effort_{step}"):
+            tap_point(effort_x, effort_y, settle=1.2)
     if chip_value("Thinking:") != EFFORT_TARGET:
-        tap_until_value("Thinking:", EFFORT_TARGET, tries=4)
+        with recorded("effort_fix"):
+            tap_until_value("Thinking:", EFFORT_TARGET, tries=4)
     mark("effort_set")
-    time.sleep(0.8)
 
-    # Prompt. prompt_start marks the tap on the field; typing leaves it drafted.
-    mark("prompt_start")
-    tap_text("Message", timeout=10, settle=0.8)
-    type_text(PROMPT)
-    time.sleep(2.0)
-    mark("prompt_typed")
+    with recorded("prompt_focus"):
+        mark("prompt_start")
+        tap_text("Message", timeout=10, settle=0.8)
 
-    # Photo attachment: third thumbnail, then Add (1).
-    mark("attach_photo_start")
-    tap_desc("Attach photo", timeout=10)
-    tap_third_photo()
-    tap_add_button()
-    wait_for_attached_photo()
-    mark("photo_attached")
-    time.sleep(1.0)
+    with recorded("prompt_type"):
+        type_text(PROMPT)
+        time.sleep(2.0)
+        mark("prompt_typed")
 
-    # File attachment: cat-diary.txt from Recent files.
-    mark("attach_file_start")
-    tap_desc("Attach files", timeout=10)
-    tap(wait_for_file_picker(), settle=1.0)
-    wait_for(desc="Remove cat-diary.txt", timeout=10)
-    mark("file_attached")
-    time.sleep(1.0)
+    with recorded("photo_open"):
+        mark("attach_photo_start")
+        tap_desc("Attach photo", timeout=10)
+        wait_for_photo_picker()
 
-    tap_send_button()
-    mark("tap_send")
-    # Show "Thinking" and the first streamed lines, then cut the rest of the
-    # stream and land on the finished reply.
-    time.sleep(4.0)
-    rec_stop()
-    if not wait_for_agent_turn(PROMPT):
-        mark("reply_timeout")
-        print("no transcript reply detected in time", file=sys.stderr)
-        rec_start()
-        return 1
-    rec_start()
-    time.sleep(2.5)
-    mark("reply_visible")
-    time.sleep(1.0)
+    with recorded("photo_pick"):
+        tap_third_photo()
+
+    with recorded("photo_add"):
+        tap_add_button()
+        wait_for_attached_photo()
+        mark("photo_attached")
+        time.sleep(1.0)
+
+    with recorded("file_open"):
+        mark("attach_file_start")
+        tap_desc("Attach files", timeout=10)
+        wait_for_file_picker()
+
+    with recorded("file_pick"):
+        tap(wait_for_file_picker(), settle=1.0)
+        wait_for(desc="Remove cat-diary.txt", timeout=10)
+        mark("file_attached")
+        time.sleep(1.0)
+
+    with recorded("send"):
+        tap_send_button()
+        mark("tap_send")
+        time.sleep(4.0)
+
+    with recorded("reply_wait"):
+        if not wait_for_agent_turn(PROMPT):
+            mark("reply_timeout")
+            print("no transcript reply detected in time", file=sys.stderr)
+            return 1
+
+    with recorded("reply"):
+        time.sleep(2.5)
+        mark("reply_visible")
+        time.sleep(1.0)
 
     if voice_scene() is None:
         return 1
-    time.sleep(1.5)
-    rec_stop()
     time.sleep(0.5)
     mark("done")
     return 0

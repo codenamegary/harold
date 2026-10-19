@@ -11,11 +11,35 @@
 #
 # Seed against the main checkout rather than the worktree running the capture:
 # a session opened on camera must still load after that worktree is removed.
+#
+# Every seeded session is pinned to SEED_MODEL (default
+# deepseek/deepseek-flash) so the phone composer shows the intended provider
+# and model on both fresh and reused history.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
 SEED_LOG="${SEED_LOG:-/dev/null}"
+SEED_MODEL="${SEED_MODEL:-deepseek/deepseek-flash}"
+if ! SEED_MODEL_JSON=$(python3 - "$SEED_MODEL" <<'PY'
+import json
+import sys
+
+spec = sys.argv[1]
+target, has_variant, variant = spec.partition("#")
+provider, has_separator, model = target.partition("/")
+if not has_separator or not provider or not model or (has_variant and not variant):
+    raise SystemExit(f"SEED_MODEL must be provider/model[#variant], got {spec!r}")
+
+payload = {"id": model, "providerID": provider}
+if has_variant:
+    payload["variant"] = variant
+print(json.dumps(payload, separators=(",", ":")))
+PY
+); then
+  echo "invalid SEED_MODEL; use provider/model[#variant]" >&2
+  exit 1
+fi
 
 main_worktree() {
   git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null |
@@ -70,8 +94,48 @@ sys.exit(1)
 ' "$SEED_CWD" "${TITLES[@]}"
 }
 
+# The session row carries the model the composer reads. Update the five menu
+# rows in place so an already-seeded history picks up a changed SEED_MODEL
+# without creating duplicate sessions.
+set_seeded_models() {
+  python3 - "$OPENCODE_DB" "$SEED_CWD" "$SEED_MODEL_JSON" "${TITLES[@]}" <<'PY'
+import sqlite3
+import sys
+
+db, cwd, model_json, *titles = sys.argv[1:]
+connection = sqlite3.connect(db, timeout=30)
+rows = connection.execute(
+    "select id, title from session_v2 where directory = ? "
+    "order by time_updated desc limit ?",
+    (cwd, len(titles)),
+).fetchall()
+if [title for _, title in rows] != titles:
+    raise SystemExit(
+        "the newest sessions do not match the seed titles; refusing to set the model"
+    )
+connection.executemany(
+    "update session_v2 set model = ? where id = ?",
+    [(model_json, session_id) for session_id, _ in rows],
+)
+connection.commit()
+placeholders = ",".join("?" for _ in rows)
+models = [
+    row[0]
+    for row in connection.execute(
+        f"select model from session_v2 where id in ({placeholders})",
+        [session_id for session_id, _ in rows],
+    )
+]
+if any(model != model_json for model in models):
+    raise SystemExit("could not set the seed session model")
+connection.close()
+print(f"seeded sessions use {model_json}")
+PY
+}
+
 echo "checking OpenCode session history in $SEED_CWD"
 if top_sessions_match 2>/dev/null; then
+  set_seeded_models
   echo "session history already seeded"
   exit 0
 fi
@@ -85,8 +149,8 @@ for ((index = ${#TITLES[@]} - 1; index >= 0; index--)); do
   # records the user message wrapped in literal quotes.
   read -r -a prompt <<<"$title"
   echo "seeding session: $title"
-  if ! output=$(cd "$SEED_CWD" && opencode run --auto --format json --title "$title" \
-    "${prompt[@]}" 2>>"$SEED_LOG"); then
+  if ! output=$(cd "$SEED_CWD" && opencode run --auto --model "$SEED_MODEL" \
+    --format json --title "$title" "${prompt[@]}" 2>>"$SEED_LOG"); then
     echo "opencode run failed for \"$title\"; see $SEED_LOG" >&2
     exit 1
   fi
@@ -147,9 +211,11 @@ except sqlite3.Error as error:
     raise SystemExit(f"could not order seeded sessions: {error}")
 PY
 
+set_seeded_models
+
 if ! top_sessions_match; then
   echo "seeded sessions are not the five newest; refusing to run the capture" >&2
   exit 1
 fi
 
-echo "session history seeded"
+echo "session history seeded with $SEED_MODEL"
