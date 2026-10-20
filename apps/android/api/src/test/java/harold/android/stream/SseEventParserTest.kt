@@ -10,7 +10,7 @@ class SseEventParserTest {
         val parser = SseEventParser()
 
         assertNull(parser.feed("""data: {"type":"subscribed"}"""))
-        assertEquals("""{"type":"subscribed"}""", parser.feed(""))
+        assertEquals(SseEvent("""{"type":"subscribed"}"""), parser.feed(""))
     }
 
     @Test
@@ -19,7 +19,7 @@ class SseEventParserTest {
 
         assertNull(parser.feed("data: first"))
         assertNull(parser.feed("data: second"))
-        assertEquals("first\nsecond", parser.feed(""))
+        assertEquals(SseEvent("first\nsecond"), parser.feed(""))
     }
 
     @Test
@@ -32,14 +32,17 @@ class SseEventParserTest {
     }
 
     @Test
-    fun ignoresEventIdAndRetryFields() {
+    fun capturesTheEventIdAlongsideData() {
         val parser = SseEventParser()
 
         assertNull(parser.feed("event: session_update"))
-        assertNull(parser.feed("id: 17"))
+        assertNull(parser.feed("id: epoch:17"))
         assertNull(parser.feed("retry: 2500"))
         assertNull(parser.feed("""data: {"type":"subscribed"}"""))
-        assertEquals("""{"type":"subscribed"}""", parser.feed(""))
+        assertEquals(
+            SseEvent("""{"type":"subscribed"}""", id = "epoch:17"),
+            parser.feed(""),
+        )
     }
 
     @Test
@@ -47,10 +50,10 @@ class SseEventParserTest {
         val parser = SseEventParser()
 
         assertNull(parser.feed("data: one space"))
-        assertEquals("one space", parser.feed(""))
+        assertEquals("one space", parser.feed("")?.data)
 
         assertNull(parser.feed("data:  two spaces"))
-        assertEquals(" two spaces", parser.feed(""))
+        assertEquals(" two spaces", parser.feed("")?.data)
     }
 
     @Test
@@ -62,13 +65,14 @@ class SseEventParserTest {
     }
 
     @Test
-    fun consecutiveEventsDoNotLeakDataBetweenThem() {
+    fun consecutiveEventsDoNotLeakDataOrIdsBetweenThem() {
         val parser = SseEventParser()
 
+        assertNull(parser.feed("id: first"))
         assertNull(parser.feed("data: a"))
-        assertEquals("a", parser.feed(""))
+        assertEquals(SseEvent("a", id = "first"), parser.feed(""))
         assertNull(parser.feed("data: b"))
-        assertEquals("b", parser.feed(""))
+        assertEquals(SseEvent("b"), parser.feed(""))
     }
 
     @Test
@@ -77,6 +81,6 @@ class SseEventParserTest {
 
         assertNull(parser.feed("event"))
         assertNull(parser.feed("""data: {"ok":true}"""))
-        assertEquals("""{"ok":true}""", parser.feed(""))
+        assertEquals("""{"ok":true}""", parser.feed("")?.data)
     }
 }

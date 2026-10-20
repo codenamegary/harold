@@ -1,5 +1,5 @@
-import { AbsoluteFill, Freeze, OffthreadVideo, staticFile } from "remotion"
-import { rippleColor, rippleDuration } from "./timeline"
+import { AbsoluteFill, Freeze, OffthreadVideo, staticFile, useVideoConfig } from "remotion"
+import { clipFrame, rippleColor, rippleDuration, type PhoneClip } from "./timeline"
 import { line } from "./theme"
 
 const BEZEL = 10
@@ -48,10 +48,12 @@ export const PhoneFrame: React.FC<{
   videoWidth: number
   videoHeight: number
   screenWidth: number
-  captureFrame: number
+  clip: PhoneClip | null
+  sec: number
   blackOpacity: number
   ripples: { at: number; progress: number; x: number; y: number }[]
-}> = ({ videoWidth, videoHeight, screenWidth, captureFrame, blackOpacity, ripples }) => {
+}> = ({ videoWidth, videoHeight, screenWidth, clip, sec, blackOpacity, ripples }) => {
+  const { fps } = useVideoConfig()
   const size = phoneFrameSize(videoWidth, videoHeight, screenWidth)
   return (
     <div
@@ -75,13 +77,15 @@ export const PhoneFrame: React.FC<{
           background: "#000",
         }}
       >
-        <Freeze frame={Math.round(captureFrame)}>
-          <OffthreadVideo
-            src={staticFile("phone.mp4")}
-            muted
-            style={{ width: size.screenWidth, height: size.screenHeight }}
-          />
-        </Freeze>
+        {clip !== null ? (
+          <Freeze frame={Math.round(clipFrame(clip, sec) * fps)}>
+            <OffthreadVideo
+              src={staticFile(clip.file)}
+              muted
+              style={{ width: size.screenWidth, height: size.screenHeight }}
+            />
+          </Freeze>
+        ) : null}
         <AbsoluteFill style={{ background: "#000", opacity: blackOpacity }} />
         {ripples.map((ripple, index) => (
           <div

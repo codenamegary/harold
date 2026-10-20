@@ -1,120 +1,254 @@
 import { Easing } from "remotion"
 import { pairSegs, statusSegs, type TermItem } from "./terminal-data"
 
-export type CaptureEvent = { name: string; sec: number }
+export type CaptureTap = { x: number; y: number; atSec: number }
+
+export type CaptureSlice = {
+  name: string
+  file: string
+  durationSec: number
+  width: number
+  height: number
+  still?: boolean
+  taps?: CaptureTap[]
+}
 
 export type DemoProps = {
-  events: CaptureEvent[]
+  slices: CaptureSlice[]
   videoWidth: number
   videoHeight: number
-  captureSec: number
 }
 
 export const FPS = 30
-export const INTRO_SEC = 3.4
 export const OUTRO_SEC = 4.2
 
-// --- Master clock -----------------------------------------------------------
+// --- Edit timeline ----------------------------------------------------------
 //
-// Scene 1 is the terminal, zoomed in close: it types `harold start` and
-// prints the server status, fixed in place the whole time. When the pairing
-// flow starts the terminal zooms out to sit fully in frame on the left - and
-// never moves again until pairing is done - while the phone slides in to the
-// right of it. The QR prints, the phone taps Pair, the camera scans, the
-// device pairs. Only then does the terminal slide out and the phone take
-// center stage for the rest of the walk.
-//
-// Two short holds give the captions room to breathe (before the Pair tap and
-// before the session dropdown tap) and one 3x sprint skips the scanner
-// warm-up so the camera scene reads in about three seconds. Everything else
-// is 1:1, so capture marks map linearly (render = capture + 12.1).
-//
-//   render  8.8 - 11.7    phone slides in, capture plays 0 -> 2.9
-//   render 11.7 - 14.2    hold on "Not paired"     [CAP] Pair with your agents
-//   render 14.2 - 15.1    Pair tap, scanner opens
-//   render 15.1 - 16.9    scanner warm-up          (capture 3.8 -> 9.2 at 3x)
-//   render 16.9 - 23.05   scan lands, device pairs capture 9.2 -> 15.35
-//   render 23.05 - 27.5   hold on paired home      [CAP] Achievement unlocked
-//   render 27.5 -> end    capture 15.4 -> end, 1:1
+// capture.json is raw material: one video per action, with tap positions and
+// the time each tap landed inside its slice. This file is the edit. Adjust a
+// shot's rate, duration, hold, caption, or typing and the rest of the walk
+// shifts with it. Nothing here requires a re-capture.
 
 const PHONE_IN_AT = 8.8
-const TAP_HOLD_END = 14.2
-const SPRINT_END = 16.9
-const PAIRED_HOLD_END = 23.05
 const REcede_AT = 22.8
-const DROPDOWN_HOLD_END = 27.5
-const RESUME_CAPTURE_AT = 15.4
-const PAIRED_CAPTURE_AT = 12.7
-const SCANNER_WARM_END_CAPTURE_AT = 9.2
+const WALK_START = 27.5
 
-type PlaySegment = {
-  kind: "play"
-  from: number
-  to: number
-  captureFrom: number
-  rate: number
+type Step = {
+  slice: string
+  at?: number
+  rate?: number
+  duration?: number
+  hold?: number
+  required?: boolean
+  caption?: { text: string; at?: number; hold?: number }
+  typing?: { text: string; at?: number; duration?: number }
 }
-type HoldSegment = { kind: "hold"; from: number; to: number; captureAt: number }
 
-const segments: (PlaySegment | HoldSegment)[] = [
-  { kind: "play", from: PHONE_IN_AT + 0.6, to: 11.7, captureFrom: 0, rate: 1 },
-  { kind: "hold", from: 11.7, to: TAP_HOLD_END, captureAt: 2.9 },
-  { kind: "play", from: TAP_HOLD_END, to: 15.1, captureFrom: 2.9, rate: 1 },
-  { kind: "play", from: 15.1, to: SPRINT_END, captureFrom: 3.8, rate: 3 },
+// The pairing act is interleaved with the terminal stage, so its shots keep
+// fixed render starts. Gaps between them become holds on the previous frame.
+const PAIR_STEPS: Step[] = [
+  { slice: "pair_idle", at: 9.4 },
+  { slice: "pair_tap", at: 14.2, duration: 0.9 },
+  { slice: "scanner_open", at: 15.1, rate: 8, duration: 1.2 },
+  { slice: "scan_wait", at: 16.3, rate: 2, duration: 0.6 },
   {
-    kind: "play",
-    from: SPRINT_END,
-    to: PAIRED_HOLD_END,
-    captureFrom: SCANNER_WARM_END_CAPTURE_AT,
-    rate: 1,
-  },
-  { kind: "hold", from: PAIRED_HOLD_END, to: DROPDOWN_HOLD_END, captureAt: 15.35 },
-  {
-    kind: "play",
-    from: DROPDOWN_HOLD_END,
-    to: Number.POSITIVE_INFINITY,
-    captureFrom: RESUME_CAPTURE_AT,
-    rate: 1,
+    slice: "paired",
+    at: 16.9,
+    caption: { text: "Achievement Unlocked: Work from Couch", at: 6.1, hold: 2.6 },
   },
 ]
 
-/** Capture second shown by the phone at this render second. */
-export const captureAt = (sec: number): number => {
-  for (const segment of segments) {
-    if (sec < segment.to) {
-      if (segment.kind === "hold") {
-        return segment.captureAt
-      }
-      return Math.max(
-        0,
-        segment.captureFrom + (Math.max(sec, segment.from) - segment.from) * segment.rate,
+// The walk starts after the paired home. Every shot starts where the previous
+// one ends plus its hold, so changing one duration moves the rest.
+const WALK_STEPS: Step[] = [
+  {
+    slice: "session_menu_open",
+    hold: 0.6,
+    caption: { text: "Access your agent session history", at: 0.2, hold: 2.4 },
+  },
+  { slice: "session_pick", hold: 0.4 },
+  { slice: "session_chat", rate: 2, duration: 1.5, hold: 0.4 },
+  { slice: "session_menu_reopen", hold: 0.4 },
+  {
+    slice: "new_session",
+    hold: 0.4,
+    caption: { text: "Start a new session", at: 0.2, hold: 2.4 },
+  },
+  { slice: "workspace_sites", required: false },
+  { slice: "workspace_harold", hold: 0.2 },
+  { slice: "agent_open", hold: 0.3 },
+  { slice: "agent_pick", hold: 0.3 },
+  { slice: "continue", hold: 0.2 },
+  { slice: "session_create_wait", rate: 4, duration: 1.2 },
+  {
+    slice: "model_open",
+    hold: 0.3,
+    caption: { text: "Model list from your Agent", at: 0.2, hold: 2.4 },
+  },
+  {
+    slice: "model_search",
+    typing: { text: "deepseek", duration: 1.4 },
+    hold: 0.3,
+  },
+  { slice: "model_pick", hold: 0.3 },
+  {
+    slice: "mode_plan",
+    hold: 1.0,
+    caption: { text: "Toggle modes supported by your agent", at: 0.2, hold: 2.6 },
+  },
+  { slice: "mode_build", hold: 1.0 },
+  {
+    slice: "effort_1",
+    hold: 0.3,
+    caption: { text: "Adjust thinking effort", at: 0.2, hold: 2.6 },
+  },
+  { slice: "effort_2", hold: 0.3 },
+  { slice: "effort_3", hold: 0.3 },
+  {
+    slice: "prompt_focus",
+    hold: 0.3,
+    caption: { text: "Send a text Prompt", at: 0.2, hold: 2.6 },
+  },
+  {
+    slice: "prompt_type",
+    duration: 2.8,
+    typing: { text: "Do you think my cat's behaviour is strange?", duration: 2.4 },
+    hold: 0.6,
+  },
+  {
+    slice: "photo_open",
+    hold: 0.3,
+    caption: { text: "Attachments", at: 0.2, hold: 2.6 },
+  },
+  { slice: "photo_pick", hold: 0.3 },
+  { slice: "photo_add", hold: 0.3 },
+  { slice: "file_open", hold: 0.3 },
+  { slice: "file_pick", hold: 0.3 },
+  { slice: "send", hold: 0.2 },
+  { slice: "reply_wait", rate: 6, duration: 2.0, hold: 0.2 },
+  { slice: "reply", duration: 2.5, hold: 1.0 },
+  { slice: "voice_open", hold: 0.3 },
+  { slice: "voice_expand", hold: 0.6 },
+  { slice: "voice_transcript", rate: 2, duration: 3.0 },
+  { slice: "voice_send", hold: 0.2 },
+  { slice: "voice_reply_wait", rate: 6, duration: 2.0, hold: 0.2 },
+  { slice: "voice_reply", duration: 2.5, hold: 1.2 },
+]
+
+type Shot = Step & {
+  at: number
+  rate: number
+  duration: number
+  data: CaptureSlice
+}
+
+export type PhoneClip =
+  | { kind: "play"; file: string; from: number; duration: number; rate: number }
+  | { kind: "hold"; file: string; from: number; duration: number; atSec: number }
+
+const DEFAULT_SHOT_SEC = 2.0
+
+const shotDuration = (step: Step, data: CaptureSlice): number => {
+  const rate = step.rate ?? 1
+  const available = data.still ? data.durationSec : data.durationSec / rate
+  const fallback = data.still ? Math.min(available, 1.5) : Math.min(available, DEFAULT_SHOT_SEC)
+  return Math.max(0.05, Math.min(step.duration ?? fallback, available))
+}
+
+const buildShots = (slices: CaptureSlice[]): { pair: Shot[]; walk: Shot[] } => {
+  const byName = new Map(slices.map((slice) => [slice.name, slice]))
+  const resolve = (step: Step): Shot => {
+    const data = byName.get(step.slice)
+    if (data === undefined) {
+      throw new Error(
+        `capture.json is missing slice "${step.slice}". Re-run docs/demo/capture/capture.sh.`,
       )
     }
-  }
-  return RESUME_CAPTURE_AT
-}
-
-/** Render second at which the phone shows this capture second. Linear zones only. */
-export const renderAt = (captureSec: number): number => {
-  for (let index = 0; index < segments.length; index += 1) {
-    const segment = segments[index]
-    if (segment.kind !== "play" || segment.rate !== 1) {
-      continue
-    }
-    const captureTo =
-      segment.captureFrom + ((segments[index + 1]?.from ?? Infinity) - segment.from)
-    if (captureSec >= segment.captureFrom && captureSec < captureTo) {
-      return segment.from + (captureSec - segment.captureFrom)
+    return {
+      ...step,
+      at: step.at ?? 0,
+      rate: step.rate ?? 1,
+      duration: shotDuration(step, data),
+      data,
     }
   }
-  return DROPDOWN_HOLD_END
+
+  const pair = PAIR_STEPS.map((step) => resolve(step))
+  const walk: Shot[] = []
+  let at = WALK_START
+  for (const step of WALK_STEPS) {
+    if (!byName.has(step.slice)) {
+      if (step.required === false) {
+        continue
+      }
+      resolve(step)
+    }
+    const shot = resolve(step)
+    shot.at = at
+    walk.push(shot)
+    at += shot.duration + (shot.hold ?? 0)
+  }
+  return { pair, walk }
 }
 
-export const captureEndSec = (captureDurationSec: number): number =>
-  DROPDOWN_HOLD_END + (captureDurationSec - RESUME_CAPTURE_AT)
+const buildClips = (shots: Shot[]): PhoneClip[] => {
+  const clips: PhoneClip[] = []
+  const ordered = [...shots].sort((a, b) => a.at - b.at)
+  for (let index = 0; index < ordered.length; index += 1) {
+    const shot = ordered[index]
+    const nextAt =
+      ordered[index + 1]?.at ?? shot.at + shot.duration + (shot.hold ?? 0)
+    const playDuration = Math.max(0, Math.min(shot.duration, nextAt - shot.at))
+    if (shot.data.still) {
+      clips.push({
+        kind: "hold",
+        file: shot.data.file,
+        from: shot.at,
+        duration: playDuration,
+        atSec: 0,
+      })
+    } else {
+      clips.push({
+        kind: "play",
+        file: shot.data.file,
+        from: shot.at,
+        duration: playDuration,
+        rate: shot.rate,
+      })
+    }
+    const holdStart = shot.at + playDuration
+    if (nextAt > holdStart + 0.001) {
+      clips.push({
+        kind: "hold",
+        file: shot.data.file,
+        from: holdStart,
+        duration: nextAt - holdStart,
+        atSec: shot.data.still
+          ? 0
+          : Math.min(shot.data.durationSec, playDuration * shot.rate),
+      })
+    }
+  }
+  return clips
+}
 
-export const totalSec = (captureDurationSec: number): number =>
-  captureEndSec(captureDurationSec) + OUTRO_SEC
+export const activeClip = (clips: PhoneClip[], sec: number): PhoneClip | null => {
+  let current: PhoneClip | null = null
+  for (const clip of clips) {
+    if (sec < clip.from) {
+      break
+    }
+    current = clip
+  }
+  return current
+}
+
+export const clipFrame = (clip: PhoneClip, sec: number): number => {
+  if (clip.kind === "hold") {
+    return clip.atSec
+  }
+  return Math.max(0, (sec - clip.from) * clip.rate)
+}
 
 // --- Keyframe channels ------------------------------------------------------
 
@@ -218,43 +352,16 @@ const transcript = (pairedRenderSec: number): TermItem[] => {
   return items
 }
 
-// --- Taps -------------------------------------------------------------------
+// --- Captions, taps, typing -------------------------------------------------
 
-// Every tap of the recorded walk, from drive_phone.py's log: capture second
-// and screen position in capture pixels (1080x2400). All of these sit in 1:1
-// zones of the clock above; a re-capture with different pacing means
-// re-checking this table against the new marks and frames.
-type TapSpec = { at: number; x: number; y: number }
+type CaptionSpec = { at: number; hold: number; text: string }
+export type Caption = CaptionSpec
 
-const tapSpecs: TapSpec[] = [
-  { at: 3.411, x: 540, y: 2205 }, // Pair
-  { at: 15.42, x: 498, y: 211 }, // Select session dropdown
-  { at: 23.25, x: 508, y: 491 }, // first recent session row
-  { at: 35.3, x: 498, y: 211 }, // Select session dropdown again
-  { at: 40.45, x: 530, y: 364 }, // New session
-  { at: 42.6, x: 540, y: 507 }, // workspace: sites
-  { at: 47.6, x: 126, y: 801 }, // workspace: harold
-  { at: 52.6, x: 540, y: 707 }, // agent picker (Cursor row)
-  { at: 58.8, x: 159, y: 1001 }, // agent: OpenCode
-  { at: 61.4, x: 540, y: 886 }, // Continue
-  { at: 69.3, x: 391, y: 1934 }, // Model chip
-  { at: 74.2, x: 327, y: 1484 }, // Search models
-  { at: 79.2, x: 540, y: 1313 }, // deepseek/DeepSeek V4.1 Flash
-  { at: 84.6, x: 822, y: 1934 }, // Mode chip -> Plan
-  { at: 86.3, x: 822, y: 1934 }, // Mode chip -> Build
-  { at: 92.7, x: 978, y: 1934 }, // Thinking chip
-  { at: 94.2, x: 978, y: 1934 },
-  { at: 95.7, x: 978, y: 1934 },
-  { at: 99.8, x: 176, y: 2074 }, // Message field
-  { at: 109.4, x: 274, y: 1391 }, // Attach photo
-  { at: 114.3, x: 902, y: 817 }, // third cat photo
-  { at: 116.9, x: 922, y: 2242 }, // Add (1)
-  { at: 122.6, x: 411, y: 1391 }, // Attach files
-  { at: 126.4, x: 299, y: 797 }, // cat-diary.txt
-  { at: 133.2, x: 943, y: 1391 }, // Send message
-  { at: 156.8, x: 806, y: 2211 }, // Dictate with voice
-  { at: 166.3, x: 274, y: 2212 }, // Expand voice input
-  { at: 181.2, x: 975, y: 2242 }, // Send (voice)
+const FIXED_CAPTIONS: CaptionSpec[] = [
+  { at: 3.9, hold: 2.6, text: "Start Harold wherever you run your agents" },
+  { at: 8.3, hold: 1.6, text: "Generate a secure temporary pairing code" },
+  { at: 10.9, hold: 1.4, text: "Harold'ing..." },
+  { at: 13.3, hold: 2.2, text: "Pair with your agents" },
 ]
 
 export type Ripple = { at: number; x: number; y: number }
@@ -262,29 +369,38 @@ export type Ripple = { at: number; x: number; y: number }
 export const rippleDuration = 0.55
 export const rippleColor = "#B6F36B"
 
-// --- Keystrokes and captions ------------------------------------------------
+const buildRipples = (shots: Shot[]): Ripple[] => {
+  const ripples: Ripple[] = []
+  for (const shot of shots) {
+    if (shot.data.still && shot.data.taps === undefined) {
+      continue
+    }
+    for (const tap of shot.data.taps ?? []) {
+      const atSec = Math.min(shot.duration, tap.atSec / shot.rate)
+      ripples.push({
+        at: shot.at + atSec,
+        x: tap.x / shot.data.width,
+        y: tap.y / shot.data.height,
+      })
+    }
+  }
+  return ripples.sort((a, b) => a.at - b.at)
+}
 
-const MODEL_SEARCH_TEXT = "deepseek"
-const PROMPT_TEXT = "Do you think my cat's behaviour is strange?"
-
-type CaptionSpec = { at: number; hold: number; text: string }
-
-const captionSpecs: CaptionSpec[] = [
-  { at: 3.9, hold: 2.6, text: "Start Harold wherever you run your agents" },
-  { at: 8.3, hold: 1.6, text: "Generate a secure temporary pairing code" },
-  { at: 10.9, hold: 1.4, text: "Harold'ing..." },
-  { at: 13.3, hold: 2.2, text: "Pair with your agents" },
-  { at: 23.0, hold: 2.6, text: "Achievement Unlocked: Work from Couch" },
-  { at: 25.2, hold: 2.4, text: "Access your agent session history" },
-  { at: 49.8, hold: 2.4, text: "Start a new session" },
-  { at: 78.7, hold: 2.4, text: "Model list from your Agent" },
-  { at: 94.0, hold: 2.6, text: "Toggle modes supported by your agent" },
-  { at: 102.1, hold: 2.4, text: "Adjust thinking effort" },
-  { at: 109.2, hold: 2.6, text: "Send a text Prompt" },
-  { at: 118.8, hold: 2.6, text: "Attachments" },
-]
-
-export type Caption = CaptionSpec
+const buildCaptions = (shots: Shot[]): CaptionSpec[] => {
+  const captions = [...FIXED_CAPTIONS]
+  for (const shot of shots) {
+    if (shot.caption === undefined) {
+      continue
+    }
+    captions.push({
+      at: shot.at + (shot.caption.at ?? 0.2),
+      hold: shot.caption.hold ?? 2.4,
+      text: shot.caption.text,
+    })
+  }
+  return captions.sort((a, b) => a.at - b.at)
+}
 
 // --- Sounds -----------------------------------------------------------------
 
@@ -292,22 +408,7 @@ export type SoundName = "key" | "enter" | "tap" | "ping"
 
 export type Sound = { at: number; name: SoundName; volume: number }
 
-// --- Timeline ---------------------------------------------------------------
-
-export type Timeline = {
-  terminal: TermItem[]
-  ripples: Ripple[]
-  captions: Caption[]
-  sounds: Sound[]
-  endSec: number
-}
-
-/**
- * The whole cut, derived from the capture marks.
- */
-export const buildTimeline = (captureDurationSec: number): Timeline => {
-  const pairedRenderSec = renderAt(PAIRED_CAPTURE_AT)
-
+const buildSounds = (shots: Shot[], captions: CaptionSpec[], ripples: Ripple[]): Sound[] => {
   const sounds: Sound[] = []
   // [KR] every keystroke, a separate sound for Enter.
   for (let index = 0; index < 12; index += 1) {
@@ -318,32 +419,66 @@ export const buildTimeline = (captureDurationSec: number): Timeline => {
     sounds.push({ at: 9.3 + index / 10, name: "key", volume: 1 })
   }
   sounds.push({ at: 10.44, name: "enter", volume: 1 })
-  // [KR] on the phone: the model search, then the drafted prompt.
-  for (let index = 0; index < MODEL_SEARCH_TEXT.length; index += 1) {
-    sounds.push({ at: renderAt(74.8 + index * 0.14), name: "key", volume: 0.8 })
-  }
-  const promptStep = 4.8 / PROMPT_TEXT.length
-  for (let index = 0; index < PROMPT_TEXT.length; index += 1) {
-    sounds.push({ at: renderAt(101.0 + index * promptStep), name: "key", volume: 0.8 })
+  // [KR] on the phone, spread across the typing slice.
+  for (const shot of shots) {
+    if (shot.typing === undefined) {
+      continue
+    }
+    const at = shot.at + (shot.typing.at ?? 0.2)
+    const duration = Math.min(
+      shot.typing.duration ?? Math.max(0.1, shot.duration - (shot.typing.at ?? 0.2)),
+      Math.max(0.1, shot.duration - (shot.typing.at ?? 0.2)),
+    )
+    const step = duration / Math.max(1, shot.typing.text.length)
+    for (let index = 0; index < shot.typing.text.length; index += 1) {
+      sounds.push({ at: at + index * step, name: "key", volume: 0.8 })
+    }
   }
   // [TAP] one pop per tap, at the tap.
-  for (const tap of tapSpecs) {
-    sounds.push({ at: renderAt(tap.at), name: "tap", volume: 0.9 })
+  for (const ripple of ripples) {
+    sounds.push({ at: ripple.at, name: "tap", volume: 0.9 })
   }
   // [CAP] a soft ping when a caption appears.
-  for (const caption of captionSpecs) {
+  for (const caption of captions) {
     sounds.push({ at: caption.at, name: "ping", volume: 0.55 })
   }
+  return sounds.sort((a, b) => a.at - b.at)
+}
 
+// --- Timeline ---------------------------------------------------------------
+
+export type Timeline = {
+  terminal: TermItem[]
+  clips: PhoneClip[]
+  ripples: Ripple[]
+  captions: Caption[]
+  sounds: Sound[]
+  endSec: number
+}
+
+/**
+ * The whole cut, derived from the captured slices.
+ */
+export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
+  const { pair, walk } = buildShots(slices)
+  const shots = [...pair, ...walk].sort((a, b) => a.at - b.at)
+  const clips = buildClips(shots)
+  const ripples = buildRipples(shots)
+  const captions = buildCaptions(shots)
+  const sounds = buildSounds(shots, captions, ripples)
+  const pairedRenderSec =
+    pair.find((shot) => shot.slice === "paired")?.at ?? 20.4
+  const last = walk[walk.length - 1]
+  const endSec = last.at + last.duration + (last.hold ?? 0)
   return {
     terminal: transcript(pairedRenderSec),
-    ripples: tapSpecs.map((tap) => ({
-      at: renderAt(tap.at),
-      x: tap.x / 1080,
-      y: tap.y / 2400,
-    })),
-    captions: captionSpecs,
-    sounds: sounds.sort((a, b) => a.at - b.at),
-    endSec: captureEndSec(captureDurationSec),
+    clips,
+    ripples,
+    captions,
+    sounds,
+    endSec,
   }
 }
+
+export const totalSec = (slices: CaptureSlice[]): number =>
+  buildTimeline(slices).endSec + OUTRO_SEC

@@ -4,6 +4,13 @@ import { makeDeleteAcpSession } from "./session.delete.acp.session.usecase"
 
 const agentId = AgentIdSchema.parse("cursor")
 
+const noopEventLog = {
+  append: () => "epoch:1",
+  catchUp: () => null,
+  currentCursor: () => "epoch:0",
+  forget: () => undefined,
+}
+
 describe("makeDeleteAcpSession", () => {
   test("returns after archive without waiting for session/close", async () => {
     const closeStarted = { value: false }
@@ -16,6 +23,7 @@ describe("makeDeleteAcpSession", () => {
     const forgotten: Array<{ agentId: typeof agentId; sessionId: string }> = []
     const forgottenTitles: Array<{ agentId: typeof agentId; sessionId: string }> = []
     const forgottenConfigs: Array<{ agentId: typeof agentId; sessionId: string }> = []
+    const forgottenEventLogs: Array<{ agentId: typeof agentId; sessionId: string }> = []
 
     const deleteAcpSession = makeDeleteAcpSession({
       archiveAcpSession: () => undefined,
@@ -31,6 +39,12 @@ describe("makeDeleteAcpSession", () => {
         get: () => undefined,
         forget: (params) => {
           forgottenConfigs.push(params)
+        },
+      },
+      eventLog: {
+        ...noopEventLog,
+        forget: (params) => {
+          forgottenEventLogs.push(params)
         },
       },
       forgetSessionTitle: (params) => {
@@ -52,6 +66,7 @@ describe("makeDeleteAcpSession", () => {
     expect(forgotten).toEqual([{ agentId, sessionId: "sess-1" }])
     expect(forgottenTitles).toEqual([{ agentId, sessionId: "sess-1" }])
     expect(forgottenConfigs).toEqual([{ agentId, sessionId: "sess-1" }])
+    expect(forgottenEventLogs).toEqual([{ agentId, sessionId: "sess-1" }])
     expect(closeStarted.value).toBe(true)
     expect(closeFinished.value).toBe(false)
 
@@ -74,6 +89,7 @@ describe("makeDeleteAcpSession", () => {
         get: () => undefined,
         forget: () => undefined,
       },
+      eventLog: noopEventLog,
       forgetSessionTitle: () => undefined,
       ensureSupervisorReady: async () => ({ ok: true }),
       advertisesSessionClose: () => false,
@@ -103,6 +119,7 @@ describe("makeDeleteAcpSession", () => {
         get: () => undefined,
         forget: () => undefined,
       },
+      eventLog: noopEventLog,
       forgetSessionTitle: () => undefined,
       ensureSupervisorReady: async () => ({
         ok: false,

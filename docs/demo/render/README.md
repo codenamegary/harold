@@ -1,7 +1,7 @@
 # Demo render
 
 Remotion cut for the site and the README. The terminal is drawn here; the phone
-screen is the recording from `docs/demo/capture/capture.sh`.
+screen is assembled from the slices captured by `docs/demo/capture/capture.sh`.
 
 The cut follows docs/demo/script-prompt.md: an intro slide, a terminal-only
 opening scene (types `harold start` and prints the server status, zoomed in
@@ -17,12 +17,12 @@ on an outro slide with the install command and the site URL.
 | File               | Role                                                                     |
 | ------------------ | ------------------------------------------------------------------------ |
 | `Demo.tsx`         | Stage assembly: intro/outro slides, terminal stage, phone stage, captions |
-| `timeline.ts`      | The master clock: phone time-remap, layout keyframes, taps, keystrokes, captions, sounds |
+| `timeline.ts`      | The edit: slice schedule, rates, holds, captions, keystrokes, layout, sounds |
 | `terminal.tsx`     | Terminal window, type-on commands, QR drawn from the grid (no scrolling: the whole transcript fits) |
 | `terminal-data.ts` | Terminal copy (status block, pairing block) from the recorded run         |
 | `qr-rows.ts`       | The live pairing QR of the recorded run as half-block rows                |
 | `qr-matrix.ts`     | Decodes those rows into a module grid so the QR renders as crisp squares  |
-| `phone.tsx`        | Phone frame, time-remapped screen playback, tap ripples                   |
+| `phone.tsx`        | Phone frame, active slice playback, tap ripples                           |
 | `theme.ts`         | Brand tokens                                                              |
 
 Three routines run through the walkthrough, matching the script:
@@ -30,23 +30,22 @@ Three routines run through the walkthrough, matching the script:
 - **[KR] keystroke** — every typed character plays `public/sfx/key.wav`;
   Enter plays `public/sfx/enter.wav` (terminal commands, model search, prompt).
 - **[TAP] tap** — every tap blooms a ring on the phone screen and plays
-  `public/sfx/tap.wav`. Positions and times come from `drive_phone.py`'s tap
-  log and the recorded frames; they live in the `tapSpecs` table in
-  `timeline.ts`.
+  `public/sfx/tap.wav`. Positions and in-slice times come from
+  `capture.json`; `timeline.ts` maps them onto the shot.
 - **[CAP] caption** — each caption fades in with a lift and plays
   `public/sfx/ping.wav`.
 
-The phone video is remapped, never re-timed by hand: two short holds give the
-captions room (before the Pair tap and before the session dropdown) and one 3x
-sprint skips the scanner warm-up. Everything else plays 1:1, so capture marks
-map linearly (render = capture + 12.1s). The rendered cut is silent on the
-phone screen itself: `voice-input.wav` exists only as the emulator's
-microphone feed during capture and is never played in the video.
+The phone screen is a sequence of captured slices, not one stitched video.
+`WALK_STEPS` and `PAIR_STEPS` in `timeline.ts` choose each slice's rate,
+render duration, and hold. The scanner warm-up is a 3x sprint. The long
+session-creation, reply-stream, and voice-reply waits are compressed there
+too. The rendered cut is silent on the phone screen itself: `voice-input.wav`
+exists only as the emulator's microphone feed during capture and is never
+played in the video.
 
-The phone capture and marks are committed under `public/`, so the cut renders
-offline from a fresh clone. Run the capture script only when you want a fresh
-recording — and expect to re-check the `tapSpecs` table against the new marks
-and frames when you do.
+The slices and `capture.json` are committed under `public/`, so the cut
+renders offline from a fresh clone. Run the capture script only when you want
+a fresh recording. Retiming the existing slices is a `timeline.ts` change.
 
 The finished cut renders to `../harold.mp4`, which is committed. Spot-check
 stills and the bundle go to `../work/render/` and stay out of git.

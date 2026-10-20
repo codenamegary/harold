@@ -14,6 +14,20 @@ import {
 } from "./session.stream"
 
 describe("session stream contracts", () => {
+  test("parses a stream_reset frame", () => {
+    expect(
+      SessionStreamServerMessageSchema.parse({
+        type: "stream_reset",
+        agentId: "cursor",
+        sessionId: "acp-1",
+      }),
+    ).toEqual({
+      type: "stream_reset",
+      agentId: "cursor",
+      sessionId: "acp-1",
+    })
+  })
+
   test("parses a session_update frame", () => {
     expect(
       SessionStreamServerMessageSchema.parse({

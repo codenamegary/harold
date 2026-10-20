@@ -1,6 +1,8 @@
 package harold.android.chat
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import harold.android.contracts.AgentAuth
@@ -8,6 +10,8 @@ import harold.android.contracts.AgentAuthSession
 import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AgentAuthSummary
 import harold.android.contracts.AuthSessionStatus
+import harold.android.contracts.SessionState
+import harold.android.live.AcpTranscriptState
 
 class ChatUiStateTest {
     private fun summary(
@@ -86,4 +90,40 @@ class ChatUiStateTest {
             ).showAuthPanel,
         )
     }
+
+    @Test
+    fun reconnectingStreamHidesTheBlockedMessage() {
+        val state = ChatUiState(
+            selectedSession = sessionRow(SessionState.Offline),
+            transcript = AcpTranscriptState(sessionState = SessionState.Offline),
+            streamReconnecting = true,
+        )
+
+        assertNull(state.composerBlockedMessage)
+    }
+
+    @Test
+    fun offlineSessionWithoutReconnectExplainsTheBlockedComposer() {
+        val state = ChatUiState(
+            selectedSession = sessionRow(SessionState.Offline),
+            transcript = AcpTranscriptState(sessionState = SessionState.Offline),
+        )
+
+        assertEquals(
+            "Session reconnecting. Prompts unlock when it is idle again.",
+            state.composerBlockedMessage,
+        )
+    }
+
+    private fun sessionRow(state: SessionState) = SessionRow(
+        sessionId = "sess_01",
+        name = "Session",
+        cwd = "/tmp/harold",
+        workspaceId = "ws_01",
+        workspaceLabel = "harold",
+        agentId = "cursor",
+        agentLabel = "Cursor",
+        state = state,
+        updatedAt = "2026-10-19T00:00:00.000Z",
+    )
 }

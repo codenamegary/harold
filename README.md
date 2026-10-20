@@ -8,7 +8,7 @@ Harold is an agent ACP proxy and the slickest Android agent app experience. Run 
 
 ### The Harold Experience
 
-https://github.com/user-attachments/assets/5dc549a7-99e0-4198-aca5-9b34fce9496f
+https://github.com/user-attachments/assets/f046768b-8b1a-4b21-96db-69ae327722d6
 
 ## Quickstart
 

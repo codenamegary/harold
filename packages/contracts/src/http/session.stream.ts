@@ -53,6 +53,17 @@ export const SessionStreamSessionUpdateSchema = z.strictObject({
   update: z.unknown(),
 })
 
+/**
+ * Marker sent before a full replay. A client that resumes from a valid cursor
+ * never sees it; when it arrives, the client discards its cached transcript
+ * and rebuilds from the following events.
+ */
+export const SessionStreamResetSchema = z.strictObject({
+  type: z.literal("stream_reset"),
+  agentId: AgentIdSchema,
+  sessionId: z.string().min(1),
+})
+
 export const SessionStreamSessionConfigSchema = z.strictObject({
   type: z.literal("session_config"),
   agentId: AgentIdSchema,
@@ -117,6 +128,7 @@ export const SessionStreamSessionInfoSchema = z.strictObject({
 
 export const SessionStreamServerMessageSchema = z.discriminatedUnion("type", [
   SessionStreamSessionUpdateSchema,
+  SessionStreamResetSchema,
   SessionStreamSessionConfigSchema,
   SessionStreamSubscribedSchema,
   SessionStreamPermissionRequestSchema,

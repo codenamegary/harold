@@ -147,6 +147,22 @@ class ShellViewModelTest {
     }
 
     @Test
+    fun forwardsLifecycleForegroundAndBackgroundSignals() = runTest {
+        val connection = FakeSessionOwner()
+        val viewModel = viewModel(
+            paired(),
+            connection,
+            FakeAgentApi(Result.success(collectionOf(1))),
+        )
+
+        viewModel.onBackground()
+        viewModel.onForeground()
+
+        assertEquals(1, connection.backgroundMarks)
+        assertEquals(1, connection.foregroundProbes)
+    }
+
+    @Test
     fun stopsTheStreamWhenTheDeviceIsNotPaired() = runTest {
         val connection = FakeSessionOwner()
         val viewModel = viewModel(
@@ -283,6 +299,10 @@ private class FakeSessionOwner : SessionOwner {
         private set
     var disconnects = 0
         private set
+    var foregroundProbes = 0
+        private set
+    var backgroundMarks = 0
+        private set
 
     fun emit(status: ConnectionStatus) {
         _connectionState.value = _connectionState.value.copy(status = status)
@@ -298,6 +318,14 @@ private class FakeSessionOwner : SessionOwner {
 
     override fun disconnect() {
         disconnects += 1
+    }
+
+    override fun onBackground() {
+        backgroundMarks += 1
+    }
+
+    override fun onForeground() {
+        foregroundProbes += 1
     }
 
     override fun watch(agentId: AgentId?, sessionId: String?) = Unit

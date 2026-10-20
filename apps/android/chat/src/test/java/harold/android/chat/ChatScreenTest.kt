@@ -112,6 +112,44 @@ class ChatScreenTest {
     }
 
     @Test
+    fun reconnectBannerHidesTheBlockedComposerMessage() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        selectedSession = SessionRow(
+                            sessionId = "sess_01",
+                            name = "Alpha",
+                            cwd = "/tmp/harold",
+                            workspaceId = "ws_01",
+                            workspaceLabel = "harold",
+                            agentId = "cursor",
+                            agentLabel = "Cursor",
+                            state = SessionState.Offline,
+                            updatedAt = "2026-08-05T01:00:00.000Z",
+                        ),
+                        transcript = AcpTranscriptState(sessionState = SessionState.Offline),
+                        streamReconnecting = true,
+                    ),
+                    composerState = TextFieldState(),
+                    onSessionSelectorClick = {},
+                    onDismissSessionMenu = {},
+                    onWorkspacesClick = {},
+                    onSessionClick = {},
+                    onSeeAllSessionsClick = {},
+                    onCreateClick = {},
+                    onComposerSubmit = {},
+                    onComposerCancel = {},
+                    onPermissionOptionSelect = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("stream_reconnect_banner").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag("composer_blocked_message").assertCountEquals(0)
+    }
+
+    @Test
     fun showsTranscriptAndSubmitsFollowUpPrompt() {
         var submitted = false
         val composerState = TextFieldState()

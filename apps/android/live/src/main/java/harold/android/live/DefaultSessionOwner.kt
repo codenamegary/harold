@@ -4,6 +4,7 @@ import harold.android.contracts.AgentId
 import harold.android.contracts.AttachmentReference
 import harold.android.contracts.ConfigOption
 import harold.android.contracts.PromptRequestBody
+import harold.android.contracts.SessionState
 import harold.android.contracts.SessionStreamServerMessage
 import harold.android.contracts.catalogSessionKey
 import harold.android.contracts.parseAvailableCommands
@@ -28,7 +29,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonElement
 
 /**
@@ -71,16 +72,25 @@ class DefaultSessionOwner @Inject constructor(
     override val promptCompletions: Flow<Unit> = _promptCompletions.asSharedFlow()
 
     @Volatile
-    private var inbox = Channel<SessionStreamServerMessage>(Channel.UNLIMITED)
+    private var inbox = Channel<InboxFrame>(Channel.UNLIMITED)
     private var pump: Job? = null
 
     private var loop: Job? = null
     private var serverOrigin: String? = null
+
+    @Volatile
     private var stream: SessionStream? = null
     private var watchAgentId: AgentId? = null
     private var watchSessionId: String? = null
     private var pendingPrompt: String? = null
     private var turnSerial: Int = 0
+
+    /** Last cursor applied to the snapshot, sent back as SSE Last-Event-ID. */
+    @Volatile
+    private var lastEventId: String? = null
+
+    /** Stream and frame time captured when the app went to the background. */
+    private var backgroundFrameMark: Pair<SessionStream, Long?>? = null
 
     /**
      * Wakes the connect loop whenever the watch target changes. Conflated: a
@@ -89,6 +99,25 @@ class DefaultSessionOwner @Inject constructor(
      * reopened for the new target.
      */
     private val watchChanges = Channel<Unit>(capacity = Channel.CONFLATED)
+
+    /**
+     * A foreground resume that found no frames during the background period
+     * closes the possibly-dead stream and pokes the loop to reopen now.
+     */
+    private val streamProbes = Channel<Unit>(capacity = Channel.CONFLATED)
+
+    private data class InboxFrame(
+        val message: SessionStreamServerMessage,
+        val cursor: String?,
+    )
+
+    private sealed interface LoopWake {
+        data class Disconnected(val cause: DisconnectCause) : LoopWake
+
+        data object WatchChanged : LoopWake
+
+        data object ResumeProbe : LoopWake
+    }
 
     private data class WatchTarget(val agentId: AgentId, val sessionId: String)
 
@@ -120,6 +149,8 @@ class DefaultSessionOwner @Inject constructor(
 
         if (movedServer) {
             _connectionState.value = ConnectionState()
+            lastEventId = null
+            backgroundFrameMark = null
             synchronized(lock) {
                 resetWatchLocked(clearCatalog = true)
             }
@@ -142,6 +173,8 @@ class DefaultSessionOwner @Inject constructor(
         loop = null
         stream?.close()
         stream = null
+        lastEventId = null
+        backgroundFrameMark = null
         synchronized(lock) {
             pump?.cancel()
             pump = null
@@ -168,11 +201,45 @@ class DefaultSessionOwner @Inject constructor(
             }
             replaceInboxLocked()
             pendingPrompt = null
+            lastEventId = null
+            backgroundFrameMark = null
             watchAgentId = agentId
             watchSessionId = normalizedSession
             _snapshot.value = emptyLiveSnapshotLocked(reconnecting = false)
         }
         watchChanges.trySend(Unit)
+    }
+
+    override fun onBackground() {
+        val active = synchronized(lock) { stream }
+        backgroundFrameMark = active?.let { it to it.lastFrameAtNanos() }
+    }
+
+    override fun onForeground() {
+        val mark = backgroundFrameMark
+        backgroundFrameMark = null
+        val active = synchronized(lock) { stream }
+
+        if (active != null) {
+            // A frame (heartbeat included) arrived while backgrounded, so the
+            // socket survived. Without one, the process may have been frozen
+            // through Doze over a dead TCP mapping: reopen immediately rather
+            // than waiting out the 75 s idle timeout.
+            val stale = mark != null &&
+                mark.first === active &&
+                mark.second == active.lastFrameAtNanos()
+            if (stale) {
+                active.close()
+                streamProbes.trySend(Unit)
+                return
+            }
+        }
+
+        if (_connectionState.value.status is ConnectionStatus.Reconnecting) {
+            // The stream already died and the loop is backing off. Skip the
+            // remaining delay: the phone is in the user's hands.
+            streamProbes.trySend(Unit)
+        }
     }
 
     override suspend fun prompt(text: String, attachments: List<AttachmentReference>): Result<Unit> {
@@ -302,12 +369,27 @@ class DefaultSessionOwner @Inject constructor(
 
             applyConnection(ConnectionSignal.ConnectRequested)
 
-            if (reconnect) {
-                synchronized(lock) {
-                    replaceInboxLocked()
+            val (resumeFrom, streamInbox) = synchronized(lock) {
+                // Drop frames from the previous stream that the pump has not
+                // applied. They sit after lastEventId, so the server sends
+                // them again; applying them plus the replay would duplicate.
+                replaceInboxLocked()
+                if (reconnect) {
                     pendingPrompt = null
-                    _snapshot.value = emptyLiveSnapshotLocked(reconnecting = true)
+                    // Keep the rows visible while a resume is in flight. If
+                    // the server rejects the cursor it sends stream_reset,
+                    // which clears the transcript before the replay.
+                    _snapshot.update { current ->
+                        current.copy(
+                            reconnecting = true,
+                            transcript = current.transcript.copy(
+                                sessionState = SessionState.Offline,
+                                live = false,
+                            ),
+                        )
+                    }
                 }
+                lastEventId to inbox
             }
 
             val closed = CompletableDeferred<DisconnectCause>()
@@ -315,37 +397,46 @@ class DefaultSessionOwner @Inject constructor(
                 serverOrigin = serverOrigin,
                 agentId = target.agentId,
                 sessionId = target.sessionId,
+                lastEventId = resumeFrom,
                 handlers = SessionStreamHandlers(
-                    onMessage = ::enqueueFrame,
+                    onMessage = { message, cursor ->
+                        enqueueFrame(streamInbox, message, cursor)
+                    },
                     onOpen = { applyConnection(ConnectionSignal.Connected) },
                     onDisconnect = { cause -> closed.complete(cause) },
                 ),
             )
             stream = active
 
-            // Wait for a disconnect or a watch change; a stale notification
-            // (the loop already reopened for the new target) keeps waiting.
+            // Wait for a disconnect, a watch change, or a resume probe; a
+            // stale watch notification (the loop already reopened for the new
+            // target) keeps waiting.
             try {
                 var disconnectCause: DisconnectCause? = null
-                while (disconnectCause == null) {
-                    val event = select {
-                        closed.onAwait { it }
-                        watchChanges.onReceive { null }
+                var reopen = false
+                while (disconnectCause == null && !reopen) {
+                    val event = select<LoopWake> {
+                        closed.onAwait { LoopWake.Disconnected(it) }
+                        watchChanges.onReceive { LoopWake.WatchChanged }
+                        streamProbes.onReceive { LoopWake.ResumeProbe }
                     }
-                    if (event != null) {
-                        disconnectCause = event
-                    } else if (currentWatchTarget() != target) {
-                        break
+                    when (event) {
+                        is LoopWake.Disconnected -> disconnectCause = event.cause
+                        LoopWake.WatchChanged ->
+                            if (currentWatchTarget() != target) {
+                                reopen = true
+                            }
+                        LoopWake.ResumeProbe -> reopen = true
                     }
                 }
 
-                if (disconnectCause == null) {
-                    // Watch target changed: re-open immediately, no backoff.
+                if (reopen) {
+                    // Watch change or foreground probe: re-open immediately.
                     reconnect = false
                     continue
                 }
 
-                applyConnection(ConnectionSignal.Disconnected(disconnectCause))
+                applyConnection(ConnectionSignal.Disconnected(requireNotNull(disconnectCause)))
 
                 val status = _connectionState.value.status
                 if (status !is ConnectionStatus.Reconnecting) {
@@ -356,7 +447,10 @@ class DefaultSessionOwner @Inject constructor(
                     return
                 }
 
-                delay(ReconnectPolicy.delayMillis(status.attempt))
+                withTimeoutOrNull(ReconnectPolicy.delayMillis(status.attempt)) {
+                    // A foreground probe cuts the backoff short.
+                    streamProbes.receive()
+                }
                 reconnect = true
             } finally {
                 // Runs on every exit: watch change, disconnect, terminal
@@ -371,163 +465,200 @@ class DefaultSessionOwner @Inject constructor(
         }
     }
 
-    private fun enqueueFrame(message: SessionStreamServerMessage) {
-        val result = inbox.trySend(message)
+    private fun enqueueFrame(
+        channel: Channel<InboxFrame>,
+        message: SessionStreamServerMessage,
+        cursor: String?,
+    ) {
+        val result = channel.trySend(InboxFrame(message = message, cursor = cursor))
         if (result.isSuccess || result.isClosed) {
             return
         }
         stream?.close()
     }
 
-    private fun applyFrame(message: SessionStreamServerMessage) {
+    private fun applyFrame(channel: Channel<InboxFrame>, frame: InboxFrame) {
         synchronized(lock) {
-            when (message) {
-                is SessionStreamServerMessage.SessionUpdate -> {
-                    if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
-                        return
+            if (channel !== inbox) {
+                // The stream was replaced under this frame; the reconnect
+                // cursor already excludes it, so the server will resend it.
+                return
+            }
+            if (frame.message is SessionStreamServerMessage.StreamReset) {
+                // The server is about to replay the session. A cursor from
+                // before the reset no longer describes what the client holds,
+                // so a mid-replay disconnect must start over.
+                lastEventId = null
+            }
+            applyFrameLocked(frame.message)
+            if (frame.cursor != null) {
+                lastEventId = frame.cursor
+            }
+        }
+    }
+
+    private fun applyFrameLocked(message: SessionStreamServerMessage) {
+        when (message) {
+            is SessionStreamServerMessage.StreamReset -> {
+                if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
+                    return
+                }
+                _snapshot.value = emptyLiveSnapshotLocked(reconnecting = true)
+            }
+
+            is SessionStreamServerMessage.SessionUpdate -> {
+                if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
+                    return
+                }
+                val commands = parseAvailableCommands(message.update)
+                if (commands != null) {
+                    commandsCatalog.remember(message.agentId, message.sessionId, commands)
+                    _snapshot.update { current ->
+                        current.copy(
+                            availableCommands = commands,
+                            reconnecting = false,
+                        )
                     }
-                    val commands = parseAvailableCommands(message.update)
-                    if (commands != null) {
-                        commandsCatalog.remember(message.agentId, message.sessionId, commands)
-                        _snapshot.update { current ->
-                            current.copy(
-                                availableCommands = commands,
-                                reconnecting = false,
+                    return
+                }
+                _snapshot.update { current ->
+                    current.copy(
+                        transcript = foldAcpUpdate(
+                            current.transcript,
+                            parseAcpUpdate(message.update),
+                        ),
+                        reconnecting = false,
+                    )
+                }
+            }
+
+            is SessionStreamServerMessage.SessionConfig -> {
+                if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
+                    return
+                }
+                val options = parseConfigOptions(message.configOptions)
+                configCatalog.remember(message.agentId, message.sessionId, options)
+                _snapshot.update { current ->
+                    current.copy(
+                        configOptions = options,
+                        reconnecting = false,
+                    )
+                }
+            }
+
+            is SessionStreamServerMessage.Subscribed -> {
+                if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
+                    return
+                }
+                _snapshot.update { current ->
+                    current.copy(
+                        transcript = applySubscribed(current.transcript),
+                        reconnecting = false,
+                    )
+                }
+                val queued = pendingPrompt
+                pendingPrompt = null
+                if (queued != null) {
+                    val origin = serverOrigin
+                    if (origin != null) {
+                        scope.launch {
+                            commandApi.prompt(
+                                origin,
+                                message.agentId,
+                                message.sessionId,
+                                PromptRequestBody(queued),
                             )
                         }
-                        return
-                    }
-                    _snapshot.update { current ->
-                        current.copy(
-                            transcript = foldAcpUpdate(
-                                current.transcript,
-                                parseAcpUpdate(message.update),
-                            ),
-                            reconnecting = false,
-                        )
                     }
                 }
-                is SessionStreamServerMessage.SessionConfig -> {
-                    if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
-                        return
-                    }
-                    val options = parseConfigOptions(message.configOptions)
-                    configCatalog.remember(message.agentId, message.sessionId, options)
-                    _snapshot.update { current ->
-                        current.copy(
-                            configOptions = options,
-                            reconnecting = false,
-                        )
-                    }
-                }
+            }
 
-                is SessionStreamServerMessage.Subscribed -> {
-                    if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
-                        return
-                    }
-                    _snapshot.update { current ->
-                        current.copy(
-                            transcript = applySubscribed(current.transcript),
-                            reconnecting = false,
-                        )
-                    }
-                    val queued = pendingPrompt
-                    pendingPrompt = null
-                    if (queued != null) {
-                        val origin = serverOrigin
-                        if (origin != null) {
-                            scope.launch {
-                                commandApi.prompt(
-                                    origin,
-                                    message.agentId,
-                                    message.sessionId,
-                                    PromptRequestBody(queued),
-                                )
-                            }
-                        }
-                    }
+            is SessionStreamServerMessage.PromptComplete -> {
+                if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
+                    return
                 }
-                is SessionStreamServerMessage.PromptComplete -> {
-                    if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
-                        return
-                    }
-                    _snapshot.update { current ->
-                        current.copy(transcript = applyPromptComplete(current.transcript))
-                    }
-                    _promptCompletions.tryEmit(Unit)
+                _snapshot.update { current ->
+                    current.copy(transcript = applyPromptComplete(current.transcript))
                 }
-                is SessionStreamServerMessage.Cancelled -> {
-                    if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
-                        return
-                    }
-                    _snapshot.update { current ->
-                        current.copy(transcript = applyCancelled(current.transcript))
-                    }
+                _promptCompletions.tryEmit(Unit)
+            }
+
+            is SessionStreamServerMessage.Cancelled -> {
+                if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
+                    return
                 }
-                is SessionStreamServerMessage.PermissionRequest -> {
-                    if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
-                        return
-                    }
-                    val parsed = parseStreamPermission(
-                        requestId = message.requestId,
-                        sessionId = message.sessionId,
-                        params = message.params,
-                    ) ?: return
-                    _snapshot.update { current ->
-                        current.copy(
-                            pendingPermission = parsed,
-                            transcript = applyPermissionRequested(current.transcript),
-                        )
-                    }
+                _snapshot.update { current ->
+                    current.copy(transcript = applyCancelled(current.transcript))
                 }
-                is SessionStreamServerMessage.ExtensionRequest -> {
-                    if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
-                        return
-                    }
-                    _snapshot.update { current ->
-                        current.copy(
-                            extension = StreamExtension(
-                                requestId = message.requestId,
-                                method = message.method,
-                                params = message.params,
-                            ),
-                        )
-                    }
+            }
+
+            is SessionStreamServerMessage.PermissionRequest -> {
+                if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
+                    return
                 }
-                is SessionStreamServerMessage.Error -> {
-                    if (
-                        message.sessionId != null &&
-                        message.sessionId != watchSessionId
-                    ) {
-                        return
-                    }
-                    if (watchSessionId == null) {
-                        return
-                    }
-                    _snapshot.update { current ->
-                        current.copy(
-                            transcript = applyStreamError(current.transcript),
-                            authRequired = isAuthRequiredError(message.message),
-                            reconnecting = false,
-                        )
-                    }
+                val parsed = parseStreamPermission(
+                    requestId = message.requestId,
+                    sessionId = message.sessionId,
+                    params = message.params,
+                ) ?: return
+                _snapshot.update { current ->
+                    current.copy(
+                        pendingPermission = parsed,
+                        transcript = applyPermissionRequested(current.transcript),
+                    )
                 }
-                is SessionStreamServerMessage.AuthSessionUpdated -> {
-                    if (watchAgentId == null || watchAgentId != message.agentId) {
-                        return
-                    }
-                    _snapshot.update { current ->
-                        current.copy(
-                            agentAuth = message.auth,
-                            authRequired = false,
-                        )
-                    }
+            }
+
+            is SessionStreamServerMessage.ExtensionRequest -> {
+                if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
+                    return
                 }
-                is SessionStreamServerMessage.SessionInfo -> {
-                    // The server sends renames for every session to every
-                    // client, so this skips the watch filter.
-                    applySessionTitleLocked(message.agentId, message.sessionId, message.title)
+                _snapshot.update { current ->
+                    current.copy(
+                        extension = StreamExtension(
+                            requestId = message.requestId,
+                            method = message.method,
+                            params = message.params,
+                        ),
+                    )
                 }
+            }
+
+            is SessionStreamServerMessage.Error -> {
+                if (
+                    message.sessionId != null &&
+                    message.sessionId != watchSessionId
+                ) {
+                    return
+                }
+                if (watchSessionId == null) {
+                    return
+                }
+                _snapshot.update { current ->
+                    current.copy(
+                        transcript = applyStreamError(current.transcript),
+                        authRequired = isAuthRequiredError(message.message),
+                        reconnecting = false,
+                    )
+                }
+            }
+
+            is SessionStreamServerMessage.AuthSessionUpdated -> {
+                if (watchAgentId == null || watchAgentId != message.agentId) {
+                    return
+                }
+                _snapshot.update { current ->
+                    current.copy(
+                        agentAuth = message.auth,
+                        authRequired = false,
+                    )
+                }
+            }
+
+            is SessionStreamServerMessage.SessionInfo -> {
+                // The server sends renames for every session to every
+                // client, so this skips the watch filter.
+                applySessionTitleLocked(message.agentId, message.sessionId, message.title)
             }
         }
     }
@@ -536,7 +667,7 @@ class DefaultSessionOwner @Inject constructor(
         val channel = inbox
         pump = scope.launch {
             for (frame in channel) {
-                applyFrame(frame)
+                applyFrame(channel, frame)
             }
         }
     }

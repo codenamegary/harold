@@ -9,7 +9,7 @@ import { CreateSessionResponseSchema } from "contracts/http/session"
 import { DEVICES_PATH, DeviceCollectionSchema, devicePath } from "contracts/http/device"
 import { sessionEventsPath } from "contracts/http/session.stream"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
-import { openSseStream } from "test-support/session-stream"
+import { createSessionCommands, openSseStream } from "test-support/session-stream"
 import { enableAgent } from "../test-support/test.app"
 import { bootTestApp } from "../test-support/test.harness"
 
@@ -96,6 +96,168 @@ describe("GET /v1/sessions/:sessionId/events", () => {
     expect(replayIndex).toBeGreaterThanOrEqual(0)
     expect(replayIndex).toBeLessThan(subscribedIndex)
     expect(stream.messages.some((message) => message.type === "error")).toBe(false)
+
+    await stream.close()
+  }, 30_000)
+
+  test("resumes from a valid cursor without replaying the session", async () => {
+    const configOptions = [
+      {
+        id: "model",
+        name: "Model",
+        category: "model",
+        type: "select",
+        currentValue: "m1",
+        options: [
+          { value: "m1", name: "M1" },
+          { value: "m2", name: "M2" },
+        ],
+      },
+    ]
+    const { app, config } = await bootTestApp({
+      whichFn,
+      fakeAcpOptions: {
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+        sessionNewSessionId: "sse-resume-1",
+        sessionLoadSessionId: "sse-resume-1",
+        emitLoadReplayUpdates: true,
+        configOptions,
+      },
+    })
+    await enableAgent(app, "cursor", whichFn)
+    const httpBase = await getHttpBase(app, config.host)
+
+    const created = await createSession(app, "/tmp/sse-resume")
+    const first = await openSseStream({
+      url: eventsUrl(httpBase, created.sessionId),
+      credential: app.deviceCredential.credential,
+    })
+    await first.waitFor((message) => message.type === "subscribed")
+
+    expect(first.messages[0]?.type).toBe("stream_reset")
+    expect(
+      first.messages.some(
+        (message) =>
+          message.type === "session_update" && JSON.stringify(message.update).includes("Replayed"),
+      ),
+    ).toBe(true)
+    const cursor = first.lastEventId
+    expect(cursor).not.toBeNull()
+    await first.close()
+
+    const resumed = await openSseStream({
+      url: eventsUrl(httpBase, created.sessionId),
+      credential: app.deviceCredential.credential,
+      ...(cursor === null ? {} : { lastEventId: cursor }),
+    })
+    await resumed.waitFor((message) => message.type === "subscribed")
+
+    expect(resumed.messages.some((message) => message.type === "stream_reset")).toBe(false)
+    expect(
+      resumed.messages.some(
+        (message) =>
+          message.type === "session_update" && JSON.stringify(message.update).includes("Replayed"),
+      ),
+    ).toBe(false)
+    const subscribed = resumed.events.find((event) => event.message.type === "subscribed")
+    expect(subscribed?.id).not.toBeNull()
+    const resumedConfig = resumed.messages.filter((message) => message.type === "session_config")
+    expect(resumedConfig).toHaveLength(1)
+    expect(resumedConfig[0]).toMatchObject({
+      type: "session_config",
+      agentId: "cursor",
+      sessionId: created.sessionId,
+      configOptions,
+    })
+
+    await resumed.close()
+  }, 30_000)
+
+  test("resumes with every event missed while disconnected, in order", async () => {
+    const { app, config } = await bootTestApp({
+      whichFn,
+      fakeAcpOptions: {
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+        sessionNewSessionId: "sse-catch-up-1",
+        sessionLoadSessionId: "sse-catch-up-1",
+        emitLoadReplayUpdates: true,
+        emitSessionUpdatesOnPrompt: true,
+        promptCompletionDelayMs: 50,
+      },
+    })
+    await enableAgent(app, "cursor", whichFn)
+    const httpBase = await getHttpBase(app, config.host)
+    const commands = createSessionCommands({
+      httpBase,
+      credential: app.deviceCredential.credential,
+    })
+
+    const created = await createSession(app, "/tmp/sse-catch-up")
+    const first = await openSseStream({
+      url: eventsUrl(httpBase, created.sessionId),
+      credential: app.deviceCredential.credential,
+    })
+    await first.waitFor((message) => message.type === "subscribed")
+    const cursor = first.lastEventId
+    expect(cursor).not.toBeNull()
+    await first.close()
+
+    const promptResponse = await commands.prompt({
+      agentId: "cursor",
+      sessionId: created.sessionId,
+      text: "while disconnected",
+    })
+    expect(promptResponse.status).toBe(202)
+    await new Promise((resolve) => setTimeout(resolve, 250))
+
+    const resumed = await openSseStream({
+      url: eventsUrl(httpBase, created.sessionId),
+      credential: app.deviceCredential.credential,
+      ...(cursor === null ? {} : { lastEventId: cursor }),
+    })
+    await resumed.waitFor((message) => message.type === "prompt_complete")
+
+    expect(resumed.messages.some((message) => message.type === "stream_reset")).toBe(false)
+    const caughtUpText = resumed.messages.flatMap((message) => {
+      if (message.type !== "session_update") {
+        return []
+      }
+      const update = message.update as { content?: { text?: string } }
+      return update.content?.text === undefined ? [] : [update.content.text]
+    })
+    expect(caughtUpText).toEqual(["Hello", " world"])
+
+    await resumed.close()
+  }, 30_000)
+
+  test("falls back to a full replay for a stale cursor", async () => {
+    const { app, config } = await bootTestApp({
+      whichFn,
+      fakeAcpOptions: {
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+        sessionNewSessionId: "sse-stale-1",
+        sessionLoadSessionId: "sse-stale-1",
+        emitLoadReplayUpdates: true,
+      },
+    })
+    await enableAgent(app, "cursor", whichFn)
+    const httpBase = await getHttpBase(app, config.host)
+
+    const created = await createSession(app, "/tmp/sse-stale")
+    const stream = await openSseStream({
+      url: eventsUrl(httpBase, created.sessionId),
+      credential: app.deviceCredential.credential,
+      lastEventId: "stale-cursor",
+    })
+
+    await stream.waitFor((message) => message.type === "subscribed")
+    expect(stream.messages[0]?.type).toBe("stream_reset")
+    expect(
+      stream.messages.some(
+        (message) =>
+          message.type === "session_update" && JSON.stringify(message.update).includes("Replayed"),
+      ),
+    ).toBe(true)
 
     await stream.close()
   }, 30_000)

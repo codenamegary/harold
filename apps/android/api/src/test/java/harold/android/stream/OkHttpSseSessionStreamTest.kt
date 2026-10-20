@@ -17,6 +17,7 @@ import harold.android.contracts.SessionStreamServerMessage
 class OkHttpSseSessionStreamTest {
     private lateinit var server: MockWebServer
     private val messages = LinkedBlockingQueue<SessionStreamServerMessage>()
+    private val cursors = LinkedBlockingQueue<String?>()
     private val disconnects = LinkedBlockingQueue<DisconnectCause>()
 
     @Before
@@ -48,6 +49,40 @@ class OkHttpSseSessionStreamTest {
         assertEquals("GET", recorded.method)
         assertEquals("/v1/sessions/sess_01/events?agentId=cursor", recorded.path)
         assertEquals("text/event-stream", recorded.getHeader("Accept"))
+        stream.close()
+    }
+
+    @Test
+    fun deliversTheSseIdAsTheResumeCursor() {
+        server.enqueue(eventStreamResponse("id: epoch:7\ndata: {\"type\":\"subscribed\",\"agentId\":\"cursor\",\"sessionId\":\"sess_01\"}\n\n"))
+        val stream = openStream()
+
+        messages.poll(5, TimeUnit.SECONDS)
+        assertEquals("epoch:7", cursors.poll(5, TimeUnit.SECONDS))
+        stream.close()
+    }
+
+    @Test
+    fun sendsTheLastEventIdWhenResuming() {
+        server.enqueue(eventStreamResponse("data: {\"type\":\"subscribed\",\"agentId\":\"cursor\",\"sessionId\":\"sess_01\"}\n\n"))
+        val stream = openStream(lastEventId = "epoch:7")
+
+        messages.poll(5, TimeUnit.SECONDS)
+        val recorded = server.takeRequest()
+        assertEquals("epoch:7", recorded.getHeader("Last-Event-ID"))
+        stream.close()
+    }
+
+    @Test
+    fun recordsTheLastFrameTimeIncludingHeartbeats() {
+        server.enqueue(eventStreamResponse(": ping\n\n"))
+        val stream = openStream()
+
+        val startedAt = System.nanoTime()
+        while (stream.lastFrameAtNanos() == null && System.nanoTime() - startedAt < 5_000_000_000L) {
+            Thread.sleep(5)
+        }
+        assertTrue(stream.lastFrameAtNanos() != null)
         stream.close()
     }
 
@@ -89,7 +124,10 @@ class OkHttpSseSessionStreamTest {
         stream.close()
     }
 
-    private fun openStream(idleTimeoutMillis: Long = OkHttpSseSessionStreamFactory.DEFAULT_IDLE_TIMEOUT_MS): SessionStream =
+    private fun openStream(
+        idleTimeoutMillis: Long = OkHttpSseSessionStreamFactory.DEFAULT_IDLE_TIMEOUT_MS,
+        lastEventId: String? = null,
+    ): SessionStream =
         OkHttpSseSessionStreamFactory(
             client = OkHttpClient(),
             idleTimeoutMillis = idleTimeoutMillis,
@@ -97,8 +135,12 @@ class OkHttpSseSessionStreamTest {
             serverOrigin = server.url("/").toString(),
             agentId = "cursor",
             sessionId = "sess_01",
+            lastEventId = lastEventId,
             handlers = SessionStreamHandlers(
-                onMessage = { message -> messages += message },
+                onMessage = { message, cursor ->
+                    messages += message
+                    cursors += cursor
+                },
                 onDisconnect = { cause -> disconnects += cause },
             ),
         )
