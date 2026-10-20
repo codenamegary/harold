@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { buildTimeline, clipFrame, type CaptureSlice, type PhoneClip } from "./timeline"
+import { buildTimeline, clipFrame, TERM_BOX, type CaptureSlice, type PhoneClip } from "./timeline"
 
 const capture = (await Bun.file(new URL("../public/capture.json", import.meta.url)).json()) as {
   slices: CaptureSlice[]
@@ -33,6 +33,12 @@ describe("clipFrame", () => {
 
     expect(clipFrame(clip, 10)).toBe(3.5)
     expect(clipFrame(clip, 11)).toBe(5.5)
+  })
+})
+
+describe("terminal layout", () => {
+  test("keeps the terminal vertically centered in the 1080 stage", () => {
+    expect(TERM_BOX.top * 2 + TERM_BOX.height).toBe(1080)
   })
 })
 

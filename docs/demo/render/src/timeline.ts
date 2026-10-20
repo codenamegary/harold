@@ -291,12 +291,12 @@ export const channel = (keyframes: Keyframes, sec: number): number => {
   return keyframes[keyframes.length - 1][1]
 }
 
-// Terminal stage: one fixed box for the whole first act. The close-up is a
-// pure scale on that box; after pairing the box slides out to the left.
-// The origin sits at the top-left so the close-up keeps the title bar and
-// the prompt labels in frame.
-export const TERM_BOX = { left: 60, top: 112, width: 920, height: 960 }
-export const TERM_ORIGIN = "0% 6%"
+// Terminal stage: one fixed, vertically centered box for the whole first act.
+// The close-up is a pure scale on that box; after pairing the box slides out
+// to the left. The origin sits near the top-left so the close-up keeps the
+// title bar and the prompt labels in frame.
+export const TERM_BOX = { left: 60, top: 60, width: 920, height: 960 }
+export const TERM_ORIGIN = "0% 2%"
 
 export const termScale: Keyframes = [
   [0, 1],
