@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/codenamegary/harold/compare/v1.3.0...v1.4.0) (2026-10-19)
+
+
+### Features
+
+* **cli:** add private LAN HTTP pairing ([#421](https://github.com/codenamegary/harold/issues/421)) ([e4c258b](https://github.com/codenamegary/harold/commit/e4c258b750bb9c82d0b6a854fde66d8c90577fc4))
+
 ## [1.3.0](https://github.com/codenamegary/harold/compare/v1.2.3...v1.3.0) (2026-10-13)
 
 
