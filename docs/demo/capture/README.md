@@ -38,8 +38,10 @@ Preview or render from `docs/demo/render` (the render lands at `docs/demo/harold
 ```sh
 bun install
 bun run dev
-bunx remotion render src/index.ts HaroldDemo ../harold.mp4
+bun run render
 ```
+
+`bun run render` renders a master to `docs/demo/work/render/harold-master.mp4`, then compresses it to `docs/demo/harold.mp4` with H.264 CRF 26, 96 kbps AAC, and faststart. It needs `ffmpeg` on `PATH`.
 
 ## How it works
 

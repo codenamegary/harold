@@ -48,8 +48,12 @@ The slices and `capture.json` are committed under `public/`, so the cut
 renders offline from a fresh clone. Run the capture script only when you want
 a fresh recording. Retiming the existing slices is a `timeline.ts` change.
 
-The finished cut renders to `../harold.mp4`, which is committed. Spot-check
-stills and the bundle go to `../work/render/` and stay out of git.
+`bun run render` produces the finished cut at `../harold.mp4`, which is
+committed. It renders a high-quality master to
+`../work/render/harold-master.mp4`, then runs `ffmpeg` to compress it to H.264
+CRF 26 with 96 kbps AAC and faststart. The master, spot-check stills, and the
+bundle go to `../work/render/` and stay out of git. `ffmpeg` must be on `PATH`;
+`bun run compress` re-runs only the compression step.
 
 ```sh
 bun install
@@ -57,8 +61,8 @@ bun install
 # Only needed for a new recording:
 bash ../capture/capture.sh
 
-bun run dev
-bunx remotion render src/index.ts HaroldDemo ../harold.mp4
+bun run dev        # studio, scrub the timeline
+bun run render     # render the cut, then compress it
 ```
 
 `bun run dev` opens the studio so you can scrub the timeline.

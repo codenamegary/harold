@@ -168,9 +168,10 @@ f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
 --frame=<mid-walkthrough>` from `docs/demo/render`. Commit
    `docs/demo/render/public/slices/` + `capture.json` only from a fully
    successful run — never a failed one. Then re-render the committed cut so
-   it shows the new capture:
-   `bun x remotion render src/index.ts HaroldDemo ../harold.mp4` from
-   `docs/demo/render`.
+   it shows the new capture: run `bun run render` from `docs/demo/render`. It
+   renders `../work/render/harold-master.mp4`, then compresses it to
+   `../harold.mp4` (H.264 CRF 26, 96 kbps AAC, faststart) with `ffmpeg`, which
+   must be on `PATH`.
 
 ## Troubleshooting map
 
