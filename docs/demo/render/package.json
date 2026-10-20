@@ -24,6 +24,8 @@
   "scripts": {
     "dev": "remotionb studio",
     "build": "remotionb bundle --out-dir=../work/render/bundle",
+    "render": "mkdir -p ../work/render && remotionb render src/index.ts HaroldDemo ../work/render/harold-master.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p --audio-codec=aac --audio-bitrate=320k --x264-preset=medium && bun run compress",
+    "compress": "ffmpeg -y -i ../work/render/harold-master.mp4 -c:v libx264 -preset slow -crf 26 -profile:v high -level 4.0 -pix_fmt yuv420p -c:a aac -ac 2 -b:a 96k -movflags +faststart ../harold.mp4",
     "upgrade": "remotionb upgrade",
     "test": "bun test src",
     "lint": "eslint src && tsc"
