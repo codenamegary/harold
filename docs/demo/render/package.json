@@ -14,6 +14,7 @@
   },
   "devDependencies": {
     "@remotion/eslint-config-flat": "4.0.534",
+    "@types/bun": "1.4.3",
     "@types/react": "19.2.7",
     "@types/web": "0.0.166",
     "eslint": "9.39.5",
@@ -24,6 +25,7 @@
     "dev": "remotionb studio",
     "build": "remotionb bundle --out-dir=../work/render/bundle",
     "upgrade": "remotionb upgrade",
+    "test": "bun test src",
     "lint": "eslint src && tsc"
   }
 }

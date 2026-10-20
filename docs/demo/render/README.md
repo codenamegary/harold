@@ -14,16 +14,16 @@ session history, new session, model/mode/effort, a drafted prompt with photo
 and file attachments, the text reply, and voice input with its reply. It ends
 on an outro slide with the install command and the site URL.
 
-| File               | Role                                                                     |
-| ------------------ | ------------------------------------------------------------------------ |
-| `Demo.tsx`         | Stage assembly: intro/outro slides, terminal stage, phone stage, captions |
-| `timeline.ts`      | The edit: slice schedule, rates, holds, captions, keystrokes, layout, sounds |
+| File               | Role                                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------------- |
+| `Demo.tsx`         | Stage assembly: intro/outro slides, terminal stage, phone stage, captions                           |
+| `timeline.ts`      | The edit: slice schedule, rates, holds, captions, keystrokes, layout, sounds                        |
 | `terminal.tsx`     | Terminal window, type-on commands, QR drawn from the grid (no scrolling: the whole transcript fits) |
-| `terminal-data.ts` | Terminal copy (status block, pairing block) from the recorded run         |
-| `qr-rows.ts`       | The live pairing QR of the recorded run as half-block rows                |
-| `qr-matrix.ts`     | Decodes those rows into a module grid so the QR renders as crisp squares  |
-| `phone.tsx`        | Phone frame, active slice playback, tap ripples                           |
-| `theme.ts`         | Brand tokens                                                              |
+| `terminal-data.ts` | Terminal copy (status block, pairing block) from the recorded run                                   |
+| `qr-rows.ts`       | The live pairing QR of the recorded run as half-block rows                                          |
+| `qr-matrix.ts`     | Decodes those rows into a module grid so the QR renders as crisp squares                            |
+| `phone.tsx`        | Phone frame, active slice playback, tap ripples                                                     |
+| `theme.ts`         | Brand tokens                                                                                        |
 
 Three routines run through the walkthrough, matching the script:
 
@@ -36,12 +36,13 @@ Three routines run through the walkthrough, matching the script:
   `public/sfx/ping.wav`.
 
 The phone screen is a sequence of captured slices, not one stitched video.
-`WALK_STEPS` and `PAIR_STEPS` in `timeline.ts` choose each slice's rate,
-render duration, and hold. The scanner warm-up is a 3x sprint. The long
-session-creation, reply-stream, and voice-reply waits are compressed there
-too. The rendered cut is silent on the phone screen itself: `voice-input.wav`
-exists only as the emulator's microphone feed during capture and is never
-played in the video.
+`WALK_STEPS` and `PAIR_STEPS` in `timeline.ts` choose each slice's in-point,
+rate, render duration, and hold. Typing windows are source times, so the key
+sounds follow the recorded typing even when the shot is trimmed or retimed.
+The scanner warm-up is a 3x sprint. The long session-creation, reply-stream,
+and voice-reply waits are compressed there too. The rendered cut is silent on
+the phone screen itself: `voice-input.wav` exists only as the emulator's
+microphone feed during capture and is never played in the video.
 
 The slices and `capture.json` are committed under `public/`, so the cut
 renders offline from a fresh clone. Run the capture script only when you want

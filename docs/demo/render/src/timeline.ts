@@ -36,12 +36,13 @@ const WALK_START = 27.5
 type Step = {
   slice: string
   at?: number
+  startSec?: number
   rate?: number
   duration?: number
   hold?: number
   required?: boolean
   caption?: { text: string; at?: number; hold?: number }
-  typing?: { text: string; at?: number; duration?: number }
+  typing?: { text: string; fromSec: number; toSec: number }
 }
 
 // The pairing act is interleaved with the terminal stage, so its shots keep
@@ -87,7 +88,9 @@ const WALK_STEPS: Step[] = [
   },
   {
     slice: "model_search",
-    typing: { text: "deepseek", duration: 1.4 },
+    startSec: 2.75,
+    duration: 2.2,
+    typing: { text: "deepseek", fromSec: 3.9, toSec: 4.75 },
     hold: 0.3,
   },
   { slice: "model_pick", hold: 0.3 },
@@ -111,8 +114,13 @@ const WALK_STEPS: Step[] = [
   },
   {
     slice: "prompt_type",
-    duration: 2.8,
-    typing: { text: "Do you think my cat's behaviour is strange?", duration: 2.4 },
+    startSec: 0.45,
+    duration: 4.6,
+    typing: {
+      text: "Do you think my cat's behaviour is strange?",
+      fromSec: 0.82,
+      toSec: 4.62,
+    },
     hold: 0.6,
   },
   {
@@ -137,20 +145,30 @@ const WALK_STEPS: Step[] = [
 
 type Shot = Step & {
   at: number
+  startSec: number
   rate: number
   duration: number
   data: CaptureSlice
 }
 
 export type PhoneClip =
-  | { kind: "play"; file: string; from: number; duration: number; rate: number }
+  | {
+      kind: "play"
+      file: string
+      from: number
+      duration: number
+      rate: number
+      startSec: number
+    }
   | { kind: "hold"; file: string; from: number; duration: number; atSec: number }
 
 const DEFAULT_SHOT_SEC = 2.0
 
 const shotDuration = (step: Step, data: CaptureSlice): number => {
   const rate = step.rate ?? 1
-  const available = data.still ? data.durationSec : data.durationSec / rate
+  const startSec = step.startSec ?? 0
+  const remaining = Math.max(0.05, data.durationSec - startSec)
+  const available = data.still ? data.durationSec : remaining / rate
   const fallback = data.still ? Math.min(available, 1.5) : Math.min(available, DEFAULT_SHOT_SEC)
   return Math.max(0.05, Math.min(step.duration ?? fallback, available))
 }
@@ -167,6 +185,7 @@ const buildShots = (slices: CaptureSlice[]): { pair: Shot[]; walk: Shot[] } => {
     return {
       ...step,
       at: step.at ?? 0,
+      startSec: data.still ? 0 : (step.startSec ?? 0),
       rate: step.rate ?? 1,
       duration: shotDuration(step, data),
       data,
@@ -196,8 +215,7 @@ const buildClips = (shots: Shot[]): PhoneClip[] => {
   const ordered = [...shots].sort((a, b) => a.at - b.at)
   for (let index = 0; index < ordered.length; index += 1) {
     const shot = ordered[index]
-    const nextAt =
-      ordered[index + 1]?.at ?? shot.at + shot.duration + (shot.hold ?? 0)
+    const nextAt = ordered[index + 1]?.at ?? shot.at + shot.duration + (shot.hold ?? 0)
     const playDuration = Math.max(0, Math.min(shot.duration, nextAt - shot.at))
     if (shot.data.still) {
       clips.push({
@@ -214,6 +232,7 @@ const buildClips = (shots: Shot[]): PhoneClip[] => {
         from: shot.at,
         duration: playDuration,
         rate: shot.rate,
+        startSec: shot.startSec,
       })
     }
     const holdStart = shot.at + playDuration
@@ -225,7 +244,7 @@ const buildClips = (shots: Shot[]): PhoneClip[] => {
         duration: nextAt - holdStart,
         atSec: shot.data.still
           ? 0
-          : Math.min(shot.data.durationSec, playDuration * shot.rate),
+          : Math.min(shot.data.durationSec, shot.startSec + playDuration * shot.rate),
       })
     }
   }
@@ -247,7 +266,7 @@ export const clipFrame = (clip: PhoneClip, sec: number): number => {
   if (clip.kind === "hold") {
     return clip.atSec
   }
-  return Math.max(0, (sec - clip.from) * clip.rate)
+  return Math.max(0, clip.startSec + (sec - clip.from) * clip.rate)
 }
 
 // --- Keyframe channels ------------------------------------------------------
@@ -272,12 +291,12 @@ export const channel = (keyframes: Keyframes, sec: number): number => {
   return keyframes[keyframes.length - 1][1]
 }
 
-// Terminal stage: one fixed box for the whole first act. The close-up is a
-// pure scale on that box; after pairing the box slides out to the left.
-// The origin sits at the top-left so the close-up keeps the title bar and
-// the prompt labels in frame.
-export const TERM_BOX = { left: 60, top: 112, width: 920, height: 920 }
-export const TERM_ORIGIN = "0% 6%"
+// Terminal stage: one fixed, vertically centered box for the whole first act.
+// The close-up is a pure scale on that box; after pairing the box slides out
+// to the left. The origin sits near the top-left so the close-up keeps the
+// title bar and the prompt labels in frame.
+export const TERM_BOX = { left: 60, top: 60, width: 920, height: 960 }
+export const TERM_ORIGIN = "0% 2%"
 
 export const termScale: Keyframes = [
   [0, 1],
@@ -376,7 +395,11 @@ const buildRipples = (shots: Shot[]): Ripple[] => {
       continue
     }
     for (const tap of shot.data.taps ?? []) {
-      const atSec = Math.min(shot.duration, tap.atSec / shot.rate)
+      if (tap.atSec < shot.startSec) {
+        continue
+      }
+      const sinceStart = (tap.atSec - shot.startSec) / shot.rate
+      const atSec = Math.min(shot.duration, sinceStart)
       ripples.push({
         at: shot.at + atSec,
         x: tap.x / shot.data.width,
@@ -424,12 +447,11 @@ const buildSounds = (shots: Shot[], captions: CaptionSpec[], ripples: Ripple[]):
     if (shot.typing === undefined) {
       continue
     }
-    const at = shot.at + (shot.typing.at ?? 0.2)
-    const duration = Math.min(
-      shot.typing.duration ?? Math.max(0.1, shot.duration - (shot.typing.at ?? 0.2)),
-      Math.max(0.1, shot.duration - (shot.typing.at ?? 0.2)),
-    )
-    const step = duration / Math.max(1, shot.typing.text.length)
+    const fromSec = Math.max(shot.startSec, shot.typing.fromSec)
+    const toSec = Math.min(shot.startSec + shot.duration * shot.rate, shot.typing.toSec)
+    const at = shot.at + (fromSec - shot.startSec) / shot.rate
+    const duration = Math.max(0, toSec - fromSec) / shot.rate
+    const step = duration / Math.max(1, shot.typing.text.length - 1)
     for (let index = 0; index < shot.typing.text.length; index += 1) {
       sounds.push({ at: at + index * step, name: "key", volume: 0.8 })
     }
@@ -466,8 +488,7 @@ export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
   const ripples = buildRipples(shots)
   const captions = buildCaptions(shots)
   const sounds = buildSounds(shots, captions, ripples)
-  const pairedRenderSec =
-    pair.find((shot) => shot.slice === "paired")?.at ?? 20.4
+  const pairedRenderSec = pair.find((shot) => shot.slice === "paired")?.at ?? 20.4
   const last = walk[walk.length - 1]
   const endSec = last.at + last.duration + (last.hold ?? 0)
   return {
@@ -480,5 +501,4 @@ export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
   }
 }
 
-export const totalSec = (slices: CaptureSlice[]): number =>
-  buildTimeline(slices).endSec + OUTRO_SEC
+export const totalSec = (slices: CaptureSlice[]): number => buildTimeline(slices).endSec + OUTRO_SEC
