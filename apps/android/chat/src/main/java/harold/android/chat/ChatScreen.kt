@@ -146,6 +146,7 @@ fun ChatScreen(
     onAuthLogout: () -> Unit = {},
     onDisconnectFromServer: () -> Unit = {},
     onPairAnotherHarold: () -> Unit = {},
+    onSavedHarolds: () -> Unit = {},
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     var disconnectConfirmVisible by remember { mutableStateOf(false) }
@@ -461,6 +462,14 @@ fun ChatScreen(
                                 modifier = Modifier.testTag("auth_sign_out_menu_item"),
                             )
                         }
+                        DropdownMenuItem(
+                            text = { Text(text = stringResource(R.string.chat_saved_harolds)) },
+                            onClick = {
+                                menuExpanded = false
+                                onSavedHarolds()
+                            },
+                            modifier = Modifier.testTag("saved_harolds_menu_item"),
+                        )
                         DropdownMenuItem(
                             text = { Text(text = stringResource(R.string.chat_pair_another_harold)) },
                             onClick = {

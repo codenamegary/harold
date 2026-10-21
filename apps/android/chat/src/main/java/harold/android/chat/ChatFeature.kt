@@ -88,6 +88,7 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onAuthLogout = viewModel::onAuthLogout,
                 onDisconnectFromServer = viewModel::disconnectFromServer,
                 onPairAnotherHarold = navigator::openPairing,
+                onSavedHarolds = navigator::openSavedHarolds,
             )
         }
 

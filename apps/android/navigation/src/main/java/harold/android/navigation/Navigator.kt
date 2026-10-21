@@ -83,6 +83,13 @@ class Navigator @Inject constructor() {
         backStack.add(AddWorkspace)
     }
 
+    fun openSavedHarolds() {
+        if (backStack.isEmpty() || backStack.lastOrNull() == SavedHarolds) {
+            return
+        }
+        backStack.add(SavedHarolds)
+    }
+
     fun goBack(): Boolean {
         if (backStack.size <= 1) {
             return false

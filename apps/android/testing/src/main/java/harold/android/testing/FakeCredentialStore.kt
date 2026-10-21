@@ -31,6 +31,10 @@ class FakeCredentialStore(
         saved += credential
     }
 
+    override suspend fun remove(serverOrigin: String) {
+        saved.removeAll { harold -> harold.serverOrigin == serverOrigin }
+    }
+
     override suspend fun clear() {
         clearCount += 1
         saved.clear()

@@ -31,6 +31,8 @@ import harold.android.contracts.SessionState
 import harold.android.contracts.catalogSessionKey
 import harold.android.contracts.parseConfigOptions
 import harold.android.contracts.toSummary
+import harold.android.credentials.SavedHaroldBook
+import harold.android.credentials.settleAfterForget
 import harold.android.di.PreviewDispatcher
 import harold.android.foreground.ActiveSessionSnapshot
 import harold.android.foreground.ActiveSessionTracker
@@ -69,6 +71,7 @@ class ChatViewModel @Inject constructor(
     private val sessionGateway: SessionGateway,
     private val sessionOwner: SessionOwner,
     private val userRepository: UserRepository,
+    private val savedHaroldBook: SavedHaroldBook,
     private val attachmentApi: AttachmentApi,
     private val configApi: SessionConfigApi,
     private val navigationPreferences: NavigationPreferences,
@@ -908,12 +911,22 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             val paired = sessionGateway.pairedState.value as? PairedState.Paired
             if (paired != null) {
-                userRepository.revokeDevice(
-                    serverOrigin = paired.serverOrigin,
-                    deviceId = paired.deviceId,
+                val remains = savedHaroldBook.forget(paired.serverOrigin, paired.deviceId)
+                settleAfterForget(
+                    removedOrigin = paired.serverOrigin,
+                    remains = remains,
+                    gateway = sessionGateway,
+                    disconnect = sessionOwner::disconnect,
+                    connect = sessionOwner::connect,
+                    showPairing = {
+                        navigator.showShell()
+                        navigator.openPairing()
+                    },
                 )
+            } else {
+                navigator.showShell()
+                navigator.openPairing()
             }
-            sessionOwner.disconnect()
             clearPersistedSession()
             _uiState.update { current ->
                 current.copy(
@@ -923,9 +936,6 @@ class ChatViewModel @Inject constructor(
             }
             activeSessionTracker?.replaceAll(emptyList())
             sessionForegroundCoordinator?.onSessionsChanged()
-            sessionForegroundCoordinator?.setServerOrigin(null)
-            sessionGateway.clearLocalAccess()
-            navigator.showShell()
         }
     }
 

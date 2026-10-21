@@ -7,5 +7,7 @@ interface CredentialStore {
 
     suspend fun replace(credential: StoredCredential)
 
+    suspend fun remove(serverOrigin: String)
+
     suspend fun clear()
 }

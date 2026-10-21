@@ -14,6 +14,7 @@ import harold.android.navigation.AppRoute
 import harold.android.navigation.FeatureEntryProvider
 import harold.android.navigation.Navigator
 import harold.android.navigation.Pairing
+import harold.android.navigation.SavedHarolds
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -37,6 +38,21 @@ class PairingEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onConfirm = viewModel::confirmPairing,
                 onConfirmUpdate = viewModel::confirmUpdate,
                 onCancelUpdate = viewModel::cancelUpdate,
+            )
+        }
+        scope.entry<SavedHarolds> {
+            val viewModel: SavedHaroldsViewModel = hiltViewModel()
+            val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+            SavedHaroldsScreen(
+                uiState = uiState,
+                onBack = { navigator.goBack() },
+                onEdit = viewModel::startEdit,
+                onRemove = viewModel::remove,
+                onNameChanged = viewModel::onNameChanged,
+                onColorSelected = viewModel::onColorSelected,
+                onIconSelected = viewModel::onIconSelected,
+                onSave = viewModel::saveEdit,
+                onCancelEdit = viewModel::cancelEdit,
             )
         }
     }

@@ -15,7 +15,11 @@ class FakeSessionGateway(
     var clearLocalAccessCount: Int = 0
         private set
 
-    override suspend fun refresh() = Unit
+    var pairedAfterRefresh: PairedState? = null
+
+    override suspend fun refresh() {
+        pairedAfterRefresh?.let { next -> _pairedState.value = next }
+    }
 
     override suspend fun clearLocalAccess() {
         clearLocalAccessCount += 1

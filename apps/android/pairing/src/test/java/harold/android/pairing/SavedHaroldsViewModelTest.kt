@@ -1,0 +1,142 @@
+package harold.android.pairing
+
+import harold.android.credentials.SavedHaroldBook
+import harold.android.credentials.StoredCredential
+import harold.android.navigation.Navigator
+import harold.android.navigation.Pairing
+import harold.android.navigation.Shell
+import harold.android.session.PairedState
+import harold.android.testing.FakeCredentialStore
+import harold.android.testing.FakeSessionGateway
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Before
+import org.junit.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class SavedHaroldsViewModelTest {
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun theListShowsEachNameColorAndIcon() = runTest {
+        val store = storeWithTwo()
+        val viewModel = viewModel(store)
+
+        assertEquals(
+            listOf(
+                Triple("laptop", "tide", "bolt"),
+                Triple("desktop", "ink", "mark"),
+            ),
+            viewModel.uiState.value.rows.map { row -> Triple(row.name, row.colorId, row.iconId) },
+        )
+    }
+
+    @Test
+    fun editLeavesTheCredentialAndCanReuseAColor() = runTest {
+        val store = storeWithTwo()
+        val viewModel = viewModel(store)
+
+        viewModel.startEdit("http://laptop.local:3847")
+        viewModel.onNameChanged("work")
+        viewModel.onColorSelected("ink")
+        viewModel.saveEdit()
+
+        val laptop = store.list().single { harold -> harold.serverOrigin == "http://laptop.local:3847" }
+        assertEquals("devcred_laptop", laptop.credential)
+        assertEquals("work", laptop.name)
+        assertEquals("ink", laptop.colorId)
+        assertEquals("devcred_desktop", store.list().single { harold -> harold.name == "desktop" }.credential)
+    }
+
+    @Test
+    fun removingTheLastHaroldShowsPairing() = runTest {
+        val store = FakeCredentialStore()
+        store.save(saved("http://laptop.local:3847", "devcred_laptop", "laptop", "tide", "bolt"))
+        val navigator = Navigator()
+        navigator.start(paired = true)
+        val viewModel = viewModel(store, navigator)
+
+        viewModel.remove("http://laptop.local:3847")
+
+        assertEquals(emptyList<StoredCredential>(), store.list())
+        assertEquals(listOf(Shell, Pairing), navigator.backStack.toList())
+    }
+}
+
+private fun viewModel(
+    store: FakeCredentialStore,
+    navigator: Navigator = Navigator(),
+): SavedHaroldsViewModel = SavedHaroldsViewModel(
+    book = SavedHaroldBook(store) { _, _ -> Result.success(Unit) },
+    sessionGateway = FakeSessionGateway(PairedState.Paired("http://laptop.local:3847", "device_laptop", "Pixel")),
+    sessionOwner = NoopSessionOwner(),
+    navigator = navigator,
+)
+
+private suspend fun storeWithTwo(): FakeCredentialStore {
+    val store = FakeCredentialStore()
+    store.save(saved("http://laptop.local:3847", "devcred_laptop", "laptop", "tide", "bolt"))
+    store.save(saved("http://desktop.local:3847", "devcred_desktop", "desktop", "ink", "mark"))
+    return store
+}
+
+private fun saved(
+    serverOrigin: String,
+    credential: String,
+    name: String,
+    colorId: String,
+    iconId: String,
+) = StoredCredential(
+    formatVersion = 1,
+    deviceId = "device_$name",
+    serverOrigin = serverOrigin,
+    deviceName = "Pixel",
+    credential = credential,
+    name = name,
+    colorId = colorId,
+    iconId = iconId,
+)
+
+private class NoopSessionOwner : harold.android.live.SessionOwner {
+    override val connectionState = kotlinx.coroutines.flow.MutableStateFlow(harold.android.stream.ConnectionState())
+    override val snapshot = kotlinx.coroutines.flow.MutableStateFlow(harold.android.live.SessionSnapshot())
+    override val sessionTitles = kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, String>())
+    override val promptCompletions = kotlinx.coroutines.flow.MutableSharedFlow<Unit>()
+    override fun connect(serverOrigin: String) = Unit
+    override fun retry() = Unit
+    override fun disconnect() = Unit
+    override fun onForeground() = Unit
+    override fun onBackground() = Unit
+    override fun watch(agentId: String?, sessionId: String?) = Unit
+    override suspend fun prompt(
+        text: String,
+        attachments: List<harold.android.contracts.AttachmentReference>,
+    ): Result<Unit> = Result.success(Unit)
+    override suspend fun cancel(): Result<Unit> = Result.success(Unit)
+    override suspend fun replyPermission(requestId: String, optionId: String): Result<Unit> =
+        Result.success(Unit)
+    override suspend fun replyExtension(
+        requestId: String,
+        result: kotlinx.serialization.json.JsonElement,
+    ): Result<Unit> = Result.success(Unit)
+    override fun rememberConfig(
+        agentId: String,
+        sessionId: String,
+        configOptions: List<harold.android.contracts.ConfigOption>,
+    ) = Unit
+    override fun forget(agentId: String, sessionId: String) = Unit
+}

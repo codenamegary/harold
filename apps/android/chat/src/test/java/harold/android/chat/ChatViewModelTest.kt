@@ -24,6 +24,8 @@ import harold.android.contracts.SessionState
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceState
+import harold.android.credentials.SavedHaroldBook
+import harold.android.credentials.StoredCredential
 import harold.android.live.SessionOwner
 import harold.android.live.SessionSnapshot
 import harold.android.live.TranscriptUserRow
@@ -37,6 +39,7 @@ import harold.android.network.AgentApiException
 import harold.android.network.AttachmentApi
 import harold.android.network.SessionConfigApi
 import harold.android.session.PairedState
+import harold.android.testing.FakeCredentialStore
 import harold.android.session.SessionGateway
 import harold.android.stream.ConnectionState
 import harold.android.testing.FakeSessionGateway
@@ -877,6 +880,39 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun disconnectFromServerKeepsTheOtherHarold() = runTest(dispatcher) {
+        val desktopOrigin = "http://desktop.local:3847"
+        val store = FakeCredentialStore()
+        store.save(savedHarold(ORIGIN, "device_01", "devcred_loop", "loopback"))
+        store.save(savedHarold(desktopOrigin, "device_desktop", "devcred_desk", "desktop"))
+        val repository = ChatFakeUserRepository()
+        val sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel"))
+        sessionGateway.pairedAfterRefresh = PairedState.Paired(desktopOrigin, "device_desktop", "Pixel")
+        val sessionOwner = ChatFakeSessionOwner()
+        val navigator = Navigator()
+        navigator.start(paired = true)
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = sessionOwner,
+            sessionGateway = sessionGateway,
+            savedHaroldBook = SavedHaroldBook(store) { _, deviceId ->
+                repository.revokeDevice(ORIGIN, deviceId)
+            },
+            navigator = navigator,
+        )
+        advanceUntilIdle()
+
+        viewModel.disconnectFromServer()
+        advanceUntilIdle()
+
+        assertEquals(listOf(desktopOrigin), store.list().map { harold -> harold.serverOrigin })
+        assertEquals(listOf(desktopOrigin), sessionOwner.connections)
+        assertEquals(listOf(harold.android.navigation.Chat), navigator.backStack.toList())
+        assertEquals(0, sessionGateway.clearLocalAccessCount)
+    }
+
+    @Test
     fun authRequiredStreamErrorHydratesAuth() = runTest(dispatcher) {
         val repository = ChatFakeUserRepository(
             agentAuth = harold.android.contracts.AgentAuth(
@@ -991,11 +1027,16 @@ class ChatViewModelTest {
         sessionGateway: FakeSessionGateway = pairedGateway(),
         configApi: SessionConfigApi = RecordingSessionConfigApi(),
         attachmentApi: AttachmentApi = NoopAttachmentApi(),
+        savedHaroldBook: SavedHaroldBook = SavedHaroldBook(FakeCredentialStore()) { _, deviceId ->
+            repository.revokeDevice(ORIGIN, deviceId)
+        },
+        navigator: Navigator = Navigator(),
     ): ChatViewModel = ChatViewModel(
         savedStateHandle = SavedStateHandle(),
         sessionGateway = sessionGateway,
         sessionOwner = sessionOwner,
         userRepository = repository,
+        savedHaroldBook = savedHaroldBook,
         attachmentApi = attachmentApi,
         configApi = configApi,
         navigationPreferences = navigation,
@@ -1005,7 +1046,7 @@ class ChatViewModelTest {
             restartScheduler = ImmediateVoiceDictationRestartScheduler(),
         ),
         previewDispatcher = dispatcher,
-        navigator = Navigator(),
+        navigator = navigator,
         sessionCommands = sessionCommands,
     )
 
@@ -1261,7 +1302,11 @@ private class ChatFakeSessionOwner : SessionOwner {
         _promptCompletions.tryEmit(Unit)
     }
 
-    override fun connect(serverOrigin: String) = Unit
+    val connections = mutableListOf<String>()
+
+    override fun connect(serverOrigin: String) {
+        connections += serverOrigin
+    }
     override fun retry() = Unit
 
     override fun disconnect() {
@@ -1593,6 +1638,22 @@ private class ChatFakeUserRepository(
         return Result.success(Unit)
     }
 }
+
+private fun savedHarold(
+    serverOrigin: String,
+    deviceId: String,
+    credential: String,
+    name: String,
+) = StoredCredential(
+    formatVersion = 1,
+    deviceId = deviceId,
+    serverOrigin = serverOrigin,
+    deviceName = "Pixel",
+    credential = credential,
+    name = name,
+    colorId = "ink",
+    iconId = "mark",
+)
 
 private fun session(
     id: String,
