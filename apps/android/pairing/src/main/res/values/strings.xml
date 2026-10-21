@@ -11,5 +11,12 @@
     <string name="pairing_submit">Claim pairing code</string>
     <string name="pairing_submit_content_description">Claim pairing code</string>
     <string name="pairing_claiming">Claiming pairing code…</string>
+    <string name="pairing_already_saved">%1$s is already paired. Update it, or cancel.</string>
+    <string name="pairing_update">Update</string>
+    <string name="pairing_cancel">Cancel</string>
+    <string name="pairing_name_label">Name</string>
+    <string name="pairing_color_label">Color</string>
+    <string name="pairing_icon_label">Icon</string>
+    <string name="pairing_confirm">Pair</string>
     <string name="pairing_camera_permission_required">Camera permission is required to scan pairing QR codes.</string>
 </resources>

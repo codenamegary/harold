@@ -15,8 +15,12 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import harold.android.pairing.DefaultPairingPayloadParser
+import harold.android.pairing.HaroldAppearance
 import harold.android.pairing.PairingCoordinator
+import harold.android.pairing.PairingDraft
 import harold.android.pairing.PairingScreen
+import harold.android.pairing.haroldColorIds
+import harold.android.pairing.haroldIconIds
 import harold.android.pairing.PairingUiState
 import harold.android.pairing.PairingViewModel
 import kotlinx.coroutines.CompletableDeferred
@@ -113,6 +117,8 @@ class PostPairingNavigationTest {
         composeTestRule.onNodeWithTag("pairing_back").assertIsDisplayed()
         composeTestRule.runOnIdle { viewModel.onQrScanned(PAYLOAD) }
         composeTestRule.waitForIdle()
+        composeTestRule.runOnIdle { viewModel.confirmPairing() }
+        composeTestRule.waitForIdle()
         composeTestRule.runOnIdle { claim.complete(Result.success(Unit)) }
         composeTestRule.waitForIdle()
 
@@ -131,10 +137,21 @@ class PostPairingNavigationTest {
     private class GatedPairingCoordinator(
         private val result: CompletableDeferred<Result<Unit>>,
     ) : PairingCoordinator {
+        override suspend fun draft(endpoint: String): PairingDraft = PairingDraft(
+            serverOrigin = endpoint,
+            alreadySaved = false,
+            appearance = HaroldAppearance(
+                name = "laptop",
+                colorId = haroldColorIds.first(),
+                iconId = haroldIconIds.first(),
+            ),
+        )
+
         override suspend fun pair(
             endpoint: String,
             code: String,
             deviceName: String,
+            appearance: HaroldAppearance,
         ): Result<Unit> = result.await()
     }
 

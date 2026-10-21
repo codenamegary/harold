@@ -5,6 +5,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -37,5 +39,34 @@ class PairingScreenTest {
 
         composeTestRule.onNodeWithTag("pairing_back").assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Back").assertCountEquals(0)
+    }
+
+    @Test
+    fun confirmStepShowsTheNameAndChoices() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                PairingScreen(
+                    uiState = PairingUiState(
+                        phase = PairingPhase.Confirm,
+                        name = "laptop",
+                        colorId = "ink",
+                        iconId = "mark",
+                    ),
+                    onManualEntryClick = {},
+                    onScannerClick = {},
+                    onEndpointChanged = {},
+                    onCodeChanged = {},
+                    onSubmitManual = {},
+                    onQrScanned = {},
+                    onBack = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("pairing_name_field").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("laptop").assertIsDisplayed()
+        composeTestRule.onNodeWithText("ink selected").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("mark selected").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag("pairing_confirm").performScrollTo().assertIsDisplayed()
     }
 }

@@ -31,6 +31,12 @@ class PairingEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onSubmitManual = viewModel::submitManualPairing,
                 onQrScanned = viewModel::onQrScanned,
                 onBack = { navigator.goBack() },
+                onNameChanged = viewModel::onNameChanged,
+                onColorSelected = viewModel::onColorSelected,
+                onIconSelected = viewModel::onIconSelected,
+                onConfirm = viewModel::confirmPairing,
+                onConfirmUpdate = viewModel::confirmUpdate,
+                onCancelUpdate = viewModel::cancelUpdate,
             )
         }
     }

@@ -19,10 +19,22 @@ enum class PairingMode {
     Manual,
 }
 
+enum class PairingPhase {
+    Capture,
+    AlreadySaved,
+    Confirm,
+}
+
 data class PairingUiState(
     val mode: PairingMode = PairingMode.Scan,
+    val phase: PairingPhase = PairingPhase.Capture,
     val endpoint: String = "",
     val code: String = "",
+    val pendingEndpoint: String = "",
+    val pendingCode: String = "",
+    val name: String = "",
+    val colorId: String = "",
+    val iconId: String = "",
     val isClaiming: Boolean = false,
     val errorMessage: String? = null,
     val completed: Boolean = false,
@@ -74,8 +86,64 @@ class PairingViewModel @Inject constructor(
         }
     }
 
+    fun onNameChanged(value: String) {
+        _uiState.update { current -> current.copy(name = value, errorMessage = null) }
+    }
+
+    fun onColorSelected(colorId: String) {
+        _uiState.update { current -> current.copy(colorId = colorId, errorMessage = null) }
+    }
+
+    fun onIconSelected(iconId: String) {
+        _uiState.update { current -> current.copy(iconId = iconId, errorMessage = null) }
+    }
+
+    fun confirmUpdate() {
+        if (_uiState.value.phase != PairingPhase.AlreadySaved) {
+            return
+        }
+        _uiState.update { current -> current.copy(phase = PairingPhase.Confirm, errorMessage = null) }
+    }
+
+    fun cancelUpdate() {
+        if (_uiState.value.phase != PairingPhase.AlreadySaved) {
+            return
+        }
+        _uiState.update { current ->
+            current.copy(
+                phase = PairingPhase.Capture,
+                pendingEndpoint = "",
+                pendingCode = "",
+                name = "",
+                colorId = "",
+                iconId = "",
+                errorMessage = null,
+            )
+        }
+    }
+
+    fun confirmPairing() {
+        val state = _uiState.value
+        if (state.phase != PairingPhase.Confirm || state.isClaiming || state.completed) {
+            return
+        }
+        if (state.name.isBlank()) {
+            _uiState.update { current -> current.copy(errorMessage = "Enter a name") }
+            return
+        }
+        claim(
+            endpoint = state.pendingEndpoint,
+            code = state.pendingCode,
+            appearance = HaroldAppearance(
+                name = state.name.trim(),
+                colorId = state.colorId,
+                iconId = state.iconId,
+            ),
+        )
+    }
+
     fun onQrScanned(payload: String) {
-        if (_uiState.value.isClaiming || _uiState.value.completed) {
+        if (_uiState.value.isClaiming || _uiState.value.completed || _uiState.value.phase != PairingPhase.Capture) {
             return
         }
 
@@ -87,11 +155,11 @@ class PairingViewModel @Inject constructor(
                 return
             }
 
-        claim(parsed.endpoint, parsed.code)
+        prepare(parsed.endpoint, parsed.code)
     }
 
     fun submitManualPairing() {
-        if (_uiState.value.isClaiming || _uiState.value.completed) {
+        if (_uiState.value.isClaiming || _uiState.value.completed || _uiState.value.phase != PairingPhase.Capture) {
             return
         }
         val endpoint = _uiState.value.endpoint.trim()
@@ -115,10 +183,32 @@ class PairingViewModel @Inject constructor(
             return
         }
 
-        claim(parsed.endpoint, parsed.code)
+        prepare(parsed.endpoint, parsed.code)
     }
 
-    private fun claim(endpoint: String, code: String) {
+    private fun prepare(endpoint: String, code: String) {
+        viewModelScope.launch {
+            val draft = pairingCoordinator.draft(endpoint)
+            _uiState.update { current ->
+                current.copy(
+                    phase = if (draft.alreadySaved) PairingPhase.AlreadySaved else PairingPhase.Confirm,
+                    pendingEndpoint = endpoint,
+                    pendingCode = code,
+                    name = draft.appearance.name,
+                    colorId = draft.appearance.colorId,
+                    iconId = draft.appearance.iconId,
+                    errorMessage = null,
+                    isClaiming = false,
+                )
+            }
+        }
+    }
+
+    private fun claim(
+        endpoint: String,
+        code: String,
+        appearance: HaroldAppearance,
+    ) {
         if (_uiState.value.isClaiming || _uiState.value.completed) {
             return
         }
@@ -132,6 +222,7 @@ class PairingViewModel @Inject constructor(
                 endpoint = endpoint,
                 code = code,
                 deviceName = deviceNameProvider(),
+                appearance = appearance,
             )
 
             result.fold(
