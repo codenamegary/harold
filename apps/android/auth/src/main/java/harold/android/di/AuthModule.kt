@@ -12,8 +12,13 @@ import harold.android.credentials.CredentialStore
 import harold.android.credentials.DefaultCredentialStore
 import harold.android.credentials.SavedHaroldRepository
 import harold.android.network.BearerAuthInterceptor
+import harold.android.network.serverOriginFromEndpoint
+import harold.android.session.DefaultHaroldConnections
 import harold.android.session.DefaultSessionGateway
+import harold.android.session.HaroldConnections
+import harold.android.session.HaroldReachability
 import harold.android.session.SessionGateway
+import harold.android.session.WorkspaceHaroldReachability
 import harold.android.user.DefaultUserRepository
 import harold.android.user.UserRepository
 import javax.inject.Singleton
@@ -34,13 +39,24 @@ abstract class AuthModule {
     @Singleton
     abstract fun userRepository(impl: DefaultUserRepository): UserRepository
 
+    @Binds
+    @Singleton
+    abstract fun haroldConnections(impl: DefaultHaroldConnections): HaroldConnections
+
+    @Binds
+    abstract fun haroldReachability(impl: WorkspaceHaroldReachability): HaroldReachability
+
     companion object {
         @Provides
         @Singleton
         @AuthenticatedClient
         fun authenticatedClient(credentialHolder: CredentialHolder): OkHttpClient =
             OkHttpClient.Builder()
-                .addInterceptor(BearerAuthInterceptor(credentialHolder::current))
+                .addInterceptor(
+                    BearerAuthInterceptor { url ->
+                        credentialHolder.credentialFor(serverOriginFromEndpoint(url.toString()))
+                    },
+                )
                 .build()
 
         @Provides
@@ -48,9 +64,11 @@ abstract class AuthModule {
         fun defaultSessionGateway(
             credentialStore: CredentialStore,
             credentialHolder: CredentialHolder,
+            connections: HaroldConnections,
         ): DefaultSessionGateway = DefaultSessionGateway(
             credentialStore = credentialStore,
             credentialHolder = credentialHolder,
+            connections = connections,
         )
 
         @Provides

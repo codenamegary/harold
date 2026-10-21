@@ -47,6 +47,7 @@ import harold.android.navigation.Navigator
 import harold.android.network.AttachmentApi
 import harold.android.network.SessionConfigApi
 import harold.android.network.apiErrorMessage
+import harold.android.session.HaroldConnections
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 import harold.android.stream.ConnectionStatus
@@ -84,6 +85,7 @@ class ChatViewModel @Inject constructor(
     @PreviewDispatcher private val previewDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val navigator: Navigator,
     private val sessionCommands: SessionCommands,
+    private val haroldConnections: HaroldConnections? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -1362,13 +1364,17 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun syncActiveSessionsFromUiState() {
-        val tracker = activeSessionTracker ?: return
-        tracker.replaceAll(
-            catalog.map { row ->
-                ActiveSessionSnapshot(id = row.sessionId, name = row.name, state = row.state)
-            },
-        )
-        sessionForegroundCoordinator?.onSessionsChanged()
+        val snapshots = catalog.map { row ->
+            ActiveSessionSnapshot(id = row.sessionId, name = row.name, state = row.state)
+        }
+        activeSessionTracker?.let { tracker ->
+            tracker.replaceAll(snapshots)
+            sessionForegroundCoordinator?.onSessionsChanged()
+        }
+        val origin = (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin
+        if (origin != null) {
+            haroldConnections?.setSessionStates(origin, snapshots.map { snapshot -> snapshot.state })
+        }
     }
 
     private fun pendingSessionRow(workspace: WorkspaceRow, agentId: AgentId): SessionRow =

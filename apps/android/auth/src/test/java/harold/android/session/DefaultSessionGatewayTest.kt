@@ -11,6 +11,55 @@ import org.junit.Test
 
 class DefaultSessionGatewayTest {
     @Test
+    fun publishesEachSavedHaroldCredentialForRequestsToThatHarold() = runTest {
+        val holder = CredentialHolder()
+        val store = FakeCredentialStore()
+        store.save(saved("http://laptop.local:3847", "devcred_laptop", "device_laptop"))
+        store.save(saved("http://desktop.local:3847", "devcred_desktop", "device_desktop"))
+        val gateway = DefaultSessionGateway(
+            credentialStore = store,
+            credentialHolder = holder,
+        )
+
+        gateway.refresh()
+
+        assertEquals("devcred_laptop", holder.credentialFor("http://laptop.local:3847"))
+        assertEquals("devcred_desktop", holder.credentialFor("http://desktop.local:3847"))
+    }
+
+    @Test
+    fun refreshOpensConnectionsAfterEachCredentialIsPublished() = runTest {
+        val holder = CredentialHolder()
+        val store = FakeCredentialStore()
+        store.save(saved("http://laptop.local:3847", "devcred_laptop", "device_laptop"))
+        store.save(saved("http://desktop.local:3847", "devcred_desktop", "device_desktop"))
+        val seen = mutableListOf<String?>()
+        val connections = object : HaroldConnections {
+            override val connections = kotlinx.coroutines.flow.MutableStateFlow(emptyList<HaroldConnection>())
+            override fun onForeground() = Unit
+            override fun onBackground() = Unit
+            override suspend fun refresh() {
+                seen += holder.credentialFor("http://laptop.local:3847")
+                seen += holder.credentialFor("http://desktop.local:3847")
+            }
+            override fun setSessionStates(
+                serverOrigin: String,
+                states: List<harold.android.contracts.SessionState>,
+            ) = Unit
+            override fun shouldStayConnected(serverOrigin: String): Boolean = false
+        }
+        val gateway = DefaultSessionGateway(
+            credentialStore = store,
+            credentialHolder = holder,
+            connections = connections,
+        )
+
+        gateway.refresh()
+
+        assertEquals(listOf("devcred_laptop", "devcred_desktop"), seen)
+    }
+
+    @Test
     fun publishesTheStoredCredentialForAuthenticatedRequests() = runTest {
         val holder = CredentialHolder()
         val gateway = DefaultSessionGateway(
@@ -31,13 +80,13 @@ class DefaultSessionGatewayTest {
 
         gateway.refresh()
 
-        assertEquals("devcred_secret", holder.current())
+        assertEquals("devcred_secret", holder.credentialFor("http://127.0.0.1:8787"))
     }
 
     @Test
     fun clearsThePublishedCredentialWhenNothingIsStored() = runTest {
         val holder = CredentialHolder()
-        holder.set("devcred_stale")
+        holder.publish(mapOf("http://127.0.0.1:8787" to "devcred_stale"))
         val gateway = DefaultSessionGateway(
             credentialStore = FakeCredentialStore(null),
             credentialHolder = holder,
@@ -45,7 +94,7 @@ class DefaultSessionGatewayTest {
 
         gateway.refresh()
 
-        assertNull(holder.current())
+        assertNull(holder.credentialFor("http://127.0.0.1:8787"))
         assertEquals(PairedState.NotPaired, gateway.pairedState.value)
     }
 
@@ -72,9 +121,20 @@ class DefaultSessionGatewayTest {
         gateway.refresh()
         gateway.clearLocalAccess()
 
-        assertNull(holder.current())
+        assertNull(holder.credentialFor("http://127.0.0.1:8787"))
         assertEquals(emptyList<StoredCredential>(), store.list())
         assertEquals(1, store.clearCount)
         assertEquals(PairedState.NotPaired, gateway.pairedState.value)
     }
 }
+
+private fun saved(serverOrigin: String, credential: String, deviceId: String) = StoredCredential(
+    formatVersion = 1,
+    deviceId = deviceId,
+    serverOrigin = serverOrigin,
+    deviceName = "Pixel",
+    credential = credential,
+    name = "harold",
+    colorId = "ink",
+    iconId = "mark",
+)

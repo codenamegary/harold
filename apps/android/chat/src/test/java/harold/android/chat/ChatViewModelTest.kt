@@ -90,6 +90,27 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun tellsConnectionsWhichSessionsAreLiveOnThePairedHarold() = runTest(dispatcher) {
+        val reported = mutableListOf<Pair<String, List<harold.android.contracts.SessionState>>>()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(),
+            haroldConnections = RecordingHaroldConnections(reported),
+        )
+
+        advanceUntilIdle()
+
+        assertEquals(
+            ORIGIN to listOf(
+                harold.android.contracts.SessionState.Idle,
+                harold.android.contracts.SessionState.Idle,
+            ),
+            reported.last(),
+        )
+        assertEquals(2, viewModel.uiState.value.sessions.size)
+    }
+
+    @Test
     fun resumeSignalsTheSessionOwnerProbe() = runTest(dispatcher) {
         val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
@@ -1027,6 +1048,7 @@ class ChatViewModelTest {
         attachmentApi: AttachmentApi = NoopAttachmentApi(),
         savedHaroldRepository: SavedHaroldRepository = SavedHaroldRepository(FakeCredentialStore()),
         navigator: Navigator = Navigator(),
+        haroldConnections: harold.android.session.HaroldConnections? = null,
     ): ChatViewModel = ChatViewModel(
         savedStateHandle = SavedStateHandle(),
         sessionGateway = sessionGateway,
@@ -1044,6 +1066,7 @@ class ChatViewModelTest {
         previewDispatcher = dispatcher,
         navigator = navigator,
         sessionCommands = sessionCommands,
+        haroldConnections = haroldConnections,
     )
 
     private fun pairedGateway(): FakeSessionGateway =
@@ -1663,3 +1686,24 @@ private fun session(
     title = title,
     updatedAt = updatedAt,
 )
+
+private class RecordingHaroldConnections(
+    private val reported: MutableList<Pair<String, List<harold.android.contracts.SessionState>>>,
+) : harold.android.session.HaroldConnections {
+    override val connections = MutableStateFlow(emptyList<harold.android.session.HaroldConnection>())
+
+    override fun onForeground() = Unit
+
+    override fun onBackground() = Unit
+
+    override suspend fun refresh() = Unit
+
+    override fun setSessionStates(
+        serverOrigin: String,
+        states: List<harold.android.contracts.SessionState>,
+    ) {
+        reported += serverOrigin to states
+    }
+
+    override fun shouldStayConnected(serverOrigin: String): Boolean = false
+}

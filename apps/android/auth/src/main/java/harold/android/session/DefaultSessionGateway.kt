@@ -9,16 +9,19 @@ import harold.android.credentials.CredentialStore
 class DefaultSessionGateway(
     private val credentialStore: CredentialStore,
     private val credentialHolder: CredentialHolder = CredentialHolder(),
+    private val connections: HaroldConnections = InactiveHaroldConnections,
 ) : SessionGateway {
     private val _pairedState = MutableStateFlow<PairedState>(PairedState.NotPaired)
     override val pairedState: StateFlow<PairedState> = _pairedState.asStateFlow()
 
     override suspend fun refresh() {
-        // Pairing still stores one Harold. Later issues connect to every saved Harold.
-        val stored = credentialStore.list().firstOrNull()
+        val saved = credentialStore.list()
 
-        credentialHolder.set(stored?.credential)
+        credentialHolder.publish(
+            saved.associate { harold -> harold.serverOrigin to harold.credential },
+        )
 
+        val stored = saved.firstOrNull()
         _pairedState.value = if (stored == null) {
             PairedState.NotPaired
         } else {
@@ -26,13 +29,15 @@ class DefaultSessionGateway(
                 serverOrigin = stored.serverOrigin,
                 deviceId = stored.deviceId,
                 deviceName = stored.deviceName,
-            )
+                )
         }
+        connections.refresh()
     }
 
     override suspend fun clearLocalAccess() {
         credentialStore.clear()
-        credentialHolder.set(null)
+        credentialHolder.clear()
         _pairedState.value = PairedState.NotPaired
+        connections.refresh()
     }
 }

@@ -28,7 +28,7 @@ class SessionCommandApiTest {
         server.start()
         commands = DefaultAgentApi(
             client = OkHttpClient.Builder()
-                .addInterceptor(BearerAuthInterceptor { "devcred_test_secret" })
+                .addInterceptor(BearerAuthInterceptor { _ -> "devcred_test_secret" })
                 .build(),
         )
     }

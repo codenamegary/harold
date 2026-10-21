@@ -4,18 +4,27 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * In-memory copy of the device credential. OkHttp interceptors run on network
- * threads and cannot suspend on the encrypted store, so the session gateway
- * publishes the credential here whenever it reloads it.
+ * In-memory copy of each saved Harold's device credential, keyed by server
+ * origin. OkHttp interceptors run on network threads and cannot suspend on
+ * the encrypted store, so the session gateway publishes the credentials here
+ * whenever it reloads them.
  */
 @Singleton
 class CredentialHolder @Inject constructor() {
-    @Volatile
-    private var value: String? = null
+    private val credentials = mutableMapOf<String, String>()
 
-    fun current(): String? = value
+    fun publish(credentialsByOrigin: Map<String, String>) {
+        synchronized(this) {
+            credentials.clear()
+            credentials.putAll(credentialsByOrigin)
+        }
+    }
 
-    fun set(credential: String?) {
-        value = credential
+    fun credentialFor(serverOrigin: String): String? = synchronized(this) {
+        credentials[serverOrigin]
+    }
+
+    fun clear() {
+        publish(emptyMap())
     }
 }
