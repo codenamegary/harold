@@ -48,6 +48,12 @@ interface SessionOwner {
     fun onForeground()
 
     /**
+     * Drops the socket while this Harold should not stay connected. The watch
+     * target and transcript stay, so the next [connect] can resume them.
+     */
+    fun closeForBackground() {}
+
+    /**
      * Drain the inbox, empty the live snapshot, then subscribe when
      * [sessionId] is a real session. Null or blank [sessionId] means no session yet.
      */

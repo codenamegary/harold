@@ -63,9 +63,14 @@ Without them, `assembleRelease` produces an unsigned APK. CI signs releases with
 
 ## Authenticated transport
 
-One OkHttp client serves both authenticated paths. It attaches the paired device
-credential as `Authorization: Bearer`.
+One OkHttp client serves every saved Harold. Each request gets the device
+credential for the Harold it is calling, as `Authorization: Bearer`.
 The credential never appears in a URL or a log line.
+
+While the app is open, every saved Harold has its own connection. One Harold
+that cannot be reached leaves the others connected. In the background, a Harold
+stays connected only while it has a session that is starting, running, waiting
+for permission, or stopping.
 
 - HTTP: `GET /v1/workspaces?limit=1` proves the path from the shell.
 - Session events: `GET /v1/sessions/:sessionId/events?agentId=…` as SSE while a
@@ -77,9 +82,9 @@ The credential never appears in a URL or a log line.
   independent of the stream.
 
 Reconnect uses `min(250 * 2^(attempt - 1), 4000)` ms with no jitter. A rejected
-credential (HTTP `401` on the stream or a command) stops
-auto-retry, clears the local credential, and returns the user to pairing.
-Every other disconnect, slow consumer included, keeps reconnecting.
+credential on the shell stops auto-retry for that Harold and forgets it. The
+others stay connected. When none remain, the app returns to pairing. Every
+other disconnect, slow consumer included, keeps reconnecting.
 
 ## CI
 

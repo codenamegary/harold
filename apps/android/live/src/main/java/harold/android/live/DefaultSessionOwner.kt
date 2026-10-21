@@ -210,6 +210,15 @@ class DefaultSessionOwner @Inject constructor(
         watchChanges.trySend(Unit)
     }
 
+    override fun closeForBackground() {
+        loop?.cancel()
+        loop = null
+        stream?.close()
+        stream = null
+        backgroundFrameMark = null
+        _connectionState.update { current -> current.copy(status = ConnectionStatus.Idle) }
+    }
+
     override fun onBackground() {
         val active = synchronized(lock) { stream }
         backgroundFrameMark = active?.let { it to it.lastFrameAtNanos() }

@@ -7,7 +7,12 @@ import harold.android.contracts.PageInfo
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceState
+import harold.android.credentials.CredentialHolder
+import harold.android.credentials.SavedHaroldRepository
+import harold.android.credentials.StoredCredential
 import harold.android.live.SessionOwner
+import harold.android.session.DefaultSessionGateway
+import harold.android.testing.FakeCredentialStore
 import harold.android.live.SessionSnapshot
 import harold.android.network.AgentApi
 import harold.android.network.AgentApiError
@@ -226,16 +231,45 @@ class ShellViewModelTest {
         assertEquals(listOf(harold.android.navigation.Chat), navigator.backStack.toList())
     }
 
+    @Test
+    fun authFailureOnOneHaroldLeavesTheOtherConnected() = runTest {
+        val store = FakeCredentialStore()
+        store.save(savedHarold("http://laptop.local:3847", "devcred_laptop", "device_laptop"))
+        store.save(savedHarold("http://desktop.local:3847", "devcred_desktop", "device_desktop"))
+        val gateway = DefaultSessionGateway(
+            credentialStore = store,
+            credentialHolder = CredentialHolder(),
+        )
+        val connection = FakeSessionOwner()
+        viewModel(
+            gateway,
+            connection,
+            FakeAgentApi(Result.success(collectionOf(1))),
+            savedHarolds = SavedHaroldRepository(store),
+        )
+
+        connection.emit(ConnectionStatus.AuthFailed(detail = "Device revoked"))
+
+        assertEquals(listOf("http://desktop.local:3847"), store.list().map { harold -> harold.serverOrigin })
+        assertEquals(
+            listOf("http://laptop.local:3847", "http://desktop.local:3847"),
+            connection.connects,
+        )
+        assertEquals(PairedState.Paired("http://desktop.local:3847", "device_desktop", "Pixel"), gateway.pairedState.value)
+    }
+
     private fun viewModel(
         session: SessionGateway,
         connection: SessionOwner,
         api: AgentApi,
         navigator: harold.android.navigation.Navigator = harold.android.navigation.Navigator(),
+        savedHarolds: SavedHaroldRepository = SavedHaroldRepository(FakeCredentialStore()),
     ): ShellViewModel = ShellViewModel(
         sessionGateway = session,
         sessionOwner = connection,
         agentApi = api,
         navigator = navigator,
+        savedHaroldRepository = savedHarolds,
     )
 
     private fun paired(): FakeSessionGateway =
@@ -264,6 +298,17 @@ class ShellViewModelTest {
         const val ORIGIN = "http://127.0.0.1:8787"
     }
 }
+
+private fun savedHarold(serverOrigin: String, credential: String, deviceId: String) = StoredCredential(
+    formatVersion = 1,
+    deviceId = deviceId,
+    serverOrigin = serverOrigin,
+    deviceName = "Pixel",
+    credential = credential,
+    name = "harold",
+    colorId = "ink",
+    iconId = "mark",
+)
 
 private class GatedSessionGateway(
     private val release: kotlinx.coroutines.CompletableDeferred<Unit>,

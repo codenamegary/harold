@@ -1,5 +1,6 @@
 package harold.android.network
 
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.mockwebserver.MockResponse
@@ -31,8 +32,29 @@ class BearerAuthInterceptorTest {
     }
 
     @Test
+    fun attachesTheCredentialForTheHaroldBeingCalled() {
+        val origin = serverOriginFromEndpoint(server.url("/").toString())
+        val credentials = mapOf(
+            origin to "devcred_laptop",
+            "http://desktop.local:3847" to "devcred_desktop",
+        )
+        val client = clientWith { url ->
+            credentials[serverOriginFromEndpoint(url.toString())]
+        }
+        server.enqueue(MockResponse().setResponseCode(204))
+
+        client.newCall(Request.Builder().url(server.url("/v1/workspaces?limit=1")).build())
+            .execute()
+            .close()
+
+        val recorded = server.takeRequest()
+        assertEquals("Bearer devcred_laptop", recorded.getHeader("Authorization"))
+        assertFalse(recorded.path!!.contains("devcred_desktop"))
+    }
+
+    @Test
     fun attachesBearerCredentialWithoutLeakingItIntoTheUrl() {
-        val client = clientWith { "devcred_test_secret" }
+        val client = clientWith { _ -> "devcred_test_secret" }
         server.enqueue(MockResponse().setResponseCode(204))
 
         client.newCall(Request.Builder().url(server.url("/v1/workspaces?limit=1")).build())
@@ -46,7 +68,7 @@ class BearerAuthInterceptorTest {
 
     @Test
     fun omitsHeaderWhenNoCredentialIsStored() {
-        val client = clientWith { null }
+        val client = clientWith { _ -> null }
         server.enqueue(MockResponse().setResponseCode(204))
 
         client.newCall(Request.Builder().url(server.url("/v1/workspaces")).build())
@@ -58,7 +80,7 @@ class BearerAuthInterceptorTest {
 
     @Test
     fun keepsAnExplicitAuthorizationHeader() {
-        val client = clientWith { "devcred_test_secret" }
+        val client = clientWith { _ -> "devcred_test_secret" }
         server.enqueue(MockResponse().setResponseCode(204))
 
         client.newCall(
@@ -71,7 +93,7 @@ class BearerAuthInterceptorTest {
         assertEquals("Bearer explicit", server.takeRequest().getHeader("Authorization"))
     }
 
-    private fun clientWith(credential: () -> String?): OkHttpClient =
+    private fun clientWith(credential: (HttpUrl) -> String?): OkHttpClient =
         OkHttpClient.Builder()
             .addInterceptor(BearerAuthInterceptor(credential))
             .build()

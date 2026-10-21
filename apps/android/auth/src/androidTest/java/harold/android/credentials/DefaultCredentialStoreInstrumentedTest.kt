@@ -82,7 +82,7 @@ class DefaultCredentialStoreInstrumentedTest {
 
         gateway.refresh()
 
-        assertEquals("devcred_restart_secret", holder.current())
+        assertEquals("devcred_restart_secret", holder.credentialFor("http://10.0.2.2:3847"))
         assertEquals(
             PairedState.Paired(
                 serverOrigin = "http://10.0.2.2:3847",

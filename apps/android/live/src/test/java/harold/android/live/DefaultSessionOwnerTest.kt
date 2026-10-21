@@ -170,6 +170,32 @@ class DefaultSessionOwnerTest {
     }
 
     @Test
+    fun closeForBackgroundDropsTheSocketAndTheNextConnectResumesTheWatch() = runTest {
+        val factory = ScriptedSessionStreamFactory(listOf(holdOpen(), holdOpen()))
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+        val first = requireNotNull(factory.lastStream)
+
+        owner.closeForBackground()
+        advanceUntilIdle()
+
+        assertTrue(first.closed)
+        assertEquals(ConnectionStatus.Idle, owner.connectionState.value.status)
+
+        owner.connect(ORIGIN)
+        advanceUntilIdle()
+
+        assertEquals(2, factory.openCount)
+        assertEquals(ConnectionStatus.Live, owner.connectionState.value.status)
+
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
     fun reconnectSendsTheLastAppliedCursor() = runTest {
         val factory = ScriptedSessionStreamFactory(listOf(holdOpen(), holdOpen()))
         val owner = owner(factory)
