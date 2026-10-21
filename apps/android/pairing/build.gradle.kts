@@ -11,6 +11,7 @@ dependencies {
     implementation(project(":navigation"))
     implementation(project(":api"))
     implementation(project(":auth"))
+    implementation(project(":live"))
     implementation(project(":design"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.bundles.feature)
@@ -22,6 +23,7 @@ dependencies {
     implementation(libs.zxing.core)
     debugImplementation(libs.bundles.compose.debug)
 
+    testImplementation(project(":contracts"))
     testImplementation(project(":testing"))
     testImplementation(libs.bundles.unit.test)
     testImplementation(libs.androidx.compose.ui.test.junit4)

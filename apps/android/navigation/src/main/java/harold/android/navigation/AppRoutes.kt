@@ -26,3 +26,6 @@ data object Workspaces : AppRoute
 
 @Serializable
 data object AddWorkspace : AppRoute
+
+@Serializable
+data object SavedHarolds : AppRoute

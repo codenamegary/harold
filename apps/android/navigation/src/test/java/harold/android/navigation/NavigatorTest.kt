@@ -63,6 +63,16 @@ class NavigatorTest {
     }
 
     @Test
+    fun savedHaroldsOpensOnTopOfChat() {
+        val navigator = Navigator()
+        navigator.start(paired = true)
+
+        navigator.openSavedHarolds()
+
+        assertEquals(listOf(Chat, SavedHarolds), navigator.backStack.toList())
+    }
+
+    @Test
     fun showShellReplacesWhateverIsShowing() {
         val navigator = Navigator()
         navigator.start(paired = true)

@@ -63,6 +63,27 @@ class DefaultCredentialStoreTest {
 
         assertEquals(emptyList<StoredCredential>(), store.list())
     }
+
+    @Test
+    fun removeDropsOneHaroldAndKeepsTheOther() = runTest {
+        val store = newStore()
+        val laptop = storedHarold(
+            serverOrigin = "http://laptop.local:3847",
+            credential = "devcred_laptop",
+            name = "laptop",
+        )
+        val desktop = storedHarold(
+            serverOrigin = "http://desktop.local:3847",
+            credential = "devcred_desktop",
+            name = "desktop",
+        )
+        store.save(laptop)
+        store.save(desktop)
+
+        store.remove(laptop.serverOrigin)
+
+        assertEquals(listOf(desktop), store.list())
+    }
 }
 
 private fun newStore(): DefaultCredentialStore {

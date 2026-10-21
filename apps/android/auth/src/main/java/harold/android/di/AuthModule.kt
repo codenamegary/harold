@@ -10,6 +10,7 @@ import dagger.hilt.components.SingletonComponent
 import harold.android.credentials.CredentialHolder
 import harold.android.credentials.CredentialStore
 import harold.android.credentials.DefaultCredentialStore
+import harold.android.credentials.SavedHaroldRepository
 import harold.android.network.BearerAuthInterceptor
 import harold.android.session.DefaultSessionGateway
 import harold.android.session.SessionGateway
@@ -57,5 +58,11 @@ abstract class AuthModule {
         fun defaultCredentialStore(
             @ApplicationContext context: Context,
         ): DefaultCredentialStore = DefaultCredentialStore(context)
+
+        @Provides
+        @Singleton
+        fun savedHaroldRepository(
+            credentialStore: CredentialStore,
+        ): SavedHaroldRepository = SavedHaroldRepository(credentialStore)
     }
 }

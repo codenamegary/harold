@@ -29,6 +29,15 @@ class DefaultCredentialStore internal constructor(
         writeSaved(listOf(credential))
     }
 
+    override suspend fun remove(serverOrigin: String) {
+        val remaining = readSaved().filter { harold -> harold.serverOrigin != serverOrigin }
+        if (remaining.isEmpty()) {
+            clear()
+            return
+        }
+        writeSaved(remaining)
+    }
+
     override suspend fun clear() {
         dataStore.edit { preferences -> preferences.clear() }
         cipher.deleteKey()
