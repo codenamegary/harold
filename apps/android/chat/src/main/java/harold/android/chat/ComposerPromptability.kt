@@ -15,6 +15,7 @@ fun resolveEffectiveSessionState(
 }
 
 const val PENDING_SESSION_MESSAGE = "Sign in to the agent to start this session."
+const val WAITING_FOR_HAROLD = "Waiting until this Harold is back."
 
 /**
  * The agent owns the session and its working folder, so a prompt needs only an agent and an idle

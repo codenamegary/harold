@@ -102,6 +102,7 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onSessionClick = viewModel::select,
                 onDeleteSession = viewModel::delete,
                 onCreateClick = navigator::openCreateSession,
+                onHaroldFilter = viewModel::onHaroldFilter,
             )
         }
 

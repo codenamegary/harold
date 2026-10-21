@@ -25,9 +25,18 @@ data class SessionRow(
     val agentLabel: String,
     val state: SessionState,
     val updatedAt: String,
+    val serverOrigin: String = "",
+    val haroldName: String = "",
+    val haroldColorId: String = "",
+    val haroldIconId: String = "",
+    val haroldReachable: Boolean = true,
 ) {
     val id: String
-        get() = catalogSessionKey(agentId, sessionId)
+        get() = if (serverOrigin.isEmpty()) {
+            catalogSessionKey(agentId, sessionId)
+        } else {
+            "$serverOrigin|${catalogSessionKey(agentId, sessionId)}"
+        }
 }
 
 data class AgentOption(
@@ -136,11 +145,12 @@ data class ChatUiState(
     val composerEnabled: Boolean
         get() {
             val session = selectedSession ?: return false
-            return isComposerPromptable(
-                agentId = session.agentId,
-                sessionId = session.sessionId,
-                sessionState = effectiveSessionState,
-            ) && !composerSubmitting && !streamReconnecting
+            return session.haroldReachable &&
+                isComposerPromptable(
+                    agentId = session.agentId,
+                    sessionId = session.sessionId,
+                    sessionState = effectiveSessionState,
+                ) && !composerSubmitting && !streamReconnecting
         }
 
     val isPendingNewSession: Boolean
@@ -148,6 +158,7 @@ data class ChatUiState(
 
     val composerBlockedMessage: String?
         get() = when {
+            selectedSession?.haroldReachable == false -> WAITING_FOR_HAROLD
             isPendingNewSession -> PENDING_SESSION_MESSAGE
             // The reconnect banner already explains why the composer is
             // locked. Showing the Offline message too just adds a red line

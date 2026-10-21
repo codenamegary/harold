@@ -39,6 +39,7 @@ import harold.android.foreground.ActiveSessionSnapshot
 import harold.android.foreground.ActiveSessionTracker
 import harold.android.foreground.OpenSessionRequests
 import harold.android.foreground.SessionForegroundCoordinator
+import harold.android.live.AcpTranscriptState
 import harold.android.live.SessionOwner
 import harold.android.live.SessionSnapshot
 import harold.android.live.emptyAcpTranscript
@@ -47,6 +48,9 @@ import harold.android.navigation.Navigator
 import harold.android.network.AttachmentApi
 import harold.android.network.SessionConfigApi
 import harold.android.network.apiErrorMessage
+import harold.android.credentials.StoredCredential
+import harold.android.session.HaroldConnection
+import harold.android.session.HaroldConnectionStatus
 import harold.android.session.HaroldConnections
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
@@ -103,6 +107,9 @@ class ChatViewModel @Inject constructor(
     private var agentLabels: Map<AgentId, String> = emptyMap()
     private var agentAuthSummaries: Map<AgentId, AgentAuthSummary> = emptyMap()
     private var agentCapabilities: Map<AgentId, AgentCapabilityInventory?> = emptyMap()
+    private val retainedByOrigin = mutableMapOf<String, List<SessionRow>>()
+    private val transcriptMemory = mutableMapOf<String, AcpTranscriptState>()
+    private var watchedOrigin: String? = null
     private var attachmentLocalIdCounter: Int = 0
     private var catalog: List<SessionRow> = emptyList()
     private val titlePulledSessionIds = mutableSetOf<String>()
@@ -203,6 +210,12 @@ class ChatViewModel @Inject constructor(
                 requests.sessionIds.collect { sessionId ->
                     openSessionFromNotification(sessionId)
                 }
+            }
+        }
+
+        haroldConnections?.let { connections ->
+            viewModelScope.launch {
+                connections.connections.collect(::onHaroldLinks)
             }
         }
 
@@ -1069,11 +1082,16 @@ class ChatViewModel @Inject constructor(
         persistSelectedSession(row.id)
         clearComposer()
         val summaryFromCatalog = agentAuthSummaries[row.agentId]
+        val remembered = if (row.haroldReachable) {
+            emptyAcpTranscript
+        } else {
+            transcriptMemory[row.id] ?: emptyAcpTranscript
+        }
         _uiState.update { current ->
             current.copy(
                 selectedSession = row,
                 pickerVisible = false,
-                transcript = emptyAcpTranscript,
+                transcript = remembered,
                 composerText = "",
                 composerError = null,
                 availableCommands = emptyList(),
@@ -1091,12 +1109,28 @@ class ChatViewModel @Inject constructor(
                 authError = null,
             )
         }
-        sessionOwner.watch(row.agentId, row.sessionId)
+        if (row.serverOrigin.isNotEmpty()) {
+            watchedOrigin = row.serverOrigin
+            sessionOwner.connect(row.serverOrigin)
+        }
+        if (row.haroldReachable) {
+            sessionOwner.watch(row.agentId, row.sessionId)
+        } else {
+            sessionOwner.watch(null, null)
+        }
         syncActiveSessionsFromUiState()
         hydrateAgentAuth(row.agentId)
     }
 
     private fun applyLiveSnapshot(snapshot: SessionSnapshot) {
+        val selected = _uiState.value.selectedSession
+        if (
+            selected != null &&
+            !selected.haroldReachable &&
+            snapshot.sessionId != selected.sessionId
+        ) {
+            return
+        }
         val watchKey = catalogSessionKey(
             snapshot.agentId.orEmpty(),
             snapshot.sessionId.orEmpty(),
@@ -1151,6 +1185,10 @@ class ChatViewModel @Inject constructor(
             )
         }
         syncSelectedState(snapshot.transcript.sessionState)
+        val open = _uiState.value.selectedSession
+        if (open != null && snapshot.sessionId == open.sessionId) {
+            transcriptMemory[open.id] = _uiState.value.transcript
+        }
 
         if (snapshot.authRequired && !lastAuthRequired) {
             val agentId = snapshot.agentId
@@ -1167,15 +1205,13 @@ class ChatViewModel @Inject constructor(
         if (titles.isEmpty()) {
             return
         }
-        val renamed = catalog.map { row ->
-            titles[row.id]?.let { title -> row.copy(name = title) } ?: row
-        }
+        val renamed = catalog.map { row -> titleFor(row, titles)?.let { title -> row.copy(name = title) } ?: row }
         catalog = renamed
         _uiState.update { current ->
             current.copy(
                 sessions = renamed,
                 selectedSession = current.selectedSession?.let { row ->
-                    titles[row.id]?.let { title -> row.copy(name = title) } ?: row
+                    titleFor(row, titles)?.let { title -> row.copy(name = title) } ?: row
                 },
             )
         }
@@ -1220,7 +1256,66 @@ class ChatViewModel @Inject constructor(
         activateSession(row)
     }
 
+    private fun titleFor(row: SessionRow, titles: Map<String, String>): String? {
+        titles[row.id]?.let { title -> return title }
+        val key = catalogSessionKey(row.agentId, row.sessionId)
+        if (row.serverOrigin.isNotEmpty() && watchedOrigin != null && row.serverOrigin != watchedOrigin) {
+            return null
+        }
+        return titles[key]
+    }
+
+    private fun onHaroldLinks(links: List<HaroldConnection>) {
+        val byOrigin = links.associateBy { link -> link.serverOrigin }
+        fun reachableFor(row: SessionRow): Boolean {
+            val link = byOrigin[row.serverOrigin] ?: return row.haroldReachable
+            return when (link.status) {
+                HaroldConnectionStatus.Connected -> true
+                HaroldConnectionStatus.Unreachable,
+                HaroldConnectionStatus.Closed,
+                -> false
+                HaroldConnectionStatus.Connecting -> row.haroldReachable
+            }
+        }
+        catalog = catalog.map { row ->
+            val reachable = reachableFor(row)
+            if (reachable == row.haroldReachable) row else row.copy(haroldReachable = reachable)
+        }
+        val selected = _uiState.value.selectedSession
+        val updatedSelected = selected?.copy(haroldReachable = reachableFor(selected))
+        val becameReachable = selected != null &&
+            !selected.haroldReachable &&
+            updatedSelected?.haroldReachable == true
+        val becameUnreachable = selected != null &&
+            selected.haroldReachable &&
+            updatedSelected?.haroldReachable == false
+        _uiState.update { current ->
+            current.copy(sessions = catalog, selectedSession = updatedSelected ?: current.selectedSession)
+        }
+        publishRecentSessions()
+        if (becameUnreachable) {
+            sessionOwner.watch(null, null)
+        }
+        if (becameReachable) {
+            val next = updatedSelected ?: return
+            if (next.serverOrigin.isNotEmpty()) {
+                watchedOrigin = next.serverOrigin
+                sessionOwner.connect(next.serverOrigin)
+            }
+            sessionOwner.watch(next.agentId, next.sessionId)
+        }
+    }
+
     private suspend fun refreshCatalog() {
+        val saved = savedHaroldRepository.list()
+        if (saved.isEmpty()) {
+            refreshPairedCatalog()
+        } else {
+            refreshSavedCatalog(saved)
+        }
+    }
+
+    private suspend fun refreshPairedCatalog() {
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
         _uiState.update { current ->
             current.copy(sessionsLoading = true, sessionsError = null)
@@ -1270,6 +1365,73 @@ class ChatViewModel @Inject constructor(
         )
     }
 
+    private suspend fun refreshSavedCatalog(saved: List<StoredCredential>) {
+        _uiState.update { current ->
+            current.copy(sessionsLoading = true, sessionsError = null)
+        }
+        var anySuccess = catalog.isNotEmpty()
+        saved.forEach { harold ->
+            val workspaces = userRepository.listWorkspaces(harold.serverOrigin)
+                .getOrNull()
+                ?.items
+                .orEmpty()
+                .map { workspace -> workspace.toWorkspaceRow() }
+            val workspaceByPathForHarold = workspaces.associateBy { workspace -> workspace.path }
+            if (workspaceByPathForHarold.isNotEmpty()) {
+                workspaceByPath = workspaceByPath + workspaceByPathForHarold
+            }
+            val agents = userRepository.listAgents(harold.serverOrigin).getOrNull()?.items.orEmpty()
+            if (agents.isNotEmpty()) {
+                agentLabels = agentLabels + agents.associate { agent -> agent.id to agent.displayName }
+                agentAuthSummaries = agentAuthSummaries + agents.associate { agent -> agent.id to agent.authSummary }
+                agentCapabilities = agentCapabilities + agents.associate { agent -> agent.id to agent.capabilities }
+            }
+            val sessionsResult = userRepository.listSessions(harold.serverOrigin)
+            if (sessionsResult.isSuccess) {
+                anySuccess = true
+                val labels = agentLabels
+                retainedByOrigin[harold.serverOrigin] = sessionsResult.getOrThrow().items.map { session ->
+                    session.toSessionRow(workspaceByPathForHarold, labels).copy(
+                        serverOrigin = harold.serverOrigin,
+                        haroldName = harold.name,
+                        haroldColorId = harold.colorId,
+                        haroldIconId = harold.iconId,
+                        haroldReachable = true,
+                    )
+                }
+            } else {
+                retainedByOrigin[harold.serverOrigin] = retainedByOrigin[harold.serverOrigin]
+                    .orEmpty()
+                    .map { row -> row.copy(haroldReachable = false) }
+            }
+        }
+        syncAttachmentGating()
+        retainedByOrigin.keys.retainAll(saved.map { harold -> harold.serverOrigin }.toSet())
+        val pushedTitles = sessionOwner.sessionTitles.value
+        catalog = retainedByOrigin.values.flatten()
+            .map { row -> titleFor(row, pushedTitles)?.let { title -> row.copy(name = title) } ?: row }
+            .sortedByDescending { row -> row.updatedAt }
+        if (anySuccess || catalog.isNotEmpty()) {
+            _uiState.update { current ->
+                current.copy(
+                    sessions = catalog,
+                    sessionsLoading = false,
+                    sessionsError = null,
+                )
+            }
+            publishRecentSessions()
+            syncActiveSessionsFromUiState()
+            restoreLastSession()
+        } else {
+            _uiState.update { current ->
+                current.copy(
+                    sessionsLoading = false,
+                    sessionsError = "Could not reach Harold",
+                )
+            }
+        }
+    }
+
     private fun publishRecentSessions() {
         val recent = catalog
             .sortedByDescending { row -> row.updatedAt }
@@ -1290,7 +1452,13 @@ class ChatViewModel @Inject constructor(
             ?: catalog.firstOrNull { session -> session.sessionId == savedId }
             ?: return
         if (_uiState.value.selectedSession?.id == row.id) {
-            sessionOwner.watch(row.agentId, row.sessionId)
+            if (row.haroldReachable) {
+                if (row.serverOrigin.isNotEmpty()) {
+                    watchedOrigin = row.serverOrigin
+                    sessionOwner.connect(row.serverOrigin)
+                }
+                sessionOwner.watch(row.agentId, row.sessionId)
+            }
             return
         }
         activateSession(row)
@@ -1371,10 +1539,13 @@ class ChatViewModel @Inject constructor(
             tracker.replaceAll(snapshots)
             sessionForegroundCoordinator?.onSessionsChanged()
         }
-        val origin = (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin
-        if (origin != null) {
-            haroldConnections?.setSessionStates(origin, snapshots.map { snapshot -> snapshot.state })
-        }
+        val fallback = (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin
+        catalog.groupBy { row -> row.serverOrigin.ifEmpty { fallback.orEmpty() } }
+            .forEach { (origin, rows) ->
+                if (origin.isNotEmpty()) {
+                    haroldConnections?.setSessionStates(origin, rows.map { row -> row.state })
+                }
+            }
     }
 
     private fun pendingSessionRow(workspace: WorkspaceRow, agentId: AgentId): SessionRow =

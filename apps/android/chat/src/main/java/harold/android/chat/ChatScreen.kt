@@ -175,8 +175,13 @@ fun ChatScreen(
         onAttachmentsPicked(picks)
     }
     val composerSelection = composerState.selection
-    val sessionLabel = uiState.selectedSession?.name ?: "Select session"
-    val hasSelectedSession = uiState.selectedSession != null
+    val selected = uiState.selectedSession
+    val sessionLabel = when {
+        selected == null -> "Select session"
+        selected.haroldName.isEmpty() -> selected.name
+        else -> "${selected.name} · ${selected.haroldName} · ${selected.haroldColorId} · ${selected.haroldIconId}"
+    }
+    val hasSelectedSession = selected != null
     val context = LocalContext.current
     val sessionSelectorContentDescription = stringResource(
         R.string.chat_session_selector_content_description,
@@ -344,7 +349,9 @@ fun ChatScreen(
                                     style = MaterialTheme.typography.titleSmall,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("chat_session_label"),
                                 )
                                 Icon(
                                     imageVector = Icons.Filled.ArrowDropDown,
@@ -387,11 +394,16 @@ fun ChatScreen(
                                 )
                             } else {
                                 uiState.recentSessions.forEach { session ->
+                                    val label = if (session.haroldName.isEmpty()) {
+                                        session.name
+                                    } else {
+                                        "${session.name} · ${session.haroldName}"
+                                    }
                                     SessionMenuRow(
                                         text = if (uiState.selectedSession?.id == session.id) {
-                                            "✓ ${session.name}"
+                                            "✓ $label"
                                         } else {
-                                            session.name
+                                            label
                                         },
                                         onClick = {
                                             onDismissSessionMenu()
