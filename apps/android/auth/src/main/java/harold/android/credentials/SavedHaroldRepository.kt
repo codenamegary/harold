@@ -5,7 +5,6 @@ import harold.android.session.SessionGateway
 
 class SavedHaroldRepository(
     private val store: CredentialStore,
-    private val revoke: suspend (serverOrigin: String, deviceId: String) -> Result<Unit>,
 ) {
     suspend fun list(): List<StoredCredential> = store.list()
 
@@ -25,11 +24,20 @@ class SavedHaroldRepository(
         )
     }
 
-    suspend fun forget(serverOrigin: String, deviceId: String): Boolean {
-        revoke(serverOrigin, deviceId)
+    suspend fun remove(serverOrigin: String): Boolean {
         store.remove(serverOrigin)
         return store.list().isNotEmpty()
     }
+}
+
+suspend fun forgetSavedHarold(
+    serverOrigin: String,
+    deviceId: String,
+    revoke: suspend (serverOrigin: String, deviceId: String) -> Result<Unit>,
+    repository: SavedHaroldRepository,
+): Boolean {
+    revoke(serverOrigin, deviceId)
+    return repository.remove(serverOrigin)
 }
 
 suspend fun settleAfterForget(

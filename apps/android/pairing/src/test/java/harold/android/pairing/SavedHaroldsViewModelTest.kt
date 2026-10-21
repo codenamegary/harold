@@ -1,6 +1,7 @@
 package harold.android.pairing
 
 import harold.android.credentials.SavedHaroldRepository
+import harold.android.user.UserRepository
 import harold.android.credentials.StoredCredential
 import harold.android.navigation.Navigator
 import harold.android.navigation.Pairing
@@ -81,7 +82,8 @@ private fun viewModel(
     store: FakeCredentialStore,
     navigator: Navigator = Navigator(),
 ): SavedHaroldsViewModel = SavedHaroldsViewModel(
-    repository = SavedHaroldRepository(store) { _, _ -> Result.success(Unit) },
+    repository = SavedHaroldRepository(store),
+    userRepository = RevokeOnlyUserRepository(),
     sessionGateway = FakeSessionGateway(PairedState.Paired("http://laptop.local:3847", "device_laptop", "Pixel")),
     sessionOwner = NoopSessionOwner(),
     navigator = navigator,
@@ -110,6 +112,35 @@ private fun saved(
     colorId = colorId,
     iconId = iconId,
 )
+
+private class RevokeOnlyUserRepository : UserRepository {
+    override suspend fun revokeDevice(serverOrigin: String, deviceId: String): Result<Unit> =
+        Result.success(Unit)
+
+    override suspend fun listWorkspaces(serverOrigin: String, limit: Int) = error("unused")
+    override suspend fun getRuntimeSettings(serverOrigin: String) = error("unused")
+    override suspend fun listFilesystemDirectories(serverOrigin: String, root: String) = error("unused")
+    override suspend fun createWorkspace(
+        serverOrigin: String,
+        body: harold.android.contracts.CreateWorkspaceBody,
+    ) = error("unused")
+    override suspend fun listSessions(serverOrigin: String, cwd: String?) = error("unused")
+    override suspend fun listAgents(serverOrigin: String) = error("unused")
+    override suspend fun createSession(
+        serverOrigin: String,
+        body: harold.android.contracts.CreateSessionBody,
+    ) = error("unused")
+    override suspend fun deleteSession(serverOrigin: String, agentId: String, sessionId: String) = error("unused")
+    override suspend fun getAgentAuth(serverOrigin: String, agentId: String) = error("unused")
+    override suspend fun startAgentAuthSession(serverOrigin: String, agentId: String) = error("unused")
+    override suspend fun applyAgentAuthSessionAction(
+        serverOrigin: String,
+        agentId: String,
+        sessionId: String,
+        action: harold.android.contracts.AuthSessionAction,
+    ) = error("unused")
+    override suspend fun logoutAgentAuth(serverOrigin: String, agentId: String) = error("unused")
+}
 
 private class NoopSessionOwner : harold.android.live.SessionOwner {
     override val connectionState = kotlinx.coroutines.flow.MutableStateFlow(harold.android.stream.ConnectionState())

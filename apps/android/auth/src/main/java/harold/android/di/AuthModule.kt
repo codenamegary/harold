@@ -63,10 +63,6 @@ abstract class AuthModule {
         @Singleton
         fun savedHaroldRepository(
             credentialStore: CredentialStore,
-            userRepository: UserRepository,
-        ): SavedHaroldRepository = SavedHaroldRepository(
-            store = credentialStore,
-            revoke = userRepository::revokeDevice,
-        )
+        ): SavedHaroldRepository = SavedHaroldRepository(credentialStore)
     }
 }

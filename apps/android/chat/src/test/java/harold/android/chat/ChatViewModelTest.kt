@@ -896,9 +896,7 @@ class ChatViewModelTest {
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
             sessionOwner = sessionOwner,
             sessionGateway = sessionGateway,
-            savedHaroldRepository = SavedHaroldRepository(store) { _, deviceId ->
-                repository.revokeDevice(ORIGIN, deviceId)
-            },
+            savedHaroldRepository = SavedHaroldRepository(store),
             navigator = navigator,
         )
         advanceUntilIdle()
@@ -1027,9 +1025,7 @@ class ChatViewModelTest {
         sessionGateway: FakeSessionGateway = pairedGateway(),
         configApi: SessionConfigApi = RecordingSessionConfigApi(),
         attachmentApi: AttachmentApi = NoopAttachmentApi(),
-        savedHaroldRepository: SavedHaroldRepository = SavedHaroldRepository(FakeCredentialStore()) { _, deviceId ->
-            repository.revokeDevice(ORIGIN, deviceId)
-        },
+        savedHaroldRepository: SavedHaroldRepository = SavedHaroldRepository(FakeCredentialStore()),
         navigator: Navigator = Navigator(),
     ): ChatViewModel = ChatViewModel(
         savedStateHandle = SavedStateHandle(),

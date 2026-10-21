@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import harold.android.credentials.SavedHaroldRepository
+import harold.android.credentials.forgetSavedHarold
 import harold.android.credentials.settleAfterForget
+import harold.android.user.UserRepository
 import harold.android.live.SessionOwner
 import harold.android.navigation.Navigator
 import harold.android.session.SessionGateway
@@ -34,6 +36,7 @@ data class SavedHaroldsUiState(
 @HiltViewModel
 class SavedHaroldsViewModel @Inject constructor(
     private val repository: SavedHaroldRepository,
+    private val userRepository: UserRepository,
     private val sessionGateway: SessionGateway,
     private val sessionOwner: SessionOwner,
     private val navigator: Navigator,
@@ -96,7 +99,12 @@ class SavedHaroldsViewModel @Inject constructor(
     fun remove(serverOrigin: String) {
         val row = _uiState.value.rows.find { item -> item.serverOrigin == serverOrigin } ?: return
         viewModelScope.launch {
-            val remains = repository.forget(row.serverOrigin, row.deviceId)
+            val remains = forgetSavedHarold(
+                serverOrigin = row.serverOrigin,
+                deviceId = row.deviceId,
+                revoke = userRepository::revokeDevice,
+                repository = repository,
+            )
             settleAfterForget(
                 removedOrigin = row.serverOrigin,
                 remains = remains,

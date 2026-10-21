@@ -32,6 +32,7 @@ import harold.android.contracts.catalogSessionKey
 import harold.android.contracts.parseConfigOptions
 import harold.android.contracts.toSummary
 import harold.android.credentials.SavedHaroldRepository
+import harold.android.credentials.forgetSavedHarold
 import harold.android.credentials.settleAfterForget
 import harold.android.di.PreviewDispatcher
 import harold.android.foreground.ActiveSessionSnapshot
@@ -911,7 +912,12 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             val paired = sessionGateway.pairedState.value as? PairedState.Paired
             if (paired != null) {
-                val remains = savedHaroldRepository.forget(paired.serverOrigin, paired.deviceId)
+                val remains = forgetSavedHarold(
+                    serverOrigin = paired.serverOrigin,
+                    deviceId = paired.deviceId,
+                    revoke = userRepository::revokeDevice,
+                    repository = savedHaroldRepository,
+                )
                 settleAfterForget(
                     removedOrigin = paired.serverOrigin,
                     remains = remains,

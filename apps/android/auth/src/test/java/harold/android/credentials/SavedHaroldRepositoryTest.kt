@@ -17,7 +17,7 @@ class SavedHaroldRepositoryTest {
         val store = FakeCredentialStore()
         store.save(laptop)
         store.save(desktop)
-        val repository = SavedHaroldRepository(store) { _, _ -> Result.success(Unit) }
+        val repository = SavedHaroldRepository(store)
 
         repository.edit(
             serverOrigin = laptop.serverOrigin,
@@ -36,38 +36,58 @@ class SavedHaroldRepositoryTest {
     }
 
     @Test
-    fun forgetStillRemovesTheHaroldWhenRevokeFails() = runTest {
+    fun removeDropsOneHaroldAndReportsWhenAnyRemain() = runTest {
         val laptop = harold("http://laptop.local:3847", "devcred_laptop", "laptop", "tide", "bolt")
         val desktop = harold("http://desktop.local:3847", "devcred_desktop", "desktop", "ink", "mark")
         val store = FakeCredentialStore()
         store.save(laptop)
         store.save(desktop)
-        var revoked = 0
-        val repository = SavedHaroldRepository(store) { origin, deviceId ->
-            revoked += 1
-            assertEquals(laptop.serverOrigin, origin)
-            assertEquals(laptop.deviceId, deviceId)
-            Result.failure(IllegalStateException("offline"))
-        }
+        val repository = SavedHaroldRepository(store)
 
-        val remains = repository.forget(laptop.serverOrigin, laptop.deviceId)
+        val remains = repository.remove(laptop.serverOrigin)
 
-        assertEquals(1, revoked)
         assertTrue(remains)
         assertEquals(listOf(desktop), store.list())
     }
 
     @Test
-    fun forgettingTheLastHaroldLeavesNone() = runTest {
+    fun removingTheLastHaroldLeavesNone() = runTest {
         val laptop = harold("http://laptop.local:3847", "devcred_laptop", "laptop", "tide", "bolt")
         val store = FakeCredentialStore()
         store.save(laptop)
-        val repository = SavedHaroldRepository(store) { _, _ -> Result.success(Unit) }
+        val repository = SavedHaroldRepository(store)
 
-        val remains = repository.forget(laptop.serverOrigin, laptop.deviceId)
+        val remains = repository.remove(laptop.serverOrigin)
 
         assertFalse(remains)
         assertEquals(emptyList<StoredCredential>(), store.list())
+    }
+
+    @Test
+    fun forgetRemovesTheHaroldWhenRevokeFails() = runTest {
+        val laptop = harold("http://laptop.local:3847", "devcred_laptop", "laptop", "tide", "bolt")
+        val desktop = harold("http://desktop.local:3847", "devcred_desktop", "desktop", "ink", "mark")
+        val store = FakeCredentialStore()
+        store.save(laptop)
+        store.save(desktop)
+        val repository = SavedHaroldRepository(store)
+        var revoked = 0
+
+        val remains = forgetSavedHarold(
+            serverOrigin = laptop.serverOrigin,
+            deviceId = laptop.deviceId,
+            revoke = { origin, deviceId ->
+                revoked += 1
+                assertEquals(laptop.serverOrigin, origin)
+                assertEquals(laptop.deviceId, deviceId)
+                Result.failure(IllegalStateException("offline"))
+            },
+            repository = repository,
+        )
+
+        assertEquals(1, revoked)
+        assertTrue(remains)
+        assertEquals(listOf(desktop), store.list())
     }
 
     @Test
