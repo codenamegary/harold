@@ -10,7 +10,13 @@ import kotlinx.coroutines.flow.receiveAsFlow
 sealed interface SessionCommand {
     data class Open(val row: SessionRow) : SessionCommand
 
-    data class Created(val response: CreateSessionResponse) : SessionCommand
+    data class Created(
+        val response: CreateSessionResponse,
+        val serverOrigin: String = "",
+        val haroldName: String = "",
+        val haroldColorId: String = "",
+        val haroldIconId: String = "",
+    ) : SessionCommand
 
     data class Pending(val workspace: WorkspaceRow, val agentId: AgentId) : SessionCommand
 
