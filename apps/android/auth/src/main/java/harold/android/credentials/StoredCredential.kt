@@ -6,4 +6,7 @@ data class StoredCredential(
     val serverOrigin: String,
     val deviceName: String?,
     val credential: String,
+    val name: String,
+    val colorId: String,
+    val iconId: String,
 )
