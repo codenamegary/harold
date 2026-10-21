@@ -29,15 +29,19 @@ class DefaultPairingCoordinator @Inject constructor(
 
         return claimResult.fold(
             onSuccess = { result ->
+                val serverOrigin = harold.android.network.serverOriginFromEndpoint(endpoint)
                 val stored = harold.android.credentials.StoredCredential(
                     formatVersion = FORMAT_VERSION,
                     deviceId = result.device.id,
-                    serverOrigin = harold.android.network.serverOriginFromEndpoint(endpoint),
+                    serverOrigin = serverOrigin,
                     deviceName = result.device.name,
                     credential = result.credential,
+                    name = haroldName(serverOrigin),
+                    colorId = DEFAULT_COLOR_ID,
+                    iconId = DEFAULT_ICON_ID,
                 )
 
-                credentialStore.save(stored)
+                credentialStore.replace(stored)
                 sessionGateway.refresh()
 
                 Result.success(Unit)
@@ -51,5 +55,15 @@ class DefaultPairingCoordinator @Inject constructor(
     companion object {
         private const val PLATFORM = "android"
         private const val FORMAT_VERSION = 1
+        private const val DEFAULT_COLOR_ID = "ink"
+        private const val DEFAULT_ICON_ID = "mark"
+
+        private fun haroldName(serverOrigin: String): String {
+            val host = java.net.URI(serverOrigin).host
+            if (host.isNullOrBlank()) {
+                return serverOrigin
+            }
+            return host
+        }
     }
 }

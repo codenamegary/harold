@@ -4,7 +4,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.BeforeClass
 import org.junit.Test
@@ -31,11 +30,14 @@ class DefaultCredentialStoreInstrumentedTest {
             serverOrigin = "http://127.0.0.1:3847",
             deviceName = "Google Pixel 8",
             credential = "devcred_roundtrip_secret",
+            name = "laptop",
+            colorId = "ink",
+            iconId = "mark",
         )
 
         store.save(credential)
 
-        assertEquals(credential.copy(), store.load())
+        assertEquals(listOf(credential), store.list())
     }
 
     @Test
@@ -47,12 +49,15 @@ class DefaultCredentialStoreInstrumentedTest {
                 serverOrigin = "http://127.0.0.1:3847",
                 deviceName = "Google Pixel 8",
                 credential = "devcred_clear_me",
+                name = "laptop",
+                colorId = "ink",
+                iconId = "mark",
             ),
         )
 
         store.clear()
 
-        assertNull(store.load())
+        assertEquals(emptyList<StoredCredential>(), store.list())
     }
 
     @Test
@@ -63,6 +68,9 @@ class DefaultCredentialStoreInstrumentedTest {
             serverOrigin = "http://10.0.2.2:3847",
             deviceName = "Emulator",
             credential = "devcred_restart_secret",
+            name = "laptop",
+            colorId = "ink",
+            iconId = "mark",
         )
         store.save(credential)
 
@@ -94,6 +102,9 @@ class DefaultCredentialStoreInstrumentedTest {
                 serverOrigin = "http://10.0.2.2:3847",
                 deviceName = "Emulator",
                 credential = "devcred_clear",
+                name = "laptop",
+                colorId = "ink",
+                iconId = "mark",
             ),
         )
 
@@ -111,7 +122,7 @@ class DefaultCredentialStoreInstrumentedTest {
         second.refresh()
 
         assertEquals(PairedState.NotPaired, second.pairedState.value)
-        assertNull(store.load())
+        assertEquals(emptyList<StoredCredential>(), store.list())
     }
 
     companion object {

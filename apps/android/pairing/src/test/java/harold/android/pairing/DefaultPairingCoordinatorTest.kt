@@ -2,8 +2,6 @@ package harold.android.pairing
 
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import harold.android.credentials.StoredCredential
@@ -26,6 +24,9 @@ class DefaultPairingCoordinatorTest {
                 serverOrigin = "https://old.example.com",
                 deviceName = "Old device",
                 credential = "devcred_old",
+                name = "old",
+                colorId = "ink",
+                iconId = "mark",
             ),
         )
         val gateway = DefaultSessionGateway(store)
@@ -53,7 +54,7 @@ class DefaultPairingCoordinatorTest {
         )
 
         assertTrue(result.isFailure)
-        assertEquals("devcred_old", store.load()?.credential)
+        assertEquals("devcred_old", store.list().single().credential)
         assertTrue(gateway.pairedState.value is PairedState.Paired)
     }
 
@@ -66,6 +67,9 @@ class DefaultPairingCoordinatorTest {
                 serverOrigin = "https://old.example.com",
                 deviceName = "Old device",
                 credential = "devcred_old",
+                name = "old",
+                colorId = "ink",
+                iconId = "mark",
             ),
         )
         val gateway = DefaultSessionGateway(store)
@@ -94,8 +98,12 @@ class DefaultPairingCoordinatorTest {
         )
 
         assertTrue(result.isSuccess)
-        assertEquals("devcred_new", store.load()?.credential)
-        assertEquals("device_new", store.load()?.deviceId)
+        val saved = store.list().single()
+        assertEquals("devcred_new", saved.credential)
+        assertEquals("device_new", saved.deviceId)
+        assertEquals("127.0.0.1", saved.name)
+        assertEquals("ink", saved.colorId)
+        assertEquals("mark", saved.iconId)
     }
 }
 

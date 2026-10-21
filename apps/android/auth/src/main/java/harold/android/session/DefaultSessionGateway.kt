@@ -14,7 +14,8 @@ class DefaultSessionGateway(
     override val pairedState: StateFlow<PairedState> = _pairedState.asStateFlow()
 
     override suspend fun refresh() {
-        val stored = credentialStore.load()
+        // Pairing still stores one Harold. Later issues connect to every saved Harold.
+        val stored = credentialStore.list().firstOrNull()
 
         credentialHolder.set(stored?.credential)
 

@@ -16,8 +16,8 @@ data class EncryptedBlob(
 
 class KeystoreCipher(
     private val keyAlias: String = KEY_ALIAS,
-) {
-    fun encrypt(plaintext: String): EncryptedBlob {
+) : CredentialCipher {
+    override fun encrypt(plaintext: String): EncryptedBlob {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val iv = cipher.iv
@@ -29,7 +29,7 @@ class KeystoreCipher(
         )
     }
 
-    fun decrypt(blob: EncryptedBlob): String {
+    override fun decrypt(blob: EncryptedBlob): String {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         val iv = Base64.decode(blob.ivBase64, Base64.NO_WRAP)
         val ciphertext = Base64.decode(blob.ciphertextBase64, Base64.NO_WRAP)
@@ -38,7 +38,7 @@ class KeystoreCipher(
         return cipher.doFinal(ciphertext).toString(Charsets.UTF_8)
     }
 
-    fun deleteKey() {
+    override fun deleteKey() {
         val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
 
         if (keyStore.containsAlias(keyAlias)) {

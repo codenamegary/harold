@@ -1,9 +1,11 @@
 package harold.android.credentials
 
 interface CredentialStore {
-    suspend fun load(): StoredCredential?
+    suspend fun list(): List<StoredCredential>
 
     suspend fun save(credential: StoredCredential)
+
+    suspend fun replace(credential: StoredCredential)
 
     suspend fun clear()
 }

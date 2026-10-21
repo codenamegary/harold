@@ -21,6 +21,9 @@ class DefaultSessionGatewayTest {
                     serverOrigin = "http://127.0.0.1:8787",
                     deviceName = "Pixel",
                     credential = "devcred_secret",
+                    name = "laptop",
+                    colorId = "ink",
+                    iconId = "mark",
                 ),
             ),
             credentialHolder = holder,
@@ -56,6 +59,9 @@ class DefaultSessionGatewayTest {
                 serverOrigin = "http://127.0.0.1:8787",
                 deviceName = "Pixel",
                 credential = "devcred_secret",
+                name = "laptop",
+                colorId = "ink",
+                iconId = "mark",
             ),
         )
         val gateway = DefaultSessionGateway(
@@ -67,7 +73,7 @@ class DefaultSessionGatewayTest {
         gateway.clearLocalAccess()
 
         assertNull(holder.current())
-        assertNull(store.load())
+        assertEquals(emptyList<StoredCredential>(), store.list())
         assertEquals(1, store.clearCount)
         assertEquals(PairedState.NotPaired, gateway.pairedState.value)
     }
