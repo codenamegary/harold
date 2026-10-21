@@ -9,6 +9,8 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -68,6 +70,12 @@ fun PairingScreen(
     onSubmitManual: () -> Unit,
     onQrScanned: (String) -> Unit,
     onBack: () -> Unit,
+    onNameChanged: (String) -> Unit = {},
+    onColorSelected: (String) -> Unit = {},
+    onIconSelected: (String) -> Unit = {},
+    onConfirm: () -> Unit = {},
+    onConfirmUpdate: () -> Unit = {},
+    onCancelUpdate: () -> Unit = {},
 ) {
     val backContentDescription = stringResource(R.string.pairing_back_content_description)
     val manualEntryContentDescription = stringResource(R.string.pairing_manual_entry_content_description)
@@ -102,6 +110,7 @@ fun PairingScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -112,6 +121,22 @@ fun PairingScreen(
                 Text(
                     text = stringResource(R.string.pairing_claiming),
                     modifier = Modifier.padding(top = 16.dp),
+                )
+            } else if (uiState.phase == PairingPhase.AlreadySaved) {
+                AlreadySavedPrompt(
+                    name = uiState.name,
+                    onUpdate = onConfirmUpdate,
+                    onCancel = onCancelUpdate,
+                )
+            } else if (uiState.phase == PairingPhase.Confirm) {
+                ConfirmHarold(
+                    name = uiState.name,
+                    colorId = uiState.colorId,
+                    iconId = uiState.iconId,
+                    onNameChanged = onNameChanged,
+                    onColorSelected = onColorSelected,
+                    onIconSelected = onIconSelected,
+                    onConfirm = onConfirm,
                 )
             } else if (uiState.mode == PairingMode.Scan) {
                 Spacer(modifier = Modifier.height(16.dp))
@@ -289,5 +314,93 @@ private fun PairingScanner(
                 ProcessCameraProvider.getInstance(context).get().unbindAll()
             }
         }
+    }
+}
+
+@Composable
+private fun AlreadySavedPrompt(
+    name: String,
+    onUpdate: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    Spacer(modifier = Modifier.height(24.dp))
+    Text(
+        text = stringResource(R.string.pairing_already_saved, name),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("pairing_already_saved"),
+    )
+    Spacer(modifier = Modifier.height(24.dp))
+    Button(
+        onClick = onUpdate,
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+            .testTag("pairing_update"),
+    ) {
+        Text(text = stringResource(R.string.pairing_update))
+    }
+    TextButton(
+        onClick = onCancel,
+        modifier = Modifier
+            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+            .testTag("pairing_cancel"),
+    ) {
+        Text(text = stringResource(R.string.pairing_cancel))
+    }
+}
+
+@Composable
+private fun ConfirmHarold(
+    name: String,
+    colorId: String,
+    iconId: String,
+    onNameChanged: (String) -> Unit,
+    onColorSelected: (String) -> Unit,
+    onIconSelected: (String) -> Unit,
+    onConfirm: () -> Unit,
+) {
+    Spacer(modifier = Modifier.height(16.dp))
+    OutlinedTextField(
+        value = name,
+        onValueChange = onNameChanged,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("pairing_name_field"),
+        label = { Text(text = stringResource(R.string.pairing_name_label)) },
+        singleLine = true,
+    )
+    Spacer(modifier = Modifier.height(16.dp))
+    Text(text = stringResource(R.string.pairing_color_label))
+    haroldColorIds.forEach { id ->
+        TextButton(
+            onClick = { onColorSelected(id) },
+            modifier = Modifier
+                .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                .testTag("pairing_color_$id"),
+        ) {
+            Text(text = if (id == colorId) "$id selected" else id)
+        }
+    }
+    Text(text = stringResource(R.string.pairing_icon_label))
+    haroldIconIds.forEach { id ->
+        TextButton(
+            onClick = { onIconSelected(id) },
+            modifier = Modifier
+                .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                .testTag("pairing_icon_$id"),
+        ) {
+            Text(text = if (id == iconId) "$id selected" else id)
+        }
+    }
+    Spacer(modifier = Modifier.height(16.dp))
+    Button(
+        onClick = onConfirm,
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+            .testTag("pairing_confirm"),
+    ) {
+        Text(text = stringResource(R.string.pairing_confirm))
     }
 }
