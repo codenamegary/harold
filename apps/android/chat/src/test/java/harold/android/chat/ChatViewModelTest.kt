@@ -24,7 +24,7 @@ import harold.android.contracts.SessionState
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceState
-import harold.android.credentials.SavedHaroldBook
+import harold.android.credentials.SavedHaroldRepository
 import harold.android.credentials.StoredCredential
 import harold.android.live.SessionOwner
 import harold.android.live.SessionSnapshot
@@ -896,7 +896,7 @@ class ChatViewModelTest {
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
             sessionOwner = sessionOwner,
             sessionGateway = sessionGateway,
-            savedHaroldBook = SavedHaroldBook(store) { _, deviceId ->
+            savedHaroldRepository = SavedHaroldRepository(store) { _, deviceId ->
                 repository.revokeDevice(ORIGIN, deviceId)
             },
             navigator = navigator,
@@ -1027,7 +1027,7 @@ class ChatViewModelTest {
         sessionGateway: FakeSessionGateway = pairedGateway(),
         configApi: SessionConfigApi = RecordingSessionConfigApi(),
         attachmentApi: AttachmentApi = NoopAttachmentApi(),
-        savedHaroldBook: SavedHaroldBook = SavedHaroldBook(FakeCredentialStore()) { _, deviceId ->
+        savedHaroldRepository: SavedHaroldRepository = SavedHaroldRepository(FakeCredentialStore()) { _, deviceId ->
             repository.revokeDevice(ORIGIN, deviceId)
         },
         navigator: Navigator = Navigator(),
@@ -1036,7 +1036,7 @@ class ChatViewModelTest {
         sessionGateway = sessionGateway,
         sessionOwner = sessionOwner,
         userRepository = repository,
-        savedHaroldBook = savedHaroldBook,
+        savedHaroldRepository = savedHaroldRepository,
         attachmentApi = attachmentApi,
         configApi = configApi,
         navigationPreferences = navigation,

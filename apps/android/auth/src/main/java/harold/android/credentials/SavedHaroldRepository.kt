@@ -3,7 +3,7 @@ package harold.android.credentials
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 
-class SavedHaroldBook(
+class SavedHaroldRepository(
     private val store: CredentialStore,
     private val revoke: suspend (serverOrigin: String, deviceId: String) -> Result<Unit>,
 ) {

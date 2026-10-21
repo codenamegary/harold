@@ -1,6 +1,6 @@
 package harold.android.pairing
 
-import harold.android.credentials.SavedHaroldBook
+import harold.android.credentials.SavedHaroldRepository
 import harold.android.credentials.StoredCredential
 import harold.android.navigation.Navigator
 import harold.android.navigation.Pairing
@@ -81,7 +81,7 @@ private fun viewModel(
     store: FakeCredentialStore,
     navigator: Navigator = Navigator(),
 ): SavedHaroldsViewModel = SavedHaroldsViewModel(
-    book = SavedHaroldBook(store) { _, _ -> Result.success(Unit) },
+    repository = SavedHaroldRepository(store) { _, _ -> Result.success(Unit) },
     sessionGateway = FakeSessionGateway(PairedState.Paired("http://laptop.local:3847", "device_laptop", "Pixel")),
     sessionOwner = NoopSessionOwner(),
     navigator = navigator,

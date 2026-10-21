@@ -3,7 +3,7 @@ package harold.android.pairing
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import harold.android.credentials.SavedHaroldBook
+import harold.android.credentials.SavedHaroldRepository
 import harold.android.credentials.settleAfterForget
 import harold.android.live.SessionOwner
 import harold.android.navigation.Navigator
@@ -33,7 +33,7 @@ data class SavedHaroldsUiState(
 
 @HiltViewModel
 class SavedHaroldsViewModel @Inject constructor(
-    private val book: SavedHaroldBook,
+    private val repository: SavedHaroldRepository,
     private val sessionGateway: SessionGateway,
     private val sessionOwner: SessionOwner,
     private val navigator: Navigator,
@@ -82,7 +82,7 @@ class SavedHaroldsViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
-            book.edit(
+            repository.edit(
                 serverOrigin = origin,
                 name = state.name.trim(),
                 colorId = state.colorId,
@@ -96,7 +96,7 @@ class SavedHaroldsViewModel @Inject constructor(
     fun remove(serverOrigin: String) {
         val row = _uiState.value.rows.find { item -> item.serverOrigin == serverOrigin } ?: return
         viewModelScope.launch {
-            val remains = book.forget(row.serverOrigin, row.deviceId)
+            val remains = repository.forget(row.serverOrigin, row.deviceId)
             settleAfterForget(
                 removedOrigin = row.serverOrigin,
                 remains = remains,
@@ -113,7 +113,7 @@ class SavedHaroldsViewModel @Inject constructor(
     }
 
     private suspend fun reload() {
-        val rows = book.list().map { harold ->
+        val rows = repository.list().map { harold ->
             SavedHaroldRow(
                 serverOrigin = harold.serverOrigin,
                 deviceId = harold.deviceId,

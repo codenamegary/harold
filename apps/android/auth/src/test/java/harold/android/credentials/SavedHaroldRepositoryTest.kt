@@ -9,7 +9,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class SavedHaroldBookTest {
+class SavedHaroldRepositoryTest {
     @Test
     fun editChangesTheNameColorAndIconAndLeavesTheCredential() = runTest {
         val laptop = harold("http://laptop.local:3847", "devcred_laptop", "laptop", "tide", "bolt")
@@ -17,9 +17,9 @@ class SavedHaroldBookTest {
         val store = FakeCredentialStore()
         store.save(laptop)
         store.save(desktop)
-        val book = SavedHaroldBook(store) { _, _ -> Result.success(Unit) }
+        val repository = SavedHaroldRepository(store) { _, _ -> Result.success(Unit) }
 
-        book.edit(
+        repository.edit(
             serverOrigin = laptop.serverOrigin,
             name = "work",
             colorId = "ink",
@@ -43,14 +43,14 @@ class SavedHaroldBookTest {
         store.save(laptop)
         store.save(desktop)
         var revoked = 0
-        val book = SavedHaroldBook(store) { origin, deviceId ->
+        val repository = SavedHaroldRepository(store) { origin, deviceId ->
             revoked += 1
             assertEquals(laptop.serverOrigin, origin)
             assertEquals(laptop.deviceId, deviceId)
             Result.failure(IllegalStateException("offline"))
         }
 
-        val remains = book.forget(laptop.serverOrigin, laptop.deviceId)
+        val remains = repository.forget(laptop.serverOrigin, laptop.deviceId)
 
         assertEquals(1, revoked)
         assertTrue(remains)
@@ -62,9 +62,9 @@ class SavedHaroldBookTest {
         val laptop = harold("http://laptop.local:3847", "devcred_laptop", "laptop", "tide", "bolt")
         val store = FakeCredentialStore()
         store.save(laptop)
-        val book = SavedHaroldBook(store) { _, _ -> Result.success(Unit) }
+        val repository = SavedHaroldRepository(store) { _, _ -> Result.success(Unit) }
 
-        val remains = book.forget(laptop.serverOrigin, laptop.deviceId)
+        val remains = repository.forget(laptop.serverOrigin, laptop.deviceId)
 
         assertFalse(remains)
         assertEquals(emptyList<StoredCredential>(), store.list())
