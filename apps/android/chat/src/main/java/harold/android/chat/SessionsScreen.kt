@@ -1,9 +1,12 @@
 package harold.android.chat
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -49,6 +53,7 @@ fun SessionsScreen(
     onSessionClick: (SessionRow) -> Unit,
     onDeleteSession: (SessionRow) -> Unit,
     onCreateClick: () -> Unit,
+    onHaroldFilter: (String?) -> Unit = {},
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -90,6 +95,7 @@ fun SessionsScreen(
             onSearchChanged = onSearchChanged,
             onSessionClick = onSessionClick,
             onDeleteSession = onDeleteSession,
+            onHaroldFilter = onHaroldFilter,
             modifier = Modifier.padding(innerPadding),
         )
     }
@@ -103,6 +109,7 @@ fun SessionsListContent(
     onDeleteSession: (SessionRow) -> Unit,
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
+    onHaroldFilter: (String?) -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -129,6 +136,32 @@ fun SessionsListContent(
                 }
             },
         )
+
+        if (uiState.harolds.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .testTag("session_harold_filters"),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TextButton(
+                    onClick = { onHaroldFilter(null) },
+                    modifier = Modifier.testTag("session_filter_all"),
+                ) {
+                    Text(text = if (uiState.haroldFilter == null) "All selected" else "All")
+                }
+                uiState.harolds.forEach { harold ->
+                    val selected = uiState.haroldFilter == harold.serverOrigin
+                    TextButton(
+                        onClick = { onHaroldFilter(harold.serverOrigin) },
+                        modifier = Modifier.testTag("session_filter_${harold.serverOrigin}"),
+                    ) {
+                        Text(text = if (selected) "${harold.name} selected" else harold.name)
+                    }
+                }
+            }
+        }
 
         uiState.error?.let { message ->
             Text(
@@ -200,6 +233,22 @@ private fun SessionListRow(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(text = session.name, style = MaterialTheme.typography.titleMedium)
+            if (session.haroldName.isNotEmpty()) {
+                Text(
+                    text = "${session.haroldName} · ${session.haroldColorId} · ${session.haroldIconId}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("session_harold_${session.id}"),
+                )
+            }
+            if (!session.haroldReachable) {
+                Text(
+                    text = "Unreachable",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("session_unreachable_${session.id}"),
+                )
+            }
             Text(
                 text = "${session.workspaceLabel} · ${session.agentLabel} · ${sessionStatusLabel(session.state)}",
                 style = MaterialTheme.typography.bodySmall,

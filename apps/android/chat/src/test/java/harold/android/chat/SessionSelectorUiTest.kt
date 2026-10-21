@@ -3,6 +3,7 @@ package harold.android.chat
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import org.junit.Assert.assertEquals
@@ -167,5 +168,63 @@ class SessionSelectorUiTest {
 
         composeTestRule.onNodeWithTag("sessions_search_loading").assertIsDisplayed()
         composeTestRule.onNodeWithTag("session_row_cursor:sess_01").assertIsDisplayed()
+    }
+
+    @Test
+    fun sessionRowShowsTheHaroldAndAnUnreachableMark() {
+        val laptop = sampleSession.copy(
+            sessionId = "sess_laptop",
+            name = "Alpha",
+            serverOrigin = "http://laptop.local:3847",
+            haroldName = "laptop",
+            haroldColorId = "tide",
+            haroldIconId = "bolt",
+            haroldReachable = false,
+        )
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                SessionsScreen(
+                    uiState = SessionsUiState(
+                        sessions = listOf(laptop),
+                        harolds = listOf(
+                            HaroldFilterChoice(
+                                serverOrigin = laptop.serverOrigin,
+                                name = "laptop",
+                                colorId = "tide",
+                                iconId = "bolt",
+                            ),
+                        ),
+                        loading = false,
+                    ),
+                    onBack = {},
+                    onSearchChanged = {},
+                    onSessionClick = {},
+                    onDeleteSession = {},
+                    onCreateClick = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("laptop · tide · bolt").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Unreachable").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("session_filter_all").assertIsDisplayed()
+    }
+
+    @Test
+    fun chatShowsTheHaroldNameColorAndIcon() {
+        val session = sampleSession.copy(
+            haroldName = "laptop",
+            haroldColorId = "tide",
+            haroldIconId = "bolt",
+        )
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(selectedSession = session),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Alpha · laptop · tide · bolt").assertIsDisplayed()
     }
 }
