@@ -9,7 +9,7 @@
 - Text Chat
 - Voice Chat
 - Attachments
-- Pairing
+- Multiple Harold instances
 - Slash commands
 
 ## Phone Capture Setup (capture.sh)
@@ -58,8 +58,8 @@
 
 ### Session history
 
-- Seed the five fixed OpenCode demo sessions on instance 2, newest first. Make sure they are the newest sessions so unrelated global OpenCode history cannot appear.
-- Seed one fixed Cursor or pi session on instance 1 so the session list can show both Harold badges.
+- Purge the demo workspace OpenCode history on instance 2, then seed the five fixed OpenCode demo sessions, newest first, so repeated captures cannot stack duplicate rows.
+- Seed one fixed pi session on instance 1 so the session list can show both Harold badges.
 - Do not copy sessions from `~/.harold` or a previous demo DB.
 
 ### Pairing codes and ports
@@ -261,7 +261,7 @@
 - [TAP] The thinking bars, wait 1s
 - [TAP] The thinking bars, wait 1s
 - [TAP] The thinking bars, wait 1s
-- If the toast is not "Thinking: High", tap once more and wait 1s
+- If the toast is not "Thinking set to High", tap once more and wait 1s
 - [CAP] Slash commands from your agent
 - [TAP] The slash button
 - The Commands panel opens with "/init", "/review", and "/compact"
@@ -281,7 +281,7 @@
 ### Scene 8: Voice Chat
 
 - [TAP] "Dictate with voice"
-- The inline voice rail opens with "Start speaking…" and "Mute voice input"
+- The inline voice rail opens and starts listening. The mic control reads "Mute voice input", and the transcript begins to appear.
 - [TAP] "Expand voice input"
 - The full-screen voice overlay opens with "Collapse voice input" and "Switch to keyboard input"
 - Play "voice-input.wav" as the virtual mic input

@@ -103,6 +103,17 @@ class ChatViewModel @Inject constructor(
     private val configWriter = SessionConfigWriter(configApi, viewModelScope)
 
     /**
+     * Session-scoped actions must follow the selected session's Harold. The
+     * paired state is only the active fallback for legacy single-Harold flows.
+     */
+    private fun selectedSessionOrigin(): String? =
+        _uiState.value.selectedSession?.serverOrigin?.takeIf { origin -> origin.isNotEmpty() }
+
+    private fun selectedOrPairedOrigin(): String? =
+        selectedSessionOrigin()
+            ?: (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin
+
+    /**
      * The composer's text and caret. The prompt input paints its tokens from
      * these, so they are the source of truth; [ChatUiState.composerText]
      * mirrors the text for everything that reads state instead of the field.
@@ -184,7 +195,9 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             sessionGateway.pairedState.collect { paired ->
                 if (paired is PairedState.Paired) {
-                    sessionForegroundCoordinator?.setServerOrigin(paired.serverOrigin)
+                    sessionForegroundCoordinator?.setServerOrigin(
+                        selectedSessionOrigin() ?: paired.serverOrigin,
+                    )
                     _uiState.value.selectedSession?.let { selected ->
                         sessionOwner.watch(selected.agentId, selected.sessionId)
                     }
@@ -243,8 +256,8 @@ class ChatViewModel @Inject constructor(
 
     fun onResume() {
         sessionOwner.onForeground()
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
-        sessionForegroundCoordinator?.setServerOrigin(paired.serverOrigin)
+        val origin = selectedOrPairedOrigin() ?: return
+        sessionForegroundCoordinator?.setServerOrigin(origin)
         viewModelScope.launch {
             refreshCatalog()
         }
@@ -560,7 +573,7 @@ class ChatViewModel @Inject constructor(
 
     /** Picker intake: bytes are read by the screen, previews decode off-main. */
     fun onAttachmentsPicked(files: List<AttachmentPick>) {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val origin = selectedOrPairedOrigin() ?: return
         if (files.isEmpty()) {
             return
         }
@@ -599,7 +612,7 @@ class ChatViewModel @Inject constructor(
                     )
                 }
             }
-            viewModelScope.launch { uploadAttachment(paired.serverOrigin, attachment) }
+            viewModelScope.launch { uploadAttachment(origin, attachment) }
         }
     }
 
@@ -612,10 +625,10 @@ class ChatViewModel @Inject constructor(
         }
         if (attachment.status == AttachmentUploadStatus.Ready && attachment.uploadedId != null) {
             viewModelScope.launch {
-                val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return@launch
+                val origin = selectedOrPairedOrigin() ?: return@launch
                 val session = _uiState.value.selectedSession ?: return@launch
                 attachmentApi.deleteAttachment(
-                    serverOrigin = paired.serverOrigin,
+                    serverOrigin = origin,
                     agentId = session.agentId,
                     sessionId = session.sessionId,
                     attachmentId = attachment.uploadedId,
@@ -629,7 +642,7 @@ class ChatViewModel @Inject constructor(
         if (attachment.status != AttachmentUploadStatus.Failed) {
             return
         }
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val origin = selectedOrPairedOrigin() ?: return
         _uiState.update { current ->
             current.copy(
                 pendingAttachments = current.pendingAttachments.map { existing ->
@@ -641,7 +654,7 @@ class ChatViewModel @Inject constructor(
                 },
             )
         }
-        viewModelScope.launch { uploadAttachment(paired.serverOrigin, attachment) }
+        viewModelScope.launch { uploadAttachment(origin, attachment) }
     }
 
     private suspend fun uploadAttachment(serverOrigin: String, attachment: PendingAttachmentUi) {
@@ -834,14 +847,14 @@ class ChatViewModel @Inject constructor(
         if (_uiState.value.authActionBusy || _uiState.value.authPanelSubmitting) {
             return
         }
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val origin = selectedOrPairedOrigin() ?: return
 
         _uiState.update { current ->
             current.copy(authActionBusy = true, authError = null)
         }
         viewModelScope.launch {
             userRepository.applyAgentAuthSessionAction(
-                serverOrigin = paired.serverOrigin,
+                serverOrigin = origin,
                 agentId = selected.agentId,
                 sessionId = authSession.sessionId,
                 action = AuthSessionAction.Confirm(stepId = stepId),
@@ -867,14 +880,14 @@ class ChatViewModel @Inject constructor(
         if (_uiState.value.authActionBusy || _uiState.value.authPanelSubmitting) {
             return
         }
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val origin = selectedOrPairedOrigin() ?: return
 
         _uiState.update { current ->
             current.copy(authActionBusy = true, authError = null)
         }
         viewModelScope.launch {
             userRepository.applyAgentAuthSessionAction(
-                serverOrigin = paired.serverOrigin,
+                serverOrigin = origin,
                 agentId = selected.agentId,
                 sessionId = authSession.sessionId,
                 action = AuthSessionAction.Cancel,
@@ -907,14 +920,14 @@ class ChatViewModel @Inject constructor(
         ) {
             return
         }
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val origin = selectedOrPairedOrigin() ?: return
 
         _uiState.update { current ->
             current.copy(authActionBusy = true, authError = null)
         }
         viewModelScope.launch {
             userRepository.logoutAgentAuth(
-                serverOrigin = paired.serverOrigin,
+                serverOrigin = origin,
                 agentId = selected.agentId,
             ).fold(
                 onSuccess = { logoutSummary ->
@@ -1014,14 +1027,14 @@ class ChatViewModel @Inject constructor(
         if (_uiState.value.authPanelSubmitting || _uiState.value.authActionBusy) {
             return
         }
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val origin = selectedOrPairedOrigin() ?: return
 
         _uiState.update { current ->
             current.copy(authPanelSubmitting = true, authError = null)
         }
         viewModelScope.launch {
             userRepository.startAgentAuthSession(
-                serverOrigin = paired.serverOrigin,
+                serverOrigin = origin,
                 agentId = agentId,
             ).fold(
                 onSuccess = { session ->
@@ -1077,10 +1090,10 @@ class ChatViewModel @Inject constructor(
         agentId: AgentId,
         attachHostLoginIfNeeded: Boolean = false,
     ) {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val origin = selectedOrPairedOrigin() ?: return
         val generation = ++authHydrateGeneration
         userRepository.getAgentAuth(
-            serverOrigin = paired.serverOrigin,
+            serverOrigin = origin,
             agentId = agentId,
         ).fold(
             onSuccess = { auth ->
@@ -1244,7 +1257,8 @@ class ChatViewModel @Inject constructor(
         }
 
         configWriter.onSnapshot(
-            serverOrigin = (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin,
+            serverOrigin = selectedSessionOrigin()
+                ?: (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin,
             agentId = snapshot.agentId,
             sessionId = snapshot.sessionId,
             configOptions = snapshot.configOptions,
@@ -1327,12 +1341,17 @@ class ChatViewModel @Inject constructor(
         if (selected.sessionId.isEmpty() || selected.name != selected.sessionId) {
             return
         }
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val origin = selected.serverOrigin.ifEmpty {
+            (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin.orEmpty()
+        }
+        if (origin.isEmpty()) {
+            return
+        }
         if (!titlePulledSessionIds.add(selected.id)) {
             return
         }
 
-        userRepository.listSessions(paired.serverOrigin).onSuccess { collection ->
+        userRepository.listSessions(origin).onSuccess { collection ->
             val listed = collection.items.firstOrNull { session ->
                 catalogSessionKey(session.agentId, session.sessionId) == selected.id
             } ?: return@onSuccess
