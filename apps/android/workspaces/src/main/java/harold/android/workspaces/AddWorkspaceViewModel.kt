@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectory
+import harold.android.credentials.SavedHaroldRepository
+import harold.android.navigation.CreatedWorkspaceResult
 import harold.android.navigation.Navigator
 import harold.android.network.apiErrorMessage
 import harold.android.session.PairedState
@@ -48,6 +50,8 @@ sealed interface FoldersLoadState {
 }
 
 data class AddWorkspaceUiState(
+    val harolds: List<WorkspaceHaroldBadge> = emptyList(),
+    val selectedServerOrigin: String = "",
     val name: String = "",
     val selectedRoot: String = "",
     val selectedFolderPath: String = "",
@@ -88,13 +92,61 @@ class AddWorkspaceViewModel @Inject constructor(
     private val sessionGateway: SessionGateway,
     private val userRepository: UserRepository,
     private val navigator: Navigator,
+    private val savedHaroldRepository: SavedHaroldRepository? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AddWorkspaceUiState())
     val uiState: StateFlow<AddWorkspaceUiState> = _uiState.asStateFlow()
 
     init {
         viewModelScope.launch {
-            loadRoots()
+            initialize()
+        }
+    }
+
+    private suspend fun initialize() {
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired
+        val saved = savedHaroldRepository?.list().orEmpty().map { harold ->
+            WorkspaceHaroldBadge(
+                serverOrigin = harold.serverOrigin,
+                name = harold.name,
+                colorId = harold.colorId,
+                iconId = harold.iconId,
+            )
+        }
+        val preferredOrigin = navigator.consumePreferredAddWorkspaceOrigin()
+        val initialOrigin = preferredOrigin?.takeIf { origin ->
+            saved.isEmpty() || saved.any { it.serverOrigin == origin }
+        } ?: paired?.serverOrigin?.takeIf { origin ->
+            saved.isEmpty() || saved.any { it.serverOrigin == origin }
+        } ?: saved.firstOrNull()?.serverOrigin.orEmpty()
+
+        _uiState.update {
+            it.copy(
+                harolds = saved,
+                selectedServerOrigin = initialOrigin,
+            )
+        }
+        loadRoots(initialOrigin)
+    }
+
+    fun onHaroldChanged(serverOrigin: String) {
+        if (serverOrigin == _uiState.value.selectedServerOrigin) {
+            return
+        }
+        _uiState.update {
+            it.copy(
+                selectedServerOrigin = serverOrigin,
+                selectedRoot = "",
+                selectedFolderPath = "",
+                folderQuery = "",
+                name = "",
+                rootsLoadState = RootsLoadState.Loading,
+                foldersLoadState = FoldersLoadState.Idle,
+                submitError = null,
+            )
+        }
+        viewModelScope.launch {
+            loadRoots(serverOrigin)
         }
     }
 
@@ -137,20 +189,31 @@ class AddWorkspaceViewModel @Inject constructor(
             return
         }
 
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val origin = state.selectedServerOrigin.ifEmpty {
+            (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin.orEmpty()
+        }
+        if (origin.isEmpty()) {
+            return
+        }
 
         viewModelScope.launch {
             _uiState.update { it.copy(submitting = true, submitError = null) }
 
             userRepository.createWorkspace(
-                serverOrigin = paired.serverOrigin,
+                serverOrigin = origin,
                 body = CreateWorkspaceBody(
                     name = state.name.trim(),
                     path = state.selectedFolderPath,
                 ),
             ).fold(
-                onSuccess = {
+                onSuccess = { created ->
                     _uiState.update { it.copy(submitting = false) }
+                    navigator.reportWorkspaceCreated(
+                        CreatedWorkspaceResult(
+                            workspaceId = created.id,
+                            serverOrigin = origin,
+                        ),
+                    )
                     navigator.goBack()
                 },
                 onFailure = { error ->
@@ -165,12 +228,18 @@ class AddWorkspaceViewModel @Inject constructor(
         }
     }
 
-    private suspend fun loadRoots() {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+    private suspend fun loadRoots(originOverride: String? = null) {
+        val origin = originOverride?.takeIf { it.isNotEmpty() }
+            ?: _uiState.value.selectedServerOrigin.ifEmpty {
+                (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin.orEmpty()
+            }
+        if (origin.isEmpty()) {
+            return
+        }
 
         _uiState.update { it.copy(rootsLoadState = RootsLoadState.Loading) }
 
-        userRepository.getRuntimeSettings(paired.serverOrigin).fold(
+        userRepository.getRuntimeSettings(origin).fold(
             onSuccess = { view ->
                 val roots = view.settings.allowedRoots
                 _uiState.update {
@@ -192,9 +261,14 @@ class AddWorkspaceViewModel @Inject constructor(
     }
 
     private suspend fun loadFolders(root: String) {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val origin = _uiState.value.selectedServerOrigin.ifEmpty {
+            (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin.orEmpty()
+        }
+        if (origin.isEmpty()) {
+            return
+        }
 
-        userRepository.listFilesystemDirectories(paired.serverOrigin, root).fold(
+        userRepository.listFilesystemDirectories(origin, root).fold(
             onSuccess = { collection ->
                 _uiState.update {
                     it.copy(

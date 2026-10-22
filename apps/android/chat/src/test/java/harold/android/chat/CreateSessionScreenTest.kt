@@ -4,6 +4,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -85,6 +87,40 @@ class CreateSessionScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("notes · laptop · tide · bolt").assertIsDisplayed()
+        composeTestRule.onNodeWithText("notes").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("create_session_workspace_badge", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun workspaceDropdownShowsNewWorkspaceOption() {
+        var newWorkspaceClicked = false
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                CreateSessionScreen(
+                    createState = CreateSessionUiState(
+                        workspaces = listOf(
+                            WorkspaceRow(
+                                id = "ws_01",
+                                name = "harold",
+                                path = "/tmp/harold",
+                                state = harold.android.contracts.WorkspaceState.Available,
+                            ),
+                        ),
+                        selectedWorkspaceId = "ws_01",
+                        agents = listOf(AgentOption(id = "cursor", displayName = "Cursor")),
+                        selectedAgentId = "cursor",
+                    ),
+                    onBack = {},
+                    onWorkspaceChanged = {},
+                    onAgentChanged = {},
+                    onSubmit = {},
+                    onNewWorkspaceClick = { newWorkspaceClicked = true },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("create_session_workspace").performClick()
+        composeTestRule.onNodeWithTag("create_session_new_workspace").assertIsDisplayed().performClick()
+        assertTrue(newWorkspaceClicked)
     }
 }

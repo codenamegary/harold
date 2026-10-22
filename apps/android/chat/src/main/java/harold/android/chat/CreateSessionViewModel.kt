@@ -9,6 +9,7 @@ import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.WorkspaceState
 import harold.android.credentials.SavedHaroldRepository
 import harold.android.credentials.StoredCredential
+import harold.android.navigation.CreatedWorkspaceResult
 import harold.android.navigation.Navigator
 import harold.android.network.apiErrorMessage
 import harold.android.session.HaroldConnectionStatus
@@ -39,6 +40,17 @@ class CreateSessionViewModel @Inject constructor(
         viewModelScope.launch {
             load()
         }
+        viewModelScope.launch {
+            navigator.workspaceCreated.collect(::selectCreatedWorkspace)
+        }
+    }
+
+    fun openNewWorkspace() {
+        val selectedOrigin = _uiState.value.workspaces
+            .firstOrNull { row -> row.id == _uiState.value.selectedWorkspaceId }
+            ?.serverOrigin
+            .orEmpty()
+        navigator.openAddWorkspace(preferredServerOrigin = selectedOrigin)
     }
 
     fun onWorkspaceChanged(workspaceId: String) {
@@ -147,6 +159,55 @@ class CreateSessionViewModel @Inject constructor(
         )
         if (first != null) {
             loadAgents(first)
+        }
+    }
+
+    private suspend fun selectCreatedWorkspace(result: CreatedWorkspaceResult) {
+        val saved = savedHaroldRepository?.list().orEmpty()
+        if (saved.isEmpty()) {
+            val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+            val workspaces = userRepository.listWorkspaces(paired.serverOrigin).getOrNull()?.items.orEmpty()
+                .map { workspace -> workspace.toWorkspaceRow() }
+                .filter { workspace -> workspace.state == WorkspaceState.Available }
+            val targetId = workspaces.firstOrNull { workspace -> workspace.id == result.workspaceId }?.id
+                ?: _uiState.value.selectedWorkspaceId
+            _uiState.update { current ->
+                current.copy(
+                    workspaces = workspaces,
+                    selectedWorkspaceId = targetId,
+                    error = null,
+                )
+            }
+            return
+        }
+
+        val workspaces = saved.filter { harold -> isReachable(harold.serverOrigin) }
+            .flatMap { harold -> workspacesFor(harold) }
+        val scopedId = "${result.serverOrigin}|${result.workspaceId}"
+        val selected = workspaces.firstOrNull { workspace ->
+            workspace.id == scopedId || workspace.id == result.workspaceId
+        }
+        if (selected == null) {
+            _uiState.update { current -> current.copy(workspaces = workspaces) }
+            return
+        }
+        val previousWorkspace = _uiState.value.workspaces.firstOrNull { row ->
+            row.id == _uiState.value.selectedWorkspaceId
+        }
+        val sameOrigin = previousWorkspace != null &&
+            previousWorkspace.serverOrigin == selected.serverOrigin &&
+            _uiState.value.agents.isNotEmpty()
+        _uiState.update { current ->
+            current.copy(
+                workspaces = workspaces,
+                selectedWorkspaceId = selected.id,
+                error = null,
+                agents = if (sameOrigin) current.agents else emptyList(),
+                selectedAgentId = if (sameOrigin) current.selectedAgentId else null,
+            )
+        }
+        if (!sameOrigin) {
+            loadAgents(selected)
         }
     }
 

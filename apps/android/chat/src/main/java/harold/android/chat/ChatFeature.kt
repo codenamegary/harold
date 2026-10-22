@@ -115,6 +115,7 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onWorkspaceChanged = viewModel::onWorkspaceChanged,
                 onAgentChanged = viewModel::onAgentChanged,
                 onSubmit = viewModel::submit,
+                onNewWorkspaceClick = viewModel::openNewWorkspace,
             )
         }
     }

@@ -102,7 +102,19 @@ data class ChatUiState(
     val authPanelSubmitting: Boolean = false,
     val authActionBusy: Boolean = false,
     val authError: String? = null,
+    val activeHaroldName: String = "",
+    val activeHaroldColorId: String = "",
+    val activeHaroldIconId: String = "",
 ) {
+    val disconnectHaroldName: String
+        get() = selectedSession?.haroldName?.takeIf { it.isNotEmpty() } ?: activeHaroldName
+
+    val disconnectHaroldColorId: String
+        get() = selectedSession?.haroldColorId?.takeIf { it.isNotEmpty() } ?: activeHaroldColorId
+
+    val disconnectHaroldIconId: String
+        get() = selectedSession?.haroldIconId?.takeIf { it.isNotEmpty() } ?: activeHaroldIconId
+
     val activePermissionRequest: PermissionRequest?
         get() = activePermissionRequest(pendingPermissions)
 

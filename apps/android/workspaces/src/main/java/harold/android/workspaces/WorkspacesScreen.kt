@@ -2,6 +2,8 @@ package harold.android.workspaces
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,16 +12,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -27,9 +32,11 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceState
+import harold.android.ui.components.HaroldBadge
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -64,20 +71,22 @@ fun WorkspacesScreen(
                         )
                     }
                 },
-                actions = {
-                    TextButton(
-                        onClick = onAddClick,
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                            .semantics {
-                                contentDescription = addContentDescription
-                            }
-                            .testTag("workspaces_add"),
-                    ) {
-                        Text(text = stringResource(R.string.workspaces_add))
-                    }
-                },
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onAddClick,
+                modifier = Modifier
+                    .testTag("workspaces_add")
+                    .semantics {
+                        contentDescription = addContentDescription
+                    },
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = null,
+                )
+            }
         },
     ) { innerPadding ->
         Column(
@@ -125,10 +134,14 @@ fun WorkspacesScreen(
                 is WorkspacesLoadState.Loaded -> {
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(bottom = 88.dp),
                         modifier = Modifier.testTag("workspaces_list"),
                     ) {
                         items(state.workspaces, key = { workspace -> workspace.id }) { workspace ->
-                            WorkspaceCard(workspace = workspace)
+                            WorkspaceCard(
+                                workspace = workspace,
+                                harold = uiState.haroldByWorkspaceId[workspace.id],
+                            )
                         }
                     }
                 }
@@ -138,26 +151,55 @@ fun WorkspacesScreen(
 }
 
 @Composable
-private fun WorkspaceCard(workspace: Workspace) {
+private fun WorkspaceCard(
+    workspace: Workspace,
+    harold: WorkspaceHaroldBadge? = null,
+) {
     Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .testTag("workspace_row_${workspace.id}"),
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(text = workspace.name, style = MaterialTheme.typography.titleMedium)
-            Text(
-                text = workspace.path,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = workspaceStateLabel(workspace.state),
-                style = MaterialTheme.typography.labelMedium,
-            )
+            if (harold != null) {
+                HaroldBadge(
+                    colorId = harold.colorId,
+                    iconId = harold.iconId,
+                    size = 28.dp,
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = workspace.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = workspace.path,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = workspaceStateLabel(workspace.state),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
         }
     }
 }

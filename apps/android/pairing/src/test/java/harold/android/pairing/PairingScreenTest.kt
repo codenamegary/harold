@@ -2,6 +2,7 @@ package harold.android.pairing
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -64,9 +65,8 @@ class PairingScreenTest {
         }
 
         composeTestRule.onNodeWithTag("pairing_name_field").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("laptop").assertIsDisplayed()
-        composeTestRule.onNodeWithText("ink selected").performScrollTo().assertIsDisplayed()
-        composeTestRule.onNodeWithText("mark selected").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag("pairing_color_ink").performScrollTo().assertIsDisplayed().assertIsSelected()
+        composeTestRule.onNodeWithTag("pairing_icon_mark").performScrollTo().assertIsDisplayed().assertIsSelected()
         composeTestRule.onNodeWithTag("pairing_confirm").performScrollTo().assertIsDisplayed()
     }
 }

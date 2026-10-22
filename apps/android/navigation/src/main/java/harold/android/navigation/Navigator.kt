@@ -6,8 +6,16 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.savedstate.SavedStateRegistry
 import dagger.hilt.android.scopes.ActivityRetainedScoped
 import javax.inject.Inject
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+
+data class CreatedWorkspaceResult(
+    val workspaceId: String,
+    val serverOrigin: String = "",
+)
 
 private const val SAVED_STATE_KEY = "harold.navigation"
 private const val BACK_STACK_KEY = "back_stack"
@@ -23,6 +31,9 @@ class Navigator @Inject constructor() {
     val backStack: SnapshotStateList<AppRoute> = mutableStateListOf()
 
     private var pairingQueued: Boolean = false
+    private var preferredAddWorkspaceOrigin: String? = null
+    private val workspaceCreatedChannel = Channel<CreatedWorkspaceResult>(Channel.CONFLATED)
+    val workspaceCreated: Flow<CreatedWorkspaceResult> = workspaceCreatedChannel.receiveAsFlow()
 
     /**
      * Saves the stack with the activity so it comes back after process death.
@@ -79,8 +90,22 @@ class Navigator @Inject constructor() {
         backStack.add(Workspaces)
     }
 
-    fun openAddWorkspace() {
+    fun openAddWorkspace(preferredServerOrigin: String = "") {
+        preferredAddWorkspaceOrigin = preferredServerOrigin.takeIf { it.isNotEmpty() }
+        workspaceCreatedChannel.tryReceive()
         backStack.add(AddWorkspace)
+    }
+
+    fun consumePreferredAddWorkspaceOrigin(): String? {
+        val origin = preferredAddWorkspaceOrigin
+        preferredAddWorkspaceOrigin = null
+        return origin
+    }
+
+    fun reportWorkspaceCreated(result: CreatedWorkspaceResult) {
+        if (CreateSession in backStack) {
+            workspaceCreatedChannel.trySend(result)
+        }
     }
 
     fun openSavedHarolds() {

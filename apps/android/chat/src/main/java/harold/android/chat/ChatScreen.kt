@@ -26,7 +26,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -34,6 +36,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +44,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import harold.android.ui.components.HaroldBadge
+import harold.android.ui.components.HaroldButton
+import harold.android.ui.components.HaroldButtonVariant
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -85,22 +91,96 @@ private fun SessionMenuRow(
     testTag: String,
     enabled: Boolean = true,
     color: Color = MaterialTheme.colorScheme.onSurface,
+    leadingContent: (@Composable () -> Unit)? = null,
 ) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyLarge.copy(
-            fontSize = 16.sp,
-            lineHeight = 24.sp,
-            fontWeight = FontWeight.Medium,
-        ),
-        color = if (enabled) color else color.copy(alpha = 0.38f),
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(SessionMenuItemPadding)
             .testTag(testTag),
-    )
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        leadingContent?.invoke()
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge.copy(
+                fontSize = 15.sp,
+                lineHeight = 22.sp,
+                fontWeight = FontWeight.Medium,
+            ),
+            color = if (enabled) color else color.copy(alpha = 0.38f),
+        )
+    }
+}
+
+@Composable
+private fun SessionDropdownItem(
+    session: SessionRow,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val hasHaroldIdentity =
+        session.haroldColorId.isNotEmpty() ||
+            session.haroldIconId.isNotEmpty() ||
+            session.haroldName.isNotEmpty()
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .testTag("session_menu_row_${session.id}"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (hasHaroldIdentity) {
+            HaroldBadge(
+                colorId = session.haroldColorId,
+                iconId = session.haroldIconId,
+                size = 22.dp,
+                modifier = Modifier.testTag("session_menu_badge_${session.id}"),
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = session.name,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontSize = 15.sp,
+                    lineHeight = 20.sp,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                ),
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (session.needsAttention) {
+                Text(
+                    text = "Needs permission",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+        if (selected) {
+            Icon(
+                imageVector = Icons.Filled.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.requiredSize(18.dp),
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -176,11 +256,7 @@ fun ChatScreen(
     }
     val composerSelection = composerState.selection
     val selected = uiState.selectedSession
-    val sessionLabel = when {
-        selected == null -> "Select session"
-        selected.haroldName.isEmpty() -> selected.name
-        else -> "${selected.name} · ${selected.haroldName} · ${selected.haroldColorId} · ${selected.haroldIconId}"
-    }
+    val sessionLabel = selected?.name ?: "Select session"
     val hasSelectedSession = selected != null
     val context = LocalContext.current
     val sessionSelectorContentDescription = stringResource(
@@ -289,10 +365,31 @@ fun ChatScreen(
         )
     }
 
+    val disconnectName = uiState.disconnectHaroldName
+    val disconnectColorId = uiState.disconnectHaroldColorId
+    val disconnectIconId = uiState.disconnectHaroldIconId
+    val hasDisconnectBadge =
+        disconnectColorId.isNotEmpty() ||
+            disconnectIconId.isNotEmpty() ||
+            disconnectName.isNotEmpty()
+    val disconnectLabel = if (disconnectName.isNotEmpty()) {
+        stringResource(R.string.chat_disconnect_server_named, disconnectName)
+    } else {
+        stringResource(R.string.chat_disconnect_from_server)
+    }
+
     if (disconnectConfirmVisible) {
         AlertDialog(
             onDismissRequest = { disconnectConfirmVisible = false },
-            title = { Text(text = stringResource(R.string.chat_disconnect_confirm_title)) },
+            title = {
+                Text(
+                    text = if (disconnectName.isNotEmpty()) {
+                        stringResource(R.string.chat_disconnect_confirm_title_named, disconnectName)
+                    } else {
+                        stringResource(R.string.chat_disconnect_confirm_title)
+                    },
+                )
+            },
             text = { Text(text = stringResource(R.string.chat_disconnect_confirm_body)) },
             confirmButton = {
                 TextButton(
@@ -342,8 +439,23 @@ fun ChatScreen(
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
+                                if (
+                                    selected != null &&
+                                    (
+                                        selected.haroldColorId.isNotEmpty() ||
+                                            selected.haroldIconId.isNotEmpty() ||
+                                            selected.haroldName.isNotEmpty()
+                                        )
+                                ) {
+                                    HaroldBadge(
+                                        colorId = selected.haroldColorId,
+                                        iconId = selected.haroldIconId,
+                                        size = 24.dp,
+                                        modifier = Modifier.testTag("chat_session_harold_badge"),
+                                    )
+                                }
                                 Text(
                                     text = sessionLabel,
                                     style = MaterialTheme.typography.titleSmall,
@@ -356,7 +468,7 @@ fun ChatScreen(
                                 Icon(
                                     imageVector = Icons.Filled.ArrowDropDown,
                                     contentDescription = null,
-                                    modifier = Modifier.requiredSize(36.dp),
+                                    modifier = Modifier.requiredSize(28.dp),
                                 )
                             }
                         }
@@ -365,7 +477,7 @@ fun ChatScreen(
                             expanded = uiState.pickerVisible,
                             onDismissRequest = onDismissSessionMenu,
                             modifier = Modifier
-                                .widthIn(min = SessionMenuMinWidth)
+                                .widthIn(min = SessionMenuMinWidth, max = 340.dp)
                                 .testTag("session_menu"),
                         ) {
                             SessionMenuRow(
@@ -374,10 +486,24 @@ fun ChatScreen(
                                     onDismissSessionMenu()
                                     onCreateClick()
                                 },
+                                color = MaterialTheme.colorScheme.primary,
+                                leadingContent = {
+                                    Icon(
+                                        imageVector = Icons.Filled.Add,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.requiredSize(20.dp),
+                                    )
+                                },
                                 testTag = "session_menu_new",
                             )
 
-                            if (uiState.recentSessionsLoading) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 4.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                            )
+
+                            if (uiState.recentSessionsLoading && uiState.recentSessions.isEmpty()) {
                                 SessionMenuRow(
                                     text = "Loading…",
                                     onClick = {},
@@ -394,32 +520,21 @@ fun ChatScreen(
                                 )
                             } else {
                                 uiState.recentSessions.forEach { session ->
-                                    val label = buildString {
-                                        append(
-                                            if (session.haroldName.isEmpty()) {
-                                                session.name
-                                            } else {
-                                                "${session.name} · ${session.haroldName}"
-                                            },
-                                        )
-                                        if (session.needsAttention) {
-                                            append(" · Needs permission")
-                                        }
-                                    }
-                                    SessionMenuRow(
-                                        text = if (uiState.selectedSession?.id == session.id) {
-                                            "✓ $label"
-                                        } else {
-                                            label
-                                        },
+                                    SessionDropdownItem(
+                                        session = session,
+                                        selected = uiState.selectedSession?.id == session.id,
                                         onClick = {
                                             onDismissSessionMenu()
                                             onSessionClick(session)
                                         },
-                                        testTag = "session_menu_row_${session.id}",
                                     )
                                 }
                             }
+
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 4.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                            )
 
                             SessionMenuRow(
                                 text = stringResource(R.string.sessions_see_all),
@@ -427,6 +542,7 @@ fun ChatScreen(
                                     onDismissSessionMenu()
                                     onSeeAllSessionsClick()
                                 },
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 testTag = "session_menu_see_all",
                             )
                         }
@@ -498,8 +614,20 @@ fun ChatScreen(
                             modifier = Modifier.testTag("pair_another_menu_item"),
                         )
                         DropdownMenuItem(
+                            leadingIcon = if (hasDisconnectBadge) {
+                                {
+                                    HaroldBadge(
+                                        colorId = disconnectColorId,
+                                        iconId = disconnectIconId,
+                                        size = 20.dp,
+                                        modifier = Modifier.testTag("disconnect_menu_badge"),
+                                    )
+                                }
+                            } else {
+                                null
+                            },
                             text = {
-                                Text(text = stringResource(R.string.chat_disconnect_from_server))
+                                Text(text = disconnectLabel)
                             },
                             onClick = {
                                 menuExpanded = false
@@ -597,38 +725,41 @@ fun ChatScreen(
                                 action = {
                                     Column(
                                         modifier = Modifier.fillMaxWidth(),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp),
                                     ) {
-                                        Button(
+                                        HaroldButton(
+                                            text = stringResource(R.string.chat_new_session),
                                             onClick = onCreateClick,
+                                            variant = HaroldButtonVariant.Primary,
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                                                 .testTag("new_session_cta"),
-                                        ) {
-                                            Text(text = stringResource(R.string.chat_new_session))
-                                        }
-                                        TextButton(
+                                        )
+                                        HaroldButton(
+                                            text = stringResource(R.string.chat_select_session),
                                             onClick = onSessionSelectorClick,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .defaultMinSize(minHeight = MIN_TOUCH_TARGET),
-                                        ) {
-                                            Text(text = stringResource(R.string.chat_select_session))
-                                        }
-                                        TextButton(
+                                            variant = HaroldButtonVariant.Secondary,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                        HaroldButton(
+                                            text = disconnectLabel,
                                             onClick = { disconnectConfirmVisible = true },
+                                            variant = HaroldButtonVariant.Ghost,
+                                            leadingIcon = if (hasDisconnectBadge) {
+                                                {
+                                                    HaroldBadge(
+                                                        colorId = disconnectColorId,
+                                                        iconId = disconnectIconId,
+                                                        size = 20.dp,
+                                                    )
+                                                }
+                                            } else {
+                                                null
+                                            },
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                                                 .testTag("disconnect_cta"),
-                                        ) {
-                                            Text(
-                                                text = stringResource(
-                                                    R.string.chat_disconnect_from_server,
-                                                ),
-                                            )
-                                        }
+                                        )
                                     }
                                 },
                             )

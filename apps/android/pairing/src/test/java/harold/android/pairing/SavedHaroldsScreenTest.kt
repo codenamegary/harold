@@ -2,6 +2,7 @@ package harold.android.pairing
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import harold.android.ui.theme.HaroldTheme
 import org.junit.Rule
@@ -17,7 +18,7 @@ class SavedHaroldsScreenTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun showsEachHaroldNameColorAndIcon() {
+    fun showsEachHaroldNameOriginAndBadge() {
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
                 SavedHaroldsScreen(
@@ -44,7 +45,11 @@ class SavedHaroldsScreenTest {
             }
         }
 
+        composeTestRule.onNodeWithText("Connected Servers").assertIsDisplayed()
         composeTestRule.onNodeWithText("laptop").assertIsDisplayed()
-        composeTestRule.onNodeWithText("tide · bolt").assertIsDisplayed()
+        composeTestRule.onNodeWithText("http://laptop.local:3847").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("saved_harold_badge_http://laptop.local:3847").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("saved_harold_edit_http://laptop.local:3847").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("saved_harold_remove_http://laptop.local:3847").assertIsDisplayed()
     }
 }

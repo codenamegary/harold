@@ -205,13 +205,13 @@ class SessionSelectorUiTest {
             }
         }
 
-        composeTestRule.onNodeWithText("laptop · tide · bolt").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("session_harold_${laptop.id}", useUnmergedTree = true).assertIsDisplayed()
         composeTestRule.onNodeWithText("Unreachable").assertIsDisplayed()
         composeTestRule.onNodeWithTag("session_filter_all").assertIsDisplayed()
     }
 
     @Test
-    fun chatShowsTheHaroldNameColorAndIcon() {
+    fun chatShowsTheHaroldBadgeAndSessionName() {
         val session = sampleSession.copy(
             haroldName = "laptop",
             haroldColorId = "tide",
@@ -225,6 +225,12 @@ class SessionSelectorUiTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Alpha · laptop · tide · bolt").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Alpha").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("chat_session_harold_badge", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithTag("chat_overflow").performClick()
+        composeTestRule.onNodeWithText("Connected Servers").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Pair").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Disconnect laptop").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("disconnect_menu_badge", useUnmergedTree = true).assertIsDisplayed()
     }
 }
