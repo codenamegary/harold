@@ -11,9 +11,9 @@ export type TermItem =
 // pair-code.txt). The code block mirrors `harold pair` output verbatim;
 // expires is issued + 10 minutes (PAIRING_CODE_TTL_MS in
 // packages/core device.create.pairing.code.usecase).
-export const CODE = "2HN-XBV"
+export const CODE = "7XK-PUK"
 export const ENDPOINT = "http://127.0.0.1:3847"
-export const EXPIRES = "2026-10-17T18:16:39.997Z"
+export const EXPIRES = "2026-10-22T15:17:55.642Z"
 
 export const promptSegs: TermSeg[] = [
   { text: "codenamegary@harold", color: lime },
@@ -26,11 +26,11 @@ export const promptSegs: TermSeg[] = [
 export const statusSegs: TermSeg[][] = [
   [{ text: "Harold is running", color: paper, bold: true }],
   [{ text: "" }],
-  [{ text: "  data dir             /home/codenamegary/.harold" }],
+  [{ text: "  data dir             /home/codenamegary/.harold-demo-3847" }],
   [{ text: `  local api            ${ENDPOINT}` }],
   [{ text: `  advertised endpoint  ${ENDPOINT}` }],
-  [{ text: "  agents               3 enabled, unknown needs auth" }],
-  [{ text: "  workspaces           2" }],
+  [{ text: "  agents               2 enabled, unknown needs auth" }],
+  [{ text: "  workspaces           4" }],
   [{ text: "" }],
   [{ text: "Next step", color: paper, bold: true }],
   [{ text: "" }],

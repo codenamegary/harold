@@ -5,11 +5,11 @@
 # first. Create one real OpenCode session per title below, then pin their
 # update times in display order so the menu reads exactly as declared.
 #
-# Reuse the existing history when the five newest sessions already carry these
-# titles and point at the seed workspace, so repeated capture runs do not
-# stack up duplicate rows below the menu.
+# The demo workspace history is purged before seeding, so repeated captures
+# cannot stack duplicate rows below the menu. The main checkout history is
+# left alone unless SEED_PURGE=1 is explicit.
 #
-# Seed against the main checkout rather than the worktree running the capture:
+# Seed against the demo workspace rather than the worktree running the capture:
 # a session opened on camera must still load after that worktree is removed.
 #
 # Every seeded session is pinned to SEED_MODEL (default
@@ -54,6 +54,19 @@ OPENCODE_DB=$(cd "$SEED_CWD" && opencode debug paths | awk '$1 == "db" { print $
   echo "could not find the OpenCode database (opencode debug paths)" >&2
   exit 1
 }
+
+# The demo workspace is disposable. Purge its OpenCode history so the full
+# Sessions screen cannot show sessions from earlier capture runs. The main
+# checkout is left alone unless SEED_PURGE=1 is explicit.
+if [[ "$SEED_CWD" == "$HOME/harold-demo-workspaces/"* || "${SEED_PURGE:-0}" == "1" ]]; then
+  echo "purging OpenCode sessions in $SEED_CWD"
+  (cd "$SEED_CWD" && opencode session list) |
+    awk -F'\t' 'NF { print $1 }' |
+    while IFS= read -r session_id; do
+      [[ -n "$session_id" ]] || continue
+      (cd "$SEED_CWD" && opencode session delete "$session_id") >>"$SEED_LOG" 2>&1 || true
+    done
+fi
 
 # Display order, newest first. This is what the phone's session menu shows.
 TITLES=(

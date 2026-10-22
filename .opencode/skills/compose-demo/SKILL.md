@@ -13,37 +13,42 @@ capturing frames. If a stage fails, fix the script, not the run.
 
 All under `docs/demo/capture/` unless noted:
 
-- `capture.sh` — the whole run: stops any running Harold, recreates the demo
-  data dir `~/.harold-demo` from `~/.harold/harold.db` (agents/workspaces
-  kept, devices/pairing codes cleared), starts the source daemon on
-  127.0.0.1:3847 with `bun run dev` (so the server matches the debug app),
-  seeds OpenCode session history with `SEED_MODEL` (default
-  `deepseek/deepseek-flash`), issues a pairing code, composes the feed, converts
-  `assets/voice-input.wav` for the emulator's WAV audio driver, compiles
-  `audio-env-shim.c`, boots the emulator with `-wipe-data` (factory reset),
-  seeds its gallery and Downloads from `assets/`, builds and installs the app,
-  resets the app, screen-records one named slice
-  per action while `drive_phone.py` walks pairing → session history → new
-  session → model/mode/effort → prompt/attachments → text chat → voice chat,
-  pulls the slices, and builds `docs/demo/render/public/capture.json`. It
-  derives `apps/android/local.properties` from the SDK before the install, so
-  the installed app matches the source server. Run it from the repo root:
-  `bash docs/demo/capture/capture.sh`.
-- `seed_sessions.sh` — creates the five OpenCode sessions the phone's session
-  menu shows, with `opencode run --title`. It declares the titles newest
-  first, creates them oldest first, pins their stored update times in display
-  order, and skips the work when the five newest sessions already match.
-  Sessions are created in the main checkout so they survive worktree removal.
+- `capture.sh` — the whole run. It stops only the two demo instances, recreates
+  `~/.harold-demo-3847` and `~/.harold-demo-3848`, keeps the workspace roots,
+  re-registers the workspaces, enables `cursor` + `pi-acp` on instance 1 and
+  `opencode` on instance 2, seeds the OpenCode and pi sessions, starts both
+  source daemons with `bun run dev` on 127.0.0.1:3847 and :3848, issues
+  instance 1's QR, composes the feed, converts `assets/voice-input.wav` for the
+  WAV audio driver, compiles `audio-env-shim.c`, boots the emulator through a
+  transient systemd user unit with `-wipe-data`, pushes assets, builds and
+  installs the app, records one named slice per action while `drive_phone.py`
+  walks both pairings, session history, new session, model/mode/effort,
+  prompt/attachments, text chat, and voice chat, pulls every manifest slice
+  with ADB stdin isolated, and builds `docs/demo/render/public/capture.json`.
+  It derives `apps/android/local.properties` from the SDK before the install.
+  Run it from the repo root: `bash docs/demo/capture/capture.sh`.
+- `seed_sessions.sh` — purges the OpenCode history in the demo yuekbox
+  workspace, then creates the five fixed sessions with
+  `opencode run --title`. It declares the titles newest first, creates them
+  oldest first, and pins their stored update times in display order. The main
+  checkout history is untouched unless `SEED_PURGE=1` is explicit.
+- `seed_work_session.sh` — removes old pi sessions for the Work workspace and
+  the capture scratch, then creates one pi ACP session titled
+  `Cat food budget`.
 - `compose_camera.mjs <source.mp4> [qr.png] <out.mp4>` — builds the camera
   feed: optional live-QR paste over the staged panel (per-frame connected-
   component tracking), then a geometry pass (rotate 90° CCW, cover-crop to
   1280x960), then a 120s freeze tail. With a QR arg the source must be the
   1920x1080 staged clip; without one, any aspect works.
-- `drive_phone.py` — the UI driver. Starts one screenrecord slice per action
-  under `/data/local/tmp` (outside the media pickers), writes the slice
-  manifest to `docs/demo/work/capture/slices.json`, and marks
-  taps plus step names in `docs/demo/work/capture/marks.log`. `--warm` is a
-  manual camera warm-up; the capture does not use it.
+- `drive_phone.py` — the UI driver. It pairs the camera Harold and confirms
+  `Work`, pairs the second Harold manually as `Couch`, opens the full Sessions
+  screen, starts a session on Work/Cursor then Couch/OpenCode, changes the
+  model, mode, and effort, shows slash commands, sends a prompt with photo and
+  file attachments, then runs voice chat. It records one screenrecord slice per
+  action, verifies the remote file exists before continuing, waits for
+  screenrecord to finalize on stop, writes `slices.json`, and marks taps plus
+  step names in `marks.log`. `--warm` is a manual camera warm-up; the capture
+  does not use it.
 - `audio-env-shim.c` — sets `QEMU_AUDIO_DRV=wav` and the WAV input/output
   paths inside QEMU, because the emulator wrapper strips `QEMU_*` variables.
   `capture.sh` compiles it to `/tmp/opencode/harold-audio-env-shim.so`.
@@ -102,12 +107,16 @@ All under `docs/demo/capture/` unless noted:
   are single-use (`pairing_code_claimed` on re-claim), so do not run a warm
   scan against the live QR. The composed feed keeps the live QR out of the
   first 40 seconds; the recorded scanner may reach it, and that is the scan.
-- The demo daemon uses `HAROLD_DATA_DIR=~/.harold-demo`,
-  `bindHost=127.0.0.1`, `bindPort=3847`, and
-  `advertisedUrl=http://127.0.0.1:3847`. The real `~/.harold` is stopped
-  first and read only for agents/workspaces. Pairing codes live 10 minutes;
-  `capture.sh` issues one right before composing. `adb reverse tcp:3847
-  tcp:3847` must be set after every boot.
+- The demo daemons use `~/.harold-demo-3847` and `~/.harold-demo-3848`, both
+  with `bindHost=127.0.0.1` and ports 3847/3848. The real `~/.harold` daemon is
+  never stopped. Both `adb reverse` mappings must be set after every boot.
+  Instance 1's code is issued before composing. Instance 2's code is issued by
+  the driver immediately before manual pairing. Pairing codes live 10 minutes.
+- Launch the capture emulator through a transient systemd user unit
+  (`harold-capture-agent_server_api34`) so QEMU survives the agent shell.
+  Direct `nohup` dies when the command ends. Stop and `reset-failed` the unit
+  before boot. `capture.sh` waits for `adb get-state` and retries setup ADB
+  commands.
 - Kill the emulator with bracketed patterns (`pkill -f '[q]emu-system'`).
 
 ## The verification loop
@@ -128,40 +137,55 @@ f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
    upright, filling the frame, undistorted. Measure if unsure: flood-fill
    the QR's white quiet zone from a seed and compare the panel's aspect to
    the file frame's (0.999 = perfect; 0.44 = the old squash).
-3. **Pairing lands.** After tapping Pair and up to ~90s: `uiautomator dump` must
-   contain a `Select session:` content description, and
-   `~/.harold-demo/harold.log` must show requests from the emulator. No error UI
-   means the analyzer never decoded — go back to step 2 and measure.
+3. **Pairing lands.** After tapping Pair and up to ~90s, the identity screen
+   must show the `Violet` color option and the Name field. Enter `Work`,
+   dismiss the keyboard, tap Pair, then `uiautomator dump` must contain a
+   `Select session:` content description. `~/.harold-demo-3847/harold.log` must
+   show the claim. No error UI means the analyzer never decoded. Go back to
+   step 2 and measure.
 4. **Full capture.** Run `capture.sh`. It exits non-zero if the driver
-   fails; `docs/demo/work/capture/capture.log` and `driver.log` hold the
-   progress. `capture.log` must show `daemon_shutdown`, `daemon_home`,
-   `daemon_ready`, `emulator_dark_mode`, `sessions_seeded`,
-   `android_installed`, `slices_pulled`, and `build_capture`;
-   `android-build.log` must show `BUILD SUCCESSFUL`. The seed
-   log must show `seeded sessions use {"id":"deepseek-flash","providerID":"deepseek"}`.
-   `capture.json` must list the full slice set: `pair_idle`,
-   `pair_tap`, `scan_wait`, `paired`, `session_menu_open`, `session_pick`,
-   `session_chat`, `session_menu_reopen`, `new_session`, `workspace_harold`,
-   `agent_open`, `agent_pick`, `continue`, `session_create_wait`, `model_open`,
-   `model_search`, `model_pick`, `mode_plan`, `mode_build`, `effort_1..3`,
+   fails. `docs/demo/work/capture/capture.log` and `driver.log` hold the
+   progress. `capture.log` must show `daemon_start_instance1`,
+   `daemon_start_instance2`, `daemons_ready`, `sessions_seeded`,
+   `android_installed`, `slices_pulled`, and `build_capture`.
+   `android-build.log` must show `BUILD SUCCESSFUL`. The seed log must show
+   `seeded sessions use {"id":"deepseek-flash","providerID":"deepseek"}`.
+   `capture.json` must list 56 slices:
+   `pair_idle`, `pair_tap`, `scanner_open`, `scan_wait`, `first_name`,
+   `first_confirm`, `paired`, `pair_another_open`, `pair_another_manual`,
+   `pair_another_details`, `pair_another_claim`, `pair_another_name`,
+   `pair_another_confirm`, `pair_another_done`, `session_menu_open`,
+   `session_see_all`, `session_pick`, `session_chat`, `session_menu_reopen`,
+   `new_session`, `workspace_open_work`, `workspace_pick_work`,
+   `agent_open_work`, `agent_pick_work`, `workspace_open_couch`,
+   `workspace_pick_couch`, `agent_open_couch`, `agent_pick_couch`, `continue`,
+   `session_create_wait`, `model_open`, `model_search`, `model_pick`,
+   `mode_plan`, `mode_build`, `effort_1..3`, `slash_open`, `slash_close`,
    `prompt_focus`, `prompt_type`, `photo_open`, `photo_pick`, `photo_add`,
    `file_open`, `file_pick`, `send`, `reply_wait`, `reply`, `voice_open`,
    `voice_expand`, `voice_transcript`, `voice_send`, `voice_reply_wait`, and
-   `voice_reply` (plus `workspace_sites` when the picker shows it). Every
-   listed slice must have an mp4 in `docs/demo/render/public/slices/`.
-   The session menu must show exactly "Cat Therapist near me", "Does KGB use
-   cats?", "Why does my cat hate me?", "Cat treat safe for humans?", and
-   "Russian for dummies", newest first. `/sdcard/DCIM/Camera` must hold the
+   `voice_reply`. Every listed slice must have an mp4 in
+   `docs/demo/render/public/slices/`. The full Sessions screen must show the
+   five OpenCode titles ("Cat Therapist near me", "Does KGB use cats?", "Why
+   does my cat hate me?", "Cat treat safe for humans?", and "Russian for
+   dummies") plus the Work pi session "Cat food budget". The first row is
+   "Cat Therapist near me" under Couch. `/sdcard/DCIM/Camera` must hold the
    zip's 17 photos, `/sdcard/Download` must hold `cat-diary.txt`, and the
    assets step must report 18 pushed onto the wiped emulator.
 5. **Voice landed.** `driver.log` must print a non-empty
    `voice transcript:` line, and the last frame of the `voice_reply` slice
    must show the completed reply (no "Replying" label and no stop button).
+   The inline rail must show `Mute voice input`. Do not wait for
+   `Start speaking…`; the transcript can replace it before the first poll.
+   The driver waits for the transcript to stay stable for one second.
    If the transcript is empty, confirm `avd hostmicon` and `avd rewindaudio`
    were sent, the QEMU process has `QEMU_AUDIO_DRV=wav` and holds
    `/tmp/opencode/harold-qemu-in.wav` open, and no voice warm-up fixture ran.
-6. **Remotion is in sync.** `docs/demo/render` reads `public/capture.json` at
-   build time (`calculateMetadata`); `src/timeline.ts` holds the slice edit in
+6. **Remotion is in sync.** The timeline still targets the old single-instance
+   slice set. Update `PAIR_STEPS`/`WALK_STEPS` to the 56-slice set before
+   rendering. Do not render until that edit is done.
+   `docs/demo/render` reads `public/capture.json` at build time
+   (`calculateMetadata`); `src/timeline.ts` holds the slice edit in
    `PAIR_STEPS`/`WALK_STEPS`. After a fresh capture, check the slice names and
    durations, then render a spot-check still:
    `bun x remotion still HaroldDemo ../work/render/check.png
@@ -176,9 +200,24 @@ f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
 ## Troubleshooting map
 
 - Session menu shows unrelated titles or duplicate demo titles → run
-  `bash docs/demo/capture/seed_sessions.sh` and read its stderr; it checks the
-  global OpenCode session list, reseeds when the five newest do not match, and
-  leaves the per-run prompt output in `work/capture/session-seed.log`.
+  `bash docs/demo/capture/seed_sessions.sh`; it purges the demo yuekbox
+  workspace before creating the five fixed sessions. The full Sessions screen
+  can still show sessions from other workspaces because the agents keep global
+  history. The first row must be "Cat Therapist near me" under Couch.
+- Composer shows "Agent is not enabled", the model pick rolls back, or the
+  thinking chip is missing → a session-scoped call used the active paired
+  Harold instead of the selected session's `serverOrigin`. Config PUTs must go
+  to the session's Harold, for example 3848 for Couch/OpenCode. Check
+  `ChatViewModel` uses `selectedOrPairedOrigin()` for config, attachments,
+  auth, and title pulls.
+- Emulator dies when the agent command ends → launch it through the transient
+  systemd user unit. Direct `nohup` does not survive the shell.
+- `adb pull` stops after one slice → ADB consumed the manifest stdin. Redirect
+  ADB stdin with `</dev/null` inside the pull loop.
+- `pair_tap` is missing or much longer than its action window → screenrecord
+  failed to start or failed to stop. The driver verifies the remote file and
+  waits for `pidof screenrecord`; rerun. A long stale file can be trimmed to its
+  action window before `build_capture.py`.
 - Scanner open but never pairs, no error UI → feed geometry or decode;
   re-run step 1's jsQR check at 640x480.
 - Driver dies on `not found text='Pair'` → the app was not on the home
@@ -205,15 +244,16 @@ f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
   and `mode` → the installed app and source server are different revisions,
   or the app is not reaching the demo daemon. Check `capture.log` for
   `android_installed` and `android-build.log` for `BUILD SUCCESSFUL`. Check
-  `~/.harold-demo/settings.yml` for `127.0.0.1:3847`, `adb reverse --list`,
-  and that the demo daemon, not the real one, is running. Then rerun the
-  capture. The script builds and installs the debug app from this checkout
-  before pairing.
+  `~/.harold-demo-3847/settings.yml` and `~/.harold-demo-3848/settings.yml`,
+  `adb reverse --list` for both ports, and that the demo daemons, not the real
+  one, are running. Then rerun the capture. The script builds and installs the
+  debug app from this checkout before pairing.
 - Voice reply still streaming at the end of the `voice_reply` slice → the
   driver's completion check needs three quiet polls; if it returns early,
   inspect `wait_for_agent_turn` and the app's "Replying"/`Cancel run` signals.
 - `build_capture.py` reports a missing slice or the render throws
   `capture.json is missing slice ...` → the driver did not record that action.
   Check `driver.log` and the manifest, then re-run the capture.
-- Pair code expired (~10 min) → reissue and recompose; capture.sh does both
-  in order, so prefer a fresh full run over hand-patching.
+- Pair code expired (~10 min) → instance 1's code is issued before composing,
+  instance 2's by the driver just before manual pairing. Rerun the full capture
+  instead of hand-patching.

@@ -5,7 +5,7 @@
     {
       "name": "pair_idle",
       "file": "slices/001-pair_idle.mp4",
-      "durationSec": 2.301,
+      "durationSec": 2.362,
       "width": 1080,
       "height": 2400,
       "still": true,
@@ -14,7 +14,7 @@
     {
       "name": "pair_tap",
       "file": "slices/002-pair_tap.mp4",
-      "durationSec": 3.961,
+      "durationSec": 4.202,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -22,14 +22,14 @@
         {
           "x": 540,
           "y": 2205,
-          "atSec": 3.516
+          "atSec": 3.25
         }
       ]
     },
     {
       "name": "scanner_open",
       "file": "slices/003-scanner_open.mp4",
-      "durationSec": 2.313,
+      "durationSec": 1.522,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -38,55 +38,209 @@
     {
       "name": "scan_wait",
       "file": "slices/004-scan_wait.mp4",
-      "durationSec": 16.829,
+      "durationSec": 2.014,
       "width": 1080,
       "height": 2400,
       "still": false,
       "taps": []
     },
     {
+      "name": "first_name",
+      "file": "slices/005-first_name.mp4",
+      "durationSec": 9.7,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 540,
+          "y": 654,
+          "atSec": 2.974
+        }
+      ]
+    },
+    {
+      "name": "first_confirm",
+      "file": "slices/006-first_confirm.mp4",
+      "durationSec": 5.714,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 540,
+          "y": 1361,
+          "atSec": 3.766
+        }
+      ]
+    },
+    {
       "name": "paired",
-      "file": "slices/005-paired.mp4",
-      "durationSec": 5.801,
+      "file": "slices/007-paired.mp4",
+      "durationSec": 5.849,
       "width": 1080,
       "height": 2400,
       "still": true,
       "taps": []
     },
     {
+      "name": "pair_another_open",
+      "file": "slices/008-pair_another_open.mp4",
+      "durationSec": 10.472,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 1007,
+          "y": 212,
+          "atSec": 3.059
+        },
+        {
+          "x": 696,
+          "y": 611,
+          "atSec": 8.03
+        }
+      ]
+    },
+    {
+      "name": "pair_another_manual",
+      "file": "slices/009-pair_another_manual.mp4",
+      "durationSec": 4.999,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 540,
+          "y": 1286,
+          "atSec": 3.308
+        }
+      ]
+    },
+    {
+      "name": "pair_another_details",
+      "file": "slices/010-pair_another_details.mp4",
+      "durationSec": 9.036,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 540,
+          "y": 380,
+          "atSec": 2.971
+        },
+        {
+          "x": 540,
+          "y": 580,
+          "atSec": 6.854
+        }
+      ]
+    },
+    {
+      "name": "pair_another_claim",
+      "file": "slices/011-pair_another_claim.mp4",
+      "durationSec": 5.432,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 540,
+          "y": 792,
+          "atSec": 3.784
+        }
+      ]
+    },
+    {
+      "name": "pair_another_name",
+      "file": "slices/012-pair_another_name.mp4",
+      "durationSec": 9.467,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 540,
+          "y": 654,
+          "atSec": 2.978
+        }
+      ]
+    },
+    {
+      "name": "pair_another_confirm",
+      "file": "slices/013-pair_another_confirm.mp4",
+      "durationSec": 5.585,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 540,
+          "y": 1361,
+          "atSec": 3.751
+        }
+      ]
+    },
+    {
+      "name": "pair_another_done",
+      "file": "slices/014-pair_another_done.mp4",
+      "durationSec": 1.426,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": []
+    },
+    {
       "name": "session_menu_open",
-      "file": "slices/006-session_menu_open.mp4",
-      "durationSec": 6.143,
+      "file": "slices/015-session_menu_open.mp4",
+      "durationSec": 6.984,
       "width": 1080,
       "height": 2400,
       "still": false,
       "taps": [
         {
           "x": 498,
-          "y": 211,
-          "atSec": 3.067
+          "y": 212,
+          "atSec": 2.951
         }
       ]
     },
     {
-      "name": "session_pick",
-      "file": "slices/007-session_pick.mp4",
-      "durationSec": 4.06,
+      "name": "session_see_all",
+      "file": "slices/016-session_see_all.mp4",
+      "durationSec": 7.919,
       "width": 1080,
       "height": 2400,
       "still": false,
       "taps": [
         {
-          "x": 410,
-          "y": 491,
-          "atSec": 2.97
+          "x": 252,
+          "y": 1165,
+          "atSec": 3.072
+        }
+      ]
+    },
+    {
+      "name": "session_pick",
+      "file": "slices/017-session_pick.mp4",
+      "durationSec": 4.882,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 405,
+          "y": 759,
+          "atSec": 3.005
         }
       ]
     },
     {
       "name": "session_chat",
-      "file": "slices/008-session_chat.mp4",
-      "durationSec": 3.953,
+      "file": "slices/018-session_chat.mp4",
+      "durationSec": 1.971,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -94,38 +248,38 @@
     },
     {
       "name": "session_menu_reopen",
-      "file": "slices/009-session_menu_reopen.mp4",
-      "durationSec": 5.255,
+      "file": "slices/019-session_menu_reopen.mp4",
+      "durationSec": 6.83,
       "width": 1080,
       "height": 2400,
       "still": false,
       "taps": [
         {
           "x": 498,
-          "y": 211,
-          "atSec": 3.013
+          "y": 212,
+          "atSec": 2.991
         }
       ]
     },
     {
       "name": "new_session",
-      "file": "slices/010-new_session.mp4",
-      "durationSec": 4.711,
+      "file": "slices/020-new_session.mp4",
+      "durationSec": 4.785,
       "width": 1080,
       "height": 2400,
       "still": false,
       "taps": [
         {
-          "x": 410,
-          "y": 364,
-          "atSec": 2.947
+          "x": 289,
+          "y": 359,
+          "atSec": 2.979
         }
       ]
     },
     {
-      "name": "workspace_sites",
-      "file": "slices/011-workspace_sites.mp4",
-      "durationSec": 3.175,
+      "name": "workspace_open_work",
+      "file": "slices/021-workspace_open_work.mp4",
+      "durationSec": 6.912,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -133,29 +287,29 @@
         {
           "x": 540,
           "y": 507,
-          "atSec": 2.978
+          "atSec": 3.125
         }
       ]
     },
     {
-      "name": "workspace_harold",
-      "file": "slices/012-workspace_harold.mp4",
-      "durationSec": 3.013,
+      "name": "workspace_pick_work",
+      "file": "slices/022-workspace_pick_work.mp4",
+      "durationSec": 3.145,
       "width": 1080,
       "height": 2400,
       "still": false,
       "taps": [
         {
-          "x": 126,
-          "y": 801,
-          "atSec": 2.968
+          "x": 232,
+          "y": 1183,
+          "atSec": 2.975
         }
       ]
     },
     {
-      "name": "agent_open",
-      "file": "slices/013-agent_open.mp4",
-      "durationSec": 4.553,
+      "name": "agent_open_work",
+      "file": "slices/023-agent_open_work.mp4",
+      "durationSec": 6.715,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -163,44 +317,104 @@
         {
           "x": 540,
           "y": 707,
-          "atSec": 2.953
+          "atSec": 2.98
         }
       ]
     },
     {
-      "name": "agent_pick",
-      "file": "slices/014-agent_pick.mp4",
-      "durationSec": 3.039,
+      "name": "agent_pick_work",
+      "file": "slices/024-agent_pick_work.mp4",
+      "durationSec": 3.082,
       "width": 1080,
       "height": 2400,
       "still": false,
       "taps": [
         {
-          "x": 159,
-          "y": 1001,
-          "atSec": 2.956
+          "x": 130,
+          "y": 875,
+          "atSec": 2.962
         }
       ]
     },
     {
-      "name": "continue",
-      "file": "slices/015-continue.mp4",
-      "durationSec": 3.151,
+      "name": "workspace_open_couch",
+      "file": "slices/025-workspace_open_couch.mp4",
+      "durationSec": 4.728,
       "width": 1080,
       "height": 2400,
       "still": false,
       "taps": [
         {
           "x": 540,
-          "y": 886,
+          "y": 507,
+          "atSec": 2.983
+        }
+      ]
+    },
+    {
+      "name": "workspace_pick_couch",
+      "file": "slices/026-workspace_pick_couch.mp4",
+      "durationSec": 4.925,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 251,
+          "y": 1813,
+          "atSec": 2.943
+        }
+      ]
+    },
+    {
+      "name": "agent_open_couch",
+      "file": "slices/027-agent_open_couch.mp4",
+      "durationSec": 4.66,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 540,
+          "y": 707,
           "atSec": 2.959
         }
       ]
     },
     {
+      "name": "agent_pick_couch",
+      "file": "slices/028-agent_pick_couch.mp4",
+      "durationSec": 3.118,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 159,
+          "y": 875,
+          "atSec": 2.959
+        }
+      ]
+    },
+    {
+      "name": "continue",
+      "file": "slices/029-continue.mp4",
+      "durationSec": 7.336,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 540,
+          "y": 889,
+          "atSec": 2.994
+        }
+      ]
+    },
+    {
       "name": "session_create_wait",
-      "file": "slices/016-session_create_wait.mp4",
-      "durationSec": 1.881,
+      "file": "slices/030-session_create_wait.mp4",
+      "durationSec": 2.133,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -208,8 +422,8 @@
     },
     {
       "name": "model_open",
-      "file": "slices/017-model_open.mp4",
-      "durationSec": 4.86,
+      "file": "slices/031-model_open.mp4",
+      "durationSec": 4.987,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -217,14 +431,14 @@
         {
           "x": 384,
           "y": 1934,
-          "atSec": 3.043
+          "atSec": 3.066
         }
       ]
     },
     {
       "name": "model_search",
-      "file": "slices/018-model_search.mp4",
-      "durationSec": 6.037,
+      "file": "slices/032-model_search.mp4",
+      "durationSec": 5.681,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -232,14 +446,14 @@
         {
           "x": 327,
           "y": 1484,
-          "atSec": 2.986
+          "atSec": 2.95
         }
       ]
     },
     {
       "name": "model_pick",
-      "file": "slices/019-model_pick.mp4",
-      "durationSec": 4.996,
+      "file": "slices/033-model_pick.mp4",
+      "durationSec": 5.01,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -247,14 +461,14 @@
         {
           "x": 540,
           "y": 1313,
-          "atSec": 3.01
+          "atSec": 2.99
         }
       ]
     },
     {
       "name": "mode_plan",
-      "file": "slices/020-mode_plan.mp4",
-      "durationSec": 1.941,
+      "file": "slices/034-mode_plan.mp4",
+      "durationSec": 7.65,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -262,29 +476,29 @@
         {
           "x": 827,
           "y": 1934,
-          "atSec": 0.801
+          "atSec": 5.029
         }
       ]
     },
     {
       "name": "mode_build",
-      "file": "slices/021-mode_build.mp4",
-      "durationSec": 3.905,
+      "file": "slices/035-mode_build.mp4",
+      "durationSec": 7.925,
       "width": 1080,
       "height": 2400,
       "still": false,
       "taps": [
         {
-          "x": 827,
+          "x": 830,
           "y": 1934,
-          "atSec": 0.805
+          "atSec": 5.362
         }
       ]
     },
     {
       "name": "effort_1",
-      "file": "slices/022-effort_1.mp4",
-      "durationSec": 1.37,
+      "file": "slices/036-effort_1.mp4",
+      "durationSec": 1.689,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -292,14 +506,14 @@
         {
           "x": 976,
           "y": 1934,
-          "atSec": 0.8
+          "atSec": 0.848
         }
       ]
     },
     {
       "name": "effort_2",
-      "file": "slices/023-effort_2.mp4",
-      "durationSec": 1.69,
+      "file": "slices/037-effort_2.mp4",
+      "durationSec": 1.676,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -307,14 +521,14 @@
         {
           "x": 976,
           "y": 1934,
-          "atSec": 0.8
+          "atSec": 0.846
         }
       ]
     },
     {
       "name": "effort_3",
-      "file": "slices/024-effort_3.mp4",
-      "durationSec": 1.475,
+      "file": "slices/038-effort_3.mp4",
+      "durationSec": 1.702,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -322,14 +536,44 @@
         {
           "x": 976,
           "y": 1934,
-          "atSec": 0.801
+          "atSec": 0.848
+        }
+      ]
+    },
+    {
+      "name": "slash_open",
+      "file": "slices/039-slash_open.mp4",
+      "durationSec": 6.853,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 137,
+          "y": 2211,
+          "atSec": 3.057
+        }
+      ]
+    },
+    {
+      "name": "slash_close",
+      "file": "slices/040-slash_close.mp4",
+      "durationSec": 4.615,
+      "width": 1080,
+      "height": 2400,
+      "still": false,
+      "taps": [
+        {
+          "x": 964,
+          "y": 412,
+          "atSec": 2.954
         }
       ]
     },
     {
       "name": "prompt_focus",
-      "file": "slices/025-prompt_focus.mp4",
-      "durationSec": 3.398,
+      "file": "slices/041-prompt_focus.mp4",
+      "durationSec": 3.481,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -337,14 +581,14 @@
         {
           "x": 176,
           "y": 2074,
-          "atSec": 2.968
+          "atSec": 2.944
         }
       ]
     },
     {
       "name": "prompt_type",
-      "file": "slices/026-prompt_type.mp4",
-      "durationSec": 6.609,
+      "file": "slices/042-prompt_type.mp4",
+      "durationSec": 7.123,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -352,8 +596,8 @@
     },
     {
       "name": "photo_open",
-      "file": "slices/027-photo_open.mp4",
-      "durationSec": 6.249,
+      "file": "slices/043-photo_open.mp4",
+      "durationSec": 6.984,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -361,14 +605,14 @@
         {
           "x": 274,
           "y": 1391,
-          "atSec": 3.016
+          "atSec": 2.989
         }
       ]
     },
     {
       "name": "photo_pick",
-      "file": "slices/028-photo_pick.mp4",
-      "durationSec": 3.265,
+      "file": "slices/044-photo_pick.mp4",
+      "durationSec": 3.485,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -376,14 +620,14 @@
         {
           "x": 902,
           "y": 817,
-          "atSec": 3.043
+          "atSec": 3.035
         }
       ]
     },
     {
       "name": "photo_add",
-      "file": "slices/029-photo_add.mp4",
-      "durationSec": 7.229,
+      "file": "slices/045-photo_add.mp4",
+      "durationSec": 7.333,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -391,14 +635,14 @@
         {
           "x": 922,
           "y": 2242,
-          "atSec": 2.972
+          "atSec": 2.981
         }
       ]
     },
     {
       "name": "file_open",
-      "file": "slices/030-file_open.mp4",
-      "durationSec": 6.212,
+      "file": "slices/046-file_open.mp4",
+      "durationSec": 6.508,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -406,14 +650,14 @@
         {
           "x": 411,
           "y": 1391,
-          "atSec": 2.999
+          "atSec": 2.967
         }
       ]
     },
     {
       "name": "file_pick",
-      "file": "slices/031-file_pick.mp4",
-      "durationSec": 7.132,
+      "file": "slices/047-file_pick.mp4",
+      "durationSec": 6.555,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -421,29 +665,29 @@
         {
           "x": 299,
           "y": 605,
-          "atSec": 2.985
+          "atSec": 3.136
         }
       ]
     },
     {
       "name": "send",
-      "file": "slices/032-send.mp4",
-      "durationSec": 6.712,
+      "file": "slices/048-send.mp4",
+      "durationSec": 6.767,
       "width": 1080,
       "height": 2400,
       "still": false,
       "taps": [
         {
           "x": 943,
-          "y": 1391,
-          "atSec": 2.961
+          "y": 2211,
+          "atSec": 3.226
         }
       ]
     },
     {
       "name": "reply_wait",
-      "file": "slices/033-reply_wait.mp4",
-      "durationSec": 13.759,
+      "file": "slices/049-reply_wait.mp4",
+      "durationSec": 18.113,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -451,8 +695,8 @@
     },
     {
       "name": "reply",
-      "file": "slices/034-reply.mp4",
-      "durationSec": 4.302,
+      "file": "slices/050-reply.mp4",
+      "durationSec": 4.349,
       "width": 1080,
       "height": 2400,
       "still": true,
@@ -460,8 +704,8 @@
     },
     {
       "name": "voice_open",
-      "file": "slices/035-voice_open.mp4",
-      "durationSec": 10.095,
+      "file": "slices/051-voice_open.mp4",
+      "durationSec": 8.325,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -469,14 +713,14 @@
         {
           "x": 806,
           "y": 2211,
-          "atSec": 2.982
+          "atSec": 2.992
         }
       ]
     },
     {
       "name": "voice_expand",
-      "file": "slices/036-voice_expand.mp4",
-      "durationSec": 8.134,
+      "file": "slices/052-voice_expand.mp4",
+      "durationSec": 6.852,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -484,14 +728,14 @@
         {
           "x": 274,
           "y": 2211,
-          "atSec": 4.168
+          "atSec": 3.764
         }
       ]
     },
     {
       "name": "voice_transcript",
-      "file": "slices/037-voice_transcript.mp4",
-      "durationSec": 4.069,
+      "file": "slices/053-voice_transcript.mp4",
+      "durationSec": 7.74,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -499,8 +743,8 @@
     },
     {
       "name": "voice_send",
-      "file": "slices/038-voice_send.mp4",
-      "durationSec": 4.232,
+      "file": "slices/054-voice_send.mp4",
+      "durationSec": 4.885,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -508,14 +752,14 @@
         {
           "x": 975,
           "y": 2242,
-          "atSec": 3.342
+          "atSec": 3.665
         }
       ]
     },
     {
       "name": "voice_reply_wait",
-      "file": "slices/039-voice_reply_wait.mp4",
-      "durationSec": 22.217,
+      "file": "slices/055-voice_reply_wait.mp4",
+      "durationSec": 10.45,
       "width": 1080,
       "height": 2400,
       "still": false,
@@ -523,8 +767,8 @@
     },
     {
       "name": "voice_reply",
-      "file": "slices/040-voice_reply.mp4",
-      "durationSec": 3.301,
+      "file": "slices/056-voice_reply.mp4",
+      "durationSec": 3.349,
       "width": 1080,
       "height": 2400,
       "still": true,

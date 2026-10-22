@@ -159,7 +159,8 @@ export const makeAgentCommand = (): Command => {
     }
   })
 
-  const enable = new Command("enable <id>")
+  const enable = new Command("enable")
+  enable.argument("<id>")
   enable.description("enable an agent")
   enable.action((id: string) => {
     const config = parseConfig(process.env)
@@ -180,7 +181,8 @@ export const makeAgentCommand = (): Command => {
     }
   })
 
-  const disable = new Command("disable <id>")
+  const disable = new Command("disable")
+  disable.argument("<id>")
   disable.description("disable an agent")
   disable.action((id: string) => {
     const config = parseConfig(process.env)
@@ -201,7 +203,8 @@ export const makeAgentCommand = (): Command => {
     }
   })
 
-  const probe = new Command("probe [id]")
+  const probe = new Command("probe")
+  probe.argument("[id]")
   probe.description("probe agent presence and state (default: enabled agents)")
   probe.action((id: string | undefined) => {
     const config = parseConfig(process.env)

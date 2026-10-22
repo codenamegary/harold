@@ -761,6 +761,43 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun modelPickUsesTheSelectedSessionsHaroldOrigin() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val configApi = RecordingSessionConfigApi()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = sessionOwner,
+            configApi = configApi,
+        )
+        advanceUntilIdle()
+
+        val remoteOrigin = "http://desktop.local:3847"
+        viewModel.selectSession(
+            listedSession("sess_remote", "Remote").copy(
+                serverOrigin = remoteOrigin,
+                haroldName = "desktop",
+                haroldColorId = "ink",
+                haroldIconId = "mark",
+            ),
+        )
+        advanceUntilIdle()
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                agentId = "cursor",
+                sessionId = "sess_remote",
+                configOptions = listOf(modelOption(currentValue = "m1")),
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.onModelPick("m2")
+        advanceUntilIdle()
+
+        assertEquals(remoteOrigin, configApi.calls.single().serverOrigin)
+    }
+
+    @Test
     fun configEchoSettlesTheOptimisticPick() = runTest(dispatcher) {
         val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(

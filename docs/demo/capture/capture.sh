@@ -1,52 +1,35 @@
 #!/usr/bin/env bash
-# Record the Harold phone demo.
+# Record the Harold phone demo with two paired Harold instances.
 #
-# Boots the emulator with its back camera fed by a video file
-# (-camera-back videofile:). Before boot, compose_camera.mjs pastes the live
-# pairing QR over the QR panel in the staged clip and rotates the frame so the
-# camera preview lands upright. The terminal is not recorded; Remotion draws
-# the phone frame later and plays this capture on the screen.
+# The capture owns the full environment:
+#   - instance 1 on 127.0.0.1:3847 with cursor and pi-acp
+#   - instance 2 on 127.0.0.1:3848 with opencode
+# Both use fresh data dirs, fresh DBs, and stable workspace roots outside the
+# data dirs. The user's real ~/.harold daemon is never stopped.
+#
+# The emulator's back camera plays a staged clip with instance 1's live pairing
+# QR pasted over the laptop screen. The phone pairs by camera first, then pairs
+# instance 2 by typing its endpoint and code.
 #
 # The walk is recorded as named slices: drive_phone.py starts one screenrecord
 # file per action, from the tap through the wait for the UI to settle. Each
 # slice and its taps are published to docs/demo/render/public/slices/, and
 # build_capture.py writes capture.json for Remotion to compose. There is no
-# stitched video, so pacing changes stay in the Remotion timeline.
-#
-# The emulator boots with -wipe-data, so every run starts from factory userdata:
-# no prior photos, downloads, installed app, or permissions. push_assets.sh
-# then copies only the demo photos and cat diary onto it. The microphone reads a
-# converted copy of assets/voice-input.wav through its built-in WAV audio
-# driver; drive_phone.py rewinds that file at the voice scene. The wav is
-# microphone input only - it never lands in the recording or the video.
-#
-# Before the emulator boots, seed_sessions.sh gives OpenCode the five recent
-# sessions the phone's session menu shows, reusing them when they are already
-# the newest. That keeps the history scene deterministic.
-#
-# The capture stops any running Harold first, then starts a fresh demo home at
-# ~/.harold-demo (HAROLD_DEMO_DATA_DIR) on 127.0.0.1:3847. It copies the agent
-# and workspace rows from ~/.harold, clears devices and pairing codes, and
-# writes a loopback settings.yml. The emulator reaches that daemon through
-# adb reverse tcp:3847 tcp:3847.
-#
-# Needs emulator 36.5+ with the VideoPlayback feature, a C compiler for the
-# audio shim, bun for the source CLI, a configured ~/.harold with agents and
-# workspaces, sqlite3, and a JDK + Android SDK for the debug app build. The
-# script writes apps/android/local.properties when missing and installs
-# harold.android.debug from this checkout (see README).
+# stitched video.
 #
 # Artifacts:
 #   docs/demo/render/public/slices/*.mp4
 #   docs/demo/render/public/capture.json
 #
-# Scratch (composed feed, logs, raw slice recordings) goes to
-# docs/demo/work/capture/.
+# Scratch goes to docs/demo/work/capture/.
 set -euo pipefail
+
+export DISPLAY="${DISPLAY:-:0}"
 
 SERIAL="${SERIAL:-emulator-5554}"
 AVD="${AVD:-agent_server_api34}"
 EMULATOR="${EMULATOR:-$HOME/android/emulator/emulator}"
+EMULATOR_UNIT="${HAROLD_EMULATOR_UNIT:-harold-capture-${AVD//[^A-Za-z0-9:_.@-]/-}}"
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 DEMO=$(cd "$SCRIPT_DIR/.." && pwd)
 ROOT=$(cd "$DEMO/../.." && pwd)
@@ -56,8 +39,6 @@ SLICES="$WORK/slices"
 SLICE_MANIFEST="$WORK/slices.json"
 CAMERA_SOURCE="${CAMERA_SOURCE:-$SCRIPT_DIR/assets/virtual-qr-code-webcam.mp4}"
 CAMERA_FILE="$WORK/camera-live.mp4"
-# The emulator's videofile camera silently fails on long paths. This worktree
-# path is longer than the main checkout's, so give the emulator a short copy.
 SHORT_TMP="${HAROLD_TMP:-/tmp/opencode}"
 CAMERA_FEED="$SHORT_TMP/harold-camera-live.mp4"
 EMULATOR_LOG="$WORK/emulator.log"
@@ -66,19 +47,27 @@ MARKS="$WORK/marks.log"
 DEFAULT_PROMPT="Do you think my cat's behaviour is strange?"
 PROMPT="${PROMPT:-$DEFAULT_PROMPT}"
 SEED_MODEL="${SEED_MODEL:-deepseek/deepseek-flash}"
+PI_MODEL="${PI_MODEL:-deepseek/deepseek-flash}"
+WORK_SESSION_TITLE="${WORK_SESSION_TITLE:-Cat food budget}"
+SESSION_TITLE="${SESSION_TITLE:-Cat Therapist near me}"
 VOICE_INPUT="${VOICE_INPUT:-$SCRIPT_DIR/assets/voice-input.wav}"
 VOICE_WAV="$SHORT_TMP/harold-qemu-in.wav"
 VOICE_WAV_OUT="$SHORT_TMP/harold-qemu-out.wav"
 AUDIO_SHIM_SOURCE="$SCRIPT_DIR/audio-env-shim.c"
 AUDIO_SHIM="$SHORT_TMP/harold-audio-env-shim.so"
-REAL_DATA_DIR="${HAROLD_DATA_DIR:-$HOME/.harold}"
-REAL_DATA_DIR="${REAL_DATA_DIR/#\~/$HOME}"
-DEMO_DATA_DIR="${HAROLD_DEMO_DATA_DIR:-$HOME/.harold-demo}"
-DEMO_DATA_DIR="${DEMO_DATA_DIR/#\~/$HOME}"
-DEMO_HOST="127.0.0.1"
-DEMO_PORT="${HAROLD_DEMO_PORT:-3847}"
-MAIN_ROOT=$(git -C "$ROOT" worktree list --porcelain | sed -n 's/^worktree //p' | head -n 1)
-SITES_ROOT=$(dirname "$MAIN_ROOT")
+
+INSTANCE1_PORT="${HAROLD_INSTANCE1_PORT:-3847}"
+INSTANCE2_PORT="${HAROLD_INSTANCE2_PORT:-3848}"
+INSTANCE1_DATA_DIR="${HAROLD_INSTANCE1_DATA_DIR:-$HOME/.harold-demo-$INSTANCE1_PORT}"
+INSTANCE2_DATA_DIR="${HAROLD_INSTANCE2_DATA_DIR:-$HOME/.harold-demo-$INSTANCE2_PORT}"
+INSTANCE1_WORKSPACES="${HAROLD_INSTANCE1_WORKSPACES:-$HOME/harold-demo-workspaces/$INSTANCE1_PORT}"
+INSTANCE2_WORKSPACES="${HAROLD_INSTANCE2_WORKSPACES:-$HOME/harold-demo-workspaces/$INSTANCE2_PORT}"
+INSTANCE1_DATA_DIR="${INSTANCE1_DATA_DIR/#\~/$HOME}"
+INSTANCE2_DATA_DIR="${INSTANCE2_DATA_DIR/#\~/$HOME}"
+INSTANCE1_WORKSPACES="${INSTANCE1_WORKSPACES/#\~/$HOME}"
+INSTANCE2_WORKSPACES="${INSTANCE2_WORKSPACES/#\~/$HOME}"
+INSTANCE1_ENDPOINT="http://127.0.0.1:$INSTANCE1_PORT"
+INSTANCE2_ENDPOINT="http://127.0.0.1:$INSTANCE2_PORT"
 
 export PYTHONPYCACHEPREFIX="$WORK/pycache"
 
@@ -90,71 +79,143 @@ mkdir -p "$WORK" "$PUBLIC" "$SHORT_TMP" "$SLICES"
 log() { printf '%s %s\n' "$(date +%s.%3N)" "$*" | tee -a "$LOG"; }
 die() { echo "capture.sh: $*" >&2; exit 1; }
 
-# Run the source CLI against the demo data dir and loopback port. The daemon
-# and every CLI command must agree on these three values.
-harold() {
+adb_retry() {
+  local attempt
+  for attempt in $(seq 1 40); do
+    if adb "$@"; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "adb_retry failed after 40 attempts: adb $*" >&2
+  return 1
+}
+
+wait_for_device() {
+  local state=""
+  for _ in $(seq 1 90); do
+    state=$(adb -s "$SERIAL" get-state 2>/dev/null | tr -d '\r' || true)
+    if [[ "$state" == "device" ]] && adb -s "$SERIAL" shell true >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  die "$SERIAL is not available (adb state: ${state:-none})"
+}
+
+harold1() {
   (cd "$ROOT" && \
-    HAROLD_DATA_DIR="$DEMO_DATA_DIR" \
-    HAROLD_HOST="$DEMO_HOST" \
-    HAROLD_PORT="$DEMO_PORT" \
+    HAROLD_DATA_DIR="$INSTANCE1_DATA_DIR" \
+    HAROLD_HOST=127.0.0.1 \
+    HAROLD_PORT="$INSTANCE1_PORT" \
     bun run dev "$@")
 }
 
-for tool in bun opencode adb node ffmpeg ffprobe python3 cc sqlite3; do
-  command -v "$tool" >/dev/null || die "$tool is not on PATH"
-done
-command -v java >/dev/null || [[ -n "${JAVA_HOME:-}" && -x "${JAVA_HOME}/bin/java" ]] \
-  || die "java not found (set JAVA_HOME)"
-[[ -x "$ROOT/apps/android/gradlew" ]] || die "android gradlew not found"
-[[ -x "$EMULATOR" ]] || die "emulator not found at $EMULATOR (set EMULATOR)"
-[[ -f "$CAMERA_SOURCE" ]] || die "camera source not found at $CAMERA_SOURCE (set CAMERA_SOURCE)"
-[[ -f "$VOICE_INPUT" ]] || die "voice input not found at $VOICE_INPUT (set VOICE_INPUT)"
-[[ -f "$AUDIO_SHIM_SOURCE" ]] || die "audio shim source not found at $AUDIO_SHIM_SOURCE"
+harold2() {
+  (cd "$ROOT" && \
+    HAROLD_DATA_DIR="$INSTANCE2_DATA_DIR" \
+    HAROLD_HOST=127.0.0.1 \
+    HAROLD_PORT="$INSTANCE2_PORT" \
+    bun run dev "$@")
+}
 
-# Shut Harold down before touching the demo runtime. The real home may be on a
-# different port or advertised URL; the demo home may be left from a prior run.
-log "daemon_shutdown"
-(cd "$ROOT" && env -u HAROLD_HOST -u HAROLD_PORT \
-  HAROLD_DATA_DIR="$REAL_DATA_DIR" bun run dev stop) 2>&1 | tee -a "$LOG" || true
-harold stop 2>&1 | tee -a "$LOG" || true
+write_settings() {
+  local data_dir=$1
+  local port=$2
+  local workspace_root=$3
+  cat >"$data_dir/settings.yml" <<EOF
+advertisedUrl: http://127.0.0.1:$port
+advertisedUrlEnabled: true
+bindHost: 127.0.0.1
+bindPort: $port
+logLevel: info
+logPath: null
+allowedRoots:
+  - "$workspace_root"
+EOF
+}
 
-# Android needs an SDK path in local.properties. The file is gitignored and
-# absent in a fresh worktree, so derive it from the emulator the capture
-# already uses and write it before Gradle runs.
-ANDROID_SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
-if [[ -z "$ANDROID_SDK_DIR" && -x "$EMULATOR" ]]; then
-  ANDROID_SDK_DIR=$(cd "$(dirname "$EMULATOR")/.." && pwd)
-fi
-if [[ -z "$ANDROID_SDK_DIR" && -d "$HOME/Android/Sdk" ]]; then
-  ANDROID_SDK_DIR="$HOME/Android/Sdk"
-fi
-[[ -n "$ANDROID_SDK_DIR" && -d "$ANDROID_SDK_DIR" ]] \
-  || die "Android SDK not found (set ANDROID_HOME or create apps/android/local.properties)"
-LOCAL_PROPERTIES="$ROOT/apps/android/local.properties"
-existing_sdk=$(sed -n 's/^sdk\.dir=//p' "$LOCAL_PROPERTIES" 2>/dev/null | tail -n 1)
-if [[ -z "$existing_sdk" || ! -d "$existing_sdk" ]]; then
-  printf 'sdk.dir=%s\n' "$ANDROID_SDK_DIR" >"$LOCAL_PROPERTIES"
-  log "android_sdk $LOCAL_PROPERTIES"
-fi
+ensure_clone() {
+  local url=$1
+  local path=$2
+  if [[ -d "$path/.git" ]]; then
+    log "git_pull $path"
+    git -C "$path" pull --ff-only >>"$LOG" 2>&1 \
+      || die "git pull failed in $path"
+    return
+  fi
+  [[ ! -e "$path" ]] || die "$path exists but is not a git clone"
+  log "git_clone $path"
+  git clone "$url" "$path" >>"$LOG" 2>&1 \
+    || die "git clone failed for $url"
+}
 
-# Slices from a previous run would ride along in the pull and the manifest;
-# clear both sides before the driver starts.
-rm -f "$SLICES"/*.mp4
+ensure_local_repo() {
+  local path=$1
+  local name=$2
+  mkdir -p "$path"
+  if [[ ! -d "$path/.git" ]]; then
+    log "git_init $path"
+    git -C "$path" init -b main >>"$LOG" 2>&1
+  fi
+  if ! git -C "$path" rev-parse --verify HEAD >/dev/null 2>&1; then
+    if [[ -z "$(find "$path" -mindepth 1 -maxdepth 1 ! -name .git -print -quit)" ]]; then
+      printf '# %s\n' "$name" >"$path/README.md"
+    fi
+    git -C "$path" add -A >>"$LOG" 2>&1
+    git -C "$path" \
+      -c user.name="Harold Demo" \
+      -c user.email="harold-demo@example.invalid" \
+      commit -m "Initial commit" >>"$LOG" 2>&1 \
+      || die "could not create the initial commit in $path"
+  fi
+}
 
-# The emulator's WAV audio driver reads a canonical 44.1 kHz stereo S16 file.
-# Add a short lead-in and a long silence tail: the lead-in lets the voice UI
-# settle before speech starts, and the tail gives Vosk time to endpoint
-# before the looping file starts the phrase again.
-log "voice_prepare"
-ffmpeg -hide_banner -loglevel error -y -i "$VOICE_INPUT" \
-  -af "adelay=1500:all=1,apad=pad_dur=30" \
-  -ar 44100 -ac 2 -c:a pcm_s16le -map_metadata -1 -fflags +bitexact \
-  "$VOICE_WAV"
-cc -shared -fPIC -O2 -o "$AUDIO_SHIM" "$AUDIO_SHIM_SOURCE"
-log "voice_prepared"
+register_workspace() {
+  local command=$1
+  local path=$2
+  "$command" workspace add "$path" >>"$LOG" 2>&1 \
+    || die "workspace add failed for $path"
+}
+
+port_open() {
+  python3 - "$1" <<'PY'
+import socket
+import sys
+
+port = int(sys.argv[1])
+sock = socket.socket()
+sock.settimeout(0.3)
+try:
+    raise SystemExit(0 if sock.connect_ex(("127.0.0.1", port)) == 0 else 1)
+finally:
+    sock.close()
+PY
+}
+
+wait_for_status() {
+  local name=$1
+  local endpoint=$2
+  for _ in $(seq 1 80); do
+    if curl -sf "$endpoint/v1/status" >/dev/null 2>&1; then
+      return
+    fi
+    sleep 0.5
+  done
+  die "$name did not answer $endpoint/v1/status"
+}
+
+stop_demo_daemon() {
+  local data_dir=$1
+  log "daemon_stop $data_dir"
+  (cd "$ROOT" && env -u HAROLD_HOST -u HAROLD_PORT \
+    HAROLD_DATA_DIR="$data_dir" bun run dev stop) 2>&1 | tee -a "$LOG" || true
+}
 
 stop_emulator() {
   local pid
+  systemctl --user stop "$EMULATOR_UNIT.service" 2>/dev/null || true
+  systemctl --user reset-failed "$EMULATOR_UNIT.service" 2>/dev/null || true
   for pid in $(pgrep -f "qemu-system-x86_64.*-avd $AVD" || true); do
     kill "$pid" 2>/dev/null || true
   done
@@ -168,56 +229,187 @@ stop_emulator() {
   die "the $AVD emulator did not stop; kill it and retry"
 }
 
-# The demo gets its own data dir so the real config cannot leak a LAN port or
-# a stale device into the capture. Keep the agent/workspace rows, clear the
-# device/pairing rows, and pin the daemon to loopback on the port the
-# emulator reaches through adb reverse.
-log "daemon_home"
-[[ "$REAL_DATA_DIR" != "$DEMO_DATA_DIR" ]] \
-  || die "HAROLD_DATA_DIR must differ from HAROLD_DEMO_DATA_DIR"
-if command -v lsof >/dev/null && lsof -ti "tcp:$DEMO_PORT" >/dev/null 2>&1; then
-  die "port $DEMO_PORT is still in use; stop that process and retry"
-fi
-rm -rf "$DEMO_DATA_DIR"
-mkdir -p "$DEMO_DATA_DIR"
-[[ -f "$REAL_DATA_DIR/harold.db" ]] \
-  || die "no Harold config at $REAL_DATA_DIR/harold.db; run harold setup first"
-cp "$REAL_DATA_DIR/harold.db" "$DEMO_DATA_DIR/harold.db"
-if [[ -f "$REAL_DATA_DIR/harold.db-wal" ]]; then
-  cp "$REAL_DATA_DIR/harold.db-wal" "$DEMO_DATA_DIR/harold.db-wal"
-fi
-sqlite3 "$DEMO_DATA_DIR/harold.db" \
-  "PRAGMA foreign_keys=OFF;
-   DELETE FROM devices;
-   DELETE FROM pairing_codes;
-   DELETE FROM archived_acp_sessions;
-   PRAGMA foreign_keys=ON;"
-cat >"$DEMO_DATA_DIR/settings.yml" <<EOF
-advertisedUrl: http://$DEMO_HOST:$DEMO_PORT
-advertisedUrlEnabled: true
-bindHost: $DEMO_HOST
-bindPort: $DEMO_PORT
-logLevel: info
-logPath: null
-allowedRoots:
-  - "$MAIN_ROOT"
-  - "$SITES_ROOT"
-EOF
-log "daemon_start"
-harold start
-log "daemon_ready"
+verify_slices() {
+  python3 - "$SLICE_MANIFEST" <<'PY'
+import json
+import sys
 
-# The phone's session menu shows the five most recent agent sessions. Seed
-# them before pairing so the history scene always shows the demo titles.
-log "sessions_seed_start model=$SEED_MODEL"
+manifest_path = sys.argv[1]
+entries = json.load(open(manifest_path))
+names = {entry["name"] for entry in entries}
+
+exact = {
+    "pair_idle",
+    "pair_tap",
+    "scanner_open",
+    "scan_wait",
+    "first_name",
+    "first_confirm",
+    "paired",
+    "pair_another_open",
+    "pair_another_manual",
+    "pair_another_details",
+    "pair_another_claim",
+    "pair_another_name",
+    "pair_another_confirm",
+    "pair_another_done",
+    "session_menu_open",
+    "session_see_all",
+    "session_pick",
+    "session_chat",
+    "session_menu_reopen",
+    "new_session",
+    "workspace_open_work",
+    "workspace_pick_work",
+    "agent_open_work",
+    "agent_pick_work",
+    "workspace_open_couch",
+    "workspace_pick_couch",
+    "agent_open_couch",
+    "agent_pick_couch",
+    "continue",
+    "session_create_wait",
+    "model_open",
+    "model_search",
+    "model_pick",
+    "mode_plan",
+    "mode_build",
+    "slash_open",
+    "slash_close",
+    "prompt_focus",
+    "prompt_type",
+    "photo_open",
+    "photo_pick",
+    "photo_add",
+    "file_open",
+    "file_pick",
+    "send",
+    "reply_wait",
+    "reply",
+    "voice_open",
+    "voice_expand",
+    "voice_transcript",
+    "voice_send",
+    "voice_reply_wait",
+    "voice_reply",
+}
+
+missing = sorted(exact - names)
+if missing:
+    raise SystemExit(f"missing slices: {', '.join(missing)}")
+if not any(name.startswith("effort_") for name in names):
+    raise SystemExit("missing effort_* slices")
+
+print(f"slices: {len(entries)} recorded, {len(exact)} required actions present")
+PY
+}
+
+# --- Preflight --------------------------------------------------------------
+
+log "preflight"
+for tool in bun opencode adb node ffmpeg ffprobe python3 cc sqlite3 git curl pi agent systemctl systemd-run; do
+  command -v "$tool" >/dev/null || die "$tool is not on PATH"
+done
+command -v java >/dev/null || [[ -n "${JAVA_HOME:-}" && -x "${JAVA_HOME}/bin/java" ]] \
+  || die "java not found (set JAVA_HOME)"
+[[ -x "$ROOT/apps/android/gradlew" ]] || die "android gradlew not found"
+[[ -x "$EMULATOR" ]] || die "emulator not found at $EMULATOR (set EMULATOR)"
+[[ -f "$CAMERA_SOURCE" ]] || die "camera source not found at $CAMERA_SOURCE (set CAMERA_SOURCE)"
+[[ -f "$VOICE_INPUT" ]] || die "voice input not found at $VOICE_INPUT (set VOICE_INPUT)"
+[[ -f "$AUDIO_SHIM_SOURCE" ]] || die "audio shim source not found at $AUDIO_SHIM_SOURCE"
+[[ -f "$SCRIPT_DIR/assets/cats.zip" ]] || die "cats.zip not found"
+[[ -f "$SCRIPT_DIR/assets/cat-diary.txt" ]] || die "cat-diary.txt not found"
+(cd "$ROOT" && node -e 'require("qrcode")') >/dev/null 2>&1 \
+  || die "node module qrcode is not available in $ROOT"
+[[ "$INSTANCE1_WORKSPACES" != "$INSTANCE1_DATA_DIR"/* ]] \
+  || die "instance 1 workspace root must be outside the data dir"
+[[ "$INSTANCE2_WORKSPACES" != "$INSTANCE2_DATA_DIR"/* ]] \
+  || die "instance 2 workspace root must be outside the data dir"
+
+agent status >/dev/null 2>&1 || die "Cursor agent is not authenticated"
+pi auth check --model "$PI_MODEL" >/dev/null 2>&1 || die "pi is not ready for $PI_MODEL"
+opencode auth list >/dev/null 2>&1 || die "OpenCode is not authenticated"
+GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=10" \
+  git ls-remote git@github.com:codenamegary/harold.git HEAD >/dev/null 2>&1 \
+  || die "cannot reach git@github.com:codenamegary/harold.git"
+GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=10" \
+  git ls-remote git@personal:codenamegary/yuekbox.git HEAD >/dev/null 2>&1 \
+  || die "cannot reach git@personal:codenamegary/yuekbox.git"
+log "repo_commit $(git -C "$ROOT" rev-parse --short HEAD)"
+
+# Stop only the demo instances. The real ~/.harold daemon is left alone.
+stop_demo_daemon "$INSTANCE1_DATA_DIR"
+stop_demo_daemon "$INSTANCE2_DATA_DIR"
+if port_open "$INSTANCE1_PORT"; then
+  die "port $INSTANCE1_PORT is still in use; stop that process and retry"
+fi
+if port_open "$INSTANCE2_PORT"; then
+  die "port $INSTANCE2_PORT is still in use; stop that process and retry"
+fi
+
+log "instance1_prepare host=127.0.0.1 port=$INSTANCE1_PORT data=$INSTANCE1_DATA_DIR workspaces=$INSTANCE1_WORKSPACES"
+log "instance2_prepare host=127.0.0.1 port=$INSTANCE2_PORT data=$INSTANCE2_DATA_DIR workspaces=$INSTANCE2_WORKSPACES"
+rm -rf "$INSTANCE1_DATA_DIR" "$INSTANCE2_DATA_DIR"
+mkdir -p "$INSTANCE1_DATA_DIR" "$INSTANCE2_DATA_DIR"
+mkdir -p "$INSTANCE1_WORKSPACES" "$INSTANCE2_WORKSPACES"
+write_settings "$INSTANCE1_DATA_DIR" "$INSTANCE1_PORT" "$INSTANCE1_WORKSPACES"
+write_settings "$INSTANCE2_DATA_DIR" "$INSTANCE2_PORT" "$INSTANCE2_WORKSPACES"
+
+# --- Workspaces and agents --------------------------------------------------
+
+ensure_clone "git@github.com:codenamegary/harold.git" "$INSTANCE1_WORKSPACES/harold"
+ensure_local_repo "$INSTANCE1_WORKSPACES/cat-screensaver" "cat-screensaver"
+ensure_local_repo "$INSTANCE1_WORKSPACES/fish-screensaver-for-cats" "fish-screensaver-for-cats"
+ensure_local_repo "$INSTANCE1_WORKSPACES/meow" "meow"
+
+ensure_clone "git@personal:codenamegary/yuekbox.git" "$INSTANCE2_WORKSPACES/yuekbox"
+ensure_local_repo "$INSTANCE2_WORKSPACES/pet-me-human" "pet-me-human"
+ensure_local_repo "$INSTANCE2_WORKSPACES/thesis-research" "thesis-research"
+ensure_local_repo "$INSTANCE2_WORKSPACES/qbert-nextgen" "qbert-nextgen"
+ensure_local_repo "$INSTANCE2_WORKSPACES/elt-meeting-agenda" "elt-meeting-agenda"
+
+harold1 agent enable cursor
+harold1 agent enable pi-acp
+harold2 agent enable opencode
+
+register_workspace harold1 "$INSTANCE1_WORKSPACES/harold"
+register_workspace harold1 "$INSTANCE1_WORKSPACES/cat-screensaver"
+register_workspace harold1 "$INSTANCE1_WORKSPACES/fish-screensaver-for-cats"
+register_workspace harold1 "$INSTANCE1_WORKSPACES/meow"
+register_workspace harold2 "$INSTANCE2_WORKSPACES/yuekbox"
+register_workspace harold2 "$INSTANCE2_WORKSPACES/pet-me-human"
+register_workspace harold2 "$INSTANCE2_WORKSPACES/thesis-research"
+register_workspace harold2 "$INSTANCE2_WORKSPACES/qbert-nextgen"
+register_workspace harold2 "$INSTANCE2_WORKSPACES/elt-meeting-agenda"
+
+# One pi ACP session on the Work Harold. This is the second badge in the
+# session history. It is older than the five pinned OpenCode sessions.
+log "work_session_seed"
+WORK_SESSION_LOG="$WORK/work-session-seed.log" \
+  bash "$SCRIPT_DIR/seed_work_session.sh" \
+  "$INSTANCE1_WORKSPACES/harold" "$WORK_SESSION_TITLE" "$PI_MODEL" 2>&1 | tee -a "$LOG"
+
+# Five OpenCode sessions on the Couch Harold, in the yuekbox workspace.
+log "sessions_seed_start model=$SEED_MODEL cwd=$INSTANCE2_WORKSPACES/yuekbox"
 SEED_LOG="$WORK/session-seed.log" SEED_MODEL="$SEED_MODEL" \
+  SEED_CWD="$INSTANCE2_WORKSPACES/yuekbox" \
   bash "$SCRIPT_DIR/seed_sessions.sh" 2>&1 | tee -a "$LOG"
 log "sessions_seeded"
 
-# The emulator reaches the host through adb reverse. Pin the QR to loopback;
-# the default advertised endpoint is the LAN URL used by physical phones.
-PAIR_JSON=$(harold pair --no-wait --json --endpoint loopback | tail -n 1)
-log "pair_issued"
+# --- Daemons ----------------------------------------------------------------
+
+log "daemon_start_instance1"
+harold1 start
+log "daemon_start_instance2"
+harold2 start
+wait_for_status "instance 1" "$INSTANCE1_ENDPOINT"
+wait_for_status "instance 2" "$INSTANCE2_ENDPOINT"
+log "daemons_ready"
+
+# Instance 1's QR is baked into the camera clip. Instance 2's code is issued by
+# drive_phone.py immediately before the manual pairing beat.
+log "pair_issue_instance1"
+PAIR_JSON=$(harold1 pair --no-wait --json --endpoint loopback | tail -n 1)
 (
   cd "$ROOT"
   node -e '
@@ -241,25 +433,40 @@ node "$SCRIPT_DIR/compose_camera.mjs" "$CAMERA_SOURCE" "$WORK/qr-live.png" "$CAM
 cp "$CAMERA_FILE" "$CAMERA_FEED"
 log "camera_composed"
 
+# --- Emulator ---------------------------------------------------------------
+
+log "voice_prepare"
+ffmpeg -hide_banner -loglevel error -y -i "$VOICE_INPUT" \
+  -af "adelay=1500:all=1,apad=pad_dur=30" \
+  -ar 44100 -ac 2 -c:a pcm_s16le -map_metadata -1 -fflags +bitexact \
+  "$VOICE_WAV"
+cc -shared -fPIC -O2 -o "$AUDIO_SHIM" "$AUDIO_SHIM_SOURCE"
+log "voice_prepared"
+
 log "emulator_stop"
 stop_emulator
 log "emulator_boot"
-# CameraX validates that both a front and back camera exist. The AVD has
-# hw.camera.front=none, so that check retries forever and the pairing scanner
-# never opens. Add an unused emulated front camera so the back videofile
-# camera is accepted.
-#
-# -wipe-data restores the initial userdata image. That removes every installed
-# app, permission grant, photo, screenshot, download, and old recording, so
-# the asset prep does not have to chase individual picker directories. The
-# debug app is installed after this boot.
-LD_PRELOAD="$AUDIO_SHIM" \
-HAROLD_WAV_IN="$VOICE_WAV" \
-HAROLD_WAV_OUT="$VOICE_WAV_OUT" \
-nohup "$EMULATOR" -avd "$AVD" -wipe-data -allow-host-audio \
+systemctl --user stop "$EMULATOR_UNIT.service" 2>/dev/null || true
+systemctl --user reset-failed "$EMULATOR_UNIT.service" 2>/dev/null || true
+systemd-run --user \
+  --unit="$EMULATOR_UNIT" \
+  --collect \
+  --property=Restart=no \
+  --property=StandardOutput=append:"$EMULATOR_LOG" \
+  --property=StandardError=append:"$EMULATOR_LOG" \
+  --setenv=DISPLAY="${DISPLAY:-:0}" \
+  --setenv=WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}" \
+  --setenv=XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" \
+  --setenv=PATH="$PATH" \
+  --setenv=ANDROID_HOME="${ANDROID_HOME:-}" \
+  --setenv=ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}" \
+  --setenv=LD_PRELOAD="$AUDIO_SHIM" \
+  --setenv=HAROLD_WAV_IN="$VOICE_WAV" \
+  --setenv=HAROLD_WAV_OUT="$VOICE_WAV_OUT" \
+  "$EMULATOR" -avd "$AVD" -wipe-data -allow-host-audio \
   -gpu swiftshader_indirect -no-snapshot \
   -feature VideoPlayback -camera-back "videofile:$CAMERA_FEED" \
-  -camera-front emulated >"$EMULATOR_LOG" 2>&1 &
+  -camera-front emulated
 boot=""
 for _ in $(seq 1 150); do
   boot=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
@@ -267,25 +474,43 @@ for _ in $(seq 1 150); do
   sleep 2
 done
 [[ "$boot" == "1" ]] || die "emulator did not finish booting (see $EMULATOR_LOG)"
+wait_for_device
 log "emulator_ready"
 
-# -wipe-data resets the system UI mode to light. The demo is dark, and the app
-# reads the system mode at launch, so enable night mode before installing or
-# starting it.
 log "emulator_dark_mode"
-adb -s "$SERIAL" shell cmd uimode night yes >/dev/null
-night_mode=$(adb -s "$SERIAL" shell cmd uimode night | tr -d '\r')
-[[ "$night_mode" == *"yes"* ]] || die "could not enable dark mode (got: $night_mode)"
+night_output=""
+for _ in $(seq 1 10); do
+  night_output=$(adb -s "$SERIAL" shell cmd uimode night yes 2>&1 | tr -d '\r' || true)
+  [[ "$night_output" == *"Night mode: yes"* ]] && break
+  sleep 1
+done
+[[ "$night_output" == *"Night mode: yes"* ]] \
+  || die "could not enable dark mode (got: $night_output)"
+log "emulator_settings"
+adb_retry -s "$SERIAL" shell settings put global hide_error_dialogs 1 >/dev/null \
+  || die "could not hide system error dialogs"
+adb_retry -s "$SERIAL" shell settings put global anr_show_background 0 >/dev/null 2>&1 || true
 
-# The first boot after -wipe-data is slow enough to ANR Pixel Launcher while it
-# initializes. Hide system crash/ANR dialogs so they cannot cover the app while
-# the driver records the pair screen.
-adb -s "$SERIAL" shell settings put global hide_error_dialogs 1 >/dev/null
-adb -s "$SERIAL" shell settings put global anr_show_background 0 >/dev/null 2>&1 || true
+# --- Build and assets -------------------------------------------------------
 
-# The server and app ship together. Build and install the debug app from this
-# checkout so the recorded app speaks the same session transport as the
-# source server. A stale app can pair and then sit in reconnect retries.
+ANDROID_SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+if [[ -z "$ANDROID_SDK_DIR" && -x "$EMULATOR" ]]; then
+  ANDROID_SDK_DIR=$(cd "$(dirname "$EMULATOR")/.." && pwd)
+fi
+if [[ -z "$ANDROID_SDK_DIR" && -d "$HOME/Android/Sdk" ]]; then
+  ANDROID_SDK_DIR="$HOME/Android/Sdk"
+fi
+[[ -n "$ANDROID_SDK_DIR" && -d "$ANDROID_SDK_DIR" ]] \
+  || die "Android SDK not found (set ANDROID_HOME or create apps/android/local.properties)"
+LOCAL_PROPERTIES="$ROOT/apps/android/local.properties"
+existing_sdk=$(sed -n 's/^sdk\.dir=//p' "$LOCAL_PROPERTIES" 2>/dev/null | tail -n 1 || true)
+if [[ -z "$existing_sdk" || ! -d "$existing_sdk" ]]; then
+  printf 'sdk.dir=%s\n' "$ANDROID_SDK_DIR" >"$LOCAL_PROPERTIES"
+  log "android_sdk $LOCAL_PROPERTIES"
+fi
+
+rm -f "$SLICES"/*.mp4
+
 log "android_build"
 if ! (cd "$ROOT/apps/android" && ANDROID_SERIAL="$SERIAL" ./gradlew :app:installDebug --console=plain) \
   >"$WORK/android-build.log" 2>&1; then
@@ -296,57 +521,91 @@ log "android_installed"
 
 SERIAL="$SERIAL" WORK="$WORK" bash "$SCRIPT_DIR/push_assets.sh" 2>&1 | tee -a "$LOG"
 log "assets_ready"
-adb -s "$SERIAL" shell settings put global sysui_demo_allowed 1
-adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command enter >/dev/null 2>&1 || true
-adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command clock -e hhmm 0941 >/dev/null 2>&1 || true
-adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command battery -e level 100 -e plugged false >/dev/null 2>&1 || true
-adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command network -e wifi show -e level 4 >/dev/null 2>&1 || true
-adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command notifications -e visible false >/dev/null 2>&1 || true
+adb_retry -s "$SERIAL" shell settings put global sysui_demo_allowed 1 >/dev/null
+adb_retry -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command enter >/dev/null 2>&1 || true
+adb_retry -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command clock -e hhmm 0941 >/dev/null 2>&1 || true
+adb_retry -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command battery -e level 100 -e plugged false >/dev/null 2>&1 || true
+adb_retry -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command network -e wifi show -e level 4 >/dev/null 2>&1 || true
+adb_retry -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command notifications -e visible false >/dev/null 2>&1 || true
 
-# Stale device-side slices would otherwise ride along in the pull. Slices live
-# in /data/local/tmp, outside the media roots the app's pickers index.
-adb -s "$SERIAL" shell 'rm -f /data/local/tmp/harold-demo-*.mp4' >/dev/null
+adb_retry -s "$SERIAL" shell 'rm -f /data/local/tmp/harold-demo-*.mp4' >/dev/null
+adb_retry -s "$SERIAL" shell pm clear harold.android.debug >/dev/null
+adb_retry -s "$SERIAL" shell pm grant harold.android.debug android.permission.CAMERA
+adb_retry -s "$SERIAL" shell pm grant harold.android.debug android.permission.POST_NOTIFICATIONS
+adb_retry -s "$SERIAL" shell pm grant harold.android.debug android.permission.RECORD_AUDIO
+adb_retry -s "$SERIAL" reverse "tcp:$INSTANCE1_PORT" "tcp:$INSTANCE1_PORT" >/dev/null
+adb_retry -s "$SERIAL" reverse "tcp:$INSTANCE2_PORT" "tcp:$INSTANCE2_PORT" >/dev/null
+adb -s "$SERIAL" reverse --list | grep -q "tcp:$INSTANCE1_PORT tcp:$INSTANCE1_PORT" \
+  || die "adb reverse for port $INSTANCE1_PORT is not set"
+adb -s "$SERIAL" reverse --list | grep -q "tcp:$INSTANCE2_PORT tcp:$INSTANCE2_PORT" \
+  || die "adb reverse for port $INSTANCE2_PORT is not set"
 
-# Reset the app once for the recorded run. The first camera open after boot
-# takes ~20s; scanner_open records that startup and Remotion trims it.
-adb -s "$SERIAL" shell pm clear harold.android.debug >/dev/null
-adb -s "$SERIAL" shell pm grant harold.android.debug android.permission.CAMERA
-adb -s "$SERIAL" shell pm grant harold.android.debug android.permission.POST_NOTIFICATIONS
-adb -s "$SERIAL" shell pm grant harold.android.debug android.permission.RECORD_AUDIO
-# Enable the reverse for the recorded run so the loopback QR reaches the host.
-adb -s "$SERIAL" reverse "tcp:$DEMO_PORT" "tcp:$DEMO_PORT" >/dev/null
-adb -s "$SERIAL" reverse --list | grep -q "tcp:$DEMO_PORT tcp:$DEMO_PORT" \
-  || die "adb reverse for port $DEMO_PORT is not set"
-
-# VoskSpeechRecognitionClient preloads the bundled model when the app process
-# starts, so the recorded voice scene does not pay the unpack cost. Do not
-# open a throwaway microphone stream here: force-stopping one leaves the
-# emulator's WAV input unable to feed the next stream.
-adb -s "$SERIAL" shell monkey -p harold.android.debug -c android.intent.category.LAUNCHER 1 >/dev/null
+adb_retry -s "$SERIAL" shell monkey -p harold.android.debug -c android.intent.category.LAUNCHER 1 >/dev/null
 sleep 4
 log "app_reset"
 
-# Slice capture: drive_phone.py records one named file per action.
+if [[ "${SETUP_ONLY:-0}" == "1" ]]; then
+  log "setup_only"
+  exit 0
+fi
+
+# --- Driver -----------------------------------------------------------------
+
+log "driver_start"
 set +eu
-SERIAL="$SERIAL" PROMPT="$PROMPT" MARKS="$MARKS" SLICES="$SLICE_MANIFEST" \
+SERIAL="$SERIAL" \
+PROMPT="$PROMPT" \
+MARKS="$MARKS" \
+SLICES="$SLICE_MANIFEST" \
+HAROLD_ROOT="$ROOT" \
+INSTANCE2_DATA_DIR="$INSTANCE2_DATA_DIR" \
+INSTANCE2_PORT="$INSTANCE2_PORT" \
+INSTANCE2_ENDPOINT="$INSTANCE2_ENDPOINT" \
+SESSION_TITLE="$SESSION_TITLE" \
   python3 "$SCRIPT_DIR/drive_phone.py" 2>&1 | tee "$WORK/driver.log"
 DRIVER_STATUS=${PIPESTATUS[0]:-1}
 set -eu
 log "driver_exit $DRIVER_STATUS"
 
-# Pull every slice under the manifest's file name, then publish the slices
-# and their tap metadata. The device prefix is only a screenrecord namespace.
-for remote in $(adb -s "$SERIAL" shell ls /data/local/tmp/harold-demo-\*.mp4 2>/dev/null | tr -d '\r'); do
-  name="${remote##*/}"
-  name="${name#harold-demo-}"
-  adb -s "$SERIAL" pull "$remote" "$SLICES/$name" >/dev/null
+# Wait for the last screenrecord to finalize before pulling.
+for _ in $(seq 1 30); do
+  running=$(adb -s "$SERIAL" shell pidof screenrecord 2>/dev/null | tr -d '\r' || true)
+  [[ -z "$running" ]] && break
+  sleep 1
 done
-SLICE_COUNT=$(ls "$SLICES"/*.mp4 2>/dev/null | wc -l)
+sleep 2
+
+python3 - "$SLICE_MANIFEST" >"$WORK/slice-files.txt" <<'PY'
+import json
+import sys
+
+for entry in json.load(open(sys.argv[1])):
+    print(entry["file"])
+PY
+
+while IFS= read -r file; do
+  remote="/data/local/tmp/harold-demo-$file"
+  pulled=0
+  for _ in $(seq 1 5); do
+    if adb -s "$SERIAL" pull "$remote" "$SLICES/$file" </dev/null >/dev/null 2>&1 \
+      && [[ -s "$SLICES/$file" ]]; then
+      pulled=1
+      break
+    fi
+    sleep 1
+  done
+  [[ "$pulled" == "1" ]] || die "could not pull slice $file from $SERIAL"
+done <"$WORK/slice-files.txt"
+
+SLICE_COUNT=$(find "$SLICES" -maxdepth 1 -name '*.mp4' | wc -l)
 [[ "$SLICE_COUNT" -gt 0 ]] || die "no slices pulled from $SERIAL"
 log "slices_pulled $SLICE_COUNT"
 
-log "build_capture"
-WORK="$WORK" PUBLIC="$PUBLIC" python3 "$SCRIPT_DIR/build_capture.py" 2>&1 | tee -a "$LOG"
+if [[ "$DRIVER_STATUS" -eq 0 ]]; then
+  verify_slices
+  log "build_capture"
+  WORK="$WORK" PUBLIC="$PUBLIC" python3 "$SCRIPT_DIR/build_capture.py" 2>&1 | tee -a "$LOG"
+fi
 
 adb -s "$SERIAL" shell am broadcast -a com.android.systemui.demo -e command exit >/dev/null 2>&1 || true
 log "capture_complete"
