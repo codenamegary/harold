@@ -14,18 +14,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -37,6 +35,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import harold.android.ui.components.HaroldAppearanceEditor
 import harold.android.ui.components.HaroldBadge
+import harold.android.ui.components.HaroldButton
+import harold.android.ui.components.HaroldButtonVariant
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -121,31 +121,29 @@ fun SavedHaroldsScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                OutlinedButton(
+                                HaroldButton(
+                                    text = stringResource(R.string.pairing_cancel),
                                     onClick = onCancelEdit,
+                                    variant = HaroldButtonVariant.Secondary,
                                     modifier = Modifier
                                         .weight(1f)
-                                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                                         .testTag("saved_harold_cancel"),
-                                ) {
-                                    Text(text = stringResource(R.string.pairing_cancel))
-                                }
-                                Button(
+                                )
+                                HaroldButton(
+                                    text = stringResource(R.string.saved_harolds_save),
                                     onClick = onSave,
+                                    variant = HaroldButtonVariant.Primary,
                                     modifier = Modifier
                                         .weight(1f)
-                                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                                         .testTag("saved_harold_save"),
-                                ) {
-                                    Text(text = stringResource(R.string.saved_harolds_save))
-                                }
+                                )
                             }
                         }
                     } else {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                                .padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
@@ -177,24 +175,29 @@ fun SavedHaroldsScreen(
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                TextButton(
+                                IconButton(
                                     onClick = { onEdit(row.serverOrigin) },
                                     modifier = Modifier
                                         .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                                         .testTag("saved_harold_edit_${row.serverOrigin}"),
                                 ) {
-                                    Text(text = stringResource(R.string.saved_harolds_edit))
+                                    Icon(
+                                        imageVector = Icons.Filled.Edit,
+                                        contentDescription = stringResource(R.string.saved_harolds_edit),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
                                 }
-                                TextButton(
+                                IconButton(
                                     onClick = { onRemove(row.serverOrigin) },
-                                    colors = ButtonDefaults.textButtonColors(
-                                        contentColor = MaterialTheme.colorScheme.error,
-                                    ),
                                     modifier = Modifier
                                         .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                                         .testTag("saved_harold_remove_${row.serverOrigin}"),
                                 ) {
-                                    Text(text = stringResource(R.string.saved_harolds_remove))
+                                    Icon(
+                                        imageVector = Icons.Filled.Delete,
+                                        contentDescription = stringResource(R.string.saved_harolds_remove),
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
                                 }
                             }
                         }

@@ -45,6 +45,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import harold.android.ui.components.HaroldBadge
+import harold.android.ui.components.HaroldButton
+import harold.android.ui.components.HaroldButtonVariant
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -363,10 +365,31 @@ fun ChatScreen(
         )
     }
 
+    val disconnectName = uiState.disconnectHaroldName
+    val disconnectColorId = uiState.disconnectHaroldColorId
+    val disconnectIconId = uiState.disconnectHaroldIconId
+    val hasDisconnectBadge =
+        disconnectColorId.isNotEmpty() ||
+            disconnectIconId.isNotEmpty() ||
+            disconnectName.isNotEmpty()
+    val disconnectLabel = if (disconnectName.isNotEmpty()) {
+        stringResource(R.string.chat_disconnect_server_named, disconnectName)
+    } else {
+        stringResource(R.string.chat_disconnect_from_server)
+    }
+
     if (disconnectConfirmVisible) {
         AlertDialog(
             onDismissRequest = { disconnectConfirmVisible = false },
-            title = { Text(text = stringResource(R.string.chat_disconnect_confirm_title)) },
+            title = {
+                Text(
+                    text = if (disconnectName.isNotEmpty()) {
+                        stringResource(R.string.chat_disconnect_confirm_title_named, disconnectName)
+                    } else {
+                        stringResource(R.string.chat_disconnect_confirm_title)
+                    },
+                )
+            },
             text = { Text(text = stringResource(R.string.chat_disconnect_confirm_body)) },
             confirmButton = {
                 TextButton(
@@ -591,8 +614,20 @@ fun ChatScreen(
                             modifier = Modifier.testTag("pair_another_menu_item"),
                         )
                         DropdownMenuItem(
+                            leadingIcon = if (hasDisconnectBadge) {
+                                {
+                                    HaroldBadge(
+                                        colorId = disconnectColorId,
+                                        iconId = disconnectIconId,
+                                        size = 20.dp,
+                                        modifier = Modifier.testTag("disconnect_menu_badge"),
+                                    )
+                                }
+                            } else {
+                                null
+                            },
                             text = {
-                                Text(text = stringResource(R.string.chat_disconnect_from_server))
+                                Text(text = disconnectLabel)
                             },
                             onClick = {
                                 menuExpanded = false
@@ -690,38 +725,41 @@ fun ChatScreen(
                                 action = {
                                     Column(
                                         modifier = Modifier.fillMaxWidth(),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp),
                                     ) {
-                                        Button(
+                                        HaroldButton(
+                                            text = stringResource(R.string.chat_new_session),
                                             onClick = onCreateClick,
+                                            variant = HaroldButtonVariant.Primary,
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                                                 .testTag("new_session_cta"),
-                                        ) {
-                                            Text(text = stringResource(R.string.chat_new_session))
-                                        }
-                                        TextButton(
+                                        )
+                                        HaroldButton(
+                                            text = stringResource(R.string.chat_select_session),
                                             onClick = onSessionSelectorClick,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .defaultMinSize(minHeight = MIN_TOUCH_TARGET),
-                                        ) {
-                                            Text(text = stringResource(R.string.chat_select_session))
-                                        }
-                                        TextButton(
+                                            variant = HaroldButtonVariant.Secondary,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                        HaroldButton(
+                                            text = disconnectLabel,
                                             onClick = { disconnectConfirmVisible = true },
+                                            variant = HaroldButtonVariant.Ghost,
+                                            leadingIcon = if (hasDisconnectBadge) {
+                                                {
+                                                    HaroldBadge(
+                                                        colorId = disconnectColorId,
+                                                        iconId = disconnectIconId,
+                                                        size = 20.dp,
+                                                    )
+                                                }
+                                            } else {
+                                                null
+                                            },
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                                                 .testTag("disconnect_cta"),
-                                        ) {
-                                            Text(
-                                                text = stringResource(
-                                                    R.string.chat_disconnect_from_server,
-                                                ),
-                                            )
-                                        }
+                                        )
                                     }
                                 },
                             )

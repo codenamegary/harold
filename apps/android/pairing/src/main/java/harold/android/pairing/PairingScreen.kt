@@ -37,6 +37,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import harold.android.ui.components.HaroldAppearanceEditor
 import harold.android.ui.components.HaroldBadge
+import harold.android.ui.components.HaroldButton
+import harold.android.ui.components.HaroldButtonVariant
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -163,18 +165,17 @@ fun PairingScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Button(
+                HaroldButton(
+                    text = stringResource(R.string.pairing_manual_entry),
                     onClick = onManualEntryClick,
+                    variant = HaroldButtonVariant.Primary,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                         .testTag("pairing_manual_entry")
                         .semantics {
                             contentDescription = manualEntryContentDescription
                         },
-                ) {
-                    Text(text = stringResource(R.string.pairing_manual_entry))
-                }
+                )
             } else {
                 OutlinedTextField(
                     value = uiState.endpoint,
@@ -184,6 +185,7 @@ fun PairingScreen(
                         .testTag("pairing_endpoint_field"),
                     label = { Text(text = stringResource(R.string.pairing_endpoint_label)) },
                     singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -196,33 +198,35 @@ fun PairingScreen(
                         .testTag("pairing_code_field"),
                     label = { Text(text = stringResource(R.string.pairing_code_label)) },
                     singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                Button(
+                HaroldButton(
+                    text = stringResource(R.string.pairing_submit),
                     onClick = onSubmitManual,
+                    variant = HaroldButtonVariant.Primary,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                         .testTag("pairing_submit_button")
                         .semantics {
                             contentDescription = submitContentDescription
                         },
-                ) {
-                    Text(text = stringResource(R.string.pairing_submit))
-                }
+                )
 
-                TextButton(
+                Spacer(modifier = Modifier.height(8.dp))
+
+                HaroldButton(
+                    text = stringResource(R.string.pairing_use_scanner),
                     onClick = onScannerClick,
+                    variant = HaroldButtonVariant.Ghost,
                     modifier = Modifier
-                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                        .fillMaxWidth()
                         .semantics {
                             contentDescription = useScannerContentDescription
                         },
-                ) {
-                    Text(text = stringResource(R.string.pairing_use_scanner))
-                }
+                )
             }
 
             uiState.errorMessage?.let { message ->
@@ -366,24 +370,22 @@ private fun AlreadySavedPrompt(
                     .fillMaxWidth()
                     .testTag("pairing_already_saved"),
             )
-            Button(
+            HaroldButton(
+                text = stringResource(R.string.pairing_update),
                 onClick = onUpdate,
+                variant = HaroldButtonVariant.Primary,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                     .testTag("pairing_update"),
-            ) {
-                Text(text = stringResource(R.string.pairing_update))
-            }
-            OutlinedButton(
+            )
+            HaroldButton(
+                text = stringResource(R.string.pairing_cancel),
                 onClick = onCancel,
+                variant = HaroldButtonVariant.Secondary,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                     .testTag("pairing_cancel"),
-            ) {
-                Text(text = stringResource(R.string.pairing_cancel))
-            }
+            )
         }
     }
 }
@@ -416,14 +418,13 @@ private fun ConfirmHarold(
         endpointSubtitle = endpoint.takeIf { it.isNotBlank() },
     )
     Spacer(modifier = Modifier.height(24.dp))
-    Button(
+    HaroldButton(
+        text = stringResource(R.string.pairing_confirm),
         onClick = onConfirm,
+        variant = HaroldButtonVariant.Primary,
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
             .testTag("pairing_confirm"),
-    ) {
-        Text(text = stringResource(R.string.pairing_confirm))
-    }
+    )
     Spacer(modifier = Modifier.height(24.dp))
 }

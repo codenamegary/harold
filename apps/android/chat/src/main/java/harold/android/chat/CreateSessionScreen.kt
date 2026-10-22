@@ -33,6 +33,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import harold.android.ui.components.HaroldBadge
+import harold.android.ui.components.HaroldButton
+import harold.android.ui.components.HaroldButtonVariant
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -101,21 +103,19 @@ fun CreateSessionScreen(
                 )
             }
 
-            Button(
+            HaroldButton(
+                text = if (createState.submitting) {
+                    stringResource(R.string.create_session_continuing)
+                } else {
+                    stringResource(R.string.create_session_continue)
+                },
                 onClick = onSubmit,
                 enabled = !createState.submitting,
+                variant = HaroldButtonVariant.Primary,
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("create_session_submit"),
-            ) {
-                Text(
-                    text = if (createState.submitting) {
-                        stringResource(R.string.create_session_continuing)
-                    } else {
-                        stringResource(R.string.create_session_continue)
-                    },
-                )
-            }
+            )
         }
     }
 }

@@ -947,16 +947,26 @@ class ChatViewModel @Inject constructor(
 
     fun disconnectFromServer() {
         viewModelScope.launch {
+            val selectedOrigin = _uiState.value.selectedSession?.serverOrigin?.takeIf { it.isNotEmpty() }
+            val saved = savedHaroldRepository.list()
+            val targetSaved = if (selectedOrigin != null) {
+                saved.find { harold -> harold.serverOrigin == selectedOrigin }
+            } else {
+                null
+            }
             val paired = sessionGateway.pairedState.value as? PairedState.Paired
-            if (paired != null) {
+            val originToRemove = targetSaved?.serverOrigin ?: paired?.serverOrigin
+            val deviceIdToRemove = targetSaved?.deviceId ?: paired?.deviceId
+
+            if (originToRemove != null && deviceIdToRemove != null) {
                 val remains = forgetSavedHarold(
-                    serverOrigin = paired.serverOrigin,
-                    deviceId = paired.deviceId,
+                    serverOrigin = originToRemove,
+                    deviceId = deviceIdToRemove,
                     revoke = userRepository::revokeDevice,
                     repository = savedHaroldRepository,
                 )
                 settleAfterForget(
-                    removedOrigin = paired.serverOrigin,
+                    removedOrigin = originToRemove,
                     remains = remains,
                     gateway = sessionGateway,
                     disconnect = sessionOwner::disconnect,
@@ -966,19 +976,37 @@ class ChatViewModel @Inject constructor(
                         navigator.openPairing()
                     },
                 )
+                clearPersistedSession()
+                _uiState.update { current ->
+                    current.copy(
+                        selectedSession = if (current.selectedSession?.serverOrigin == originToRemove) {
+                            null
+                        } else {
+                            current.selectedSession
+                        },
+                        availableCommands = emptyList(),
+                        composerConfig = ComposerConfigUi(),
+                    )
+                }
+                if (remains) {
+                    refreshCatalog()
+                } else {
+                    activeSessionTracker?.replaceAll(emptyList())
+                    sessionForegroundCoordinator?.onSessionsChanged()
+                }
             } else {
                 navigator.showShell()
                 navigator.openPairing()
+                clearPersistedSession()
+                _uiState.update { current ->
+                    current.copy(
+                        availableCommands = emptyList(),
+                        composerConfig = ComposerConfigUi(),
+                    )
+                }
+                activeSessionTracker?.replaceAll(emptyList())
+                sessionForegroundCoordinator?.onSessionsChanged()
             }
-            clearPersistedSession()
-            _uiState.update { current ->
-                current.copy(
-                    availableCommands = emptyList(),
-                    composerConfig = ComposerConfigUi(),
-                )
-            }
-            activeSessionTracker?.replaceAll(emptyList())
-            sessionForegroundCoordinator?.onSessionsChanged()
         }
     }
 
@@ -1439,8 +1467,17 @@ class ChatViewModel @Inject constructor(
     }
 
     private suspend fun refreshSavedCatalog(saved: List<StoredCredential>) {
+        val pairedOrigin = (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin
+        val activeHarold = saved.firstOrNull { harold -> harold.serverOrigin == pairedOrigin }
+            ?: saved.firstOrNull()
         _uiState.update { current ->
-            current.copy(sessionsLoading = true, sessionsError = null)
+            current.copy(
+                sessionsLoading = true,
+                sessionsError = null,
+                activeHaroldName = activeHarold?.name.orEmpty(),
+                activeHaroldColorId = activeHarold?.colorId.orEmpty(),
+                activeHaroldIconId = activeHarold?.iconId.orEmpty(),
+            )
         }
         var anySuccess = catalog.isNotEmpty()
         saved.forEach { harold ->

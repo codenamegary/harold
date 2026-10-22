@@ -227,5 +227,10 @@ class SessionSelectorUiTest {
 
         composeTestRule.onNodeWithText("Alpha").assertIsDisplayed()
         composeTestRule.onNodeWithTag("chat_session_harold_badge", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithTag("chat_overflow").performClick()
+        composeTestRule.onNodeWithText("Connected Servers").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Pair").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Disconnect laptop").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("disconnect_menu_badge", useUnmergedTree = true).assertIsDisplayed()
     }
 }

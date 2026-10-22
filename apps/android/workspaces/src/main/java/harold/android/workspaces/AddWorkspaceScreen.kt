@@ -40,6 +40,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import harold.android.contracts.FilesystemDirectory
 import harold.android.ui.components.HaroldBadge
+import harold.android.ui.components.HaroldButton
+import harold.android.ui.components.HaroldButtonVariant
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -168,22 +170,19 @@ fun AddWorkspaceScreen(
                 )
             }
 
-            Button(
+            HaroldButton(
+                text = if (uiState.submitting) {
+                    stringResource(R.string.add_workspace_submitting)
+                } else {
+                    stringResource(R.string.add_workspace_submit)
+                },
                 onClick = onSubmit,
                 enabled = uiState.canSubmit,
+                variant = HaroldButtonVariant.Primary,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                     .testTag("add_workspace_submit"),
-            ) {
-                Text(
-                    text = if (uiState.submitting) {
-                        stringResource(R.string.add_workspace_submitting)
-                    } else {
-                        stringResource(R.string.add_workspace_submit)
-                    },
-                )
-            }
+            )
         }
     }
 }
