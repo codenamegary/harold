@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import dagger.hilt.android.AndroidEntryPoint
 import harold.android.foreground.EXTRA_OPEN_SESSION_ID
+import harold.android.foreground.EXTRA_OPEN_SESSION_LIST
 import harold.android.foreground.OpenSessionRequests
 import harold.android.navigation.ActivityEffect
 import harold.android.navigation.AppNavHost
@@ -51,6 +52,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun deliverOpenSession(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_SESSION_LIST, false) == true) {
+            navigator.openSessions()
+            return
+        }
         val sessionId = intent?.getStringExtra(EXTRA_OPEN_SESSION_ID) ?: return
         openSessionRequests.open(sessionId)
     }

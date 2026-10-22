@@ -6,11 +6,26 @@ data class ActiveSessionSnapshot(
     val id: String,
     val name: String,
     val state: SessionState,
+    val haroldIconId: String? = null,
 )
 
 data class NotificationCopy(
     val title: String,
     val text: String,
+)
+
+data class RunningNotification(
+    val copy: NotificationCopy,
+    val largeIconId: String?,
+    val openSessionId: String?,
+    val openSessionList: Boolean,
+)
+
+data class PermissionNotification(
+    val title: String,
+    val text: String,
+    val largeIconId: String?,
+    val openSessionId: String,
 )
 
 fun isUserVisibleActive(state: SessionState): Boolean =
@@ -55,6 +70,35 @@ fun aggregateActiveLabel(sessions: List<ActiveSessionSnapshot>): String {
 
     val top = active.maxBy { snapshot -> activeStatePriority(snapshot.state) }
     return notificationStateLabel(top.state)
+}
+
+fun runningNotification(sessions: List<ActiveSessionSnapshot>): RunningNotification {
+    val copy = notificationCopy(sessions)
+    val active = sessions.filter { snapshot -> isUserVisibleActive(snapshot.state) }
+    val icons = active.map { snapshot -> snapshot.haroldIconId }.distinct()
+    val oneHarold = active.size == 1 || (icons.size == 1 && icons.first() != null && active.all { snapshot -> snapshot.haroldIconId != null })
+    val largeIconId = if (oneHarold) icons.singleOrNull() else null
+    return RunningNotification(
+        copy = copy,
+        largeIconId = largeIconId,
+        openSessionId = if (active.size == 1) active.first().id else null,
+        openSessionList = active.size > 1,
+    )
+}
+
+fun permissionNotification(
+    sessionId: String,
+    sessionName: String,
+    haroldName: String,
+    haroldIconId: String,
+): PermissionNotification {
+    val text = "$sessionName · Needs permission"
+    return PermissionNotification(
+        title = "Harold",
+        text = text,
+        largeIconId = haroldIconId,
+        openSessionId = sessionId,
+    )
 }
 
 fun notificationCopy(sessions: List<ActiveSessionSnapshot>): NotificationCopy {

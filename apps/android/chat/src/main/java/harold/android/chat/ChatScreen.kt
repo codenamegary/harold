@@ -394,10 +394,17 @@ fun ChatScreen(
                                 )
                             } else {
                                 uiState.recentSessions.forEach { session ->
-                                    val label = if (session.haroldName.isEmpty()) {
-                                        session.name
-                                    } else {
-                                        "${session.name} · ${session.haroldName}"
+                                    val label = buildString {
+                                        append(
+                                            if (session.haroldName.isEmpty()) {
+                                                session.name
+                                            } else {
+                                                "${session.name} · ${session.haroldName}"
+                                            },
+                                        )
+                                        if (session.needsAttention) {
+                                            append(" · Needs permission")
+                                        }
                                     }
                                     SessionMenuRow(
                                         text = if (uiState.selectedSession?.id == session.id) {

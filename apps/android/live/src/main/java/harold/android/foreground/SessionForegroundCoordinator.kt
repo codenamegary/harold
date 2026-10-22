@@ -25,6 +25,8 @@ data class ForegroundCoordinatorState(
     val permissionDenied: Boolean = false,
     val notification: NotificationCopy? = null,
     val openSessionId: String? = null,
+    val openSessionList: Boolean = false,
+    val largeIconId: String? = null,
 )
 
 /**
@@ -87,8 +89,7 @@ class SessionForegroundCoordinator @Inject constructor(
             return
         }
 
-        val copy = notificationCopy(active)
-        val openId = highestPriorityActiveSession(active)?.id
+        val presentation = runningNotification(active)
 
         if (!permitted) {
             if (launcher.isRunning) {
@@ -98,7 +99,9 @@ class SessionForegroundCoordinator @Inject constructor(
                 serviceDesired = true,
                 permissionDenied = !permissionPromptDismissed,
                 notification = null,
-                openSessionId = openId,
+                openSessionId = presentation.openSessionId,
+                openSessionList = presentation.openSessionList,
+                largeIconId = presentation.largeIconId,
             )
             return
         }
@@ -106,13 +109,15 @@ class SessionForegroundCoordinator @Inject constructor(
         _state.value = ForegroundCoordinatorState(
             serviceDesired = true,
             permissionDenied = false,
-            notification = copy,
-            openSessionId = openId,
+            notification = presentation.copy,
+            openSessionId = presentation.openSessionId,
+            openSessionList = presentation.openSessionList,
+            largeIconId = presentation.largeIconId,
         )
 
         if (!launcher.isRunning) {
             launcher.start()
         }
-        launcher.updateNotification(copy)
+        launcher.updateNotification(presentation.copy)
     }
 }

@@ -27,5 +27,20 @@ class ActiveSessionNotificationTest {
         assertTrue(notification.flags and android.app.Notification.FLAG_ONGOING_EVENT != 0)
         assertNotNull(notification.contentIntent)
         assertEquals(0, notification.actions?.size ?: 0)
+        assertEquals(harold.android.live.R.drawable.ic_notification, notification.smallIcon.resId)
+    }
+
+    @Test
+    fun statusBarIconStaysTheAppIconWhenTheLargeIconIsAHarold() {
+        val context = RuntimeEnvironment.getApplication()
+        val notification = buildActiveSessionsNotification(
+            context = context,
+            copy = NotificationCopy(title = "Harold", text = "Build · Running"),
+            openSessionId = "sess_01",
+            largeIconRes = harold.android.live.R.drawable.ic_harold_bolt,
+        )
+
+        assertEquals(harold.android.live.R.drawable.ic_notification, notification.smallIcon.resId)
+        assertNotNull(notification.getLargeIcon())
     }
 }
