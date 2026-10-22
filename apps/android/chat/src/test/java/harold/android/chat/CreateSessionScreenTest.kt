@@ -85,6 +85,7 @@ class CreateSessionScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("notes · laptop · tide · bolt").assertIsDisplayed()
+        composeTestRule.onNodeWithText("notes").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("create_session_workspace_badge", useUnmergedTree = true).assertIsDisplayed()
     }
 }

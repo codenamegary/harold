@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,7 +30,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import harold.android.ui.components.HaroldBadge
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -125,9 +128,14 @@ private fun WorkspaceDropdown(
     onWorkspaceChanged: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val selectedLabel = workspaces.firstOrNull { workspace -> workspace.id == selectedWorkspaceId }
-        ?.pickerLabel()
-        ?: "Choose workspace"
+    val selectedWorkspace = workspaces.firstOrNull { workspace -> workspace.id == selectedWorkspaceId }
+    val selectedLabel = selectedWorkspace?.pickerLabel() ?: "Choose workspace"
+    val showSelectedBadge = selectedWorkspace != null &&
+        (
+            selectedWorkspace.haroldColorId.isNotEmpty() ||
+                selectedWorkspace.haroldIconId.isNotEmpty() ||
+                selectedWorkspace.haroldName.isNotEmpty()
+            )
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -138,6 +146,18 @@ private fun WorkspaceDropdown(
             onValueChange = {},
             readOnly = true,
             label = { Text(text = "Workspace") },
+            leadingIcon = if (showSelectedBadge) {
+                {
+                    HaroldBadge(
+                        colorId = selectedWorkspace.haroldColorId,
+                        iconId = selectedWorkspace.haroldIconId,
+                        size = 22.dp,
+                        modifier = Modifier.testTag("create_session_workspace_badge"),
+                    )
+                }
+            } else {
+                null
+            },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
@@ -150,12 +170,58 @@ private fun WorkspaceDropdown(
             onDismissRequest = { expanded = false },
         ) {
             workspaces.forEach { workspace ->
+                val hasBadge = workspace.haroldColorId.isNotEmpty() ||
+                    workspace.haroldIconId.isNotEmpty() ||
+                    workspace.haroldName.isNotEmpty()
+                val isSelected = workspace.id == selectedWorkspaceId
                 DropdownMenuItem(
-                    text = { Text(text = workspace.pickerLabel()) },
+                    leadingIcon = if (hasBadge) {
+                        {
+                            HaroldBadge(
+                                colorId = workspace.haroldColorId,
+                                iconId = workspace.haroldIconId,
+                                size = 22.dp,
+                                modifier = Modifier.testTag("create_session_workspace_option_badge_${workspace.id}"),
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                    text = {
+                        Column {
+                            Text(
+                                text = workspace.pickerLabel(),
+                                style = MaterialTheme.typography.bodyLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (workspace.path.isNotBlank()) {
+                                Text(
+                                    text = workspace.path,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    },
+                    trailingIcon = if (isSelected) {
+                        {
+                            Icon(
+                                imageVector = Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    } else {
+                        null
+                    },
                     onClick = {
                         onWorkspaceChanged(workspace.id)
                         expanded = false
                     },
+                    modifier = Modifier.testTag("create_session_workspace_option_${workspace.id}"),
                 )
             }
         }

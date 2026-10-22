@@ -69,7 +69,7 @@
     <string name="agent_auth_done_cancelled">Cancelled</string>
     <string name="agent_auth_done_failed">Sign-in failed</string>
     <string name="chat_pair_another_harold">Pair another Harold</string>
-    <string name="chat_saved_harolds">Saved Harolds</string>
+    <string name="chat_saved_harolds">Connected Harolds</string>
     <string name="chat_disconnect_from_server">Disconnect from server</string>
     <string name="chat_disconnect_confirm_title">Disconnect from server?</string>
     <string name="chat_disconnect_confirm_body">This device will be unpaired. You will need to scan a pairing QR or enter a code again to reconnect.</string>

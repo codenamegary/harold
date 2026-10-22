@@ -1525,6 +1525,7 @@ class ChatViewModel @Inject constructor(
             ?: catalog.firstOrNull { session -> session.sessionId == savedId }
             ?: return
         if (_uiState.value.selectedSession?.id == row.id) {
+            _uiState.update { current -> current.copy(selectedSession = row) }
             if (row.haroldReachable) {
                 if (row.serverOrigin.isNotEmpty()) {
                     watchedOrigin = row.serverOrigin

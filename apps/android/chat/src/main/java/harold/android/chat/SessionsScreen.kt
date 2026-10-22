@@ -23,6 +23,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -30,9 +32,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.testTag
@@ -41,6 +43,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import harold.android.ui.components.HaroldBadge
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -138,27 +141,52 @@ fun SessionsListContent(
         )
 
         if (uiState.harolds.isNotEmpty()) {
+            val chipColors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                selectedLabelColor = MaterialTheme.colorScheme.primary,
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
                     .testTag("session_harold_filters"),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(
+                val allSelected = uiState.haroldFilter == null
+                FilterChip(
+                    selected = allSelected,
                     onClick = { onHaroldFilter(null) },
+                    label = { Text(text = "All") },
+                    colors = chipColors,
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = allSelected,
+                        selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                    ),
                     modifier = Modifier.testTag("session_filter_all"),
-                ) {
-                    Text(text = if (uiState.haroldFilter == null) "All selected" else "All")
-                }
+                )
                 uiState.harolds.forEach { harold ->
                     val selected = uiState.haroldFilter == harold.serverOrigin
-                    TextButton(
+                    FilterChip(
+                        selected = selected,
                         onClick = { onHaroldFilter(harold.serverOrigin) },
+                        leadingIcon = {
+                            HaroldBadge(
+                                colorId = harold.colorId,
+                                iconId = harold.iconId,
+                                size = 18.dp,
+                            )
+                        },
+                        label = { Text(text = harold.name) },
+                        colors = chipColors,
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = selected,
+                            selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                        ),
                         modifier = Modifier.testTag("session_filter_${harold.serverOrigin}"),
-                    ) {
-                        Text(text = if (selected) "${harold.name} selected" else harold.name)
-                    }
+                    )
                 }
             }
         }
@@ -217,6 +245,11 @@ private fun SessionListRow(
     session: SessionRow,
     onClick: () -> Unit,
 ) {
+    val hasHaroldIdentity =
+        session.haroldColorId.isNotEmpty() ||
+            session.haroldIconId.isNotEmpty() ||
+            session.haroldName.isNotEmpty()
+
     Card(
         shape = RectangleShape,
         colors = CardDefaults.cardColors(
@@ -228,42 +261,59 @@ private fun SessionListRow(
             .testTag("session_row_${session.id}")
             .clickable(onClick = onClick),
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(text = session.name, style = MaterialTheme.typography.titleMedium)
-            if (session.haroldName.isNotEmpty()) {
-                Text(
-                    text = "${session.haroldName} · ${session.haroldColorId} · ${session.haroldIconId}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            if (hasHaroldIdentity) {
+                HaroldBadge(
+                    colorId = session.haroldColorId,
+                    iconId = session.haroldIconId,
+                    size = 28.dp,
                     modifier = Modifier.testTag("session_harold_${session.id}"),
                 )
             }
-            if (session.needsAttention) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 Text(
-                    text = "Needs permission",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.testTag("session_attention_${session.id}"),
+                    text = session.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-            }
-            if (!session.haroldReachable) {
                 Text(
-                    text = "Unreachable",
+                    text = "${session.workspaceLabel} · ${session.agentLabel} · ${sessionStatusLabel(session.state)}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.testTag("session_unreachable_${session.id}"),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
+                if (session.needsAttention || !session.haroldReachable) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (session.needsAttention) {
+                            Text(
+                                text = "Needs permission",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.testTag("session_attention_${session.id}"),
+                            )
+                        }
+                        if (!session.haroldReachable) {
+                            Text(
+                                text = "Unreachable",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.testTag("session_unreachable_${session.id}"),
+                            )
+                        }
+                    }
+                }
             }
-            Text(
-                text = "${session.workspaceLabel} · ${session.agentLabel} · ${sessionStatusLabel(session.state)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
     }
 }

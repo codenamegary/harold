@@ -41,6 +41,8 @@ fun haroldNotificationIconRes(iconId: String?): Int? = when (iconId) {
     "bolt" -> R.drawable.ic_harold_bolt
     "home" -> R.drawable.ic_harold_home
     "cloud" -> R.drawable.ic_harold_cloud
+    "terminal" -> R.drawable.ic_harold_terminal
+    "server" -> R.drawable.ic_harold_server
     else -> null
 }
 

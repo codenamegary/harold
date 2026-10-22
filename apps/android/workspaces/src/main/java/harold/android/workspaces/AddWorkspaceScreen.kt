@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import harold.android.contracts.FilesystemDirectory
+import harold.android.ui.components.HaroldBadge
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -52,6 +53,7 @@ fun AddWorkspaceScreen(
     onFolderChanged: (String) -> Unit,
     onFolderQueryChanged: (String) -> Unit,
     onSubmit: () -> Unit,
+    onHaroldChanged: (String) -> Unit = {},
 ) {
     val backContentDescription = stringResource(R.string.add_workspace_back_content_description)
     val formDisabled = uiState.hasNoRoots || uiState.rootsLoadState is RootsLoadState.Loading
@@ -88,6 +90,15 @@ fun AddWorkspaceScreen(
                 .testTag("add_workspace_screen"),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (uiState.harolds.size > 1) {
+                HaroldServerDropdown(
+                    harolds = uiState.harolds,
+                    selectedServerOrigin = uiState.selectedServerOrigin,
+                    enabled = !uiState.submitting,
+                    onHaroldChanged = onHaroldChanged,
+                )
+            }
+
             when (val roots = uiState.rootsLoadState) {
                 RootsLoadState.Loading -> {
                     Text(
@@ -171,6 +182,70 @@ fun AddWorkspaceScreen(
                     } else {
                         stringResource(R.string.add_workspace_submit)
                     },
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HaroldServerDropdown(
+    harolds: List<WorkspaceHaroldBadge>,
+    selectedServerOrigin: String,
+    enabled: Boolean,
+    onHaroldChanged: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selected = harolds.firstOrNull { it.serverOrigin == selectedServerOrigin } ?: harolds.firstOrNull()
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { if (enabled) expanded = !expanded },
+    ) {
+        OutlinedTextField(
+            value = selected?.name.orEmpty(),
+            onValueChange = {},
+            readOnly = true,
+            enabled = enabled,
+            label = { Text(text = "Harold") },
+            leadingIcon = if (selected != null) {
+                {
+                    HaroldBadge(
+                        colorId = selected.colorId,
+                        iconId = selected.iconId,
+                        size = 22.dp,
+                    )
+                }
+            } else {
+                null
+            },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = enabled)
+                .fillMaxWidth()
+                .testTag("add_workspace_harold"),
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            harolds.forEach { harold ->
+                DropdownMenuItem(
+                    leadingIcon = {
+                        HaroldBadge(
+                            colorId = harold.colorId,
+                            iconId = harold.iconId,
+                            size = 22.dp,
+                        )
+                    },
+                    text = { Text(text = harold.name) },
+                    onClick = {
+                        onHaroldChanged(harold.serverOrigin)
+                        expanded = false
+                    },
+                    modifier = Modifier.testTag("add_workspace_harold_${harold.serverOrigin}"),
                 )
             }
         }

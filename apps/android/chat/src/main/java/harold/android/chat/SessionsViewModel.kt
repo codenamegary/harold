@@ -48,6 +48,7 @@ class SessionsViewModel @Inject constructor(
     val uiState: StateFlow<SessionsUiState> = _uiState.asStateFlow()
 
     private var catalog: List<SessionRow> = emptyList()
+    private var savedHarolds: List<HaroldFilterChoice> = emptyList()
     private val retainedByOrigin = mutableMapOf<String, List<SessionRow>>()
     private var haroldFilter: String? = null
 
@@ -117,8 +118,17 @@ class SessionsViewModel @Inject constructor(
     private suspend fun load() {
         val saved = savedHaroldRepository.list()
         if (saved.isEmpty()) {
+            savedHarolds = emptyList()
             loadPairedHarold()
             return
+        }
+        savedHarolds = saved.map { harold ->
+            HaroldFilterChoice(
+                serverOrigin = harold.serverOrigin,
+                name = harold.name,
+                colorId = harold.colorId,
+                iconId = harold.iconId,
+            )
         }
 
         saved.forEach { harold ->
@@ -206,17 +216,19 @@ class SessionsViewModel @Inject constructor(
 
     private fun publish() {
         val search = _uiState.value.search.trim()
-        val harolds = catalog
-            .distinctBy { row -> row.serverOrigin }
-            .filter { row -> row.serverOrigin.isNotEmpty() }
-            .map { row ->
-                HaroldFilterChoice(
-                    serverOrigin = row.serverOrigin,
-                    name = row.haroldName,
-                    colorId = row.haroldColorId,
-                    iconId = row.haroldIconId,
-                )
-            }
+        val harolds = savedHarolds.ifEmpty {
+            catalog
+                .distinctBy { row -> row.serverOrigin }
+                .filter { row -> row.serverOrigin.isNotEmpty() }
+                .map { row ->
+                    HaroldFilterChoice(
+                        serverOrigin = row.serverOrigin,
+                        name = row.haroldName,
+                        colorId = row.haroldColorId,
+                        iconId = row.haroldIconId,
+                    )
+                }
+        }
         val sessions = visibleSessionRows(catalog, haroldFilter)
             .filter { row -> search.isEmpty() || row.name.contains(search, ignoreCase = true) }
             .sortedByDescending { row -> row.updatedAt }

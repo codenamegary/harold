@@ -44,6 +44,7 @@ class WorkspacesEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onFolderChanged = viewModel::onFolderChanged,
                 onFolderQueryChanged = viewModel::onFolderQueryChanged,
                 onSubmit = viewModel::submit,
+                onHaroldChanged = viewModel::onHaroldChanged,
             )
         }
     }

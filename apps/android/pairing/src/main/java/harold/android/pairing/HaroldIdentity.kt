@@ -1,6 +1,8 @@
 package harold.android.pairing
 
 import harold.android.credentials.StoredCredential
+import harold.android.ui.components.haroldColorPalette
+import harold.android.ui.components.haroldIconCatalog
 
 data class HaroldAppearance(
     val name: String,
@@ -8,9 +10,9 @@ data class HaroldAppearance(
     val iconId: String,
 )
 
-val haroldColorIds: List<String> = listOf("ink", "tide", "ember", "leaf")
+val haroldColorIds: List<String> = haroldColorPalette.map { option -> option.id }
 
-val haroldIconIds: List<String> = listOf("mark", "bolt", "home", "cloud")
+val haroldIconIds: List<String> = haroldIconCatalog.map { option -> option.id }
 
 fun proposedHaroldIdentity(
     serverOrigin: String,

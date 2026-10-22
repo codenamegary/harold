@@ -18,8 +18,8 @@
     <string name="pairing_color_label">Color</string>
     <string name="pairing_icon_label">Icon</string>
     <string name="pairing_confirm">Pair</string>
-    <string name="saved_harolds_title">Saved Harolds</string>
-    <string name="saved_harolds_back">Go back from saved Harolds</string>
+    <string name="saved_harolds_title">Connected Harolds</string>
+    <string name="saved_harolds_back">Go back from connected Harolds</string>
     <string name="saved_harolds_edit">Edit</string>
     <string name="saved_harolds_remove">Remove</string>
     <string name="saved_harolds_save">Save</string>

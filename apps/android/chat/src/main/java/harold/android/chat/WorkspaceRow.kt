@@ -13,11 +13,7 @@ data class WorkspaceRow(
     val haroldColorId: String = "",
     val haroldIconId: String = "",
 ) {
-    fun pickerLabel(): String = if (haroldName.isEmpty()) {
-        name
-    } else {
-        "$name · $haroldName · $haroldColorId · $haroldIconId"
-    }
+    fun pickerLabel(): String = name
 }
 
 fun Workspace.toWorkspaceRow(): WorkspaceRow =
