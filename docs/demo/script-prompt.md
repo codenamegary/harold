@@ -125,41 +125,47 @@
 - The terminal prompt says "codenamegary" as the username, with a flashing caret ready for input
 - [KR] The user types "harold start" and hits enter
 - The terminal zooms out quickly to display enough screen real-estate for the server status to display
-- Harold server starts and displays status in the terminal
+- The Harold server starts and displays its status in the terminal
 - [CAP] Generate a secure temporary pairing code
 - [KR] The user types "harold pair" and hits enter
-- The QR Code output is displayed
-- The last output says "waiting for device..."
+- The QR code output is displayed
+- The last output says "Waiting for a device to scan..."
 
 ### Transition
 
 - [CAP] Harold'ing...
 - The terminal zooms far out and becomes mostly transparent, slides far to the left, overflowing the left side of the screen and partly out of frame
 - A phone appears from the right
-- Phone animates in to front and center
-- Phone starts black and quickly fades in the Harold app loading screen
+- The phone animates in to front and center
+- The phone starts black and quickly fades in the Harold app loading screen
 
 ### Scene 2: Phone
 
 - [CAP] Pair with your agents
 - The phone starts with the Harold app loading screen
-- The initial "not connected yet" state appears
-- [TAP] The users presses "pair"
+- The initial "Not paired" state appears
+- [TAP] The user presses "Pair"
 
 ### Transition
 
 - Everything is animated
 - The remotion screen splits vertically
-- The terminal with the qr code is on the left, opacity animates back to 1, size and zoom animate as well
-- The terminal is zoomed in on the last line saying "waiting for device..."
-- The right side is the phone
+- The terminal with the QR code is on the left, opacity animates back to 1, size and zoom animate as well
+- The terminal is zoomed in on the last line saying "Waiting for a device to scan..."
+- The right side is the phone, showing the Pair device scanner
 
 ### Scene 3: Pairing w/Camera
 
-- The phone pair camera view launches on the right with the video of the qr code, simulating that the camera is pointed at a laptop screen where the qr code is shown
+- The phone pair camera view launches on the right with the video of the QR code, simulating that the camera is pointed at a laptop screen where the QR code is shown
 - The camera simulation displays for about 3s
-- The terminal goes to "device connected" state and returns to the codenamegary prompt with flashing caret ready for input
-- The phone follows the normal flow back to the connected state home screen
+- The scanner is replaced by the Harold identity screen. It shows a badge preview, the Name field, the Color row, the Icon row, and the Pair button.
+- [TAP] The Name field
+- [KR] Clear the suggested name and type "Work"
+- Leave Violet and Harold mark selected
+- Dismiss the keyboard
+- [TAP] The "Pair" button
+- The terminal goes to the "Device paired." state and returns to the codenamegary prompt with a flashing caret ready for input
+- The phone follows the normal flow to the chat screen with the Work badge
 
 ### Transition
 
@@ -167,59 +173,126 @@
 - The terminal zooms out again and opacity fades, it returns to the scene 2 position
 - The remotion screen is no longer split vertically
 - The phone animates back to its scene 2 position
+- The phone is on the chat screen with the Work badge
+- The terminal stays off-screen for the rest of the video
 
-### Scene 4: Session History
+### Scene 4: Pair Another Harold
+
+- [CAP] Pair another Harold
+- [TAP] The overflow menu in the top right of the chat screen
+- [TAP] "Pair" in the menu
+- The Pair device screen opens with the scanner. No terminal is visible.
+- [TAP] "Enter manually" below the scanner
+- The manual pairing form appears with the Harold endpoint and Pairing code fields
+- [TAP] The Harold endpoint field
+- [KR] Type "http://127.0.0.1:3848"
+- [TAP] The Pairing code field
+- [KR] Type the instance 2 pairing code
+- [TAP] "Claim pairing code"
+- The Harold identity screen appears with the suggested name "127.0.0.1 2", Tide, and Bolt
+- [TAP] The Name field
+- [KR] Clear the suggested name and type "Couch"
+- Leave Tide and Bolt selected
+- Dismiss the keyboard
+- [TAP] The "Pair" button
+- The chat screen returns with the second Harold connected
+
+### Transition
+
+- The chat screen settles with both Harolds connected
+- The terminal stays off-screen
+- The phone remains centered
+- The next caption fades in
+
+### Scene 5: Session History
 
 - [CAP] Access your agent session history
-- [TAP] The user taps the session dropdown at the top left of the screen
-- The session dropdown takes a moment to load
-- [TAP] The user taps on the first available session
+- [TAP] The session dropdown in the header
+- The dropdown loads and shows recent sessions with Harold badges and a "See all sessions…" item
+- [TAP] "See all sessions…"
+- The Sessions screen opens with the search field, the All, Work, and Couch filter chips, and the merged session list
+- Each row shows a Harold badge, title, workspace, agent, and state
+- [TAP] The newest OpenCode session from Couch
+- The Sessions screen closes and the chat opens with that session
+- The header shows the Couch badge and the session name
 
-### Scene 5: New Session
+### Transition
+
+- The Sessions screen closes
+- The selected chat returns with the Couch badge and session name
+- The composer is visible
+
+### Scene 6: New Session
 
 - [CAP] Start a new session
 - [TAP] The session dropdown in the header
-- [TAP] The 'New Session' item
-- (wait for new session screen to populate)
-- [TAP] Workspace dropdown
-- [TAP] harold option
-- [TAP] Agent dropdown
-- [TAP] OpenCode option
-- [TAP] Continue button
+- [TAP] "New session"
+- Wait for the New session screen to populate
+- [TAP] The Workspace dropdown
+- The menu shows "New workspace" and workspaces from both Harolds, each with a Harold badge and path
+- [TAP] "harold" under Work
+- [TAP] The Agent dropdown
+- The menu shows "Cursor" and "pi ACP"
+- [TAP] "Cursor"
+- [TAP] The Workspace dropdown
+- [TAP] "yuekbox" under Couch. Scroll if needed.
+- [TAP] The Agent dropdown
+- [TAP] "OpenCode"
+- [TAP] Continue
 
-### Scene 6: Text Chat
+### Transition
+
+- The New session screen closes
+- The chat returns with the new session selected
+- The composer shows the model, mode, and thinking chips
+
+### Scene 7: Text Chat
 
 - [CAP] Model list from your Agent
-- [TAP] Model list launcher
-- [TAP] Model search input
-- [KR] Type 'deepseek', do not press enter
-- [TAP] 'deepseek 4.1 flash' from the list
+- [TAP] The model chip
+- The Model sheet opens
+- [TAP] "Search models"
+- [KR] Type "deepseek", do not press enter
+- [TAP] "deepseek/DeepSeek V4.1 Flash 1017"
 - [CAP] Toggle modes supported by your agent
-- [TAP] 'Build' in mode toggle, wait 2s
-- [TAP] 'Plan' in mode toggle, wait 2s
+- [TAP] The mode chip until it reads "PLAN", wait 2s
+- [TAP] The mode chip until it reads "BUILD", wait 2s
 - [CAP] Adjust thinking effort
-- [TAP] Effort level, wait 1s
-- [TAP] Effort level, wait 1s
-- [TAP] Effort level, wait 1s
+- [TAP] The thinking bars, wait 1s
+- [TAP] The thinking bars, wait 1s
+- [TAP] The thinking bars, wait 1s
+- If the toast is not "Thinking: High", tap once more and wait 1s
+- [CAP] Slash commands from your agent
+- [TAP] The slash button
+- The Commands panel opens with "/init", "/review", and "/compact"
+- [TAP] "Close command list"
 - [CAP] Send a text Prompt
-- [KR] type 'Do you think my cat's behaviour is strange?', wait 2s
-- Do not send prompt, leave it drafted
+- [KR] Type "Do you think my cat's behaviour is strange?", wait 2s
+- Do not send the prompt. Leave it drafted.
 - [CAP] Attachments
-- [TAP] Photo attachment, wait for photo picker
+- [TAP] "Attach photo", wait for the photo picker
 - [TAP] The 3rd cat picture
-- [TAP] Add (1) at the bottom right
-- [TAP] The file attachment
-- [TAP] The cat-diary.txt file
-- [TAP] The 'send' button
-- Wait for response from agent to complete
-
-### Scene 7: Voice Chat
-
-- [TAP] The 'voice' button
-- [TAP] The 'expand' button to expand to the full screen voice input
-- Play 'voice-input.wav' as a virtual mic input
-- [TAP] Send
+- [TAP] "Add (1)"
+- [TAP] "Attach files"
+- [TAP] "cat-diary.txt"
+- [TAP] "Send message"
 - Wait for the response from the agent to complete
+
+### Scene 8: Voice Chat
+
+- [TAP] "Dictate with voice"
+- The inline voice rail opens with "Start speaking…" and "Mute voice input"
+- [TAP] "Expand voice input"
+- The full-screen voice overlay opens with "Collapse voice input" and "Switch to keyboard input"
+- Play "voice-input.wav" as the virtual mic input
+- [TAP] "Send message"
+- Wait for the response from the agent to complete
+
+### Transition
+
+- The voice reply settles
+- The phone fades out
+- The outro slide fades in
 
 ### Outro
 
