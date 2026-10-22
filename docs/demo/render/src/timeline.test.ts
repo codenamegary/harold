@@ -44,25 +44,58 @@ describe("terminal layout", () => {
 
 describe("phone typing", () => {
   test("keeps the model search on screen with its keys inside the typing window", () => {
-    const clip = playClip("018-model_search.mp4")
+    const clip = playClip("032-model_search.mp4")
     expect(clip.startSec).toBe(2.75)
-    expect(clip.startSec + clip.duration * clip.rate).toBeGreaterThanOrEqual(4.75)
+    expect(clip.startSec + clip.duration * clip.rate).toBeGreaterThanOrEqual(4.5)
 
     const keys = keysBetween(clip.from, clip.from + clip.duration)
     expect(keys).toHaveLength("deepseek".length)
-    expect(keys[0].at).toBeCloseTo(clip.from + (3.9 - clip.startSec) / clip.rate, 5)
-    expect(keys[keys.length - 1].at).toBeCloseTo(clip.from + (4.75 - clip.startSec) / clip.rate, 5)
+    expect(keys[0].at).toBeCloseTo(clip.from + (3.4 - clip.startSec) / clip.rate, 5)
+    expect(keys[keys.length - 1].at).toBeCloseTo(clip.from + (4.5 - clip.startSec) / clip.rate, 5)
   })
 
   test("keeps the whole prompt on screen with its keys inside the typing window", () => {
-    const clip = playClip("026-prompt_type.mp4")
-    expect(clip.startSec).toBe(0.45)
-    expect(clip.startSec + clip.duration * clip.rate).toBeGreaterThanOrEqual(4.62)
+    const clip = playClip("042-prompt_type.mp4")
+    expect(clip.startSec).toBe(0.4)
+    expect(clip.rate).toBe(1.3)
+    expect(clip.startSec + clip.duration * clip.rate).toBeGreaterThanOrEqual(5.5)
 
     const text = "Do you think my cat's behaviour is strange?"
     const keys = keysBetween(clip.from, clip.from + clip.duration)
     expect(keys).toHaveLength(text.length)
-    expect(keys[0].at).toBeCloseTo(clip.from + (0.82 - clip.startSec) / clip.rate, 5)
-    expect(keys[keys.length - 1].at).toBeCloseTo(clip.from + (4.62 - clip.startSec) / clip.rate, 5)
+    expect(keys[0].at).toBeCloseTo(clip.from + (0.55 - clip.startSec) / clip.rate, 5)
+    expect(keys[keys.length - 1].at).toBeCloseTo(clip.from + (5.5 - clip.startSec) / clip.rate, 5)
+  })
+
+  test("types both identity names and the manual pairing details", () => {
+    const first = playClip("005-first_name.mp4")
+    const details = playClip("010-pair_another_details.mp4")
+    const second = playClip("012-pair_another_name.mp4")
+
+    expect(keysBetween(first.from, first.from + first.duration)).toHaveLength("Work".length)
+    expect(keysBetween(second.from, second.from + second.duration)).toHaveLength("Couch".length)
+    expect(keysBetween(details.from, details.from + details.duration)).toHaveLength(
+      "http://127.0.0.1:3848".length + "GTN-5DK".length,
+    )
+  })
+})
+
+describe("new scenes", () => {
+  test("plays the identity screen and both Harolds before the walkthrough moves on", () => {
+    const played = timeline.clips
+      .filter((clip) => clip.kind === "play")
+      .map((clip) => clip.file)
+
+    expect(played.some((file) => file.endsWith("005-first_name.mp4"))).toBe(true)
+    expect(played.some((file) => file.endsWith("010-pair_another_details.mp4"))).toBe(true)
+    expect(played.some((file) => file.endsWith("028-agent_pick_couch.mp4"))).toBe(true)
+    expect(played.some((file) => file.endsWith("039-slash_open.mp4"))).toBe(true)
+  })
+
+  test("captions the second pairing and the slash command panel", () => {
+    const captions = timeline.captions.map((caption) => caption.text)
+
+    expect(captions).toContain("Pair another Harold")
+    expect(captions).toContain("Slash commands from your agent")
   })
 })

@@ -30,8 +30,10 @@ export const OUTRO_SEC = 4.2
 // shifts with it. Nothing here requires a re-capture.
 
 const PHONE_IN_AT = 8.8
-const REcede_AT = 22.8
-const WALK_START = 27.5
+const REcede_AT = 23.4
+const WALK_START = 27.8
+
+type TypingWindow = { text: string; fromSec: number; toSec: number }
 
 type Step = {
   slice: string
@@ -42,20 +44,29 @@ type Step = {
   hold?: number
   required?: boolean
   caption?: { text: string; at?: number; hold?: number }
-  typing?: { text: string; fromSec: number; toSec: number }
+  typing?: TypingWindow | TypingWindow[]
 }
 
 // The pairing act is interleaved with the terminal stage, so its shots keep
 // fixed render starts. Gaps between them become holds on the previous frame.
 const PAIR_STEPS: Step[] = [
   { slice: "pair_idle", at: 9.4 },
-  { slice: "pair_tap", at: 14.2, duration: 0.9 },
-  { slice: "scanner_open", at: 15.1, rate: 8, duration: 1.2 },
-  { slice: "scan_wait", at: 16.3, rate: 2, duration: 0.6 },
+  { slice: "pair_tap", at: 14.2, startSec: 2.55, duration: 1.6 },
+  { slice: "scanner_open", at: 15.8, rate: 8, duration: 0.35 },
+  { slice: "scan_wait", at: 16.5, rate: 2, duration: 1.0 },
+  {
+    slice: "first_name",
+    at: 17.5,
+    startSec: 2.6,
+    rate: 1.4,
+    duration: 2.6,
+    typing: { text: "Work", fromSec: 4.85, toSec: 5.6 },
+  },
+  { slice: "first_confirm", at: 20.2, startSec: 3.0, rate: 2, duration: 1.4 },
   {
     slice: "paired",
-    at: 16.9,
-    caption: { text: "Achievement Unlocked: Work from Couch", at: 6.1, hold: 2.6 },
+    at: 21.6,
+    caption: { text: "Achievement Unlocked: Work from Couch", at: 1.2, hold: 2.6 },
   },
 ]
 
@@ -63,26 +74,71 @@ const PAIR_STEPS: Step[] = [
 // one ends plus its hold, so changing one duration moves the rest.
 const WALK_STEPS: Step[] = [
   {
-    slice: "session_menu_open",
-    hold: 0.6,
-    caption: { text: "Access your agent session history", at: 0.2, hold: 2.4 },
+    slice: "pair_another_open",
+    startSec: 2.4,
+    rate: 2,
+    duration: 3.8,
+    hold: 0.3,
+    caption: { text: "Pair another Harold", at: 0.2, hold: 2.4 },
   },
-  { slice: "session_pick", hold: 0.4 },
-  { slice: "session_chat", rate: 2, duration: 1.5, hold: 0.4 },
-  { slice: "session_menu_reopen", hold: 0.4 },
+  { slice: "pair_another_manual", startSec: 2.9, rate: 1.5, duration: 1.7, hold: 0.3 },
+  {
+    slice: "pair_another_details",
+    startSec: 2.8,
+    rate: 1.5,
+    duration: 4.0,
+    hold: 0.3,
+    typing: [
+      { text: "http://127.0.0.1:3848", fromSec: 3.55, toSec: 5.95 },
+      { text: "GTN-5DK", fromSec: 7.2, toSec: 8.6 },
+    ],
+  },
+  { slice: "pair_another_claim", startSec: 2.8, rate: 2, duration: 1.4, hold: 0.4 },
+  {
+    slice: "pair_another_name",
+    startSec: 2.7,
+    rate: 1.5,
+    duration: 2.0,
+    hold: 0.4,
+    typing: { text: "Couch", fromSec: 4.3, toSec: 5.15 },
+  },
+  { slice: "pair_another_confirm", startSec: 2.9, rate: 2, duration: 1.5, hold: 0.3 },
+  { slice: "pair_another_done", duration: 0.8, hold: 0.3 },
+  {
+    slice: "session_menu_open",
+    startSec: 2.4,
+    rate: 2,
+    duration: 2.2,
+    hold: 0.5,
+    caption: { text: "Access your agent session history", at: 0.2, hold: 4.0 },
+  },
+  { slice: "session_see_all", startSec: 2.5, rate: 2.5, duration: 2.2, hold: 0.4 },
+  { slice: "session_pick", startSec: 2.5, rate: 2.5, duration: 1.0, hold: 0.3 },
+  { slice: "session_chat", rate: 2, duration: 1.0, hold: 0.3 },
+  { slice: "session_menu_reopen", startSec: 2.4, rate: 2.5, duration: 1.8, hold: 0.4 },
   {
     slice: "new_session",
-    hold: 0.4,
+    startSec: 2.5,
+    rate: 2,
+    duration: 1.15,
+    hold: 0.3,
     caption: { text: "Start a new session", at: 0.2, hold: 2.4 },
   },
-  { slice: "workspace_sites", required: false },
-  { slice: "workspace_harold", hold: 0.2 },
-  { slice: "agent_open", hold: 0.3 },
-  { slice: "agent_pick", hold: 0.3 },
-  { slice: "continue", hold: 0.2 },
-  { slice: "session_create_wait", rate: 4, duration: 1.2 },
+  { slice: "workspace_open_work", startSec: 2.6, rate: 2.5, duration: 1.8, hold: 0.3 },
+  { slice: "workspace_pick_work", startSec: 2.5, rate: 2, duration: 0.5, hold: 0.2 },
+  { slice: "agent_open_work", startSec: 2.6, rate: 2.5, duration: 1.65, hold: 0.3 },
+  { slice: "agent_pick_work", startSec: 2.5, rate: 2, duration: 0.4, hold: 0.2 },
+  { slice: "workspace_open_couch", startSec: 2.6, rate: 2, duration: 1.1, hold: 0.3 },
+  { slice: "workspace_pick_couch", startSec: 2.6, rate: 1.5, duration: 1.4, hold: 0.3 },
+  { slice: "agent_open_couch", startSec: 2.6, rate: 2, duration: 1.05, hold: 0.3 },
+  { slice: "agent_pick_couch", startSec: 2.5, rate: 2, duration: 0.4, hold: 0.2 },
+  { slice: "continue", startSec: 2.6, rate: 2.5, duration: 2.0, hold: 0.2 },
+  { slice: "session_create_wait", rate: 2, duration: 1.0, hold: 0.2 },
   {
     slice: "model_open",
+    startSec: 2.6,
+    rate: 2,
+    duration: 1.2,
     hold: 0.3,
     caption: { text: "Model list from your Agent", at: 0.2, hold: 2.4 },
   },
@@ -90,56 +146,77 @@ const WALK_STEPS: Step[] = [
     slice: "model_search",
     startSec: 2.75,
     duration: 2.2,
-    typing: { text: "deepseek", fromSec: 3.9, toSec: 4.75 },
+    typing: { text: "deepseek", fromSec: 3.4, toSec: 4.5 },
     hold: 0.3,
   },
-  { slice: "model_pick", hold: 0.3 },
+  { slice: "model_pick", startSec: 2.5, rate: 2, duration: 0.8, hold: 0.3 },
   {
     slice: "mode_plan",
+    startSec: 4.5,
+    rate: 1.5,
+    duration: 1.5,
     hold: 1.0,
     caption: { text: "Toggle modes supported by your agent", at: 0.2, hold: 2.6 },
   },
-  { slice: "mode_build", hold: 1.0 },
+  { slice: "mode_build", startSec: 4.8, rate: 1.5, duration: 1.4, hold: 1.0 },
   {
     slice: "effort_1",
-    hold: 0.3,
-    caption: { text: "Adjust thinking effort", at: 0.2, hold: 2.6 },
+    startSec: 0.5,
+    duration: 0.8,
+    hold: 0.25,
+    caption: { text: "Adjust thinking effort", at: 0.2, hold: 2.2 },
   },
-  { slice: "effort_2", hold: 0.3 },
-  { slice: "effort_3", hold: 0.3 },
+  { slice: "effort_2", startSec: 0.5, duration: 0.8, hold: 0.25 },
+  { slice: "effort_3", startSec: 0.5, duration: 0.8, hold: 0.3 },
+  {
+    slice: "slash_open",
+    startSec: 2.6,
+    rate: 2.5,
+    duration: 2.0,
+    hold: 1.0,
+    caption: { text: "Slash commands from your agent", at: 0.2, hold: 2.4 },
+  },
+  { slice: "slash_close", startSec: 2.6, rate: 2, duration: 0.8, hold: 0.5 },
   {
     slice: "prompt_focus",
-    hold: 0.3,
+    startSec: 2.5,
+    rate: 2,
+    duration: 0.5,
+    hold: 0.2,
     caption: { text: "Send a text Prompt", at: 0.2, hold: 2.6 },
   },
   {
     slice: "prompt_type",
-    startSec: 0.45,
-    duration: 4.6,
+    startSec: 0.4,
+    rate: 1.3,
+    duration: 4.1,
     typing: {
       text: "Do you think my cat's behaviour is strange?",
-      fromSec: 0.82,
-      toSec: 4.62,
+      fromSec: 0.55,
+      toSec: 5.5,
     },
-    hold: 0.6,
+    hold: 0.7,
   },
   {
     slice: "photo_open",
+    startSec: 2.6,
+    rate: 2,
+    duration: 1.1,
     hold: 0.3,
     caption: { text: "Attachments", at: 0.2, hold: 2.6 },
   },
-  { slice: "photo_pick", hold: 0.3 },
-  { slice: "photo_add", hold: 0.3 },
-  { slice: "file_open", hold: 0.3 },
-  { slice: "file_pick", hold: 0.3 },
-  { slice: "send", hold: 0.2 },
-  { slice: "reply_wait", rate: 6, duration: 2.0, hold: 0.2 },
+  { slice: "photo_pick", startSec: 2.6, rate: 2, duration: 0.8, hold: 0.3 },
+  { slice: "photo_add", startSec: 2.6, rate: 2, duration: 1.1, hold: 0.3 },
+  { slice: "file_open", startSec: 2.6, rate: 2, duration: 1.0, hold: 0.3 },
+  { slice: "file_pick", startSec: 2.7, rate: 2, duration: 1.0, hold: 0.25 },
+  { slice: "send", startSec: 2.8, rate: 2, duration: 1.2, hold: 0.2 },
+  { slice: "reply_wait", rate: 6, duration: 1.8, hold: 0.2 },
   { slice: "reply", duration: 2.5, hold: 1.0 },
-  { slice: "voice_open", hold: 0.3 },
-  { slice: "voice_expand", hold: 0.6 },
-  { slice: "voice_transcript", rate: 2, duration: 3.0 },
-  { slice: "voice_send", hold: 0.2 },
-  { slice: "voice_reply_wait", rate: 6, duration: 2.0, hold: 0.2 },
+  { slice: "voice_open", startSec: 2.5, rate: 2, duration: 1.3, hold: 0.4 },
+  { slice: "voice_expand", startSec: 3.0, rate: 2, duration: 1.4, hold: 0.6 },
+  { slice: "voice_transcript", startSec: 0.4, rate: 2, duration: 3.2, hold: 0.2 },
+  { slice: "voice_send", startSec: 3.0, rate: 2, duration: 0.9, hold: 0.2 },
+  { slice: "voice_reply_wait", rate: 6, duration: 1.7, hold: 0.2 },
   { slice: "voice_reply", duration: 2.5, hold: 1.2 },
 ]
 
@@ -444,16 +521,17 @@ const buildSounds = (shots: Shot[], captions: CaptionSpec[], ripples: Ripple[]):
   sounds.push({ at: 10.44, name: "enter", volume: 1 })
   // [KR] on the phone, spread across the typing slice.
   for (const shot of shots) {
-    if (shot.typing === undefined) {
-      continue
-    }
-    const fromSec = Math.max(shot.startSec, shot.typing.fromSec)
-    const toSec = Math.min(shot.startSec + shot.duration * shot.rate, shot.typing.toSec)
-    const at = shot.at + (fromSec - shot.startSec) / shot.rate
-    const duration = Math.max(0, toSec - fromSec) / shot.rate
-    const step = duration / Math.max(1, shot.typing.text.length - 1)
-    for (let index = 0; index < shot.typing.text.length; index += 1) {
-      sounds.push({ at: at + index * step, name: "key", volume: 0.8 })
+    const windows =
+      shot.typing === undefined ? [] : Array.isArray(shot.typing) ? shot.typing : [shot.typing]
+    for (const typing of windows) {
+      const fromSec = Math.max(shot.startSec, typing.fromSec)
+      const toSec = Math.min(shot.startSec + shot.duration * shot.rate, typing.toSec)
+      const at = shot.at + (fromSec - shot.startSec) / shot.rate
+      const duration = Math.max(0, toSec - fromSec) / shot.rate
+      const step = duration / Math.max(1, typing.text.length - 1)
+      for (let index = 0; index < typing.text.length; index += 1) {
+        sounds.push({ at: at + index * step, name: "key", volume: 0.8 })
+      }
     }
   }
   // [TAP] one pop per tap, at the tap.
@@ -478,6 +556,14 @@ export type Timeline = {
   endSec: number
 }
 
+const tapRenderSec = (shot: Shot | undefined): number | null => {
+  const tap = shot?.data.taps?.[0]
+  if (shot === undefined || tap === undefined) {
+    return null
+  }
+  return shot.at + Math.max(0, (tap.atSec - shot.startSec) / shot.rate)
+}
+
 /**
  * The whole cut, derived from the captured slices.
  */
@@ -488,7 +574,10 @@ export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
   const ripples = buildRipples(shots)
   const captions = buildCaptions(shots)
   const sounds = buildSounds(shots, captions, ripples)
-  const pairedRenderSec = pair.find((shot) => shot.slice === "paired")?.at ?? 20.4
+  const pairedRenderSec =
+    tapRenderSec(pair.find((shot) => shot.slice === "first_confirm")) ??
+    pair.find((shot) => shot.slice === "paired")?.at ??
+    20.4
   const last = walk[walk.length - 1]
   const endSec = last.at + last.duration + (last.hold ?? 0)
   return {

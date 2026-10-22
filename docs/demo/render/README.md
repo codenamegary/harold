@@ -8,11 +8,14 @@ opening scene (types `harold start` and prints the server status, zoomed in
 close and fixed in place), then the pairing flow - the terminal zooms out to
 sit fully in frame on the left, the phone slides in to the right of it, the
 terminal types `harold pair` and prints the QR for the recorded pairing code,
-the phone taps Pair and its camera scans that QR, landing on `Device paired.`.
-Only then does the terminal slide out and the phone take center stage for
-session history, new session, model/mode/effort, a drafted prompt with photo
-and file attachments, the text reply, and voice input with its reply. It ends
-on an outro slide with the install command and the site URL.
+the phone taps Pair and its camera scans that QR, names the first Harold
+`Work`, and lands on `Device paired.`. The phone then pairs a second Harold
+over the manual endpoint, names it `Couch`, and browses sessions across both
+Harolds. It takes center stage for session history, new session with a
+workspace and agent from each Harold, model/mode/effort, slash commands, a
+drafted prompt with photo and file attachments, the text reply, and voice
+input with its reply. It ends on an outro slide with the install command and
+the site URL.
 
 | File               | Role                                                                                                |
 | ------------------ | --------------------------------------------------------------------------------------------------- |
@@ -39,8 +42,8 @@ The phone screen is a sequence of captured slices, not one stitched video.
 `WALK_STEPS` and `PAIR_STEPS` in `timeline.ts` choose each slice's in-point,
 rate, render duration, and hold. Typing windows are source times, so the key
 sounds follow the recorded typing even when the shot is trimmed or retimed.
-The scanner warm-up is a 3x sprint. The long session-creation, reply-stream,
-and voice-reply waits are compressed there too. The rendered cut is silent on
+The scanner opening, the identity typing, and the long session-creation,
+reply-stream, and voice-reply waits are compressed there too. The rendered cut is silent on
 the phone screen itself: `voice-input.wav` exists only as the emulator's
 microphone feed during capture and is never played in the video.
 
