@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.4.0](https://github.com/codenamegary/harold/compare/harold-android-v1.3.0...harold-android-v1.4.0) (2026-10-22)
+
+
+### Features
+
+* **android:** edit or remove one saved Harold ([#439](https://github.com/codenamegary/harold/issues/439)) ([b89dd64](https://github.com/codenamegary/harold/commit/b89dd64201f7f85a6005f042a96fb8b78e37baf3))
+* **android:** pair another Harold without dropping the ones already saved ([#438](https://github.com/codenamegary/harold/issues/438)) ([10e2d08](https://github.com/codenamegary/harold/commit/10e2d08148c43d3c89b6a5d41477f02c24b929e8))
+* **android:** polish multi-Harold badges and appearance UI ([#444](https://github.com/codenamegary/harold/issues/444)) ([a5131a6](https://github.com/codenamegary/harold/commit/a5131a6a88de02aa71aa61182388f5c53735ef84))
+* **android:** save more than one Harold on the phone ([#436](https://github.com/codenamegary/harold/issues/436)) ([161e9f9](https://github.com/codenamegary/harold/commit/161e9f9cefb5a75431e311a151a217d2aca974ad))
+* **android:** show sessions from every paired Harold ([#441](https://github.com/codenamegary/harold/issues/441)) ([02ed151](https://github.com/codenamegary/harold/commit/02ed1518bfaf608e745ff1977f221a2722b58e85))
+* **android:** start a session from any Harold's workspace ([#442](https://github.com/codenamegary/harold/issues/442)) ([6503278](https://github.com/codenamegary/harold/commit/650327813d09260391659a69d65c7f1a3e20897e))
+* **android:** stay connected to every paired Harold ([#440](https://github.com/codenamegary/harold/issues/440)) ([bef370c](https://github.com/codenamegary/harold/commit/bef370c47ef8b3a3d4097ae53c35bf92f22a3bc9))
+* **android:** tell the user when another Harold needs attention ([#443](https://github.com/codenamegary/harold/issues/443)) ([2b264af](https://github.com/codenamegary/harold/commit/2b264af49c18adc6b0b5d8099790445ede1ed0bc))
+
 ## [1.3.0](https://github.com/codenamegary/harold/compare/harold-android-v1.2.0...harold-android-v1.3.0) (2026-10-19)
 
 
