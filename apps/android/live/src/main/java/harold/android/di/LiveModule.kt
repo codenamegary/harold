@@ -7,11 +7,15 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import harold.android.foreground.ActiveSessionTracker
 import harold.android.foreground.AndroidNotificationPermissionChecker
+import harold.android.foreground.AndroidPermissionAttentionNotifier
 import harold.android.foreground.AndroidSessionForegroundLauncher
 import harold.android.foreground.DefaultActiveSessionTracker
 import harold.android.foreground.DefaultOpenSessionRequests
+import harold.android.foreground.DefaultSessionAttentionMarks
 import harold.android.foreground.NotificationPermissionChecker
 import harold.android.foreground.OpenSessionRequests
+import harold.android.foreground.PermissionAttentionNotifier
+import harold.android.foreground.SessionAttentionMarks
 import harold.android.foreground.SessionForegroundLauncher
 import harold.android.live.DefaultSessionOwner
 import harold.android.live.SessionOwner
@@ -34,6 +38,16 @@ abstract class LiveModule {
     @Binds
     @Singleton
     abstract fun openSessionRequests(impl: DefaultOpenSessionRequests): OpenSessionRequests
+
+    @Binds
+    @Singleton
+    abstract fun sessionAttentionMarks(impl: DefaultSessionAttentionMarks): SessionAttentionMarks
+
+    @Binds
+    @Singleton
+    abstract fun permissionAttentionNotifier(
+        impl: AndroidPermissionAttentionNotifier,
+    ): PermissionAttentionNotifier
 
     @Binds
     @Singleton

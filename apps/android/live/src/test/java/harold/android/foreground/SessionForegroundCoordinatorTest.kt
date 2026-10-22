@@ -74,7 +74,7 @@ class SessionForegroundCoordinatorTest {
     }
 
     @Test
-    fun openSessionIdPrefersAwaitingPermissionOverRunning() = runTest {
+    fun severalActiveSessionsOpenTheSessionList() = runTest {
         val tracker = DefaultActiveSessionTracker()
         val launcher = FakeLauncher()
         val coordinator = SessionForegroundCoordinator(
@@ -97,7 +97,8 @@ class SessionForegroundCoordinatorTest {
         coordinator.onSessionsChanged()
         advanceUntilIdle()
 
-        assertEquals("sess_permission", coordinator.state.value.openSessionId)
+        assertEquals(null, coordinator.state.value.openSessionId)
+        assertEquals(true, coordinator.state.value.openSessionList)
         assertEquals("2 active sessions · Needs permission", coordinator.state.value.notification?.text)
         assertTrue(launcher.isRunning)
     }

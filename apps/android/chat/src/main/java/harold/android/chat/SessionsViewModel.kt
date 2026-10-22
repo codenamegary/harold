@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import harold.android.credentials.SavedHaroldRepository
+import harold.android.foreground.SessionAttentionMarks
 import harold.android.live.SessionOwner
 import harold.android.navigation.Navigator
 import harold.android.network.apiErrorMessage
@@ -41,6 +42,7 @@ class SessionsViewModel @Inject constructor(
     private val navigator: Navigator,
     private val sessionOwner: SessionOwner,
     private val savedHaroldRepository: SavedHaroldRepository,
+    private val sessionAttention: SessionAttentionMarks? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SessionsUiState())
     val uiState: StateFlow<SessionsUiState> = _uiState.asStateFlow()
@@ -55,6 +57,14 @@ class SessionsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             sessionOwner.sessionTitles.collect(::applyTitles)
+        }
+        sessionAttention?.let { marks ->
+            viewModelScope.launch {
+                marks.marked.collect {
+                    catalog = catalog.map { row -> row.copy(needsAttention = it.containsKey(row.id)) }
+                    publish()
+                }
+            }
         }
     }
 

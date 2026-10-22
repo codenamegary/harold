@@ -616,6 +616,71 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun permissionForAnotherSessionMarksTheRowAndDoesNotCoverTheOpenChat() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val alerts = mutableListOf<harold.android.foreground.PermissionNotification>()
+        val cleared = mutableListOf<String>()
+        val notifier = object : harold.android.foreground.PermissionAttentionNotifier {
+            override fun show(alert: harold.android.foreground.PermissionNotification) {
+                alerts += alert
+            }
+
+            override fun clear(sessionId: String) {
+                cleared += sessionId
+            }
+        }
+        val marks = harold.android.foreground.DefaultSessionAttentionMarks()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = sessionOwner,
+            sessionAttention = marks,
+            permissionNotifier = notifier,
+        )
+        advanceUntilIdle()
+        val open = listedSession("sess_02", "Alpha").copy(
+            haroldName = "laptop",
+            haroldIconId = "bolt",
+        )
+        viewModel.selectSession(open)
+        advanceUntilIdle()
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                pendingPermission = PermissionRequest(
+                    id = "perm_01",
+                    sessionId = "sess_02",
+                    turnId = "stream",
+                    toolCallId = "stream",
+                    toolName = "fake-tool",
+                    status = PermissionStatus.Pending,
+                    options = listOf(PermissionOption(optionId = "allow-once", name = "Allow once")),
+                    createdAt = "",
+                ),
+            ),
+        )
+        advanceUntilIdle()
+        assertEquals("fake-tool", viewModel.uiState.value.activePermissionRequest?.toolName)
+        assertTrue(alerts.isEmpty())
+
+        viewModel.selectSession(listedSession("sess_01", "Beta"))
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.activePermissionRequest)
+        assertTrue(viewModel.uiState.value.sessions.single { row -> row.sessionId == "sess_02" }.needsAttention)
+        assertEquals("Alpha · Needs permission", alerts.single().text)
+        assertFalse(alerts.single().text.contains("laptop"))
+        assertEquals("bolt", alerts.single().largeIconId)
+        assertEquals("Harold", alerts.single().title)
+
+        viewModel.selectSession(open)
+        advanceUntilIdle()
+
+        assertEquals("fake-tool", viewModel.uiState.value.activePermissionRequest?.toolName)
+        assertEquals(listOf(open.id), cleared)
+        assertFalse(viewModel.uiState.value.sessions.single { row -> row.sessionId == "sess_02" }.needsAttention)
+    }
+
+    @Test
     fun liveSnapshotMapsComposerConfig() = runTest(dispatcher) {
         val sessionOwner = ChatFakeSessionOwner()
         val viewModel = createViewModel(
@@ -1156,6 +1221,8 @@ class ChatViewModelTest {
         savedHaroldRepository: SavedHaroldRepository = SavedHaroldRepository(FakeCredentialStore()),
         navigator: Navigator = Navigator(),
         haroldConnections: harold.android.session.HaroldConnections? = null,
+        sessionAttention: harold.android.foreground.SessionAttentionMarks? = null,
+        permissionNotifier: harold.android.foreground.PermissionAttentionNotifier? = null,
     ): ChatViewModel = ChatViewModel(
         savedStateHandle = SavedStateHandle(),
         sessionGateway = sessionGateway,
@@ -1174,6 +1241,8 @@ class ChatViewModelTest {
         navigator = navigator,
         sessionCommands = sessionCommands,
         haroldConnections = haroldConnections,
+        sessionAttention = sessionAttention,
+        permissionNotifier = permissionNotifier,
     )
 
     private fun pairedGateway(): FakeSessionGateway =

@@ -30,6 +30,7 @@ data class SessionRow(
     val haroldColorId: String = "",
     val haroldIconId: String = "",
     val haroldReachable: Boolean = true,
+    val needsAttention: Boolean = false,
 ) {
     val id: String
         get() = if (serverOrigin.isEmpty()) {

@@ -30,11 +30,13 @@ class ActiveSessionsService : Service() {
                 val updateIntent = intent ?: return START_STICKY
                 val title = updateIntent.getStringExtra(EXTRA_TITLE) ?: return START_STICKY
                 val text = updateIntent.getStringExtra(EXTRA_TEXT) ?: return START_STICKY
-                val openSessionId = coordinator.state.value.openSessionId
+                val state = coordinator.state.value
                 val notification = buildActiveSessionsNotification(
                     context = this,
                     copy = NotificationCopy(title = title, text = text),
-                    openSessionId = openSessionId,
+                    openSessionId = state.openSessionId,
+                    openSessionList = state.openSessionList,
+                    largeIconRes = haroldNotificationIconRes(state.largeIconId),
                 )
                 val manager = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
                 manager.notify(ACTIVE_SESSIONS_NOTIFICATION_ID, notification)
@@ -43,10 +45,13 @@ class ActiveSessionsService : Service() {
             else -> {
                 val copy = coordinator.state.value.notification
                     ?: NotificationCopy(title = "Harold", text = "Active sessions")
+                val state = coordinator.state.value
                 val notification = buildActiveSessionsNotification(
                     context = this,
                     copy = copy,
-                    openSessionId = coordinator.state.value.openSessionId,
+                    openSessionId = state.openSessionId,
+                    openSessionList = state.openSessionList,
+                    largeIconRes = haroldNotificationIconRes(state.largeIconId),
                 )
                 ServiceCompat.startForeground(
                     this,

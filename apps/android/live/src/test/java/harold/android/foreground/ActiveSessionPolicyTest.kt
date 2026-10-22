@@ -65,6 +65,51 @@ class ActiveSessionPolicyTest {
     }
 
     @Test
+    fun oneHaroldUsesItsIconAndOpensThatSession() {
+        val presentation = runningNotification(
+            listOf(snapshot("s1", "Build fix", SessionState.Running, haroldIconId = "bolt")),
+        )
+
+        assertEquals("Harold", presentation.copy.title)
+        assertEquals("Build fix · Running", presentation.copy.text)
+        assertFalse(presentation.copy.text.contains("laptop"))
+        assertEquals("bolt", presentation.largeIconId)
+        assertEquals("s1", presentation.openSessionId)
+        assertFalse(presentation.openSessionList)
+    }
+
+    @Test
+    fun severalHaroldsUseTheAppIconAndOpenTheSessionList() {
+        val presentation = runningNotification(
+            listOf(
+                snapshot("s1", "Build fix", SessionState.Running, haroldIconId = "bolt"),
+                snapshot("s2", "Notes", SessionState.Starting, haroldIconId = "mark"),
+            ),
+        )
+
+        assertEquals("2 active sessions · Running", presentation.copy.text)
+        assertEquals(null, presentation.largeIconId)
+        assertEquals(null, presentation.openSessionId)
+        assertTrue(presentation.openSessionList)
+    }
+
+    @Test
+    fun permissionForAnotherSessionOmitsTheHaroldNameAndUsesItsIcon() {
+        val alert = permissionNotification(
+            sessionId = "s2",
+            sessionName = "Notes",
+            haroldName = "laptop",
+            haroldIconId = "bolt",
+        )
+
+        assertEquals("Notes · Needs permission", alert.text)
+        assertFalse(alert.text.contains("laptop"))
+        assertEquals("Harold", alert.title)
+        assertEquals("bolt", alert.largeIconId)
+        assertEquals("s2", alert.openSessionId)
+    }
+
+    @Test
     fun highestPriorityReturnsNullWhenNoneActive() {
         assertNull(
             highestPriorityActiveSession(
@@ -77,5 +122,11 @@ class ActiveSessionPolicyTest {
         id: String,
         name: String,
         state: SessionState,
-    ): ActiveSessionSnapshot = ActiveSessionSnapshot(id = id, name = name, state = state)
+        haroldIconId: String? = null,
+    ): ActiveSessionSnapshot = ActiveSessionSnapshot(
+        id = id,
+        name = name,
+        state = state,
+        haroldIconId = haroldIconId,
+    )
 }

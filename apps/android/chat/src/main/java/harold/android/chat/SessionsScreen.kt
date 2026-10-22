@@ -241,6 +241,14 @@ private fun SessionListRow(
                     modifier = Modifier.testTag("session_harold_${session.id}"),
                 )
             }
+            if (session.needsAttention) {
+                Text(
+                    text = "Needs permission",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("session_attention_${session.id}"),
+                )
+            }
             if (!session.haroldReachable) {
                 Text(
                     text = "Unreachable",

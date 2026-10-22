@@ -36,6 +36,10 @@ import harold.android.credentials.forgetSavedHarold
 import harold.android.credentials.settleAfterForget
 import harold.android.di.PreviewDispatcher
 import harold.android.foreground.ActiveSessionSnapshot
+import harold.android.foreground.MarkedPermission
+import harold.android.foreground.PermissionAttentionNotifier
+import harold.android.foreground.SessionAttentionMarks
+import harold.android.foreground.permissionNotification
 import harold.android.foreground.ActiveSessionTracker
 import harold.android.foreground.OpenSessionRequests
 import harold.android.foreground.SessionForegroundCoordinator
@@ -90,6 +94,8 @@ class ChatViewModel @Inject constructor(
     private val navigator: Navigator,
     private val sessionCommands: SessionCommands,
     private val haroldConnections: HaroldConnections? = null,
+    private val sessionAttention: SessionAttentionMarks? = null,
+    private val permissionNotifier: PermissionAttentionNotifier? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -110,6 +116,7 @@ class ChatViewModel @Inject constructor(
     private val retainedByOrigin = mutableMapOf<String, List<SessionRow>>()
     private val transcriptMemory = mutableMapOf<String, AcpTranscriptState>()
     private var watchedOrigin: String? = null
+    private var keepRestoredPermission: Boolean = false
     private var attachmentLocalIdCounter: Int = 0
     private var catalog: List<SessionRow> = emptyList()
     private val titlePulledSessionIds = mutableSetOf<String>()
@@ -1089,6 +1096,34 @@ class ChatViewModel @Inject constructor(
         )
     }
 
+    private fun holdPermissionForPrevious(next: SessionRow) {
+        val current = _uiState.value.selectedSession ?: return
+        if (current.id == next.id) {
+            return
+        }
+        val request = _uiState.value.activePermissionRequest ?: return
+        sessionAttention?.mark(
+            MarkedPermission(
+                rowId = current.id,
+                sessionId = current.sessionId,
+                sessionName = current.name,
+                haroldIconId = current.haroldIconId,
+                request = request,
+            ),
+        )
+        permissionNotifier?.show(
+            permissionNotification(
+                sessionId = current.id,
+                sessionName = current.name,
+                haroldName = current.haroldName,
+                haroldIconId = current.haroldIconId,
+            ),
+        )
+        catalog = catalog.map { row ->
+            if (row.id == current.id) row.copy(needsAttention = true) else row
+        }
+    }
+
     private suspend fun activateSession(row: SessionRow) {
         if (voiceDictationController.state.visible) {
             syncVoiceDictationState(voiceDictationController.cancel())
@@ -1096,6 +1131,16 @@ class ChatViewModel @Inject constructor(
         navigationPreferences.saveLastSessionId(row.id)
         persistSelectedSession(row.id)
         clearComposer()
+        holdPermissionForPrevious(row)
+        val restored = sessionAttention?.marked?.value?.get(row.id)
+        if (restored != null) {
+            keepRestoredPermission = true
+            sessionAttention.clear(row.id)
+            permissionNotifier?.clear(restored.rowId)
+            catalog = catalog.map { item ->
+                if (item.id == row.id) item.copy(needsAttention = false) else item
+            }
+        }
         val summaryFromCatalog = agentAuthSummaries[row.agentId]
         val remembered = if (row.haroldReachable) {
             emptyAcpTranscript
@@ -1104,7 +1149,8 @@ class ChatViewModel @Inject constructor(
         }
         _uiState.update { current ->
             current.copy(
-                selectedSession = row,
+                selectedSession = row.copy(needsAttention = false),
+                sessions = catalog,
                 pickerVisible = false,
                 transcript = remembered,
                 composerText = "",
@@ -1113,7 +1159,7 @@ class ChatViewModel @Inject constructor(
                 composerConfig = ComposerConfigUi(),
                 voiceCommandPrefix = "",
                 voiceCommandListVisible = false,
-                pendingPermissions = emptyList(),
+                pendingPermissions = listOfNotNull(restored?.request),
                 permissionUiState = PermissionUiState(),
                 extensionUiState = ExtensionUiState(),
                 streamReconnecting = false,
@@ -1133,6 +1179,7 @@ class ChatViewModel @Inject constructor(
         } else {
             sessionOwner.watch(null, null)
         }
+        publishRecentSessions()
         syncActiveSessionsFromUiState()
         hydrateAgentAuth(row.agentId)
     }
@@ -1188,11 +1235,19 @@ class ChatViewModel @Inject constructor(
             } else {
                 current.permissionUiState
             }
+            val permissions = if (snapshot.pendingPermission == null && keepRestoredPermission) {
+                current.pendingPermissions
+            } else {
+                listOfNotNull(snapshot.pendingPermission)
+            }
+            if (snapshot.pendingPermission != null || snapshot.transcript.live) {
+                keepRestoredPermission = false
+            }
             current.copy(
                 transcript = snapshot.transcript,
                 streamReconnecting = snapshot.reconnecting,
                 availableCommands = snapshot.availableCommands,
-                pendingPermissions = listOfNotNull(snapshot.pendingPermission),
+                pendingPermissions = permissions,
                 permissionUiState = permissionUi,
                 extensionUiState = extensionUi,
                 agentAuth = streamAuth ?: current.agentAuth,
@@ -1264,10 +1319,13 @@ class ChatViewModel @Inject constructor(
     }
 
     private suspend fun openSessionFromNotification(sessionId: String) {
-        if (_uiState.value.selectedSession?.sessionId == sessionId) {
+        val selected = _uiState.value.selectedSession
+        if (selected?.sessionId == sessionId || selected?.id == sessionId) {
             return
         }
-        val row = catalog.firstOrNull { session -> session.sessionId == sessionId } ?: return
+        val row = catalog.firstOrNull { session -> session.id == sessionId }
+            ?: catalog.firstOrNull { session -> session.sessionId == sessionId }
+            ?: return
         activateSession(row)
     }
 
@@ -1548,7 +1606,12 @@ class ChatViewModel @Inject constructor(
 
     private fun syncActiveSessionsFromUiState() {
         val snapshots = catalog.map { row ->
-            ActiveSessionSnapshot(id = row.sessionId, name = row.name, state = row.state)
+            ActiveSessionSnapshot(
+                id = row.id,
+                name = row.name,
+                state = row.state,
+                haroldIconId = row.haroldIconId.ifEmpty { null },
+            )
         }
         activeSessionTracker?.let { tracker ->
             tracker.replaceAll(snapshots)
