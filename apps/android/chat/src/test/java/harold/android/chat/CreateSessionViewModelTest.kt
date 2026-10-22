@@ -17,8 +17,10 @@ import harold.android.session.HaroldConnection
 import harold.android.session.HaroldConnectionStatus
 import harold.android.session.HaroldConnections
 import harold.android.testing.FakeCredentialStore
+import harold.android.navigation.AddWorkspace
 import harold.android.navigation.Chat
 import harold.android.navigation.CreateSession
+import harold.android.navigation.CreatedWorkspaceResult
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.session.PairedState
@@ -240,6 +242,56 @@ class CreateSessionViewModelTest {
         assertEquals("cursor", pending.agentId)
         assertNull(viewModel.uiState.value.error)
         assertEquals(listOf(Chat), navigator.backStack.toList())
+    }
+
+    @Test
+    fun newWorkspaceSelectsCreatedWorkspaceOnSaveAndKeepsSelectionOnCancel() = runTest {
+        val navigator = testNavigator()
+        navigator.openCreateSession()
+        val savedHarolds = saved(
+            harold(LAPTOP, "laptop", "tide", "bolt"),
+            harold(DESKTOP, "desktop", "ink", "mark"),
+        )
+        val laptopWorkspaces = mutableListOf(workspace("ws_laptop", WorkspaceState.Available, name = "notes"))
+        val desktopWorkspaces = mutableListOf(workspace("ws_desktop", WorkspaceState.Available, name = "docs"))
+        val repository = HaroldCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to laptopWorkspaces,
+                DESKTOP to desktopWorkspaces,
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(agent("cursor", enabled = true)),
+                DESKTOP to listOf(agent("claude", enabled = true)),
+            ),
+        )
+        val viewModel = viewModel(
+            navigator = navigator,
+            repository = repository,
+            savedHarolds = savedHarolds,
+        )
+
+        assertEquals("$LAPTOP|ws_laptop", viewModel.uiState.value.selectedWorkspaceId)
+
+        viewModel.openNewWorkspace()
+        assertEquals(listOf(Chat, CreateSession, AddWorkspace), navigator.backStack.toList())
+
+        // Cancel from AddWorkspace: selection stays unchanged
+        navigator.goBack()
+        assertEquals("$LAPTOP|ws_laptop", viewModel.uiState.value.selectedWorkspaceId)
+
+        // Open again and save a new workspace on DESKTOP
+        viewModel.openNewWorkspace()
+        desktopWorkspaces += workspace("ws_new", WorkspaceState.Available, name = "fresh")
+        navigator.reportWorkspaceCreated(
+            CreatedWorkspaceResult(
+                workspaceId = "ws_new",
+                serverOrigin = DESKTOP,
+            ),
+        )
+        navigator.goBack()
+
+        assertEquals("$DESKTOP|ws_new", viewModel.uiState.value.selectedWorkspaceId)
+        assertEquals("claude", viewModel.uiState.value.selectedAgentId)
     }
 
     private fun viewModel(

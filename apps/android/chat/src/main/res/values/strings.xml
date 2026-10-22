@@ -50,6 +50,7 @@
     <string name="chat_select_session">Select session</string>
     <string name="chat_new_session">New session</string>
     <string name="create_session_helper">Choose a workspace and agent to start the session.</string>
+    <string name="create_session_new_workspace">New workspace</string>
     <string name="create_session_continue">Continue</string>
     <string name="create_session_continuing">Continuing…</string>
     <string name="sessions_title">Sessions</string>

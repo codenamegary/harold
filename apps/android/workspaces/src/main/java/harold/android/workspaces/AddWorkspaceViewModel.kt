@@ -6,6 +6,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectory
 import harold.android.credentials.SavedHaroldRepository
+import harold.android.navigation.CreatedWorkspaceResult
 import harold.android.navigation.Navigator
 import harold.android.network.apiErrorMessage
 import harold.android.session.PairedState
@@ -112,7 +113,10 @@ class AddWorkspaceViewModel @Inject constructor(
                 iconId = harold.iconId,
             )
         }
-        val initialOrigin = paired?.serverOrigin?.takeIf { origin ->
+        val preferredOrigin = navigator.consumePreferredAddWorkspaceOrigin()
+        val initialOrigin = preferredOrigin?.takeIf { origin ->
+            saved.isEmpty() || saved.any { it.serverOrigin == origin }
+        } ?: paired?.serverOrigin?.takeIf { origin ->
             saved.isEmpty() || saved.any { it.serverOrigin == origin }
         } ?: saved.firstOrNull()?.serverOrigin.orEmpty()
 
@@ -202,8 +206,14 @@ class AddWorkspaceViewModel @Inject constructor(
                     path = state.selectedFolderPath,
                 ),
             ).fold(
-                onSuccess = {
+                onSuccess = { created ->
                     _uiState.update { it.copy(submitting = false) }
+                    navigator.reportWorkspaceCreated(
+                        CreatedWorkspaceResult(
+                            workspaceId = created.id,
+                            serverOrigin = origin,
+                        ),
+                    )
                     navigator.goBack()
                 },
                 onFailure = { error ->

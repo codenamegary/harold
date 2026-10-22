@@ -8,13 +8,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import harold.android.ui.components.HaroldBadge
@@ -46,6 +48,7 @@ fun CreateSessionScreen(
     onWorkspaceChanged: (String) -> Unit,
     onAgentChanged: (harold.android.contracts.AgentId) -> Unit,
     onSubmit: () -> Unit,
+    onNewWorkspaceClick: () -> Unit = {},
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -87,6 +90,7 @@ fun CreateSessionScreen(
                 workspaces = createState.workspaces,
                 selectedWorkspaceId = createState.selectedWorkspaceId,
                 onWorkspaceChanged = onWorkspaceChanged,
+                onNewWorkspaceClick = onNewWorkspaceClick,
             )
 
             AgentDropdown(
@@ -126,6 +130,7 @@ private fun WorkspaceDropdown(
     workspaces: List<WorkspaceRow>,
     selectedWorkspaceId: String,
     onWorkspaceChanged: (String) -> Unit,
+    onNewWorkspaceClick: () -> Unit = {},
 ) {
     var expanded by remember { mutableStateOf(false) }
     val selectedWorkspace = workspaces.firstOrNull { workspace -> workspace.id == selectedWorkspaceId }
@@ -169,6 +174,36 @@ private fun WorkspaceDropdown(
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {
+            DropdownMenuItem(
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.Add,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                },
+                text = {
+                    Text(
+                        text = stringResource(R.string.create_session_new_workspace),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onNewWorkspaceClick()
+                },
+                modifier = Modifier.testTag("create_session_new_workspace"),
+            )
+
+            if (workspaces.isNotEmpty()) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                )
+            }
+
             workspaces.forEach { workspace ->
                 val hasBadge = workspace.haroldColorId.isNotEmpty() ||
                     workspace.haroldIconId.isNotEmpty() ||
