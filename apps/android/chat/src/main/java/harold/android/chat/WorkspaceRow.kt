@@ -8,7 +8,17 @@ data class WorkspaceRow(
     val name: String,
     val path: String,
     val state: WorkspaceState,
-)
+    val serverOrigin: String = "",
+    val haroldName: String = "",
+    val haroldColorId: String = "",
+    val haroldIconId: String = "",
+) {
+    fun pickerLabel(): String = if (haroldName.isEmpty()) {
+        name
+    } else {
+        "$name · $haroldName · $haroldColorId · $haroldIconId"
+    }
+}
 
 fun Workspace.toWorkspaceRow(): WorkspaceRow =
     WorkspaceRow(

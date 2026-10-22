@@ -125,7 +125,8 @@ private fun WorkspaceDropdown(
     onWorkspaceChanged: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val selectedLabel = workspaces.firstOrNull { workspace -> workspace.id == selectedWorkspaceId }?.name
+    val selectedLabel = workspaces.firstOrNull { workspace -> workspace.id == selectedWorkspaceId }
+        ?.pickerLabel()
         ?: "Choose workspace"
 
     ExposedDropdownMenuBox(
@@ -150,7 +151,7 @@ private fun WorkspaceDropdown(
         ) {
             workspaces.forEach { workspace ->
                 DropdownMenuItem(
-                    text = { Text(text = workspace.name) },
+                    text = { Text(text = workspace.pickerLabel()) },
                     onClick = {
                         onWorkspaceChanged(workspace.id)
                         expanded = false

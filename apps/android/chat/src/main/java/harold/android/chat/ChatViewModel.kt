@@ -223,7 +223,7 @@ class ChatViewModel @Inject constructor(
             sessionCommands.commands.collect { command ->
                 when (command) {
                     is SessionCommand.Open -> activateSession(command.row)
-                    is SessionCommand.Created -> openCreatedSession(command.response)
+                    is SessionCommand.Created -> openCreatedSession(command)
                     is SessionCommand.Pending -> openPendingSession(
                         workspace = command.workspace,
                         agentId = command.agentId,
@@ -415,9 +415,15 @@ class ChatViewModel @Inject constructor(
         _uiState.update { current -> current.copy(voiceDictation = voiceDictation) }
     }
 
-    private suspend fun openCreatedSession(created: CreateSessionResponse) {
-        rememberCreatedConfig(created)
-        activateSession(created.toSession().toSessionRow(workspaceByPath, agentLabels))
+    private suspend fun openCreatedSession(created: SessionCommand.Created) {
+        rememberCreatedConfig(created.response)
+        val row = created.response.toSession().toSessionRow(workspaceByPath, agentLabels).copy(
+            serverOrigin = created.serverOrigin,
+            haroldName = created.haroldName,
+            haroldColorId = created.haroldColorId,
+            haroldIconId = created.haroldIconId,
+        )
+        activateSession(row)
         refreshCatalog()
     }
 
@@ -469,17 +475,26 @@ class ChatViewModel @Inject constructor(
         ) {
             return
         }
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired
+        val origin = pending.serverOrigin.ifEmpty { paired?.serverOrigin } ?: return
 
         pendingCreateInFlight = true
         viewModelScope.launch {
             userRepository.createSession(
-                serverOrigin = paired.serverOrigin,
+                serverOrigin = origin,
                 body = CreateSessionBody(agentId = agentId, cwd = pending.cwd),
             ).fold(
                 onSuccess = { created ->
                     if (_uiState.value.selectedSession == pending) {
-                        openCreatedSession(created)
+                        openCreatedSession(
+                            SessionCommand.Created(
+                                response = created,
+                                serverOrigin = origin,
+                                haroldName = pending.haroldName,
+                                haroldColorId = pending.haroldColorId,
+                                haroldIconId = pending.haroldIconId,
+                            ),
+                        )
                     } else {
                         refreshCatalog()
                     }
@@ -1297,7 +1312,7 @@ class ChatViewModel @Inject constructor(
             sessionOwner.watch(null, null)
         }
         if (becameReachable) {
-            val next = updatedSelected ?: return
+            val next = checkNotNull(updatedSelected)
             if (next.serverOrigin.isNotEmpty()) {
                 watchedOrigin = next.serverOrigin
                 sessionOwner.connect(next.serverOrigin)
@@ -1559,6 +1574,10 @@ class ChatViewModel @Inject constructor(
             agentLabel = agentLabels[agentId] ?: agentId,
             state = SessionState.Idle,
             updatedAt = "",
+            serverOrigin = workspace.serverOrigin,
+            haroldName = workspace.haroldName,
+            haroldColorId = workspace.haroldColorId,
+            haroldIconId = workspace.haroldIconId,
         )
 
     /**

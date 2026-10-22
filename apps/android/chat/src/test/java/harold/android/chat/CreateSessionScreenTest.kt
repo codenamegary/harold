@@ -54,4 +54,37 @@ class CreateSessionScreenTest {
         composeTestRule.onNodeWithText("New session").assertIsDisplayed()
         composeTestRule.onNodeWithText("Continue").assertIsDisplayed()
     }
+
+    @Test
+    fun workspaceFieldShowsTheHaroldNameColorAndIcon() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                CreateSessionScreen(
+                    createState = CreateSessionUiState(
+                        workspaces = listOf(
+                            WorkspaceRow(
+                                id = "http://laptop.local:3847|ws_01",
+                                name = "notes",
+                                path = "/tmp/notes",
+                                state = harold.android.contracts.WorkspaceState.Available,
+                                serverOrigin = "http://laptop.local:3847",
+                                haroldName = "laptop",
+                                haroldColorId = "tide",
+                                haroldIconId = "bolt",
+                            ),
+                        ),
+                        selectedWorkspaceId = "http://laptop.local:3847|ws_01",
+                        agents = listOf(AgentOption(id = "cursor", displayName = "Cursor")),
+                        selectedAgentId = "cursor",
+                    ),
+                    onBack = {},
+                    onWorkspaceChanged = {},
+                    onAgentChanged = {},
+                    onSubmit = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("notes · laptop · tide · bolt").assertIsDisplayed()
+    }
 }
