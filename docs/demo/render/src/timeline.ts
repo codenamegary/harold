@@ -35,6 +35,13 @@ const WALK_START = 27.8
 
 type TypingWindow = { text: string; fromSec: number; toSec: number }
 
+// [ZOOM] push the camera into the phone for a feature beat. `x`/`y` are
+// screen fractions of the point to frame; they default to the shot's first
+// tap. `drift` pans the focus down by that fraction over the shot, for
+// reading a reply. Consecutive shots with a focus hold the zoom; a shot with
+// none pulls back out.
+export type Focus = { scale: number; x?: number; y?: number; drift?: number }
+
 type Step = {
   slice: string
   at?: number
@@ -45,7 +52,12 @@ type Step = {
   required?: boolean
   caption?: { text: string; at?: number; hold?: number }
   typing?: TypingWindow | TypingWindow[]
+  focus?: Focus
 }
+
+const COMPOSER: Focus = { scale: 2.4, x: 0.5, y: 0.81 }
+const EFFORT: Focus = { scale: 2.6, x: 0.6, y: 0.81 }
+const READ: Focus = { scale: 1.6, x: 0.5, y: 0.33, drift: 0.22 }
 
 // The pairing act is interleaved with the terminal stage, so its shots keep
 // fixed render starts. Gaps between them become holds on the previous frame.
@@ -92,6 +104,7 @@ const WALK_STEPS: Step[] = [
       { text: "http://127.0.0.1:3848", fromSec: 3.55, toSec: 5.95 },
       { text: "GTN-5DK", fromSec: 7.2, toSec: 8.6 },
     ],
+    focus: { scale: 1.8, x: 0.5, y: 0.22 },
   },
   { slice: "pair_another_claim", startSec: 2.8, rate: 2, duration: 1.4, hold: 0.4 },
   {
@@ -101,6 +114,7 @@ const WALK_STEPS: Step[] = [
     duration: 2.0,
     hold: 0.4,
     typing: { text: "Couch", fromSec: 4.3, toSec: 5.15 },
+    focus: { scale: 1.7, x: 0.5, y: 0.3 },
   },
   { slice: "pair_another_confirm", startSec: 2.9, rate: 2, duration: 1.5, hold: 0.3 },
   { slice: "pair_another_done", duration: 0.8, hold: 0.3 },
@@ -141,6 +155,7 @@ const WALK_STEPS: Step[] = [
     duration: 1.2,
     hold: 0.3,
     caption: { text: "Model list from your Agent", at: 0.2, hold: 2.4 },
+    focus: { scale: 1.7, x: 0.5, y: 0.72 },
   },
   {
     slice: "model_search",
@@ -148,8 +163,16 @@ const WALK_STEPS: Step[] = [
     duration: 2.2,
     typing: { text: "deepseek", fromSec: 3.4, toSec: 4.5 },
     hold: 0.3,
+    focus: { scale: 1.7, x: 0.5, y: 0.72 },
   },
-  { slice: "model_pick", startSec: 2.5, rate: 2, duration: 0.8, hold: 0.3 },
+  {
+    slice: "model_pick",
+    startSec: 2.5,
+    rate: 2,
+    duration: 0.8,
+    hold: 0.3,
+    focus: { scale: 1.7, x: 0.5, y: 0.72 },
+  },
   {
     slice: "mode_plan",
     startSec: 4.5,
@@ -157,17 +180,19 @@ const WALK_STEPS: Step[] = [
     duration: 1.5,
     hold: 1.0,
     caption: { text: "Toggle modes supported by your agent", at: 0.2, hold: 2.6 },
+    focus: COMPOSER,
   },
-  { slice: "mode_build", startSec: 4.8, rate: 1.5, duration: 1.4, hold: 1.0 },
+  { slice: "mode_build", startSec: 4.8, rate: 1.5, duration: 1.4, hold: 1.0, focus: COMPOSER },
   {
     slice: "effort_1",
     startSec: 0.5,
     duration: 0.8,
     hold: 0.25,
     caption: { text: "Adjust thinking effort", at: 0.2, hold: 2.2 },
+    focus: EFFORT,
   },
-  { slice: "effort_2", startSec: 0.5, duration: 0.8, hold: 0.25 },
-  { slice: "effort_3", startSec: 0.5, duration: 0.8, hold: 0.3 },
+  { slice: "effort_2", startSec: 0.5, duration: 0.8, hold: 0.25, focus: EFFORT },
+  { slice: "effort_3", startSec: 0.5, duration: 0.8, hold: 0.3, focus: EFFORT },
   {
     slice: "slash_open",
     startSec: 2.6,
@@ -175,8 +200,16 @@ const WALK_STEPS: Step[] = [
     duration: 2.0,
     hold: 1.0,
     caption: { text: "Slash commands from your agent", at: 0.2, hold: 2.4 },
+    focus: { scale: 1.6, x: 0.5, y: 0.3 },
   },
-  { slice: "slash_close", startSec: 2.6, rate: 2, duration: 0.8, hold: 0.5 },
+  {
+    slice: "slash_close",
+    startSec: 2.6,
+    rate: 2,
+    duration: 0.8,
+    hold: 0.5,
+    focus: { scale: 1.6, x: 0.5, y: 0.3 },
+  },
   {
     slice: "prompt_focus",
     startSec: 2.5,
@@ -184,6 +217,7 @@ const WALK_STEPS: Step[] = [
     duration: 0.5,
     hold: 0.2,
     caption: { text: "Send a text Prompt", at: 0.2, hold: 2.6 },
+    focus: { scale: 1.8, x: 0.5, y: 0.52 },
   },
   {
     slice: "prompt_type",
@@ -196,6 +230,7 @@ const WALK_STEPS: Step[] = [
       toSec: 5.5,
     },
     hold: 0.7,
+    focus: { scale: 1.8, x: 0.5, y: 0.52 },
   },
   {
     slice: "photo_open",
@@ -209,15 +244,36 @@ const WALK_STEPS: Step[] = [
   { slice: "photo_add", startSec: 2.6, rate: 2, duration: 1.1, hold: 0.3 },
   { slice: "file_open", startSec: 2.6, rate: 2, duration: 1.0, hold: 0.3 },
   { slice: "file_pick", startSec: 2.7, rate: 2, duration: 1.0, hold: 0.25 },
-  { slice: "send", startSec: 2.8, rate: 2, duration: 1.2, hold: 0.2 },
+  {
+    slice: "send",
+    startSec: 2.8,
+    rate: 2,
+    duration: 1.2,
+    hold: 0.2,
+    focus: { scale: 1.8, x: 0.5, y: 0.84 },
+  },
   { slice: "reply_wait", rate: 6, duration: 1.8, hold: 0.2 },
-  { slice: "reply", duration: 2.5, hold: 1.0 },
-  { slice: "voice_open", startSec: 2.5, rate: 2, duration: 1.3, hold: 0.4 },
+  { slice: "reply", duration: 2.5, hold: 1.6, focus: READ },
+  {
+    slice: "voice_open",
+    startSec: 2.5,
+    rate: 2,
+    duration: 1.3,
+    hold: 0.4,
+    focus: { scale: 1.9, x: 0.5, y: 0.9 },
+  },
   { slice: "voice_expand", startSec: 3.0, rate: 2, duration: 1.4, hold: 0.6 },
-  { slice: "voice_transcript", startSec: 0.4, rate: 2, duration: 3.2, hold: 0.2 },
+  {
+    slice: "voice_transcript",
+    startSec: 0.4,
+    rate: 2,
+    duration: 3.2,
+    hold: 0.2,
+    focus: { scale: 1.5, x: 0.5, y: 0.22 },
+  },
   { slice: "voice_send", startSec: 3.0, rate: 2, duration: 0.9, hold: 0.2 },
   { slice: "voice_reply_wait", rate: 6, duration: 1.7, hold: 0.2 },
-  { slice: "voice_reply", duration: 2.5, hold: 1.2 },
+  { slice: "voice_reply", duration: 2.5, hold: 1.6, focus: READ },
 ]
 
 type Shot = Step & {
@@ -417,6 +473,63 @@ export const phoneBlack: Keyframes = [
   [PHONE_IN_AT + 1.0, 0],
 ]
 
+// --- Phone zoom -------------------------------------------------------------
+
+export type Zoom = { scale: Keyframes; x: Keyframes; y: Keyframes }
+
+const ZOOM_SEC = 0.55
+
+// Three channels driven by the shots' focus: scale, and the screen-fraction
+// point that stays framed. Zooming out keeps the last focus so the pull-back
+// is a straight line, not a swerve.
+const buildZoom = (shots: Shot[]): Zoom => {
+  const scale: Keyframes = [[0, 1]]
+  const x: Keyframes = [[0, 0.5]]
+  const y: Keyframes = [[0, 0.5]]
+  const push = (channel: Keyframes, at: number, value: number) => {
+    const last = channel[channel.length - 1]
+    if (at <= last[0] + 0.001) {
+      last[1] = value
+      return
+    }
+    channel.push([at, value])
+  }
+  const ordered = [...shots].sort((a, b) => a.at - b.at)
+  let current: Focus = { scale: 1, x: 0.5, y: 0.5 }
+  for (let index = 0; index < ordered.length; index += 1) {
+    const shot = ordered[index]
+    const end = shot.at + shot.duration + (shot.hold ?? 0)
+    const nextAt = ordered[index + 1]?.at ?? end
+    const tap = shot.data.taps?.[0]
+    const target: Focus =
+      shot.focus === undefined
+        ? { scale: 1, x: current.x, y: current.y }
+        : {
+            scale: shot.focus.scale,
+            x: shot.focus.x ?? (tap ? tap.x / shot.data.width : current.x),
+            y: shot.focus.y ?? (tap ? tap.y / shot.data.height : current.y),
+          }
+    const same =
+      target.scale === current.scale && target.x === current.x && target.y === current.y
+    if (!same) {
+      const landAt = Math.min(shot.at + ZOOM_SEC, nextAt)
+      push(scale, shot.at, current.scale)
+      push(x, shot.at, current.x ?? 0.5)
+      push(y, shot.at, current.y ?? 0.5)
+      push(scale, landAt, target.scale)
+      push(x, landAt, target.x ?? 0.5)
+      push(y, landAt, target.y ?? 0.5)
+    }
+    current = target
+    if (shot.focus?.drift !== undefined) {
+      const to = (target.y ?? 0.5) + shot.focus.drift
+      push(y, nextAt, to)
+      current = { ...target, y: to }
+    }
+  }
+  return { scale, x, y }
+}
+
 // --- Terminal transcript ----------------------------------------------------
 
 const transcript = (pairedRenderSec: number): TermItem[] => {
@@ -553,6 +666,7 @@ export type Timeline = {
   ripples: Ripple[]
   captions: Caption[]
   sounds: Sound[]
+  zoom: Zoom
   endSec: number
 }
 
@@ -586,6 +700,7 @@ export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
     ripples,
     captions,
     sounds,
+    zoom: buildZoom(shots),
     endSec,
   }
 }
