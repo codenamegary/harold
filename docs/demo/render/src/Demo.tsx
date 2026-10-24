@@ -12,6 +12,7 @@ import { CalloutView } from "./callout"
 import { CardFanView } from "./cardFan"
 import { celebrationStyle } from "./celebration"
 import { NoteView } from "./note"
+import { PhoneCardView } from "./phoneCard"
 import { Confetti } from "./confetti"
 import { monoFamily, sansFamily } from "./fonts"
 import { Mark } from "./mark"
@@ -379,6 +380,16 @@ export const Demo: React.FC<DemoProps> = ({ slices, videoWidth, videoHeight }) =
         <AnnotationView
           key={annotation.at}
           annotation={annotation}
+          sec={sec}
+          zoom={timeline.zoom}
+          videoWidth={videoWidth}
+          videoHeight={videoHeight}
+        />
+      ))}
+      {timeline.phoneCaptions.map((caption) => (
+        <PhoneCardView
+          key={caption.at}
+          caption={caption}
           sec={sec}
           zoom={timeline.zoom}
           videoWidth={videoWidth}

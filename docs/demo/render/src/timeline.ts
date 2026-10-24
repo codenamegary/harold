@@ -153,6 +153,22 @@ type AnnotationSpec = {
   nextTarget?: AnnotationRect
 }
 
+// [CARD] one white caption card inside the phone screen. Use it when the
+// caption belongs in an empty part of the app rather than beside the phone.
+export type PhoneCaption = {
+  at: number
+  hold: number
+  title: string
+  top: number
+}
+
+type PhoneCaptionSpec = {
+  at?: number
+  hold?: number
+  title: string
+  top?: number
+}
+
 // [POP] one short squash, shake, and settle on the phone. `at` is seconds
 // after the shot starts. Use it when the app reaches a happy state.
 // `confetti` drops a full-stage shower from the same beat.
@@ -190,6 +206,7 @@ type Step = {
   cards?: CardFanSpec
   note?: NoteSpec
   annotation?: AnnotationSpec
+  phoneCaption?: PhoneCaptionSpec
   spotlight?: SpotlightSpec
   celebrate?: CelebrationSpec
   typing?: TypingWindow | TypingWindow[]
@@ -385,7 +402,12 @@ const WALK_STEPS: Step[] = [
     rate: 2.5,
     duration: 2.0,
     hold: 1.0,
-    caption: { text: "Slash commands from your agent", at: 0.2, hold: 2.4 },
+    phoneCaption: {
+      at: 0.2,
+      hold: 2.0,
+      title: "Slash commands from your agent",
+      top: 0.5,
+    },
     focus: { scale: 1.6, x: 0.5, y: 0.3 },
   },
   {
@@ -927,6 +949,22 @@ const buildAnnotations = (shots: Shot[]): Annotation[] => {
   return annotations.sort((a, b) => a.at - b.at)
 }
 
+const buildPhoneCaptions = (shots: Shot[]): PhoneCaption[] => {
+  const captions: PhoneCaption[] = []
+  for (const shot of shots) {
+    if (shot.phoneCaption === undefined) {
+      continue
+    }
+    captions.push({
+      at: shot.at + (shot.phoneCaption.at ?? 0.2),
+      hold: shot.phoneCaption.hold ?? 2.0,
+      title: shot.phoneCaption.title,
+      top: shot.phoneCaption.top ?? 0.5,
+    })
+  }
+  return captions.sort((a, b) => a.at - b.at)
+}
+
 const buildCelebrations = (shots: Shot[]): Celebration[] => {
   const celebrations: Celebration[] = []
   for (const shot of shots) {
@@ -958,6 +996,7 @@ const buildSounds = (
   cardFans: CardFan[],
   notes: Note[],
   annotations: Annotation[],
+  phoneCaptions: PhoneCaption[],
 ): Sound[] => {
   const sounds: Sound[] = []
   // [KR] every keystroke, a separate sound for Enter.
@@ -1013,6 +1052,10 @@ const buildSounds = (
     sounds.push({ at: annotation.at, name: "ping", volume: 0.65 })
     sounds.push({ at: annotation.moveAt, name: "ping", volume: 0.65 })
   }
+  // [CARD] a soft ping when the in-phone card lands.
+  for (const caption of phoneCaptions) {
+    sounds.push({ at: caption.at, name: "ping", volume: 0.65 })
+  }
   return sounds.sort((a, b) => a.at - b.at)
 }
 
@@ -1027,6 +1070,7 @@ export type Timeline = {
   cardFans: CardFan[]
   notes: Note[]
   annotations: Annotation[]
+  phoneCaptions: PhoneCaption[]
   spotlights: Spotlight[]
   celebrations: Celebration[]
   sounds: Sound[]
@@ -1055,6 +1099,7 @@ export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
   const cardFans = buildCardFans(shots)
   const notes = buildNotes(shots)
   const annotations = buildAnnotations(shots)
+  const phoneCaptions = buildPhoneCaptions(shots)
   const spotlights = buildSpotlights(shots)
   const celebrations = buildCelebrations(shots)
   const sounds = buildSounds(
@@ -1066,6 +1111,7 @@ export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
     cardFans,
     notes,
     annotations,
+    phoneCaptions,
   )
   const pairedRenderSec =
     tapRenderSec(pair.find((shot) => shot.slice === "first_confirm")) ??
@@ -1082,6 +1128,7 @@ export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
     cardFans,
     notes,
     annotations,
+    phoneCaptions,
     spotlights,
     celebrations,
     sounds,

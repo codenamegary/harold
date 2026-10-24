@@ -147,12 +147,30 @@ describe("new scenes", () => {
     expect(played.some((file) => file.endsWith("039-slash_open.mp4"))).toBe(true)
   })
 
-  test("callouts the second pairing and captions the slash command panel", () => {
+  test("callouts the second pairing and cards the slash command panel", () => {
     const callouts = timeline.callouts.map((callout) => callout.title)
-    const captions = timeline.captions.map((caption) => caption.text)
+    const cards = timeline.phoneCaptions.map((caption) => caption.title)
 
     expect(callouts).toContain("Pair another Harold")
-    expect(captions).toContain("Slash commands from your agent")
+    expect(cards).toContain("Slash commands from your agent")
+  })
+
+  test("puts the slash caption in the lower phone area", () => {
+    const caption = timeline.phoneCaptions.find(
+      (entry) => entry.title === "Slash commands from your agent",
+    )
+
+    expect(caption).toBeDefined()
+    expect(caption?.at).toBeCloseTo(82.75, 2)
+    expect(caption?.top).toBeCloseTo(0.5, 2)
+    expect(
+      timeline.captions.some((entry) => entry.text === "Slash commands from your agent"),
+    ).toBe(false)
+    expect(
+      timeline.sounds.some(
+        (sound) => sound.name === "ping" && Math.abs(sound.at - (caption?.at ?? 0)) < 0.01,
+      ),
+    ).toBe(true)
   })
 
   test("boxes the mode and thinking controls", () => {

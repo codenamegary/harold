@@ -84,6 +84,11 @@ intro -> terminal -> phone-pair -> pair-scan -> achievement
   tape carries a short label. Slides out from behind the phone, holds, then
   slides back. Plays a ping.
 
+### Phone cards
+
+- `[CARD "title"]` One white card inside the empty part of the current phone
+  screen. Tracks the phone camera. Plays a ping.
+
 ### Annotations
 
 - `[BOX "title" -> "next title"]` White card in the empty phone area. A lime
@@ -282,9 +287,9 @@ Beats:
 - Wait 1s.
 - If the toast is not `Thinking set to High`, tap once more and wait 1s.
 - [PZ:upper-center ~0.55s]
-- [CAP "Slash commands from your agent"]
 - [TAP "Slash button"]
 - The Commands panel opens with `/init`, `/review`, and `/compact`.
+- [CARD "Slash commands from your agent"]
 - [TAP "Close command list"]
 - [PZ:lower-center scale=2.4 focus=0.5,0.81 ~0.55s]
 - [CAP "Send a text Prompt"]
