@@ -369,6 +369,7 @@ export const Demo: React.FC<DemoProps> = ({ slices, videoWidth, videoHeight }) =
           key={callout.at}
           callout={callout}
           sec={sec}
+          zoom={timeline.zoom}
           videoWidth={videoWidth}
           videoHeight={videoHeight}
         />

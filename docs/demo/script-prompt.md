@@ -66,7 +66,8 @@ intro -> terminal -> phone-pair -> pair-scan -> achievement
 - `[CAP "text"]` Bottom caption. Fades in with a lift and plays a ping.
 - `[CALLOUT "title" eyebrow="text" hint="text" side=right]` Phone-attached
   tag with a drawn leader line and target pulse. The first tap of the shot is
-  the anchor. Plays a ping.
+  the anchor. Plays a ping. Add `compact placement=edge` to sit it beside the
+  phone. Add `connector=T` for a T-bracket outside the phone frame.
 - `[SPOTLIGHT side=left]` Large copy card with a mono kicker, display title,
   and lime rule. Plays a ping. The kicker and title sit on the following
   indented lines.
@@ -252,10 +253,10 @@ selected. The composer shows the model, mode, and thinking chips. [L1 phone]
 
 Beats:
 
-- [CAP "Model list from your Agent"]
 - [TAP "Model chip"]
 - [PZ:lower-center ~0.55s]
 - The Model sheet opens.
+- [CALLOUT "Model list from your Agent" eyebrow="YOUR AGENT" hint="Pick one to continue." compact placement=edge connector=T]
 - [TAP "Search models"]
 - [KR "deepseek"]
 - [TAP "deepseek/DeepSeek V4.1 Flash 1017"]

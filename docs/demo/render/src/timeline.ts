@@ -73,6 +73,10 @@ export type Callout = {
   side: "left" | "right"
   targetX: number
   targetY: number
+  compact: boolean
+  placement: "target" | "edge"
+  connector: "string" | "t"
+  span?: { y: number; h: number }
 }
 
 type CalloutSpec = {
@@ -82,6 +86,12 @@ type CalloutSpec = {
   title: string
   hint?: string
   side?: "left" | "right"
+  targetX?: number
+  targetY?: number
+  compact?: boolean
+  placement?: "target" | "edge"
+  connector?: "string" | "t"
+  span?: { y: number; h: number }
 }
 
 // [CARDS] a fan of paper cards that spreads out from behind the phone. Use it
@@ -282,7 +292,19 @@ const WALK_STEPS: Step[] = [
     rate: 2,
     duration: 1.2,
     hold: 0.3,
-    caption: { text: "Model list from your Agent", at: 0.2, hold: 2.4 },
+    callout: {
+      at: 0.2,
+      hold: 1.7,
+      eyebrow: "YOUR AGENT",
+      title: "Model list from your Agent",
+      hint: "Pick one to continue.",
+      compact: true,
+      placement: "edge",
+      connector: "t",
+      span: { y: 0.67, h: 0.24 },
+      targetX: 0.5,
+      targetY: 0.78,
+    },
     focus: { scale: 1.7, x: 0.5, y: 0.72 },
   },
   {
@@ -798,8 +820,12 @@ const buildCallouts = (shots: Shot[]): Callout[] => {
       title: shot.callout.title,
       hint: shot.callout.hint,
       side: shot.callout.side ?? "right",
-      targetX: tap ? tap.x / shot.data.width : 0.5,
-      targetY: tap ? tap.y / shot.data.height : 0.5,
+      targetX: shot.callout.targetX ?? (tap ? tap.x / shot.data.width : 0.5),
+      targetY: shot.callout.targetY ?? (tap ? tap.y / shot.data.height : 0.5),
+      compact: shot.callout.compact ?? false,
+      placement: shot.callout.placement ?? "target",
+      connector: shot.callout.connector ?? "string",
+      span: shot.callout.span,
     })
   }
   return callouts.sort((a, b) => a.at - b.at)

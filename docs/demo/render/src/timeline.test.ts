@@ -155,6 +155,29 @@ describe("new scenes", () => {
     expect(captions).toContain("Slash commands from your agent")
   })
 
+  test("puts the model list callout beside the phone", () => {
+    const callout = timeline.callouts.find(
+      (entry) => entry.title === "Model list from your Agent",
+    )
+
+    expect(callout).toBeDefined()
+    expect(callout?.at).toBeCloseTo(69.56, 2)
+    expect(callout?.compact).toBe(true)
+    expect(callout?.placement).toBe("edge")
+    expect(callout?.connector).toBe("t")
+    expect(callout?.span).toEqual({ y: 0.67, h: 0.24 })
+    expect(callout?.targetX).toBeCloseTo(0.5, 5)
+    expect(callout?.targetY).toBeCloseTo(0.78, 5)
+    expect(
+      timeline.captions.some((caption) => caption.text === "Model list from your Agent"),
+    ).toBe(false)
+    expect(
+      timeline.sounds.some(
+        (sound) => sound.name === "ping" && Math.abs(sound.at - (callout?.at ?? 0)) < 0.01,
+      ),
+    ).toBe(true)
+  })
+
   test("slides in a paper note for the new session caption", () => {
     const note = timeline.notes.find((entry) => entry.title === "Start a new Session")
 
