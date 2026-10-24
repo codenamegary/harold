@@ -30,10 +30,50 @@ export const OUTRO_SEC = 4.2
 // shifts with it. Nothing here requires a re-capture.
 
 const PHONE_IN_AT = 8.8
-const REcede_AT = 23.4
+const PAIR_ZOOM_AT = 15.0
+const PAIR_ZOOM_SEC = 0.5
+const PAIR_LAND_AT = 20.7
+const PAIR_LAND_SEC = 0.5
+const REcede_AT = 22.8
 const WALK_START = 27.8
 
 type TypingWindow = { text: string; fromSec: number; toSec: number }
+
+// [SPOTLIGHT] a full-stage feature beat. The phone docks to one side, the
+// terminal leaves, and this copy fills the other side in display type. It is
+// the large, editorial sibling of [CAP], for milestones and headline features.
+export type Spotlight = {
+  at: number
+  hold: number
+  side: "left" | "right"
+  kicker: string
+  title: string
+}
+
+type SpotlightSpec = {
+  at?: number
+  hold?: number
+  side?: "left" | "right"
+  kicker: string
+  title: string
+}
+
+// [POP] one short squash, shake, and settle on the phone. `at` is seconds
+// after the shot starts. Use it when the app reaches a happy state.
+// `confetti` drops a full-stage shower from the same beat.
+export type Celebration = {
+  at: number
+  hold: number
+  strength: number
+  confetti: boolean
+}
+
+type CelebrationSpec = {
+  at?: number
+  hold?: number
+  strength?: number
+  confetti?: boolean
+}
 
 // [ZOOM] push the camera into the phone for a feature beat. `x`/`y` are
 // screen fractions of the point to frame; they default to the shot's first
@@ -51,6 +91,8 @@ type Step = {
   hold?: number
   required?: boolean
   caption?: { text: string; at?: number; hold?: number }
+  spotlight?: SpotlightSpec
+  celebrate?: CelebrationSpec
   typing?: TypingWindow | TypingWindow[]
   focus?: Focus
 }
@@ -78,7 +120,13 @@ const PAIR_STEPS: Step[] = [
   {
     slice: "paired",
     at: 21.6,
-    caption: { text: "Achievement Unlocked: Work from Couch", at: 1.2, hold: 2.6 },
+    spotlight: {
+      at: 1.2,
+      hold: 3.2,
+      kicker: "Achievement unlocked",
+      title: "Work from Couch",
+    },
+    celebrate: { at: 1.7, hold: 1.3, confetti: true },
   },
 ]
 
@@ -441,31 +489,43 @@ export const termScale: Keyframes = [
 export const termOpacity: Keyframes = [
   [0, 1],
   [REcede_AT, 1],
-  [REcede_AT + 1.8, 0],
+  [REcede_AT + 1.2, 0],
 ]
 export const termX: Keyframes = [
   [0, 0],
   [REcede_AT, 0],
-  [REcede_AT + 1.8, -1120],
+  [REcede_AT + 1.2, -1120],
 ]
 
 // Phone stage channels: joins at the pairing flow, to the right of the fully
-// framed terminal, and only takes center stage once pairing is done.
+// framed terminal. The Pair tap starts a 2x close-up of the top two thirds.
+// That framing holds through the scanner and name entry. Right after the
+// confirm tap it pans up to the centered close-up, so the landing screen is
+// readable before the spotlight copy lands. The phone only takes center stage
+// when the walkthrough starts.
 export const phoneWidth: Keyframes = [
   [PHONE_IN_AT, 380],
-  [REcede_AT, 380],
-  [REcede_AT + 1.8, 450],
+  [PAIR_ZOOM_AT, 380],
+  [PAIR_ZOOM_AT + PAIR_ZOOM_SEC, 760],
+  [REcede_AT, 760],
+  [27.0, 760],
+  [27.8, 450],
 ]
 export const phoneCenterX: Keyframes = [
   [PHONE_IN_AT, 2440],
   [PHONE_IN_AT + 1.7, 1460],
   [REcede_AT, 1460],
-  [REcede_AT + 1.8, 960],
+  [27.0, 1460],
+  [27.8, 960],
 ]
 export const phoneTop: Keyframes = [
   [PHONE_IN_AT, 108],
-  [REcede_AT, 108],
-  [REcede_AT + 1.8, 30],
+  [PAIR_ZOOM_AT, 108],
+  [PAIR_ZOOM_AT + PAIR_ZOOM_SEC, 0],
+  [PAIR_LAND_AT, 0],
+  [PAIR_LAND_AT + PAIR_LAND_SEC, -314.5],
+  [27.0, -314.5],
+  [27.8, 30],
 ]
 // The screen starts black and fades the app in as the phone settles.
 export const phoneBlack: Keyframes = [
@@ -570,7 +630,7 @@ const FIXED_CAPTIONS: CaptionSpec[] = [
   { at: 3.9, hold: 2.6, text: "Start Harold wherever you run your agents" },
   { at: 8.3, hold: 1.6, text: "Generate a secure temporary pairing code" },
   { at: 10.9, hold: 1.4, text: "Harold'ing..." },
-  { at: 13.3, hold: 2.2, text: "Pair with your agents" },
+  { at: 13.3, hold: 1.4, text: "Pair with your agents" },
 ]
 
 export type Ripple = { at: number; x: number; y: number }
@@ -615,13 +675,51 @@ const buildCaptions = (shots: Shot[]): CaptionSpec[] => {
   return captions.sort((a, b) => a.at - b.at)
 }
 
+const buildSpotlights = (shots: Shot[]): Spotlight[] => {
+  const spotlights: Spotlight[] = []
+  for (const shot of shots) {
+    if (shot.spotlight === undefined) {
+      continue
+    }
+    spotlights.push({
+      at: shot.at + (shot.spotlight.at ?? 0.2),
+      hold: shot.spotlight.hold ?? 3.0,
+      side: shot.spotlight.side ?? "left",
+      kicker: shot.spotlight.kicker,
+      title: shot.spotlight.title,
+    })
+  }
+  return spotlights.sort((a, b) => a.at - b.at)
+}
+
+const buildCelebrations = (shots: Shot[]): Celebration[] => {
+  const celebrations: Celebration[] = []
+  for (const shot of shots) {
+    if (shot.celebrate === undefined) {
+      continue
+    }
+    celebrations.push({
+      at: shot.at + (shot.celebrate.at ?? shot.duration),
+      hold: shot.celebrate.hold ?? 1.3,
+      strength: shot.celebrate.strength ?? 1,
+      confetti: shot.celebrate.confetti ?? false,
+    })
+  }
+  return celebrations.sort((a, b) => a.at - b.at)
+}
+
 // --- Sounds -----------------------------------------------------------------
 
 export type SoundName = "key" | "enter" | "tap" | "ping"
 
 export type Sound = { at: number; name: SoundName; volume: number }
 
-const buildSounds = (shots: Shot[], captions: CaptionSpec[], ripples: Ripple[]): Sound[] => {
+const buildSounds = (
+  shots: Shot[],
+  captions: CaptionSpec[],
+  ripples: Ripple[],
+  spotlights: Spotlight[],
+): Sound[] => {
   const sounds: Sound[] = []
   // [KR] every keystroke, a separate sound for Enter.
   for (let index = 0; index < 12; index += 1) {
@@ -655,6 +753,10 @@ const buildSounds = (shots: Shot[], captions: CaptionSpec[], ripples: Ripple[]):
   for (const caption of captions) {
     sounds.push({ at: caption.at, name: "ping", volume: 0.55 })
   }
+  // [SPOTLIGHT] the same ping, a little louder, when the big copy lands.
+  for (const spotlight of spotlights) {
+    sounds.push({ at: spotlight.at, name: "ping", volume: 0.7 })
+  }
   return sounds.sort((a, b) => a.at - b.at)
 }
 
@@ -665,6 +767,8 @@ export type Timeline = {
   clips: PhoneClip[]
   ripples: Ripple[]
   captions: Caption[]
+  spotlights: Spotlight[]
+  celebrations: Celebration[]
   sounds: Sound[]
   zoom: Zoom
   endSec: number
@@ -687,7 +791,9 @@ export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
   const clips = buildClips(shots)
   const ripples = buildRipples(shots)
   const captions = buildCaptions(shots)
-  const sounds = buildSounds(shots, captions, ripples)
+  const spotlights = buildSpotlights(shots)
+  const celebrations = buildCelebrations(shots)
+  const sounds = buildSounds(shots, captions, ripples, spotlights)
   const pairedRenderSec =
     tapRenderSec(pair.find((shot) => shot.slice === "first_confirm")) ??
     pair.find((shot) => shot.slice === "paired")?.at ??
@@ -699,6 +805,8 @@ export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
     clips,
     ripples,
     captions,
+    spotlights,
+    celebrations,
     sounds,
     zoom: buildZoom(shots),
     endSec,

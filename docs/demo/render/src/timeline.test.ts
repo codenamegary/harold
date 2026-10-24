@@ -1,5 +1,15 @@
 import { describe, expect, test } from "bun:test"
-import { buildTimeline, clipFrame, TERM_BOX, type CaptureSlice, type PhoneClip } from "./timeline"
+import {
+  buildTimeline,
+  channel,
+  clipFrame,
+  phoneCenterX,
+  phoneTop,
+  phoneWidth,
+  TERM_BOX,
+  type CaptureSlice,
+  type PhoneClip,
+} from "./timeline"
 
 const capture = (await Bun.file(new URL("../public/capture.json", import.meta.url)).json()) as {
   slices: CaptureSlice[]
@@ -77,6 +87,51 @@ describe("phone typing", () => {
     expect(keysBetween(details.from, details.from + details.duration)).toHaveLength(
       "http://127.0.0.1:3848".length + "GTN-5DK".length,
     )
+  })
+})
+
+describe("spotlight beat", () => {
+  test("puts the achievement copy on the left after pairing", () => {
+    const spotlight = timeline.spotlights.find((entry) => entry.title === "Work from Couch")
+
+    expect(spotlight).toBeDefined()
+    expect(spotlight?.kicker).toBe("Achievement unlocked")
+    expect(spotlight?.side).toBe("left")
+    expect(spotlight?.at).toBeCloseTo(22.8, 5)
+    expect(spotlight?.hold).toBeGreaterThanOrEqual(3)
+    expect(timeline.captions.some((caption) => caption.text.includes("Achievement"))).toBe(false)
+  })
+
+  test("zooms the first pairing flow to the top two thirds", () => {
+    expect(channel(phoneWidth, 15.0)).toBeCloseTo(380, 5)
+    expect(channel(phoneTop, 15.0)).toBeCloseTo(108, 5)
+    expect(channel(phoneWidth, 15.5)).toBeCloseTo(760, 5)
+    expect(channel(phoneTop, 15.5)).toBeCloseTo(0, 5)
+    expect(channel(phoneCenterX, 18.5)).toBeCloseTo(1460, 5)
+    expect(channel(phoneTop, 20.7)).toBeCloseTo(0, 5)
+    expect(channel(phoneTop, 21.2)).toBeCloseTo(-314.5, 5)
+    expect(channel(phoneTop, 21.6)).toBeCloseTo(-314.5, 5)
+    expect(channel(phoneTop, 22.8)).toBeCloseTo(-314.5, 5)
+  })
+
+  test("keeps the phone on the right and larger through the beat", () => {
+    expect(channel(phoneCenterX, 24.5)).toBeCloseTo(1460, 5)
+    expect(channel(phoneWidth, 24.5)).toBeCloseTo(760, 5)
+    expect(channel(phoneTop, 24.5)).toBeCloseTo(-314.5, 5)
+    expect(channel(phoneCenterX, 27.8)).toBeCloseTo(960, 5)
+    expect(channel(phoneWidth, 27.8)).toBeCloseTo(450, 5)
+  })
+
+  test("lands one celebration as the terminal leaves", () => {
+    expect(timeline.celebrations).toHaveLength(1)
+    expect(timeline.celebrations[0].at).toBeCloseTo(23.3, 5)
+  })
+
+  test("adds confetti without a tap under the celebration", () => {
+    expect(timeline.celebrations[0].confetti).toBe(true)
+    expect(
+      timeline.sounds.some((sound) => sound.name === "tap" && Math.abs(sound.at - 23.3) < 0.01),
+    ).toBe(false)
   })
 })
 

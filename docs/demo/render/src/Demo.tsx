@@ -7,9 +7,12 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion"
+import { celebrationStyle } from "./celebration"
+import { Confetti } from "./confetti"
 import { monoFamily, sansFamily } from "./fonts"
 import { Mark } from "./mark"
 import { PhoneFrame, phoneFrameSize, rippleProgress } from "./phone"
+import { SpotlightView } from "./spotlight"
 import { Terminal } from "./terminal"
 import {
   activeClip,
@@ -227,6 +230,7 @@ const PhoneStage: React.FC<{
   const hi = -scaledTop - overscan
   const slideY = lo <= hi ? Math.min(hi, Math.max(lo, wantY)) : (lo + hi) / 2
   const slideX = stageW / 2 - scaledCenterX
+  const pop = celebrationStyle(timeline.celebrations, sec)
   return (
     <div
       style={{
@@ -237,15 +241,22 @@ const PhoneStage: React.FC<{
         transform: `translate(${slideX * weight}px, ${slideY * weight}px) scale(${scale})`,
       }}
     >
-      <PhoneFrame
-        videoWidth={videoWidth}
-        videoHeight={videoHeight}
-        screenWidth={screenWidth}
-        clip={activeClip(timeline.clips, sec)}
-        sec={sec}
-        blackOpacity={channel(phoneBlack, sec)}
-        ripples={active}
-      />
+      <div
+        style={{
+          transform: `translate(${pop.x}px, ${pop.y}px) rotate(${pop.rotate}deg) scale(${pop.scaleX}, ${pop.scaleY})`,
+          transformOrigin: "50% 68%",
+        }}
+      >
+        <PhoneFrame
+          videoWidth={videoWidth}
+          videoHeight={videoHeight}
+          screenWidth={screenWidth}
+          clip={activeClip(timeline.clips, sec)}
+          sec={sec}
+          blackOpacity={channel(phoneBlack, sec)}
+          ripples={active}
+        />
+      </div>
     </div>
   )
 }
@@ -340,6 +351,10 @@ export const Demo: React.FC<DemoProps> = ({ slices, videoWidth, videoHeight }) =
       <Music />
       <TerminalStage timeline={timeline} />
       <PhoneStage timeline={timeline} videoWidth={videoWidth} videoHeight={videoHeight} />
+      <Confetti celebrations={timeline.celebrations} sec={sec} />
+      {timeline.spotlights.map((spotlight) => (
+        <SpotlightView key={spotlight.at} spotlight={spotlight} sec={sec} />
+      ))}
       {timeline.captions.map((caption) => (
         <CaptionView key={caption.at} caption={caption} sec={sec} top={zoomedAt(caption.at)} />
       ))}
