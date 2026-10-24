@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/codenamegary/harold/compare/harold-android-v1.4.0...harold-android-v1.4.1) (2026-10-24)
+
+
+### Documentation
+
+* **demo:** update Remotion cut for refreshed capture ([#445](https://github.com/codenamegary/harold/issues/445)) ([d250a3f](https://github.com/codenamegary/harold/commit/d250a3fcaeff1fb10b0e1d5f0ac4cbb8c93a73d2))
+
 ## [1.4.0](https://github.com/codenamegary/harold/compare/harold-android-v1.3.0...harold-android-v1.4.0) (2026-10-22)
 
 
