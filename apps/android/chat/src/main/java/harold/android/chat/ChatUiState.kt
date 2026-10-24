@@ -1,12 +1,7 @@
 package harold.android.chat
 
-import harold.android.chat.auth.authPanelSummary
 import harold.android.chat.composer.ComposerConfigUi
-import harold.android.contracts.AgentAuth
-import harold.android.contracts.AgentAuthStatus
-import harold.android.contracts.AgentAuthSummary
 import harold.android.contracts.AgentId
-import harold.android.contracts.AuthSessionStatus
 import harold.android.contracts.AvailableCommand
 import harold.android.contracts.PermissionRequest
 import harold.android.contracts.SessionState
@@ -98,11 +93,6 @@ data class ChatUiState(
     val voiceCommandPrefix: String = "",
     /** Voice mode toggles the command list from a button instead of a typed slash. */
     val voiceCommandListVisible: Boolean = false,
-    val agentAuth: AgentAuth? = null,
-    val agentAuthSummary: AgentAuthSummary? = null,
-    val authPanelSubmitting: Boolean = false,
-    val authActionBusy: Boolean = false,
-    val authError: String? = null,
     val activeHaroldName: String = "",
     val activeHaroldColorId: String = "",
     val activeHaroldIconId: String = "",
@@ -118,26 +108,6 @@ data class ChatUiState(
 
     val activePermissionRequest: PermissionRequest?
         get() = activePermissionRequest(pendingPermissions)
-
-    val authSummary: AgentAuthSummary?
-        get() = authPanelSummary(agentAuth, agentAuthSummary)
-
-    val showAuthPanel: Boolean
-        get() {
-            val sessionInFlight = agentAuth?.session?.status == AuthSessionStatus.InProgress
-            if (sessionInFlight) {
-                return true
-            }
-            return when (authSummary?.status) {
-                AgentAuthStatus.NeedsAuth,
-                AgentAuthStatus.Error,
-                -> true
-                AgentAuthStatus.Unknown,
-                AgentAuthStatus.Authenticated,
-                null,
-                -> false
-            }
-        }
 
     val effectiveSessionState: SessionState?
         get() = resolveEffectiveSessionState(

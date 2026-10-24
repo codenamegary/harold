@@ -6,11 +6,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import harold.android.chat.composer.ComposerConfigUi
-import harold.android.contracts.AgentAuth
-import harold.android.contracts.AgentAuthSession
-import harold.android.contracts.AgentAuthStatus
-import harold.android.contracts.AgentAuthSummary
-import harold.android.contracts.AuthSessionStatus
 import harold.android.contracts.PermissionRequest
 import harold.android.contracts.PermissionStatus
 import harold.android.contracts.SessionState
@@ -18,83 +13,6 @@ import harold.android.live.AcpTranscriptState
 import harold.android.live.emptyAcpTranscript
 
 class ChatUiStateTest {
-    private fun summary(
-        status: AgentAuthStatus,
-        error: String? = null,
-    ) = AgentAuthSummary(
-        status = status,
-        error = error,
-        activeSessionId = null,
-        canLogout = false,
-    )
-
-    private fun auth(
-        status: AgentAuthStatus,
-        session: AgentAuthSession? = null,
-    ) = AgentAuth(
-        agentId = "cursor",
-        status = status,
-        error = null,
-        session = session,
-    )
-
-    private fun inFlightSession() = AgentAuthSession(
-        sessionId = "auth-1",
-        agentId = "cursor",
-        status = AuthSessionStatus.InProgress,
-        steps = emptyList(),
-        error = null,
-    )
-
-    @Test
-    fun unknownSummaryWithNoErrorHidesAuthPanel() {
-        assertFalse(ChatUiState(agentAuthSummary = summary(AgentAuthStatus.Unknown)).showAuthPanel)
-    }
-
-    @Test
-    fun unknownSummaryWithErrorHidesAuthPanel() {
-        assertFalse(
-            ChatUiState(
-                agentAuthSummary = summary(AgentAuthStatus.Unknown, error = "probe failed"),
-            ).showAuthPanel,
-        )
-    }
-
-    @Test
-    fun needsAuthSummaryShowsAuthPanel() {
-        assertTrue(
-            ChatUiState(agentAuthSummary = summary(AgentAuthStatus.NeedsAuth)).showAuthPanel,
-        )
-    }
-
-    @Test
-    fun errorSummaryShowsAuthPanel() {
-        assertTrue(
-            ChatUiState(agentAuthSummary = summary(AgentAuthStatus.Error)).showAuthPanel,
-        )
-    }
-
-    @Test
-    fun authenticatedSummaryHidesAuthPanel() {
-        assertFalse(
-            ChatUiState(agentAuthSummary = summary(AgentAuthStatus.Authenticated)).showAuthPanel,
-        )
-    }
-
-    @Test
-    fun noAuthStateHidesAuthPanel() {
-        assertFalse(ChatUiState().showAuthPanel)
-    }
-
-    @Test
-    fun inFlightSessionShowsAuthPanelEvenWhenStatusIsUnknown() {
-        assertTrue(
-            ChatUiState(
-                agentAuth = auth(AgentAuthStatus.Unknown, session = inFlightSession()),
-            ).showAuthPanel,
-        )
-    }
-
     @Test
     fun reconnectingStreamHidesTheBlockedMessage() {
         val state = ChatUiState(
@@ -138,11 +56,6 @@ class ChatUiStateTest {
             permissionUiState = PermissionUiState(submittingOptionId = "allow"),
             extensionUiState = ExtensionUiState(submitting = true, error = "extension failed"),
             streamReconnecting = true,
-            agentAuth = auth(AgentAuthStatus.Authenticated),
-            agentAuthSummary = summary(AgentAuthStatus.Authenticated),
-            authPanelSubmitting = true,
-            authActionBusy = true,
-            authError = "auth failed",
         )
 
         val reset = busy.resetSessionScopedState()
@@ -161,15 +74,9 @@ class ChatUiStateTest {
         assertFalse(reset.streamReconnecting)
         assertFalse(reset.pickerVisible)
         // Outside the reset policy: switching sessions leaves these alone.
-        // The auth panel slice belongs to the agent-auth module.
         assertEquals("Reconnecting", reset.connectionBanner)
         assertEquals(busy.sessions, reset.sessions)
         assertEquals(busy.recentSessions, reset.recentSessions)
-        assertEquals(busy.agentAuth, reset.agentAuth)
-        assertEquals(busy.agentAuthSummary, reset.agentAuthSummary)
-        assertTrue(reset.authPanelSubmitting)
-        assertTrue(reset.authActionBusy)
-        assertEquals("auth failed", reset.authError)
     }
 
     @Test

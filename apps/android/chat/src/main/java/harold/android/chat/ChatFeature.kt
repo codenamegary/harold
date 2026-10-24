@@ -34,9 +34,11 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
         scope.entry<Chat> {
             val viewModel: ChatViewModel = hiltViewModel()
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+            val agentAuthState by viewModel.agentAuthState.collectAsStateWithLifecycle()
             ResumeChat(viewModel)
             ChatScreen(
                 uiState = uiState,
+                agentAuthState = agentAuthState,
                 composerState = viewModel.composerState,
                 composerActions = remember(viewModel) {
                     ComposerConfigActions(

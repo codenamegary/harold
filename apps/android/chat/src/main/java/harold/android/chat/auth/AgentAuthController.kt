@@ -18,8 +18,8 @@ import kotlinx.coroutines.launch
 
 /**
  * The agent-auth slice the auth panel renders: the agent's auth state, its
- * summary, and the transient panel flags. The chat view model mirrors this
- * slice into [harold.android.chat.ChatUiState].
+ * summary, and the transient panel flags. The chat screen reads this slice
+ * directly.
  */
 data class AgentAuthUiState(
     val agentAuth: AgentAuth? = null,
@@ -27,7 +27,28 @@ data class AgentAuthUiState(
     val panelSubmitting: Boolean = false,
     val actionBusy: Boolean = false,
     val error: String? = null,
-)
+) {
+    /** The summary the auth panel acts on: the resolved one, else one derived from the raw auth. */
+    val authSummary: AgentAuthSummary?
+        get() = summary ?: agentAuth?.toSummary(canLogout = false)
+
+    val showAuthPanel: Boolean
+        get() {
+            val sessionInFlight = agentAuth?.session?.status == AuthSessionStatus.InProgress
+            if (sessionInFlight) {
+                return true
+            }
+            return when (authSummary?.status) {
+                AgentAuthStatus.NeedsAuth,
+                AgentAuthStatus.Error,
+                -> true
+                AgentAuthStatus.Unknown,
+                AgentAuthStatus.Authenticated,
+                null,
+                -> false
+            }
+        }
+}
 
 /**
  * Owns the agent-auth conversation with a Harold: hydrating the auth state
@@ -163,7 +184,7 @@ class AgentAuthController(
 
     fun logout(agentId: AgentId) {
         val current = _state.value
-        if (current.authSummary()?.canLogout != true) {
+        if (current.authSummary?.canLogout != true) {
             return
         }
         if (current.actionBusy || current.panelSubmitting) {
@@ -269,16 +290,3 @@ class AgentAuthController(
         onAuthenticated(agentId, auth.status)
     }
 }
-
-/**
- * The summary the auth panel acts on: the resolved one when there is one,
- * otherwise one derived from the raw auth with no logout offered. The chat
- * state's derived [harold.android.chat.ChatUiState.authSummary] shares this.
- */
-fun authPanelSummary(
-    auth: AgentAuth?,
-    summary: AgentAuthSummary?,
-): AgentAuthSummary? = summary ?: auth?.toSummary(canLogout = false)
-
-fun AgentAuthUiState.authSummary(): AgentAuthSummary? =
-    authPanelSummary(auth = agentAuth, summary = summary)
