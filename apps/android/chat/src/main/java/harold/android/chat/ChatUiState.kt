@@ -1,5 +1,6 @@
 package harold.android.chat
 
+import harold.android.chat.auth.authPanelSummary
 import harold.android.chat.composer.ComposerConfigUi
 import harold.android.contracts.AgentAuth
 import harold.android.contracts.AgentAuthStatus
@@ -119,17 +120,7 @@ data class ChatUiState(
         get() = activePermissionRequest(pendingPermissions)
 
     val authSummary: AgentAuthSummary?
-        get() = agentAuthSummary
-            ?: agentAuth?.let { auth ->
-                AgentAuthSummary(
-                    status = auth.status,
-                    error = auth.error,
-                    activeSessionId = auth.session
-                        ?.takeIf { it.status == AuthSessionStatus.InProgress }
-                        ?.sessionId,
-                    canLogout = false,
-                )
-            }
+        get() = authPanelSummary(agentAuth, agentAuthSummary)
 
     val showAuthPanel: Boolean
         get() {
@@ -203,3 +194,39 @@ data class ChatUiState(
     val voiceMessage: String
         get() = voiceCommandPrefix + voiceDictation.transcript
 }
+
+/**
+ * The values an incoming session supplies instead of the defaults when the
+ * session-scoped surface resets. The auth panel slice is not here: the
+ * [harold.android.chat.auth.AgentAuthController] owns it and resets itself.
+ */
+internal data class SessionResetKeep(
+    val selectedSession: SessionRow? = null,
+    val transcript: AcpTranscriptState = emptyAcpTranscript,
+    val pendingPermissions: List<PermissionRequest> = emptyList(),
+)
+
+/**
+ * The one session-reset policy. Selecting, creating, or dropping a session
+ * clears every session-scoped surface back to its default; the keep slot
+ * carries what the next session brings with it. A new session-scoped
+ * [ChatUiState] field gets exactly one edit here.
+ */
+internal fun ChatUiState.resetSessionScopedState(
+    keep: SessionResetKeep = SessionResetKeep(),
+): ChatUiState = copy(
+    selectedSession = keep.selectedSession,
+    transcript = keep.transcript,
+    composerText = "",
+    composerSubmitting = false,
+    composerError = null,
+    composerConfig = ComposerConfigUi(),
+    availableCommands = emptyList(),
+    voiceCommandPrefix = "",
+    voiceCommandListVisible = false,
+    pendingPermissions = keep.pendingPermissions,
+    permissionUiState = PermissionUiState(),
+    extensionUiState = ExtensionUiState(),
+    streamReconnecting = false,
+    pickerVisible = false,
+)
