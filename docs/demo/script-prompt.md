@@ -1,9 +1,13 @@
 # Harold Remotion Prompt
 
+This file is the edit script. It describes intent, scene order, and reusable
+beats. Exact timing, easing, and pixels live in the Remotion project at
+`docs/demo/render`. Capture setup lives in `docs/demo/capture/setup.md`.
+
 ## Features to highlight
 
 - Pairing
-- Multiple-agent support 
+- Multiple-agent support
 - Connecting to existing sessions
 - Creating a new session
 - Text Chat
@@ -12,290 +16,332 @@
 - Multiple Harold instances
 - Slash commands
 
-## Phone Capture Setup (capture.sh)
+## Notation
 
-`capture.sh` owns the full capture environment. The setup must live in the script. Do not depend on instructions in a skill.
+- `[TAG]` is a one-shot routine.
+- `[TAG:preset]` selects a named preset.
+- `[TAG key=value]` passes one-off parameters.
+- `[L...]` is a layout state. It holds until the next layout tag.
+- `Enter:` is the transition into a scene.
+- `~` marks a duration, for example `~0.5s`.
+- Coordinates are normalized `0..1`, origin top-left.
+- `focus` is a point on the phone screen. `dock` is a point on the stage.
+- `[PZ]` defaults to the current layout slot. `focus` defaults to the phone
+  screen center.
+- Scene slugs are stable. Scene numbers are not used.
 
-### Instances
+## Scene map
 
-- Run both instances from this checkout with `bun run dev` so every command uses `apps/cli/src/main.ts`, not a globally installed `harold`.
-- Instance 1: `HAROLD_HOST=127.0.0.1`, `HAROLD_PORT=3847`, `HAROLD_DATA_DIR=~/.harold-demo-3847`.
-- Instance 2: `HAROLD_HOST=127.0.0.1`, `HAROLD_PORT=3848`, `HAROLD_DATA_DIR=~/.harold-demo-3848`.
-- Write a separate `settings.yml` for each instance. Set `advertisedUrl` to `http://127.0.0.1:<port>`, `bindHost` to `127.0.0.1`, `bindPort` to the instance port, and `allowedRoots` to the instance workspace root.
-- Stop any previous instance 1 or instance 2 by its data dir or daemon state. Do not stop the user's real `~/.harold` daemon.
-- Remove the previous demo data dirs, create fresh DBs, and register the agents and workspaces again. Do not copy `~/.harold/harold.db` or any previous demo DB.
-- Start both instances from the fresh data dirs. Fail if another process owns port 3847 or 3848.
-- The workspace roots are outside the data dirs. Removing a data dir must not remove a workspace.
+```text
+intro -> terminal -> phone-pair -> pair-scan -> achievement
+-> second-pair -> sessions -> new-session -> text-chat
+-> voice-chat -> outro
+```
 
-### Agents
+## Vocabulary
 
-- Instance 1: enable `cursor` and `pi-acp`.
-- Instance 2: enable `opencode`.
-- Use the exact agent IDs. The pi agent is `pi-acp`, not `pi`.
-- Verify each enabled agent is present and available. Check auth for any agent that needs it. Enabling alone is not enough.
+### Layouts
 
-### Workspaces
+- `[L1 term]` One column. Terminal only. Phone and copy off.
+- `[L1 phone]` One column. Phone centered. Terminal and copy off.
+- `[L2C term|phone]` Two columns. Terminal left, phone right.
+- `[L2C copy|phone]` Two columns. Large copy left, phone right.
 
-- Instance 1 workspace root: `~/harold-demo-workspaces/3847`.
-- Instance 2 workspace root: `~/harold-demo-workspaces/3848`.
-- Instance 1 workspaces:
-  - Clone `git@personal:codenamegary/harold.git` into `harold`.
-  - Create local repos `cat-screensaver`, `fish-screensaver-for-cats`, and `meow`.
-- Instance 2 workspaces:
-  - Clone `git@personal:codenamegary/yuekbox.git` into `yuekbox`.
-  - Create local repos `pet-me-human`, `thesis-research`, `qbert-nextgen`, and `elt-meeting-agenda`.
-- Keep existing workspace directories. Do not delete them.
-- If a clone is missing, clone it. If it exists, run `git pull --ff-only`. Fail with a clear message if the pull fails.
-- If a local repo is missing or empty, run `git init` and make an initial commit. Leave existing content alone.
-- Re-register every workspace path on each fresh DB. The DB reset loses the rows. The directories stay.
+### Camera
 
-### Demo values
+- `[PZ:full]` 1x, full frame. Uses the current layout slot.
+- `[PZ:right-full]` 1x, full frame, docked right.
+- `[PZ:top-two-thirds]` 2x, framed on the top two thirds.
+- `[PZ:center-two-thirds]` 2x, framed on the center.
+- `[PZ:lower-center]` 1.7x, focus lower center.
+- `[PZ:lower-right]` 2.6x, focus lower right.
+- `[PZ:upper-center]` 1.6x, focus upper center.
+- Override a preset value with `scale=`, `focus=`, or `drift=`, for example
+  `[PZ:lower-center scale=2.4 focus=0.5,0.81]`.
+- Raw form: `[PZ scale=2 focus=0.5,0.33 dock=right]`.
+- Preset names describe framing. Do not name a preset after a scene or feature.
 
-- Instance 1 identity: name `Work`, color Violet, icon Harold mark.
-- Instance 2 identity: name `Couch`, color Tide, icon Bolt.
-- Instance 2 manual pairing endpoint: `http://127.0.0.1:3848`.
-- Main chat target: instance 2 workspace `yuekbox` with agent `opencode`.
+### Copy
 
-### Session history
+- `[CAP "text"]` Fallback bottom caption. Prefer a card, callout, note, or
+  annotation when the copy can sit in the empty area.
+- `[CALLOUT "title" eyebrow="text" hint="text" side=right]` Phone-attached
+  tag with a drawn leader line and target pulse. The first tap of the shot is
+  the anchor. Plays a ping. Eyebrow and hint are optional. Add
+  `compact placement=edge` to sit it beside the phone. Add `connector=T` for
+  a T-bracket outside the phone frame.
+- `[SPOTLIGHT side=left]` Large copy card with a mono kicker, display title,
+  and lime rule. Plays a ping. The kicker and title sit on the following
+  indented lines.
 
-- Purge the demo workspace OpenCode history on instance 2, then seed the five fixed OpenCode demo sessions, newest first, so repeated captures cannot stack duplicate rows.
-- Seed one fixed pi session on instance 1 so the session list can show both Harold badges.
-- Do not copy sessions from `~/.harold` or a previous demo DB.
+### Collections
 
-### Pairing codes and ports
+- `[CARDS "title" eyebrow="text" hint="text"]` Paper cards fan out from
+  behind the phone. Use it for list or history beats where the story is a
+  collection, not one control. Plays a ping.
 
-- Generate the instance 1 pairing code with the loopback endpoint immediately before composing the camera feed.
-- Generate the instance 2 pairing code with the loopback endpoint immediately before the manual pairing scene. Pairing codes live 10 minutes. Do not generate it at setup start.
-- Set `adb reverse tcp:3847 tcp:3847` and `adb reverse tcp:3848 tcp:3848` after every emulator boot. Verify both mappings.
+### Notes
 
-### Camera and audio
+- `[NOTE "title" label="text"]` One paper note with a lime tape and rule. The
+  tape carries a short label. Slides out from behind the phone, holds, then
+  slides back. Plays a ping.
 
-- Compose the instance 1 live QR into the staged camera clip.
-- Copy the composed feed to a short `/tmp/opencode/harold-camera-live.mp4` path before boot. The emulator's videofile camera fails on long paths.
-- Boot the emulator with the videofile back camera and an emulated front camera.
-- Prepare the WAV microphone input and compile the audio environment shim.
+### Cards
 
-### Emulator and app
+- `[CARD "title"]` One white card inside the empty part of the current phone
+  screen. Tracks the phone camera. Plays a ping.
+- `[CARD "title" place=stage]` One white card on the stage, for terminal copy
+  or copy that sits beside the phone. Plays a ping.
 
-- Stop the capture AVD. Boot it with `-wipe-data`, `-allow-host-audio`, `-gpu swiftshader_indirect`, `-no-snapshot`, and `-feature VideoPlayback`.
-- Enable dark mode and hide system error dialogs before launching the app.
-- Set the demo clock, battery, network, and notification state.
-- Build and install `harold.android.debug` from this checkout.
-- Clear app data once before the recorded run.
-- Grant camera, notifications, and record audio permissions.
-- Push the cat photos and `cat-diary.txt`. Rescan MediaStore so the pickers see them.
+### Annotations
 
-### Driver and artifacts
+- `[BOX "title" -> "next title"]` White card in the empty phone area. A lime
+  box frames the first control, then moves to the next control while the card
+  text swaps. Plays a ping at each move.
 
-- Run `drive_phone.py` after the app is installed and the reverses are set.
-- Pull the recorded slices, run `build_capture.py`, and write `docs/demo/render/public/capture.json`.
-- Do not reuse slices or captures from a previous run.
+### Interaction
 
-### Preflight
+- `[TAP "target"]` Tap ripple and tap sound.
+- `[KR "text"]` Typing window and key sounds. Enter is separate.
 
-- Check `bun`, `adb`, `node`, `ffmpeg`, `ffprobe`, `python3`, `cc`, `sqlite3`, a JDK, the Android SDK, and the emulator.
-- Check that ports 3847 and 3848 are free before starting.
-- Check SSH access to the two clone remotes.
-- Fail before changing anything if a check fails.
+### Celebration
 
-
-## Routines
-
-- [KR] Keystroke Routine - Every keystroke makes a sound, a separate sound is played when the user hits 'Enter'
-- [TAP] Tap Routine - Every time the user taps, a quick animation is overlayed at the part of the phone screen where the user tapped and a sound is played
-- [CAP] Caption Routine - Display the specified caption, animate in and out, subtle but classy animation, a subtle 'ping' sound when the caption appears
+- `[POP]` Phone squash, shake, and settle. Silent.
+- `[CF]` Full-stage confetti shower. Silent.
 
 ## Scenes
 
-### INTRO SLIDE
+### Scene: intro
 
-- Harold Logo
-- Subtitle "Hark! The Harold Agents Sing"
-- CTA bun install -g @codenamegary/harold@latest
+Enter: Composition opens on the intro slide.
 
-### Transition
+Beats:
 
-- The intro text slide fades out
-- The terminal zooms in
+- Harold logo.
+- Subtitle "Hark! The Harold Agents Sing".
+- CTA `bun install -g @codenamegary/harold@latest`.
 
-### Scene 1: Terminal
+### Scene: terminal
 
-- [CAP] Start Harold wherever you run your agents
-- Starts zoomed in on a terminal, very close
-- The terminal prompt says "codenamegary" as the username, with a flashing caret ready for input
-- [KR] The user types "harold start" and hits enter
-- The terminal zooms out quickly to display enough screen real-estate for the server status to display
-- The Harold server starts and displays its status in the terminal
-- [CAP] Generate a secure temporary pairing code
-- [KR] The user types "harold pair" and hits enter
-- The QR code output is displayed
-- The last output says "Waiting for a device to scan..."
+Enter: The intro slide fades out. The terminal zooms in close. [L1 term]
 
-### Transition
+Beats:
 
-- [CAP] Harold'ing...
-- The terminal zooms far out and becomes mostly transparent, slides far to the left, overflowing the left side of the screen and partly out of frame
-- A phone appears from the right
-- The phone animates in to front and center
-- The phone starts black and quickly fades in the Harold app loading screen
+- [CARD "Start Harold wherever you run your agents" place=stage]
+- The terminal prompt shows `codenamegary` and a ready caret.
+- [KR "harold start"] then press Enter.
+- The terminal zooms out to show the server status.
+- The server prints its status.
+- [KR "harold pair"] then press Enter.
+- The QR code appears.
+- [CARD "Generate a secure temporary pairing code" place=stage]
+- The last output reads `Waiting for a device to scan...`
 
-### Scene 2: Phone
+### Scene: phone-pair
 
-- [CAP] Pair with your agents
-- The phone starts with the Harold app loading screen
-- The initial "Not paired" state appears
-- [TAP] The user presses "Pair"
+Enter: The terminal stays on the left. The phone enters right on its loading
+screen. [L2C term|phone ~1.7s] [PZ:right-full]
 
-### Transition
+Beats:
 
-- Everything is animated
-- The remotion screen splits vertically
-- The terminal with the QR code is on the left, opacity animates back to 1, size and zoom animate as well
-- The terminal is zoomed in on the last line saying "Waiting for a device to scan..."
-- The right side is the phone, showing the Pair device scanner
+- The phone starts black and fades in the Harold app loading screen.
+- [CARD "Harold'ing..." place=stage]
+- The phone shows the Not paired state.
+- [CARD "Pair with your agents" place=stage]
+- [TAP "Pair"]
+- [PZ:top-two-thirds ~0.5s]
+- The phone holds the top-two-thirds framing.
 
-### Scene 3: Pairing w/Camera
+### Scene: pair-scan
 
-- The phone pair camera view launches on the right with the video of the QR code, simulating that the camera is pointed at a laptop screen where the QR code is shown
-- The camera simulation displays for about 3s
-- The scanner is replaced by the Harold identity screen. It shows a badge preview, the Name field, the Color row, the Icon row, and the Pair button.
-- [TAP] The Name field
-- [KR] Clear the suggested name and type "Work"
-- Leave Violet and Harold mark selected
-- Dismiss the keyboard
-- [TAP] The "Pair" button
-- The terminal goes to the "Device paired." state and returns to the codenamegary prompt with a flashing caret ready for input
-- The phone follows the normal flow to the chat screen with the Work badge
+Enter: The terminal QR is on the left, showing
+`Waiting for a device to scan...`. [L2C term|phone]. The phone holds [PZ:top-two-thirds].
 
-### Transition
+Beats:
 
-- [CAP] Achievement Unlocked: Work from Couch
-- The terminal zooms out again and opacity fades, it returns to the scene 2 position
-- The remotion screen is no longer split vertically
-- The phone animates back to its scene 2 position
-- The phone is on the chat screen with the Work badge
-- The terminal stays off-screen for the rest of the video
+- The pair camera opens on the right with the recorded QR video.
+- The video simulates the camera pointed at a laptop screen.
+- The camera shows for about 3s.
+- The scanner is replaced by the Harold identity screen with the badge preview,
+  Name field, Color row, Icon row, and Pair button.
+- [TAP "Name field"]
+- [KR "Work"]
+- Leave Violet and the Harold mark selected.
+- Dismiss the keyboard.
+- [TAP "Pair"]
+- [PZ:center-two-thirds ~0.5s]
+- The landing screen is visible with the Work badge and the paired state.
+- The terminal prints `Device paired.` and returns to the prompt.
 
-### Scene 4: Pair Another Harold
+### Scene: achievement
 
-- [CAP] Pair another Harold
-- [TAP] The overflow menu in the top right of the chat screen
-- [TAP] "Pair" in the menu
+Enter: [L2C copy|phone ~1.2s]. The terminal wooshes out left and fades. [PZ:center-two-thirds].
+
+Beats:
+
+- [SPOTLIGHT side=left]
+  kicker: Achievement unlocked
+  title: Work from Couch
+- [POP]
+- [CF]
+- The phone holds the centered close-up.
+
+### Scene: second-pair
+
+Enter: [L1 phone ~0.8s] [PZ:full ~0.8s]. The phone returns to center. The
+terminal stays off screen.
+
+Beats:
+
+- [CALLOUT "Pair another Harold" eyebrow="MULTI-HAROLD" hint="One phone, two Harolds." side=right]
+- [TAP "Overflow menu"]
+- [TAP "Pair"]
 - The Pair device screen opens with the scanner. No terminal is visible.
-- [TAP] "Enter manually" below the scanner
-- The manual pairing form appears with the Harold endpoint and Pairing code fields
-- [TAP] The Harold endpoint field
-- [KR] Type "http://127.0.0.1:3848"
-- [TAP] The Pairing code field
-- [KR] Type the instance 2 pairing code
-- [TAP] "Claim pairing code"
-- The Harold identity screen appears with the suggested name "127.0.0.1 2", Tide, and Bolt
-- [TAP] The Name field
-- [KR] Clear the suggested name and type "Couch"
-- Leave Tide and Bolt selected
-- Dismiss the keyboard
-- [TAP] The "Pair" button
-- The chat screen returns with the second Harold connected
+- [TAP "Enter manually"]
+- The manual pairing form appears with the Harold endpoint and Pairing code
+  fields.
+- [TAP "Harold endpoint field"]
+- [KR "http://127.0.0.1:3848"]
+- [TAP "Pairing code field"]
+- [KR "instance 2 pairing code"]
+- [TAP "Claim pairing code"]
+- The identity screen appears with the suggested name `127.0.0.1 2`, Tide,
+  and Bolt.
+- [TAP "Name field"]
+- [KR "Couch"]
+- Leave Tide and Bolt selected.
+- Dismiss the keyboard.
+- [TAP "Pair"]
+- The chat returns with both Harolds connected.
 
-### Transition
+### Scene: sessions
 
-- The chat screen settles with both Harolds connected
-- The terminal stays off-screen
-- The phone remains centered
-- The next caption fades in
+Enter: The chat settles with both Harolds connected. The session history
+cards spread in. [L1 phone] [PZ:full].
 
-### Scene 5: Session History
+Beats:
 
-- [CAP] Access your agent session history
-- [TAP] The session dropdown in the header
-- The dropdown loads and shows recent sessions with Harold badges and a "See all sessions…" item
-- [TAP] "See all sessions…"
-- The Sessions screen opens with the search field, the All, Work, and Couch filter chips, and the merged session list
-- Each row shows a Harold badge, title, workspace, agent, and state
-- [TAP] The newest OpenCode session from Couch
-- The Sessions screen closes and the chat opens with that session
-- The header shows the Couch badge and the session name
+- [CARDS "Access your agent session history" eyebrow="SESSION HISTORY" hint="Past sessions, one tap away."]
+- [TAP "Session dropdown"]
+- The dropdown shows recent sessions with Harold badges and a
+  `See all sessions...` item.
+- [TAP "See all sessions..."]
+- The Sessions screen opens with the search field, the All, Work, and Couch
+  filter chips, and the merged session list.
+- Each row shows a Harold badge, title, workspace, agent, and state.
+- [TAP "Newest OpenCode session from Couch"]
+- The Sessions screen closes and the chat opens with that session.
+- The header shows the Couch badge and the session name.
 
-### Transition
+### Scene: new-session
 
-- The Sessions screen closes
-- The selected chat returns with the Couch badge and session name
-- The composer is visible
+Enter: The Sessions screen closes. The chat returns with the Couch badge and
+session name. The phone moves right and zooms in on the new session form.
+[L2C copy|phone ~0.56s] [PZ:center-two-thirds].
 
-### Scene 6: New Session
+Beats:
 
-- [CAP] Start a new session
-- [TAP] The session dropdown in the header
-- [TAP] "New session"
-- Wait for the New session screen to populate
-- [TAP] The Workspace dropdown
-- The menu shows "New workspace" and workspaces from both Harolds, each with a Harold badge and path
-- [TAP] "harold" under Work
-- [TAP] The Agent dropdown
-- The menu shows "Cursor" and "pi ACP"
-- [TAP] "Cursor"
-- [TAP] The Workspace dropdown
-- [TAP] "yuekbox" under Couch. Scroll if needed.
-- [TAP] The Agent dropdown
-- [TAP] "OpenCode"
-- [TAP] Continue
+- [NOTE "Start a new Session" label="MAKE SOME HISTORY"]
+- [TAP "Session dropdown"]
+- [TAP "New session"]
+- Wait for the New session screen to populate.
+- [TAP "Workspace dropdown"]
+- The menu shows `New workspace` and workspaces from both Harolds, each with a
+  Harold badge and path.
+- [TAP "harold under Work"]
+- [TAP "Agent dropdown"]
+- The menu shows Cursor and pi ACP.
+- [TAP "Cursor"]
+- [TAP "Workspace dropdown"]
+- Scroll if needed.
+- [TAP "yuekbox under Couch"]
+- [TAP "Agent dropdown"]
+- [TAP "OpenCode"]
+- [TAP "Continue"]
+- [L1 phone ~0.8s] [PZ:full ~0.8s]
+- The phone pulls back to center as the session is created.
 
-### Transition
+### Scene: text-chat
 
-- The New session screen closes
-- The chat returns with the new session selected
-- The composer shows the model, mode, and thinking chips
+Enter: The New session screen closes. The chat returns with the new session
+selected. The composer shows the model, mode, and thinking chips. [L1 phone]
+[PZ:full].
 
-### Scene 7: Text Chat
+Beats:
 
-- [CAP] Model list from your Agent
-- [TAP] The model chip
-- The Model sheet opens
-- [TAP] "Search models"
-- [KR] Type "deepseek", do not press enter
-- [TAP] "deepseek/DeepSeek V4.1 Flash 1017"
-- [CAP] Toggle modes supported by your agent
-- [TAP] The mode chip until it reads "PLAN", wait 2s
-- [TAP] The mode chip until it reads "BUILD", wait 2s
-- [CAP] Adjust thinking effort
-- [TAP] The thinking bars, wait 1s
-- [TAP] The thinking bars, wait 1s
-- [TAP] The thinking bars, wait 1s
-- If the toast is not "Thinking set to High", tap once more and wait 1s
-- [CAP] Slash commands from your agent
-- [TAP] The slash button
-- The Commands panel opens with "/init", "/review", and "/compact"
-- [TAP] "Close command list"
-- [CAP] Send a text Prompt
-- [KR] Type "Do you think my cat's behaviour is strange?", wait 2s
+- [TAP "Model chip"]
+- [PZ:lower-center ~0.55s]
+- The Model sheet opens.
+- [CALLOUT "Model list from your Agent" eyebrow="YOUR AGENT" hint="Pick one to continue." compact placement=edge connector=T]
+- [TAP "Search models"]
+- [KR "deepseek"]
+- [TAP "deepseek/DeepSeek V4.1 Flash 1017"]
+- [PZ:lower-center scale=2.4 focus=0.5,0.81 ~0.55s]
+- [BOX "Toggle modes supported by your agent" -> "Adjust thinking effort"]
+- [TAP "Mode chip until PLAN"]
+- Wait 2s.
+- [TAP "Mode chip until BUILD"]
+- Wait 2s.
+- [PZ:lower-right ~0.55s]
+- [BOX moves to the thinking bars]
+- [TAP "Thinking bars"]
+- Wait 1s.
+- [TAP "Thinking bars"]
+- Wait 1s.
+- [TAP "Thinking bars"]
+- Wait 1s.
+- If the toast is not `Thinking set to High`, tap once more and wait 1s.
+- [PZ:upper-center ~0.55s]
+- [TAP "Slash button"]
+- The Commands panel opens with `/init`, `/review`, and `/compact`.
+- [CARD "Slash commands from your agent"]
+- [TAP "Close command list"]
+- [PZ:lower-center scale=2.4 focus=0.5,0.81 ~0.55s]
+- [CARD "Send a text Prompt"]
+- [KR "Do you think my cat's behaviour is strange?"]
+- Wait 2s.
 - Do not send the prompt. Leave it drafted.
-- [CAP] Attachments
-- [TAP] "Attach photo", wait for the photo picker
-- [TAP] The 3rd cat picture
-- [TAP] "Add (1)"
-- [TAP] "Attach files"
-- [TAP] "cat-diary.txt"
-- [TAP] "Send message"
-- Wait for the response from the agent to complete
+- [CALLOUT "Attachments" compact placement=edge connector=T]
+- [PZ:full ~0.55s]
+- [TAP "Attach photo"]
+- Wait for the photo picker.
+- [TAP "Third cat picture"]
+- [TAP "Add (1)"]
+- [TAP "Attach files"]
+- [TAP "cat-diary.txt"]
+- [PZ:lower-center scale=1.8 focus=0.5,0.84 ~0.55s]
+- [TAP "Send message"]
+- Wait for the response.
+- [PZ:upper-center focus=0.5,0.33 drift=0.22 ~0.55s]
+- The reply settles.
 
-### Scene 8: Voice Chat
+### Scene: voice-chat
 
-- [TAP] "Dictate with voice"
-- The inline voice rail opens and starts listening. The mic control reads "Mute voice input", and the transcript begins to appear.
-- [TAP] "Expand voice input"
-- The full-screen voice overlay opens with "Collapse voice input" and "Switch to keyboard input"
-- Play "voice-input.wav" as the virtual mic input
-- [TAP] "Send message"
-- Wait for the response from the agent to complete
+Enter: The text reply settles. [L1 phone] [PZ:full].
 
-### Transition
+Beats:
 
-- The voice reply settles
-- The phone fades out
-- The outro slide fades in
+- [TAP "Dictate with voice"]
+- The inline voice rail opens and starts listening.
+- [PZ:lower-center scale=1.9 focus=0.5,0.9 ~0.55s]
+- The mic control reads `Mute voice input`, and the transcript begins to appear.
+- [TAP "Expand voice input"]
+- The full-screen overlay opens with `Collapse voice input` and
+  `Switch to keyboard input`.
+- [PZ:upper-center scale=1.5 focus=0.5,0.22 ~0.55s]
+- Play `voice-input.wav` as the virtual mic input.
+- [TAP "Send message"]
+- Wait for the response.
+- [PZ:upper-center focus=0.5,0.33 drift=0.22 ~0.55s]
+- The reply settles.
 
-### Outro
+### Scene: outro
 
-- Similar to the intro slide
-- CTA to install Harold
-- harold.codenamegary.com on the slide
+Enter: The voice reply settles. The phone fades out. The outro fades in.
+
+Beats:
+
+- Harold logo.
+- Subtitle "Hark! The Harold Agents Sing".
+- CTA `bun install -g @codenamegary/harold@latest`.
+- `harold.codenamegary.com`.

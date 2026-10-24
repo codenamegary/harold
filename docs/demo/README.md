@@ -5,7 +5,7 @@ The demo video pipeline, in two stages:
 | Stage     | Directory  | Role                                                                                          |
 | --------- | ---------- | --------------------------------------------------------------------------------------------- |
 | `capture` | `capture/` | Records the phone: emulator with a staged camera feed, UI driver, dead-space cut              |
-| `render`  | `render/`  | The Remotion cut: terminal, phone frame, captions; renders from fixtures tracked in `public/` |
+| `render`  | `render/`  | The Remotion cut: terminal, phone frame, captions, spotlights; renders from fixtures tracked in `public/` |
 
 What is kept and what is not:
 

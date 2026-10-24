@@ -7,9 +7,18 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion"
+import { AnnotationView } from "./annotation"
+import { CalloutView } from "./callout"
+import { CardFanView } from "./cardFan"
+import { celebrationStyle } from "./celebration"
+import { NoteView } from "./note"
+import { PhoneCardView } from "./phoneCard"
+import { StageCardView } from "./stageCard"
+import { Confetti } from "./confetti"
 import { monoFamily, sansFamily } from "./fonts"
 import { Mark } from "./mark"
 import { PhoneFrame, phoneFrameSize, rippleProgress } from "./phone"
+import { SpotlightView } from "./spotlight"
 import { Terminal } from "./terminal"
 import {
   activeClip,
@@ -193,7 +202,7 @@ const PhoneStage: React.FC<{
   videoHeight: number
 }> = ({ timeline, videoWidth, videoHeight }) => {
   const frame = useCurrentFrame()
-  const { fps } = useVideoConfig()
+  const { fps, width: stageW, height: stageH } = useVideoConfig()
   const sec = frame / fps
   const screenWidth = channel(phoneWidth, sec)
   const size = phoneFrameSize(videoWidth, videoHeight, screenWidth)
@@ -202,24 +211,69 @@ const PhoneStage: React.FC<{
   const active = timeline.ripples
     .map((ripple) => ({ ...ripple, progress: rippleProgress(sec, ripple.at) }))
     .filter((ripple) => ripple.progress > 0 && ripple.progress < 1)
+  // [ZOOM] scale the phone about the focus point, then slide that point
+  // toward the middle of the stage. The slide is clamped so a zoomed phone
+  // always covers the stage edge it crosses: no bezel or void peeks in.
+  const scale = channel(timeline.zoom.scale, sec)
+  const bezel = (size.frameWidth - size.screenWidth) / 2
+  const originX = bezel + channel(timeline.zoom.x, sec) * size.screenWidth
+  const originY = bezel + channel(timeline.zoom.y, sec) * size.screenHeight
+  const pointX = left + originX
+  const pointY = top + originY
+  const scaledTop = pointY - originY * scale
+  const scaledBottom = pointY + (size.frameHeight - originY) * scale
+  const scaledCenterX = pointX + (size.frameWidth / 2 - originX) * scale
+  const weight = interpolate(scale, [1, 1.3], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  })
+  const wantY = stageH / 2 - pointY
+  // Keep the bezel and its rounded corners past the stage edge.
+  // When the phone is shorter than the stage the bounds cross; centering it
+  // then keeps the slide continuous as the scale eases through.
+  const overscan = (bezel + 44) * scale
+  const lo = stageH - scaledBottom + overscan
+  const hi = -scaledTop - overscan
+  const slideY = lo <= hi ? Math.min(hi, Math.max(lo, wantY)) : (lo + hi) / 2
+  const slideX = stageW / 2 - scaledCenterX
+  const pop = celebrationStyle(timeline.celebrations, sec)
   return (
-    <div style={{ position: "absolute", left, top }}>
-      <PhoneFrame
-        videoWidth={videoWidth}
-        videoHeight={videoHeight}
-        screenWidth={screenWidth}
-        clip={activeClip(timeline.clips, sec)}
-        sec={sec}
-        blackOpacity={channel(phoneBlack, sec)}
-        ripples={active}
-      />
+    <div
+      style={{
+        position: "absolute",
+        left,
+        top,
+        transformOrigin: `${originX}px ${originY}px`,
+        transform: `translate(${slideX * weight}px, ${slideY * weight}px) scale(${scale})`,
+      }}
+    >
+      <div
+        style={{
+          transform: `translate(${pop.x}px, ${pop.y}px) rotate(${pop.rotate}deg) scale(${pop.scaleX}, ${pop.scaleY})`,
+          transformOrigin: "50% 68%",
+        }}
+      >
+        <PhoneFrame
+          videoWidth={videoWidth}
+          videoHeight={videoHeight}
+          screenWidth={screenWidth}
+          clip={activeClip(timeline.clips, sec)}
+          sec={sec}
+          blackOpacity={channel(phoneBlack, sec)}
+          ripples={active}
+        />
+      </div>
     </div>
   )
 }
 
 // [CAP] one classy line at the bottom of the stage: fades in with a lift,
 // holds, fades out.
-const CaptionView: React.FC<{ caption: Caption; sec: number }> = ({ caption, sec }) => {
+const CaptionView: React.FC<{ caption: Caption; sec: number; top: boolean }> = ({
+  caption,
+  sec,
+  top,
+}) => {
   const { at, hold, text } = caption
   const since = sec - at
   const total = hold + 0.85
@@ -240,7 +294,8 @@ const CaptionView: React.FC<{ caption: Caption; sec: number }> = ({ caption, sec
         position: "absolute",
         left: 0,
         right: 0,
-        bottom: 64,
+        // [ZOOM] a zoomed phone fills the bottom; the top shows the empty chat area.
+        ...(top ? { top: 64 } : { bottom: 64 }),
         display: "flex",
         justifyContent: "center",
         pointerEvents: "none",
@@ -295,13 +350,58 @@ export const Demo: React.FC<DemoProps> = ({ slices, videoWidth, videoHeight }) =
   const { fps } = useVideoConfig()
   const sec = frame / fps
   const timeline = buildTimeline(slices)
+  // Place each caption from the zoom once it has settled so it never jumps.
+  const zoomedAt = (at: number) => channel(timeline.zoom.scale, at + 0.6) > 1.05
   return (
     <AbsoluteFill style={{ background: ink, color: paper }}>
       <Music />
       <TerminalStage timeline={timeline} />
+      {timeline.stageCards.map((card) => (
+        <StageCardView key={card.at} card={card} sec={sec} />
+      ))}
+      {timeline.cardFans.map((fan) => (
+        <CardFanView key={fan.at} fan={fan} sec={sec} />
+      ))}
+      {timeline.notes.map((note) => (
+        <NoteView key={note.at} note={note} sec={sec} />
+      ))}
       <PhoneStage timeline={timeline} videoWidth={videoWidth} videoHeight={videoHeight} />
+      <Confetti celebrations={timeline.celebrations} sec={sec} />
+      {timeline.spotlights.map((spotlight) => (
+        <SpotlightView key={spotlight.at} spotlight={spotlight} sec={sec} />
+      ))}
+      {timeline.callouts.map((callout) => (
+        <CalloutView
+          key={callout.at}
+          callout={callout}
+          sec={sec}
+          zoom={timeline.zoom}
+          videoWidth={videoWidth}
+          videoHeight={videoHeight}
+        />
+      ))}
+      {timeline.annotations.map((annotation) => (
+        <AnnotationView
+          key={annotation.at}
+          annotation={annotation}
+          sec={sec}
+          zoom={timeline.zoom}
+          videoWidth={videoWidth}
+          videoHeight={videoHeight}
+        />
+      ))}
+      {timeline.phoneCaptions.map((caption) => (
+        <PhoneCardView
+          key={caption.at}
+          caption={caption}
+          sec={sec}
+          zoom={timeline.zoom}
+          videoWidth={videoWidth}
+          videoHeight={videoHeight}
+        />
+      ))}
       {timeline.captions.map((caption) => (
-        <CaptionView key={caption.at} caption={caption} sec={sec} />
+        <CaptionView key={caption.at} caption={caption} sec={sec} top={zoomedAt(caption.at)} />
       ))}
       {/* Scheduled sound effects, one short Sequence each. */}
       {timeline.sounds.map((sound, index) => (

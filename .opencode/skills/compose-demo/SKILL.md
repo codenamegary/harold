@@ -63,6 +63,19 @@ All under `docs/demo/capture/` unless noted:
   picker, file picker, and gallery see the demo files. The emulator was wiped
   at boot, so there is no prior media to sweep.
 
+## Spotlight beats
+
+`docs/demo/render/src/timeline.ts` supports a `spotlight` on a step. The phone
+stays on one side at a 2x close-up, the terminal exits, and `SpotlightView`
+lands centered display copy on the other side. Add `celebrate` to the same
+step for the [POP] squash and shake. Add `confetti: true` for the full-stage
+shower. The first pairing achievement is the reference. The first pairing also
+holds a 2x top-two-thirds crop from the Pair
+tap through the scanner and name entry, then pans up after the confirm so the
+landing screen is visible. Keep `phoneCenterX` on the right through the
+spotlight hold, then move it back to center before the next walk step. Do not
+replace a spotlight with a bottom `caption`.
+
 ## Hardware facts that must not drift
 
 - Emulator: `~/android/emulator/emulator` (36.5+, has videofile camera),

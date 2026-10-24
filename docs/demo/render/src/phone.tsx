@@ -1,8 +1,19 @@
-import { AbsoluteFill, Freeze, OffthreadVideo, staticFile, useVideoConfig } from "remotion"
-import { clipFrame, rippleColor, rippleDuration, type PhoneClip } from "./timeline"
+import { AbsoluteFill, Freeze, interpolate, OffthreadVideo, staticFile, useVideoConfig } from "remotion"
+import {
+  channel,
+  clipFrame,
+  phoneCenterX,
+  phoneTop,
+  phoneWidth,
+  rippleColor,
+  rippleDuration,
+  type PhoneClip,
+  type Zoom,
+} from "./timeline"
 import { line } from "./theme"
 
 const BEZEL = 10
+const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const
 
 export const phoneFrameSize = (videoWidth: number, videoHeight: number, screenWidth: number) => {
   const height = Math.round((screenWidth * videoHeight) / videoWidth)
@@ -11,6 +22,54 @@ export const phoneFrameSize = (videoWidth: number, videoHeight: number, screenWi
     screenHeight: height,
     frameWidth: screenWidth + BEZEL * 2,
     frameHeight: height + BEZEL * 2,
+  }
+}
+
+// The visible phone screen after the phone dock and camera zoom. Overlays use
+// this so a frame tracks the phone even while the camera moves.
+export type PhoneScreenRect = {
+  left: number
+  top: number
+  width: number
+  height: number
+  frameBezel: number
+}
+
+export const phoneScreenRect = (
+  sec: number,
+  stageW: number,
+  stageH: number,
+  videoWidth: number,
+  videoHeight: number,
+  zoom: Zoom,
+): PhoneScreenRect => {
+  const screenWidth = channel(phoneWidth, sec)
+  const size = phoneFrameSize(videoWidth, videoHeight, screenWidth)
+  const left = channel(phoneCenterX, sec) - size.frameWidth / 2
+  const top = channel(phoneTop, sec)
+  const scale = channel(zoom.scale, sec)
+  const bezel = (size.frameWidth - size.screenWidth) / 2
+  const originX = bezel + channel(zoom.x, sec) * size.screenWidth
+  const originY = bezel + channel(zoom.y, sec) * size.screenHeight
+  const pointX = left + originX
+  const pointY = top + originY
+  const scaledTop = pointY - originY * scale
+  const scaledBottom = pointY + (size.frameHeight - originY) * scale
+  const scaledCenterX = pointX + (size.frameWidth / 2 - originX) * scale
+  const weight = interpolate(scale, [1, 1.3], [0, 1], clamp)
+  const wantY = stageH / 2 - pointY
+  const overscan = (bezel + 44) * scale
+  const lo = stageH - scaledBottom + overscan
+  const hi = -scaledTop - overscan
+  const slideY = lo <= hi ? Math.min(hi, Math.max(lo, wantY)) : (lo + hi) / 2
+  const slideX = stageW / 2 - scaledCenterX
+
+  return {
+    left: pointX + slideX * weight + (bezel - originX) * scale,
+    top: pointY + slideY * weight + (bezel - originY) * scale,
+    width: size.screenWidth * scale,
+    height: size.screenHeight * scale,
+    frameBezel: bezel * scale,
   }
 }
 

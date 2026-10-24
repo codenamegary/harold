@@ -2,7 +2,8 @@
 
 `capture.sh` records the phone walk with two Harold instances. Instance 1 uses
 Cursor and pi ACP. Instance 2 uses OpenCode. The phone pairs with instance 1 by
-camera, then pairs with instance 2 by typing its endpoint and code.
+camera, then pairs with instance 2 by typing its endpoint and code. The
+detailed setup spec is in [setup.md](./setup.md).
 
 | File                 | Role                                                                             |
 | -------------------- | -------------------------------------------------------------------------------- |
