@@ -263,6 +263,54 @@ describe("new scenes", () => {
     ).toBe(true)
   })
 
+  test("replaces the early captions with stage cards", () => {
+    const cards = new Map(timeline.stageCards.map((card) => [card.title, card]))
+
+    expect(cards.get("Start Harold wherever you run your agents")?.at).toBeCloseTo(3.9, 5)
+    expect(cards.get("Generate a secure temporary pairing code")?.at).toBeCloseTo(8.3, 5)
+    expect(cards.get("Harold'ing...")?.at).toBeCloseTo(10.9, 5)
+    expect(cards.get("Pair with your agents")?.at).toBeCloseTo(13.3, 5)
+    expect(timeline.captions).toHaveLength(0)
+    expect(
+      timeline.sounds.some(
+        (sound) => sound.name === "ping" && Math.abs(sound.at - 3.9) < 0.01,
+      ),
+    ).toBe(true)
+  })
+
+  test("puts the prompt card above the composer", () => {
+    const caption = timeline.phoneCaptions.find(
+      (entry) => entry.title === "Send a text Prompt",
+    )
+
+    expect(caption).toBeDefined()
+    expect(caption?.at).toBeCloseTo(86.75, 2)
+    expect(caption?.top).toBeCloseTo(0.33, 2)
+    expect(caption?.height).toBe(150)
+    expect(
+      timeline.sounds.some(
+        (sound) => sound.name === "ping" && Math.abs(sound.at - (caption?.at ?? 0)) < 0.01,
+      ),
+    ).toBe(true)
+  })
+
+  test("callouts the attachments sheet from the edge", () => {
+    const callout = timeline.callouts.find((entry) => entry.title === "Attachments")
+
+    expect(callout).toBeDefined()
+    expect(callout?.at).toBeCloseTo(92.25, 2)
+    expect(callout?.eyebrow).toBeUndefined()
+    expect(callout?.compact).toBe(true)
+    expect(callout?.placement).toBe("edge")
+    expect(callout?.connector).toBe("t")
+    expect(callout?.span).toEqual({ y: 0.12, h: 0.62 })
+    expect(
+      timeline.sounds.some(
+        (sound) => sound.name === "ping" && Math.abs(sound.at - (callout?.at ?? 0)) < 0.01,
+      ),
+    ).toBe(true)
+  })
+
   test("zooms the new session and pulls back on continue", () => {
     expect(channel(phoneCenterX, 60)).toBeCloseTo(1460, 5)
     expect(channel(phoneWidth, 60)).toBeCloseTo(760, 5)

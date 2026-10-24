@@ -13,6 +13,7 @@ import { CardFanView } from "./cardFan"
 import { celebrationStyle } from "./celebration"
 import { NoteView } from "./note"
 import { PhoneCardView } from "./phoneCard"
+import { StageCardView } from "./stageCard"
 import { Confetti } from "./confetti"
 import { monoFamily, sansFamily } from "./fonts"
 import { Mark } from "./mark"
@@ -355,6 +356,9 @@ export const Demo: React.FC<DemoProps> = ({ slices, videoWidth, videoHeight }) =
     <AbsoluteFill style={{ background: ink, color: paper }}>
       <Music />
       <TerminalStage timeline={timeline} />
+      {timeline.stageCards.map((card) => (
+        <StageCardView key={card.at} card={card} sec={sec} />
+      ))}
       {timeline.cardFans.map((fan) => (
         <CardFanView key={fan.at} fan={fan} sec={sec} />
       ))}

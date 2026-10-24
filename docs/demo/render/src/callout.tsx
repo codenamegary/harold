@@ -216,20 +216,22 @@ export const CalloutView: React.FC<{
             }}
           />
         )}
+        {eyebrow ? (
+          <div
+            style={{
+              fontFamily: monoFamily,
+              fontSize: 15,
+              fontWeight: 600,
+              letterSpacing: "0.18em",
+              opacity: 0.62,
+            }}
+          >
+            {eyebrow}
+          </div>
+        ) : null}
         <div
           style={{
-            fontFamily: monoFamily,
-            fontSize: 15,
-            fontWeight: 600,
-            letterSpacing: "0.18em",
-            opacity: 0.62,
-          }}
-        >
-          {eyebrow}
-        </div>
-        <div
-          style={{
-            marginTop: 6,
+            marginTop: eyebrow ? 6 : 0,
             maxWidth: compact ? 382 : 462,
             fontFamily: displayFamily,
             fontSize: compact ? 42 : 46,

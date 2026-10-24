@@ -63,11 +63,13 @@ intro -> terminal -> phone-pair -> pair-scan -> achievement
 
 ### Copy
 
-- `[CAP "text"]` Bottom caption. Fades in with a lift and plays a ping.
+- `[CAP "text"]` Fallback bottom caption. Prefer a card, callout, note, or
+  annotation when the copy can sit in the empty area.
 - `[CALLOUT "title" eyebrow="text" hint="text" side=right]` Phone-attached
   tag with a drawn leader line and target pulse. The first tap of the shot is
-  the anchor. Plays a ping. Add `compact placement=edge` to sit it beside the
-  phone. Add `connector=T` for a T-bracket outside the phone frame.
+  the anchor. Plays a ping. Eyebrow and hint are optional. Add
+  `compact placement=edge` to sit it beside the phone. Add `connector=T` for
+  a T-bracket outside the phone frame.
 - `[SPOTLIGHT side=left]` Large copy card with a mono kicker, display title,
   and lime rule. Plays a ping. The kicker and title sit on the following
   indented lines.
@@ -84,10 +86,12 @@ intro -> terminal -> phone-pair -> pair-scan -> achievement
   tape carries a short label. Slides out from behind the phone, holds, then
   slides back. Plays a ping.
 
-### Phone cards
+### Cards
 
 - `[CARD "title"]` One white card inside the empty part of the current phone
   screen. Tracks the phone camera. Plays a ping.
+- `[CARD "title" place=stage]` One white card on the stage, for terminal copy
+  or copy that sits beside the phone. Plays a ping.
 
 ### Annotations
 
@@ -123,14 +127,14 @@ Enter: The intro slide fades out. The terminal zooms in close. [L1 term]
 
 Beats:
 
-- [CAP "Start Harold wherever you run your agents"]
+- [CARD "Start Harold wherever you run your agents" place=stage]
 - The terminal prompt shows `codenamegary` and a ready caret.
 - [KR "harold start"] then press Enter.
 - The terminal zooms out to show the server status.
 - The server prints its status.
-- [CAP "Generate a secure temporary pairing code"]
 - [KR "harold pair"] then press Enter.
 - The QR code appears.
+- [CARD "Generate a secure temporary pairing code" place=stage]
 - The last output reads `Waiting for a device to scan...`
 
 ### Scene: phone-pair
@@ -141,8 +145,9 @@ screen. [L2C term|phone ~1.7s] [PZ:right-full]
 Beats:
 
 - The phone starts black and fades in the Harold app loading screen.
-- [CAP "Pair with your agents"]
+- [CARD "Harold'ing..." place=stage]
 - The phone shows the Not paired state.
+- [CARD "Pair with your agents" place=stage]
 - [TAP "Pair"]
 - [PZ:top-two-thirds ~0.5s]
 - The phone holds the top-two-thirds framing.
@@ -211,8 +216,8 @@ Beats:
 
 ### Scene: sessions
 
-Enter: The chat settles with both Harolds connected. The next caption fades
-in. [L1 phone] [PZ:full].
+Enter: The chat settles with both Harolds connected. The session history
+cards spread in. [L1 phone] [PZ:full].
 
 Beats:
 
@@ -292,11 +297,11 @@ Beats:
 - [CARD "Slash commands from your agent"]
 - [TAP "Close command list"]
 - [PZ:lower-center scale=2.4 focus=0.5,0.81 ~0.55s]
-- [CAP "Send a text Prompt"]
+- [CARD "Send a text Prompt"]
 - [KR "Do you think my cat's behaviour is strange?"]
 - Wait 2s.
 - Do not send the prompt. Leave it drafted.
-- [CAP "Attachments"]
+- [CALLOUT "Attachments" compact placement=edge connector=T]
 - [PZ:full ~0.55s]
 - [TAP "Attach photo"]
 - Wait for the photo picker.

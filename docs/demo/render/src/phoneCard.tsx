@@ -1,11 +1,9 @@
 import { Easing, interpolate, useVideoConfig } from "remotion"
-import { sansFamily } from "./fonts"
+import { CardFace } from "./cardFace"
 import { phoneScreenRect } from "./phone"
-import { ink, lime, paper } from "./theme"
 import { type PhoneCaption, type Zoom } from "./timeline"
 
 const CARD_W = 600
-const CARD_H = 190
 const FADE_SEC = 0.55
 const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const
 const ease = Easing.bezier(0.16, 1, 0.3, 1)
@@ -20,7 +18,7 @@ export const PhoneCardView: React.FC<{
   videoHeight: number
 }> = ({ caption, sec, zoom, videoWidth, videoHeight }) => {
   const { width: stageW, height: stageH } = useVideoConfig()
-  const { at, hold, title, top } = caption
+  const { at, hold, title, top, height } = caption
   const since = sec - at
   if (since < 0 || since > hold + FADE_SEC) {
     return null
@@ -44,46 +42,13 @@ export const PhoneCardView: React.FC<{
         left: cardLeft,
         top: cardTop,
         width: CARD_W,
-        height: CARD_H,
-        boxSizing: "border-box",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "center",
-        padding: "26px 36px 26px 38px",
-        borderRadius: 16,
-        background: paper,
-        border: "1px solid rgba(8,10,13,0.12)",
-        borderLeft: `5px solid ${lime}`,
-        boxShadow: "0 24px 60px rgba(0,0,0,0.5)",
-        color: ink,
+        height,
         opacity: presence,
         translate: `0px ${10 * (1 - reveal)}px`,
         pointerEvents: "none",
       }}
     >
-      <div
-        style={{
-          fontFamily: sansFamily,
-          fontSize: 32,
-          fontWeight: 600,
-          lineHeight: 1.05,
-          letterSpacing: "-0.02em",
-          textWrap: "balance",
-        }}
-      >
-        {title}
-      </div>
-      <div
-        style={{
-          marginTop: 14,
-          width: 80,
-          height: 4,
-          borderRadius: 2,
-          background: lime,
-          scale: `${ruleIn} 1`,
-          transformOrigin: "left center",
-        }}
-      />
+      <CardFace title={title} width={CARD_W} height={height} fontSize={32} ruleIn={ruleIn} />
     </div>
   )
 }

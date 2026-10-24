@@ -67,7 +67,7 @@ type SpotlightSpec = {
 export type Callout = {
   at: number
   hold: number
-  eyebrow: string
+  eyebrow?: string
   title: string
   hint?: string
   side: "left" | "right"
@@ -82,7 +82,7 @@ export type Callout = {
 type CalloutSpec = {
   at?: number
   hold?: number
-  eyebrow: string
+  eyebrow?: string
   title: string
   hint?: string
   side?: "left" | "right"
@@ -160,6 +160,7 @@ export type PhoneCaption = {
   hold: number
   title: string
   top: number
+  height: number
 }
 
 type PhoneCaptionSpec = {
@@ -167,6 +168,21 @@ type PhoneCaptionSpec = {
   hold?: number
   title: string
   top?: number
+  height?: number
+}
+
+// [CARD] one white caption card placed on the stage. `x` and `y` are the
+// normalized center of the card. Use it when the phone is off screen or the
+// copy belongs beside the phone rather than inside it.
+export type StageCard = {
+  at: number
+  hold: number
+  title: string
+  x: number
+  y: number
+  width: number
+  height: number
+  fontSize: number
 }
 
 // [POP] one short squash, shake, and settle on the phone. `at` is seconds
@@ -424,7 +440,13 @@ const WALK_STEPS: Step[] = [
     rate: 2,
     duration: 0.5,
     hold: 0.2,
-    caption: { text: "Send a text Prompt", at: 0.2, hold: 2.6 },
+    phoneCaption: {
+      at: 0.2,
+      hold: 2.6,
+      title: "Send a text Prompt",
+      top: 0.33,
+      height: 150,
+    },
     focus: { scale: 1.8, x: 0.5, y: 0.52 },
   },
   {
@@ -446,7 +468,17 @@ const WALK_STEPS: Step[] = [
     rate: 2,
     duration: 1.1,
     hold: 0.3,
-    caption: { text: "Attachments", at: 0.2, hold: 2.6 },
+    callout: {
+      at: 0.2,
+      hold: 2.6,
+      title: "Attachments",
+      side: "right",
+      compact: true,
+      placement: "edge",
+      connector: "t",
+      span: { y: 0.12, h: 0.62 },
+      targetY: 0.43,
+    },
   },
   { slice: "photo_pick", startSec: 2.6, rate: 2, duration: 0.8, hold: 0.3 },
   { slice: "photo_add", startSec: 2.6, rate: 2, duration: 1.1, hold: 0.3 },
@@ -798,11 +830,47 @@ const transcript = (pairedRenderSec: number): TermItem[] => {
 type CaptionSpec = { at: number; hold: number; text: string }
 export type Caption = CaptionSpec
 
-const FIXED_CAPTIONS: CaptionSpec[] = [
-  { at: 3.9, hold: 2.6, text: "Start Harold wherever you run your agents" },
-  { at: 8.3, hold: 1.6, text: "Generate a secure temporary pairing code" },
-  { at: 10.9, hold: 1.4, text: "Harold'ing..." },
-  { at: 13.3, hold: 1.4, text: "Pair with your agents" },
+const FIXED_STAGE_CARDS: StageCard[] = [
+  {
+    at: 3.9,
+    hold: 2.6,
+    title: "Start Harold wherever you run your agents",
+    x: 0.5,
+    y: 0.84,
+    width: 600,
+    height: 190,
+    fontSize: 32,
+  },
+  {
+    at: 8.3,
+    hold: 1.6,
+    title: "Generate a secure temporary pairing code",
+    x: 0.5,
+    y: 0.87,
+    width: 520,
+    height: 150,
+    fontSize: 32,
+  },
+  {
+    at: 10.9,
+    hold: 1.4,
+    title: "Harold'ing...",
+    x: 0.51,
+    y: 0.64,
+    width: 520,
+    height: 160,
+    fontSize: 32,
+  },
+  {
+    at: 13.3,
+    hold: 1.4,
+    title: "Pair with your agents",
+    x: 0.51,
+    y: 0.74,
+    width: 520,
+    height: 160,
+    fontSize: 32,
+  },
 ]
 
 export type Ripple = { at: number; x: number; y: number }
@@ -833,7 +901,7 @@ const buildRipples = (shots: Shot[]): Ripple[] => {
 }
 
 const buildCaptions = (shots: Shot[]): CaptionSpec[] => {
-  const captions = [...FIXED_CAPTIONS]
+  const captions: CaptionSpec[] = []
   for (const shot of shots) {
     if (shot.caption === undefined) {
       continue
@@ -846,6 +914,9 @@ const buildCaptions = (shots: Shot[]): CaptionSpec[] => {
   }
   return captions.sort((a, b) => a.at - b.at)
 }
+
+const buildStageCards = (): StageCard[] =>
+  [...FIXED_STAGE_CARDS].sort((a, b) => a.at - b.at)
 
 const buildSpotlights = (shots: Shot[]): Spotlight[] => {
   const spotlights: Spotlight[] = []
@@ -960,6 +1031,7 @@ const buildPhoneCaptions = (shots: Shot[]): PhoneCaption[] => {
       hold: shot.phoneCaption.hold ?? 2.0,
       title: shot.phoneCaption.title,
       top: shot.phoneCaption.top ?? 0.5,
+      height: shot.phoneCaption.height ?? 190,
     })
   }
   return captions.sort((a, b) => a.at - b.at)
@@ -997,6 +1069,7 @@ const buildSounds = (
   notes: Note[],
   annotations: Annotation[],
   phoneCaptions: PhoneCaption[],
+  stageCards: StageCard[],
 ): Sound[] => {
   const sounds: Sound[] = []
   // [KR] every keystroke, a separate sound for Enter.
@@ -1052,8 +1125,8 @@ const buildSounds = (
     sounds.push({ at: annotation.at, name: "ping", volume: 0.65 })
     sounds.push({ at: annotation.moveAt, name: "ping", volume: 0.65 })
   }
-  // [CARD] a soft ping when the in-phone card lands.
-  for (const caption of phoneCaptions) {
+  // [CARD] a soft ping when the in-phone or stage card lands.
+  for (const caption of [...phoneCaptions, ...stageCards]) {
     sounds.push({ at: caption.at, name: "ping", volume: 0.65 })
   }
   return sounds.sort((a, b) => a.at - b.at)
@@ -1071,6 +1144,7 @@ export type Timeline = {
   notes: Note[]
   annotations: Annotation[]
   phoneCaptions: PhoneCaption[]
+  stageCards: StageCard[]
   spotlights: Spotlight[]
   celebrations: Celebration[]
   sounds: Sound[]
@@ -1100,6 +1174,7 @@ export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
   const notes = buildNotes(shots)
   const annotations = buildAnnotations(shots)
   const phoneCaptions = buildPhoneCaptions(shots)
+  const stageCards = buildStageCards()
   const spotlights = buildSpotlights(shots)
   const celebrations = buildCelebrations(shots)
   const sounds = buildSounds(
@@ -1112,6 +1187,7 @@ export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
     notes,
     annotations,
     phoneCaptions,
+    stageCards,
   )
   const pairedRenderSec =
     tapRenderSec(pair.find((shot) => shot.slice === "first_confirm")) ??
@@ -1129,6 +1205,7 @@ export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
     notes,
     annotations,
     phoneCaptions,
+    stageCards,
     spotlights,
     celebrations,
     sounds,
