@@ -7,6 +7,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion"
+import { AnnotationView } from "./annotation"
 import { CalloutView } from "./callout"
 import { CardFanView } from "./cardFan"
 import { celebrationStyle } from "./celebration"
@@ -368,6 +369,16 @@ export const Demo: React.FC<DemoProps> = ({ slices, videoWidth, videoHeight }) =
         <CalloutView
           key={callout.at}
           callout={callout}
+          sec={sec}
+          zoom={timeline.zoom}
+          videoWidth={videoWidth}
+          videoHeight={videoHeight}
+        />
+      ))}
+      {timeline.annotations.map((annotation) => (
+        <AnnotationView
+          key={annotation.at}
+          annotation={annotation}
           sec={sec}
           zoom={timeline.zoom}
           videoWidth={videoWidth}

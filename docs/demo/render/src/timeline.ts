@@ -128,6 +128,31 @@ type NoteSpec = {
   title: string
 }
 
+// [BOX] one continuous annotation across a run of controls. A white card sits
+// in the empty phone area, a lime box frames the first control, then the box
+// slides to the next control and the card text swaps.
+export type AnnotationRect = { x: number; y: number; w: number; h: number }
+
+export type Annotation = {
+  at: number
+  moveAt: number
+  endAt: number
+  title: string
+  nextTitle: string
+  target: AnnotationRect
+  nextTarget: AnnotationRect
+}
+
+type AnnotationSpec = {
+  at?: number
+  title: string
+  nextTitle: string
+  nextSlice: string
+  endSlice: string
+  target?: AnnotationRect
+  nextTarget?: AnnotationRect
+}
+
 // [POP] one short squash, shake, and settle on the phone. `at` is seconds
 // after the shot starts. Use it when the app reaches a happy state.
 // `confetti` drops a full-stage shower from the same beat.
@@ -164,6 +189,7 @@ type Step = {
   callout?: CalloutSpec
   cards?: CardFanSpec
   note?: NoteSpec
+  annotation?: AnnotationSpec
   spotlight?: SpotlightSpec
   celebrate?: CelebrationSpec
   typing?: TypingWindow | TypingWindow[]
@@ -173,6 +199,9 @@ type Step = {
 const COMPOSER: Focus = { scale: 2.4, x: 0.5, y: 0.81 }
 const EFFORT: Focus = { scale: 2.6, x: 0.6, y: 0.81 }
 const READ: Focus = { scale: 1.6, x: 0.5, y: 0.33, drift: 0.22 }
+
+const MODE_TARGET: AnnotationRect = { x: 0.67, y: 0.776, w: 0.19, h: 0.06 }
+const THINKING_TARGET: AnnotationRect = { x: 0.83, y: 0.776, w: 0.14, h: 0.06 }
 
 // The pairing act is interleaved with the terminal stage, so its shots keep
 // fixed render starts. Gaps between them become holds on the previous frame.
@@ -329,7 +358,15 @@ const WALK_STEPS: Step[] = [
     rate: 1.5,
     duration: 1.5,
     hold: 1.0,
-    caption: { text: "Toggle modes supported by your agent", at: 0.2, hold: 2.6 },
+    annotation: {
+      at: 0.2,
+      title: "Toggle modes supported by your agent",
+      nextTitle: "Adjust thinking effort",
+      nextSlice: "effort_1",
+      endSlice: "effort_3",
+      target: MODE_TARGET,
+      nextTarget: THINKING_TARGET,
+    },
     focus: COMPOSER,
   },
   { slice: "mode_build", startSec: 4.8, rate: 1.5, duration: 1.4, hold: 1.0, focus: COMPOSER },
@@ -338,7 +375,6 @@ const WALK_STEPS: Step[] = [
     startSec: 0.5,
     duration: 0.8,
     hold: 0.25,
-    caption: { text: "Adjust thinking effort", at: 0.2, hold: 2.2 },
     focus: EFFORT,
   },
   { slice: "effort_2", startSec: 0.5, duration: 0.8, hold: 0.25, focus: EFFORT },
@@ -864,6 +900,33 @@ const buildNotes = (shots: Shot[]): Note[] => {
   return notes.sort((a, b) => a.at - b.at)
 }
 
+const buildAnnotations = (shots: Shot[]): Annotation[] => {
+  const bySlice = new Map(shots.map((shot) => [shot.slice, shot]))
+  const annotations: Annotation[] = []
+  for (const shot of shots) {
+    if (shot.annotation === undefined) {
+      continue
+    }
+    const next = bySlice.get(shot.annotation.nextSlice)
+    const end = bySlice.get(shot.annotation.endSlice)
+    if (next === undefined || end === undefined) {
+      throw new Error(
+        `annotation on "${shot.slice}" is missing "${shot.annotation.nextSlice}" or "${shot.annotation.endSlice}"`,
+      )
+    }
+    annotations.push({
+      at: shot.at + (shot.annotation.at ?? 0.2),
+      moveAt: next.at + 0.2,
+      endAt: end.at + end.duration + (end.hold ?? 0) - 0.2,
+      title: shot.annotation.title,
+      nextTitle: shot.annotation.nextTitle,
+      target: shot.annotation.target ?? MODE_TARGET,
+      nextTarget: shot.annotation.nextTarget ?? THINKING_TARGET,
+    })
+  }
+  return annotations.sort((a, b) => a.at - b.at)
+}
+
 const buildCelebrations = (shots: Shot[]): Celebration[] => {
   const celebrations: Celebration[] = []
   for (const shot of shots) {
@@ -894,6 +957,7 @@ const buildSounds = (
   callouts: Callout[],
   cardFans: CardFan[],
   notes: Note[],
+  annotations: Annotation[],
 ): Sound[] => {
   const sounds: Sound[] = []
   // [KR] every keystroke, a separate sound for Enter.
@@ -944,6 +1008,11 @@ const buildSounds = (
   for (const note of notes) {
     sounds.push({ at: note.at, name: "ping", volume: 0.65 })
   }
+  // [BOX] a pair of soft pings as the box lands and moves.
+  for (const annotation of annotations) {
+    sounds.push({ at: annotation.at, name: "ping", volume: 0.65 })
+    sounds.push({ at: annotation.moveAt, name: "ping", volume: 0.65 })
+  }
   return sounds.sort((a, b) => a.at - b.at)
 }
 
@@ -957,6 +1026,7 @@ export type Timeline = {
   callouts: Callout[]
   cardFans: CardFan[]
   notes: Note[]
+  annotations: Annotation[]
   spotlights: Spotlight[]
   celebrations: Celebration[]
   sounds: Sound[]
@@ -984,9 +1054,19 @@ export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
   const callouts = buildCallouts(shots)
   const cardFans = buildCardFans(shots)
   const notes = buildNotes(shots)
+  const annotations = buildAnnotations(shots)
   const spotlights = buildSpotlights(shots)
   const celebrations = buildCelebrations(shots)
-  const sounds = buildSounds(shots, captions, ripples, spotlights, callouts, cardFans, notes)
+  const sounds = buildSounds(
+    shots,
+    captions,
+    ripples,
+    spotlights,
+    callouts,
+    cardFans,
+    notes,
+    annotations,
+  )
   const pairedRenderSec =
     tapRenderSec(pair.find((shot) => shot.slice === "first_confirm")) ??
     pair.find((shot) => shot.slice === "paired")?.at ??
@@ -1001,6 +1081,7 @@ export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
     callouts,
     cardFans,
     notes,
+    annotations,
     spotlights,
     celebrations,
     sounds,

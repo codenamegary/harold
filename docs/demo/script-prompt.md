@@ -84,6 +84,12 @@ intro -> terminal -> phone-pair -> pair-scan -> achievement
   tape carries a short label. Slides out from behind the phone, holds, then
   slides back. Plays a ping.
 
+### Annotations
+
+- `[BOX "title" -> "next title"]` White card in the empty phone area. A lime
+  box frames the first control, then moves to the next control while the card
+  text swaps. Plays a ping at each move.
+
 ### Interaction
 
 - `[TAP "target"]` Tap ripple and tap sound.
@@ -261,13 +267,13 @@ Beats:
 - [KR "deepseek"]
 - [TAP "deepseek/DeepSeek V4.1 Flash 1017"]
 - [PZ:lower-center scale=2.4 focus=0.5,0.81 ~0.55s]
-- [CAP "Toggle modes supported by your agent"]
+- [BOX "Toggle modes supported by your agent" -> "Adjust thinking effort"]
 - [TAP "Mode chip until PLAN"]
 - Wait 2s.
 - [TAP "Mode chip until BUILD"]
 - Wait 2s.
 - [PZ:lower-right ~0.55s]
-- [CAP "Adjust thinking effort"]
+- [BOX moves to the thinking bars]
 - [TAP "Thinking bars"]
 - Wait 1s.
 - [TAP "Thinking bars"]

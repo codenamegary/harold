@@ -155,6 +155,38 @@ describe("new scenes", () => {
     expect(captions).toContain("Slash commands from your agent")
   })
 
+  test("boxes the mode and thinking controls", () => {
+    const annotation = timeline.annotations.find(
+      (entry) => entry.title === "Toggle modes supported by your agent",
+    )
+
+    expect(annotation).toBeDefined()
+    expect(annotation?.nextTitle).toBe("Adjust thinking effort")
+    expect(annotation?.at).toBeCloseTo(74.65, 2)
+    expect(annotation?.moveAt).toBeCloseTo(79.55, 2)
+    expect(annotation?.endAt).toBeCloseTo(82.35, 2)
+    expect(
+      timeline.captions.some(
+        (caption) => caption.text === "Toggle modes supported by your agent",
+      ),
+    ).toBe(false)
+    expect(
+      timeline.captions.some((caption) => caption.text === "Adjust thinking effort"),
+    ).toBe(false)
+    expect(
+      timeline.sounds.some(
+        (sound) =>
+          sound.name === "ping" && Math.abs(sound.at - (annotation?.at ?? 0)) < 0.01,
+      ),
+    ).toBe(true)
+    expect(
+      timeline.sounds.some(
+        (sound) =>
+          sound.name === "ping" && Math.abs(sound.at - (annotation?.moveAt ?? 0)) < 0.01,
+      ),
+    ).toBe(true)
+  })
+
   test("puts the model list callout beside the phone", () => {
     const callout = timeline.callouts.find(
       (entry) => entry.title === "Model list from your Agent",
