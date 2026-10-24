@@ -64,9 +64,24 @@ intro -> terminal -> phone-pair -> pair-scan -> achievement
 ### Copy
 
 - `[CAP "text"]` Bottom caption. Fades in with a lift and plays a ping.
+- `[CALLOUT "title" eyebrow="text" hint="text" side=right]` Phone-attached
+  tag with a drawn leader line and target pulse. The first tap of the shot is
+  the anchor. Plays a ping.
 - `[SPOTLIGHT side=left]` Large copy card with a mono kicker, display title,
   and lime rule. Plays a ping. The kicker and title sit on the following
   indented lines.
+
+### Collections
+
+- `[CARDS "title" eyebrow="text" hint="text"]` Paper cards fan out from
+  behind the phone. Use it for list or history beats where the story is a
+  collection, not one control. Plays a ping.
+
+### Notes
+
+- `[NOTE "title" label="text"]` One paper note with a lime tape and rule. The
+  tape carries a short label. Slides out from behind the phone, holds, then
+  slides back. Plays a ping.
 
 ### Interaction
 
@@ -161,7 +176,7 @@ terminal stays off screen.
 
 Beats:
 
-- [CAP "Pair another Harold"]
+- [CALLOUT "Pair another Harold" eyebrow="MULTI-HAROLD" hint="One phone, two Harolds." side=right]
 - [TAP "Overflow menu"]
 - [TAP "Pair"]
 - The Pair device screen opens with the scanner. No terminal is visible.
@@ -189,7 +204,7 @@ in. [L1 phone] [PZ:full].
 
 Beats:
 
-- [CAP "Access your agent session history"]
+- [CARDS "Access your agent session history" eyebrow="SESSION HISTORY" hint="Past sessions, one tap away."]
 - [TAP "Session dropdown"]
 - The dropdown shows recent sessions with Harold badges and a
   `See all sessions...` item.
@@ -204,11 +219,12 @@ Beats:
 ### Scene: new-session
 
 Enter: The Sessions screen closes. The chat returns with the Couch badge and
-session name. The composer is visible. [L1 phone] [PZ:full].
+session name. The phone moves right and zooms in on the new session form.
+[L2C copy|phone ~0.56s] [PZ:center-two-thirds].
 
 Beats:
 
-- [CAP "Start a new session"]
+- [NOTE "Start a new Session" label="MAKE SOME HISTORY"]
 - [TAP "Session dropdown"]
 - [TAP "New session"]
 - Wait for the New session screen to populate.
@@ -225,6 +241,8 @@ Beats:
 - [TAP "Agent dropdown"]
 - [TAP "OpenCode"]
 - [TAP "Continue"]
+- [L1 phone ~0.8s] [PZ:full ~0.8s]
+- The phone pulls back to center as the session is created.
 
 ### Scene: text-chat
 

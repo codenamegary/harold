@@ -7,7 +7,10 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion"
+import { CalloutView } from "./callout"
+import { CardFanView } from "./cardFan"
 import { celebrationStyle } from "./celebration"
+import { NoteView } from "./note"
 import { Confetti } from "./confetti"
 import { monoFamily, sansFamily } from "./fonts"
 import { Mark } from "./mark"
@@ -350,10 +353,25 @@ export const Demo: React.FC<DemoProps> = ({ slices, videoWidth, videoHeight }) =
     <AbsoluteFill style={{ background: ink, color: paper }}>
       <Music />
       <TerminalStage timeline={timeline} />
+      {timeline.cardFans.map((fan) => (
+        <CardFanView key={fan.at} fan={fan} sec={sec} />
+      ))}
+      {timeline.notes.map((note) => (
+        <NoteView key={note.at} note={note} sec={sec} />
+      ))}
       <PhoneStage timeline={timeline} videoWidth={videoWidth} videoHeight={videoHeight} />
       <Confetti celebrations={timeline.celebrations} sec={sec} />
       {timeline.spotlights.map((spotlight) => (
         <SpotlightView key={spotlight.at} spotlight={spotlight} sec={sec} />
+      ))}
+      {timeline.callouts.map((callout) => (
+        <CalloutView
+          key={callout.at}
+          callout={callout}
+          sec={sec}
+          videoWidth={videoWidth}
+          videoHeight={videoHeight}
+        />
       ))}
       {timeline.captions.map((caption) => (
         <CaptionView key={caption.at} caption={caption} sec={sec} top={zoomedAt(caption.at)} />

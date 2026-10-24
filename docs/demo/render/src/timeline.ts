@@ -36,6 +36,10 @@ const PAIR_LAND_AT = 20.7
 const PAIR_LAND_SEC = 0.5
 const REcede_AT = 22.8
 const WALK_START = 27.8
+const NEW_SESSION_ZOOM_AT = 54.94
+const NEW_SESSION_ZOOM_SEC = 0.56
+const NEW_SESSION_OUT_AT = 66.31
+const NEW_SESSION_OUT_SEC = 0.8
 
 type TypingWindow = { text: string; fromSec: number; toSec: number }
 
@@ -55,6 +59,62 @@ type SpotlightSpec = {
   hold?: number
   side?: "left" | "right"
   kicker: string
+  title: string
+}
+
+// [CALLOUT] a feature tag attached to the phone. The first tap of the shot is
+// the anchor, so the tag points at the control the user is about to press.
+export type Callout = {
+  at: number
+  hold: number
+  eyebrow: string
+  title: string
+  hint?: string
+  side: "left" | "right"
+  targetX: number
+  targetY: number
+}
+
+type CalloutSpec = {
+  at?: number
+  hold?: number
+  eyebrow: string
+  title: string
+  hint?: string
+  side?: "left" | "right"
+}
+
+// [CARDS] a fan of paper cards that spreads out from behind the phone. Use it
+// for list or history beats where the story is a collection, not one control.
+export type CardFan = {
+  at: number
+  hold: number
+  eyebrow: string
+  title: string
+  hint?: string
+}
+
+type CardFanSpec = {
+  at?: number
+  hold?: number
+  eyebrow: string
+  title: string
+  hint?: string
+}
+
+// [NOTE] one paper note with a lime tape and rule. It slides out from behind
+// the phone carrying a single line. No extra copy, no typing.
+export type Note = {
+  at: number
+  hold: number
+  label: string
+  title: string
+}
+
+type NoteSpec = {
+  at?: number
+  hold?: number
+  label: string
   title: string
 }
 
@@ -91,6 +151,9 @@ type Step = {
   hold?: number
   required?: boolean
   caption?: { text: string; at?: number; hold?: number }
+  callout?: CalloutSpec
+  cards?: CardFanSpec
+  note?: NoteSpec
   spotlight?: SpotlightSpec
   celebrate?: CelebrationSpec
   typing?: TypingWindow | TypingWindow[]
@@ -139,7 +202,13 @@ const WALK_STEPS: Step[] = [
     rate: 2,
     duration: 3.8,
     hold: 0.3,
-    caption: { text: "Pair another Harold", at: 0.2, hold: 2.4 },
+    callout: {
+      at: 0.2,
+      hold: 2.4,
+      eyebrow: "MULTI-HAROLD",
+      title: "Pair another Harold",
+      hint: "One phone, two Harolds.",
+    },
   },
   { slice: "pair_another_manual", startSec: 2.9, rate: 1.5, duration: 1.7, hold: 0.3 },
   {
@@ -172,7 +241,13 @@ const WALK_STEPS: Step[] = [
     rate: 2,
     duration: 2.2,
     hold: 0.5,
-    caption: { text: "Access your agent session history", at: 0.2, hold: 4.0 },
+    cards: {
+      at: 0.2,
+      hold: 4.0,
+      eyebrow: "SESSION HISTORY",
+      title: "Access your agent session history",
+      hint: "Past sessions, one tap away.",
+    },
   },
   { slice: "session_see_all", startSec: 2.5, rate: 2.5, duration: 2.2, hold: 0.4 },
   { slice: "session_pick", startSec: 2.5, rate: 2.5, duration: 1.0, hold: 0.3 },
@@ -184,7 +259,12 @@ const WALK_STEPS: Step[] = [
     rate: 2,
     duration: 1.15,
     hold: 0.3,
-    caption: { text: "Start a new session", at: 0.2, hold: 2.4 },
+    note: {
+      at: 0.2,
+      hold: 2.8,
+      label: "MAKE SOME HISTORY",
+      title: "Start a new Session",
+    },
   },
   { slice: "workspace_open_work", startSec: 2.6, rate: 2.5, duration: 1.8, hold: 0.3 },
   { slice: "workspace_pick_work", startSec: 2.5, rate: 2, duration: 0.5, hold: 0.2 },
@@ -510,6 +590,10 @@ export const phoneWidth: Keyframes = [
   [REcede_AT, 760],
   [27.0, 760],
   [27.8, 450],
+  [NEW_SESSION_ZOOM_AT, 450],
+  [NEW_SESSION_ZOOM_AT + NEW_SESSION_ZOOM_SEC, 760],
+  [NEW_SESSION_OUT_AT, 760],
+  [NEW_SESSION_OUT_AT + NEW_SESSION_OUT_SEC, 450],
 ]
 export const phoneCenterX: Keyframes = [
   [PHONE_IN_AT, 2440],
@@ -517,6 +601,10 @@ export const phoneCenterX: Keyframes = [
   [REcede_AT, 1460],
   [27.0, 1460],
   [27.8, 960],
+  [NEW_SESSION_ZOOM_AT, 960],
+  [NEW_SESSION_ZOOM_AT + NEW_SESSION_ZOOM_SEC, 1460],
+  [NEW_SESSION_OUT_AT, 1460],
+  [NEW_SESSION_OUT_AT + NEW_SESSION_OUT_SEC, 960],
 ]
 export const phoneTop: Keyframes = [
   [PHONE_IN_AT, 108],
@@ -526,6 +614,10 @@ export const phoneTop: Keyframes = [
   [PAIR_LAND_AT + PAIR_LAND_SEC, -314.5],
   [27.0, -314.5],
   [27.8, 30],
+  [NEW_SESSION_ZOOM_AT, 30],
+  [NEW_SESSION_ZOOM_AT + NEW_SESSION_ZOOM_SEC, -314.5],
+  [NEW_SESSION_OUT_AT, -314.5],
+  [NEW_SESSION_OUT_AT + NEW_SESSION_OUT_SEC, 30],
 ]
 // The screen starts black and fades the app in as the phone settles.
 export const phoneBlack: Keyframes = [
@@ -692,6 +784,60 @@ const buildSpotlights = (shots: Shot[]): Spotlight[] => {
   return spotlights.sort((a, b) => a.at - b.at)
 }
 
+const buildCallouts = (shots: Shot[]): Callout[] => {
+  const callouts: Callout[] = []
+  for (const shot of shots) {
+    if (shot.callout === undefined) {
+      continue
+    }
+    const tap = shot.data.taps?.[0]
+    callouts.push({
+      at: shot.at + (shot.callout.at ?? 0.2),
+      hold: shot.callout.hold ?? 2.4,
+      eyebrow: shot.callout.eyebrow,
+      title: shot.callout.title,
+      hint: shot.callout.hint,
+      side: shot.callout.side ?? "right",
+      targetX: tap ? tap.x / shot.data.width : 0.5,
+      targetY: tap ? tap.y / shot.data.height : 0.5,
+    })
+  }
+  return callouts.sort((a, b) => a.at - b.at)
+}
+
+const buildCardFans = (shots: Shot[]): CardFan[] => {
+  const fans: CardFan[] = []
+  for (const shot of shots) {
+    if (shot.cards === undefined) {
+      continue
+    }
+    fans.push({
+      at: shot.at + (shot.cards.at ?? 0.2),
+      hold: shot.cards.hold ?? 3,
+      eyebrow: shot.cards.eyebrow,
+      title: shot.cards.title,
+      hint: shot.cards.hint,
+    })
+  }
+  return fans.sort((a, b) => a.at - b.at)
+}
+
+const buildNotes = (shots: Shot[]): Note[] => {
+  const notes: Note[] = []
+  for (const shot of shots) {
+    if (shot.note === undefined) {
+      continue
+    }
+    notes.push({
+      at: shot.at + (shot.note.at ?? 0.2),
+      hold: shot.note.hold ?? 2.6,
+      label: shot.note.label,
+      title: shot.note.title,
+    })
+  }
+  return notes.sort((a, b) => a.at - b.at)
+}
+
 const buildCelebrations = (shots: Shot[]): Celebration[] => {
   const celebrations: Celebration[] = []
   for (const shot of shots) {
@@ -719,6 +865,9 @@ const buildSounds = (
   captions: CaptionSpec[],
   ripples: Ripple[],
   spotlights: Spotlight[],
+  callouts: Callout[],
+  cardFans: CardFan[],
+  notes: Note[],
 ): Sound[] => {
   const sounds: Sound[] = []
   // [KR] every keystroke, a separate sound for Enter.
@@ -757,6 +906,18 @@ const buildSounds = (
   for (const spotlight of spotlights) {
     sounds.push({ at: spotlight.at, name: "ping", volume: 0.7 })
   }
+  // [CALLOUT] a soft ping when the tag lands.
+  for (const callout of callouts) {
+    sounds.push({ at: callout.at, name: "ping", volume: 0.65 })
+  }
+  // [CARDS] the same ping when the fan spreads.
+  for (const fan of cardFans) {
+    sounds.push({ at: fan.at, name: "ping", volume: 0.65 })
+  }
+  // [NOTE] and again when the paper note lands.
+  for (const note of notes) {
+    sounds.push({ at: note.at, name: "ping", volume: 0.65 })
+  }
   return sounds.sort((a, b) => a.at - b.at)
 }
 
@@ -767,6 +928,9 @@ export type Timeline = {
   clips: PhoneClip[]
   ripples: Ripple[]
   captions: Caption[]
+  callouts: Callout[]
+  cardFans: CardFan[]
+  notes: Note[]
   spotlights: Spotlight[]
   celebrations: Celebration[]
   sounds: Sound[]
@@ -791,9 +955,12 @@ export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
   const clips = buildClips(shots)
   const ripples = buildRipples(shots)
   const captions = buildCaptions(shots)
+  const callouts = buildCallouts(shots)
+  const cardFans = buildCardFans(shots)
+  const notes = buildNotes(shots)
   const spotlights = buildSpotlights(shots)
   const celebrations = buildCelebrations(shots)
-  const sounds = buildSounds(shots, captions, ripples, spotlights)
+  const sounds = buildSounds(shots, captions, ripples, spotlights, callouts, cardFans, notes)
   const pairedRenderSec =
     tapRenderSec(pair.find((shot) => shot.slice === "first_confirm")) ??
     pair.find((shot) => shot.slice === "paired")?.at ??
@@ -805,6 +972,9 @@ export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
     clips,
     ripples,
     captions,
+    callouts,
+    cardFans,
+    notes,
     spotlights,
     celebrations,
     sounds,
