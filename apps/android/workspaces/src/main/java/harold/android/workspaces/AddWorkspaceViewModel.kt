@@ -12,6 +12,7 @@ import harold.android.network.apiErrorMessage
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 import harold.android.user.UserRepository
+import harold.android.workspaces.data.WorkspaceRepository
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -91,6 +92,7 @@ data class AddWorkspaceUiState(
 class AddWorkspaceViewModel @Inject constructor(
     private val sessionGateway: SessionGateway,
     private val userRepository: UserRepository,
+    private val workspaceRepository: WorkspaceRepository,
     private val navigator: Navigator,
     private val savedHaroldRepository: SavedHaroldRepository? = null,
 ) : ViewModel() {
@@ -199,7 +201,7 @@ class AddWorkspaceViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(submitting = true, submitError = null) }
 
-            userRepository.createWorkspace(
+            workspaceRepository.create(
                 serverOrigin = origin,
                 body = CreateWorkspaceBody(
                     name = state.name.trim(),

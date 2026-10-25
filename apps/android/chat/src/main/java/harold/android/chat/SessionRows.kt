@@ -1,5 +1,6 @@
 package harold.android.chat
 
+import harold.android.chat.data.CachedSession
 import harold.android.contracts.AgentId
 import harold.android.contracts.Session
 import harold.android.contracts.SessionState
@@ -21,3 +22,16 @@ fun Session.toSessionRow(
         updatedAt = updatedAt,
     )
 }
+
+fun CachedSession.toSessionRow(): SessionRow = SessionRow(
+    sessionId = session.sessionId,
+    name = session.title.ifBlank { session.sessionId },
+    cwd = session.cwd,
+    workspaceId = workspaceId,
+    workspaceLabel = workspaceName,
+    agentId = session.agentId,
+    agentLabel = agentLabel,
+    state = SessionState.Idle,
+    updatedAt = session.updatedAt,
+    serverOrigin = serverOrigin,
+)

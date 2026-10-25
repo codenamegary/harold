@@ -3,7 +3,10 @@ package harold.android.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import harold.android.chat.data.CachedSession
+import harold.android.chat.data.SessionRepository
 import harold.android.credentials.SavedHaroldRepository
+import harold.android.credentials.StoredCredential
 import harold.android.foreground.SessionAttentionMarks
 import harold.android.live.SessionOwner
 import harold.android.navigation.Navigator
@@ -37,6 +40,7 @@ data class SessionsUiState(
 @HiltViewModel
 class SessionsViewModel @Inject constructor(
     private val sessionGateway: SessionGateway,
+    private val sessionRepository: SessionRepository,
     private val userRepository: UserRepository,
     private val sessionCommands: SessionCommands,
     private val navigator: Navigator,
@@ -47,12 +51,21 @@ class SessionsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(SessionsUiState())
     val uiState: StateFlow<SessionsUiState> = _uiState.asStateFlow()
 
+    private var cached: List<CachedSession> = emptyList()
     private var catalog: List<SessionRow> = emptyList()
     private var savedHarolds: List<HaroldFilterChoice> = emptyList()
-    private val retainedByOrigin = mutableMapOf<String, List<SessionRow>>()
+    private var savedByOrigin: Map<String, StoredCredential> = emptyMap()
+    private val unreachableOrigins = mutableSetOf<String>()
+    private var pushedTitles: Map<String, String> = emptyMap()
     private var haroldFilter: String? = null
 
     init {
+        viewModelScope.launch {
+            sessionRepository.observeSessions().collect { sessions ->
+                cached = sessions
+                rebuildCatalog()
+            }
+        }
         viewModelScope.launch {
             load()
         }
@@ -61,8 +74,8 @@ class SessionsViewModel @Inject constructor(
         }
         sessionAttention?.let { marks ->
             viewModelScope.launch {
-                marks.marked.collect {
-                    catalog = catalog.map { row -> row.copy(needsAttention = it.containsKey(row.id)) }
+                marks.marked.collect { marked ->
+                    catalog = catalog.map { row -> row.copy(needsAttention = marked.containsKey(row.id)) }
                     publish()
                 }
             }
@@ -95,17 +108,18 @@ class SessionsViewModel @Inject constructor(
         val origin = row.serverOrigin.ifEmpty { paired?.serverOrigin } ?: return
 
         viewModelScope.launch {
-            userRepository.deleteSession(
+            sessionRepository.deleteSession(
                 serverOrigin = origin,
                 agentId = row.agentId,
                 sessionId = row.sessionId,
             ).fold(
                 onSuccess = {
-                    catalog = catalog.filterNot { item -> item.id == row.id }
-                    retainedByOrigin[origin] = retainedByOrigin[origin]
-                        .orEmpty()
-                        .filterNot { item -> item.id == row.id }
-                    publish()
+                    cached = cached.filterNot { session ->
+                        session.serverOrigin == origin &&
+                            session.session.agentId == row.agentId &&
+                            session.session.sessionId == row.sessionId
+                    }
+                    rebuildCatalog()
                     sessionCommands.emit(SessionCommand.Deleted(row))
                 },
                 onFailure = { error ->
@@ -116,12 +130,10 @@ class SessionsViewModel @Inject constructor(
     }
 
     private suspend fun load() {
+        _uiState.update { current -> current.copy(loading = true, error = null) }
+
         val saved = savedHaroldRepository.list()
-        if (saved.isEmpty()) {
-            savedHarolds = emptyList()
-            loadPairedHarold()
-            return
-        }
+        savedByOrigin = saved.associateBy { harold -> harold.serverOrigin }
         savedHarolds = saved.map { harold ->
             HaroldFilterChoice(
                 serverOrigin = harold.serverOrigin,
@@ -131,87 +143,51 @@ class SessionsViewModel @Inject constructor(
             )
         }
 
-        saved.forEach { harold ->
-            val workspaceByPath = userRepository.listWorkspaces(harold.serverOrigin)
-                .getOrNull()
-                ?.items
-                .orEmpty()
-                .map { workspace -> workspace.toWorkspaceRow() }
-                .associateBy { workspace -> workspace.path }
-            val agentLabels = userRepository.listAgents(harold.serverOrigin)
-                .getOrNull()
-                ?.items
-                .orEmpty()
-                .associate { agent -> agent.id to agent.displayName }
-            val sessionsResult = userRepository.listSessions(harold.serverOrigin)
-            if (sessionsResult.isSuccess) {
-                retainedByOrigin[harold.serverOrigin] = mergedSessionRows(
-                    listOf(
-                        HaroldSessionGroup(
-                            serverOrigin = harold.serverOrigin,
-                            haroldName = harold.name,
-                            colorId = harold.colorId,
-                            iconId = harold.iconId,
-                            reachable = true,
-                            sessions = sessionsResult.getOrThrow().items.map { session ->
-                                session.toSessionRow(workspaceByPath, agentLabels)
-                            },
-                        ),
-                    ),
-                )
-            } else {
-                retainedByOrigin[harold.serverOrigin] = retainedByOrigin[harold.serverOrigin]
-                    .orEmpty()
-                    .map { row ->
-                        row.copy(
-                            haroldName = harold.name,
-                            haroldColorId = harold.colorId,
-                            haroldIconId = harold.iconId,
-                            haroldReachable = false,
-                        )
-                    }
-            }
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired
+        val origins = saved.map { harold -> harold.serverOrigin }
+            .ifEmpty { listOfNotNull(paired?.serverOrigin) }
+
+        var anySuccess = false
+        var lastError: Throwable? = null
+        origins.forEach { serverOrigin ->
+            sessionRepository.refresh(serverOrigin).fold(
+                onSuccess = {
+                    anySuccess = true
+                    unreachableOrigins.remove(serverOrigin)
+                },
+                onFailure = { error ->
+                    lastError = error
+                    unreachableOrigins.add(serverOrigin)
+                },
+            )
         }
-        val known = saved.map { harold -> harold.serverOrigin }.toSet()
-        retainedByOrigin.keys.retainAll(known)
-        catalog = retainedByOrigin.values.flatten().sortedByDescending { row -> row.updatedAt }
-        publish()
-        _uiState.update { current -> current.copy(loading = false, error = null) }
+
+        val hasCache = origins.isNotEmpty() && cached.any { session -> session.serverOrigin in origins }
+        val error = if (!anySuccess && !hasCache) lastError else null
+
+        _uiState.update { current ->
+            current.copy(
+                loading = false,
+                error = error?.let(::apiErrorMessage),
+            )
+        }
+        rebuildCatalog()
     }
 
-    private suspend fun loadPairedHarold() {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired
-        if (paired == null) {
-            _uiState.update { current -> current.copy(loading = false) }
-            return
+    private fun rebuildCatalog() {
+        val scopedToHarold = savedByOrigin.isNotEmpty()
+        catalog = cached.map { session ->
+            val harold = savedByOrigin[session.serverOrigin]
+            val row = session.toSessionRow().copy(
+                serverOrigin = if (scopedToHarold) session.serverOrigin else "",
+                haroldName = harold?.name.orEmpty(),
+                haroldColorId = harold?.colorId.orEmpty(),
+                haroldIconId = harold?.iconId.orEmpty(),
+                haroldReachable = session.serverOrigin !in unreachableOrigins,
+            )
+            pushedTitles[row.id]?.let { title -> row.copy(name = title) } ?: row
         }
-
-        val workspaceByPath = userRepository.listWorkspaces(paired.serverOrigin)
-            .getOrNull()
-            ?.items
-            .orEmpty()
-            .map { workspace -> workspace.toWorkspaceRow() }
-            .associateBy { workspace -> workspace.path }
-        val agentLabels = userRepository.listAgents(paired.serverOrigin)
-            .getOrNull()
-            ?.items
-            .orEmpty()
-            .associate { agent -> agent.id to agent.displayName }
-
-        userRepository.listSessions(paired.serverOrigin).fold(
-            onSuccess = { collection ->
-                catalog = collection.items.map { session ->
-                    session.toSessionRow(workspaceByPath, agentLabels)
-                }
-                publish()
-                _uiState.update { current -> current.copy(loading = false, error = null) }
-            },
-            onFailure = { error ->
-                _uiState.update { current ->
-                    current.copy(loading = false, error = apiErrorMessage(error))
-                }
-            },
-        )
+        publish()
     }
 
     private fun publish() {
@@ -245,9 +221,7 @@ class SessionsViewModel @Inject constructor(
         if (titles.isEmpty()) {
             return
         }
-        catalog = catalog.map { row ->
-            titles[row.id]?.let { title -> row.copy(name = title) } ?: row
-        }
-        publish()
+        pushedTitles = pushedTitles + titles
+        rebuildCatalog()
     }
 }

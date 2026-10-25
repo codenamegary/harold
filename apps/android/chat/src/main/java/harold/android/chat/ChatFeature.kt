@@ -17,6 +17,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
 import harold.android.chat.composer.ComposerConfigActions
+import harold.android.chat.data.DefaultSessionRepository
+import harold.android.chat.data.SessionRepository
 import harold.android.di.PreviewDispatcher
 import harold.android.navigation.AppRoute
 import harold.android.navigation.Chat
@@ -147,6 +149,10 @@ abstract class ChatFeatureModule {
     @Binds
     @Singleton
     abstract fun sessionCommands(impl: DefaultSessionCommands): SessionCommands
+
+    @Binds
+    @Singleton
+    abstract fun sessionRepository(impl: DefaultSessionRepository): SessionRepository
 
     companion object {
         @Provides

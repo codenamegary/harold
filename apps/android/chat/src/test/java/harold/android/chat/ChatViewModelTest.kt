@@ -1,6 +1,7 @@
 package harold.android.chat
 
 import androidx.lifecycle.SavedStateHandle
+import harold.android.chat.data.SessionRepository
 import harold.android.contracts.AgentId
 import harold.android.contracts.AgentSettings
 import harold.android.contracts.AgentSettingsCollection
@@ -538,6 +539,7 @@ class ChatViewModelTest {
         val selected = viewModel.uiState.value.selectedSession!!
         val sessionsRoute = SessionsViewModel(
             sessionGateway = pairedGateway(),
+            sessionRepository = TestSessionRepository(repository),
             userRepository = repository,
             sessionCommands = sessionCommands,
             navigator = Navigator(),
@@ -1253,6 +1255,7 @@ class ChatViewModelTest {
         navigation: ChatFakeNavigationPreferences,
         sessionOwner: ChatFakeSessionOwner = ChatFakeSessionOwner(),
         sessionGateway: FakeSessionGateway = pairedGateway(),
+        sessionRepository: SessionRepository = TestSessionRepository(repository),
         configApi: SessionConfigApi = RecordingSessionConfigApi(),
         attachmentApi: AttachmentApi = NoopAttachmentApi(),
         savedHaroldRepository: SavedHaroldRepository = SavedHaroldRepository(FakeCredentialStore()),
@@ -1264,6 +1267,7 @@ class ChatViewModelTest {
         savedStateHandle = SavedStateHandle(),
         sessionGateway = sessionGateway,
         sessionOwner = sessionOwner,
+        sessionRepository = sessionRepository,
         userRepository = repository,
         savedHaroldRepository = savedHaroldRepository,
         attachmentApi = attachmentApi,
@@ -1288,6 +1292,7 @@ class ChatViewModelTest {
     private fun TestScope.createSessionThroughRoute(repository: ChatFakeUserRepository) {
         val route = CreateSessionViewModel(
             sessionGateway = pairedGateway(),
+            sessionRepository = TestSessionRepository(repository),
             userRepository = repository,
             sessionCommands = sessionCommands,
             navigator = Navigator(),

@@ -5,15 +5,16 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import harold.android.contracts.Workspace
 import harold.android.credentials.SavedHaroldRepository
+import harold.android.credentials.StoredCredential
 import harold.android.network.apiErrorMessage
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
-import harold.android.user.UserRepository
+import harold.android.workspaces.data.CachedWorkspace
+import harold.android.workspaces.data.WorkspaceRepository
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class WorkspaceHaroldBadge(
@@ -45,11 +46,27 @@ data class WorkspacesUiState(
 @HiltViewModel
 class WorkspacesViewModel @Inject constructor(
     private val sessionGateway: SessionGateway,
-    private val userRepository: UserRepository,
+    private val workspaceRepository: WorkspaceRepository,
     private val savedHaroldRepository: SavedHaroldRepository? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(WorkspacesUiState())
     val uiState: StateFlow<WorkspacesUiState> = _uiState.asStateFlow()
+
+    private var cached: List<CachedWorkspace> = emptyList()
+    private var savedHarolds: List<StoredCredential> = emptyList()
+    private var targetOrigins: List<String> = emptyList()
+    private var refreshing = false
+    private var loadAttempted = false
+    private var refreshError: Throwable? = null
+
+    init {
+        viewModelScope.launch {
+            workspaceRepository.observe().collect { workspaces ->
+                cached = workspaces
+                publish()
+            }
+        }
+    }
 
     fun refresh() {
         viewModelScope.launch {
@@ -58,77 +75,73 @@ class WorkspacesViewModel @Inject constructor(
     }
 
     private suspend fun loadWorkspaces() {
-        val saved = savedHaroldRepository?.list().orEmpty()
-        if (saved.isNotEmpty()) {
-            _uiState.update { WorkspacesUiState(loadState = WorkspacesLoadState.Loading) }
-            val allWorkspaces = mutableListOf<Workspace>()
-            val badges = mutableMapOf<String, WorkspaceHaroldBadge>()
-            var lastError: Throwable? = null
-            var anySuccess = false
-
-            saved.forEach { harold ->
-                userRepository.listWorkspaces(harold.serverOrigin).fold(
-                    onSuccess = { collection ->
-                        anySuccess = true
-                        collection.items.forEach { ws ->
-                            val scopedId = if (saved.size > 1) "${harold.serverOrigin}|${ws.id}" else ws.id
-                            allWorkspaces += ws.copy(id = scopedId)
-                            badges[scopedId] = WorkspaceHaroldBadge(
-                                serverOrigin = harold.serverOrigin,
-                                name = harold.name,
-                                colorId = harold.colorId,
-                                iconId = harold.iconId,
-                            )
-                        }
-                    },
-                    onFailure = { error ->
-                        lastError = error
-                    },
-                )
-            }
-
-            _uiState.update {
-                when {
-                    !anySuccess && lastError != null -> WorkspacesUiState(
-                        loadState = WorkspacesLoadState.Error(apiErrorMessage(lastError)),
-                    )
-                    allWorkspaces.isEmpty() -> WorkspacesUiState(
-                        loadState = WorkspacesLoadState.Empty,
-                    )
-                    else -> WorkspacesUiState(
-                        loadState = WorkspacesLoadState.Loaded(allWorkspaces),
-                        haroldByWorkspaceId = badges,
-                    )
-                }
-            }
-            return
+        savedHarolds = savedHaroldRepository?.list().orEmpty()
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired
+        targetOrigins = if (savedHarolds.isNotEmpty()) {
+            savedHarolds.map { harold -> harold.serverOrigin }
+        } else {
+            listOfNotNull(paired?.serverOrigin)
         }
 
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        refreshing = true
+        loadAttempted = true
+        refreshError = null
+        publish()
 
-        _uiState.update { WorkspacesUiState(loadState = WorkspacesLoadState.Loading) }
+        var anySuccess = false
+        var lastError: Throwable? = null
+        targetOrigins.forEach { serverOrigin ->
+            workspaceRepository.refresh(serverOrigin).fold(
+                onSuccess = { anySuccess = true },
+                onFailure = { error -> lastError = error },
+            )
+        }
 
-        userRepository.listWorkspaces(paired.serverOrigin).fold(
-            onSuccess = { collection ->
-                val workspaces = collection.items
+        refreshing = false
+        refreshError = if (anySuccess) null else lastError
+        publish()
+    }
 
-                _uiState.update {
-                    WorkspacesUiState(
-                        loadState = if (workspaces.isEmpty()) {
-                            WorkspacesLoadState.Empty
-                        } else {
-                            WorkspacesLoadState.Loaded(workspaces)
-                        },
-                    )
-                }
-            },
-            onFailure = { error ->
-                _uiState.update {
-                    WorkspacesUiState(
-                        loadState = WorkspacesLoadState.Error(apiErrorMessage(error)),
-                    )
-                }
-            },
+    private fun publish() {
+        val savedByOrigin = savedHarolds.associateBy { harold -> harold.serverOrigin }
+        val source = if (loadAttempted) {
+            targetOrigins.flatMap { serverOrigin ->
+                cached.filter { workspace -> workspace.serverOrigin == serverOrigin }
+            }
+        } else {
+            cached
+        }
+        val scoped = targetOrigins.size > 1
+
+        val workspaces = mutableListOf<Workspace>()
+        val badges = mutableMapOf<String, WorkspaceHaroldBadge>()
+        source.forEach { cachedWorkspace ->
+            val id = if (scoped) {
+                "${cachedWorkspace.serverOrigin}|${cachedWorkspace.workspace.id}"
+            } else {
+                cachedWorkspace.workspace.id
+            }
+            workspaces += cachedWorkspace.workspace.copy(id = id)
+            savedByOrigin[cachedWorkspace.serverOrigin]?.let { harold ->
+                badges[id] = WorkspaceHaroldBadge(
+                    serverOrigin = harold.serverOrigin,
+                    name = harold.name,
+                    colorId = harold.colorId,
+                    iconId = harold.iconId,
+                )
+            }
+        }
+
+        val loadState = when {
+            workspaces.isNotEmpty() -> WorkspacesLoadState.Loaded(workspaces)
+            refreshing || !loadAttempted -> WorkspacesLoadState.Loading
+            refreshError != null -> WorkspacesLoadState.Error(apiErrorMessage(checkNotNull(refreshError)))
+            else -> WorkspacesLoadState.Empty
+        }
+
+        _uiState.value = WorkspacesUiState(
+            loadState = loadState,
+            haroldByWorkspaceId = badges,
         )
     }
 }

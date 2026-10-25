@@ -86,6 +86,15 @@ credential on the shell stops auto-retry for that Harold and forgets it. The
 others stay connected. When none remain, the app returns to pairing. Every
 other disconnect, slow consumer included, keeps reconnecting.
 
+## Offline cache
+
+Room keeps the last REST snapshot of workspaces, sessions, and agents. Each row
+is keyed by `serverOrigin`, so several Harolds can share the database without
+colliding. Screens collect the DAO flows, then call the feature repository's
+`refresh` method to fetch the live list. Creates and deletes call the server
+first and update Room only after the server accepts the change. Removing a saved
+Harold deletes every cached row for that origin.
+
 ## CI
 
 Android checks run in `.github/workflows/ci.yml` when `apps/android/**` changes.

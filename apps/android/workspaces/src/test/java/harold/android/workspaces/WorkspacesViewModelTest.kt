@@ -1,21 +1,19 @@
 package harold.android.workspaces
 
-import harold.android.contracts.ItemCollection
-import harold.android.contracts.PageInfo
+import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.Workspace
-import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceState
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.session.PairedState
-import harold.android.session.SessionGateway
 import harold.android.testing.FakeSessionGateway
-import harold.android.user.UserRepository
+import harold.android.workspaces.data.CachedWorkspace
+import harold.android.workspaces.data.WorkspaceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -45,7 +43,7 @@ class WorkspacesViewModelTest {
     fun loadsWorkspaces() = runTest(dispatcher) {
         val viewModel = WorkspacesViewModel(
             sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
-            userRepository = WorkspacesFakeUserRepository(),
+            workspaceRepository = FakeWorkspaceRepository(),
         )
 
         viewModel.refresh()
@@ -60,7 +58,7 @@ class WorkspacesViewModelTest {
     fun reportsEmptyWorkspaces() = runTest(dispatcher) {
         val viewModel = WorkspacesViewModel(
             sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
-            userRepository = WorkspacesFakeUserRepository(workspaces = emptyList()),
+            workspaceRepository = FakeWorkspaceRepository(workspaces = emptyList()),
         )
 
         viewModel.refresh()
@@ -73,7 +71,7 @@ class WorkspacesViewModelTest {
     fun reportsApiFailure() = runTest(dispatcher) {
         val viewModel = WorkspacesViewModel(
             sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
-            userRepository = WorkspacesFakeUserRepository(
+            workspaceRepository = FakeWorkspaceRepository(
                 apiFailure = AgentApiException(AgentApiError.Transport(RuntimeException("boom"))),
             ),
         )
@@ -85,12 +83,39 @@ class WorkspacesViewModelTest {
         assertEquals("Could not reach Harold", error.message)
     }
 
+    @Test
+    fun keepsCachedWorkspacesWhenTheHaroldIsOffline() = runTest(dispatcher) {
+        val repository = FakeWorkspaceRepository(
+            apiFailure = AgentApiException(AgentApiError.Transport(RuntimeException("boom"))),
+        )
+        repository.seed(listOf(CachedWorkspace(ORIGIN, workspace())))
+        val viewModel = WorkspacesViewModel(
+            sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
+            workspaceRepository = repository,
+        )
+
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        val loaded = viewModel.uiState.value.loadState as WorkspacesLoadState.Loaded
+        assertEquals(listOf("ws_01"), loaded.workspaces.map { cached -> cached.id })
+    }
+
     private companion object {
         const val ORIGIN = "http://127.0.0.1:8787"
+
+        fun workspace() = Workspace(
+            id = "ws_01",
+            name = "harold",
+            path = "/tmp/harold",
+            state = WorkspaceState.Available,
+            createdAt = "2026-08-05T00:00:00.000Z",
+            lastUsedAt = "2026-08-05T00:00:00.000Z",
+        )
     }
 }
 
-private class WorkspacesFakeUserRepository(
+private class FakeWorkspaceRepository(
     private val workspaces: List<Workspace> = listOf(
         Workspace(
             id = "ws_01",
@@ -102,85 +127,26 @@ private class WorkspacesFakeUserRepository(
         ),
     ),
     private val apiFailure: Throwable? = null,
-) : UserRepository {
-    override suspend fun listWorkspaces(
-        serverOrigin: String,
-        limit: Int,
-    ): Result<WorkspaceCollection> {
-        apiFailure?.let { return Result.failure(it) }
+) : WorkspaceRepository {
+    private val cached = MutableStateFlow<List<CachedWorkspace>>(emptyList())
 
-        return Result.success(
-            WorkspaceCollection(
-                items = workspaces,
-                page = PageInfo(limit = limit, count = workspaces.size),
-            ),
-        )
+    override fun observe(): Flow<List<CachedWorkspace>> = cached
+
+    override fun observe(serverOrigin: String): Flow<List<CachedWorkspace>> =
+        cached.map { workspaces -> workspaces.filter { cached -> cached.serverOrigin == serverOrigin } }
+
+    override suspend fun refresh(serverOrigin: String): Result<Unit> {
+        apiFailure?.let { error -> return Result.failure(error) }
+        cached.value = workspaces.map { workspace -> CachedWorkspace(serverOrigin, workspace) }
+        return Result.success(Unit)
     }
 
-    override suspend fun getRuntimeSettings(serverOrigin: String) =
-        Result.failure<harold.android.contracts.RuntimeSettingsView>(UnsupportedOperationException())
-
-    override suspend fun listFilesystemDirectories(
+    override suspend fun create(
         serverOrigin: String,
-        root: String,
-    ) = Result.failure<harold.android.contracts.FilesystemDirectoryCollection>(
-        UnsupportedOperationException(),
-    )
+        body: CreateWorkspaceBody,
+    ): Result<Workspace> = Result.failure(UnsupportedOperationException())
 
-    override suspend fun createWorkspace(
-        serverOrigin: String,
-        body: harold.android.contracts.CreateWorkspaceBody,
-    ) = Result.failure<Workspace>(UnsupportedOperationException())
-
-    override suspend fun listSessions(
-        serverOrigin: String,
-        cwd: String?,
-    ): Result<harold.android.contracts.SessionCollection> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun listAgents(serverOrigin: String): Result<harold.android.contracts.AgentSettingsCollection> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun createSession(
-        serverOrigin: String,
-        body: harold.android.contracts.CreateSessionBody,
-    ): Result<harold.android.contracts.CreateSessionResponse> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun deleteSession(
-        serverOrigin: String,
-        agentId: harold.android.contracts.AgentId,
-        sessionId: String,
-    ): Result<Unit> = Result.failure(UnsupportedOperationException())
-
-    override suspend fun getAgentAuth(
-        serverOrigin: String,
-        agentId: harold.android.contracts.AgentId,
-    ): Result<harold.android.contracts.AgentAuth> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun startAgentAuthSession(
-        serverOrigin: String,
-        agentId: harold.android.contracts.AgentId,
-    ): Result<harold.android.contracts.AgentAuthSession> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun applyAgentAuthSessionAction(
-        serverOrigin: String,
-        agentId: harold.android.contracts.AgentId,
-        sessionId: String,
-        action: harold.android.contracts.AuthSessionAction,
-    ): Result<harold.android.contracts.AgentAuthSession> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun logoutAgentAuth(
-        serverOrigin: String,
-        agentId: harold.android.contracts.AgentId,
-    ): Result<harold.android.contracts.AgentAuthSummary> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun revokeDevice(
-        serverOrigin: String,
-        deviceId: String,
-    ): Result<Unit> = Result.success(Unit)
+    fun seed(workspaces: List<CachedWorkspace>) {
+        cached.value = workspaces
+    }
 }

@@ -1,5 +1,6 @@
 package harold.android.credentials
 
+import harold.android.cache.LocalCacheCleaner
 import harold.android.session.PairedState
 import harold.android.testing.FakeCredentialStore
 import harold.android.testing.FakeSessionGateway
@@ -61,6 +62,24 @@ class SavedHaroldRepositoryTest {
 
         assertFalse(remains)
         assertEquals(emptyList<StoredCredential>(), store.list())
+    }
+
+    @Test
+    fun removeClearsCachedDataForThatHaroldOnly() = runTest {
+        val laptop = harold("http://laptop.local:3847", "devcred_laptop", "laptop", "tide", "bolt")
+        val desktop = harold("http://desktop.local:3847", "devcred_desktop", "desktop", "ink", "mark")
+        val store = FakeCredentialStore()
+        store.save(laptop)
+        store.save(desktop)
+        val cleaned = mutableListOf<String>()
+        val repository = SavedHaroldRepository(
+            store = store,
+            localCacheCleaner = LocalCacheCleaner { serverOrigin -> cleaned += serverOrigin },
+        )
+
+        repository.remove(laptop.serverOrigin)
+
+        assertEquals(listOf(laptop.serverOrigin), cleaned)
     }
 
     @Test
