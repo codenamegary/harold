@@ -61,6 +61,9 @@ class WorkspacesViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            // Read credentials before the first Room emission so cached rows
+            // already carry the right host badges and scoped IDs.
+            loadHaroldMetadata()
             workspaceRepository.observe().collect { workspaces ->
                 cached = workspaces
                 publish()
@@ -75,13 +78,7 @@ class WorkspacesViewModel @Inject constructor(
     }
 
     private suspend fun loadWorkspaces() {
-        savedHarolds = savedHaroldRepository?.list().orEmpty()
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired
-        targetOrigins = if (savedHarolds.isNotEmpty()) {
-            savedHarolds.map { harold -> harold.serverOrigin }
-        } else {
-            listOfNotNull(paired?.serverOrigin)
-        }
+        loadHaroldMetadata()
 
         refreshing = true
         loadAttempted = true
@@ -100,6 +97,16 @@ class WorkspacesViewModel @Inject constructor(
         refreshing = false
         refreshError = if (anySuccess) null else lastError
         publish()
+    }
+
+    private suspend fun loadHaroldMetadata() {
+        savedHarolds = savedHaroldRepository?.list().orEmpty()
+        val paired = sessionGateway.pairedState.value as? PairedState.Paired
+        targetOrigins = if (savedHarolds.isNotEmpty()) {
+            savedHarolds.map { harold -> harold.serverOrigin }
+        } else {
+            listOfNotNull(paired?.serverOrigin)
+        }
     }
 
     private fun publish() {

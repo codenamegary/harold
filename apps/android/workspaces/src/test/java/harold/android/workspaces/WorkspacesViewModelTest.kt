@@ -3,9 +3,12 @@ package harold.android.workspaces
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceState
+import harold.android.credentials.SavedHaroldRepository
+import harold.android.credentials.StoredCredential
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.session.PairedState
+import harold.android.testing.FakeCredentialStore
 import harold.android.testing.FakeSessionGateway
 import harold.android.workspaces.data.CachedWorkspace
 import harold.android.workspaces.data.WorkspaceRepository
@@ -84,6 +87,41 @@ class WorkspacesViewModelTest {
     }
 
     @Test
+    fun firstCachedFrameAlreadyHasScopedIdsAndBadges() = runTest(dispatcher) {
+        val store = FakeCredentialStore()
+        store.save(storedHarold(LAPTOP, "laptop", "tide", "bolt"))
+        store.save(storedHarold(DESKTOP, "desktop", "ink", "mark"))
+        val repository = FakeWorkspaceRepository()
+        repository.seed(
+            listOf(
+                CachedWorkspace(LAPTOP, workspace(id = "ws_laptop")),
+                CachedWorkspace(DESKTOP, workspace(id = "ws_desktop")),
+            ),
+        )
+
+        val viewModel = WorkspacesViewModel(
+            sessionGateway = FakeSessionGateway(PairedState.NotPaired),
+            workspaceRepository = repository,
+            savedHaroldRepository = SavedHaroldRepository(store),
+        )
+        advanceUntilIdle()
+
+        val loaded = viewModel.uiState.value.loadState as WorkspacesLoadState.Loaded
+        assertEquals(
+            listOf("$LAPTOP|ws_laptop", "$DESKTOP|ws_desktop"),
+            loaded.workspaces.map { workspace -> workspace.id },
+        )
+        assertEquals(
+            "laptop",
+            viewModel.uiState.value.haroldByWorkspaceId["$LAPTOP|ws_laptop"]?.name,
+        )
+        assertEquals(
+            "desktop",
+            viewModel.uiState.value.haroldByWorkspaceId["$DESKTOP|ws_desktop"]?.name,
+        )
+    }
+
+    @Test
     fun keepsCachedWorkspacesWhenTheHaroldIsOffline() = runTest(dispatcher) {
         val repository = FakeWorkspaceRepository(
             apiFailure = AgentApiException(AgentApiError.Transport(RuntimeException("boom"))),
@@ -103,9 +141,11 @@ class WorkspacesViewModelTest {
 
     private companion object {
         const val ORIGIN = "http://127.0.0.1:8787"
+        const val LAPTOP = "http://laptop.local:3847"
+        const val DESKTOP = "http://desktop.local:3847"
 
-        fun workspace() = Workspace(
-            id = "ws_01",
+        fun workspace(id: String = "ws_01") = Workspace(
+            id = id,
             name = "harold",
             path = "/tmp/harold",
             state = WorkspaceState.Available,
@@ -114,6 +154,22 @@ class WorkspacesViewModelTest {
         )
     }
 }
+
+private fun storedHarold(
+    serverOrigin: String,
+    name: String,
+    colorId: String,
+    iconId: String,
+) = StoredCredential(
+    formatVersion = 1,
+    deviceId = "device_$name",
+    serverOrigin = serverOrigin,
+    deviceName = "Pixel",
+    credential = "devcred_$name",
+    name = name,
+    colorId = colorId,
+    iconId = iconId,
+)
 
 private class FakeWorkspaceRepository(
     private val workspaces: List<Workspace> = listOf(
