@@ -1,3 +1,4 @@
+import { confirm as clackConfirm, isCancel as clackIsCancel } from "@clack/prompts"
 import { Command } from "commander"
 import pc from "picocolors"
 import { Device } from "contracts/http/device"
@@ -6,18 +7,31 @@ import { parseConfig } from "server/config"
 import { AgentDatabase, openDatabase } from "server/database"
 import { assembleDeviceSlice, DeviceSlice } from "server/device"
 import { makeRuntimeSettingsFileStore, seedDefaultsFromConfig } from "server/runtime-settings"
+import { makeDeviceNameMatcher } from "./device.name.pattern"
 import {
+  RemoveDeviceTarget,
   renderDeviceList,
   renderDeviceNameNoMatch,
-  renderDeviceRevokeError,
-  renderDeviceRevoked,
+  renderDeviceRemoveError,
+  renderDeviceRemoved,
+  renderRemoveDevicesConfirmation,
 } from "./device.render"
-import { makeDeviceNameMatcher } from "./device.name.pattern"
 
 type DeviceCommandContext = Readonly<{
   slice: DeviceSlice
   database: AgentDatabase
 }>
+
+export type DeviceCommandDeps = Readonly<{
+  confirm: (message: string) => Promise<boolean>
+}>
+
+const defaultDeviceCommandDeps: DeviceCommandDeps = {
+  confirm: async (message) => {
+    const answer = await clackConfirm({ message, initialValue: false })
+    return clackIsCancel(answer) ? false : answer
+  },
+}
 
 const openDeviceCommandContext = (): DeviceCommandContext => {
   const config = parseConfig(process.env)
@@ -74,33 +88,64 @@ const listAllDevices = (slice: DeviceSlice): Device[] | undefined => {
   return devices
 }
 
-const revokeDevicesByName = (params: { context: DeviceCommandContext; pattern: string }): void => {
-  const { context, pattern } = params
+const findDevicesToRemove = (params: {
+  devices: ReadonlyArray<Device>
+  target: RemoveDeviceTarget
+}): Device[] => {
+  const { devices, target } = params
+  if (target.kind === "name") {
+    const matchesName = makeDeviceNameMatcher(target.pattern)
+    return devices.filter((device) => matchesName(device.name))
+  }
+
+  return devices.filter((device) => device.id === target.deviceId)
+}
+
+const removeDevices = async (params: {
+  context: DeviceCommandContext
+  target: RemoveDeviceTarget
+  skipConfirmation: boolean
+  confirm: DeviceCommandDeps["confirm"]
+}): Promise<void> => {
+  const { context, target } = params
   const devices = listAllDevices(context.slice)
   if (devices === undefined) {
     reportError("Could not list devices.")
     return
   }
 
-  const matchesName = makeDeviceNameMatcher(pattern)
-  const matches = devices.filter((device) => matchesName(device.name))
+  const matches = findDevicesToRemove({ devices, target })
   if (matches.length === 0) {
-    reportError(renderDeviceNameNoMatch(pattern))
+    reportError(
+      target.kind === "name"
+        ? renderDeviceNameNoMatch(target.pattern)
+        : renderDeviceRemoveError({ kind: "device_not_found" }),
+    )
     return
   }
 
-  for (const { id: deviceId } of matches) {
-    const result = context.slice.revokeDevice({ deviceId })
+  if (!params.skipConfirmation) {
+    const confirmed = await params.confirm(
+      renderRemoveDevicesConfirmation({ count: matches.length, target }),
+    )
+    if (!confirmed) {
+      console.log("Cancelled.")
+      return
+    }
+  }
+
+  for (const { id, name } of matches) {
+    const result = context.slice.removeDevice({ deviceId: id })
     if (!result.ok) {
-      reportError(renderDeviceRevokeError(result.error))
+      reportError(renderDeviceRemoveError(result.error))
       continue
     }
 
-    console.log(renderDeviceRevoked({ deviceId, newlyRevoked: result.value.newlyRevoked }))
+    console.log(renderDeviceRemoved({ deviceId: id, name }))
   }
 }
 
-export const makeDeviceCommand = (): Command => {
+export const makeDeviceCommand = (deps: DeviceCommandDeps = defaultDeviceCommandDeps): Command => {
   const command = new Command("device")
   command.description("manage paired devices")
 
@@ -122,40 +167,38 @@ export const makeDeviceCommand = (): Command => {
     )
 
   command
-    .command("revoke")
-    .description("revoke paired devices by id or name pattern")
+    .command("remove")
+    .description("remove paired devices by id or name pattern")
     .argument("[id]", "device id")
     .option(
       "--name <pattern>",
-      'revoke every device whose name matches a case-insensitive glob, e.g. "*gphone*"',
+      'remove every device whose name matches a case-insensitive glob, e.g. "*gphone*"',
     )
-    .action((deviceId: string | undefined, options: { name?: string }) => {
+    .option("-y, --yes", "skip the confirmation prompt")
+    .action((deviceId: string | undefined, options: { name?: string; yes?: boolean }) => {
+      let target: RemoveDeviceTarget
       if (options.name !== undefined) {
         if (deviceId !== undefined) {
           reportError("Use either a device id or --name, not both.")
           return
         }
 
-        const pattern = options.name
-        return withDeviceCommandContext((context) => {
-          revokeDevicesByName({ context, pattern })
-        })
-      }
-
-      if (deviceId === undefined) {
+        target = { kind: "name", pattern: options.name }
+      } else if (deviceId !== undefined) {
+        target = { kind: "id", deviceId }
+      } else {
         reportError("Provide a device id or --name <pattern>.")
         return
       }
 
-      return withDeviceCommandContext((context) => {
-        const result = context.slice.revokeDevice({ deviceId })
-        if (!result.ok) {
-          reportError(renderDeviceRevokeError(result.error))
-          return
-        }
-
-        console.log(renderDeviceRevoked({ deviceId, newlyRevoked: result.value.newlyRevoked }))
-      })
+      return withDeviceCommandContext((context) =>
+        removeDevices({
+          context,
+          target,
+          skipConfirmation: options.yes === true,
+          confirm: deps.confirm,
+        }),
+      )
     })
 
   return command

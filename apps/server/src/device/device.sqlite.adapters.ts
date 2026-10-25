@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, inArray, isNull, lt, lte, or, sql } from "drizzle-orm"
+import { and, asc, desc, eq, gt, inArray, lt, lte, or, sql } from "drizzle-orm"
 import { Device, DeviceState, ListDevicesQuery } from "contracts/http/device"
 import { PairingCodeState } from "contracts/http/pairing-code"
 import { AgentDatabase, DbExecutor } from "../persistence/database"
@@ -23,8 +23,9 @@ import {
   MarkExpiredActiveBefore,
   MarkPairingCodeExpired,
   PairingCodeSnapshot,
-  RevokeDeviceRow,
-  RevokeDeviceRowInput,
+  RemoveDeviceRow,
+  RemoveDeviceRowInput,
+  RemoveDeviceRowResult,
   TouchDeviceLastSeen,
 } from "core/device/ports"
 import { isDeviceOnline } from "./device.presence"
@@ -44,27 +45,14 @@ const rowToPairingCodeSnapshot = (row: PairingCodeRow): PairingCodeSnapshot => (
   expiresAt: row.expiresAt,
 })
 
-const rowToDevice = (row: DeviceRow): Device => {
-  if (row.revokedAt !== null) {
-    return {
-      id: row.id,
-      name: row.name,
-      platform: row.platform,
-      state: "revoked",
-      pairedAt: row.pairedAt,
-      lastSeenAt: row.lastSeenAt,
-    }
-  }
-
-  return {
-    id: row.id,
-    name: row.name,
-    platform: row.platform,
-    state: isDeviceOnline(row.id) ? "online" : "offline",
-    pairedAt: row.pairedAt,
-    lastSeenAt: row.lastSeenAt,
-  }
-}
+const rowToDevice = (row: DeviceRow): Device => ({
+  id: row.id,
+  name: row.name,
+  platform: row.platform,
+  state: isDeviceOnline(row.id) ? "online" : "offline",
+  pairedAt: row.pairedAt,
+  lastSeenAt: row.lastSeenAt,
+})
 
 export const makeInsertPairingCode =
   (database: AgentDatabase): InsertPairingCode =>
@@ -179,7 +167,6 @@ export const makeClaimPairingCodeRow =
             credentialHash: input.credentialHash,
             pairedAt: input.pairedAt,
             lastSeenAt: input.pairedAt,
-            revokedAt: null,
           })
           .run()
 
@@ -229,7 +216,6 @@ export const makeInsertProbeDevice =
         credentialHash: input.credentialHash,
         pairedAt: input.pairedAt,
         lastSeenAt: input.pairedAt,
-        revokedAt: null,
       })
       .run()
 
@@ -249,7 +235,7 @@ export const makeFindDeviceByCredentialHash =
       .from(devices)
       .where(eq(devices.credentialHash, credentialHash))
       .get()
-    return row === undefined ? undefined : { id: row.id, revokedAt: row.revokedAt }
+    return row === undefined ? undefined : { id: row.id }
   }
 
 export const makeTouchDeviceLastSeen =
@@ -258,7 +244,7 @@ export const makeTouchDeviceLastSeen =
     database.db
       .update(devices)
       .set({ lastSeenAt: input.lastSeenAt })
-      .where(and(eq(devices.id, input.deviceId), isNull(devices.revokedAt)))
+      .where(eq(devices.id, input.deviceId))
       .run()
   }
 
@@ -284,39 +270,13 @@ const deleteDeviceRow = (
   return { ok: true }
 }
 
-export const makeRevokeDeviceRow =
-  (database: AgentDatabase): RevokeDeviceRow =>
-  (input: RevokeDeviceRowInput) => {
-    return database.db.transaction(
-      (tx): { ok: true; value: { newlyRevoked: boolean } } | { ok: false; error: DeviceError } => {
-        const row = tx.select().from(devices).where(eq(devices.id, input.deviceId)).get()
-
-        if (row === undefined) {
-          return { ok: false, error: { kind: "device_not_found" } }
-        }
-
-        let newlyRevoked = false
-
-        if (row.revokedAt === null) {
-          tx.update(devices)
-            .set({ revokedAt: input.revokedAt })
-            .where(and(eq(devices.id, input.deviceId), isNull(devices.revokedAt)))
-            .run()
-          newlyRevoked = true
-        }
-
-        if (input.hardDelete) {
-          clearPairingCodeDeviceRefs(tx, input.deviceId)
-          const deleted = deleteDeviceRow(tx, input.deviceId)
-          if (!deleted.ok) {
-            return deleted
-          }
-        }
-
-        return { ok: true, value: { newlyRevoked } }
-      },
-    )
-  }
+export const makeRemoveDeviceRow =
+  (database: AgentDatabase): RemoveDeviceRow =>
+  (input: RemoveDeviceRowInput): RemoveDeviceRowResult =>
+    database.db.transaction((tx) => {
+      clearPairingCodeDeviceRefs(tx, input.deviceId)
+      return deleteDeviceRow(tx, input.deviceId)
+    })
 
 const getDeviceRowById = (database: AgentDatabase, id: string): DeviceRow | undefined =>
   database.db.select().from(devices).where(eq(devices.id, id)).get()

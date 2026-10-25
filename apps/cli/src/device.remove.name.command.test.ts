@@ -5,7 +5,7 @@ import path from "node:path"
 import { parseConfig } from "server/config"
 import { openDatabase } from "server/database"
 import { assembleDeviceSlice } from "server/device"
-import { makeDeviceCommand } from "./device.command"
+import { DeviceCommandDeps, makeDeviceCommand } from "./device.command"
 
 const seedDevices = (dataDir: string, names: readonly string[]): string[] => {
   const config = parseConfig({ HAROLD_DATA_DIR: dataDir })
@@ -35,6 +35,7 @@ const seedDevices = (dataDir: string, names: readonly string[]): string[] => {
 
 const runCommand = async (
   args: readonly string[],
+  deps: Partial<DeviceCommandDeps> = {},
 ): Promise<{ output: string; errOutput: string; exitCode: number | undefined }> => {
   const lines: string[] = []
   const errLines: string[] = []
@@ -49,7 +50,12 @@ const runCommand = async (
   }
   process.exitCode = 0
   try {
-    await makeDeviceCommand().parseAsync([...args], { from: "user" })
+    await makeDeviceCommand({
+      confirm: async () => {
+        throw new Error("confirm should not be called")
+      },
+      ...deps,
+    }).parseAsync([...args], { from: "user" })
   } finally {
     console.log = originalLog
     console.error = originalErr
@@ -76,17 +82,22 @@ const withDataDir = async (run: (dataDir: string) => Promise<void>): Promise<voi
   }
 }
 
-describe("harold device revoke --name", () => {
-  test("revokes every device matching the name pattern", async () => {
+describe("harold device remove --name", () => {
+  test("removes every device matching the name pattern", async () => {
     await withDataDir(async (dataDir) => {
       const [firstId, secondId] = seedDevices(dataDir, ["GPhone One", "GPhone Two"])
 
-      const { output, errOutput, exitCode } = await runCommand(["revoke", "--name", "*gphone*"])
+      const { output, errOutput, exitCode } = await runCommand([
+        "remove",
+        "--name",
+        "*gphone*",
+        "--yes",
+      ])
 
       expect(exitCode).toBe(0)
       expect(errOutput).toBe("")
-      expect(output).toContain(`Revoked device ${firstId}.`)
-      expect(output).toContain(`Revoked device ${secondId}.`)
+      expect(output).toContain(`Removed device GPhone One (${firstId}).`)
+      expect(output).toContain(`Removed device GPhone Two (${secondId}).`)
     })
   })
 
@@ -94,10 +105,10 @@ describe("harold device revoke --name", () => {
     await withDataDir(async (dataDir) => {
       const [gphoneId, pixelId] = seedDevices(dataDir, ["GPhone", "Pixel"])
 
-      const { output, exitCode } = await runCommand(["revoke", "--name", "*gphone*"])
+      const { output, exitCode } = await runCommand(["remove", "--name", "*gphone*", "--yes"])
 
       expect(exitCode).toBe(0)
-      expect(output).toContain(`Revoked device ${gphoneId}.`)
+      expect(output).toContain(`Removed device GPhone (${gphoneId}).`)
       expect(output).not.toContain(pixelId)
 
       const listed = await runCommand(["list"])
@@ -110,7 +121,7 @@ describe("harold device revoke --name", () => {
     await withDataDir(async (dataDir) => {
       seedDevices(dataDir, ["Pixel"])
 
-      const { output, errOutput, exitCode } = await runCommand(["revoke", "--name", "*gphone*"])
+      const { output, errOutput, exitCode } = await runCommand(["remove", "--name", "*gphone*"])
 
       expect(exitCode).toBe(1)
       expect(output).toBe("")
@@ -118,21 +129,63 @@ describe("harold device revoke --name", () => {
     })
   })
 
-  test("reports devices that were already revoked", async () => {
+  test("prompts with the match count and removes when confirmed", async () => {
     await withDataDir(async (dataDir) => {
-      const [deviceId] = seedDevices(dataDir, ["GPhone"])
+      const [firstId, secondId] = seedDevices(dataDir, ["GPhone One", "GPhone Two"])
+      const prompts: string[] = []
 
-      await runCommand(["revoke", "--name", "*gphone*"])
-      const { output, exitCode } = await runCommand(["revoke", "--name", "*gphone*"])
+      const { output, exitCode } = await runCommand(["remove", "--name", "*gphone*"], {
+        confirm: async (message) => {
+          prompts.push(message)
+          return true
+        },
+      })
 
       expect(exitCode).toBe(0)
-      expect(output).toBe(`Device ${deviceId} was already revoked.`)
+      expect(prompts).toEqual(['Remove 2 devices matching "*gphone*"?'])
+      expect(output).toContain(`Removed device GPhone One (${firstId}).`)
+      expect(output).toContain(`Removed device GPhone Two (${secondId}).`)
+    })
+  })
+
+  test("prompts with a count of one when removing by id", async () => {
+    await withDataDir(async (dataDir) => {
+      const [deviceId] = seedDevices(dataDir, ["Pixel"])
+      const prompts: string[] = []
+
+      const { output, exitCode } = await runCommand(["remove", deviceId], {
+        confirm: async (message) => {
+          prompts.push(message)
+          return true
+        },
+      })
+
+      expect(exitCode).toBe(0)
+      expect(prompts).toEqual([`Remove 1 device with id ${deviceId}?`])
+      expect(output).toBe(`Removed device Pixel (${deviceId}).`)
+    })
+  })
+
+  test("does not remove devices when the prompt is declined", async () => {
+    await withDataDir(async (dataDir) => {
+      seedDevices(dataDir, ["GPhone"])
+
+      const { output, exitCode } = await runCommand(["remove", "--name", "*gphone*"], {
+        confirm: async () => false,
+      })
+
+      expect(exitCode).toBe(0)
+      expect(output).toBe("Cancelled.")
+
+      const listed = await runCommand(["list"])
+      expect(listed.output).toContain("GPhone")
+      expect(listed.output).toContain("1 device")
     })
   })
 
   test("requires an id or --name", async () => {
     await withDataDir(async () => {
-      const { output, errOutput, exitCode } = await runCommand(["revoke"])
+      const { output, errOutput, exitCode } = await runCommand(["remove", "--yes"])
 
       expect(exitCode).toBe(1)
       expect(output).toBe("")
@@ -145,10 +198,11 @@ describe("harold device revoke --name", () => {
       seedDevices(dataDir, ["GPhone"])
 
       const { errOutput, exitCode } = await runCommand([
-        "revoke",
+        "remove",
         "device_unknown",
         "--name",
         "*gphone*",
+        "--yes",
       ])
 
       expect(exitCode).toBe(1)

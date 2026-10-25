@@ -87,16 +87,12 @@ describe("device-only HTTP edge", () => {
     await expectUnauthorized(response)
   })
 
-  test("revoked device credential returns 401", async () => {
+  test("deleted device credential returns 401", async () => {
     const { app, config, database } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
     const { deviceId, credential } = seedTestDevice(database)
 
-    database.db
-      .update(devices)
-      .set({ revokedAt: "2026-08-02T12:00:00.000Z" })
-      .where(eq(devices.id, deviceId))
-      .run()
+    database.db.delete(devices).where(eq(devices.id, deviceId)).run()
 
     const response = await fetch(`${httpBase}/v1/workspaces`, { headers: authHeaders(credential) })
 

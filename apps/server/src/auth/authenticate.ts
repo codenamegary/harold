@@ -4,7 +4,6 @@ import { devicePrincipal, Principal, unauthenticatedPrincipal } from "./principa
 
 export type DeviceCredentialLookup = {
   id: string
-  revokedAt: string | null
 }
 
 export type AuthenticateParams = {
@@ -31,7 +30,7 @@ export const authenticate = (params: AuthenticateParams): AuthenticateResult => 
   const credentialHash = hashDeviceCredential(parsed.credential)
   const device = params.lookupByCredentialHash(credentialHash)
 
-  if (device === undefined || device.revokedAt !== null) {
+  if (device === undefined) {
     return { principal: unauthenticatedPrincipal(), credentialPresented: true }
   }
 

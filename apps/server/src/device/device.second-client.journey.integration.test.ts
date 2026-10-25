@@ -33,7 +33,7 @@ const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 
 }
 
 describe("second-client journey", () => {
-  test("full MS2 lifecycle: pair, reconnect, operate, presence, revoke, access loss", async () => {
+  test("full MS2 lifecycle: pair, reconnect, operate, presence, remove, access loss", async () => {
     const logCapture = createLogCapture()
     const { app, config, dataDir } = await bootTestApp({
       logStream: logCapture.stream,
@@ -122,24 +122,22 @@ describe("second-client journey", () => {
     expect(onlineEntry?.state).toBe("online")
 
     const endPromise = deviceStream.waitForEnd()
-    const revokeResponse = await fetch(`${httpBase}${devicePath(paired.deviceId)}`, {
+    const removeResponse = await fetch(`${httpBase}${devicePath(paired.deviceId)}`, {
       method: "DELETE",
       headers: { authorization: `Bearer ${app.deviceCredential.credential}` },
     })
-    expect(revokeResponse.status).toBe(204)
+    expect(removeResponse.status).toBe(204)
 
     await endPromise
 
-    const listedAfterRevoke = DeviceCollectionSchema.parse(
+    const listedAfterRemove = DeviceCollectionSchema.parse(
       await (
         await fetch(`${httpBase}${DEVICES_PATH}`, {
           headers: { authorization: `Bearer ${app.deviceCredential.credential}` },
         })
       ).json(),
     )
-    expect(listedAfterRevoke.items.find((item) => item.id === paired.deviceId)?.state).toBe(
-      "revoked",
-    )
+    expect(listedAfterRemove.items.find((item) => item.id === paired.deviceId)).toBeUndefined()
 
     const httpDenied = await reconnected.fetch("/v1/workspaces")
     expect(httpDenied.status).toBe(401)

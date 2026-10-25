@@ -408,19 +408,19 @@ describe("GET /v1/sessions/:sessionId/events", () => {
     }
   }, 30_000)
 
-  test("revocation ends the open stream and the credential is refused afterwards", async () => {
+  test("removal ends the open stream and the credential is refused afterwards", async () => {
     const { app, config } = await bootTestApp({
       whichFn,
       fakeAcpOptions: {
         capabilities: { loadSession: true, sessionClose: true, sessionList: true },
-        sessionNewSessionId: "sse-revoke-1",
-        sessionLoadSessionId: "sse-revoke-1",
+        sessionNewSessionId: "sse-remove-1",
+        sessionLoadSessionId: "sse-remove-1",
       },
     })
     await enableAgent(app, "cursor", whichFn)
     const httpBase = await getHttpBase(app, config.host)
 
-    const created = await createSession(app, "/tmp/sse-revoke")
+    const created = await createSession(app, "/tmp/sse-remove")
     const stream = await openSseStream({
       url: eventsUrl(httpBase, created.sessionId),
       credential: app.deviceCredential.credential,
@@ -428,11 +428,11 @@ describe("GET /v1/sessions/:sessionId/events", () => {
     await stream.waitFor((message) => message.type === "subscribed")
 
     const endPromise = stream.waitForEnd()
-    const revokeResponse = await fetch(`${httpBase}${devicePath(app.deviceCredential.deviceId)}`, {
+    const removeResponse = await fetch(`${httpBase}${devicePath(app.deviceCredential.deviceId)}`, {
       method: "DELETE",
       headers: authHeaders(app),
     })
-    expect(revokeResponse.status).toBe(204)
+    expect(removeResponse.status).toBe(204)
     await endPromise
 
     const reopenResponse = await fetch(eventsUrl(httpBase, created.sessionId), {

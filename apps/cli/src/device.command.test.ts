@@ -5,7 +5,7 @@ import path from "node:path"
 import { parseConfig } from "server/config"
 import { openDatabase } from "server/database"
 import { assembleDeviceSlice } from "server/device"
-import { makeDeviceCommand } from "./device.command"
+import { DeviceCommandDeps, makeDeviceCommand } from "./device.command"
 
 const seedProbeDevice = (dataDir: string): string => {
   const config = parseConfig({ HAROLD_DATA_DIR: dataDir })
@@ -31,6 +31,7 @@ const seedProbeDevice = (dataDir: string): string => {
 
 const runCommand = async (
   args: readonly string[],
+  deps: Partial<DeviceCommandDeps> = {},
 ): Promise<{ output: string; errOutput: string; exitCode: number | undefined }> => {
   const lines: string[] = []
   const errLines: string[] = []
@@ -45,7 +46,12 @@ const runCommand = async (
   }
   process.exitCode = 0
   try {
-    await makeDeviceCommand().parseAsync([...args], { from: "user" })
+    await makeDeviceCommand({
+      confirm: async () => {
+        throw new Error("confirm should not be called")
+      },
+      ...deps,
+    }).parseAsync([...args], { from: "user" })
   } finally {
     console.log = originalLog
     console.error = originalErr
@@ -102,29 +108,22 @@ describe("harold device", () => {
     expect(output).toContain("1 device")
   })
 
-  test("revoke removes the device credential by id", async () => {
-    const { output, exitCode } = await runCommand(["revoke", deviceId])
+  test("remove deletes the device by id with confirmation skipped", async () => {
+    const { output, exitCode } = await runCommand(["remove", deviceId, "--yes"])
 
     expect(exitCode).toBe(0)
-    expect(output).toBe(`Revoked device ${deviceId}.`)
+    expect(output).toBe(`Removed device Connection test probe (${deviceId}).`)
   })
 
-  test("revoke is idempotent", async () => {
-    const { output, exitCode } = await runCommand(["revoke", deviceId])
-
-    expect(exitCode).toBe(0)
-    expect(output).toBe(`Device ${deviceId} was already revoked.`)
-  })
-
-  test("list still shows a revoked device", async () => {
+  test("list hides a removed device", async () => {
     const { output, exitCode } = await runCommand(["list"])
 
     expect(exitCode).toBe(0)
-    expect(output).toContain("revoked")
+    expect(output).toBe("No devices paired yet.")
   })
 
-  test("revoke reports an unknown device id", async () => {
-    const { errOutput, exitCode } = await runCommand(["revoke", "device_unknown"])
+  test("remove reports an unknown device id", async () => {
+    const { errOutput, exitCode } = await runCommand(["remove", "device_unknown", "--yes"])
 
     expect(exitCode).toBe(1)
     expect(errOutput).toContain("No device matches that id.")

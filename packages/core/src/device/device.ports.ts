@@ -70,7 +70,6 @@ export type InsertProbeDevice = (
 
 export type DeviceCredentialLookup = Readonly<{
   id: string
-  revokedAt: string | null
 }>
 
 export type FindDeviceByCredentialHash = (
@@ -79,17 +78,13 @@ export type FindDeviceByCredentialHash = (
 
 export type TouchDeviceLastSeen = (input: { deviceId: string; lastSeenAt: string }) => void
 
-export type RevokeDeviceRowInput = Readonly<{
+export type RemoveDeviceRowInput = Readonly<{
   deviceId: string
-  revokedAt: string
-  hardDelete: boolean
 }>
 
-export type RevokeDeviceRowResult =
-  | { ok: true; value: { newlyRevoked: boolean } }
-  | { ok: false; error: DeviceError }
+export type RemoveDeviceRowResult = { ok: true } | { ok: false; error: DeviceError }
 
-export type RevokeDeviceRow = (input: RevokeDeviceRowInput) => RevokeDeviceRowResult
+export type RemoveDeviceRow = (input: RemoveDeviceRowInput) => RemoveDeviceRowResult
 
 export type DeviceListPage = Readonly<{
   items: Device[]

@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
   DEVICES_PATH,
-  deleteDevicePath,
-  DeleteDeviceQuerySchema,
   devicePath,
   DeviceCollectionSchema,
   DeviceCredentialResponseSchema,
@@ -33,39 +31,6 @@ describe("devicePath", () => {
   })
 })
 
-describe("deleteDevicePath", () => {
-  test("builds soft revoke path by default", () => {
-    expect(deleteDevicePath("device_01JFC8C7E77NQCFH0RF9Z22JHH")).toBe(
-      "/v1/devices/device_01JFC8C7E77NQCFH0RF9Z22JHH",
-    )
-  })
-
-  test("appends hardDelete query when requested", () => {
-    expect(
-      deleteDevicePath("device_01JFC8C7E77NQCFH0RF9Z22JHH", { hardDelete: true }),
-    ).toBe("/v1/devices/device_01JFC8C7E77NQCFH0RF9Z22JHH?hardDelete=true")
-  })
-})
-
-describe("DeleteDeviceQuerySchema", () => {
-  test("defaults hardDelete to false when omitted", () => {
-    expect(DeleteDeviceQuerySchema.parse({})).toEqual({ hardDelete: false })
-  })
-
-  test("parses hardDelete true and false", () => {
-    expect(DeleteDeviceQuerySchema.parse({ hardDelete: "true" })).toEqual({
-      hardDelete: true,
-    })
-    expect(DeleteDeviceQuerySchema.parse({ hardDelete: "false" })).toEqual({
-      hardDelete: false,
-    })
-  })
-
-  test("rejects unknown values", () => {
-    expect(() => DeleteDeviceQuerySchema.parse({ hardDelete: "yes" })).toThrow()
-  })
-})
-
 describe("DeviceSchema", () => {
   test("accepts a valid device", () => {
     expect(DeviceSchema.parse(validDevice)).toEqual(validDevice)
@@ -82,10 +47,8 @@ describe("DeviceSchema", () => {
     expect(DeviceSchema.parse(device)).toEqual(device)
   })
 
-  test("accepts revoked state", () => {
-    expect(DeviceSchema.parse({ ...validDevice, state: "revoked" }).state).toBe(
-      "revoked",
-    )
+  test("rejects revoked state", () => {
+    expect(() => DeviceSchema.parse({ ...validDevice, state: "revoked" })).toThrow()
   })
 
   test("rejects empty name", () => {
@@ -93,15 +56,11 @@ describe("DeviceSchema", () => {
   })
 
   test("rejects name over 80 characters", () => {
-    expect(() =>
-      DeviceSchema.parse({ ...validDevice, name: "a".repeat(81) }),
-    ).toThrow()
+    expect(() => DeviceSchema.parse({ ...validDevice, name: "a".repeat(81) })).toThrow()
   })
 
   test("rejects invalid state", () => {
-    expect(() =>
-      DeviceSchema.parse({ ...validDevice, state: "paired" }),
-    ).toThrow()
+    expect(() => DeviceSchema.parse({ ...validDevice, state: "paired" })).toThrow()
   })
 
   test("rejects prototype fingerprint", () => {
@@ -194,9 +153,7 @@ describe("DeviceCredentialResponseSchema", () => {
   })
 
   test("rejects response without credential", () => {
-    expect(() =>
-      DeviceCredentialResponseSchema.parse({ device: validDevice }),
-    ).toThrow()
+    expect(() => DeviceCredentialResponseSchema.parse({ device: validDevice })).toThrow()
   })
 
   test("rejects extra fields", () => {

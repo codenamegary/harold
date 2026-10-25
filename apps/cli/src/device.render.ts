@@ -4,9 +4,12 @@ import { DeviceError } from "core/device/errors"
 export type DeviceColors = Readonly<{
   green: (text: string) => string
   yellow: (text: string) => string
-  red: (text: string) => string
   dim: (text: string) => string
 }>
+
+export type RemoveDeviceTarget =
+  | Readonly<{ kind: "id"; deviceId: string }>
+  | Readonly<{ kind: "name"; pattern: string }>
 
 const shortIdLength = "device_".length + 8
 
@@ -27,7 +30,6 @@ export const renderDeviceList = (params: {
   const stateColor: Record<Device["state"], (text: string) => string> = {
     online: colors.green,
     offline: colors.yellow,
-    revoked: colors.red,
   }
 
   const header = ["ID", "NAME", "PLATFORM", "STATE", "PAIRED AT"]
@@ -64,17 +66,25 @@ export const renderDeviceList = (params: {
   return lines.join("\n")
 }
 
-export const renderDeviceRevoked = (params: { deviceId: string; newlyRevoked: boolean }): string =>
-  params.newlyRevoked
-    ? `Revoked device ${params.deviceId}.`
-    : `Device ${params.deviceId} was already revoked.`
+export const renderDeviceRemoved = (params: { deviceId: string; name: string }): string =>
+  `Removed device ${params.name} (${params.deviceId}).`
 
-export const renderDeviceRevokeError = (error: DeviceError): string => {
+export const renderDeviceRemoveError = (error: DeviceError): string => {
   if (error.kind === "device_not_found") {
     return "No device matches that id."
   }
-  return "Could not revoke the device."
+  return "Could not remove the device."
 }
 
 export const renderDeviceNameNoMatch = (pattern: string): string =>
   `No devices match name pattern "${pattern}".`
+
+export const renderRemoveDevicesConfirmation = (params: {
+  count: number
+  target: RemoveDeviceTarget
+}): string => {
+  const { count, target } = params
+  return target.kind === "name"
+    ? `Remove ${deviceCount(count)} matching "${target.pattern}"?`
+    : `Remove ${deviceCount(count)} with id ${target.deviceId}?`
+}

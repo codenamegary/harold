@@ -71,6 +71,13 @@
       "when": 1786679293495,
       "tag": "0009_add_archived_acp_sessions_table",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1792947284077,
+      "tag": "0010_drop_device_revoked_at",
+      "breakpoints": true
     }
   ]
 }

@@ -34,7 +34,6 @@ export const seedTestDevice = (database: AgentDatabase): TestDeviceCredential =>
       credentialHash: hashDeviceCredential(credential),
       pairedAt,
       lastSeenAt: pairedAt,
-      revokedAt: null,
     })
     .run()
   return { deviceId, credential }

@@ -104,7 +104,7 @@ interface AgentApi {
         agentId: AgentId,
     ): Result<AgentAuthSummary>
 
-    /** Soft-revokes this device on the server (DELETE /v1/devices/{id}). */
+    /** Removes this device on the server (DELETE /v1/devices/{id}). */
     suspend fun revokeDevice(
         serverOrigin: String,
         deviceId: String,
