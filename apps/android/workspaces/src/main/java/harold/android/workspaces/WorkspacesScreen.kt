@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceState
 import harold.android.ui.components.HaroldBadge
+import harold.android.ui.components.LoadingSkeletonList
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -98,13 +99,15 @@ fun WorkspacesScreen(
         ) {
             when (val state = uiState.loadState) {
                 WorkspacesLoadState.Loading -> {
-                    Text(
-                        text = "Loading workspaces…",
+                    LoadingSkeletonList(
+                        contentDescription = "Loading workspaces",
                         modifier = Modifier
                             .testTag("workspaces_loading")
                             .semantics {
                                 liveRegion = LiveRegionMode.Polite
                             },
+                        rows = 4,
+                        rowHeight = 64.dp,
                     )
                 }
 
