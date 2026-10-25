@@ -61,18 +61,17 @@ const listAllDevices = (slice: DeviceSlice): Device[] | undefined => {
   const devices: Device[] = []
   let cursor: string | undefined
 
-  for (;;) {
-    const result = slice.listDevices(cursor === undefined ? { limit: 200 } : { limit: 200, cursor })
+  do {
+    const result = slice.listDevices({ limit: 200, cursor })
     if (!result.ok) {
       return undefined
     }
 
     devices.push(...result.value.items)
-    if (result.value.nextCursor === undefined) {
-      return devices
-    }
     cursor = result.value.nextCursor
-  }
+  } while (cursor !== undefined)
+
+  return devices
 }
 
 const revokeDevicesByName = (params: { context: DeviceCommandContext; pattern: string }): void => {
