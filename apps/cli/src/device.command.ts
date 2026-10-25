@@ -89,22 +89,16 @@ const revokeDevicesByName = (params: { context: DeviceCommandContext; pattern: s
     return
   }
 
-  let failed = false
   for (const device of matches) {
     const result = context.slice.revokeDevice({ deviceId: device.id })
     if (!result.ok) {
       reportError(renderDeviceRevokeError(result.error))
-      failed = true
       continue
     }
 
     console.log(
       renderDeviceRevoked({ deviceId: device.id, newlyRevoked: result.value.newlyRevoked }),
     )
-  }
-
-  if (failed) {
-    process.exitCode = 1
   }
 }
 
