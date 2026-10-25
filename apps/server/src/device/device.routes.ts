@@ -7,7 +7,6 @@ import {
   claimPairingCodePath,
 } from "contracts/http/pairing-code"
 import {
-  DeleteDeviceQuerySchema,
   DeviceCollectionSchema,
   DEVICES_PATH,
   devicePath,
@@ -30,7 +29,7 @@ import {
 } from "core/device/claim.pairing.code.usecase"
 import { ListDevices } from "core/device/ports"
 import { CreatePairingCodeResult } from "core/device/create.pairing.code.usecase"
-import { RevokeDeviceCommand, RevokeDeviceResult } from "core/device/revoke.device.usecase"
+import { RemoveDeviceCommand, RemoveDeviceResult } from "core/device/remove.device.usecase"
 
 const sendProblem = (
   reply: {
@@ -89,7 +88,7 @@ export type DeviceRouteDeps = Readonly<{
   }) => Promise<CreatePairingCodeResult>
   claimPairingCode: (command: ClaimPairingCodeCommand) => Promise<ClaimPairingCodeResult>
   listDevices: ListDevices
-  revokeDevice: (command: RevokeDeviceCommand) => RevokeDeviceResult
+  removeDevice: (command: RemoveDeviceCommand) => RemoveDeviceResult
 }>
 
 export const registerDeviceRoutes = (app: FastifyInstance, deps: DeviceRouteDeps) => {
@@ -139,8 +138,7 @@ export const registerDeviceRoutes = (app: FastifyInstance, deps: DeviceRouteDeps
 
   app.delete(devicePath(":deviceId"), async (request, reply) => {
     const { deviceId } = request.params as { deviceId: string }
-    const query = DeleteDeviceQuerySchema.parse(request.query)
-    const result = deps.revokeDevice({ deviceId, hardDelete: query.hardDelete })
+    const result = deps.removeDevice({ deviceId })
 
     if (!result.ok) {
       return sendErrorProblem(reply, result.error)

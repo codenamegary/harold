@@ -55,8 +55,7 @@ describe("authenticate", () => {
     const credentialHash = hashDeviceCredential(credential)
     const result = authenticate({
       authorization: `Bearer ${credential}`,
-      lookupByCredentialHash: (hash) =>
-        hash === credentialHash ? { id: "device_1", revokedAt: null } : undefined,
+      lookupByCredentialHash: (hash) => (hash === credentialHash ? { id: "device_1" } : undefined),
     })
 
     expect(formatPrincipal(result.principal)).toBe("device:device_1")
@@ -71,20 +70,6 @@ describe("authenticate", () => {
 
     expect(formatPrincipal(result.principal)).toBe("unauthenticated")
     expect(result.credentialPresented).toBe(true)
-  })
-
-  test("revoked device is unauthenticated", () => {
-    const credential = "devcred_revoked"
-    const credentialHash = hashDeviceCredential(credential)
-    const result = authenticate({
-      authorization: `Bearer ${credential}`,
-      lookupByCredentialHash: (hash) =>
-        hash === credentialHash
-          ? { id: "device_2", revokedAt: "2026-08-01T00:00:00.000Z" }
-          : undefined,
-    })
-
-    expect(formatPrincipal(result.principal)).toBe("unauthenticated")
   })
 })
 

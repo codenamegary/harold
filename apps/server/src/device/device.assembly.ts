@@ -14,10 +14,10 @@ import {
   makeCreateProbeDevice,
 } from "core/device/create.probe.device.usecase"
 import {
-  RevokeDeviceCommand,
-  RevokeDeviceResult,
-  makeRevokeDevice,
-} from "core/device/revoke.device.usecase"
+  RemoveDeviceCommand,
+  RemoveDeviceResult,
+  makeRemoveDevice,
+} from "core/device/remove.device.usecase"
 import {
   FindDeviceByCredentialHash,
   GetAdvertisedEndpointSettings,
@@ -39,7 +39,7 @@ import {
   makeListPairingCodesByStates,
   makeMarkExpiredActiveBefore,
   makeMarkPairingCodeExpired,
-  makeRevokeDeviceRow,
+  makeRemoveDeviceRow,
   makeTouchDeviceLastSeen,
 } from "./device.sqlite.adapters"
 
@@ -58,7 +58,7 @@ export type DeviceSlice = Readonly<{
   findDeviceByCredentialHash: FindDeviceByCredentialHash
   touchDeviceLastSeen: TouchDeviceLastSeen
   createProbeDevice: () => CreateProbeDeviceResult
-  revokeDevice: (command: RevokeDeviceCommand) => RevokeDeviceResult
+  removeDevice: (command: RemoveDeviceCommand) => RemoveDeviceResult
 }>
 
 export const assembleDeviceSlice = (deps: AssembleDeviceSliceDeps): DeviceSlice => {
@@ -72,7 +72,7 @@ export const assembleDeviceSlice = (deps: AssembleDeviceSliceDeps): DeviceSlice 
   const insertProbeDevice = makeInsertProbeDevice(deps.database)
   const findDeviceByCredentialHash = makeFindDeviceByCredentialHash(deps.database)
   const touchDeviceLastSeen = makeTouchDeviceLastSeen(deps.database)
-  const revokeDeviceRow = makeRevokeDeviceRow(deps.database)
+  const removeDeviceRow = makeRemoveDeviceRow(deps.database)
   const listDevices = makeListDevices(deps.database)
 
   const createPairingCode = makeCreatePairingCode({
@@ -89,8 +89,8 @@ export const assembleDeviceSlice = (deps: AssembleDeviceSliceDeps): DeviceSlice 
     claimPairingCodeRow,
   })
   const createProbeDevice = makeCreateProbeDevice({ insertProbeDevice })
-  const revokeDevice = makeRevokeDevice({
-    revokeDeviceRow,
+  const removeDevice = makeRemoveDevice({
+    removeDeviceRow,
     closeDeviceConnections,
   })
 
@@ -100,7 +100,7 @@ export const assembleDeviceSlice = (deps: AssembleDeviceSliceDeps): DeviceSlice 
         createPairingCode,
         claimPairingCode,
         listDevices,
-        revokeDevice,
+        removeDevice,
       })
     },
     createPairingCode,
@@ -110,6 +110,6 @@ export const assembleDeviceSlice = (deps: AssembleDeviceSliceDeps): DeviceSlice 
     findDeviceByCredentialHash,
     touchDeviceLastSeen,
     createProbeDevice,
-    revokeDevice,
+    removeDevice,
   }
 }

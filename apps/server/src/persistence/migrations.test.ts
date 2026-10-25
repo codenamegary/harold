@@ -8,7 +8,8 @@ import { openDatabase } from "./database"
 import { bootTestDirectory, registerTestCleanup } from "../test-support/test.harness"
 const migrationsFolder = path.join(import.meta.dir, "drizzle")
 const ms1MigrationCount = 4
-const currentMigrationCount = 10
+const migrationsBeforeDropRevokedAt = 10
+const currentMigrationCount = 11
 
 const tableNames = (sqlite: Database) =>
   sqlite
@@ -22,7 +23,7 @@ const migrationCount = (sqlite: Database) =>
   sqlite.query<{ count: number }, []>("SELECT COUNT(*) AS count FROM __drizzle_migrations").get()
     ?.count
 
-const createMs1Database = async (dataDir: string) => {
+const createDatabaseAtMigration = async (dataDir: string, count: number) => {
   const databasePath = path.join(dataDir, "harold.db")
   const sqlite = new Database(databasePath)
   sqlite.run("PRAGMA foreign_keys = ON")
@@ -40,7 +41,7 @@ const createMs1Database = async (dataDir: string) => {
     entries: Array<{ tag: string; when: number }>
   }
 
-  for (const entry of journal.entries.slice(0, ms1MigrationCount)) {
+  for (const entry of journal.entries.slice(0, count)) {
     const query = await readFile(path.join(migrationsFolder, `${entry.tag}.sql`), "utf8")
     for (const statement of query.split("--> statement-breakpoint")) {
       const trimmed = statement.trim()
@@ -55,6 +56,14 @@ const createMs1Database = async (dataDir: string) => {
       .run(hash, entry.when)
   }
 
+  sqlite.close()
+  return databasePath
+}
+
+const createMs1Database = async (dataDir: string) => {
+  const databasePath = await createDatabaseAtMigration(dataDir, ms1MigrationCount)
+  const sqlite = new Database(databasePath)
+  sqlite.run("PRAGMA foreign_keys = ON")
   sqlite
     .query(
       `INSERT INTO workspaces (id, name, canonical_path, created_at, last_used_at)
@@ -177,7 +186,6 @@ describe("drizzle migrations", () => {
       "credential_hash",
       "paired_at",
       "last_seen_at",
-      "revoked_at",
     ])
     expect(deviceColumns).not.toContain("credential")
     expect(deviceColumns).not.toContain("token")
@@ -211,7 +219,7 @@ describe("drizzle migrations", () => {
       .all()
       .map((row) => row.name)
 
-    expect(deviceIndexes).toEqual(["devices_credential_hash_unique", "devices_revoked_at_idx"])
+    expect(deviceIndexes).toEqual(["devices_credential_hash_unique"])
 
     const pairingCodeIndexes = database.sqlite
       .query<{ name: string }, []>(
@@ -242,6 +250,83 @@ describe("drizzle migrations", () => {
         to: "id",
       }),
     ])
+  })
+
+  test("drops revoked_at after deleting revoked devices and clearing pairing refs", async () => {
+    const dataDir = await bootTestDirectory()
+    await createDatabaseAtMigration(dataDir, migrationsBeforeDropRevokedAt)
+
+    const before = new Database(path.join(dataDir, "harold.db"))
+    before.run("PRAGMA foreign_keys = ON")
+    before
+      .query(
+        `INSERT INTO devices
+           (id, name, platform, credential_hash, paired_at, last_seen_at, revoked_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        "device_revoked",
+        "Revoked device",
+        "android",
+        "hash_revoked",
+        "2026-08-01T00:00:00.000Z",
+        "2026-08-01T00:00:00.000Z",
+        "2026-08-02T00:00:00.000Z",
+      )
+    before
+      .query(
+        `INSERT INTO devices
+           (id, name, platform, credential_hash, paired_at, last_seen_at, revoked_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        "device_active",
+        "Active device",
+        "ios",
+        "hash_active",
+        "2026-08-01T00:00:00.000Z",
+        "2026-08-01T00:00:00.000Z",
+        null,
+      )
+    before
+      .query(
+        `INSERT INTO pairing_codes
+           (id, code_hash, state, created_at, expires_at, claimed_at, device_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        "pair_revoked",
+        "code_hash",
+        "claimed",
+        "2026-08-01T00:00:00.000Z",
+        "2026-08-01T00:10:00.000Z",
+        "2026-08-01T00:01:00.000Z",
+        "device_revoked",
+      )
+    before.close()
+
+    const database = openDatabase({ dataDir })
+    registerTestCleanup(() => database.close())
+
+    expect(migrationCount(database.sqlite)).toBe(currentMigrationCount)
+
+    const deviceIds = database.sqlite
+      .query<{ id: string }, []>("SELECT id FROM devices ORDER BY id")
+      .all()
+    expect(deviceIds).toEqual([{ id: "device_active" }])
+
+    const pairingCode = database.sqlite
+      .query<{ device_id: string | null }, []>(
+        "SELECT device_id FROM pairing_codes WHERE id = 'pair_revoked'",
+      )
+      .get()
+    expect(pairingCode).toEqual({ device_id: null })
+
+    const deviceColumns = database.sqlite
+      .query<{ name: string }, []>("PRAGMA table_info(devices)")
+      .all()
+      .map((row) => row.name)
+    expect(deviceColumns).not.toContain("revoked_at")
   })
 
   test("applies device tables onto an existing MS1 database", async () => {

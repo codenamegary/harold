@@ -6,12 +6,7 @@ import {
   PAIRING_CODES_PATH,
   claimPairingCodePath,
 } from "contracts/http/pairing-code"
-import {
-  DeviceCollectionSchema,
-  DEVICES_PATH,
-  deleteDevicePath,
-  devicePath,
-} from "contracts/http/device"
+import { DeviceCollectionSchema, DEVICES_PATH, devicePath } from "contracts/http/device"
 import { CreateSessionResponseSchema } from "contracts/http/session"
 import { sessionEventsPath } from "contracts/http/session.stream"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
@@ -102,24 +97,24 @@ const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 
   }
 }
 
-describe("device revoke", () => {
-  test("DELETE revokes device, ends the event stream, blocks credential", async () => {
-    const { app, config } = await bootTestApp({
+describe("device remove", () => {
+  test("DELETE removes the device, ends the event stream, and blocks the credential", async () => {
+    const { app, config, database } = await bootTestApp({
       whichFn,
       fakeAcpOptions: {
         capabilities: { loadSession: true, sessionClose: true, sessionList: true },
-        sessionNewSessionId: "revoke-1",
-        sessionLoadSessionId: "revoke-1",
+        sessionNewSessionId: "remove-1",
+        sessionLoadSessionId: "remove-1",
       },
     })
     await enableAgent(app, "cursor", whichFn)
     const { httpBase } = await getListeningBase(app, config)
     const paired = await pairDevice(
       httpBase,
-      { name: "To revoke", platform: "android" },
+      { name: "To remove", platform: "android" },
       app.deviceCredential.credential,
     )
-    const created = await createSession(app, httpBase, "/tmp/revoke-project")
+    const created = await createSession(app, httpBase, "/tmp/remove-project")
 
     const deviceStream = await openSseStream({
       url: `${httpBase}${sessionEventsPath(created.sessionId, { agentId: "cursor" })}`,
@@ -129,17 +124,24 @@ describe("device revoke", () => {
       const online = DeviceCollectionSchema.parse(
         await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
       )
-      return online.items[0]?.state === "online"
+      return online.items.find((item) => item.id === paired.device.id)?.state === "online"
     })
+
+    const pairingReference = database.sqlite
+      .query<{ count: number }, [string]>(
+        "SELECT COUNT(*) AS count FROM pairing_codes WHERE device_id = ?",
+      )
+      .get(paired.device.id)
+    expect(pairingReference?.count).toBe(1)
 
     const endPromise = deviceStream.waitForEnd()
 
-    const revokeResponse = await fetch(`${httpBase}${devicePath(paired.device.id)}`, {
+    const removeResponse = await fetch(`${httpBase}${devicePath(paired.device.id)}`, {
       method: "DELETE",
       headers: authHeaders(app),
     })
-    expect(revokeResponse.status).toBe(204)
-    expect(await revokeResponse.text()).toBe("")
+    expect(removeResponse.status).toBe(204)
+    expect(await removeResponse.text()).toBe("")
 
     await endPromise
 
@@ -161,11 +163,17 @@ describe("device revoke", () => {
     const listed = DeviceCollectionSchema.parse(
       await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
     )
-    const revoked = listed.items.find((item) => item.id === paired.device.id)
-    expect(revoked?.state).toBe("revoked")
+    expect(listed.items.map((item) => item.id)).toEqual([app.deviceCredential.deviceId])
+
+    const clearedReference = database.sqlite
+      .query<{ count: number }, [string]>(
+        "SELECT COUNT(*) AS count FROM pairing_codes WHERE device_id = ?",
+      )
+      .get(paired.device.id)
+    expect(clearedReference?.count).toBe(0)
   })
 
-  test("idempotent second DELETE returns 204", async () => {
+  test("second DELETE returns 404", async () => {
     const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningBase(app, config)
     const paired = await pairDevice(httpBase, {}, app.deviceCredential.credential)
@@ -180,12 +188,8 @@ describe("device revoke", () => {
       method: "DELETE",
       headers: authHeaders(app),
     })
-    expect(second.status).toBe(204)
-
-    const listed = DeviceCollectionSchema.parse(
-      await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
-    )
-    expect(listed.items[0]?.state).toBe("revoked")
+    expect(second.status).toBe(404)
+    NotFoundProblemSchema.parse(await second.json())
   })
 
   test("unknown deviceId returns 404 Problem+JSON", async () => {
@@ -199,55 +203,5 @@ describe("device revoke", () => {
     expect(response.status).toBe(404)
     expect(response.headers.get("content-type")).toContain("application/problem+json")
     NotFoundProblemSchema.parse(await response.json())
-  })
-
-  test("hardDelete removes device from list", async () => {
-    const { app, config } = await bootTestApp()
-    const { httpBase } = await getListeningBase(app, config)
-    const paired = await pairDevice(
-      httpBase,
-      { name: "Hard delete me", platform: "ios" },
-      app.deviceCredential.credential,
-    )
-
-    const response = await fetch(
-      `${httpBase}${deleteDevicePath(paired.device.id, { hardDelete: true })}`,
-      { method: "DELETE", headers: authHeaders(app) },
-    )
-    expect(response.status).toBe(204)
-
-    const listed = DeviceCollectionSchema.parse(
-      await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
-    )
-    expect(listed.items.map((item) => item.id)).toEqual([app.deviceCredential.deviceId])
-  })
-
-  test("hardDelete of already-revoked device removes row", async () => {
-    const { app, config } = await bootTestApp()
-    const { httpBase } = await getListeningBase(app, config)
-    const paired = await pairDevice(httpBase, {}, app.deviceCredential.credential)
-
-    const soft = await fetch(`${httpBase}${devicePath(paired.device.id)}`, {
-      method: "DELETE",
-      headers: authHeaders(app),
-    })
-    expect(soft.status).toBe(204)
-
-    const afterSoft = DeviceCollectionSchema.parse(
-      await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
-    )
-    const afterSoftRevoked = afterSoft.items.find((item) => item.id === paired.device.id)
-    expect(afterSoftRevoked?.state).toBe("revoked")
-
-    const hard = await fetch(
-      `${httpBase}${deleteDevicePath(paired.device.id, { hardDelete: true })}`,
-      { method: "DELETE", headers: authHeaders(app) },
-    )
-    expect(hard.status).toBe(204)
-
-    const listed = DeviceCollectionSchema.parse(
-      await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
-    )
-    expect(listed.items.map((item) => item.id)).toEqual([app.deviceCredential.deviceId])
   })
 })
