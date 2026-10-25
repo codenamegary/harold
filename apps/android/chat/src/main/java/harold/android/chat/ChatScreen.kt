@@ -576,11 +576,11 @@ fun ChatScreen(
                             },
                             modifier = Modifier.testTag("workspaces_menu_item"),
                         )
-                        if (uiState.authSummary?.canLogout == true) {
+                        if (uiState.agentAuth.authSummary?.canLogout == true) {
                             DropdownMenuItem(
                                 text = {
                                     Text(
-                                        text = if (uiState.authActionBusy) {
+                                        text = if (uiState.agentAuth.actionBusy) {
                                             stringResource(R.string.agent_auth_signing_out)
                                         } else {
                                             stringResource(R.string.agent_auth_sign_out)
@@ -591,9 +591,7 @@ fun ChatScreen(
                                     menuExpanded = false
                                     onAuthLogout()
                                 },
-                                enabled = !uiState.authActionBusy &&
-                                    !uiState.authPanelSubmitting &&
-                                    uiState.agentAuth?.session?.status != AuthSessionStatus.InProgress,
+                                enabled = uiState.agentAuth.canLogoutAction,
                                 modifier = Modifier.testTag("auth_sign_out_menu_item"),
                             )
                         }
@@ -673,17 +671,17 @@ fun ChatScreen(
                 )
             }
 
-            if (hasSelectedSession && uiState.showAuthPanel) {
-                val summary = uiState.authSummary
+            if (hasSelectedSession && uiState.agentAuth.showAuthPanel) {
+                val summary = uiState.agentAuth.authSummary
                 val selected = uiState.selectedSession
                 if (summary != null && selected != null) {
                     AgentAuthPanel(
                         agentName = selected.agentLabel.ifBlank { selected.agentId },
                         summary = summary,
-                        auth = uiState.agentAuth,
-                        submitting = uiState.authPanelSubmitting,
-                        actionBusy = uiState.authActionBusy,
-                        error = uiState.authError,
+                        auth = uiState.agentAuth.agentAuth,
+                        submitting = uiState.agentAuth.panelSubmitting,
+                        actionBusy = uiState.agentAuth.actionBusy,
+                        error = uiState.agentAuth.error,
                         onSignIn = onAuthSignIn,
                         onConfirm = onAuthConfirm,
                         onCancel = onAuthCancel,

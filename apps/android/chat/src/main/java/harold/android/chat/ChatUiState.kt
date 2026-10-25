@@ -1,11 +1,8 @@
 package harold.android.chat
 
+import harold.android.chat.auth.AgentAuthUiState
 import harold.android.chat.composer.ComposerConfigUi
-import harold.android.contracts.AgentAuth
-import harold.android.contracts.AgentAuthStatus
-import harold.android.contracts.AgentAuthSummary
 import harold.android.contracts.AgentId
-import harold.android.contracts.AuthSessionStatus
 import harold.android.contracts.AvailableCommand
 import harold.android.contracts.PermissionRequest
 import harold.android.contracts.SessionState
@@ -97,11 +94,8 @@ data class ChatUiState(
     val voiceCommandPrefix: String = "",
     /** Voice mode toggles the command list from a button instead of a typed slash. */
     val voiceCommandListVisible: Boolean = false,
-    val agentAuth: AgentAuth? = null,
-    val agentAuthSummary: AgentAuthSummary? = null,
-    val authPanelSubmitting: Boolean = false,
-    val authActionBusy: Boolean = false,
-    val authError: String? = null,
+    /** The auth panel slice; the AgentAuthController owns it and the view model mirrors it. */
+    val agentAuth: AgentAuthUiState = AgentAuthUiState(),
     val activeHaroldName: String = "",
     val activeHaroldColorId: String = "",
     val activeHaroldIconId: String = "",
@@ -117,36 +111,6 @@ data class ChatUiState(
 
     val activePermissionRequest: PermissionRequest?
         get() = activePermissionRequest(pendingPermissions)
-
-    val authSummary: AgentAuthSummary?
-        get() = agentAuthSummary
-            ?: agentAuth?.let { auth ->
-                AgentAuthSummary(
-                    status = auth.status,
-                    error = auth.error,
-                    activeSessionId = auth.session
-                        ?.takeIf { it.status == AuthSessionStatus.InProgress }
-                        ?.sessionId,
-                    canLogout = false,
-                )
-            }
-
-    val showAuthPanel: Boolean
-        get() {
-            val sessionInFlight = agentAuth?.session?.status == AuthSessionStatus.InProgress
-            if (sessionInFlight) {
-                return true
-            }
-            return when (authSummary?.status) {
-                AgentAuthStatus.NeedsAuth,
-                AgentAuthStatus.Error,
-                -> true
-                AgentAuthStatus.Unknown,
-                AgentAuthStatus.Authenticated,
-                null,
-                -> false
-            }
-        }
 
     val effectiveSessionState: SessionState?
         get() = resolveEffectiveSessionState(
@@ -203,3 +167,42 @@ data class ChatUiState(
     val voiceMessage: String
         get() = voiceCommandPrefix + voiceDictation.transcript
 }
+
+/**
+ * The values an incoming session supplies instead of the defaults when the
+ * session-scoped surface resets. The auth panel slice is not here: the
+ * [harold.android.chat.auth.AgentAuthController] owns it, resets itself, and
+ * the mirror collector writes the result into [ChatUiState.agentAuth].
+ */
+internal data class SessionResetKeep(
+    val selectedSession: SessionRow? = null,
+    val transcript: AcpTranscriptState = emptyAcpTranscript,
+    val pendingPermissions: List<PermissionRequest> = emptyList(),
+)
+
+/**
+ * The one session-reset policy. Selecting, creating, or dropping a session
+ * clears every session-scoped surface back to its default; the keep slot
+ * carries what the next session brings with it. A new session-scoped
+ * [ChatUiState] field gets exactly one edit here.
+ */
+internal fun ChatUiState.resetSessionScopedState(
+    keep: SessionResetKeep = SessionResetKeep(),
+): ChatUiState = copy(
+    selectedSession = keep.selectedSession,
+    transcript = keep.transcript,
+    composerText = "",
+    composerSubmitting = false,
+    composerError = null,
+    composerConfig = ComposerConfigUi(),
+    availableCommands = emptyList(),
+    voiceCommandPrefix = "",
+    voiceCommandListVisible = false,
+    pendingPermissions = keep.pendingPermissions,
+    permissionUiState = PermissionUiState(),
+    extensionUiState = ExtensionUiState(),
+    streamReconnecting = false,
+    cancelSubmitting = false,
+    cancelError = null,
+    pickerVisible = false,
+)

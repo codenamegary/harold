@@ -8,21 +8,18 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import harold.android.chat.auth.AgentAuthController
 import harold.android.chat.composer.ComposerConfigUi
 import harold.android.chat.composer.SessionConfigWriter
 import harold.android.chat.composer.completeSlashCommand
 import harold.android.chat.composer.supportsFileAttachments
 import harold.android.chat.composer.supportsImageAttachments
-import harold.android.contracts.AgentAuth
 import harold.android.contracts.AgentAuthStatus
-import harold.android.contracts.AgentAuthSummary
 import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AgentId
 import harold.android.contracts.AttachmentDescriptor
 import harold.android.contracts.AttachmentKind
 import harold.android.contracts.AttachmentUploadRequest
-import harold.android.contracts.AuthSessionAction
-import harold.android.contracts.AuthSessionStatus
 import harold.android.contracts.ConfigOptionValue
 import harold.android.contracts.ConfigValue
 import harold.android.contracts.CreateSessionBody
@@ -30,7 +27,6 @@ import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.SessionState
 import harold.android.contracts.catalogSessionKey
 import harold.android.contracts.parseConfigOptions
-import harold.android.contracts.toSummary
 import harold.android.credentials.SavedHaroldRepository
 import harold.android.credentials.forgetSavedHarold
 import harold.android.credentials.settleAfterForget
@@ -103,6 +99,19 @@ class ChatViewModel @Inject constructor(
     private val configWriter = SessionConfigWriter(configApi, viewModelScope)
 
     /**
+     * The agent-auth conversation lives in its own module. Its panel slice is
+     * mirrored into [ChatUiState.agentAuth] by the collector in [init], so the
+     * screen observes one atomic state stream.
+     */
+    private val agentAuth = AgentAuthController(
+        userRepository = userRepository,
+        scope = viewModelScope,
+        origin = ::selectedOrPairedOrigin,
+        selectedAgent = { _uiState.value.selectedSession?.agentId },
+        onAuthenticated = ::createPendingSessionAfterLogin,
+    )
+
+    /**
      * Session-scoped actions must follow the selected session's Harold. The
      * paired state is only the active fallback for legacy single-Harold flows.
      */
@@ -122,7 +131,6 @@ class ChatViewModel @Inject constructor(
 
     private var workspaceByPath: Map<String, WorkspaceRow> = emptyMap()
     private var agentLabels: Map<AgentId, String> = emptyMap()
-    private var agentAuthSummaries: Map<AgentId, AgentAuthSummary> = emptyMap()
     private var agentCapabilities: Map<AgentId, AgentCapabilityInventory?> = emptyMap()
     private val retainedByOrigin = mutableMapOf<String, List<SessionRow>>()
     private val transcriptMemory = mutableMapOf<String, AcpTranscriptState>()
@@ -131,7 +139,6 @@ class ChatViewModel @Inject constructor(
     private var attachmentLocalIdCounter: Int = 0
     private var catalog: List<SessionRow> = emptyList()
     private val titlePulledSessionIds = mutableSetOf<String>()
-    private var authHydrateGeneration: Int = 0
     private var lastLiveWatchKey: String? = null
     private var lastAuthRequired: Boolean = false
     private var pendingCreateInFlight = false
@@ -189,6 +196,12 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             configWriter.state.collect { config ->
                 _uiState.update { current -> current.copy(composerConfig = config) }
+            }
+        }
+
+        viewModelScope.launch {
+            agentAuth.state.collect { auth ->
+                _uiState.update { current -> current.copy(agentAuth = auth) }
             }
         }
 
@@ -458,31 +471,16 @@ class ChatViewModel @Inject constructor(
         clearComposer()
         clearPersistedSession()
         _uiState.update { current ->
-            current.copy(
-                selectedSession = pendingSessionRow(workspace = workspace, agentId = agentId),
-                pickerVisible = false,
-                transcript = emptyAcpTranscript,
-                composerText = "",
-                composerError = null,
-                composerSubmitting = false,
-                availableCommands = emptyList(),
-                composerConfig = ComposerConfigUi(),
-                voiceCommandPrefix = "",
-                voiceCommandListVisible = false,
-                pendingPermissions = emptyList(),
-                permissionUiState = PermissionUiState(),
-                extensionUiState = ExtensionUiState(),
-                streamReconnecting = false,
-                agentAuth = null,
-                agentAuthSummary = agentAuthSummaries[agentId],
-                authPanelSubmitting = false,
-                authActionBusy = false,
-                authError = null,
+            current.resetSessionScopedState(
+                SessionResetKeep(
+                    selectedSession = pendingSessionRow(workspace = workspace, agentId = agentId),
+                ),
             )
         }
+        agentAuth.resetFor(agentId)
         sessionOwner.watch(agentId, null)
         syncActiveSessionsFromUiState()
-        hydrateAgentAuth(agentId)
+        agentAuth.hydrate(agentId)
     }
 
     private fun createPendingSessionAfterLogin(agentId: AgentId, status: AgentAuthStatus) {
@@ -838,124 +836,22 @@ class ChatViewModel @Inject constructor(
 
     fun onAuthSignIn() {
         val session = _uiState.value.selectedSession ?: return
-        startAuthSession(session.agentId)
+        agentAuth.signIn(session.agentId)
     }
 
     fun onAuthConfirm(stepId: String) {
         val selected = _uiState.value.selectedSession ?: return
-        val authSession = _uiState.value.agentAuth?.session ?: return
-        if (_uiState.value.authActionBusy || _uiState.value.authPanelSubmitting) {
-            return
-        }
-        val origin = selectedOrPairedOrigin() ?: return
-
-        _uiState.update { current ->
-            current.copy(authActionBusy = true, authError = null)
-        }
-        viewModelScope.launch {
-            userRepository.applyAgentAuthSessionAction(
-                serverOrigin = origin,
-                agentId = selected.agentId,
-                sessionId = authSession.sessionId,
-                action = AuthSessionAction.Confirm(stepId = stepId),
-            ).fold(
-                onSuccess = { updatedSession ->
-                    applyAuthSessionResult(selected.agentId, updatedSession)
-                },
-                onFailure = { error ->
-                    _uiState.update { current ->
-                        current.copy(
-                            authActionBusy = false,
-                            authError = apiErrorMessage(error),
-                        )
-                    }
-                },
-            )
-        }
+        agentAuth.confirm(selected.agentId, stepId)
     }
 
     fun onAuthCancel() {
         val selected = _uiState.value.selectedSession ?: return
-        val authSession = _uiState.value.agentAuth?.session ?: return
-        if (_uiState.value.authActionBusy || _uiState.value.authPanelSubmitting) {
-            return
-        }
-        val origin = selectedOrPairedOrigin() ?: return
-
-        _uiState.update { current ->
-            current.copy(authActionBusy = true, authError = null)
-        }
-        viewModelScope.launch {
-            userRepository.applyAgentAuthSessionAction(
-                serverOrigin = origin,
-                agentId = selected.agentId,
-                sessionId = authSession.sessionId,
-                action = AuthSessionAction.Cancel,
-            ).fold(
-                onSuccess = { updatedSession ->
-                    applyAuthSessionResult(selected.agentId, updatedSession)
-                    hydrateAgentAuth(selected.agentId)
-                },
-                onFailure = { error ->
-                    _uiState.update { current ->
-                        current.copy(
-                            authActionBusy = false,
-                            authError = apiErrorMessage(error),
-                        )
-                    }
-                },
-            )
-        }
+        agentAuth.cancel(selected.agentId)
     }
 
     fun onAuthLogout() {
         val selected = _uiState.value.selectedSession ?: return
-        val summary = _uiState.value.authSummary
-        if (summary?.canLogout != true) {
-            return
-        }
-        if (_uiState.value.authActionBusy ||
-            _uiState.value.authPanelSubmitting ||
-            _uiState.value.agentAuth?.session?.status == AuthSessionStatus.InProgress
-        ) {
-            return
-        }
-        val origin = selectedOrPairedOrigin() ?: return
-
-        _uiState.update { current ->
-            current.copy(authActionBusy = true, authError = null)
-        }
-        viewModelScope.launch {
-            userRepository.logoutAgentAuth(
-                serverOrigin = origin,
-                agentId = selected.agentId,
-            ).fold(
-                onSuccess = { logoutSummary ->
-                    agentAuthSummaries = agentAuthSummaries + (selected.agentId to logoutSummary)
-                    _uiState.update { current ->
-                        current.copy(
-                            agentAuth = AgentAuth(
-                                agentId = selected.agentId,
-                                status = logoutSummary.status,
-                                error = logoutSummary.error,
-                                session = null,
-                            ),
-                            agentAuthSummary = logoutSummary,
-                            authActionBusy = false,
-                            authError = null,
-                        )
-                    }
-                },
-                onFailure = { error ->
-                    _uiState.update { current ->
-                        current.copy(
-                            authActionBusy = false,
-                            authError = apiErrorMessage(error),
-                        )
-                    }
-                },
-            )
-        }
+        agentAuth.logout(selected.agentId)
     }
 
     fun disconnectFromServer() {
@@ -1023,120 +919,6 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun startAuthSession(agentId: AgentId) {
-        if (_uiState.value.authPanelSubmitting || _uiState.value.authActionBusy) {
-            return
-        }
-        val origin = selectedOrPairedOrigin() ?: return
-
-        _uiState.update { current ->
-            current.copy(authPanelSubmitting = true, authError = null)
-        }
-        viewModelScope.launch {
-            userRepository.startAgentAuthSession(
-                serverOrigin = origin,
-                agentId = agentId,
-            ).fold(
-                onSuccess = { session ->
-                    applyAuthSessionResult(agentId, session)
-                },
-                onFailure = { error ->
-                    _uiState.update { current ->
-                        current.copy(
-                            authPanelSubmitting = false,
-                            authError = apiErrorMessage(error),
-                        )
-                    }
-                },
-            )
-        }
-    }
-
-    private fun applyAuthSessionResult(
-        agentId: AgentId,
-        session: harold.android.contracts.AgentAuthSession,
-    ) {
-        val canLogout = agentAuthSummaries[agentId]?.canLogout ?: false
-        val auth = AgentAuth(
-            agentId = agentId,
-            status = when (session.status) {
-                AuthSessionStatus.Succeeded -> AgentAuthStatus.Authenticated
-                AuthSessionStatus.Failed -> AgentAuthStatus.Error
-                AuthSessionStatus.Cancelled,
-                AuthSessionStatus.InProgress,
-                -> AgentAuthStatus.NeedsAuth
-            },
-            error = session.error,
-            session = session,
-        )
-        val summary = auth.toSummary(canLogout = canLogout)
-        agentAuthSummaries = agentAuthSummaries + (agentId to summary)
-        _uiState.update { current ->
-            if (current.selectedSession?.agentId != agentId) {
-                return@update current
-            }
-            current.copy(
-                agentAuth = auth,
-                agentAuthSummary = summary,
-                authPanelSubmitting = false,
-                authActionBusy = false,
-                authError = null,
-            )
-        }
-        createPendingSessionAfterLogin(agentId, auth.status)
-    }
-
-    private suspend fun hydrateAgentAuth(
-        agentId: AgentId,
-        attachHostLoginIfNeeded: Boolean = false,
-    ) {
-        val origin = selectedOrPairedOrigin() ?: return
-        val generation = ++authHydrateGeneration
-        userRepository.getAgentAuth(
-            serverOrigin = origin,
-            agentId = agentId,
-        ).fold(
-            onSuccess = { auth ->
-                if (generation != authHydrateGeneration) {
-                    return
-                }
-                if (_uiState.value.selectedSession?.agentId != agentId) {
-                    return
-                }
-                val canLogout = agentAuthSummaries[agentId]?.canLogout ?: false
-                val summary = auth.toSummary(canLogout = canLogout)
-                agentAuthSummaries = agentAuthSummaries + (agentId to summary)
-                val sessionInFlight = auth.session?.status == AuthSessionStatus.InProgress
-                _uiState.update { current ->
-                    current.copy(
-                        agentAuth = auth,
-                        agentAuthSummary = summary,
-                        authError = null,
-                    )
-                }
-                if (
-                    attachHostLoginIfNeeded &&
-                    !sessionInFlight &&
-                    auth.status == AgentAuthStatus.NeedsAuth
-                ) {
-                    startAuthSession(agentId)
-                }
-                createPendingSessionAfterLogin(agentId, auth.status)
-            },
-            onFailure = { error ->
-                if (generation != authHydrateGeneration) {
-                    return
-                }
-                if (_uiState.value.selectedSession?.agentId != agentId) {
-                    return
-                }
-                _uiState.update { current ->
-                    current.copy(authError = apiErrorMessage(error))
-                }
-            },
-        )
-    }
-
     private fun holdPermissionForPrevious(next: SessionRow) {
         val current = _uiState.value.selectedSession ?: return
         if (current.id == next.id) {
@@ -1182,35 +964,21 @@ class ChatViewModel @Inject constructor(
                 if (item.id == row.id) item.copy(needsAttention = false) else item
             }
         }
-        val summaryFromCatalog = agentAuthSummaries[row.agentId]
         val remembered = if (row.haroldReachable) {
             emptyAcpTranscript
         } else {
             transcriptMemory[row.id] ?: emptyAcpTranscript
         }
         _uiState.update { current ->
-            current.copy(
-                selectedSession = row.copy(needsAttention = false),
-                sessions = catalog,
-                pickerVisible = false,
-                transcript = remembered,
-                composerText = "",
-                composerError = null,
-                availableCommands = emptyList(),
-                composerConfig = ComposerConfigUi(),
-                voiceCommandPrefix = "",
-                voiceCommandListVisible = false,
-                pendingPermissions = listOfNotNull(restored?.request),
-                permissionUiState = PermissionUiState(),
-                extensionUiState = ExtensionUiState(),
-                streamReconnecting = false,
-                agentAuth = null,
-                agentAuthSummary = summaryFromCatalog,
-                authPanelSubmitting = false,
-                authActionBusy = false,
-                authError = null,
-            )
+            current.resetSessionScopedState(
+                SessionResetKeep(
+                    selectedSession = row.copy(needsAttention = false),
+                    transcript = remembered,
+                    pendingPermissions = listOfNotNull(restored?.request),
+                ),
+            ).copy(sessions = catalog)
         }
+        agentAuth.resetFor(row.agentId)
         if (row.serverOrigin.isNotEmpty()) {
             watchedOrigin = row.serverOrigin
             sessionOwner.connect(row.serverOrigin)
@@ -1222,7 +990,7 @@ class ChatViewModel @Inject constructor(
         }
         publishRecentSessions()
         syncActiveSessionsFromUiState()
-        hydrateAgentAuth(row.agentId)
+        agentAuth.hydrate(row.agentId)
     }
 
     private fun applyLiveSnapshot(snapshot: SessionSnapshot) {
@@ -1243,18 +1011,7 @@ class ChatViewModel @Inject constructor(
             lastAuthRequired = false
         }
 
-        val streamAuth = snapshot.agentAuth
-        val streamAuthSummary = if (streamAuth != null) {
-            val agentId = snapshot.agentId
-            val canLogout = agentId?.let { id -> agentAuthSummaries[id]?.canLogout } ?: false
-            val summary = streamAuth.toSummary(canLogout = canLogout)
-            if (agentId != null) {
-                agentAuthSummaries = agentAuthSummaries + (agentId to summary)
-            }
-            summary
-        } else {
-            null
-        }
+        agentAuth.absorbStream(snapshot.agentId, snapshot.agentAuth)
 
         configWriter.onSnapshot(
             serverOrigin = selectedSessionOrigin()
@@ -1292,8 +1049,6 @@ class ChatViewModel @Inject constructor(
                 pendingPermissions = permissions,
                 permissionUiState = permissionUi,
                 extensionUiState = extensionUi,
-                agentAuth = streamAuth ?: current.agentAuth,
-                agentAuthSummary = streamAuthSummary ?: current.agentAuthSummary,
             )
         }
         syncSelectedState(snapshot.transcript.sessionState)
@@ -1306,7 +1061,7 @@ class ChatViewModel @Inject constructor(
             val agentId = snapshot.agentId
             if (agentId != null) {
                 viewModelScope.launch {
-                    hydrateAgentAuth(agentId, attachHostLoginIfNeeded = true)
+                    agentAuth.hydrate(agentId, autoStartLogin = true)
                 }
             }
         }
@@ -1451,8 +1206,10 @@ class ChatViewModel @Inject constructor(
         workspaceByPath = workspaces.associateBy { workspace -> workspace.path }
         agentLabels = agentsResult.getOrNull()?.items.orEmpty()
             .associate { agent -> agent.id to agent.displayName }
-        agentAuthSummaries = agentsResult.getOrNull()?.items.orEmpty()
-            .associate { agent -> agent.id to agent.authSummary }
+        agentAuth.replaceSummaries(
+            agentsResult.getOrNull()?.items.orEmpty()
+                .associate { agent -> agent.id to agent.authSummary },
+        )
         agentCapabilities = agentsResult.getOrNull()?.items.orEmpty()
             .associate { agent -> agent.id to agent.capabilities }
         syncAttachmentGating()
@@ -1512,7 +1269,7 @@ class ChatViewModel @Inject constructor(
             val agents = userRepository.listAgents(harold.serverOrigin).getOrNull()?.items.orEmpty()
             if (agents.isNotEmpty()) {
                 agentLabels = agentLabels + agents.associate { agent -> agent.id to agent.displayName }
-                agentAuthSummaries = agentAuthSummaries + agents.associate { agent -> agent.id to agent.authSummary }
+                agentAuth.mergeSummaries(agents.associate { agent -> agent.id to agent.authSummary })
                 agentCapabilities = agentCapabilities + agents.associate { agent -> agent.id to agent.capabilities }
             }
             val sessionsResult = userRepository.listSessions(harold.serverOrigin)
@@ -1618,27 +1375,11 @@ class ChatViewModel @Inject constructor(
             sessionOwner.watch(null, null)
             clearComposer()
             viewModelScope.launch { clearPersistedSession() }
+            agentAuth.resetFor(null)
         }
         _uiState.update { current ->
-            current.copy(
-                sessions = catalog,
-                selectedSession = if (selectedWasDeleted) null else current.selectedSession,
-                transcript = if (selectedWasDeleted) emptyAcpTranscript else current.transcript,
-                composerText = if (selectedWasDeleted) "" else current.composerText,
-                availableCommands = if (selectedWasDeleted) emptyList() else current.availableCommands,
-                composerConfig = if (selectedWasDeleted) ComposerConfigUi() else current.composerConfig,
-                voiceCommandPrefix = if (selectedWasDeleted) "" else current.voiceCommandPrefix,
-                voiceCommandListVisible = if (selectedWasDeleted) false else current.voiceCommandListVisible,
-                pendingPermissions = if (selectedWasDeleted) emptyList() else current.pendingPermissions,
-                permissionUiState = if (selectedWasDeleted) PermissionUiState() else current.permissionUiState,
-                extensionUiState = if (selectedWasDeleted) ExtensionUiState() else current.extensionUiState,
-                agentAuth = if (selectedWasDeleted) null else current.agentAuth,
-                agentAuthSummary = if (selectedWasDeleted) null else current.agentAuthSummary,
-                authPanelSubmitting = if (selectedWasDeleted) false else current.authPanelSubmitting,
-                authActionBusy = if (selectedWasDeleted) false else current.authActionBusy,
-                authError = if (selectedWasDeleted) null else current.authError,
-                pickerVisible = false,
-            )
+            val reset = if (selectedWasDeleted) current.resetSessionScopedState() else current
+            reset.copy(sessions = catalog, pickerVisible = false)
         }
         publishRecentSessions()
         syncActiveSessionsFromUiState()
