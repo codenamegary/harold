@@ -1,11 +1,18 @@
 import { Command } from "commander"
 import pc from "picocolors"
+import { Device } from "contracts/http/device"
 import { localApiUrl } from "core/status/summary.models"
 import { parseConfig } from "server/config"
 import { AgentDatabase, openDatabase } from "server/database"
 import { assembleDeviceSlice, DeviceSlice } from "server/device"
 import { makeRuntimeSettingsFileStore, seedDefaultsFromConfig } from "server/runtime-settings"
-import { renderDeviceList, renderDeviceRevokeError, renderDeviceRevoked } from "./device.render"
+import {
+  renderDeviceList,
+  renderDeviceNameNoMatch,
+  renderDeviceRevokeError,
+  renderDeviceRevoked,
+} from "./device.render"
+import { makeDeviceNameMatcher } from "./device.name.pattern"
 
 type DeviceCommandContext = Readonly<{
   slice: DeviceSlice
@@ -50,6 +57,58 @@ const reportError = (message: string): void => {
   process.exitCode = 1
 }
 
+const listAllDevices = (slice: DeviceSlice): Device[] | undefined => {
+  const devices: Device[] = []
+  let cursor: string | undefined
+
+  for (;;) {
+    const result = slice.listDevices(cursor === undefined ? { limit: 200 } : { limit: 200, cursor })
+    if (!result.ok) {
+      return undefined
+    }
+
+    devices.push(...result.value.items)
+    if (result.value.nextCursor === undefined) {
+      return devices
+    }
+    cursor = result.value.nextCursor
+  }
+}
+
+const revokeDevicesByName = (params: { context: DeviceCommandContext; pattern: string }): void => {
+  const { context, pattern } = params
+  const devices = listAllDevices(context.slice)
+  if (devices === undefined) {
+    reportError("Could not list devices.")
+    return
+  }
+
+  const matchesName = makeDeviceNameMatcher(pattern)
+  const matches = devices.filter((device) => matchesName(device.name))
+  if (matches.length === 0) {
+    reportError(renderDeviceNameNoMatch(pattern))
+    return
+  }
+
+  let failed = false
+  for (const device of matches) {
+    const result = context.slice.revokeDevice({ deviceId: device.id })
+    if (!result.ok) {
+      reportError(renderDeviceRevokeError(result.error))
+      failed = true
+      continue
+    }
+
+    console.log(
+      renderDeviceRevoked({ deviceId: device.id, newlyRevoked: result.value.newlyRevoked }),
+    )
+  }
+
+  if (failed) {
+    process.exitCode = 1
+  }
+}
+
 export const makeDeviceCommand = (): Command => {
   const command = new Command("device")
   command.description("manage paired devices")
@@ -73,10 +132,31 @@ export const makeDeviceCommand = (): Command => {
 
   command
     .command("revoke")
-    .description("revoke a paired device")
-    .argument("<id>", "device id")
-    .action((deviceId: string) =>
-      withDeviceCommandContext((context) => {
+    .description("revoke paired devices by id or name pattern")
+    .argument("[id]", "device id")
+    .option(
+      "--name <pattern>",
+      'revoke every device whose name matches a case-insensitive glob, e.g. "*gphone*"',
+    )
+    .action((deviceId: string | undefined, options: { name?: string }) => {
+      if (options.name !== undefined) {
+        if (deviceId !== undefined) {
+          reportError("Use either a device id or --name, not both.")
+          return
+        }
+
+        const pattern = options.name
+        return withDeviceCommandContext((context) => {
+          revokeDevicesByName({ context, pattern })
+        })
+      }
+
+      if (deviceId === undefined) {
+        reportError("Provide a device id or --name <pattern>.")
+        return
+      }
+
+      return withDeviceCommandContext((context) => {
         const result = context.slice.revokeDevice({ deviceId })
         if (!result.ok) {
           reportError(renderDeviceRevokeError(result.error))
@@ -84,8 +164,8 @@ export const makeDeviceCommand = (): Command => {
         }
 
         console.log(renderDeviceRevoked({ deviceId, newlyRevoked: result.value.newlyRevoked }))
-      }),
-    )
+      })
+    })
 
   return command
 }

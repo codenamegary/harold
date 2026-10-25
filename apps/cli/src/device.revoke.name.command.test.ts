@@ -1,0 +1,158 @@
+import { describe, expect, test } from "bun:test"
+import { mkdtemp, rm } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
+import { parseConfig } from "server/config"
+import { openDatabase } from "server/database"
+import { assembleDeviceSlice } from "server/device"
+import { makeDeviceCommand } from "./device.command"
+
+const seedDevices = (dataDir: string, names: readonly string[]): string[] => {
+  const config = parseConfig({ HAROLD_DATA_DIR: dataDir })
+  const database = openDatabase({ dataDir })
+  const slice = assembleDeviceSlice({
+    database,
+    loopbackEndpoint: `http://${config.host}:${config.port}`,
+    getAdvertisedEndpointSettings: () => ({
+      advertisedUrl: null,
+      advertisedUrlEnabled: false,
+    }),
+  })
+
+  const deviceIds = names.map((name) => {
+    const created = slice.createProbeDevice()
+    if (!created.ok) {
+      throw new Error("failed to seed probe device")
+    }
+
+    database.sqlite.run("UPDATE devices SET name = ? WHERE id = ?", [name, created.value.device.id])
+    return created.value.device.id
+  })
+
+  database.close()
+  return deviceIds
+}
+
+const runCommand = async (
+  args: readonly string[],
+): Promise<{ output: string; errOutput: string; exitCode: number | undefined }> => {
+  const lines: string[] = []
+  const errLines: string[] = []
+  const originalLog = console.log
+  const originalErr = console.error
+  const previousExitCode = process.exitCode
+  console.log = (...values: unknown[]) => {
+    lines.push(values.join(" "))
+  }
+  console.error = (...values: unknown[]) => {
+    errLines.push(values.join(" "))
+  }
+  process.exitCode = 0
+  try {
+    await makeDeviceCommand().parseAsync([...args], { from: "user" })
+  } finally {
+    console.log = originalLog
+    console.error = originalErr
+  }
+  const exitCode = process.exitCode
+  process.exitCode = previousExitCode
+  return { output: lines.join("\n"), errOutput: errLines.join("\n"), exitCode }
+}
+
+const withDataDir = async (run: (dataDir: string) => Promise<void>): Promise<void> => {
+  const scratch = await mkdtemp(path.join(os.tmpdir(), "harold-cli-device-name-"))
+  const dataDir = path.join(scratch, "data")
+  const previousDataDir = process.env.HAROLD_DATA_DIR
+  process.env.HAROLD_DATA_DIR = dataDir
+  try {
+    await run(dataDir)
+  } finally {
+    if (previousDataDir === undefined) {
+      delete process.env.HAROLD_DATA_DIR
+    } else {
+      process.env.HAROLD_DATA_DIR = previousDataDir
+    }
+    await rm(scratch, { recursive: true, force: true })
+  }
+}
+
+describe("harold device revoke --name", () => {
+  test("revokes every device matching the name pattern", async () => {
+    await withDataDir(async (dataDir) => {
+      const [firstId, secondId] = seedDevices(dataDir, ["GPhone One", "GPhone Two"])
+
+      const { output, errOutput, exitCode } = await runCommand(["revoke", "--name", "*gphone*"])
+
+      expect(exitCode).toBe(0)
+      expect(errOutput).toBe("")
+      expect(output).toContain(`Revoked device ${firstId}.`)
+      expect(output).toContain(`Revoked device ${secondId}.`)
+    })
+  })
+
+  test("leaves devices whose names do not match", async () => {
+    await withDataDir(async (dataDir) => {
+      const [gphoneId, pixelId] = seedDevices(dataDir, ["GPhone", "Pixel"])
+
+      const { output, exitCode } = await runCommand(["revoke", "--name", "*gphone*"])
+
+      expect(exitCode).toBe(0)
+      expect(output).toContain(`Revoked device ${gphoneId}.`)
+      expect(output).not.toContain(pixelId)
+
+      const listed = await runCommand(["list"])
+      expect(listed.output).toContain("Pixel")
+      expect(listed.output).toContain("offline")
+    })
+  })
+
+  test("reports when no device name matches", async () => {
+    await withDataDir(async (dataDir) => {
+      seedDevices(dataDir, ["Pixel"])
+
+      const { output, errOutput, exitCode } = await runCommand(["revoke", "--name", "*gphone*"])
+
+      expect(exitCode).toBe(1)
+      expect(output).toBe("")
+      expect(errOutput).toBe('No devices match name pattern "*gphone*".')
+    })
+  })
+
+  test("reports devices that were already revoked", async () => {
+    await withDataDir(async (dataDir) => {
+      const [deviceId] = seedDevices(dataDir, ["GPhone"])
+
+      await runCommand(["revoke", "--name", "*gphone*"])
+      const { output, exitCode } = await runCommand(["revoke", "--name", "*gphone*"])
+
+      expect(exitCode).toBe(0)
+      expect(output).toBe(`Device ${deviceId} was already revoked.`)
+    })
+  })
+
+  test("requires an id or --name", async () => {
+    await withDataDir(async () => {
+      const { output, errOutput, exitCode } = await runCommand(["revoke"])
+
+      expect(exitCode).toBe(1)
+      expect(output).toBe("")
+      expect(errOutput).toBe("Provide a device id or --name <pattern>.")
+    })
+  })
+
+  test("rejects an id combined with --name", async () => {
+    await withDataDir(async (dataDir) => {
+      seedDevices(dataDir, ["GPhone"])
+
+      const { errOutput, exitCode } = await runCommand([
+        "revoke",
+        "device_unknown",
+        "--name",
+        "*gphone*",
+      ])
+
+      expect(exitCode).toBe(1)
+      expect(errOutput).toBe("Use either a device id or --name, not both.")
+    })
+  })
+})

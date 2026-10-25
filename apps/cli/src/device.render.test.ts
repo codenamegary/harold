@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import { Device } from "contracts/http/device"
-import { renderDeviceList, renderDeviceRevokeError, renderDeviceRevoked } from "./device.render"
+import {
+  renderDeviceList,
+  renderDeviceNameNoMatch,
+  renderDeviceRevokeError,
+  renderDeviceRevoked,
+} from "./device.render"
 
 const colors = {
   green: (text: string) => text,
@@ -111,5 +116,11 @@ describe("renderDeviceRevoked", () => {
 describe("renderDeviceRevokeError", () => {
   test("maps a missing device to a friendly message", () => {
     expect(renderDeviceRevokeError({ kind: "device_not_found" })).toBe("No device matches that id.")
+  })
+})
+
+describe("renderDeviceNameNoMatch", () => {
+  test("includes the name pattern that matched nothing", () => {
+    expect(renderDeviceNameNoMatch("*gphone*")).toBe('No devices match name pattern "*gphone*".')
   })
 })

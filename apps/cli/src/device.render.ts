@@ -75,3 +75,6 @@ export const renderDeviceRevokeError = (error: DeviceError): string => {
   }
   return "Could not revoke the device."
 }
+
+export const renderDeviceNameNoMatch = (pattern: string): string =>
+  `No devices match name pattern "${pattern}".`
