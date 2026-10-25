@@ -19,8 +19,9 @@ import kotlinx.coroutines.launch
 
 /**
  * The agent-auth slice the auth panel renders: the agent's auth state, its
- * summary, and the transient panel flags. The chat screen reads this slice
- * directly.
+ * summary, and the transient panel flags. The view model mirrors it into
+ * [harold.android.chat.ChatUiState.agentAuth], which is what the chat screen
+ * reads.
  */
 data class AgentAuthUiState(
     val agentAuth: AgentAuth? = null,
