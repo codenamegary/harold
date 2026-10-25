@@ -10,6 +10,7 @@ import { makeRuntimeSettingsFileStore, seedDefaultsFromConfig } from "server/run
 import { makeDeviceNameMatcher } from "./device.name.pattern"
 import {
   RemoveDeviceTarget,
+  renderAmbiguousDeviceId,
   renderDeviceList,
   renderDeviceNameNoMatch,
   renderDeviceRemoveError,
@@ -88,17 +89,57 @@ const listAllDevices = (slice: DeviceSlice): Device[] | undefined => {
   return devices
 }
 
+type DeviceIdResolution =
+  | Readonly<{ kind: "unique"; device: Device }>
+  | Readonly<{ kind: "ambiguous"; devices: Device[] }>
+  | Readonly<{ kind: "not_found" }>
+
+type DevicesToRemove =
+  | Readonly<{ ok: true; devices: Device[] }>
+  | Readonly<{ ok: false; message: string }>
+
+const resolveDeviceId = (devices: ReadonlyArray<Device>, reference: string): DeviceIdResolution => {
+  const exact = devices.find((device) => device.id === reference)
+  if (exact !== undefined) {
+    return { kind: "unique", device: exact }
+  }
+
+  const matches = devices.filter((device) => device.id.startsWith(reference))
+  if (matches.length === 0) {
+    return { kind: "not_found" }
+  }
+  if (matches.length === 1) {
+    return { kind: "unique", device: matches[0] }
+  }
+
+  return { kind: "ambiguous", devices: matches }
+}
+
 const findDevicesToRemove = (params: {
   devices: ReadonlyArray<Device>
   target: RemoveDeviceTarget
-}): Device[] => {
+}): DevicesToRemove => {
   const { devices, target } = params
   if (target.kind === "name") {
     const matchesName = makeDeviceNameMatcher(target.pattern)
-    return devices.filter((device) => matchesName(device.name))
+    const matches = devices.filter((device) => matchesName(device.name))
+    return matches.length === 0
+      ? { ok: false, message: renderDeviceNameNoMatch(target.pattern) }
+      : { ok: true, devices: matches }
   }
 
-  return devices.filter((device) => device.id === target.deviceId)
+  const resolved = resolveDeviceId(devices, target.deviceId)
+  if (resolved.kind === "not_found") {
+    return { ok: false, message: renderDeviceRemoveError({ kind: "device_not_found" }) }
+  }
+  if (resolved.kind === "ambiguous") {
+    return {
+      ok: false,
+      message: renderAmbiguousDeviceId({ reference: target.deviceId, devices: resolved.devices }),
+    }
+  }
+
+  return { ok: true, devices: [resolved.device] }
 }
 
 const removeDevices = async (params: {
@@ -114,15 +155,13 @@ const removeDevices = async (params: {
     return
   }
 
-  const matches = findDevicesToRemove({ devices, target })
-  if (matches.length === 0) {
-    reportError(
-      target.kind === "name"
-        ? renderDeviceNameNoMatch(target.pattern)
-        : renderDeviceRemoveError({ kind: "device_not_found" }),
-    )
+  const found = findDevicesToRemove({ devices, target })
+  if (!found.ok) {
+    reportError(found.message)
     return
   }
+
+  const matches = found.devices
 
   if (!params.skipConfirmation) {
     const confirmed = await params.confirm(

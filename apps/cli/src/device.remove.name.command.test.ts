@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { stripVTControlCharacters } from "node:util"
 import { parseConfig } from "server/config"
 import { openDatabase } from "server/database"
 import { assembleDeviceSlice } from "server/device"
@@ -62,7 +63,11 @@ const runCommand = async (
   }
   const exitCode = process.exitCode
   process.exitCode = previousExitCode
-  return { output: lines.join("\n"), errOutput: errLines.join("\n"), exitCode }
+  return {
+    output: stripVTControlCharacters(lines.join("\n")),
+    errOutput: stripVTControlCharacters(errLines.join("\n")),
+    exitCode,
+  }
 }
 
 const withDataDir = async (run: (dataDir: string) => Promise<void>): Promise<void> => {
@@ -180,6 +185,21 @@ describe("harold device remove --name", () => {
       const listed = await runCommand(["list"])
       expect(listed.output).toContain("GPhone")
       expect(listed.output).toContain("1 device")
+    })
+  })
+
+  test("reports an ambiguous id prefix", async () => {
+    await withDataDir(async (dataDir) => {
+      const deviceIds = seedDevices(dataDir, ["GPhone", "Pixel"])
+
+      const { output, errOutput, exitCode } = await runCommand(["remove", "device_", "--yes"])
+
+      expect(exitCode).toBe(1)
+      expect(output).toBe("")
+      expect(errOutput).toContain('More than one device matches id "device_":')
+      expect(errOutput).toContain(deviceIds[0])
+      expect(errOutput).toContain(deviceIds[1])
+      expect(errOutput).toContain("Use a longer id.")
     })
   })
 

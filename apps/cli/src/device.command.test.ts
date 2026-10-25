@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { stripVTControlCharacters } from "node:util"
 import { parseConfig } from "server/config"
 import { openDatabase } from "server/database"
 import { assembleDeviceSlice } from "server/device"
@@ -58,7 +59,11 @@ const runCommand = async (
   }
   const exitCode = process.exitCode
   process.exitCode = previousExitCode
-  return { output: lines.join("\n"), errOutput: errLines.join("\n"), exitCode }
+  return {
+    output: stripVTControlCharacters(lines.join("\n")),
+    errOutput: stripVTControlCharacters(errLines.join("\n")),
+    exitCode,
+  }
 }
 
 describe("harold device", () => {
@@ -108,8 +113,9 @@ describe("harold device", () => {
     expect(output).toContain("1 device")
   })
 
-  test("remove deletes the device by id with confirmation skipped", async () => {
-    const { output, exitCode } = await runCommand(["remove", deviceId, "--yes"])
+  test("remove deletes the device by the short id shown in the list", async () => {
+    const shortId = deviceId.slice(0, "device_".length + 8)
+    const { output, exitCode } = await runCommand(["remove", shortId, "--yes"])
 
     expect(exitCode).toBe(0)
     expect(output).toBe(`Removed device Connection test probe (${deviceId}).`)

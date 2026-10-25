@@ -79,6 +79,16 @@ export const renderDeviceRemoveError = (error: DeviceError): string => {
 export const renderDeviceNameNoMatch = (pattern: string): string =>
   `No devices match name pattern "${pattern}".`
 
+export const renderAmbiguousDeviceId = (params: {
+  reference: string
+  devices: ReadonlyArray<Device>
+}): string =>
+  [
+    `More than one device matches id "${params.reference}":`,
+    ...params.devices.map((device) => `  ${device.id}  ${device.name}`),
+    "Use a longer id.",
+  ].join("\n")
+
 export const renderRemoveDevicesConfirmation = (params: {
   count: number
   target: RemoveDeviceTarget

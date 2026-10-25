@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Device } from "contracts/http/device"
 import {
+  renderAmbiguousDeviceId,
   renderDeviceList,
   renderDeviceNameNoMatch,
   renderDeviceRemoveError,
@@ -111,6 +112,27 @@ describe("renderDeviceRemoveError", () => {
 describe("renderDeviceNameNoMatch", () => {
   test("includes the name pattern that matched nothing", () => {
     expect(renderDeviceNameNoMatch("*gphone*")).toBe('No devices match name pattern "*gphone*".')
+  })
+})
+
+describe("renderAmbiguousDeviceId", () => {
+  test("lists the candidate ids and asks for a longer id", () => {
+    expect(
+      renderAmbiguousDeviceId({
+        reference: "device_",
+        devices: [
+          aDevice({ id: "device_01JABCDEFGHIJKLMNOPQRSTUV", name: "Pixel" }),
+          aDevice({ id: "device_01JZYXWVUTSRQPONMLKJIHGF", name: "iPhone" }),
+        ],
+      }),
+    ).toBe(
+      [
+        'More than one device matches id "device_":',
+        "  device_01JABCDEFGHIJKLMNOPQRSTUV  Pixel",
+        "  device_01JZYXWVUTSRQPONMLKJIHGF  iPhone",
+        "Use a longer id.",
+      ].join("\n"),
+    )
   })
 })
 
