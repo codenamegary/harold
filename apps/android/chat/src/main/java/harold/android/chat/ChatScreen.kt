@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -737,6 +738,19 @@ fun ChatScreen(
                                             text = stringResource(R.string.chat_select_session),
                                             onClick = onSessionSelectorClick,
                                             variant = HaroldButtonVariant.Secondary,
+                                            leadingIcon = if (uiState.isRefreshing) {
+                                                {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier
+                                                            .requiredSize(16.dp)
+                                                            .testTag("select_session_refreshing"),
+                                                        strokeWidth = 2.dp,
+                                                        color = MaterialTheme.colorScheme.onSurface,
+                                                    )
+                                                }
+                                            } else {
+                                                null
+                                            },
                                             modifier = Modifier.fillMaxWidth(),
                                         )
                                         HaroldButton(

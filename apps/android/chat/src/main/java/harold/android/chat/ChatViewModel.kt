@@ -14,9 +14,13 @@ import harold.android.chat.composer.SessionConfigWriter
 import harold.android.chat.composer.completeSlashCommand
 import harold.android.chat.composer.supportsFileAttachments
 import harold.android.chat.composer.supportsImageAttachments
+import harold.android.chat.data.CachedSession
+import harold.android.chat.data.SessionRefresh
+import harold.android.chat.data.SessionRepository
 import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AgentId
+import harold.android.contracts.AgentSettings
 import harold.android.contracts.AttachmentDescriptor
 import harold.android.contracts.AttachmentKind
 import harold.android.contracts.AttachmentUploadRequest
@@ -25,6 +29,7 @@ import harold.android.contracts.ConfigValue
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.SessionState
+import harold.android.contracts.Workspace
 import harold.android.contracts.catalogSessionKey
 import harold.android.contracts.parseConfigOptions
 import harold.android.credentials.SavedHaroldRepository
@@ -63,12 +68,15 @@ import harold.android.voice.VoiceDictationUiState
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonObject
 
 @HiltViewModel
@@ -76,6 +84,7 @@ class ChatViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val sessionGateway: SessionGateway,
     private val sessionOwner: SessionOwner,
+    private val sessionRepository: SessionRepository,
     private val userRepository: UserRepository,
     private val savedHaroldRepository: SavedHaroldRepository,
     private val attachmentApi: AttachmentApi,
@@ -132,7 +141,13 @@ class ChatViewModel @Inject constructor(
     private var workspaceByPath: Map<String, WorkspaceRow> = emptyMap()
     private var agentLabels: Map<AgentId, String> = emptyMap()
     private var agentCapabilities: Map<AgentId, AgentCapabilityInventory?> = emptyMap()
-    private val retainedByOrigin = mutableMapOf<String, List<SessionRow>>()
+    private var cachedSessions: List<CachedSession> = emptyList()
+    private var savedHarolds: List<StoredCredential> = emptyList()
+    private var pairedOrigin: String? = null
+    private var metadataLoaded = false
+    private val unreachableOrigins = mutableSetOf<String>()
+    private val refreshMutex = Mutex()
+    private var restoreJob: Job? = null
     private val transcriptMemory = mutableMapOf<String, AcpTranscriptState>()
     private var watchedOrigin: String? = null
     private var keepRestoredPermission: Boolean = false
@@ -164,6 +179,15 @@ class ChatViewModel @Inject constructor(
         savedStateHandle.get<String>(KEY_SELECTED_SESSION_ID)?.let { sessionKey ->
             viewModelScope.launch {
                 selectSessionLocally(sessionKey)
+            }
+        }
+
+        viewModelScope.launch {
+            sessionRepository.observeSessions().collect { sessions ->
+                cachedSessions = sessions
+                if (metadataLoaded) {
+                    publishCachedSessions()
+                }
             }
         }
 
@@ -498,7 +522,7 @@ class ChatViewModel @Inject constructor(
 
         pendingCreateInFlight = true
         viewModelScope.launch {
-            userRepository.createSession(
+            sessionRepository.createSession(
                 serverOrigin = origin,
                 body = CreateSessionBody(agentId = agentId, cwd = pending.cwd),
             ).fold(
@@ -1181,140 +1205,158 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private suspend fun refreshCatalog() {
-        val saved = savedHaroldRepository.list()
-        if (saved.isEmpty()) {
-            refreshPairedCatalog()
-        } else {
-            refreshSavedCatalog(saved)
-        }
-    }
+    private suspend fun refreshCatalog() = refreshMutex.withLock {
+        loadHaroldMetadata()
+        publishCachedSessions()
 
-    private suspend fun refreshPairedCatalog() {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
-        _uiState.update { current ->
-            current.copy(sessionsLoading = true, sessionsError = null)
-        }
-
-        val workspacesResult = userRepository.listWorkspaces(paired.serverOrigin)
-        val sessionsResult = userRepository.listSessions(paired.serverOrigin)
-        val agentsResult = userRepository.listAgents(paired.serverOrigin)
-
-        val workspaces = workspacesResult.getOrNull()?.items.orEmpty().map { workspace ->
-            workspace.toWorkspaceRow()
-        }
-        workspaceByPath = workspaces.associateBy { workspace -> workspace.path }
-        agentLabels = agentsResult.getOrNull()?.items.orEmpty()
-            .associate { agent -> agent.id to agent.displayName }
-        agentAuth.replaceSummaries(
-            agentsResult.getOrNull()?.items.orEmpty()
-                .associate { agent -> agent.id to agent.authSummary },
-        )
-        agentCapabilities = agentsResult.getOrNull()?.items.orEmpty()
-            .associate { agent -> agent.id to agent.capabilities }
-        syncAttachmentGating()
-
-        sessionsResult.fold(
-            onSuccess = { collection ->
-                val pushedTitles = sessionOwner.sessionTitles.value
-                catalog = collection.items
-                    .map { session -> session.toSessionRow(workspaceByPath, agentLabels) }
-                    .map { row -> pushedTitles[row.id]?.let { title -> row.copy(name = title) } ?: row }
-                _uiState.update { current ->
-                    current.copy(
-                        sessions = catalog,
-                        sessionsLoading = false,
-                        sessionsError = null,
-                    )
-                }
-                publishRecentSessions()
-                syncActiveSessionsFromUiState()
-                restoreLastSession()
-            },
-            onFailure = { error ->
-                _uiState.update { current ->
-                    current.copy(
-                        sessionsLoading = false,
-                        sessionsError = apiErrorMessage(error),
-                    )
-                }
-            },
-        )
-    }
-
-    private suspend fun refreshSavedCatalog(saved: List<StoredCredential>) {
-        val pairedOrigin = (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin
-        val activeHarold = saved.firstOrNull { harold -> harold.serverOrigin == pairedOrigin }
-            ?: saved.firstOrNull()
+        val origins = targetOrigins()
         _uiState.update { current ->
             current.copy(
-                sessionsLoading = true,
+                isRefreshing = origins.isNotEmpty(),
                 sessionsError = null,
-                activeHaroldName = activeHarold?.name.orEmpty(),
-                activeHaroldColorId = activeHarold?.colorId.orEmpty(),
-                activeHaroldIconId = activeHarold?.iconId.orEmpty(),
+                activeHaroldName = activeHarold()?.name.orEmpty(),
+                activeHaroldColorId = activeHarold()?.colorId.orEmpty(),
+                activeHaroldIconId = activeHarold()?.iconId.orEmpty(),
             )
         }
-        var anySuccess = catalog.isNotEmpty()
-        saved.forEach { harold ->
-            val workspaces = userRepository.listWorkspaces(harold.serverOrigin)
+        if (origins.isEmpty()) {
+            _uiState.update { current -> current.copy(isRefreshing = false, sessionsLoaded = true) }
+            return@withLock
+        }
+
+        var anySuccess = false
+        var lastError: Throwable? = null
+        origins.forEach { serverOrigin ->
+            val listedWorkspaces = userRepository.listWorkspaces(serverOrigin)
                 .getOrNull()
                 ?.items
-                .orEmpty()
-                .map { workspace -> workspace.toWorkspaceRow() }
-            val workspaceByPathForHarold = workspaces.associateBy { workspace -> workspace.path }
-            if (workspaceByPathForHarold.isNotEmpty()) {
-                workspaceByPath = workspaceByPath + workspaceByPathForHarold
-            }
-            val agents = userRepository.listAgents(harold.serverOrigin).getOrNull()?.items.orEmpty()
-            if (agents.isNotEmpty()) {
-                agentLabels = agentLabels + agents.associate { agent -> agent.id to agent.displayName }
-                agentAuth.mergeSummaries(agents.associate { agent -> agent.id to agent.authSummary })
-                agentCapabilities = agentCapabilities + agents.associate { agent -> agent.id to agent.capabilities }
-            }
-            val sessionsResult = userRepository.listSessions(harold.serverOrigin)
-            if (sessionsResult.isSuccess) {
+            applyWorkspaces(listedWorkspaces)
+            val listedAgents = userRepository.listAgents(serverOrigin).getOrNull()?.items
+            applyAgents(listedAgents)
+            val refreshResult = sessionRepository.refresh(
+                serverOrigin = serverOrigin,
+                snapshot = SessionRefresh(
+                    agents = listedAgents,
+                    workspaces = listedWorkspaces,
+                ),
+            )
+            if (refreshResult.isSuccess) {
                 anySuccess = true
-                val labels = agentLabels
-                retainedByOrigin[harold.serverOrigin] = sessionsResult.getOrThrow().items.map { session ->
-                    session.toSessionRow(workspaceByPathForHarold, labels).copy(
-                        serverOrigin = harold.serverOrigin,
-                        haroldName = harold.name,
-                        haroldColorId = harold.colorId,
-                        haroldIconId = harold.iconId,
-                        haroldReachable = true,
-                    )
-                }
+                unreachableOrigins.remove(serverOrigin)
             } else {
-                retainedByOrigin[harold.serverOrigin] = retainedByOrigin[harold.serverOrigin]
-                    .orEmpty()
-                    .map { row -> row.copy(haroldReachable = false) }
+                lastError = refreshResult.exceptionOrNull()
+                unreachableOrigins.add(serverOrigin)
             }
         }
-        syncAttachmentGating()
-        retainedByOrigin.keys.retainAll(saved.map { harold -> harold.serverOrigin }.toSet())
-        val pushedTitles = sessionOwner.sessionTitles.value
-        catalog = retainedByOrigin.values.flatten()
-            .map { row -> titleFor(row, pushedTitles)?.let { title -> row.copy(name = title) } ?: row }
-            .sortedByDescending { row -> row.updatedAt }
-        if (anySuccess || catalog.isNotEmpty()) {
-            _uiState.update { current ->
-                current.copy(
-                    sessions = catalog,
-                    sessionsLoading = false,
-                    sessionsError = null,
-                )
-            }
-            publishRecentSessions()
-            syncActiveSessionsFromUiState()
-            restoreLastSession()
+
+        publishCachedSessions()
+        _uiState.update { current ->
+            current.copy(
+                sessionsLoaded = true,
+                isRefreshing = false,
+                sessionsError = if (!anySuccess && catalog.isEmpty()) {
+                    lastError?.let(::apiErrorMessage) ?: "Could not reach Harold"
+                } else {
+                    null
+                },
+            )
+        }
+        publishRecentSessions()
+        syncActiveSessionsFromUiState()
+        maybeRestoreLastSession()
+    }
+
+    private suspend fun loadHaroldMetadata() {
+        savedHarolds = savedHaroldRepository.list()
+        pairedOrigin = (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin
+        metadataLoaded = true
+        unreachableOrigins.retainAll(targetOrigins().toSet())
+    }
+
+    private fun targetOrigins(): List<String> =
+        if (savedHarolds.isNotEmpty()) {
+            savedHarolds.map { harold -> harold.serverOrigin }.distinct()
         } else {
-            _uiState.update { current ->
-                current.copy(
-                    sessionsLoading = false,
-                    sessionsError = "Could not reach Harold",
+            listOfNotNull(pairedOrigin)
+        }
+
+    private fun activeHarold(): StoredCredential? =
+        savedHarolds.firstOrNull { harold -> harold.serverOrigin == pairedOrigin }
+            ?: savedHarolds.firstOrNull()
+
+    private fun applyWorkspaces(workspaces: List<Workspace>?) {
+        val rows = workspaces.orEmpty().map { workspace -> workspace.toWorkspaceRow() }
+        if (rows.isNotEmpty()) {
+            workspaceByPath = workspaceByPath + rows.associateBy { row -> row.path }
+        }
+    }
+
+    private fun applyAgents(agents: List<AgentSettings>?) {
+        if (agents.isNullOrEmpty()) {
+            return
+        }
+        agentLabels = agentLabels + agents.associate { agent -> agent.id to agent.displayName }
+        agentAuth.mergeSummaries(agents.associate { agent -> agent.id to agent.authSummary })
+        agentCapabilities = agentCapabilities + agents.associate { agent -> agent.id to agent.capabilities }
+        syncAttachmentGating()
+    }
+
+    /**
+     * Paints the Room snapshot before the network refresh starts. The refresh
+     * writes to Room, and the flow collector calls this again with fresh rows.
+     */
+    private fun publishCachedSessions() {
+        if (!metadataLoaded) {
+            return
+        }
+        val origins = targetOrigins()
+        val scopedToHarold = savedHarolds.isNotEmpty()
+        val haroldByOrigin = savedHarolds.associateBy { harold -> harold.serverOrigin }
+        val pushedTitles = sessionOwner.sessionTitles.value
+        val rows = cachedSessions
+            .filter { cached -> cached.serverOrigin in origins }
+            .map { cached ->
+                val harold = haroldByOrigin[cached.serverOrigin]
+                val row = cached.toSessionRow().copy(
+                    serverOrigin = if (scopedToHarold) cached.serverOrigin else "",
+                    haroldName = harold?.name.orEmpty(),
+                    haroldColorId = harold?.colorId.orEmpty(),
+                    haroldIconId = harold?.iconId.orEmpty(),
+                    haroldReachable = cached.serverOrigin !in unreachableOrigins,
                 )
+                titleFor(row, pushedTitles)?.let { title -> row.copy(name = title) } ?: row
             }
+            .sortedByDescending { row -> row.updatedAt }
+        catalog = rows
+        val selected = _uiState.value.selectedSession
+        val updatedSelected = selected?.let { current ->
+            rows.firstOrNull { row -> row.id == current.id }?.copy(
+                state = current.state,
+                needsAttention = current.needsAttention,
+            ) ?: current
+        }
+        _uiState.update { current ->
+            current.copy(
+                sessions = rows,
+                sessionsLoaded = true,
+                selectedSession = updatedSelected ?: current.selectedSession,
+                sessionsError = if (rows.isNotEmpty()) null else current.sessionsError,
+            )
+        }
+        publishRecentSessions()
+        syncActiveSessionsFromUiState()
+        maybeRestoreLastSession()
+    }
+
+    private fun maybeRestoreLastSession() {
+        if (_uiState.value.selectedSession != null || catalog.isEmpty()) {
+            return
+        }
+        if (restoreJob?.isActive == true) {
+            return
+        }
+        restoreJob = viewModelScope.launch {
+            restoreLastSession()
         }
     }
 

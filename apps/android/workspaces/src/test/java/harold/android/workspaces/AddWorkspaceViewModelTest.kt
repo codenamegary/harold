@@ -20,8 +20,11 @@ import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 import harold.android.testing.FakeSessionGateway
 import harold.android.user.UserRepository
+import harold.android.workspaces.data.CachedWorkspace
+import harold.android.workspaces.data.WorkspaceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -57,6 +60,7 @@ class AddWorkspaceViewModelTest {
             sessionGateway = fakeSession(),
             navigator = Navigator(),
             userRepository = FakeAddUserRepository(),
+            workspaceRepository = FakeAddWorkspaceRepository(),
         )
 
         advanceUntilIdle()
@@ -71,6 +75,7 @@ class AddWorkspaceViewModelTest {
             sessionGateway = fakeSession(),
             navigator = Navigator(),
             userRepository = FakeAddUserRepository(allowedRoots = emptyList()),
+            workspaceRepository = FakeAddWorkspaceRepository(),
         )
 
         advanceUntilIdle()
@@ -82,6 +87,7 @@ class AddWorkspaceViewModelTest {
     @Test
     fun selectingFolderAutofillsNameAndSubmitCreatesWorkspace() = runTest(dispatcher) {
         val repository = FakeAddUserRepository()
+        val workspaceRepository = FakeAddWorkspaceRepository()
         val navigator = Navigator()
         navigator.start(paired = true)
         navigator.openWorkspaces()
@@ -90,6 +96,7 @@ class AddWorkspaceViewModelTest {
             sessionGateway = fakeSession(),
             navigator = navigator,
             userRepository = repository,
+            workspaceRepository = workspaceRepository,
         )
 
         advanceUntilIdle()
@@ -106,7 +113,7 @@ class AddWorkspaceViewModelTest {
 
         assertEquals(
             listOf(CreateWorkspaceBody(name = "harold", path = "/home/ops/code/harold")),
-            repository.createCalls,
+            workspaceRepository.createCalls,
         )
         assertEquals(listOf(Chat, Workspaces), navigator.backStack.toList())
     }
@@ -122,6 +129,7 @@ class AddWorkspaceViewModelTest {
                     FilesystemDirectory(name = "notes", path = "/home/ops/code/notes"),
                 ),
             ),
+            workspaceRepository = FakeAddWorkspaceRepository(),
         )
 
         advanceUntilIdle()
@@ -141,6 +149,7 @@ class AddWorkspaceViewModelTest {
             userRepository = FakeAddUserRepository(
                 foldersFailure = AgentApiException(AgentApiError.Transport(RuntimeException("boom"))),
             ),
+            workspaceRepository = FakeAddWorkspaceRepository(),
         )
 
         advanceUntilIdle()
@@ -277,4 +286,32 @@ private class FakeAddUserRepository(
         serverOrigin: String,
         deviceId: String,
     ): Result<Unit> = Result.success(Unit)
+}
+
+private class FakeAddWorkspaceRepository : WorkspaceRepository {
+    val createCalls = mutableListOf<CreateWorkspaceBody>()
+    private val cached = MutableStateFlow<List<CachedWorkspace>>(emptyList())
+
+    override fun observe(): Flow<List<CachedWorkspace>> = cached
+
+    override fun observe(serverOrigin: String): Flow<List<CachedWorkspace>> = cached
+
+    override suspend fun refresh(serverOrigin: String): Result<Unit> = Result.success(Unit)
+
+    override suspend fun create(
+        serverOrigin: String,
+        body: CreateWorkspaceBody,
+    ): Result<Workspace> {
+        createCalls += body
+        val workspace = Workspace(
+            id = "ws_new",
+            name = body.name,
+            path = body.path,
+            state = WorkspaceState.Available,
+            createdAt = "2026-08-10T00:00:00.000Z",
+            lastUsedAt = "2026-08-10T00:00:00.000Z",
+        )
+        cached.value = listOf(CachedWorkspace(serverOrigin, workspace))
+        return Result.success(workspace)
+    }
 }

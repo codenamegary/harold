@@ -283,6 +283,24 @@ class ChatScreenTest {
     }
 
     @Test
+    fun showsSelectSessionCtaWhileSessionsAreRefreshing() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        selectedSession = null,
+                        isRefreshing = true,
+                    ),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("select_session_cta").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("chat_welcome").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("select_session_refreshing").assertIsDisplayed()
+    }
+
+    @Test
     fun overflowMenuNoLongerOffersNewSession() {
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {

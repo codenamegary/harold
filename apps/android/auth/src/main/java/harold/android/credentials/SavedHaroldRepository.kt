@@ -1,10 +1,12 @@
 package harold.android.credentials
 
+import harold.android.cache.LocalCacheCleaner
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 
 class SavedHaroldRepository(
     private val store: CredentialStore,
+    private val localCacheCleaner: LocalCacheCleaner? = null,
 ) {
     suspend fun list(): List<StoredCredential> = store.list()
 
@@ -24,8 +26,10 @@ class SavedHaroldRepository(
         )
     }
 
+    /** Drops the saved credential and every cached row for that server origin. */
     suspend fun remove(serverOrigin: String): Boolean {
         store.remove(serverOrigin)
+        localCacheCleaner?.deleteByOrigin(serverOrigin)
         return store.list().isNotEmpty()
     }
 }

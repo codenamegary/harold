@@ -1,5 +1,6 @@
 package harold.android.chat
 
+import harold.android.chat.data.SessionRepository
 import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AgentId
 import harold.android.contracts.AgentSettings
@@ -171,6 +172,40 @@ class CreateSessionViewModelTest {
     }
 
     @Test
+    fun keepsCachedAgentsWhenTheHaroldIsOffline() = runTest {
+        val network = HaroldCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(workspace("ws_laptop", WorkspaceState.Available, name = "notes")),
+            ),
+            agents = emptyMap(),
+            failAgents = setOf(LAPTOP),
+        )
+        val sessionRepository = TestSessionRepository(network).apply {
+            seedAgents(
+                LAPTOP,
+                listOf(
+                    harold.android.chat.data.CachedAgent(
+                        serverOrigin = LAPTOP,
+                        agentId = "cursor",
+                        displayName = "Cursor",
+                        enabled = true,
+                    ),
+                ),
+            )
+        }
+
+        val viewModel = viewModel(
+            repository = network,
+            sessionRepository = sessionRepository,
+            savedHarolds = saved(harold(LAPTOP, "laptop", "tide", "bolt")),
+            connections = links(HaroldConnection(LAPTOP, HaroldConnectionStatus.Connected)),
+        )
+
+        assertEquals(listOf("cursor"), viewModel.uiState.value.agents.map { agent -> agent.id })
+        assertNull(viewModel.uiState.value.error)
+    }
+
+    @Test
     fun submitWithoutAWorkspaceReportsAnError() = runTest {
         val viewModel = viewModel(
             repository = RouteUserRepository(),
@@ -298,10 +333,12 @@ class CreateSessionViewModelTest {
         commands: RecordingSessionCommands = RecordingSessionCommands(),
         navigator: harold.android.navigation.Navigator = testNavigator(),
         repository: harold.android.user.UserRepository = repository(),
+        sessionRepository: SessionRepository = TestSessionRepository(repository),
         savedHarolds: SavedHaroldRepository? = null,
         connections: HaroldConnections? = null,
     ): CreateSessionViewModel = CreateSessionViewModel(
         sessionGateway = FakeSessionGateway(PAIRED),
+        sessionRepository = sessionRepository,
         userRepository = repository,
         sessionCommands = commands,
         navigator = navigator,

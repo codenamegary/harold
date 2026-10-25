@@ -3,6 +3,8 @@ package harold.android.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import harold.android.chat.data.CachedAgent
+import harold.android.chat.data.SessionRepository
 import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AgentId
 import harold.android.contracts.CreateSessionBody
@@ -18,15 +20,18 @@ import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 import harold.android.user.UserRepository
 import javax.inject.Inject
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 @HiltViewModel
 class CreateSessionViewModel @Inject constructor(
     private val sessionGateway: SessionGateway,
+    private val sessionRepository: SessionRepository,
     private val userRepository: UserRepository,
     private val sessionCommands: SessionCommands,
     private val navigator: Navigator,
@@ -35,6 +40,9 @@ class CreateSessionViewModel @Inject constructor(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CreateSessionUiState())
     val uiState: StateFlow<CreateSessionUiState> = _uiState.asStateFlow()
+
+    private var agentsJob: Job? = null
+    private var agentsOrigin: String? = null
 
     init {
         viewModelScope.launch {
@@ -107,7 +115,7 @@ class CreateSessionViewModel @Inject constructor(
         // Config options only exist once the agent has a session, so create it
         // on confirm for the selectors to render before the first prompt.
         viewModelScope.launch {
-            val result = userRepository.createSession(
+            val result = sessionRepository.createSession(
                 serverOrigin = origin,
                 body = CreateSessionBody(
                     agentId = agentId,
@@ -147,6 +155,7 @@ class CreateSessionViewModel @Inject constructor(
         if (saved.isEmpty()) {
             val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
             _uiState.value = loadCreateForm(paired.serverOrigin)
+            observeAgents(paired.serverOrigin)
             return
         }
 
@@ -178,6 +187,7 @@ class CreateSessionViewModel @Inject constructor(
                     error = null,
                 )
             }
+            observeAgents(paired.serverOrigin)
             return
         }
 
@@ -235,36 +245,53 @@ class CreateSessionViewModel @Inject constructor(
             }
     }
 
-    private suspend fun loadAgents(workspace: WorkspaceRow) {
+    private fun loadAgents(workspace: WorkspaceRow) {
         val origin = workspace.serverOrigin.ifEmpty { return }
-        val result = userRepository.listAgents(origin)
-        if (_uiState.value.selectedWorkspaceId != workspace.id) {
+        observeAgents(origin)
+        viewModelScope.launch {
+            sessionRepository.refreshAgents(origin).onFailure { error ->
+                if (agentsOrigin == origin && _uiState.value.agents.isEmpty()) {
+                    _uiState.update { current ->
+                        current.copy(
+                            agents = emptyList(),
+                            selectedAgentId = null,
+                            submitting = false,
+                            error = apiErrorMessage(error),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun observeAgents(serverOrigin: String) {
+        if (agentsOrigin == serverOrigin && agentsJob != null) {
             return
         }
-        result.fold(
-            onSuccess = { collection ->
-                val agents = collection.items
-                    .filter { agent -> agent.enabled }
-                    .map { agent -> AgentOption(id = agent.id, displayName = agent.displayName) }
-                _uiState.update { current ->
-                    current.copy(
-                        agents = agents,
-                        selectedAgentId = agents.firstOrNull()?.id,
-                        error = null,
-                    )
+        agentsJob?.cancel()
+        agentsOrigin = serverOrigin
+        agentsJob = viewModelScope.launch {
+            sessionRepository.observeAgents(serverOrigin).collect { agents ->
+                if (agentsOrigin == serverOrigin) {
+                    applyAgents(agents)
                 }
-            },
-            onFailure = { error ->
-                _uiState.update { current ->
-                    current.copy(
-                        agents = emptyList(),
-                        selectedAgentId = null,
-                        submitting = false,
-                        error = apiErrorMessage(error),
-                    )
-                }
-            },
-        )
+            }
+        }
+    }
+
+    private fun applyAgents(cachedAgents: List<CachedAgent>) {
+        val agents = cachedAgents
+            .filter { agent -> agent.enabled }
+            .map { agent -> AgentOption(id = agent.agentId, displayName = agent.displayName) }
+        _uiState.update { current ->
+            current.copy(
+                agents = agents,
+                selectedAgentId = current.selectedAgentId
+                    ?.takeIf { selected -> agents.any { agent -> agent.id == selected } }
+                    ?: agents.firstOrNull()?.id,
+                error = null,
+            )
+        }
     }
 
     private suspend fun loadCreateForm(serverOrigin: String): CreateSessionUiState {
@@ -272,9 +299,10 @@ class CreateSessionViewModel @Inject constructor(
             .map { workspace -> workspace.toWorkspaceRow() }
             .filter { workspace -> workspace.state == WorkspaceState.Available }
 
-        val agents = userRepository.listAgents(serverOrigin).getOrNull()?.items.orEmpty()
+        sessionRepository.refreshAgents(serverOrigin)
+        val agents = sessionRepository.observeAgents(serverOrigin).first()
             .filter { agent -> agent.enabled }
-            .map { agent -> AgentOption(id = agent.id, displayName = agent.displayName) }
+            .map { agent -> AgentOption(id = agent.agentId, displayName = agent.displayName) }
 
         return CreateSessionUiState(
             workspaces = workspaces,

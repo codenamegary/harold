@@ -44,6 +44,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import harold.android.ui.components.HaroldBadge
+import harold.android.ui.components.LoadingSkeletonList
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -201,9 +202,11 @@ fun SessionsListContent(
 
         when {
             uiState.sessions.isEmpty() && uiState.loading -> {
-                Text(
-                    text = "Loading sessions…",
+                LoadingSkeletonList(
+                    contentDescription = "Loading sessions",
                     modifier = Modifier.testTag("sessions_list_loading"),
+                    rows = 5,
+                    rowHeight = 76.dp,
                 )
             }
 

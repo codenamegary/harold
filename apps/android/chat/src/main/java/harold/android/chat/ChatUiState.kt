@@ -67,7 +67,10 @@ data class ChatUiState(
     val connectionBanner: String? = null,
     val selectedSession: SessionRow? = null,
     val sessions: List<SessionRow> = emptyList(),
-    val sessionsLoading: Boolean = false,
+    /** True once the first cached snapshot (or an empty cache) has been read. */
+    val sessionsLoaded: Boolean = false,
+    /** True while the network refresh is running. Cached content stays visible. */
+    val isRefreshing: Boolean = false,
     val sessionsError: String? = null,
     val pickerVisible: Boolean = false,
     val recentSessions: List<SessionRow> = emptyList(),
@@ -157,7 +160,7 @@ data class ChatUiState(
         get() = selectedSession != null && transcript.rows.isEmpty() && !showProgress
 
     val showSelectSessionCta: Boolean
-        get() = selectedSession == null && !sessionsLoading
+        get() = selectedSession == null
 
     /** Voice replaces the text slot whenever a dictation session is open. */
     val composerInVoiceMode: Boolean

@@ -1,5 +1,7 @@
 package harold.android.chat
 
+import harold.android.chat.data.CachedSession
+import harold.android.chat.data.SessionRepository
 import harold.android.contracts.AgentId
 import harold.android.contracts.AgentSettings
 import harold.android.contracts.AttachmentReference
@@ -35,6 +37,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -228,16 +231,45 @@ class SessionsViewModelTest {
         commands: RecordingSessionCommands = RecordingSessionCommands(),
         navigator: harold.android.navigation.Navigator = testNavigator(),
         repository: harold.android.user.UserRepository = repository(sessions),
+        sessionRepository: SessionRepository = TestSessionRepository(repository),
         sessionOwner: SessionsFakeSessionOwner = SessionsFakeSessionOwner(),
         savedHarolds: SavedHaroldRepository = SavedHaroldRepository(FakeCredentialStore()),
     ): SessionsViewModel = SessionsViewModel(
         sessionGateway = FakeSessionGateway(PAIRED),
+        sessionRepository = sessionRepository,
         userRepository = repository,
         sessionCommands = commands,
         navigator = navigator,
         sessionOwner = sessionOwner,
         savedHaroldRepository = savedHarolds,
     )
+
+    @Test
+    fun showsCachedSessionsWhenTheHaroldIsOffline() = runTest {
+        val origin = PAIRED.serverOrigin
+        val network = OriginSessionRepository(
+            sessionsByOrigin = mapOf(origin to listOf(session("sess_cached", "Cached", "2026-08-03T00:00:00.000Z"))),
+        )
+        val sessionRepository = TestSessionRepository(network)
+        sessionRepository.seed(
+            listOf(
+                CachedSession(
+                    serverOrigin = origin,
+                    session = session("sess_cached", "Cached", "2026-08-03T00:00:00.000Z"),
+                    workspaceId = "ws_01",
+                    workspaceName = "harold",
+                    agentLabel = "Cursor",
+                ),
+            ),
+        )
+        network.failOrigins += origin
+
+        val viewModel = viewModel(repository = network, sessionRepository = sessionRepository)
+
+        assertEquals(listOf("Cached"), viewModel.uiState.value.sessions.map { row -> row.name })
+        assertFalse(viewModel.uiState.value.sessions.single().haroldReachable)
+        assertNull(viewModel.uiState.value.error)
+    }
 
     private fun repository(
         sessions: List<Session> = listOf(session("sess_01", "Alpha", "2026-08-03T00:00:00.000Z")),
