@@ -406,7 +406,7 @@ class ChatViewModelTest {
 
         val state = viewModel.uiState.value
         assertTrue(state.isPendingNewSession)
-        assertTrue(viewModel.agentAuthState.value.showAuthPanel)
+        assertTrue(viewModel.uiState.value.agentAuth.showAuthPanel)
         assertFalse(state.composerEnabled)
         assertEquals(PENDING_SESSION_MESSAGE, state.composerBlockedMessage)
         assertNull(sessionOwner.target)
@@ -908,7 +908,7 @@ class ChatViewModelTest {
 
         assertEquals(
             harold.android.contracts.AgentAuthStatus.NeedsAuth,
-            viewModel.agentAuthState.value.agentAuth?.status,
+            viewModel.uiState.value.agentAuth.agentAuth?.status,
         )
         assertEquals(listOf("cursor"), repository.authGetCalls)
     }
@@ -943,8 +943,8 @@ class ChatViewModelTest {
         sessionOwner.publish(sessionOwner.snapshot.value.copy(agentAuth = auth))
         advanceUntilIdle()
 
-        assertTrue(viewModel.agentAuthState.value.showAuthPanel)
-        assertEquals("auth-1", viewModel.agentAuthState.value.agentAuth?.session?.sessionId)
+        assertTrue(viewModel.uiState.value.agentAuth.showAuthPanel)
+        assertEquals("auth-1", viewModel.uiState.value.agentAuth.agentAuth?.session?.sessionId)
     }
 
     @Test
@@ -977,13 +977,13 @@ class ChatViewModelTest {
         )
         advanceUntilIdle()
 
-        assertTrue(viewModel.agentAuthState.value.showAuthPanel)
+        assertTrue(viewModel.uiState.value.agentAuth.showAuthPanel)
         viewModel.onAuthSignIn()
         advanceUntilIdle()
 
         assertEquals(1, repository.authStartCalls.size)
-        assertEquals("auth-1", viewModel.agentAuthState.value.agentAuth?.session?.sessionId)
-        assertTrue(viewModel.agentAuthState.value.showAuthPanel)
+        assertEquals("auth-1", viewModel.uiState.value.agentAuth.agentAuth?.session?.sessionId)
+        assertTrue(viewModel.uiState.value.agentAuth.showAuthPanel)
     }
 
     @Test
@@ -1055,16 +1055,16 @@ class ChatViewModelTest {
         )
         advanceUntilIdle()
 
-        assertTrue(viewModel.agentAuthState.value.authSummary?.canLogout == true)
+        assertTrue(viewModel.uiState.value.agentAuth.authSummary?.canLogout == true)
         viewModel.onAuthLogout()
         advanceUntilIdle()
 
         assertEquals(listOf("cursor"), repository.authLogoutCalls)
         assertEquals(
             harold.android.contracts.AgentAuthStatus.NeedsAuth,
-            viewModel.agentAuthState.value.summary?.status,
+            viewModel.uiState.value.agentAuth.summary?.status,
         )
-        assertTrue(viewModel.agentAuthState.value.showAuthPanel)
+        assertTrue(viewModel.uiState.value.agentAuth.showAuthPanel)
     }
 
     @Test
@@ -1187,8 +1187,8 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertTrue(repository.authGetCalls.size > getsBefore)
-        assertEquals("auth-req", viewModel.agentAuthState.value.agentAuth?.session?.sessionId)
-        assertTrue(viewModel.agentAuthState.value.showAuthPanel)
+        assertEquals("auth-req", viewModel.uiState.value.agentAuth.agentAuth?.session?.sessionId)
+        assertTrue(viewModel.uiState.value.agentAuth.showAuthPanel)
     }
 
     @Test

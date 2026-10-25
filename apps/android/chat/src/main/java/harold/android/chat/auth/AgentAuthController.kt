@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -31,6 +32,13 @@ data class AgentAuthUiState(
     /** The summary the auth panel acts on: the resolved one, else one derived from the raw auth. */
     val authSummary: AgentAuthSummary?
         get() = summary ?: agentAuth?.toSummary(canLogout = false)
+
+    /** Whether the sign-out action is available right now. */
+    val canLogoutAction: Boolean
+        get() = authSummary?.canLogout == true &&
+            !actionBusy &&
+            !panelSubmitting &&
+            agentAuth?.session?.status != AuthSessionStatus.InProgress
 
     val showAuthPanel: Boolean
         get() {
@@ -89,7 +97,7 @@ class AgentAuthController(
      * the incoming agent's cached summary. [agentId] null clears everything.
      */
     fun resetFor(agentId: AgentId?) {
-        _state.value = AgentAuthUiState(summary = agentId?.let { summaries[it] })
+        _state.update { AgentAuthUiState(summary = agentId?.let { summaries[it] }) }
     }
 
     /** Adopt auth pushed by the live stream; a null stream auth leaves the panel alone. */
@@ -102,7 +110,7 @@ class AgentAuthController(
         if (agentId != null) {
             summaries = summaries + (agentId to summary)
         }
-        _state.value = _state.value.copy(agentAuth = auth, summary = summary)
+        _state.update { current -> current.copy(agentAuth = auth, summary = summary) }
     }
 
     suspend fun hydrate(agentId: AgentId, autoStartLogin: Boolean = false) {
@@ -117,7 +125,9 @@ class AgentAuthController(
                 val canLogout = summaries[agentId]?.canLogout ?: false
                 val summary = auth.toSummary(canLogout = canLogout)
                 summaries = summaries + (agentId to summary)
-                _state.value = _state.value.copy(agentAuth = auth, summary = summary, error = null)
+                _state.update { current ->
+                    current.copy(agentAuth = auth, summary = summary, error = null)
+                }
                 if (
                     autoStartLogin &&
                     auth.session?.status != AuthSessionStatus.InProgress &&
@@ -131,18 +141,17 @@ class AgentAuthController(
                 if (generation != hydrateGeneration || selectedAgent() != agentId) {
                     return
                 }
-                _state.value = _state.value.copy(error = apiErrorMessage(error))
+                _state.update { current -> current.copy(error = apiErrorMessage(error)) }
             },
         )
     }
 
     fun signIn(agentId: AgentId) {
-        val current = _state.value
-        if (current.panelSubmitting || current.actionBusy) {
+        if (busy()) {
             return
         }
         val serverOrigin = origin() ?: return
-        _state.value = current.copy(panelSubmitting = true, error = null)
+        _state.update { current -> current.copy(panelSubmitting = true, error = null) }
         scope.launch {
             userRepository.startAgentAuthSession(
                 serverOrigin = serverOrigin,
@@ -150,16 +159,16 @@ class AgentAuthController(
             ).fold(
                 onSuccess = { session -> applySessionResult(agentId, session) },
                 onFailure = { error ->
-                    _state.value = _state.value.copy(
-                        panelSubmitting = false,
-                        error = apiErrorMessage(error),
-                    )
+                    _state.update { current ->
+                        current.copy(panelSubmitting = false, error = apiErrorMessage(error))
+                    }
                 },
             )
         }
     }
 
-    fun confirm(agentId: AgentId, authSessionId: String, stepId: String) {
+    fun confirm(agentId: AgentId, stepId: String) {
+        val authSessionId = _state.value.agentAuth?.session?.sessionId ?: return
         beginAction()?.let { serverOrigin ->
             launchAction(
                 serverOrigin = serverOrigin,
@@ -170,7 +179,8 @@ class AgentAuthController(
         }
     }
 
-    fun cancel(agentId: AgentId, authSessionId: String) {
+    fun cancel(agentId: AgentId) {
+        val authSessionId = _state.value.agentAuth?.session?.sessionId ?: return
         beginAction()?.let { serverOrigin ->
             launchAction(
                 serverOrigin = serverOrigin,
@@ -183,33 +193,28 @@ class AgentAuthController(
     }
 
     fun logout(agentId: AgentId) {
-        val current = _state.value
-        if (current.authSummary?.canLogout != true) {
-            return
-        }
-        if (current.actionBusy || current.panelSubmitting) {
-            return
-        }
-        if (current.agentAuth?.session?.status == AuthSessionStatus.InProgress) {
+        if (!_state.value.canLogoutAction) {
             return
         }
         val serverOrigin = origin() ?: return
-        _state.value = current.copy(actionBusy = true, error = null)
+        _state.update { current -> current.copy(actionBusy = true, error = null) }
         scope.launch {
             userRepository.logoutAgentAuth(serverOrigin = serverOrigin, agentId = agentId).fold(
                 onSuccess = { logoutSummary ->
                     summaries = summaries + (agentId to logoutSummary)
-                    _state.value = _state.value.copy(
-                        agentAuth = AgentAuth(
-                            agentId = agentId,
-                            status = logoutSummary.status,
-                            error = logoutSummary.error,
-                            session = null,
-                        ),
-                        summary = logoutSummary,
-                        actionBusy = false,
-                        error = null,
-                    )
+                    _state.update { current ->
+                        current.copy(
+                            agentAuth = AgentAuth(
+                                agentId = agentId,
+                                status = logoutSummary.status,
+                                error = logoutSummary.error,
+                                session = null,
+                            ),
+                            summary = logoutSummary,
+                            actionBusy = false,
+                            error = null,
+                        )
+                    }
                 },
                 onFailure = { error -> endAction(error) },
             )
@@ -233,7 +238,7 @@ class AgentAuthController(
         action: AuthSessionAction,
         thenRehydrate: Boolean = false,
     ) {
-        _state.value = _state.value.copy(actionBusy = true, error = null)
+        _state.update { current -> current.copy(actionBusy = true, error = null) }
         scope.launch {
             userRepository.applyAgentAuthSessionAction(
                 serverOrigin = serverOrigin,
@@ -253,7 +258,9 @@ class AgentAuthController(
     }
 
     private fun endAction(error: Throwable) {
-        _state.value = _state.value.copy(actionBusy = false, error = apiErrorMessage(error))
+        _state.update { current ->
+            current.copy(actionBusy = false, error = apiErrorMessage(error))
+        }
     }
 
     /**
@@ -280,13 +287,15 @@ class AgentAuthController(
         if (selectedAgent() != agentId) {
             return
         }
-        _state.value = _state.value.copy(
-            agentAuth = auth,
-            summary = summary,
-            panelSubmitting = false,
-            actionBusy = false,
-            error = null,
-        )
+        _state.update { current ->
+            current.copy(
+                agentAuth = auth,
+                summary = summary,
+                panelSubmitting = false,
+                actionBusy = false,
+                error = null,
+            )
+        }
         onAuthenticated(agentId, auth.status)
     }
 }

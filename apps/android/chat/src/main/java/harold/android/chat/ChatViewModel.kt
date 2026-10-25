@@ -9,7 +9,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import harold.android.chat.auth.AgentAuthController
-import harold.android.chat.auth.AgentAuthUiState
 import harold.android.chat.composer.ComposerConfigUi
 import harold.android.chat.composer.SessionConfigWriter
 import harold.android.chat.composer.completeSlashCommand
@@ -100,8 +99,9 @@ class ChatViewModel @Inject constructor(
     private val configWriter = SessionConfigWriter(configApi, viewModelScope)
 
     /**
-     * The agent-auth conversation lives in its own module; its panel slice is
-     * mirrored into [ChatUiState] by the collector in [init].
+     * The agent-auth conversation lives in its own module. Its panel slice is
+     * mirrored into [ChatUiState.agentAuth] by the collector in [init], so the
+     * screen observes one atomic state stream.
      */
     private val agentAuth = AgentAuthController(
         userRepository = userRepository,
@@ -110,12 +110,6 @@ class ChatViewModel @Inject constructor(
         selectedAgent = { _uiState.value.selectedSession?.agentId },
         onAuthenticated = ::createPendingSessionAfterLogin,
     )
-
-    /**
-     * The agent-auth panel state. The auth module owns it; the screen reads it
-     * alongside [uiState] instead of through a mirrored copy.
-     */
-    val agentAuthState: StateFlow<AgentAuthUiState> = agentAuth.state
 
     /**
      * Session-scoped actions must follow the selected session's Harold. The
@@ -202,6 +196,12 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             configWriter.state.collect { config ->
                 _uiState.update { current -> current.copy(composerConfig = config) }
+            }
+        }
+
+        viewModelScope.launch {
+            agentAuth.state.collect { auth ->
+                _uiState.update { current -> current.copy(agentAuth = auth) }
             }
         }
 
@@ -841,21 +841,12 @@ class ChatViewModel @Inject constructor(
 
     fun onAuthConfirm(stepId: String) {
         val selected = _uiState.value.selectedSession ?: return
-        val authSession = agentAuth.state.value.agentAuth?.session ?: return
-        agentAuth.confirm(
-            agentId = selected.agentId,
-            authSessionId = authSession.sessionId,
-            stepId = stepId,
-        )
+        agentAuth.confirm(selected.agentId, stepId)
     }
 
     fun onAuthCancel() {
         val selected = _uiState.value.selectedSession ?: return
-        val authSession = agentAuth.state.value.agentAuth?.session ?: return
-        agentAuth.cancel(
-            agentId = selected.agentId,
-            authSessionId = authSession.sessionId,
-        )
+        agentAuth.cancel(selected.agentId)
     }
 
     fun onAuthLogout() {

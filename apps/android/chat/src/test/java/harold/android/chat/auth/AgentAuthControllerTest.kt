@@ -262,8 +262,12 @@ class AgentAuthControllerTest {
         val agentAuth = controller(repository, scope = this) { agentId, status ->
             authenticatedWith += agentId to status
         }
+        agentAuth.absorbStream(
+            selectedAgentId,
+            auth(AgentAuthStatus.NeedsAuth, session = inFlightSession()),
+        )
 
-        agentAuth.confirm(selectedAgentId, authSessionId = "auth-1", stepId = "step-1")
+        agentAuth.confirm(selectedAgentId, stepId = "step-1")
         advanceUntilIdle()
 
         assertEquals(
@@ -279,9 +283,20 @@ class AgentAuthControllerTest {
     }
 
     @Test
+    fun confirmWithoutAnActiveSessionDoesNothing() = runTest {
+        val repository = FakeAuthUserRepository()
+        val agentAuth = controller(repository, scope = this)
+
+        agentAuth.confirm(selectedAgentId, stepId = "step-1")
+        advanceUntilIdle()
+
+        assertTrue(repository.authActionCalls.isEmpty())
+    }
+
+    @Test
     fun cancelSendsTheCancelActionThenRehydrates() = runTest {
         val repository = FakeAuthUserRepository(
-            auth = auth(AgentAuthStatus.NeedsAuth),
+            auth = auth(AgentAuthStatus.NeedsAuth, session = inFlightSession()),
             actionSession = AgentAuthSession(
                 sessionId = "auth-1",
                 agentId = selectedAgentId,
@@ -293,7 +308,7 @@ class AgentAuthControllerTest {
         agentAuth.hydrate(selectedAgentId)
         val getsBefore = repository.authGetCalls.size
 
-        agentAuth.cancel(selectedAgentId, authSessionId = "auth-1")
+        agentAuth.cancel(selectedAgentId)
         advanceUntilIdle()
 
         assertEquals(
@@ -354,11 +369,12 @@ class AgentAuthControllerTest {
     private fun auth(
         status: AgentAuthStatus,
         agentId: AgentId = selectedAgentId,
+        session: AgentAuthSession? = null,
     ) = AgentAuth(
         agentId = agentId,
         status = status,
         error = null,
-        session = null,
+        session = session,
     )
 
     private class FakeAuthUserRepository(

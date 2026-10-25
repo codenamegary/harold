@@ -1,5 +1,6 @@
 package harold.android.chat
 
+import harold.android.chat.auth.AgentAuthUiState
 import harold.android.chat.composer.ComposerConfigUi
 import harold.android.contracts.AgentId
 import harold.android.contracts.AvailableCommand
@@ -93,6 +94,8 @@ data class ChatUiState(
     val voiceCommandPrefix: String = "",
     /** Voice mode toggles the command list from a button instead of a typed slash. */
     val voiceCommandListVisible: Boolean = false,
+    /** The auth panel slice; the AgentAuthController owns it and the view model mirrors it. */
+    val agentAuth: AgentAuthUiState = AgentAuthUiState(),
     val activeHaroldName: String = "",
     val activeHaroldColorId: String = "",
     val activeHaroldIconId: String = "",
@@ -168,7 +171,8 @@ data class ChatUiState(
 /**
  * The values an incoming session supplies instead of the defaults when the
  * session-scoped surface resets. The auth panel slice is not here: the
- * [harold.android.chat.auth.AgentAuthController] owns it and resets itself.
+ * [harold.android.chat.auth.AgentAuthController] owns it, resets itself, and
+ * the mirror collector writes the result into [ChatUiState.agentAuth].
  */
 internal data class SessionResetKeep(
     val selectedSession: SessionRow? = null,
@@ -198,5 +202,7 @@ internal fun ChatUiState.resetSessionScopedState(
     permissionUiState = PermissionUiState(),
     extensionUiState = ExtensionUiState(),
     streamReconnecting = false,
+    cancelSubmitting = false,
+    cancelError = null,
     pickerVisible = false,
 )

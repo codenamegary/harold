@@ -69,7 +69,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import harold.android.chat.auth.AgentAuthPanel
-import harold.android.chat.auth.AgentAuthUiState
 import harold.android.chat.composer.CommandListPanel
 import harold.android.chat.composer.ComposerConfigActions
 import harold.android.chat.composer.PromptComposer
@@ -188,7 +187,6 @@ private fun SessionDropdownItem(
 @Composable
 fun ChatScreen(
     uiState: ChatUiState,
-    agentAuthState: AgentAuthUiState = AgentAuthUiState(),
     composerState: TextFieldState = rememberTextFieldState(),
     composerActions: ComposerConfigActions = ComposerConfigActions(),
     onSessionSelectorClick: () -> Unit = {},
@@ -578,11 +576,11 @@ fun ChatScreen(
                             },
                             modifier = Modifier.testTag("workspaces_menu_item"),
                         )
-                        if (agentAuthState.authSummary?.canLogout == true) {
+                        if (uiState.agentAuth.authSummary?.canLogout == true) {
                             DropdownMenuItem(
                                 text = {
                                     Text(
-                                        text = if (agentAuthState.actionBusy) {
+                                        text = if (uiState.agentAuth.actionBusy) {
                                             stringResource(R.string.agent_auth_signing_out)
                                         } else {
                                             stringResource(R.string.agent_auth_sign_out)
@@ -593,9 +591,7 @@ fun ChatScreen(
                                     menuExpanded = false
                                     onAuthLogout()
                                 },
-                                enabled = !agentAuthState.actionBusy &&
-                                    !agentAuthState.panelSubmitting &&
-                                    agentAuthState.agentAuth?.session?.status != AuthSessionStatus.InProgress,
+                                enabled = uiState.agentAuth.canLogoutAction,
                                 modifier = Modifier.testTag("auth_sign_out_menu_item"),
                             )
                         }
@@ -675,17 +671,17 @@ fun ChatScreen(
                 )
             }
 
-            if (hasSelectedSession && agentAuthState.showAuthPanel) {
-                val summary = agentAuthState.authSummary
+            if (hasSelectedSession && uiState.agentAuth.showAuthPanel) {
+                val summary = uiState.agentAuth.authSummary
                 val selected = uiState.selectedSession
                 if (summary != null && selected != null) {
                     AgentAuthPanel(
                         agentName = selected.agentLabel.ifBlank { selected.agentId },
                         summary = summary,
-                        auth = agentAuthState.agentAuth,
-                        submitting = agentAuthState.panelSubmitting,
-                        actionBusy = agentAuthState.actionBusy,
-                        error = agentAuthState.error,
+                        auth = uiState.agentAuth.agentAuth,
+                        submitting = uiState.agentAuth.panelSubmitting,
+                        actionBusy = uiState.agentAuth.actionBusy,
+                        error = uiState.agentAuth.error,
                         onSignIn = onAuthSignIn,
                         onConfirm = onAuthConfirm,
                         onCancel = onAuthCancel,

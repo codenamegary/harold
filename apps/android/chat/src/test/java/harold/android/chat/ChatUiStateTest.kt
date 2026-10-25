@@ -56,6 +56,8 @@ class ChatUiStateTest {
             permissionUiState = PermissionUiState(submittingOptionId = "allow"),
             extensionUiState = ExtensionUiState(submitting = true, error = "extension failed"),
             streamReconnecting = true,
+            cancelSubmitting = true,
+            cancelError = "cancel failed",
         )
 
         val reset = busy.resetSessionScopedState()
@@ -72,6 +74,8 @@ class ChatUiStateTest {
         assertEquals(PermissionUiState(), reset.permissionUiState)
         assertEquals(ExtensionUiState(), reset.extensionUiState)
         assertFalse(reset.streamReconnecting)
+        assertFalse(reset.cancelSubmitting)
+        assertNull(reset.cancelError)
         assertFalse(reset.pickerVisible)
         // Outside the reset policy: switching sessions leaves these alone.
         assertEquals("Reconnecting", reset.connectionBanner)
