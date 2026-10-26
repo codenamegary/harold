@@ -14,6 +14,13 @@ import harold.android.live.emptyAcpTranscript
 
 class ChatUiStateTest {
     @Test
+    fun selectSessionCtaShowsBeforeTheSessionCacheLoads() {
+        val state = ChatUiState(hasLoaded = false, isRefreshing = true)
+
+        assertTrue(state.showSelectSessionCta)
+    }
+
+    @Test
     fun reconnectingStreamHidesTheBlockedMessage() {
         val state = ChatUiState(
             selectedSession = sessionRow(SessionState.Offline),

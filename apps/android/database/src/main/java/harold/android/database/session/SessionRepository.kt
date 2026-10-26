@@ -1,4 +1,4 @@
-package harold.android.chat.data
+package harold.android.database.session
 
 import harold.android.contracts.AgentId
 import harold.android.contracts.AgentSettings
@@ -6,9 +6,11 @@ import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.Session
 import harold.android.contracts.Workspace
+import harold.android.database.workspace.WorkspaceRepository
 import harold.android.network.AgentApi
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 data class CachedSession(
@@ -27,12 +29,13 @@ data class CachedAgent(
 )
 
 /**
- * Lists a caller already fetched for the same refresh cycle. Passing them keeps
- * chat from asking the server for agents and workspaces twice.
+ * The live lists that a refresh read from the server. Chat uses them for
+ * transient UI state that is not part of the Room cache, such as agent auth
+ * summaries and attachment capabilities.
  */
-data class SessionRefresh(
-    val agents: List<AgentSettings>? = null,
-    val workspaces: List<Workspace>? = null,
+data class SessionCatalog(
+    val agents: List<AgentSettings> = emptyList(),
+    val workspaces: List<Workspace> = emptyList(),
 )
 
 interface SessionRepository {
@@ -42,10 +45,7 @@ interface SessionRepository {
 
     fun observeAgents(serverOrigin: String): Flow<List<CachedAgent>>
 
-    suspend fun refresh(
-        serverOrigin: String,
-        snapshot: SessionRefresh = SessionRefresh(),
-    ): Result<Unit>
+    suspend fun refresh(serverOrigin: String): Result<SessionCatalog>
 
     suspend fun refreshAgents(serverOrigin: String): Result<Unit>
 
@@ -63,6 +63,7 @@ interface SessionRepository {
 
 class DefaultSessionRepository @Inject constructor(
     private val agentApi: AgentApi,
+    private val workspaceRepository: WorkspaceRepository,
     private val sessionDao: SessionDao,
     private val agentDao: AgentDao,
 ) : SessionRepository {
@@ -84,28 +85,24 @@ class DefaultSessionRepository @Inject constructor(
             }
         }
 
-    override suspend fun refresh(
-        serverOrigin: String,
-        snapshot: SessionRefresh,
-    ): Result<Unit> {
+    override suspend fun refresh(serverOrigin: String): Result<SessionCatalog> {
         val sessionsResult = agentApi.listSessions(serverOrigin)
         if (sessionsResult.isFailure) {
             return Result.failure(checkNotNull(sessionsResult.exceptionOrNull()))
         }
 
-        val snapshotAgents = snapshot.agents
-        if (snapshotAgents != null) {
-            cacheAgents(serverOrigin, snapshotAgents)
-        } else {
-            refreshAgents(serverOrigin)
-        }
-        val workspaces = snapshot.workspaces
-            ?: agentApi.listWorkspaces(serverOrigin, WORKSPACE_LIMIT).getOrNull()?.items
+        val agents = fetchAgents(serverOrigin).getOrNull().orEmpty()
+
+        // Workspace labels feed the session rows. Refresh the shared workspace
+        // cache when the server answers, and label from cache when it does not.
+        workspaceRepository.refresh(serverOrigin)
+        val workspaces = workspaceRepository.observe(serverOrigin).first()
+            .map { cached -> cached.workspace }
 
         val agentLabels = agentDao.agents(serverOrigin)
             .associate { agent -> agent.agentId to agent.displayName }
 
-        val workspaceByPath = workspaces?.associateBy { workspace -> workspace.path }
+        val workspaceByPath = workspaces.associateBy { workspace -> workspace.path }
         val cachedWorkspaceByPath = sessionDao.sessions(serverOrigin).associate { session ->
             session.cwd to WorkspaceLabels(
                 id = session.workspaceId,
@@ -116,7 +113,7 @@ class DefaultSessionRepository @Inject constructor(
         sessionDao.replaceByOrigin(
             serverOrigin = serverOrigin,
             sessions = sessionsResult.getOrThrow().items.map { session ->
-                val workspace = workspaceByPath?.get(session.cwd)
+                val workspace = workspaceByPath[session.cwd]
                 val cachedWorkspace = cachedWorkspaceByPath[session.cwd]
                 session.toEntity(
                     serverOrigin = serverOrigin,
@@ -126,16 +123,25 @@ class DefaultSessionRepository @Inject constructor(
                 )
             },
         )
-        return Result.success(Unit)
+        return Result.success(
+            SessionCatalog(
+                agents = agents,
+                workspaces = workspaces,
+            ),
+        )
     }
 
-    override suspend fun refreshAgents(serverOrigin: String): Result<Unit> {
+    override suspend fun refreshAgents(serverOrigin: String): Result<Unit> =
+        fetchAgents(serverOrigin).map { }
+
+    private suspend fun fetchAgents(serverOrigin: String): Result<List<AgentSettings>> {
         val result = agentApi.listAgents(serverOrigin)
         if (result.isFailure) {
             return Result.failure(checkNotNull(result.exceptionOrNull()))
         }
-        cacheAgents(serverOrigin, result.getOrThrow().items)
-        return Result.success(Unit)
+        val agents = result.getOrThrow().items
+        cacheAgents(serverOrigin, agents)
+        return Result.success(agents)
     }
 
     private suspend fun cacheAgents(
@@ -157,14 +163,19 @@ class DefaultSessionRepository @Inject constructor(
         agentApi.createSession(serverOrigin, body).onSuccess { created ->
             val cachedAgent = agentDao.agents(serverOrigin)
                 .firstOrNull { agent -> agent.agentId == created.agentId }
-            val cachedWorkspace = sessionDao.sessions(serverOrigin)
+            val cachedWorkspace = workspaceRepository.observe(serverOrigin).first()
+                .map { workspace -> workspace.workspace }
+                .firstOrNull { workspace -> workspace.path == created.cwd }
+            val cachedSession = sessionDao.sessions(serverOrigin)
                 .firstOrNull { session -> session.cwd == created.cwd }
             sessionDao.upsertAll(
                 listOf(
                     created.toSession().toEntity(
                         serverOrigin = serverOrigin,
-                        workspaceId = cachedWorkspace?.workspaceId.orEmpty(),
-                        workspaceName = cachedWorkspace?.workspaceName ?: created.cwd,
+                        workspaceId = cachedWorkspace?.id ?: cachedSession?.workspaceId.orEmpty(),
+                        workspaceName = cachedWorkspace?.name
+                            ?: cachedSession?.workspaceName
+                            ?: created.cwd,
                         agentLabel = cachedAgent?.displayName ?: created.agentId,
                     ),
                 ),
@@ -194,10 +205,6 @@ class DefaultSessionRepository @Inject constructor(
         val id: String,
         val name: String,
     )
-
-    private companion object {
-        const val WORKSPACE_LIMIT = 100
-    }
 }
 
 private fun AgentSettings.toEntity(

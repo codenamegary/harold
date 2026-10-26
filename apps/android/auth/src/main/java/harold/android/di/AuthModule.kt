@@ -7,7 +7,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import harold.android.cache.LocalCacheCleaner
+import harold.android.database.LocalCacheCleaner
 import harold.android.credentials.CredentialHolder
 import harold.android.credentials.CredentialStore
 import harold.android.credentials.DefaultCredentialStore

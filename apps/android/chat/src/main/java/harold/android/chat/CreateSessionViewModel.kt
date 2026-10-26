@@ -3,19 +3,19 @@ package harold.android.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import harold.android.chat.data.CachedAgent
-import harold.android.chat.data.SessionRepository
 import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AgentId
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.WorkspaceState
 import harold.android.credentials.SavedHaroldRepository
 import harold.android.credentials.StoredCredential
+import harold.android.database.session.CachedAgent
+import harold.android.database.session.SessionRepository
+import harold.android.database.workspace.CachedWorkspace
+import harold.android.database.workspace.WorkspaceRepository
 import harold.android.navigation.CreatedWorkspaceResult
 import harold.android.navigation.Navigator
 import harold.android.network.apiErrorMessage
-import harold.android.session.HaroldConnectionStatus
-import harold.android.session.HaroldConnections
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 import harold.android.user.UserRepository
@@ -24,7 +24,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -32,21 +31,27 @@ import kotlinx.coroutines.launch
 class CreateSessionViewModel @Inject constructor(
     private val sessionGateway: SessionGateway,
     private val sessionRepository: SessionRepository,
+    private val workspaceRepository: WorkspaceRepository,
     private val userRepository: UserRepository,
     private val sessionCommands: SessionCommands,
     private val navigator: Navigator,
     private val savedHaroldRepository: SavedHaroldRepository? = null,
-    private val haroldConnections: HaroldConnections? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CreateSessionUiState())
     val uiState: StateFlow<CreateSessionUiState> = _uiState.asStateFlow()
 
     private var agentsJob: Job? = null
     private var agentsOrigin: String? = null
+    private var workspaceJob: Job? = null
+    private var savedHarolds: List<StoredCredential> = emptyList()
+    private var pairedOrigin: String? = null
+    private var pendingCreatedWorkspace: CreatedWorkspaceResult? = null
 
     init {
         viewModelScope.launch {
-            load()
+            loadHaroldMetadata()
+            observeWorkspaces()
+            refreshWorkspaces()
         }
         viewModelScope.launch {
             navigator.workspaceCreated.collect(::selectCreatedWorkspace)
@@ -150,100 +155,117 @@ class CreateSessionViewModel @Inject constructor(
         }
     }
 
-    private suspend fun load() {
-        val saved = savedHaroldRepository?.list().orEmpty()
-        if (saved.isEmpty()) {
-            val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
-            _uiState.value = loadCreateForm(paired.serverOrigin)
-            observeAgents(paired.serverOrigin)
-            return
-        }
+    private suspend fun loadHaroldMetadata() {
+        savedHarolds = savedHaroldRepository?.list().orEmpty()
+        pairedOrigin = (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin
+    }
 
-        val workspaces = saved.filter { harold -> isReachable(harold.serverOrigin) }
-            .flatMap { harold -> workspacesFor(harold) }
-        val first = workspaces.firstOrNull()
-        _uiState.value = CreateSessionUiState(
-            workspaces = workspaces,
-            selectedWorkspaceId = first?.id.orEmpty(),
-        )
-        if (first != null) {
-            loadAgents(first)
+    private fun observeWorkspaces() {
+        workspaceJob?.cancel()
+        workspaceJob = viewModelScope.launch {
+            workspaceRepository.observe().collect(::applyCachedWorkspaces)
         }
     }
 
-    private suspend fun selectCreatedWorkspace(result: CreatedWorkspaceResult) {
-        val saved = savedHaroldRepository?.list().orEmpty()
-        if (saved.isEmpty()) {
-            val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
-            val workspaces = userRepository.listWorkspaces(paired.serverOrigin).getOrNull()?.items.orEmpty()
-                .map { workspace -> workspace.toWorkspaceRow() }
-                .filter { workspace -> workspace.state == WorkspaceState.Available }
-            val targetId = workspaces.firstOrNull { workspace -> workspace.id == result.workspaceId }?.id
-                ?: _uiState.value.selectedWorkspaceId
-            _uiState.update { current ->
-                current.copy(
-                    workspaces = workspaces,
-                    selectedWorkspaceId = targetId,
-                    error = null,
+    private suspend fun refreshWorkspaces() {
+        targetOrigins().forEach { serverOrigin ->
+            workspaceRepository.refresh(serverOrigin)
+        }
+    }
+
+    private fun applyCachedWorkspaces(cached: List<CachedWorkspace>) {
+        val origins = targetOrigins()
+        val savedByOrigin = savedHarolds.associateBy { harold -> harold.serverOrigin }
+        val scoped = savedHarolds.isNotEmpty()
+        val rows = cached
+            .filter { workspace -> workspace.serverOrigin in origins }
+            .mapNotNull { cachedWorkspace ->
+                val workspace = cachedWorkspace.workspace
+                if (workspace.state != WorkspaceState.Available) {
+                    return@mapNotNull null
+                }
+                val harold = savedByOrigin[cachedWorkspace.serverOrigin]
+                workspace.toWorkspaceRow().copy(
+                    id = if (scoped) {
+                        "${cachedWorkspace.serverOrigin}|${workspace.id}"
+                    } else {
+                        workspace.id
+                    },
+                    serverOrigin = cachedWorkspace.serverOrigin,
+                    haroldName = harold?.name.orEmpty(),
+                    haroldColorId = harold?.colorId.orEmpty(),
+                    haroldIconId = harold?.iconId.orEmpty(),
                 )
             }
-            observeAgents(paired.serverOrigin)
-            return
-        }
 
-        val workspaces = saved.filter { harold -> isReachable(harold.serverOrigin) }
-            .flatMap { harold -> workspacesFor(harold) }
-        val scopedId = "${result.serverOrigin}|${result.workspaceId}"
-        val selected = workspaces.firstOrNull { workspace ->
-            workspace.id == scopedId || workspace.id == result.workspaceId
+        val current = _uiState.value
+        val pendingId = pendingCreatedWorkspace?.let { created ->
+            workspaceId(created.serverOrigin, created.workspaceId)
         }
-        if (selected == null) {
-            _uiState.update { current -> current.copy(workspaces = workspaces) }
+        val selected = rows.firstOrNull { row -> row.id == current.selectedWorkspaceId }
+            ?: rows.firstOrNull { row -> row.id == pendingId }
+            ?: rows.firstOrNull()
+        val agentsForSelection = selected != null && selected.serverOrigin == agentsOrigin
+
+        _uiState.update { state ->
+            state.copy(
+                workspaces = rows,
+                selectedWorkspaceId = selected?.id.orEmpty(),
+                agents = if (agentsForSelection) state.agents else emptyList(),
+                selectedAgentId = if (agentsForSelection) state.selectedAgentId else null,
+            )
+        }
+        if (selected != null && selected.serverOrigin.isNotEmpty() && !agentsForSelection) {
+            loadAgents(selected)
+        }
+        if (selected != null && selected.id == pendingId) {
+            pendingCreatedWorkspace = null
+        }
+    }
+
+    private fun selectCreatedWorkspace(result: CreatedWorkspaceResult) {
+        pendingCreatedWorkspace = result
+        val targetId = workspaceId(result.serverOrigin, result.workspaceId)
+        val workspace = _uiState.value.workspaces.firstOrNull { row ->
+            row.id == targetId ||
+                (row.serverOrigin == result.serverOrigin && row.id == result.workspaceId)
+        }
+        if (workspace == null) {
             return
         }
-        val previousWorkspace = _uiState.value.workspaces.firstOrNull { row ->
-            row.id == _uiState.value.selectedWorkspaceId
-        }
-        val sameOrigin = previousWorkspace != null &&
-            previousWorkspace.serverOrigin == selected.serverOrigin &&
+        pendingCreatedWorkspace = null
+        selectWorkspace(workspace)
+    }
+
+    private fun selectWorkspace(workspace: WorkspaceRow) {
+        val sameOrigin = workspace.serverOrigin == agentsOrigin &&
             _uiState.value.agents.isNotEmpty()
         _uiState.update { current ->
             current.copy(
-                workspaces = workspaces,
-                selectedWorkspaceId = selected.id,
+                selectedWorkspaceId = workspace.id,
                 error = null,
                 agents = if (sameOrigin) current.agents else emptyList(),
                 selectedAgentId = if (sameOrigin) current.selectedAgentId else null,
             )
         }
         if (!sameOrigin) {
-            loadAgents(selected)
+            loadAgents(workspace)
         }
     }
 
-    private fun isReachable(serverOrigin: String): Boolean {
-        val link = haroldConnections?.connections?.value
-            ?.find { connection -> connection.serverOrigin == serverOrigin }
-            ?: return true
-        return link.status != HaroldConnectionStatus.Unreachable &&
-            link.status != HaroldConnectionStatus.Closed
-    }
+    private fun targetOrigins(): List<String> =
+        if (savedHarolds.isNotEmpty()) {
+            savedHarolds.map { harold -> harold.serverOrigin }.distinct()
+        } else {
+            listOfNotNull(pairedOrigin)
+        }
 
-    private suspend fun workspacesFor(harold: StoredCredential): List<WorkspaceRow> {
-        val listed = userRepository.listWorkspaces(harold.serverOrigin).getOrNull() ?: return emptyList()
-        return listed.items
-            .map { workspace -> workspace.toWorkspaceRow() }
-            .filter { workspace -> workspace.state == WorkspaceState.Available }
-            .map { workspace ->
-                workspace.copy(
-                    id = "${harold.serverOrigin}|${workspace.id}",
-                    serverOrigin = harold.serverOrigin,
-                    haroldName = harold.name,
-                    haroldColorId = harold.colorId,
-                    haroldIconId = harold.iconId,
-                )
-            }
-    }
+    private fun workspaceId(serverOrigin: String, workspaceId: String): String =
+        if (savedHarolds.isNotEmpty()) {
+            "$serverOrigin|$workspaceId"
+        } else {
+            workspaceId
+        }
 
     private fun loadAgents(workspace: WorkspaceRow) {
         val origin = workspace.serverOrigin.ifEmpty { return }
@@ -292,24 +314,6 @@ class CreateSessionViewModel @Inject constructor(
                 error = null,
             )
         }
-    }
-
-    private suspend fun loadCreateForm(serverOrigin: String): CreateSessionUiState {
-        val workspaces = userRepository.listWorkspaces(serverOrigin).getOrNull()?.items.orEmpty()
-            .map { workspace -> workspace.toWorkspaceRow() }
-            .filter { workspace -> workspace.state == WorkspaceState.Available }
-
-        sessionRepository.refreshAgents(serverOrigin)
-        val agents = sessionRepository.observeAgents(serverOrigin).first()
-            .filter { agent -> agent.enabled }
-            .map { agent -> AgentOption(id = agent.agentId, displayName = agent.displayName) }
-
-        return CreateSessionUiState(
-            workspaces = workspaces,
-            agents = agents,
-            selectedWorkspaceId = workspaces.firstOrNull()?.id.orEmpty(),
-            selectedAgentId = agents.firstOrNull()?.id,
-        )
     }
 
     private suspend fun agentNeedsLogin(serverOrigin: String, agentId: AgentId): Boolean =

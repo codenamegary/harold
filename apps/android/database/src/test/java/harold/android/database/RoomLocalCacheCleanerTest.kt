@@ -1,9 +1,9 @@
-package harold.android.db
+package harold.android.database
 
 import androidx.room.Room
-import harold.android.chat.data.AgentEntity
-import harold.android.chat.data.SessionEntity
-import harold.android.workspaces.data.WorkspaceEntity
+import harold.android.database.session.AgentEntity
+import harold.android.database.session.SessionEntity
+import harold.android.database.workspace.WorkspaceEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After

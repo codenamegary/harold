@@ -3,17 +3,16 @@ package harold.android.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import harold.android.chat.data.CachedSession
-import harold.android.chat.data.SessionRepository
 import harold.android.credentials.SavedHaroldRepository
 import harold.android.credentials.StoredCredential
+import harold.android.database.session.CachedSession
+import harold.android.database.session.SessionRepository
 import harold.android.foreground.SessionAttentionMarks
 import harold.android.live.SessionOwner
 import harold.android.navigation.Navigator
 import harold.android.network.apiErrorMessage
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
-import harold.android.user.UserRepository
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -41,7 +40,6 @@ data class SessionsUiState(
 class SessionsViewModel @Inject constructor(
     private val sessionGateway: SessionGateway,
     private val sessionRepository: SessionRepository,
-    private val userRepository: UserRepository,
     private val sessionCommands: SessionCommands,
     private val navigator: Navigator,
     private val sessionOwner: SessionOwner,

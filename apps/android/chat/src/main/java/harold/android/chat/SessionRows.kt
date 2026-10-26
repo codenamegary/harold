@@ -1,6 +1,6 @@
 package harold.android.chat
 
-import harold.android.chat.data.CachedSession
+import harold.android.database.session.CachedSession
 import harold.android.contracts.AgentId
 import harold.android.contracts.Session
 import harold.android.contracts.SessionState

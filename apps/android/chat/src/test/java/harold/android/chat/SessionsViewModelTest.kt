@@ -1,7 +1,5 @@
 package harold.android.chat
 
-import harold.android.chat.data.CachedSession
-import harold.android.chat.data.SessionRepository
 import harold.android.contracts.AgentId
 import harold.android.contracts.AgentSettings
 import harold.android.contracts.AttachmentReference
@@ -11,7 +9,8 @@ import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceState
 import harold.android.credentials.SavedHaroldRepository
 import harold.android.credentials.StoredCredential
-import harold.android.testing.FakeCredentialStore
+import harold.android.database.session.CachedSession
+import harold.android.database.session.SessionRepository
 import harold.android.live.SessionOwner
 import harold.android.live.SessionSnapshot
 import harold.android.navigation.Chat
@@ -19,6 +18,7 @@ import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.session.PairedState
 import harold.android.stream.ConnectionState
+import harold.android.testing.FakeCredentialStore
 import harold.android.testing.FakeSessionGateway
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -237,7 +237,6 @@ class SessionsViewModelTest {
     ): SessionsViewModel = SessionsViewModel(
         sessionGateway = FakeSessionGateway(PAIRED),
         sessionRepository = sessionRepository,
-        userRepository = repository,
         sessionCommands = commands,
         navigator = navigator,
         sessionOwner = sessionOwner,

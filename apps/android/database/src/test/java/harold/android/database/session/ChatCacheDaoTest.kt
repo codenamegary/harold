@@ -1,8 +1,10 @@
-package harold.android.chat.data
+package harold.android.database.session
 
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import harold.android.database.workspace.WorkspaceDao
+import harold.android.database.workspace.WorkspaceEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -183,7 +185,7 @@ class ChatCacheDaoTest {
 }
 
 @Database(
-    entities = [SessionEntity::class, AgentEntity::class],
+    entities = [SessionEntity::class, AgentEntity::class, WorkspaceEntity::class],
     version = 1,
     exportSchema = false,
 )
@@ -191,4 +193,6 @@ internal abstract class TestChatDatabase : RoomDatabase() {
     abstract fun sessionDao(): SessionDao
 
     abstract fun agentDao(): AgentDao
+
+    abstract fun workspaceDao(): WorkspaceDao
 }

@@ -205,7 +205,7 @@ fun SessionsListContent(
                 LoadingSkeletonList(
                     contentDescription = "Loading sessions",
                     modifier = Modifier.testTag("sessions_list_loading"),
-                    rows = 5,
+                    rows = 4,
                     rowHeight = 76.dp,
                 )
             }

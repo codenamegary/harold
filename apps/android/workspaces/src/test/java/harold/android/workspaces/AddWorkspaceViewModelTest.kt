@@ -20,8 +20,8 @@ import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 import harold.android.testing.FakeSessionGateway
 import harold.android.user.UserRepository
-import harold.android.workspaces.data.CachedWorkspace
-import harold.android.workspaces.data.WorkspaceRepository
+import harold.android.database.workspace.CachedWorkspace
+import harold.android.database.workspace.WorkspaceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow

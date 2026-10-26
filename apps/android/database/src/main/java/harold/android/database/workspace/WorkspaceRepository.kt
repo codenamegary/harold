@@ -1,4 +1,4 @@
-package harold.android.workspaces.data
+package harold.android.database.workspace
 
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.Workspace

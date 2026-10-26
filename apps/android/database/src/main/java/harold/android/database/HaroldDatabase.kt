@@ -1,13 +1,13 @@
-package harold.android.db
+package harold.android.database
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
-import harold.android.chat.data.AgentDao
-import harold.android.chat.data.AgentEntity
-import harold.android.chat.data.SessionDao
-import harold.android.chat.data.SessionEntity
-import harold.android.workspaces.data.WorkspaceDao
-import harold.android.workspaces.data.WorkspaceEntity
+import harold.android.database.session.AgentDao
+import harold.android.database.session.AgentEntity
+import harold.android.database.session.SessionDao
+import harold.android.database.session.SessionEntity
+import harold.android.database.workspace.WorkspaceDao
+import harold.android.database.workspace.WorkspaceEntity
 
 @Database(
     entities = [

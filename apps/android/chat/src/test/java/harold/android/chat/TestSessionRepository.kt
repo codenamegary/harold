@@ -1,12 +1,12 @@
 package harold.android.chat
 
-import harold.android.chat.data.CachedAgent
-import harold.android.chat.data.CachedSession
-import harold.android.chat.data.SessionRefresh
-import harold.android.chat.data.SessionRepository
 import harold.android.contracts.AgentId
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
+import harold.android.database.session.CachedAgent
+import harold.android.database.session.CachedSession
+import harold.android.database.session.SessionCatalog
+import harold.android.database.session.SessionRepository
 import harold.android.user.UserRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,20 +30,15 @@ class TestSessionRepository(
     override fun observeAgents(serverOrigin: String): Flow<List<CachedAgent>> =
         agents.map { cached -> cached[serverOrigin].orEmpty() }
 
-    override suspend fun refresh(
-        serverOrigin: String,
-        snapshot: SessionRefresh,
-    ): Result<Unit> {
+    override suspend fun refresh(serverOrigin: String): Result<SessionCatalog> {
         val listed = network.listSessions(serverOrigin)
         if (listed.isFailure) {
             return Result.failure(checkNotNull(listed.exceptionOrNull()))
         }
-        val agentItems = snapshot.agents
-            ?: network.listAgents(serverOrigin).getOrNull()?.items
-        val workspaces = snapshot.workspaces
-            ?: network.listWorkspaces(serverOrigin, 100).getOrNull()?.items
-            ?: emptyList()
-        val agentLabels = agentItems.orEmpty().associate { agent -> agent.id to agent.displayName }
+        val agentResult = network.listAgents(serverOrigin)
+        val agentItems = agentResult.getOrNull()?.items.orEmpty()
+        val workspaces = network.listWorkspaces(serverOrigin, 100).getOrNull()?.items.orEmpty()
+        val agentLabels = agentItems.associate { agent -> agent.id to agent.displayName }
         val workspaceByPath = workspaces.associateBy { workspace -> workspace.path }
         val cached = listed.getOrThrow().items.map { session ->
             val workspace = workspaceByPath[session.cwd]
@@ -56,7 +51,7 @@ class TestSessionRepository(
             )
         }
         sessions.value = sessions.value.filterNot { session -> session.serverOrigin == serverOrigin } + cached
-        if (agentItems != null) {
+        if (agentResult.isSuccess) {
             agents.value = agents.value + (
                 serverOrigin to agentItems.map { agent ->
                     CachedAgent(
@@ -68,7 +63,12 @@ class TestSessionRepository(
                 }
             )
         }
-        return Result.success(Unit)
+        return Result.success(
+            SessionCatalog(
+                agents = agentItems,
+                workspaces = workspaces,
+            ),
+        )
     }
 
     override suspend fun refreshAgents(serverOrigin: String): Result<Unit> {
