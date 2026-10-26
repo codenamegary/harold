@@ -19,10 +19,7 @@ import harold.android.navigation.AppRoute
 import harold.android.navigation.FeatureEntryProvider
 import harold.android.navigation.Navigator
 import harold.android.navigation.Workspaces
-import harold.android.workspaces.data.DefaultWorkspaceRepository
-import harold.android.workspaces.data.WorkspaceRepository
 import javax.inject.Inject
-import javax.inject.Singleton
 
 class WorkspacesEntryProvider @Inject constructor() : FeatureEntryProvider {
     override fun register(scope: EntryProviderScope<AppRoute>, navigator: Navigator) {
@@ -73,8 +70,4 @@ abstract class WorkspacesFeatureModule {
     @Binds
     @IntoSet
     abstract fun entryProvider(impl: WorkspacesEntryProvider): FeatureEntryProvider
-
-    @Binds
-    @Singleton
-    abstract fun workspaceRepository(impl: DefaultWorkspaceRepository): WorkspaceRepository
 }

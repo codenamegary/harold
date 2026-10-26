@@ -1,4 +1,4 @@
-package harold.android.chat.data
+package harold.android.database.session
 
 import androidx.room.Dao
 import androidx.room.Query

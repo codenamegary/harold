@@ -33,4 +33,19 @@ class WorkspacesScreenTest {
         composeTestRule.onNodeWithTag("workspaces_back").assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Back").assertCountEquals(0)
     }
+
+    @Test
+    fun emptyCacheShowsSkeletonRowsWhileLoading() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                WorkspacesScreen(
+                    uiState = WorkspacesUiState(loadState = WorkspacesLoadState.Loading),
+                    onBack = {},
+                    onAddClick = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("workspaces_loading").assertIsDisplayed()
+    }
 }

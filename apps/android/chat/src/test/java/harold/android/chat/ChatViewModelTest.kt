@@ -1,8 +1,6 @@
 package harold.android.chat
 
 import androidx.lifecycle.SavedStateHandle
-import harold.android.chat.data.CachedSession
-import harold.android.chat.data.SessionRepository
 import harold.android.contracts.AgentId
 import harold.android.contracts.AgentSettings
 import harold.android.contracts.AgentSettingsCollection
@@ -28,6 +26,8 @@ import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceState
 import harold.android.credentials.SavedHaroldRepository
 import harold.android.credentials.StoredCredential
+import harold.android.database.session.CachedSession
+import harold.android.database.session.SessionRepository
 import harold.android.live.SessionOwner
 import harold.android.live.SessionSnapshot
 import harold.android.live.TranscriptUserRow
@@ -136,7 +136,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val loading = viewModel.uiState.value
-        assertTrue(loading.sessionsLoaded)
+        assertTrue(loading.hasLoaded)
         assertTrue(loading.isRefreshing)
         assertEquals(listOf("Cached"), loading.sessions.map { row -> row.name })
 
@@ -577,7 +577,6 @@ class ChatViewModelTest {
         val sessionsRoute = SessionsViewModel(
             sessionGateway = pairedGateway(),
             sessionRepository = TestSessionRepository(repository),
-            userRepository = repository,
             sessionCommands = sessionCommands,
             navigator = Navigator(),
             sessionOwner = ChatFakeSessionOwner(),
@@ -1330,6 +1329,7 @@ class ChatViewModelTest {
         val route = CreateSessionViewModel(
             sessionGateway = pairedGateway(),
             sessionRepository = TestSessionRepository(repository),
+            workspaceRepository = TestWorkspaceRepository(repository),
             userRepository = repository,
             sessionCommands = sessionCommands,
             navigator = Navigator(),

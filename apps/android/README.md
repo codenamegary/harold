@@ -90,10 +90,13 @@ other disconnect, slow consumer included, keeps reconnecting.
 
 Room keeps the last REST snapshot of workspaces, sessions, and agents. Each row
 is keyed by `serverOrigin`, so several Harolds can share the database without
-colliding. Screens collect the DAO flows, then call the feature repository's
-`refresh` method to fetch the live list. Creates and deletes call the server
-first and update Room only after the server accepts the change. Removing a saved
-Harold deletes every cached row for that origin.
+colliding. The database, DAOs, and repositories live in the shared `:database`
+module, which both `:chat` and `:workspaces` depend on. View models collect the
+repository flows, then call `refresh` to fetch the live list. Create-session reads
+the same workspace cache, so its picker still works while a Harold is offline.
+Creates and deletes call the server first and update Room only after the server
+accepts the change. Removing a saved Harold deletes every cached row for that
+origin.
 
 ## CI
 

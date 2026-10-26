@@ -21,6 +21,7 @@ include(
     ":navigation",
     ":contracts",
     ":api",
+    ":database",
     ":auth",
     ":live",
     ":voice",

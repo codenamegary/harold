@@ -82,6 +82,7 @@ dependencies {
     implementation(project(":navigation"))
     implementation(project(":contracts"))
     implementation(project(":api"))
+    implementation(project(":database"))
     implementation(project(":auth"))
     implementation(project(":live"))
     implementation(project(":voice"))
@@ -107,9 +108,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.navigation3)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
     implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
 
     testImplementation(project(":testing"))
     testImplementation(libs.junit)

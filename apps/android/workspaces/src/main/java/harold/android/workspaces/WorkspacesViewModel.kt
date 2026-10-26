@@ -9,8 +9,8 @@ import harold.android.credentials.StoredCredential
 import harold.android.network.apiErrorMessage
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
-import harold.android.workspaces.data.CachedWorkspace
-import harold.android.workspaces.data.WorkspaceRepository
+import harold.android.database.workspace.CachedWorkspace
+import harold.android.database.workspace.WorkspaceRepository
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

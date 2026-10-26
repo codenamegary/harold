@@ -1,6 +1,6 @@
 package harold.android.credentials
 
-import harold.android.cache.LocalCacheCleaner
+import harold.android.database.LocalCacheCleaner
 import harold.android.session.PairedState
 import harold.android.testing.FakeCredentialStore
 import harold.android.testing.FakeSessionGateway

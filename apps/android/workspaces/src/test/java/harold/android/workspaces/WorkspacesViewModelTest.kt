@@ -10,8 +10,8 @@ import harold.android.network.AgentApiException
 import harold.android.session.PairedState
 import harold.android.testing.FakeCredentialStore
 import harold.android.testing.FakeSessionGateway
-import harold.android.workspaces.data.CachedWorkspace
-import harold.android.workspaces.data.WorkspaceRepository
+import harold.android.database.workspace.CachedWorkspace
+import harold.android.database.workspace.WorkspaceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow

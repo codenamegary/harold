@@ -14,9 +14,6 @@ import harold.android.chat.composer.SessionConfigWriter
 import harold.android.chat.composer.completeSlashCommand
 import harold.android.chat.composer.supportsFileAttachments
 import harold.android.chat.composer.supportsImageAttachments
-import harold.android.chat.data.CachedSession
-import harold.android.chat.data.SessionRefresh
-import harold.android.chat.data.SessionRepository
 import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AgentId
@@ -35,6 +32,8 @@ import harold.android.contracts.parseConfigOptions
 import harold.android.credentials.SavedHaroldRepository
 import harold.android.credentials.forgetSavedHarold
 import harold.android.credentials.settleAfterForget
+import harold.android.database.session.CachedSession
+import harold.android.database.session.SessionRepository
 import harold.android.di.PreviewDispatcher
 import harold.android.foreground.ActiveSessionSnapshot
 import harold.android.foreground.MarkedPermission
@@ -1220,39 +1219,32 @@ class ChatViewModel @Inject constructor(
             )
         }
         if (origins.isEmpty()) {
-            _uiState.update { current -> current.copy(isRefreshing = false, sessionsLoaded = true) }
+            _uiState.update { current -> current.copy(isRefreshing = false, hasLoaded = true) }
             return@withLock
         }
 
         var anySuccess = false
         var lastError: Throwable? = null
         origins.forEach { serverOrigin ->
-            val listedWorkspaces = userRepository.listWorkspaces(serverOrigin)
-                .getOrNull()
-                ?.items
-            applyWorkspaces(listedWorkspaces)
-            val listedAgents = userRepository.listAgents(serverOrigin).getOrNull()?.items
-            applyAgents(listedAgents)
-            val refreshResult = sessionRepository.refresh(
-                serverOrigin = serverOrigin,
-                snapshot = SessionRefresh(
-                    agents = listedAgents,
-                    workspaces = listedWorkspaces,
-                ),
+            val refreshResult = sessionRepository.refresh(serverOrigin)
+            refreshResult.fold(
+                onSuccess = { catalog ->
+                    applyWorkspaces(catalog.workspaces)
+                    applyAgents(catalog.agents)
+                    anySuccess = true
+                    unreachableOrigins.remove(serverOrigin)
+                },
+                onFailure = { error ->
+                    lastError = error
+                    unreachableOrigins.add(serverOrigin)
+                },
             )
-            if (refreshResult.isSuccess) {
-                anySuccess = true
-                unreachableOrigins.remove(serverOrigin)
-            } else {
-                lastError = refreshResult.exceptionOrNull()
-                unreachableOrigins.add(serverOrigin)
-            }
         }
 
         publishCachedSessions()
         _uiState.update { current ->
             current.copy(
-                sessionsLoaded = true,
+                hasLoaded = true,
                 isRefreshing = false,
                 sessionsError = if (!anySuccess && catalog.isEmpty()) {
                     lastError?.let(::apiErrorMessage) ?: "Could not reach Harold"
@@ -1338,7 +1330,7 @@ class ChatViewModel @Inject constructor(
         _uiState.update { current ->
             current.copy(
                 sessions = rows,
-                sessionsLoaded = true,
+                hasLoaded = true,
                 selectedSession = updatedSelected ?: current.selectedSession,
                 sessionsError = if (rows.isNotEmpty()) null else current.sessionsError,
             )

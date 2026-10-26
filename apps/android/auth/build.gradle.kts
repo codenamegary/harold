@@ -10,6 +10,7 @@ android {
 dependencies {
     implementation(project(":contracts"))
     implementation(project(":api"))
+    implementation(project(":database"))
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)

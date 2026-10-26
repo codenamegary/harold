@@ -68,7 +68,7 @@ data class ChatUiState(
     val selectedSession: SessionRow? = null,
     val sessions: List<SessionRow> = emptyList(),
     /** True once the first cached snapshot (or an empty cache) has been read. */
-    val sessionsLoaded: Boolean = false,
+    val hasLoaded: Boolean = false,
     /** True while the network refresh is running. Cached content stays visible. */
     val isRefreshing: Boolean = false,
     val sessionsError: String? = null,

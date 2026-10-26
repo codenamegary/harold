@@ -1,4 +1,4 @@
-package harold.android.chat.data
+package harold.android.database.session
 
 import androidx.room.Room
 import harold.android.contracts.AgentAuth
@@ -19,6 +19,8 @@ import harold.android.contracts.SessionCollection
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceState
+import harold.android.database.workspace.DefaultWorkspaceRepository
+import harold.android.database.workspace.WorkspaceRepository
 import harold.android.network.AgentApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -37,6 +39,7 @@ import org.robolectric.annotation.Config
 class DefaultSessionRepositoryTest {
     private lateinit var database: TestChatDatabase
     private lateinit var api: ChatFakeAgentApi
+    private lateinit var workspaceRepository: WorkspaceRepository
     private lateinit var repository: DefaultSessionRepository
 
     @Before
@@ -46,8 +49,13 @@ class DefaultSessionRepositoryTest {
             TestChatDatabase::class.java,
         ).allowMainThreadQueries().build()
         api = ChatFakeAgentApi()
+        workspaceRepository = DefaultWorkspaceRepository(
+            agentApi = api,
+            dao = database.workspaceDao(),
+        )
         repository = DefaultSessionRepository(
             agentApi = api,
+            workspaceRepository = workspaceRepository,
             sessionDao = database.sessionDao(),
             agentDao = database.agentDao(),
         )
@@ -72,40 +80,18 @@ class DefaultSessionRepositoryTest {
     }
 
     @Test
-    fun refreshUsesListsTheCallerAlreadyFetched() = runTest {
+    fun refreshReturnsTheLiveListsAndUpdatesTheWorkspaceCache() = runTest {
         api.sessions = Result.success(SessionCollection(listOf(session("sess_01", "Alpha"))))
-        api.agents = Result.failure(IllegalStateException("must not fetch"))
-        api.workspaces = Result.failure(IllegalStateException("must not fetch"))
 
-        val result = repository.refresh(
-            serverOrigin = ORIGIN,
-            snapshot = SessionRefresh(
-                agents = listOf(
-                    AgentSettings(
-                        id = "cursor",
-                        displayName = "Cursor from snapshot",
-                        available = true,
-                        enabled = true,
-                        path = null,
-                    ),
-                ),
-                workspaces = listOf(
-                    Workspace(
-                        id = "ws_01",
-                        name = "snapshot",
-                        path = "/tmp/harold",
-                        state = WorkspaceState.Available,
-                        createdAt = "2026-08-01T00:00:00.000Z",
-                        lastUsedAt = "2026-08-01T00:00:00.000Z",
-                    ),
-                ),
-            ),
+        val result = repository.refresh(ORIGIN)
+
+        val catalog = result.getOrThrow()
+        assertEquals(listOf("cursor"), catalog.agents.map { agent -> agent.id })
+        assertEquals(listOf("harold"), catalog.workspaces.map { workspace -> workspace.name })
+        assertEquals(
+            listOf("harold"),
+            workspaceRepository.observe(ORIGIN).first().map { cached -> cached.workspace.name },
         )
-
-        assertTrue(result.isSuccess)
-        val cached = repository.observeSessions(ORIGIN).first().single()
-        assertEquals("snapshot", cached.workspaceName)
-        assertEquals("Cursor from snapshot", cached.agentLabel)
     }
 
     @Test
