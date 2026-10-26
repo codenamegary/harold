@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { AttachmentDescriptorSchema } from "contracts/http/attachments"
-import { ConflictProblemSchema, ValidationProblemSchema } from "contracts/http/error"
+import { ValidationProblemSchema } from "contracts/http/error"
 import { CreateSessionResponseSchema } from "contracts/http/session"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
 import { bootTestApp, TestApp } from "../test-support/test.harness"
-import { allowWorkspaceRoots, enableAgent } from "../test-support/test.app"
+import { enableAgent } from "../test-support/test.app"
 
 const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
   authorization: `Bearer ${app.deviceCredential.credential}`,
@@ -43,9 +43,8 @@ const createSessionIn = async (app: TestApp["app"], folder: string) => {
   return CreateSessionResponseSchema.parse(JSON.parse(response.body)).sessionId
 }
 
-const createSessionInAllowedFolder = async (app: TestApp["app"], dataDir: string) => {
+const createSessionInProjectFolder = async (app: TestApp["app"], dataDir: string) => {
   const folder = path.join(dataDir, "project")
-  await allowWorkspaceRoots(app, [dataDir])
   return { sessionId: await createSessionIn(app, folder), folder }
 }
 
@@ -111,7 +110,7 @@ const listWorkspaceCount = async (app: TestApp["app"]) => {
 describe("POST /v1/sessions/:sessionId/attachments", () => {
   test("stores the file in the session folder and returns a descriptor", async () => {
     const { app, dataDir } = await bootAttachmentApp()
-    const { sessionId, folder } = await createSessionInAllowedFolder(app, dataDir)
+    const { sessionId, folder } = await createSessionInProjectFolder(app, dataDir)
 
     const response = await uploadAttachment(app, sessionId, {
       fileName: "shot.png",
@@ -128,7 +127,7 @@ describe("POST /v1/sessions/:sessionId/attachments", () => {
 
   test("does not need a registered workspace and does not create one", async () => {
     const { app, dataDir } = await bootAttachmentApp()
-    const { sessionId } = await createSessionInAllowedFolder(app, dataDir)
+    const { sessionId } = await createSessionInProjectFolder(app, dataDir)
     expect(await listWorkspaceCount(app)).toBe(0)
 
     const response = await uploadAttachment(app, sessionId, {
@@ -141,9 +140,8 @@ describe("POST /v1/sessions/:sessionId/attachments", () => {
     expect(await listWorkspaceCount(app)).toBe(0)
   })
 
-  test("accepts a session folder below an allowed root", async () => {
+  test("accepts a session folder anywhere on the host", async () => {
     const { app, dataDir } = await bootAttachmentApp()
-    await allowWorkspaceRoots(app, [dataDir])
     const folder = path.join(dataDir, "sites", "deep", "project")
     const sessionId = await createSessionIn(app, folder)
 
@@ -158,7 +156,7 @@ describe("POST /v1/sessions/:sessionId/attachments", () => {
 
   test("patches an existing .gitignore on upload", async () => {
     const { app, dataDir } = await bootAttachmentApp()
-    const { sessionId, folder } = await createSessionInAllowedFolder(app, dataDir)
+    const { sessionId, folder } = await createSessionInProjectFolder(app, dataDir)
     await writeFile(path.join(folder, ".gitignore"), "node_modules\n", "utf8")
 
     const response = await uploadAttachment(app, sessionId, {
@@ -174,7 +172,7 @@ describe("POST /v1/sessions/:sessionId/attachments", () => {
 
   test("never creates a .gitignore when the folder has none", async () => {
     const { app, dataDir } = await bootAttachmentApp()
-    const { sessionId, folder } = await createSessionInAllowedFolder(app, dataDir)
+    const { sessionId, folder } = await createSessionInProjectFolder(app, dataDir)
 
     const response = await uploadAttachment(app, sessionId, {
       fileName: "notes.md",
@@ -188,7 +186,7 @@ describe("POST /v1/sessions/:sessionId/attachments", () => {
 
   test("returns 404 for an unknown session", async () => {
     const { app, dataDir } = await bootAttachmentApp()
-    await createSessionInAllowedFolder(app, dataDir)
+    await createSessionInProjectFolder(app, dataDir)
 
     const response = await uploadAttachment(app, "ses_missing", {
       fileName: "notes.md",
@@ -199,11 +197,10 @@ describe("POST /v1/sessions/:sessionId/attachments", () => {
     expect(response.statusCode).toBe(404)
   })
 
-  test("returns 409 when the session folder is outside the allowed roots", async () => {
+  test("stores attachments in a session folder outside the data directory", async () => {
     const { app, dataDir } = await bootAttachmentApp()
-    await mkdir(path.join(dataDir, "allowed"), { recursive: true })
-    await allowWorkspaceRoots(app, [path.join(dataDir, "allowed")])
-    const sessionId = await createSessionIn(app, path.join(dataDir, "elsewhere"))
+    const outside = path.join(dataDir, "elsewhere")
+    const sessionId = await createSessionIn(app, outside)
 
     const response = await uploadAttachment(app, sessionId, {
       fileName: "notes.md",
@@ -211,14 +208,15 @@ describe("POST /v1/sessions/:sessionId/attachments", () => {
       bytes: new Uint8Array([1]),
     })
 
-    expect(response.statusCode).toBe(409)
-    ConflictProblemSchema.parse(JSON.parse(response.body))
-    expect(readFile(path.join(dataDir, "elsewhere", ".harold", "attachments"))).rejects.toThrow()
+    expect(response.statusCode).toBe(201)
+    const descriptor = AttachmentDescriptorSchema.parse(JSON.parse(response.body))
+    expect(descriptor.path.startsWith(path.join(outside, ".harold", "attachments"))).toBe(true)
+    expect((await readFile(descriptor.path)).byteLength).toBe(1)
   })
 
   test("returns 400 when agentId is missing", async () => {
     const { app, dataDir } = await bootAttachmentApp()
-    const { sessionId } = await createSessionInAllowedFolder(app, dataDir)
+    const { sessionId } = await createSessionInProjectFolder(app, dataDir)
 
     const response = await uploadAttachment(
       app,
@@ -253,7 +251,7 @@ describe("POST /v1/sessions/:sessionId/attachments", () => {
 
   test("returns 415 for executable extensions", async () => {
     const { app, dataDir } = await bootAttachmentApp()
-    const { sessionId } = await createSessionInAllowedFolder(app, dataDir)
+    const { sessionId } = await createSessionInProjectFolder(app, dataDir)
 
     const response = await uploadAttachment(app, sessionId, {
       fileName: "evil.exe",
@@ -276,7 +274,7 @@ describe("DELETE /v1/sessions/:sessionId/attachments/:attachmentId", () => {
 
   test("removes a stored attachment", async () => {
     const { app, dataDir } = await bootAttachmentApp()
-    const { sessionId } = await createSessionInAllowedFolder(app, dataDir)
+    const { sessionId } = await createSessionInProjectFolder(app, dataDir)
     const uploaded = await uploadAttachment(app, sessionId, {
       fileName: "notes.md",
       mimeType: "text/markdown",
@@ -292,7 +290,7 @@ describe("DELETE /v1/sessions/:sessionId/attachments/:attachmentId", () => {
 
   test("returns 400 when the attachmentId param is empty", async () => {
     const { app, dataDir } = await bootAttachmentApp()
-    const { sessionId } = await createSessionInAllowedFolder(app, dataDir)
+    const { sessionId } = await createSessionInProjectFolder(app, dataDir)
 
     const response = await deleteAttachment(app, sessionId, "")
 
@@ -303,7 +301,7 @@ describe("DELETE /v1/sessions/:sessionId/attachments/:attachmentId", () => {
 
   test("returns 404 for an unknown session", async () => {
     const { app, dataDir } = await bootAttachmentApp()
-    await createSessionInAllowedFolder(app, dataDir)
+    await createSessionInProjectFolder(app, dataDir)
 
     const response = await deleteAttachment(app, "ses_missing", "att_MISSING9.txt")
 
@@ -312,7 +310,7 @@ describe("DELETE /v1/sessions/:sessionId/attachments/:attachmentId", () => {
 
   test("returns 404 for an unknown attachment id", async () => {
     const { app, dataDir } = await bootAttachmentApp()
-    const { sessionId } = await createSessionInAllowedFolder(app, dataDir)
+    const { sessionId } = await createSessionInProjectFolder(app, dataDir)
 
     const response = await deleteAttachment(app, sessionId, "att_MISSING9.txt")
 
@@ -321,7 +319,7 @@ describe("DELETE /v1/sessions/:sessionId/attachments/:attachmentId", () => {
 
   test("returns 404 for an id shaped like a traversal", async () => {
     const { app, dataDir } = await bootAttachmentApp()
-    const { sessionId } = await createSessionInAllowedFolder(app, dataDir)
+    const { sessionId } = await createSessionInProjectFolder(app, dataDir)
 
     const response = await deleteAttachment(app, sessionId, encodeURIComponent("../secret.txt"))
 

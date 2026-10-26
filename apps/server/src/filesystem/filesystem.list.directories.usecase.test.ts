@@ -11,9 +11,10 @@ describe("list directories", () => {
       statPath: () => {
         throw new Error("statPath should not run when canonicalize fails")
       },
+      getHomeDirectory: () => "/home/ops",
     })
 
-    const result = await listDirectories({ root: "/no/such/dir", allowedRoots: ["/allowed"] })
+    const result = await listDirectories({ root: "/no/such/dir" })
 
     expect(result).toEqual({
       ok: false,
@@ -21,42 +22,55 @@ describe("list directories", () => {
     })
   })
 
-  test("returns not_allowed when the canonical root is not an allowed root", async () => {
+  test("starts at the home directory when no root is given", async () => {
+    const canonicalized: string[] = []
     const listDirectories = makeListDirectories({
-      canonicalizePath: () => ({ ok: true, canonicalPath: "/outside/code" }),
-      readDirectoryEntries: () => {
-        throw new Error("readDirectoryEntries should not run when the root is not allowed")
+      canonicalizePath: (inputPath) => {
+        canonicalized.push(inputPath)
+        return { ok: true, canonicalPath: "/home/ops" }
       },
+      readDirectoryEntries: async () => [],
       statPath: () => {
-        throw new Error("statPath should not run when the root is not allowed")
+        throw new Error("statPath should not run for an empty directory")
       },
+      getHomeDirectory: () => "/home/ops",
     })
 
-    const result = await listDirectories({ root: "/outside/code", allowedRoots: ["/allowed"] })
+    const result = await listDirectories({})
 
-    expect(result).toEqual({ ok: false, error: { kind: "not_allowed" } })
+    expect(canonicalized).toEqual(["/home/ops"])
+    expect(result).toEqual({
+      ok: true,
+      value: { path: "/home/ops", parent: "/home", items: [] },
+    })
   })
 
-  test("lists child directories sorted by name with paths joined to the canonical root", async () => {
+  test("lists child directories sorted by name using their canonical targets", async () => {
     const root = "/allowed/code"
     const listDirectories = makeListDirectories({
       canonicalizePath: () => ({ ok: true, canonicalPath: root }),
-      readDirectoryEntries: async () => [{ name: "beta" }, { name: "alpha" }],
+      readDirectoryEntries: async () => [{ name: "beta" }, { name: "alpha" }, { name: ".hidden" }],
       statPath: async (childPath) => ({
         ok: true,
         canonicalPath: childPath,
         isDirectory: true,
       }),
+      getHomeDirectory: () => "/home/ops",
     })
 
-    const result = await listDirectories({ root, allowedRoots: [root] })
+    const result = await listDirectories({ root })
 
     expect(result).toEqual({
       ok: true,
-      items: [
-        { name: "alpha", path: "/allowed/code/alpha" },
-        { name: "beta", path: "/allowed/code/beta" },
-      ],
+      value: {
+        path: root,
+        parent: "/allowed",
+        items: [
+          { name: ".hidden", path: "/allowed/code/.hidden" },
+          { name: "alpha", path: "/allowed/code/alpha" },
+          { name: "beta", path: "/allowed/code/beta" },
+        ],
+      },
     })
   })
 
@@ -78,34 +92,58 @@ describe("list directories", () => {
         }
         return { ok: false }
       },
+      getHomeDirectory: () => "/home/ops",
     })
 
-    const result = await listDirectories({ root, allowedRoots: [root] })
+    const result = await listDirectories({ root })
 
     expect(result).toEqual({
       ok: true,
-      items: [{ name: "dir", path: "/allowed/code/dir" }],
+      value: {
+        path: root,
+        parent: "/allowed",
+        items: [{ name: "dir", path: "/allowed/code/dir" }],
+      },
     })
   })
 
-  test("omits directories whose canonical path escapes the root", async () => {
+  test("follows directory symlinks and reports the canonical target path", async () => {
     const root = "/allowed/code"
     const listDirectories = makeListDirectories({
       canonicalizePath: () => ({ ok: true, canonicalPath: root }),
-      readDirectoryEntries: async () => [{ name: "safe" }, { name: "escape" }],
-      statPath: async (childPath) => {
-        if (childPath === "/allowed/code/escape") {
-          return { ok: true, canonicalPath: "/outside/target", isDirectory: true }
-        }
-        return { ok: true, canonicalPath: childPath, isDirectory: true }
-      },
+      readDirectoryEntries: async () => [{ name: "link" }],
+      statPath: async () => ({
+        ok: true,
+        canonicalPath: "/srv/widgets",
+        isDirectory: true,
+      }),
+      getHomeDirectory: () => "/home/ops",
     })
 
-    const result = await listDirectories({ root, allowedRoots: [root] })
+    const result = await listDirectories({ root })
 
     expect(result).toEqual({
       ok: true,
-      items: [{ name: "safe", path: "/allowed/code/safe" }],
+      value: {
+        path: root,
+        parent: "/allowed",
+        items: [{ name: "link", path: "/srv/widgets" }],
+      },
     })
+  })
+
+  test("has no parent at the filesystem root", async () => {
+    const listDirectories = makeListDirectories({
+      canonicalizePath: () => ({ ok: true, canonicalPath: "/" }),
+      readDirectoryEntries: async () => [],
+      statPath: () => {
+        throw new Error("statPath should not run for an empty directory")
+      },
+      getHomeDirectory: () => "/home/ops",
+    })
+
+    const result = await listDirectories({ root: "/" })
+
+    expect(result).toEqual({ ok: true, value: { path: "/", parent: null, items: [] } })
   })
 })

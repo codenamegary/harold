@@ -29,7 +29,6 @@ describe("makeRuntimeSettingsFileStore", () => {
       bindPort: 3847,
       logLevel: "info",
       logPath: null,
-      allowedRoots: [],
     })
 
     const filePath = path.join(dataDir, settingsFileName)
@@ -48,7 +47,6 @@ describe("makeRuntimeSettingsFileStore", () => {
         bindPort: 4123,
         logLevel: "info",
         logPath: null,
-        allowedRoots: [],
       },
     })
 
@@ -77,7 +75,6 @@ describe("makeRuntimeSettingsFileStore", () => {
         bindPort: 3847,
         logLevel: "info",
         logPath: null,
-        allowedRoots: [],
       }),
       "utf8",
     )
@@ -100,7 +97,26 @@ describe("makeRuntimeSettingsFileStore", () => {
         bindPort: 3847,
         logLevel: "info",
         logPath: null,
-        allowedRoots: [],
+      }),
+      "utf8",
+    )
+
+    expect(() => makeRuntimeSettingsFileStore({ dataDir })).toThrow(/Invalid settings\.yml/)
+  })
+
+  test("refuses to load a settings.yml that still contains allowedRoots", async () => {
+    const dataDir = await createTempDataDir()
+    const filePath = path.join(dataDir, settingsFileName)
+    await writeFile(
+      filePath,
+      YAML.stringify({
+        advertisedUrl: null,
+        advertisedUrlEnabled: true,
+        bindHost: "127.0.0.1",
+        bindPort: 3847,
+        logLevel: "info",
+        logPath: null,
+        allowedRoots: ["/home/ops/projects"],
       }),
       "utf8",
     )
@@ -121,7 +137,6 @@ describe("makeRuntimeSettingsFileStore", () => {
         bindPort: 3847,
         logLevel: "info",
         logPath: null,
-        allowedRoots: [],
       }),
       "utf8",
     )
@@ -163,7 +178,6 @@ describe("makeRuntimeSettingsFileStore", () => {
         bindPort: 3847,
         logLevel: "info",
         logPath: null,
-        allowedRoots: [],
       }),
       "utf8",
     )

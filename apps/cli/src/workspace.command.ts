@@ -8,17 +8,23 @@ import {
   makeNodeProcessAlive,
 } from "core/daemon-state/node.adapters"
 import { makeReadLiveDaemonState, ReadLiveDaemonState } from "core/daemon-state/read.live.usecase"
+import { makeCreateDirectory, CreateDirectory } from "core/filesystem/create.directory.usecase"
 import { expandHomePath } from "core/filesystem/expand.home.path"
 import { CanonicalizePath } from "core/workspace/ports"
 import { parseConfig } from "server/config"
-import { makeCanonicalizePath } from "server/filesystem"
+import {
+  makeCanonicalizePath,
+  makeCreateDirectory as makeCreateDirectoryAdapter,
+  makeReadDirectoryEntries,
+} from "server/filesystem"
 import { AgentDatabase, openDatabase } from "server/database"
-import { makeRuntimeSettingsFileStore, seedDefaultsFromConfig } from "server/runtime-settings"
 import { assembleWorkspaceSlice, WorkspaceSlice } from "server/workspace"
 import { makeResolveWorkspaceReference } from "./workspace.resolve"
 import {
   renderAmbiguousWorkspaceReference,
+  renderCloneDirectoryError,
   renderDeleteWorkspaceError,
+  renderFolderCreatedWithoutWorkspace,
   renderRegisterWorkspaceError,
   renderWorkspaceAdded,
   renderWorkspaceDaemonRunningDeleteGuard,
@@ -31,6 +37,7 @@ import {
 type WorkspaceCommandContext = Readonly<{
   slice: WorkspaceSlice
   canonicalizePath: CanonicalizePath
+  createDirectory: CreateDirectory
   database: AgentDatabase
   readLiveDaemonState: ReadLiveDaemonState
 }>
@@ -38,17 +45,18 @@ type WorkspaceCommandContext = Readonly<{
 const openWorkspaceCommandContext = (): WorkspaceCommandContext => {
   const config = parseConfig(process.env)
   const database = openDatabase({ dataDir: config.dataDir })
-  const runtimeSettingsStore = makeRuntimeSettingsFileStore({
-    dataDir: config.dataDir,
-    seedDefaults: seedDefaultsFromConfig(config),
-  })
+  const canonicalizePath = makeCanonicalizePath()
   const slice = assembleWorkspaceSlice({
     database,
-    canonicalizePath: makeCanonicalizePath(),
-    getAllowedRoots: () => runtimeSettingsStore.get().allowedRoots,
+    canonicalizePath,
+    readDirectoryEntries: makeReadDirectoryEntries(),
     listLiveByWorkspaceRoot: () => [],
     closeWorkspaceSessions: async () => ({ failures: [] }),
     unbindWorkspaceSessions: () => undefined,
+  })
+  const createDirectory = makeCreateDirectory({
+    canonicalizePath,
+    createDirectory: makeCreateDirectoryAdapter(),
   })
   const readLiveDaemonState = makeReadLiveDaemonState({
     readDaemonState: makeDaemonStateFileStore({
@@ -57,7 +65,7 @@ const openWorkspaceCommandContext = (): WorkspaceCommandContext => {
     isProcessAlive: makeNodeProcessAlive(),
   })
 
-  return { slice, canonicalizePath: makeCanonicalizePath(), database, readLiveDaemonState }
+  return { slice, canonicalizePath, createDirectory, database, readLiveDaemonState }
 }
 
 const withWorkspaceCommandContext = async (
@@ -74,10 +82,26 @@ const withWorkspaceCommandContext = async (
 export const defaultWorkspaceName = (workspacePath: string): string =>
   basename(path.resolve(expandHomePath(workspacePath)))
 
+export const deriveCloneFolderName = (url: string): string => {
+  const trimmed = url.replace(/\/+$/, "")
+  const withoutScheme = trimmed.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, "")
+  const segments = withoutScheme.split(/[/:]/).filter((segment) => segment.length > 0)
+
+  // A host-only url has no repository name to reuse.
+  if (segments.length < 2) {
+    return ""
+  }
+
+  const name = segments[segments.length - 1] ?? ""
+  return name.endsWith(".git") ? name.slice(0, -".git".length) : name
+}
+
 const reportError = (message: string): void => {
   console.log(pc.red(message))
   process.exitCode = 1
 }
+
+const nameValidationMessage = "Workspace name must be 1 to 80 characters."
 
 export const makeWorkspaceCommand = (): Command => {
   const command = new Command("workspace")
@@ -85,28 +109,87 @@ export const makeWorkspaceCommand = (): Command => {
 
   command
     .command("add")
-    .description("register a workspace directory")
-    .argument("<path>", "workspace directory path")
+    .description("open a project folder as a workspace")
+    .argument("<path>", "any existing project folder")
     .option("--name <name>", "workspace name (defaults to the directory name)")
     .action((workspacePath: string, options: { name?: string }) =>
       withWorkspaceCommandContext(async (context) => {
         const body = CreateWorkspaceBodySchema.safeParse({
-          name: options.name ?? defaultWorkspaceName(workspacePath),
+          source: "folder",
           path: workspacePath,
+          ...(options.name === undefined ? {} : { name: options.name }),
         })
 
         if (!body.success) {
-          reportError("Workspace name must be 1 to 80 characters.")
+          reportError(nameValidationMessage)
           return
         }
 
-        const result = context.slice.registerWorkspace(body.data)
+        const result = await context.slice.registerWorkspace(body.data)
         if (!result.ok) {
           reportError(renderRegisterWorkspaceError({ error: result.error, path: workspacePath }))
           return
         }
 
-        console.log(renderWorkspaceAdded(result.value))
+        console.log(renderWorkspaceAdded({ workspace: result.value, created: result.created }))
+      }),
+    )
+
+  command
+    .command("clone")
+    .description("clone a git repository into a new folder and open it as a workspace")
+    .argument("<url>", "git clone target")
+    .requiredOption("--into <parent>", "existing parent folder for the new repository folder")
+    .option("--folder-name <name>", "new folder name (defaults to the repository name)")
+    .option("--name <name>", "workspace name (defaults to the folder name)")
+    .action((url: string, options: { into: string; folderName?: string; name?: string }) =>
+      withWorkspaceCommandContext(async (context) => {
+        const folderName = options.folderName ?? deriveCloneFolderName(url)
+        const destination = path.join(options.into, folderName)
+
+        const created = await context.createDirectory({
+          parent: options.into,
+          name: folderName,
+        })
+        if (!created.ok) {
+          reportError(
+            renderCloneDirectoryError({
+              error: created.error,
+              parent: options.into,
+              destination,
+            }),
+          )
+          return
+        }
+
+        const body = CreateWorkspaceBodySchema.safeParse({
+          source: "git",
+          url,
+          path: created.value.path,
+          ...(options.name === undefined ? {} : { name: options.name }),
+        })
+        if (!body.success) {
+          reportError(
+            `${nameValidationMessage}\n${renderFolderCreatedWithoutWorkspace(created.value.path)}`,
+          )
+          return
+        }
+
+        const result = await context.slice.registerWorkspace(body.data)
+        if (!result.ok) {
+          const message = renderRegisterWorkspaceError({
+            error: result.error,
+            path: created.value.path,
+          })
+          reportError(
+            result.error.kind === "clone_failed"
+              ? message
+              : `${message}\n${renderFolderCreatedWithoutWorkspace(created.value.path)}`,
+          )
+          return
+        }
+
+        console.log(renderWorkspaceAdded({ workspace: result.value, created: result.created }))
       }),
     )
 

@@ -18,7 +18,6 @@ import { makeSaveAttachment } from "./attachments.save.usecase"
 export type AssembleAttachmentsSliceDeps = Readonly<{
   findSessionCwd: (params: { agentId: string; sessionId: string }) => string | undefined
   canonicalizePath: CanonicalizePath
-  getAllowedRoots: () => readonly string[]
 }>
 
 export type AttachmentsSlice = Readonly<{
@@ -51,7 +50,6 @@ export const assembleAttachmentsSlice = (deps: AssembleAttachmentsSliceDeps): At
   const resolveSessionFolder = makeResolveSessionFolder({
     findSessionCwd: deps.findSessionCwd,
     canonicalizePath: deps.canonicalizePath,
-    getAllowedRoots: deps.getAllowedRoots,
   })
 
   return {

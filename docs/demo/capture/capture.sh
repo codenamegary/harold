@@ -122,7 +122,6 @@ harold2() {
 write_settings() {
   local data_dir=$1
   local port=$2
-  local workspace_root=$3
   cat >"$data_dir/settings.yml" <<EOF
 advertisedUrl: http://127.0.0.1:$port
 advertisedUrlEnabled: true
@@ -130,8 +129,6 @@ bindHost: 127.0.0.1
 bindPort: $port
 logLevel: info
 logPath: null
-allowedRoots:
-  - "$workspace_root"
 EOF
 }
 
@@ -352,8 +349,8 @@ log "instance2_prepare host=127.0.0.1 port=$INSTANCE2_PORT data=$INSTANCE2_DATA_
 rm -rf "$INSTANCE1_DATA_DIR" "$INSTANCE2_DATA_DIR"
 mkdir -p "$INSTANCE1_DATA_DIR" "$INSTANCE2_DATA_DIR"
 mkdir -p "$INSTANCE1_WORKSPACES" "$INSTANCE2_WORKSPACES"
-write_settings "$INSTANCE1_DATA_DIR" "$INSTANCE1_PORT" "$INSTANCE1_WORKSPACES"
-write_settings "$INSTANCE2_DATA_DIR" "$INSTANCE2_PORT" "$INSTANCE2_WORKSPACES"
+write_settings "$INSTANCE1_DATA_DIR" "$INSTANCE1_PORT"
+write_settings "$INSTANCE2_DATA_DIR" "$INSTANCE2_PORT"
 
 # --- Workspaces and agents --------------------------------------------------
 

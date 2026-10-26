@@ -1,17 +1,15 @@
-import { isDescendantOf } from "core/filesystem/is.descendant.of"
 import { CanonicalizePath } from "core/filesystem/ports"
 import { ResolveSessionFolder } from "./attachments.ports"
 
 export type ResolveSessionFolderDeps = Readonly<{
   findSessionCwd: (params: { agentId: string; sessionId: string }) => string | undefined
   canonicalizePath: CanonicalizePath
-  getAllowedRoots: () => readonly string[]
 }>
 
 /**
  * The agent owns the session and reports its folder, so that folder is the
- * attachment home. No registered workspace is involved. The server only writes
- * there when the folder sits under an allowed root.
+ * attachment home. Sessions accept any cwd, and no workspace metadata is
+ * consulted.
  */
 export const makeResolveSessionFolder =
   (deps: ResolveSessionFolderDeps): ResolveSessionFolder =>
@@ -24,13 +22,6 @@ export const makeResolveSessionFolder =
     const canonical = deps.canonicalizePath(cwd)
     if (!canonical.ok) {
       return { ok: false, error: { kind: "folder_unavailable" } }
-    }
-
-    const allowed = deps
-      .getAllowedRoots()
-      .some((root) => isDescendantOf({ path: root, candidatePath: canonical.canonicalPath }))
-    if (!allowed) {
-      return { ok: false, error: { kind: "outside_allowed_roots" } }
     }
 
     return { ok: true, value: canonical.canonicalPath }

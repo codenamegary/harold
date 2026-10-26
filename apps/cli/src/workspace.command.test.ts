@@ -2,9 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { parseConfig } from "server/config"
-import { makeRuntimeSettingsFileStore, seedDefaultsFromConfig } from "server/runtime-settings"
-import { makeWorkspaceCommand } from "./workspace.command"
+import { deriveCloneFolderName, makeWorkspaceCommand } from "./workspace.command"
 
 const runCommand = async (
   args: readonly string[],
@@ -54,17 +52,29 @@ const removeDaemonState = async (dataDir: string): Promise<void> => {
   await rm(path.join(dataDir, "daemon-state.json"), { force: true })
 }
 
+const createSourceRepo = async (parent: string, name: string): Promise<string> => {
+  const repo = path.join(parent, name)
+  await mkdir(repo)
+  await writeFile(path.join(repo, "README.md"), "# widgets\n")
+  await Bun.$`git -C ${repo} init --quiet`.quiet()
+  await Bun.$`git -C ${repo} add .`.quiet()
+  await Bun.$`git -C ${repo} -c user.email=test@harold.local -c user.name=Harold commit --quiet -m init`.quiet()
+  return repo
+}
+
 describe("harold workspace", () => {
+  let scratch = ""
   let dataDir = ""
   let projectDir = ""
   let customDir = ""
   let thirdDir = ""
   let guardDir = ""
+  let cloneParent = ""
   let thirdId = ""
   let previousDataDir: string | undefined
 
   beforeAll(async () => {
-    const scratch = await mkdtemp(path.join(os.tmpdir(), "harold-cli-workspace-"))
+    scratch = await mkdtemp(path.join(os.tmpdir(), "harold-cli-workspace-"))
     dataDir = path.join(scratch, "data")
     await mkdir(dataDir, { recursive: true })
     const root = path.join(scratch, "root")
@@ -75,17 +85,12 @@ describe("harold workspace", () => {
     customDir = path.join(canonicalRoot, "custom")
     thirdDir = path.join(canonicalRoot, "third")
     guardDir = path.join(canonicalRoot, "guard")
+    cloneParent = path.join(canonicalRoot, "clones")
     await mkdir(projectDir)
     await mkdir(customDir)
     await mkdir(thirdDir)
     await mkdir(guardDir)
-
-    const config = parseConfig({ HAROLD_DATA_DIR: dataDir })
-    const settingsStore = makeRuntimeSettingsFileStore({
-      dataDir,
-      seedDefaults: { ...seedDefaultsFromConfig(config), allowedRoots: [canonicalRoot] },
-    })
-    settingsStore.get()
+    await mkdir(cloneParent)
 
     previousDataDir = process.env.HAROLD_DATA_DIR
     process.env.HAROLD_DATA_DIR = dataDir
@@ -97,8 +102,8 @@ describe("harold workspace", () => {
     } else {
       process.env.HAROLD_DATA_DIR = previousDataDir
     }
-    if (dataDir !== "") {
-      await rm(path.dirname(dataDir), { recursive: true, force: true })
+    if (scratch !== "") {
+      await rm(scratch, { recursive: true, force: true })
     }
   })
 
@@ -110,21 +115,12 @@ describe("harold workspace", () => {
     expect(output).toContain(projectDir)
   })
 
-  test("add rejects a duplicate path", async () => {
+  test("add is idempotent for an already registered path", async () => {
     const { output, exitCode } = await runCommand(["add", projectDir])
 
-    expect(exitCode).toBe(1)
-    expect(output).toContain(`A workspace is already registered at ${projectDir}.`)
-  })
-
-  test("add rejects a path outside the allowed roots", async () => {
-    const outside = path.join(path.dirname(dataDir), "outside")
-    await mkdir(outside)
-
-    const { output, exitCode } = await runCommand(["add", outside])
-
-    expect(exitCode).toBe(1)
-    expect(output).toContain("outside the allowed roots")
+    expect(exitCode).toBe(0)
+    expect(output).toContain(`Workspace already registered at ${projectDir}`)
+    expect(output).not.toContain("Added workspace")
   })
 
   test("add rejects a path with no directory", async () => {
@@ -254,5 +250,103 @@ describe("harold workspace", () => {
 
     const { output: listOutput } = await runCommand(["list"])
     expect(listOutput).toBe("No workspaces registered yet.")
+  })
+
+  describe("clone", () => {
+    test("creates the destination folder, clones, and registers it", async () => {
+      const source = await createSourceRepo(scratch, "widgets")
+
+      const { output, exitCode } = await runCommand([
+        "clone",
+        `file://${source}`,
+        "--into",
+        cloneParent,
+      ])
+
+      expect(exitCode).toBe(0)
+      expect(output).toContain("Added workspace widgets")
+      expect(output).toContain(path.join(cloneParent, "widgets"))
+      expect(await Bun.file(path.join(cloneParent, "widgets", "README.md")).text()).toBe(
+        "# widgets\n",
+      )
+    })
+
+    test("fails clearly when the destination already exists", async () => {
+      const source = await createSourceRepo(scratch, "widgets-source")
+
+      const { output, exitCode } = await runCommand([
+        "clone",
+        `file://${source}`,
+        "--into",
+        cloneParent,
+        "--folder-name",
+        "widgets",
+      ])
+
+      expect(exitCode).toBe(1)
+      expect(output).toContain(path.join(cloneParent, "widgets"))
+      expect(output).toContain("already exists")
+    })
+
+    test("honours --folder-name and --name", async () => {
+      const source = await createSourceRepo(scratch, "widgets-source-2")
+
+      const { output, exitCode } = await runCommand([
+        "clone",
+        `file://${source}`,
+        "--into",
+        cloneParent,
+        "--folder-name",
+        "cloned-widgets",
+        "--name",
+        "Widgets 2",
+      ])
+
+      expect(exitCode).toBe(0)
+      expect(output).toContain("Added workspace Widgets 2")
+      expect(output).toContain(path.join(cloneParent, "cloned-widgets"))
+    })
+
+    test("reports a clone failure with the destination and partial-file warning", async () => {
+      const { output, exitCode } = await runCommand([
+        "clone",
+        `file://${path.join(scratch, "missing-repo")}`,
+        "--into",
+        cloneParent,
+        "--folder-name",
+        "broken",
+      ])
+
+      expect(exitCode).toBe(1)
+      expect(output).toContain(path.join(cloneParent, "broken"))
+      expect(output).toContain("partial files may remain")
+    })
+
+    test("fails clearly when the parent is missing", async () => {
+      const source = await createSourceRepo(scratch, "widgets-source-3")
+
+      const { output, exitCode } = await runCommand([
+        "clone",
+        `file://${source}`,
+        "--into",
+        path.join(scratch, "no-parent"),
+      ])
+
+      expect(exitCode).toBe(1)
+      expect(output).toContain("No directory at")
+    })
+  })
+})
+
+describe("deriveCloneFolderName", () => {
+  test("derives a folder name from common clone urls", () => {
+    expect(deriveCloneFolderName("https://github.com/acme/widgets.git")).toBe("widgets")
+    expect(deriveCloneFolderName("git@github.com:acme/widgets.git")).toBe("widgets")
+    expect(deriveCloneFolderName("ssh://git@example.com/acme/widgets")).toBe("widgets")
+    expect(deriveCloneFolderName("file:///srv/repos/widgets.git/")).toBe("widgets")
+  })
+
+  test("returns an empty name when the url has no final segment", () => {
+    expect(deriveCloneFolderName("https://github.com/")).toBe("")
   })
 })

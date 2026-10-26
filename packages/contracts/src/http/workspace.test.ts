@@ -36,15 +36,84 @@ describe("WorkspaceSchema", () => {
 })
 
 describe("CreateWorkspaceBodySchema", () => {
-  test("accepts a valid create body", () => {
-    const body = { name: "harold", path: "/home/user/harold" }
+  test("accepts a folder source with a name", () => {
+    const body = {
+      source: "folder",
+      name: "harold",
+      path: "/home/user/harold",
+    }
 
     expect(CreateWorkspaceBodySchema.parse(body)).toEqual(body)
   })
 
-  test("rejects empty name", () => {
+  test("accepts a folder source without a name", () => {
+    const body = { source: "folder", path: "/home/user/harold" }
+
+    expect(CreateWorkspaceBodySchema.parse(body)).toEqual(body)
+  })
+
+  test("accepts a git source", () => {
+    const body = {
+      source: "git",
+      url: "https://github.com/acme/widgets.git",
+      path: "/home/user/widgets",
+      name: "Widgets",
+    }
+
+    expect(CreateWorkspaceBodySchema.parse(body)).toEqual(body)
+  })
+
+  test("gives a git source a name derived from its destination", () => {
+    const body = {
+      source: "git",
+      url: "git@github.com:acme/widgets.git",
+      path: "/home/user/widgets",
+    }
+
+    expect(CreateWorkspaceBodySchema.parse(body)).toEqual(body)
+  })
+
+  test("rejects a body without a source", () => {
     expect(() =>
       CreateWorkspaceBodySchema.parse({
+        name: "harold",
+        path: "/home/user/harold",
+      }),
+    ).toThrow()
+  })
+
+  test("rejects an unknown source", () => {
+    expect(() =>
+      CreateWorkspaceBodySchema.parse({
+        source: "tar",
+        path: "/home/user/harold",
+      }),
+    ).toThrow()
+  })
+
+  test("rejects a git source without a url", () => {
+    expect(() =>
+      CreateWorkspaceBodySchema.parse({
+        source: "git",
+        path: "/home/user/widgets",
+      }),
+    ).toThrow()
+  })
+
+  test("rejects a url on a folder source", () => {
+    expect(() =>
+      CreateWorkspaceBodySchema.parse({
+        source: "folder",
+        path: "/home/user/harold",
+        url: "https://github.com/acme/widgets.git",
+      }),
+    ).toThrow()
+  })
+
+  test("rejects an empty name", () => {
+    expect(() =>
+      CreateWorkspaceBodySchema.parse({
+        source: "folder",
         name: "",
         path: "/home/user/harold",
       }),
@@ -54,6 +123,7 @@ describe("CreateWorkspaceBodySchema", () => {
   test("rejects name over 80 characters", () => {
     expect(() =>
       CreateWorkspaceBodySchema.parse({
+        source: "folder",
         name: "a".repeat(81),
         path: "/home/user/harold",
       }),
@@ -63,7 +133,7 @@ describe("CreateWorkspaceBodySchema", () => {
   test("rejects prototype state field", () => {
     expect(() =>
       CreateWorkspaceBodySchema.parse({
-        name: "harold",
+        source: "folder",
         path: "/home/user/harold",
         state: "available",
       }),

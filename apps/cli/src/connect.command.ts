@@ -13,17 +13,13 @@ import { makeNodeFetchStatusEndpoint } from "core/reachability/node.adapters"
 import { makeVerifyAdvertisedEndpoint } from "core/reachability/verify.usecase"
 import { localApiUrl } from "core/status/summary.models"
 import { parseConfig } from "server/config"
-import { makeCanonicalizePath } from "server/filesystem/node-adapters"
 import {
   makeRuntimeSettingsFileStore,
   RuntimeSettingsFileStore,
   seedDefaultsFromConfig,
   settingsFileName,
 } from "server/runtime-settings/file-store"
-import {
-  makeUpdateRuntimeSettings,
-  UpdateRuntimeSettingsDeps,
-} from "server/runtime-settings/update.usecase"
+import { makeUpdateRuntimeSettings } from "server/runtime-settings/update.usecase"
 import { detectLanAddress } from "./lan.address"
 import { findConnectRecipe, recipeIds, WhichLookup, WriteLine } from "./connect.recipes"
 
@@ -51,20 +47,6 @@ export type ConnectDeps = Readonly<{
   localUrl: string
   detectLanAddress: () => string | null
 }>
-
-/**
- * Connect only patches advertisedUrl, advertisedUrlEnabled, and bindHost, so
- * the workspace ports the shared update use case requires are unreachable
- * here. They fail loudly instead of reporting an empty workspace list if that
- * invariant ever breaks.
- */
-const listAllWorkspacesGuard: UpdateRuntimeSettingsDeps["listAllWorkspaces"] = () => {
-  throw new Error("harold connect does not manage allowed roots")
-}
-
-const deleteWorkspaceGuard: UpdateRuntimeSettingsDeps["deleteWorkspace"] = () => {
-  throw new Error("harold connect does not manage allowed roots")
-}
 
 const renderReachabilityFailure = (error: ReachabilityFailure): string => {
   switch (error.kind) {
@@ -256,9 +238,6 @@ export const runConnect = async (params: {
   const updateRuntimeSettings = makeUpdateRuntimeSettings({
     getSettings: store.get,
     saveSettings: store.save,
-    canonicalizePath: makeCanonicalizePath(),
-    listAllWorkspaces: listAllWorkspacesGuard,
-    deleteWorkspace: deleteWorkspaceGuard,
   })
   const updated = await updateRuntimeSettings({
     body: {
@@ -266,24 +245,18 @@ export const runConnect = async (params: {
       advertisedUrlEnabled: true,
       ...(bindHost === undefined ? {} : { bindHost }),
     },
-    force: false,
   })
-
-  if (!updated.ok) {
-    deps.writeLine(deps.colors.red(`Could not save runtime settings (${updated.error.kind}).`))
-    return 1
-  }
 
   deps.writeLine(
     deps.colors.green(
       `Saved ${isLan ? "LAN endpoint" : "advertised URL"} to ${settingsFilePath(dataDir)}`,
     ),
   )
-  deps.writeLine(`  advertisedUrl: ${updated.value.settings.advertisedUrl}`)
+  deps.writeLine(`  advertisedUrl: ${updated.settings.advertisedUrl}`)
   if (bindHost !== undefined) {
-    deps.writeLine(`  bindHost: ${updated.value.settings.bindHost}`)
+    deps.writeLine(`  bindHost: ${updated.settings.bindHost}`)
   }
-  deps.writeLine(`  advertisedUrlEnabled: ${updated.value.settings.advertisedUrlEnabled}`)
+  deps.writeLine(`  advertisedUrlEnabled: ${updated.settings.advertisedUrlEnabled}`)
 
   if (isCleartextLanUrl(advertisedUrl)) {
     deps.writeLine(

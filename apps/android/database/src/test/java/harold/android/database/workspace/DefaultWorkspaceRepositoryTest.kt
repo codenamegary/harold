@@ -16,6 +16,7 @@ import harold.android.contracts.RuntimeSettingsView
 import harold.android.contracts.SessionCollection
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
+import harold.android.contracts.WorkspaceSource
 import harold.android.contracts.WorkspaceState
 import harold.android.network.AgentApi
 import kotlinx.coroutines.flow.first
@@ -92,7 +93,14 @@ class DefaultWorkspaceRepositoryTest {
 
     @Test
     fun createCachesTheWorkspaceOnlyAfterTheServerAcceptsIt() = runTest {
-        val result = repository.create(ORIGIN, CreateWorkspaceBody(name = "new", path = "/tmp/new"))
+        val result = repository.create(
+            ORIGIN,
+            CreateWorkspaceBody(
+                source = WorkspaceSource.Folder,
+                name = "new",
+                path = "/tmp/new",
+            ),
+        )
 
         assertTrue(result.isSuccess)
         assertEquals(
@@ -105,7 +113,14 @@ class DefaultWorkspaceRepositoryTest {
     fun createFailureDoesNotWriteToRoom() = runTest {
         api.created = Result.failure(IllegalStateException("offline"))
 
-        val result = repository.create(ORIGIN, CreateWorkspaceBody(name = "new", path = "/tmp/new"))
+        val result = repository.create(
+            ORIGIN,
+            CreateWorkspaceBody(
+                source = WorkspaceSource.Folder,
+                name = "new",
+                path = "/tmp/new",
+            ),
+        )
 
         assertTrue(result.isFailure)
         assertTrue(repository.observe(ORIGIN).first().isEmpty())
@@ -157,8 +172,15 @@ private class WorkspaceFakeAgentApi : AgentApi {
 
     override suspend fun listFilesystemDirectories(
         serverOrigin: String,
-        root: String,
+        root: String?,
     ) = unused<FilesystemDirectoryCollection>()
+
+    override suspend fun createFilesystemDirectory(
+        serverOrigin: String,
+        body: harold.android.contracts.CreateFilesystemDirectoryBody,
+    ) = Result.failure<harold.android.contracts.FilesystemDirectoryCreated>(
+        UnsupportedOperationException("unused"),
+    )
 
     override suspend fun listSessions(serverOrigin: String, cwd: String?) = unused<SessionCollection>()
 

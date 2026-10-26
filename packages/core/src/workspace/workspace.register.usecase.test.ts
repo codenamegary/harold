@@ -11,17 +11,28 @@ const storedWorkspace = (input: { name: string; canonicalPath: string }): Worksp
   lastUsedAt: "2026-01-01T00:00:00.000Z",
 })
 
+const findOrCreateThatInserts = (calls: Array<{ name: string; canonicalPath: string }>) =>
+  ((input) => {
+    calls.push(input)
+    return { ok: true as const, value: storedWorkspace(input), created: true as const }
+  }) satisfies Parameters<typeof makeRegisterWorkspace>[0]["findOrCreateWorkspace"]
+
 describe("register workspace", () => {
-  test("returns a path error when the directory cannot be canonicalized", () => {
+  test("returns a path error when the folder cannot be canonicalized", async () => {
     const registerWorkspace = makeRegisterWorkspace({
       canonicalizePath: () => ({ ok: false, error: { kind: "missing" } }),
-      getAllowedRoots: () => ["/allowed"],
-      insertWorkspace: () => {
-        throw new Error("insertWorkspace should not run when canonicalize fails")
+      findOrCreateWorkspace: () => {
+        throw new Error("findOrCreateWorkspace should not run when canonicalize fails")
+      },
+      readDirectoryEntries: () => {
+        throw new Error("readDirectoryEntries should not run when canonicalize fails")
+      },
+      cloneRepository: () => {
+        throw new Error("cloneRepository should not run when canonicalize fails")
       },
     })
 
-    const result = registerWorkspace({ name: "Missing", path: "/no/such/dir" })
+    const result = await registerWorkspace({ source: "folder", path: "/no/such/dir" })
 
     expect(result).toEqual({
       ok: false,
@@ -29,58 +40,163 @@ describe("register workspace", () => {
     })
   })
 
-  test("returns outside_allowed_root when no allowed roots are configured", () => {
+  test("opens any existing folder and defaults the name to its basename", async () => {
+    const calls: Array<{ name: string; canonicalPath: string }> = []
     const registerWorkspace = makeRegisterWorkspace({
-      canonicalizePath: () => ({ ok: true, canonicalPath: "/projects/app" }),
-      getAllowedRoots: () => [],
-      insertWorkspace: () => {
-        throw new Error("insertWorkspace should not run when no roots are configured")
+      canonicalizePath: () => ({ ok: true, canonicalPath: "/home/ops/widgets" }),
+      findOrCreateWorkspace: findOrCreateThatInserts(calls),
+      readDirectoryEntries: () => {
+        throw new Error("readDirectoryEntries should not run for a folder source")
+      },
+      cloneRepository: () => {
+        throw new Error("cloneRepository should not run for a folder source")
       },
     })
 
-    const result = registerWorkspace({ name: "App", path: "/projects/app" })
+    const result = await registerWorkspace({ source: "folder", path: "/home/ops/widgets" })
 
-    expect(result).toEqual({ ok: false, error: { kind: "outside_allowed_root" } })
-  })
-
-  test("returns outside_allowed_root when the canonical path is not under a root", () => {
-    const registerWorkspace = makeRegisterWorkspace({
-      canonicalizePath: () => ({ ok: true, canonicalPath: "/outside/app" }),
-      getAllowedRoots: () => ["/allowed"],
-      insertWorkspace: () => {
-        throw new Error("insertWorkspace should not run when the path is outside roots")
-      },
-    })
-
-    const result = registerWorkspace({ name: "App", path: "/outside/app" })
-
-    expect(result).toEqual({ ok: false, error: { kind: "outside_allowed_root" } })
-  })
-
-  test("returns duplicate_path when insert finds a unique path conflict", () => {
-    const registerWorkspace = makeRegisterWorkspace({
-      canonicalizePath: () => ({ ok: true, canonicalPath: "/allowed/app" }),
-      getAllowedRoots: () => ["/allowed"],
-      insertWorkspace: () => ({ ok: false, error: { kind: "duplicate_path" } }),
-    })
-
-    const result = registerWorkspace({ name: "App", path: "/allowed/app" })
-
-    expect(result).toEqual({ ok: false, error: { kind: "duplicate_path" } })
-  })
-
-  test("inserts and returns the workspace when the path is under an allowed root", () => {
-    const registerWorkspace = makeRegisterWorkspace({
-      canonicalizePath: () => ({ ok: true, canonicalPath: "/allowed/app" }),
-      getAllowedRoots: () => ["/allowed"],
-      insertWorkspace: (input) => ({ ok: true, value: storedWorkspace(input) }),
-    })
-
-    const result = registerWorkspace({ name: "App", path: "/allowed/app" })
-
+    expect(calls).toEqual([{ name: "widgets", canonicalPath: "/home/ops/widgets" }])
     expect(result).toEqual({
       ok: true,
-      value: storedWorkspace({ name: "App", canonicalPath: "/allowed/app" }),
+      value: storedWorkspace({ name: "widgets", canonicalPath: "/home/ops/widgets" }),
+      created: true,
     })
+  })
+
+  test("passes an explicit folder name through", async () => {
+    const calls: Array<{ name: string; canonicalPath: string }> = []
+    const registerWorkspace = makeRegisterWorkspace({
+      canonicalizePath: () => ({ ok: true, canonicalPath: "/home/ops/widgets" }),
+      findOrCreateWorkspace: findOrCreateThatInserts(calls),
+      readDirectoryEntries: () => {
+        throw new Error("readDirectoryEntries should not run for a folder source")
+      },
+      cloneRepository: () => {
+        throw new Error("cloneRepository should not run for a folder source")
+      },
+    })
+
+    await registerWorkspace({ source: "folder", path: "~/widgets", name: "Widgets" })
+
+    expect(calls).toEqual([{ name: "Widgets", canonicalPath: "/home/ops/widgets" }])
+  })
+
+  test("rejects a git url that starts with a dash", async () => {
+    const registerWorkspace = makeRegisterWorkspace({
+      canonicalizePath: () => {
+        throw new Error("canonicalizePath should not run for an option-like url")
+      },
+      findOrCreateWorkspace: () => {
+        throw new Error("findOrCreateWorkspace should not run for an option-like url")
+      },
+      readDirectoryEntries: () => {
+        throw new Error("readDirectoryEntries should not run for an option-like url")
+      },
+      cloneRepository: () => {
+        throw new Error("cloneRepository should not run for an option-like url")
+      },
+    })
+
+    const result = await registerWorkspace({
+      source: "git",
+      url: "--upload-pack=evil",
+      path: "/home/ops/widgets",
+    })
+
+    expect(result).toEqual({ ok: false, error: { kind: "invalid_git_url" } })
+  })
+
+  test("refuses to clone into a destination that is not empty", async () => {
+    const registerWorkspace = makeRegisterWorkspace({
+      canonicalizePath: () => ({ ok: true, canonicalPath: "/home/ops/widgets" }),
+      findOrCreateWorkspace: () => {
+        throw new Error("findOrCreateWorkspace should not run for a non-empty destination")
+      },
+      readDirectoryEntries: async () => [{ name: "README.md" }],
+      cloneRepository: () => {
+        throw new Error("cloneRepository should not run for a non-empty destination")
+      },
+    })
+
+    const result = await registerWorkspace({
+      source: "git",
+      url: "https://github.com/acme/widgets.git",
+      path: "/home/ops/widgets",
+    })
+
+    expect(result).toEqual({ ok: false, error: { kind: "destination_not_empty" } })
+  })
+
+  test("reports a clone failure with the destination path", async () => {
+    const registerWorkspace = makeRegisterWorkspace({
+      canonicalizePath: () => ({ ok: true, canonicalPath: "/home/ops/widgets" }),
+      findOrCreateWorkspace: () => {
+        throw new Error("findOrCreateWorkspace should not run when the clone fails")
+      },
+      readDirectoryEntries: async () => [],
+      cloneRepository: async () => ({
+        ok: false,
+        error: { kind: "clone_failed", detail: "repository not found" },
+      }),
+    })
+
+    const result = await registerWorkspace({
+      source: "git",
+      url: "https://github.com/acme/missing.git",
+      path: "/home/ops/widgets",
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        kind: "clone_failed",
+        detail: "Clone failed for /home/ops/widgets: repository not found",
+      },
+    })
+  })
+
+  test("clones, then finds or creates by canonical destination", async () => {
+    const calls: Array<{ name: string; canonicalPath: string }> = []
+    const cloneCalls: Array<{ url: string; destinationPath: string }> = []
+    const registerWorkspace = makeRegisterWorkspace({
+      canonicalizePath: () => ({ ok: true, canonicalPath: "/home/ops/widgets" }),
+      findOrCreateWorkspace: findOrCreateThatInserts(calls),
+      readDirectoryEntries: async () => [],
+      cloneRepository: async (input) => {
+        cloneCalls.push(input)
+        return { ok: true }
+      },
+    })
+
+    const result = await registerWorkspace({
+      source: "git",
+      url: "git@github.com:acme/widgets.git",
+      path: "/home/ops/widgets",
+    })
+
+    expect(cloneCalls).toEqual([
+      { url: "git@github.com:acme/widgets.git", destinationPath: "/home/ops/widgets" },
+    ])
+    expect(calls).toEqual([{ name: "widgets", canonicalPath: "/home/ops/widgets" }])
+    expect(result.ok).toBe(true)
+  })
+
+  test("uses an explicit git workspace name", async () => {
+    const calls: Array<{ name: string; canonicalPath: string }> = []
+    const registerWorkspace = makeRegisterWorkspace({
+      canonicalizePath: () => ({ ok: true, canonicalPath: "/home/ops/widgets" }),
+      findOrCreateWorkspace: findOrCreateThatInserts(calls),
+      readDirectoryEntries: async () => [],
+      cloneRepository: async () => ({ ok: true }),
+    })
+
+    await registerWorkspace({
+      source: "git",
+      url: "https://github.com/acme/widgets.git",
+      path: "/home/ops/widgets",
+      name: "Widgets",
+    })
+
+    expect(calls).toEqual([{ name: "Widgets", canonicalPath: "/home/ops/widgets" }])
   })
 })

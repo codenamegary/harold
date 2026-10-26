@@ -13,7 +13,6 @@ const persisted = {
   bindPort: 3847,
   logLevel: "info" as const,
   logPath: null,
-  allowedRoots: [],
 }
 
 describe("resolveEffectiveBind", () => {

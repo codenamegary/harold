@@ -25,11 +25,13 @@ import harold.android.contracts.AgentSettingsCollection
 import harold.android.contracts.AuthSessionAction
 import harold.android.contracts.ConfigValue
 import harold.android.contracts.ConflictProblem
+import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.ExtensionReplyBody
 import harold.android.contracts.FilesystemDirectoryCollection
+import harold.android.contracts.FilesystemDirectoryCreated
 import harold.android.contracts.InternalProblem
 import harold.android.contracts.ItemCollection
 import harold.android.contracts.NotFoundProblem
@@ -40,6 +42,7 @@ import harold.android.contracts.RuntimeSettingsView
 import harold.android.contracts.Session
 import harold.android.contracts.SessionCollection
 import harold.android.contracts.UnauthorizedProblem
+import harold.android.contracts.UnprocessableProblem
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 
@@ -228,13 +231,24 @@ class DefaultAgentApi(
 
     override suspend fun listFilesystemDirectories(
         serverOrigin: String,
-        root: String,
+        root: String?,
     ): Result<FilesystemDirectoryCollection> = get(
         serverOrigin = serverOrigin,
         pathSegments = "v1/filesystem/directories",
-        query = mapOf("root" to root),
+        query = root?.let { mapOf("root" to it) } ?: emptyMap(),
     ) { body ->
         json.decodeFromString(FilesystemDirectoryCollection.serializer(), body)
+    }
+
+    override suspend fun createFilesystemDirectory(
+        serverOrigin: String,
+        body: CreateFilesystemDirectoryBody,
+    ): Result<FilesystemDirectoryCreated> = post(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/filesystem/directories",
+        body = json.encodeToString(CreateFilesystemDirectoryBody.serializer(), body),
+    ) { responseBody ->
+        json.decodeFromString(FilesystemDirectoryCreated.serializer(), responseBody)
     }
 
     override suspend fun createWorkspace(
@@ -522,6 +536,7 @@ private fun ProblemDetails.detailOrNull(): String? =
         is UnauthorizedProblem -> detail
         is NotFoundProblem -> detail
         is ConflictProblem -> detail
+        is UnprocessableProblem -> detail
         is InternalProblem -> detail
         else -> null
     }

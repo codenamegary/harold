@@ -1,5 +1,4 @@
 import {
-  ConflictProblemSchema,
   NotFoundProblemSchema,
   PayloadTooLargeProblemSchema,
   PROBLEM_TYPES,
@@ -19,15 +18,6 @@ export const buildAttachmentParamsProblem = (error: ZodError) =>
       pointer: zodPathToPointer(issue.path),
       code: zodIssueToCode(issue),
     })),
-  })
-
-export const buildAttachmentFolderNotAllowedProblem = () =>
-  ConflictProblemSchema.parse({
-    type: PROBLEM_TYPES.conflict,
-    title: "Session folder not allowed",
-    status: 409,
-    detail:
-      "The session folder is outside the allowed roots, so attachments cannot be stored there",
   })
 
 export const buildAttachmentNotFoundProblem = (detail = "Unknown attachment") =>

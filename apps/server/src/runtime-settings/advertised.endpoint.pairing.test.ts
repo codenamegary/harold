@@ -19,25 +19,11 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
-/**
- * The connect flow (#320) only patches advertisedUrl and advertisedUrlEnabled,
- * so the workspace ports of the shared update use case stay unused here and
- * fail loudly if that ever changes.
- */
 const makeConnectUpdateUseCase = (dataDir: string) => {
   const store = makeRuntimeSettingsFileStore({ dataDir })
   return makeUpdateRuntimeSettings({
     getSettings: store.get,
     saveSettings: store.save,
-    canonicalizePath: () => {
-      throw new Error("connect does not manage allowed roots")
-    },
-    listAllWorkspaces: () => {
-      throw new Error("connect does not manage allowed roots")
-    },
-    deleteWorkspace: () => {
-      throw new Error("connect does not manage allowed roots")
-    },
   })
 }
 
@@ -68,10 +54,9 @@ describe("connect persistence feeding pairing endpoint selection", () => {
 
     const updated = await updateRuntimeSettings({
       body: { advertisedUrl: "https://agents.example.com", advertisedUrlEnabled: true },
-      force: false,
     })
 
-    expect(updated.ok).toBe(true)
+    expect(updated.settings.advertisedUrl).toBe("https://agents.example.com")
 
     const raw = YAML.parse(await readFile(path.join(dataDir, settingsFileName), "utf8")) as {
       advertisedUrl: string | null
@@ -94,10 +79,9 @@ describe("connect persistence feeding pairing endpoint selection", () => {
 
     const updated = await updateRuntimeSettings({
       body: { advertisedUrl: "http://127.0.0.1:3847", advertisedUrlEnabled: true },
-      force: false,
     })
 
-    expect(updated.ok).toBe(true)
+    expect(updated.settings.advertisedUrl).toBe("http://127.0.0.1:3847")
 
     const createPairingCode = makePairingCodeAgainstPersistedSettings(dataDir)
     const issued = await createPairingCode({ endpoint: "advertised" })

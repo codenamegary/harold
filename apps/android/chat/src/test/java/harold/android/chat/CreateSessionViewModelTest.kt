@@ -451,7 +451,14 @@ private class HaroldCreateRepository(
     }
 
     override suspend fun getRuntimeSettings(serverOrigin: String) = error("unused")
-    override suspend fun listFilesystemDirectories(serverOrigin: String, root: String) = error("unused")
+    override suspend fun listFilesystemDirectories(serverOrigin: String, root: String?) = error("unused")
+    override suspend fun createFilesystemDirectory(
+        serverOrigin: String,
+        body: harold.android.contracts.CreateFilesystemDirectoryBody,
+    ) = Result.failure<harold.android.contracts.FilesystemDirectoryCreated>(
+        UnsupportedOperationException("unused"),
+    )
+
     override suspend fun createWorkspace(
         serverOrigin: String,
         body: harold.android.contracts.CreateWorkspaceBody,

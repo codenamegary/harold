@@ -6,10 +6,12 @@ import harold.android.contracts.AgentAuthSummary
 import harold.android.contracts.AgentId
 import harold.android.contracts.AgentSettingsCollection
 import harold.android.contracts.AuthSessionAction
+import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectoryCollection
+import harold.android.contracts.FilesystemDirectoryCreated
 import harold.android.contracts.RuntimeSettingsView
 import harold.android.contracts.SessionCollection
 import harold.android.contracts.Workspace
@@ -25,8 +27,13 @@ interface UserRepository {
 
     suspend fun listFilesystemDirectories(
         serverOrigin: String,
-        root: String,
+        root: String? = null,
     ): Result<FilesystemDirectoryCollection>
+
+    suspend fun createFilesystemDirectory(
+        serverOrigin: String,
+        body: CreateFilesystemDirectoryBody,
+    ): Result<FilesystemDirectoryCreated>
 
     suspend fun createWorkspace(
         serverOrigin: String,

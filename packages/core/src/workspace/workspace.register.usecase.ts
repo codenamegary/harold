@@ -1,43 +1,60 @@
+import { basename } from "node:path"
 import { CreateWorkspaceBody, Workspace } from "contracts/http/workspace"
-import { isDescendantOf } from "../filesystem/filesystem.is.descendant.of"
-import { CanonicalizePath, GetAllowedRoots, InsertWorkspace } from "./workspace.ports"
-import { WorkspaceRepositoryError } from "./workspace.errors"
+import { ReadDirectoryEntries } from "../filesystem/filesystem.ports"
+import { RegisterWorkspaceError } from "./workspace.errors"
+import { CanonicalizePath, CloneRepository, FindOrCreateWorkspace } from "./workspace.ports"
 
 export type RegisterWorkspaceDeps = Readonly<{
   canonicalizePath: CanonicalizePath
-  getAllowedRoots: GetAllowedRoots
-  insertWorkspace: InsertWorkspace
+  findOrCreateWorkspace: FindOrCreateWorkspace
+  readDirectoryEntries: ReadDirectoryEntries
+  cloneRepository: CloneRepository
 }>
 
 export type RegisterWorkspaceResult =
-  | { ok: true; value: Workspace }
-  | { ok: false; error: WorkspaceRepositoryError }
+  | { ok: true; value: Workspace; created: boolean }
+  | { ok: false; error: RegisterWorkspaceError }
+
+const defaultWorkspaceName = (canonicalPath: string): string =>
+  basename(canonicalPath) || canonicalPath
 
 export const makeRegisterWorkspace =
   (deps: RegisterWorkspaceDeps) =>
-  (dto: CreateWorkspaceBody): RegisterWorkspaceResult => {
+  async (dto: CreateWorkspaceBody): Promise<RegisterWorkspaceResult> => {
+    if (dto.source === "git" && dto.url.startsWith("-")) {
+      return { ok: false, error: { kind: "invalid_git_url" } }
+    }
+
     const canonicalizeResult = deps.canonicalizePath(dto.path)
     if (!canonicalizeResult.ok) {
       return { ok: false, error: { kind: "path", error: canonicalizeResult.error } }
     }
 
-    const allowedRoots = deps.getAllowedRoots()
-    if (allowedRoots.length === 0) {
-      return { ok: false, error: { kind: "outside_allowed_root" } }
+    const canonicalPath = canonicalizeResult.canonicalPath
+    const name = dto.name ?? defaultWorkspaceName(canonicalPath)
+
+    if (dto.source === "folder") {
+      return deps.findOrCreateWorkspace({ name, canonicalPath })
     }
 
-    const isAllowed = allowedRoots.some((allowedRoot) =>
-      isDescendantOf({
-        path: allowedRoot,
-        candidatePath: canonicalizeResult.canonicalPath,
-      }),
-    )
-    if (!isAllowed) {
-      return { ok: false, error: { kind: "outside_allowed_root" } }
+    const entries = await deps.readDirectoryEntries(canonicalPath)
+    if (entries.length > 0) {
+      return { ok: false, error: { kind: "destination_not_empty" } }
     }
 
-    return deps.insertWorkspace({
-      name: dto.name,
-      canonicalPath: canonicalizeResult.canonicalPath,
+    const cloned = await deps.cloneRepository({
+      url: dto.url,
+      destinationPath: canonicalPath,
     })
+    if (!cloned.ok) {
+      return {
+        ok: false,
+        error: {
+          kind: "clone_failed",
+          detail: `Clone failed for ${canonicalPath}: ${cloned.error.detail}`,
+        },
+      }
+    }
+
+    return deps.findOrCreateWorkspace({ name, canonicalPath })
   }

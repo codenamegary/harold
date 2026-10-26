@@ -2,6 +2,7 @@ package harold.android.user
 
 import harold.android.contracts.AgentId
 import harold.android.contracts.AuthSessionAction
+import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.network.AgentApi
@@ -20,8 +21,13 @@ class DefaultUserRepository @Inject constructor(
 
     override suspend fun listFilesystemDirectories(
         serverOrigin: String,
-        root: String,
+        root: String?,
     ) = agentApi.listFilesystemDirectories(serverOrigin, root)
+
+    override suspend fun createFilesystemDirectory(
+        serverOrigin: String,
+        body: CreateFilesystemDirectoryBody,
+    ) = agentApi.createFilesystemDirectory(serverOrigin, body)
 
     override suspend fun createWorkspace(
         serverOrigin: String,

@@ -96,7 +96,6 @@ describe("composeStatusSummaryPorts", () => {
         "bindPort: 3847",
         "logLevel: info",
         "logPath: null",
-        "allowedRoots: []",
         "",
       ].join("\n"),
     )

@@ -3,6 +3,7 @@ package harold.android.workspaces
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,20 +11,24 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -50,15 +55,21 @@ private val MIN_TOUCH_TARGET = 48.dp
 fun AddWorkspaceScreen(
     uiState: AddWorkspaceUiState,
     onBack: () -> Unit,
+    onModeChanged: (AddWorkspaceMode) -> Unit,
     onNameChanged: (String) -> Unit,
-    onRootChanged: (String) -> Unit,
-    onFolderChanged: (String) -> Unit,
+    onFolderSelected: (String) -> Unit,
+    onBrowserUp: () -> Unit,
+    onUseCurrentFolder: () -> Unit,
     onFolderQueryChanged: (String) -> Unit,
+    onCreateFolder: (String) -> Unit,
+    onCloneUrlChanged: (String) -> Unit,
+    onCloneFolderNameChanged: (String) -> Unit,
     onSubmit: () -> Unit,
     onHaroldChanged: (String) -> Unit = {},
 ) {
     val backContentDescription = stringResource(R.string.add_workspace_back_content_description)
-    val formDisabled = uiState.hasNoRoots || uiState.rootsLoadState is RootsLoadState.Loading
+    var newFolderOpen by remember { mutableStateOf(false) }
+    var newFolderName by remember { mutableStateOf("") }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -89,6 +100,7 @@ fun AddWorkspaceScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(16.dp)
+                .verticalScroll(rememberScrollState())
                 .testTag("add_workspace_screen"),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -101,63 +113,75 @@ fun AddWorkspaceScreen(
                 )
             }
 
-            when (val roots = uiState.rootsLoadState) {
-                RootsLoadState.Loading -> {
-                    Text(
-                        text = stringResource(R.string.add_workspace_roots_loading),
-                        modifier = Modifier
-                            .testTag("add_workspace_roots_loading")
-                            .semantics { liveRegion = LiveRegionMode.Polite },
-                    )
-                }
+            ModeSelector(
+                mode = uiState.mode,
+                enabled = !uiState.submitting,
+                onModeChanged = onModeChanged,
+            )
 
-                RootsLoadState.Empty -> {
-                    Text(
-                        text = stringResource(R.string.add_workspace_no_roots),
-                        modifier = Modifier
-                            .testTag("add_workspace_no_roots")
-                            .semantics { liveRegion = LiveRegionMode.Polite },
-                    )
-                }
+            Browser(
+                uiState = uiState,
+                enabled = !uiState.submitting,
+                onFolderSelected = onFolderSelected,
+                onBrowserUp = onBrowserUp,
+                onUseCurrentFolder = onUseCurrentFolder,
+                onFolderQueryChanged = onFolderQueryChanged,
+                onNewFolderClick = {
+                    newFolderName = ""
+                    newFolderOpen = true
+                },
+            )
 
-                is RootsLoadState.Error -> {
-                    Text(
-                        text = roots.message,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier
-                            .testTag("add_workspace_roots_error")
-                            .semantics { liveRegion = LiveRegionMode.Polite },
-                    )
-                }
+            if (uiState.isClone) {
+                OutlinedTextField(
+                    value = uiState.cloneUrl,
+                    onValueChange = onCloneUrlChanged,
+                    label = { Text(text = stringResource(R.string.add_workspace_clone_url_label)) },
+                    singleLine = true,
+                    enabled = !uiState.submitting,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("add_workspace_clone_url"),
+                )
 
-                is RootsLoadState.Loaded -> {
-                    RootDropdown(
-                        roots = roots.roots,
-                        selectedRoot = uiState.selectedRoot,
-                        enabled = !formDisabled && !uiState.submitting,
-                        onRootChanged = onRootChanged,
-                    )
-                }
+                OutlinedTextField(
+                    value = uiState.cloneFolderName,
+                    onValueChange = onCloneFolderNameChanged,
+                    label = { Text(text = stringResource(R.string.add_workspace_clone_folder_label)) },
+                    singleLine = true,
+                    enabled = !uiState.submitting,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("add_workspace_clone_folder_name"),
+                )
+
+                LabeledValue(
+                    label = stringResource(R.string.add_workspace_clone_parent_label),
+                    value = uiState.cloneParent.ifEmpty { "—" },
+                    testTag = "add_workspace_clone_parent",
+                )
+
+                LabeledValue(
+                    label = stringResource(R.string.add_workspace_final_path_label),
+                    value = uiState.finalPath.ifEmpty { "—" },
+                    testTag = "add_workspace_final_path",
+                )
+            } else {
+                LabeledValue(
+                    label = stringResource(R.string.add_workspace_selected_folder),
+                    value = uiState.selectedFolderPath.ifEmpty { "—" },
+                    testTag = "add_workspace_selected_folder",
+                )
             }
 
             OutlinedTextField(
                 value = uiState.name,
                 onValueChange = onNameChanged,
                 label = { Text(text = stringResource(R.string.add_workspace_name_label)) },
-                enabled = !formDisabled && !uiState.submitting,
+                enabled = !uiState.submitting,
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("add_workspace_name"),
-            )
-
-            FolderPicker(
-                uiState = uiState,
-                enabled = !formDisabled &&
-                    uiState.selectedRoot.isNotEmpty() &&
-                    !uiState.submitting &&
-                    uiState.foldersLoadState !is FoldersLoadState.Loading,
-                onFolderChanged = onFolderChanged,
-                onFolderQueryChanged = onFolderQueryChanged,
             )
 
             if (uiState.submitError != null) {
@@ -184,6 +208,201 @@ fun AddWorkspaceScreen(
                     .testTag("add_workspace_submit"),
             )
         }
+    }
+
+    if (newFolderOpen) {
+        AlertDialog(
+            onDismissRequest = { newFolderOpen = false },
+            title = { Text(text = stringResource(R.string.add_workspace_new_folder_title)) },
+            text = {
+                OutlinedTextField(
+                    value = newFolderName,
+                    onValueChange = { newFolderName = it },
+                    label = { Text(text = stringResource(R.string.add_workspace_new_folder_label)) },
+                    singleLine = true,
+                    modifier = Modifier.testTag("add_workspace_new_folder_name"),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onCreateFolder(newFolderName)
+                        newFolderOpen = false
+                    },
+                    enabled = newFolderName.isNotBlank() && !uiState.submitting,
+                    modifier = Modifier.testTag("add_workspace_new_folder_confirm"),
+                ) {
+                    Text(text = stringResource(R.string.add_workspace_new_folder_create))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { newFolderOpen = false },
+                    modifier = Modifier.testTag("add_workspace_new_folder_cancel"),
+                ) {
+                    Text(text = stringResource(R.string.add_workspace_new_folder_cancel))
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun ModeSelector(
+    mode: AddWorkspaceMode,
+    enabled: Boolean,
+    onModeChanged: (AddWorkspaceMode) -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(
+            selected = mode == AddWorkspaceMode.OpenFolder,
+            onClick = { onModeChanged(AddWorkspaceMode.OpenFolder) },
+            enabled = enabled,
+            label = { Text(text = stringResource(R.string.add_workspace_mode_open)) },
+            modifier = Modifier.testTag("add_workspace_mode_open"),
+        )
+        FilterChip(
+            selected = mode == AddWorkspaceMode.CloneRepo,
+            onClick = { onModeChanged(AddWorkspaceMode.CloneRepo) },
+            enabled = enabled,
+            label = { Text(text = stringResource(R.string.add_workspace_mode_clone)) },
+            modifier = Modifier.testTag("add_workspace_mode_clone"),
+        )
+    }
+}
+
+@Composable
+private fun Browser(
+    uiState: AddWorkspaceUiState,
+    enabled: Boolean,
+    onFolderSelected: (String) -> Unit,
+    onBrowserUp: () -> Unit,
+    onUseCurrentFolder: () -> Unit,
+    onFolderQueryChanged: (String) -> Unit,
+    onNewFolderClick: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = stringResource(R.string.add_workspace_browser_path),
+            style = MaterialTheme.typography.titleSmall,
+        )
+        Text(
+            text = uiState.browserPath.ifEmpty { "—" },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.testTag("add_workspace_browser_path"),
+        )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(
+                onClick = onBrowserUp,
+                enabled = enabled && uiState.browserParent != null,
+                modifier = Modifier.testTag("add_workspace_browser_up"),
+            ) {
+                Text(text = stringResource(R.string.add_workspace_browser_up))
+            }
+            TextButton(
+                onClick = onNewFolderClick,
+                enabled = enabled && uiState.browserPath.isNotEmpty(),
+                modifier = Modifier.testTag("add_workspace_new_folder"),
+            ) {
+                Text(text = stringResource(R.string.add_workspace_new_folder))
+            }
+        }
+
+        when (val browser = uiState.browserLoadState) {
+            BrowserLoadState.Loading -> {
+                Text(
+                    text = stringResource(R.string.add_workspace_folders_loading),
+                    modifier = Modifier
+                        .testTag("add_workspace_folders_loading")
+                        .semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
+
+            is BrowserLoadState.Error -> {
+                Text(
+                    text = browser.message,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .testTag("add_workspace_browser_error")
+                        .semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
+
+            is BrowserLoadState.Loaded -> {
+                OutlinedTextField(
+                    value = uiState.folderQuery,
+                    onValueChange = onFolderQueryChanged,
+                    enabled = enabled,
+                    label = { Text(text = stringResource(R.string.add_workspace_folder_search)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("add_workspace_folder_search"),
+                )
+
+                if (browser.folders.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.add_workspace_folders_empty),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.testTag("add_workspace_folders_empty"),
+                    )
+                } else {
+                    val filtered = uiState.filteredFolders
+                    if (filtered.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.add_workspace_folder_search_empty),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.testTag("add_workspace_folder_search_empty"),
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 220.dp)
+                                .testTag("add_workspace_folder_list"),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            items(filtered, key = { folder -> folder.path }) { folder ->
+                                FolderRow(
+                                    folder = folder,
+                                    enabled = enabled,
+                                    onClick = { onFolderSelected(folder.path) },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                TextButton(
+                    onClick = onUseCurrentFolder,
+                    enabled = enabled,
+                    modifier = Modifier.testTag("add_workspace_use_current"),
+                ) {
+                    Text(text = stringResource(R.string.add_workspace_use_current))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LabeledValue(
+    label: String,
+    value: String,
+    testTag: String,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.testTag(testTag),
+        )
     }
 }
 
@@ -251,147 +470,9 @@ private fun HaroldServerDropdown(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun RootDropdown(
-    roots: List<String>,
-    selectedRoot: String,
-    enabled: Boolean,
-    onRootChanged: (String) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val selectedLabel = selectedRoot.ifEmpty { stringResource(R.string.add_workspace_root_placeholder) }
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { if (enabled) expanded = !expanded },
-    ) {
-        OutlinedTextField(
-            value = selectedLabel,
-            onValueChange = {},
-            readOnly = true,
-            enabled = enabled,
-            label = { Text(text = stringResource(R.string.add_workspace_root_label)) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = enabled)
-                .fillMaxWidth()
-                .testTag("add_workspace_root"),
-        )
-
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            roots.forEach { root ->
-                DropdownMenuItem(
-                    text = { Text(text = root) },
-                    onClick = {
-                        onRootChanged(root)
-                        expanded = false
-                    },
-                    modifier = Modifier.testTag("add_workspace_root_option"),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun FolderPicker(
-    uiState: AddWorkspaceUiState,
-    enabled: Boolean,
-    onFolderChanged: (String) -> Unit,
-    onFolderQueryChanged: (String) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = stringResource(R.string.add_workspace_folder_label),
-            style = MaterialTheme.typography.titleSmall,
-        )
-
-        when (val folders = uiState.foldersLoadState) {
-            FoldersLoadState.Idle -> {
-                Text(
-                    text = stringResource(R.string.add_workspace_folder_select_root),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.testTag("add_workspace_folder_idle"),
-                )
-            }
-
-            FoldersLoadState.Loading -> {
-                Text(
-                    text = stringResource(R.string.add_workspace_folders_loading),
-                    modifier = Modifier
-                        .testTag("add_workspace_folders_loading")
-                        .semantics { liveRegion = LiveRegionMode.Polite },
-                )
-            }
-
-            FoldersLoadState.Empty -> {
-                Text(
-                    text = stringResource(R.string.add_workspace_folders_empty),
-                    modifier = Modifier
-                        .testTag("add_workspace_folders_empty")
-                        .semantics { liveRegion = LiveRegionMode.Polite },
-                )
-            }
-
-            is FoldersLoadState.Error -> {
-                Text(
-                    text = folders.message,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier
-                        .testTag("add_workspace_folders_error")
-                        .semantics { liveRegion = LiveRegionMode.Polite },
-                )
-            }
-
-            is FoldersLoadState.Loaded -> {
-                OutlinedTextField(
-                    value = uiState.folderQuery,
-                    onValueChange = onFolderQueryChanged,
-                    enabled = enabled,
-                    label = { Text(text = stringResource(R.string.add_workspace_folder_search)) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("add_workspace_folder_search"),
-                )
-
-                val filtered = uiState.filteredFolders
-                if (filtered.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.add_workspace_folder_search_empty),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.testTag("add_workspace_folder_search_empty"),
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 280.dp)
-                            .testTag("add_workspace_folder_list"),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        items(filtered, key = { folder -> folder.path }) { folder ->
-                            FolderRow(
-                                folder = folder,
-                                selected = folder.path == uiState.selectedFolderPath,
-                                enabled = enabled,
-                                onClick = { onFolderChanged(folder.path) },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 @Composable
 private fun FolderRow(
     folder: FilesystemDirectory,
-    selected: Boolean,
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
@@ -407,11 +488,7 @@ private fun FolderRow(
         Text(
             text = folder.name,
             style = MaterialTheme.typography.bodyLarge,
-            color = if (selected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            },
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text = folder.path,

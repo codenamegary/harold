@@ -38,7 +38,6 @@ data class RuntimeSettings(
     val bindPort: Int,
     val logLevel: LogLevel,
     val logPath: String? = null,
-    val allowedRoots: List<String>,
 )
 
 @Serializable

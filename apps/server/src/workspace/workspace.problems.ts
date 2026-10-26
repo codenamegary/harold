@@ -2,6 +2,7 @@ import {
   ConflictProblemSchema,
   NotFoundProblemSchema,
   PROBLEM_TYPES,
+  UnprocessableProblemSchema,
   ValidationProblemSchema,
   WorkspaceActiveSessionsProblemSchema,
 } from "contracts/http/error"
@@ -23,6 +24,15 @@ export const buildPathValidationProblem = (error: FilesystemPathError) =>
     errors: [{ pointer: "#/path", code: pathErrorCodes[error.kind] }],
   })
 
+export const buildInvalidGitUrlProblem = () =>
+  ValidationProblemSchema.parse({
+    type: PROBLEM_TYPES.validationError,
+    title: "Request validation failed",
+    status: 400,
+    code: "validation.request.invalid",
+    errors: [{ pointer: "#/url", code: "validation.field.url.invalid" }],
+  })
+
 export const buildNotFoundProblem = (detail = "Unknown workspace id") =>
   NotFoundProblemSchema.parse({
     type: PROBLEM_TYPES.notFound,
@@ -31,11 +41,27 @@ export const buildNotFoundProblem = (detail = "Unknown workspace id") =>
     detail,
   })
 
-export const buildConflictProblem = (detail = "Duplicate canonical path") =>
+export const buildDestinationNotEmptyProblem = () =>
   ConflictProblemSchema.parse({
     type: PROBLEM_TYPES.conflict,
-    title: "Workspace path already registered",
+    title: "Workspace destination is not empty",
     status: 409,
+    detail: "Clone into an empty folder",
+  })
+
+export const buildWorkspaceConflictProblem = (detail = "Workspace could not be registered") =>
+  ConflictProblemSchema.parse({
+    type: PROBLEM_TYPES.conflict,
+    title: "Workspace could not be registered",
+    status: 409,
+    detail,
+  })
+
+export const buildCloneFailedProblem = (detail: string) =>
+  UnprocessableProblemSchema.parse({
+    type: PROBLEM_TYPES.unprocessable,
+    title: "Git clone failed",
+    status: 422,
     detail,
   })
 
@@ -57,13 +83,4 @@ export const buildWorkspaceActiveSessionsProblem = (
     status: 409,
     detail: sanitizeAcpErrorMessage(detail),
     forceDeleteAvailable: true,
-  })
-
-export const buildOutsideAllowedRootProblem = () =>
-  ValidationProblemSchema.parse({
-    type: PROBLEM_TYPES.validationError,
-    title: "Request validation failed",
-    status: 400,
-    code: "validation.request.invalid",
-    errors: [{ pointer: "#/path", code: "validation.field.path.outside_allowed_root" }],
   })

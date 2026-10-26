@@ -15,3 +15,11 @@ export type StatPathResult =
   | { ok: false }
 
 export type StatPath = (inputPath: string) => Promise<StatPathResult>
+
+export type GetHomeDirectory = () => string
+
+export type CreateDirectoryPortResult =
+  | { ok: true }
+  | { ok: false; error: { kind: "already_exists" } | { kind: "permission_denied" } }
+
+export type CreateDirectoryPort = (dirPath: string) => Promise<CreateDirectoryPortResult>

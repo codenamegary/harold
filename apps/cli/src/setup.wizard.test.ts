@@ -184,7 +184,7 @@ const makeHarness = (options: HarnessOptions = {}) => {
         }
         const value = makeWorkspace(path)
         workspaces.push(value)
-        return { ok: true, value }
+        return { ok: true, value, created: true }
       },
     },
     recipes,

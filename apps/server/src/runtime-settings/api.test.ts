@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { mkdir, readFile } from "node:fs/promises"
+import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { ValidationProblemSchema } from "contracts/http/error"
 import {
@@ -65,7 +65,6 @@ describe("GET /v1/settings/runtime", () => {
       bindPort: 3847,
       logLevel: "info",
       logPath: null,
-      allowedRoots: [],
     })
     expect(body.restartRequired).toBe(false)
     expect(body.effective).toEqual({
@@ -101,9 +100,7 @@ describe("GET /v1/settings/runtime", () => {
 
 describe("PATCH /v1/settings/runtime", () => {
   test("persists live fields without restartRequired", async () => {
-    const { app, dataDir } = await createTestApp()
-    const allowedDir = path.join(dataDir, "allowed")
-    await mkdir(allowedDir)
+    const { app } = await createTestApp()
 
     const response = await app.inject({
       headers: authHeaders(app),
@@ -112,7 +109,6 @@ describe("PATCH /v1/settings/runtime", () => {
       payload: {
         advertisedUrl: "https://agents.example.com",
         logLevel: "debug",
-        allowedRoots: [allowedDir],
       },
     })
 
@@ -122,7 +118,6 @@ describe("PATCH /v1/settings/runtime", () => {
     expect(body.restartRequired).toBe(false)
     expect(body.settings.advertisedUrl).toBe("https://agents.example.com")
     expect(body.settings.logLevel).toBe("debug")
-    expect(body.settings.allowedRoots).toEqual([path.resolve(allowedDir)])
     expect(app.log.level).toBe("debug")
 
     const getResponse = await app.inject({

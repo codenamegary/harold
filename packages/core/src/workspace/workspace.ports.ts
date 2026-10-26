@@ -4,8 +4,6 @@ import { WorkspaceRepositoryError } from "./workspace.errors"
 
 export type CanonicalizePath = (inputPath: string) => CanonicalizePathResult
 
-export type GetAllowedRoots = () => readonly string[]
-
 export type InsertWorkspaceInput = {
   name: string
   canonicalPath: string
@@ -14,6 +12,36 @@ export type InsertWorkspaceInput = {
 export type InsertWorkspace = (
   input: InsertWorkspaceInput,
 ) => { ok: true; value: Workspace } | { ok: false; error: { kind: "duplicate_path" } }
+
+export type FindWorkspaceByCanonicalPath = (input: {
+  canonicalPath: string
+}) => { ok: true; value: Workspace } | { ok: false; error: WorkspaceRepositoryError }
+
+export type TouchWorkspaceLastUsedAt = (input: {
+  id: string
+}) => { ok: true; value: Workspace } | { ok: false; error: WorkspaceRepositoryError }
+
+export type CloneRepositoryResult =
+  | { ok: true }
+  | { ok: false; error: { kind: "clone_failed"; detail: string } }
+
+export type CloneRepository = (input: {
+  url: string
+  destinationPath: string
+}) => Promise<CloneRepositoryResult>
+
+export type FindOrCreateWorkspaceInput = Readonly<{
+  name: string
+  canonicalPath: string
+}>
+
+export type FindOrCreateWorkspaceResult =
+  | { ok: true; value: Workspace; created: boolean }
+  | { ok: false; error: WorkspaceRepositoryError }
+
+export type FindOrCreateWorkspace = (
+  input: FindOrCreateWorkspaceInput,
+) => FindOrCreateWorkspaceResult
 
 export type FindWorkspaceById = (input: {
   id: string
