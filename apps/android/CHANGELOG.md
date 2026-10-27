@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.0.0](https://github.com/codenamegary/harold/compare/harold-android-v1.4.1...harold-android-v2.0.0) (2026-10-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* **workspaces:** make workspaces bookmarks to any project folder ([#457](https://github.com/codenamegary/harold/issues/457))
+* **cli:** remove devices with hard delete ([#451](https://github.com/codenamegary/harold/issues/451))
+
+### Features
+
+* **android:** cache REST data in Room for offline reads ([#454](https://github.com/codenamegary/harold/issues/454)) ([35eda3b](https://github.com/codenamegary/harold/commit/35eda3b380df81e9a3d83ee38dc14cb597462404))
+* **android:** share the Room cache across features ([#455](https://github.com/codenamegary/harold/issues/455)) ([121de90](https://github.com/codenamegary/harold/commit/121de9027d4da0cf777b03791b495644ee4b5028))
+* **cli:** remove devices with hard delete ([#451](https://github.com/codenamegary/harold/issues/451)) ([41bf5df](https://github.com/codenamegary/harold/commit/41bf5df02477f3b7e1ac9df737fb173c864b3dd9))
+* **workspaces:** make workspaces bookmarks to any project folder ([#457](https://github.com/codenamegary/harold/issues/457)) ([5d7704c](https://github.com/codenamegary/harold/commit/5d7704c74fa99cc5e2947ba60a874c2ee72bbf5f))
+
+
+### Refactoring
+
+* **android:** collapse the chat session-reset copies and extract agent-auth ([#449](https://github.com/codenamegary/harold/issues/449)) ([8edeb4b](https://github.com/codenamegary/harold/commit/8edeb4b16c9fac1b3cb0802533f89ae994e8d740))
+
 ## [1.4.1](https://github.com/codenamegary/harold/compare/harold-android-v1.4.0...harold-android-v1.4.1) (2026-10-24)
 
 
