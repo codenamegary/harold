@@ -386,8 +386,7 @@ class ContractDecodingTest {
                 "bindHost": "127.0.0.1",
                 "bindPort": 3847,
                 "logLevel": "info",
-                "logPath": null,
-                "allowedRoots": ["/home/ops/code"]
+                "logPath": null
               },
               "restartRequired": false,
               "effective": {
@@ -400,8 +399,35 @@ class ContractDecodingTest {
             """.trimIndent(),
         )
 
-        assertEquals(listOf("/home/ops/code"), view.settings.allowedRoots)
         assertEquals(LogLevel.Info, view.settings.logLevel)
+    }
+
+    @Test
+    fun rejectsRuntimeSettingsWithTheRetiredAllowedRootsKey() {
+        assertThrowsSerialization {
+            HaroldJson.decodeFromString(
+                RuntimeSettingsView.serializer(),
+                """
+                {
+                  "settings": {
+                    "advertisedUrl": null,
+                    "bindHost": "127.0.0.1",
+                    "bindPort": 3847,
+                    "logLevel": "info",
+                    "logPath": null,
+                    "allowedRoots": ["/home/ops/code"]
+                  },
+                  "restartRequired": false,
+                  "effective": {
+                    "bindHost": "127.0.0.1",
+                    "bindPort": 3847,
+                    "logPath": null
+                  },
+                  "overrides": {}
+                }
+                """.trimIndent(),
+            )
+        }
     }
 
     @Test
@@ -410,15 +436,72 @@ class ContractDecodingTest {
             FilesystemDirectoryCollection.serializer(),
             """
             {
+              "path": "/home/ops",
+              "parent": "/home",
               "items": [
-                { "name": "harold", "path": "/home/ops/code/harold" }
+                { "name": "harold", "path": "/home/ops/harold" }
               ]
             }
             """.trimIndent(),
         )
 
+        assertEquals("/home/ops", collection.path)
+        assertEquals("/home", collection.parent)
         assertEquals(1, collection.items.size)
         assertEquals("harold", collection.items.single().name)
+    }
+
+    @Test
+    fun decodesFilesystemDirectoryCollectionAtRoot() {
+        val collection = HaroldJson.decodeFromString(
+            FilesystemDirectoryCollection.serializer(),
+            """
+            {
+              "path": "/",
+              "parent": null,
+              "items": []
+            }
+            """.trimIndent(),
+        )
+
+        assertNull(collection.parent)
+        assertTrue(collection.items.isEmpty())
+    }
+
+    @Test
+    fun encodesFolderWorkspaceSourceWithoutUrl() {
+        val encoded = HaroldJson.encodeToString(
+            CreateWorkspaceBody.serializer(),
+            CreateWorkspaceBody(
+                source = WorkspaceSource.Folder,
+                path = "/home/ops/harold",
+                name = "harold",
+            ),
+        )
+        val element = HaroldJson.parseToJsonElement(encoded).jsonObject
+
+        assertEquals("folder", element["source"]?.jsonPrimitive?.content)
+        assertNull(element["url"])
+    }
+
+    @Test
+    fun encodesGitWorkspaceSource() {
+        val encoded = HaroldJson.encodeToString(
+            CreateWorkspaceBody.serializer(),
+            CreateWorkspaceBody(
+                source = WorkspaceSource.Git,
+                path = "/home/ops/widgets",
+                name = "widgets",
+                url = "https://github.com/acme/widgets.git",
+            ),
+        )
+        val element = HaroldJson.parseToJsonElement(encoded).jsonObject
+
+        assertEquals("git", element["source"]?.jsonPrimitive?.content)
+        assertEquals(
+            "https://github.com/acme/widgets.git",
+            element["url"]?.jsonPrimitive?.content,
+        )
     }
 
     @Test

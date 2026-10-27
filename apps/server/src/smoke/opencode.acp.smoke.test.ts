@@ -119,19 +119,11 @@ describe("opencode ACP smoke", () => {
         })
         expect(enableResponse.statusCode).toBe(200)
 
-        const allowResponse = await app.inject({
-          headers: authHeaders(app),
-          method: "PATCH",
-          url: "/v1/settings/runtime",
-          payload: { allowedRoots: [dataDir] },
-        })
-        expect(allowResponse.statusCode).toBe(200)
-
         const workspaceResponse = await app.inject({
           headers: authHeaders(app),
           method: "POST",
           url: "/v1/workspaces",
-          payload: { name: "Smoke workspace", path: workspaceDir },
+          payload: { source: "folder", name: "Smoke workspace", path: workspaceDir },
         })
         expect(workspaceResponse.statusCode).toBe(201)
 

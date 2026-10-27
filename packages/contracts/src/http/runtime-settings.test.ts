@@ -13,7 +13,6 @@ const validSettings = {
   bindPort: 3847,
   logLevel: "info",
   logPath: null,
-  allowedRoots: [],
 } as const
 
 describe("RuntimeSettingsSchema", () => {
@@ -52,7 +51,6 @@ describe("RuntimeSettingsSchema", () => {
       bindPort: validSettings.bindPort,
       logLevel: validSettings.logLevel,
       logPath: validSettings.logPath,
-      allowedRoots: validSettings.allowedRoots,
     }
     expect(RuntimeSettingsSchema.parse(withoutFlag).advertisedUrlEnabled).toBe(true)
   })
@@ -63,7 +61,6 @@ describe("RuntimeSettingsSchema", () => {
       advertisedUrl: "https://agents.example.com",
       logLevel: "debug",
       logPath: "/var/log/harold.log",
-      allowedRoots: ["/home/ops/projects"],
     }
 
     expect(RuntimeSettingsSchema.parse(settings)).toEqual(settings)
@@ -165,6 +162,15 @@ describe("RuntimeSettingsSchema", () => {
       }),
     ).toThrow()
   })
+
+  test("rejects the retired allowedRoots key", () => {
+    expect(() =>
+      RuntimeSettingsSchema.parse({
+        ...validSettings,
+        allowedRoots: ["/home/ops/projects"],
+      }),
+    ).toThrow()
+  })
 })
 
 describe("UpdateRuntimeSettingsBodySchema", () => {
@@ -218,6 +224,12 @@ describe("UpdateRuntimeSettingsBodySchema", () => {
 
   test("rejects unknown fields", () => {
     expect(() => UpdateRuntimeSettingsBodySchema.parse({ unknown: true })).toThrow()
+  })
+
+  test("rejects the retired allowedRoots field", () => {
+    expect(() =>
+      UpdateRuntimeSettingsBodySchema.parse({ allowedRoots: ["/home/ops/projects"] }),
+    ).toThrow()
   })
 })
 

@@ -1,21 +1,29 @@
 import path from "node:path"
 import { FilesystemPathError } from "core/filesystem/errors"
-import { isDescendantOf } from "core/filesystem/is.descendant.of"
-import { CanonicalizePath, ReadDirectoryEntries, StatPath } from "core/filesystem/ports"
+import {
+  CanonicalizePath,
+  GetHomeDirectory,
+  ReadDirectoryEntries,
+  StatPath,
+} from "core/filesystem/ports"
 
 export type FilesystemDirectoryItem = {
   name: string
   path: string
 }
 
+export type ListFilesystemDirectoriesValue = {
+  path: string
+  parent: string | null
+  items: FilesystemDirectoryItem[]
+}
+
 export type ListFilesystemDirectoriesResult =
-  | { ok: true; items: FilesystemDirectoryItem[] }
-  | { ok: false; error: { kind: "not_allowed" } }
+  | { ok: true; value: ListFilesystemDirectoriesValue }
   | { ok: false; error: { kind: "path"; error: FilesystemPathError } }
 
 export type ListFilesystemDirectoriesParams = Readonly<{
-  root: string
-  allowedRoots: readonly string[]
+  root?: string
 }>
 
 export type ListDirectories = (
@@ -26,47 +34,36 @@ export type ListDirectoriesDeps = Readonly<{
   canonicalizePath: CanonicalizePath
   readDirectoryEntries: ReadDirectoryEntries
   statPath: StatPath
+  getHomeDirectory: GetHomeDirectory
 }>
 
 export const makeListDirectories =
   (deps: ListDirectoriesDeps): ListDirectories =>
   async (params) => {
-    const canonicalizeResult = deps.canonicalizePath(params.root)
+    const canonicalizeResult = deps.canonicalizePath(params.root ?? deps.getHomeDirectory())
     if (!canonicalizeResult.ok) {
       return { ok: false, error: { kind: "path", error: canonicalizeResult.error } }
     }
 
     const canonicalRoot = canonicalizeResult.canonicalPath
-
-    if (!params.allowedRoots.includes(canonicalRoot)) {
-      return { ok: false, error: { kind: "not_allowed" } }
-    }
-
     const entries = await deps.readDirectoryEntries(canonicalRoot)
     const items: FilesystemDirectoryItem[] = []
 
     for (const entry of entries) {
-      const childPath = path.join(canonicalRoot, entry.name)
-
-      const statResult = await deps.statPath(childPath)
+      const statResult = await deps.statPath(path.join(canonicalRoot, entry.name))
       if (!statResult.ok || !statResult.isDirectory) {
         continue
       }
 
-      if (
-        !isDescendantOf({
-          path: canonicalRoot,
-          candidatePath: statResult.canonicalPath,
-        })
-      ) {
-        continue
-      }
-
-      items.push({ name: entry.name, path: childPath })
+      items.push({ name: entry.name, path: statResult.canonicalPath })
     }
 
     return {
       ok: true,
-      items: [...items].sort((left, right) => left.name.localeCompare(right.name)),
+      value: {
+        path: canonicalRoot,
+        parent: canonicalRoot === "/" ? null : path.dirname(canonicalRoot),
+        items: [...items].sort((left, right) => left.name.localeCompare(right.name)),
+      },
     }
   }

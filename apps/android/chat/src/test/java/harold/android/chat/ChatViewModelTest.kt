@@ -1417,7 +1417,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun attachmentFailsWithTheServerReasonWhenTheSessionFolderIsNotAllowed() = runTest(dispatcher) {
+    fun attachmentFailsWithTheServerReasonWhenTheSessionFolderIsUnavailable() = runTest(dispatcher) {
         val attachments = object : AttachmentApi {
             override suspend fun uploadAttachment(
                 serverOrigin: String,
@@ -1425,9 +1425,9 @@ class ChatViewModelTest {
             ): Result<AttachmentDescriptor> = Result.failure(
                 AgentApiException(
                     AgentApiError.Problem(
-                        status = 409,
-                        title = "Session folder not allowed",
-                        detail = "The session folder is outside the allowed roots",
+                        status = 404,
+                        title = "Session not found",
+                        detail = "The session folder is unavailable",
                     ),
                 ),
             )
@@ -1451,7 +1451,7 @@ class ChatViewModelTest {
 
         val pending = viewModel.uiState.value.pendingAttachments.single()
         assertEquals(AttachmentUploadStatus.Failed, pending.status)
-        assertEquals("The session folder is outside the allowed roots", pending.error)
+        assertEquals("The session folder is unavailable", pending.error)
     }
 
     private fun modelOption(currentValue: String): SelectOption = SelectOption(
@@ -1736,9 +1736,16 @@ private class ChatFakeUserRepository(
 
     override suspend fun listFilesystemDirectories(
         serverOrigin: String,
-        root: String,
+        root: String?,
     ) = Result.failure<harold.android.contracts.FilesystemDirectoryCollection>(
         UnsupportedOperationException(),
+    )
+
+    override suspend fun createFilesystemDirectory(
+        serverOrigin: String,
+        body: harold.android.contracts.CreateFilesystemDirectoryBody,
+    ) = Result.failure<harold.android.contracts.FilesystemDirectoryCreated>(
+        UnsupportedOperationException("unused"),
     )
 
     override suspend fun createWorkspace(

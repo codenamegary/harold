@@ -12,7 +12,6 @@ import { MultipartFile } from "@fastify/multipart"
 import { buildSessionNotFoundProblem } from "../session/session.problems"
 import { DeleteAttachment, ResolveSessionFolder, SaveAttachment } from "./attachments.ports"
 import {
-  buildAttachmentFolderNotAllowedProblem,
   buildAttachmentNotFoundProblem,
   buildAttachmentParamsProblem,
   buildAttachmentTooLargeProblem,
@@ -50,12 +49,6 @@ export const registerAttachmentRoutes = (app: FastifyInstance, deps: Attachments
       return { ok: true as const, folder: resolved.value }
     }
     switch (resolved.error.kind) {
-      case "outside_allowed_roots":
-        return {
-          ok: false as const,
-          status: 409,
-          problem: buildAttachmentFolderNotAllowedProblem(),
-        }
       case "unknown_session":
       case "folder_unavailable":
         return { ok: false as const, status: 404, problem: buildSessionNotFoundProblem() }

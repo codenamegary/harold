@@ -11,7 +11,6 @@ import { parseConfig } from "../config/config"
 import { openDatabase } from "../persistence/database"
 import { createRuntime } from "../runtime/runtime"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
-import { allowWorkspaceRoots } from "../test-support/test.app"
 import {
   createSmokeLogCapture,
   openStreamClient,
@@ -213,8 +212,6 @@ describe("cursor attachment smoke", () => {
           payload: { enabled: true, path: detectedPath },
         })
         expect(enableResponse.statusCode).toBe(200)
-
-        await allowWorkspaceRoots(app, [dataDir])
 
         const sessionResponse = await app.inject({
           headers: authHeaders(app),

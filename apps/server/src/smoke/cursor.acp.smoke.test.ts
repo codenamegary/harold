@@ -17,7 +17,6 @@ import {
   seedSmokeDevice,
   smokeCommands,
 } from "../test-support/session.stream.smoke"
-import { allowWorkspaceRoots } from "../test-support/test.app"
 import {
   hasCursorAuth,
   resolveCursorAgentPath,
@@ -72,13 +71,11 @@ describe("cursor ACP smoke", () => {
         })
         expect(enableResponse.statusCode).toBe(200)
 
-        await allowWorkspaceRoots(app, [dataDir])
-
         const workspaceResponse = await app.inject({
           headers: authHeaders(app),
           method: "POST",
           url: "/v1/workspaces",
-          payload: { name: "Smoke workspace", path: workspaceDir },
+          payload: { source: "folder", name: "Smoke workspace", path: workspaceDir },
         })
         expect(workspaceResponse.statusCode).toBe(201)
 

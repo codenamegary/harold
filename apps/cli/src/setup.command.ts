@@ -1,4 +1,3 @@
-import path from "node:path"
 import {
   cancel as clackCancel,
   confirm as clackConfirm,
@@ -13,8 +12,6 @@ import {
 } from "@clack/prompts"
 import { Command } from "commander"
 import pc from "picocolors"
-import { expandHomePath } from "core/filesystem/expand.home.path"
-import { isDescendantOf } from "core/filesystem/is.descendant.of"
 import {
   daemonStateFilePath,
   makeDaemonStateFileStore,
@@ -31,9 +28,8 @@ import { localApiUrl } from "core/status/summary.models"
 import { parseConfig } from "server/config"
 import { openDatabase } from "server/database"
 import { assembleDeviceSlice } from "server/device"
-import { makeCanonicalizePath } from "server/filesystem"
+import { makeCanonicalizePath, makeReadDirectoryEntries } from "server/filesystem"
 import { makeRuntimeSettingsFileStore, seedDefaultsFromConfig } from "server/runtime-settings"
-import { makeUpdateRuntimeSettings } from "server/runtime-settings/update.usecase"
 import { assembleWorkspaceSlice } from "server/workspace"
 import { disableAgent, enableAgent, openAgentCli } from "./agent.command"
 import { ConnectDeps, runConnect } from "./connect.command"
@@ -188,17 +184,10 @@ export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): P
     const workspaceSlice = assembleWorkspaceSlice({
       database,
       canonicalizePath: makeCanonicalizePath(),
-      getAllowedRoots: () => settingsStore.get().allowedRoots,
+      readDirectoryEntries: makeReadDirectoryEntries(),
       listLiveByWorkspaceRoot: () => [],
       closeWorkspaceSessions: async () => ({ failures: [] }),
       unbindWorkspaceSessions: () => undefined,
-    })
-    const updateRuntimeSettings = makeUpdateRuntimeSettings({
-      getSettings: settingsStore.get,
-      saveSettings: settingsStore.save,
-      canonicalizePath: makeCanonicalizePath(),
-      listAllWorkspaces: workspaceSlice.listAll,
-      deleteWorkspace: workspaceSlice.deleteWorkspace,
     })
 
     const which = (binary: string): boolean => Bun.which(binary) !== null
@@ -253,28 +242,12 @@ export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): P
       },
       workspaces: {
         list: () => workspaceSlice.listAll(),
-        register: async (workspacePath) => {
-          const absolutePath = path.resolve(cwd, expandHomePath(workspacePath))
-          const roots = settingsStore.get().allowedRoots
-          const allowed = roots.some((root) =>
-            isDescendantOf({ path: root, candidatePath: absolutePath }),
-          )
-
-          if (!allowed) {
-            const updated = await updateRuntimeSettings({
-              body: { allowedRoots: [...roots, absolutePath] },
-              force: false,
-            })
-            if (!updated.ok) {
-              return { ok: false, error: { kind: "outside_allowed_root" } }
-            }
-          }
-
-          return workspaceSlice.registerWorkspace({
+        register: (workspacePath) =>
+          workspaceSlice.registerWorkspace({
+            source: "folder",
             name: defaultWorkspaceName(workspacePath),
             path: workspacePath,
-          })
-        },
+          }),
       },
       recipes: connectRecipes.map((recipe) => {
         const detection = recipe.detect({ which })

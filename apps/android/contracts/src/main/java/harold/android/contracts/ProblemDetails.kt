@@ -8,11 +8,10 @@ object ProblemTypes {
     const val INTERNAL_ERROR = "https://harold.local/problems/internal-error"
     const val NOT_FOUND = "https://harold.local/problems/not-found"
     const val CONFLICT = "https://harold.local/problems/conflict"
+    const val UNPROCESSABLE = "https://harold.local/problems/unprocessable"
     const val UNAUTHORIZED = "https://harold.local/problems/unauthorized"
     const val WORKSPACE_ACTIVE_SESSIONS =
         "https://harold.local/problems/workspace-has-active-sessions"
-    const val ALLOWED_ROOT_HAS_WORKSPACES =
-        "https://harold.local/problems/allowed-root-has-workspaces"
 }
 
 @Serializable
@@ -66,6 +65,15 @@ data class ConflictProblem(
 ) : ProblemDetails()
 
 @Serializable
+@SerialName(ProblemTypes.UNPROCESSABLE)
+data class UnprocessableProblem(
+    override val title: String,
+    override val status: Int? = null,
+    override val instance: String? = null,
+    val detail: String? = null,
+) : ProblemDetails()
+
+@Serializable
 @SerialName(ProblemTypes.UNAUTHORIZED)
 data class UnauthorizedProblem(
     override val title: String,
@@ -77,16 +85,6 @@ data class UnauthorizedProblem(
 @Serializable
 @SerialName(ProblemTypes.WORKSPACE_ACTIVE_SESSIONS)
 data class WorkspaceActiveSessionsProblem(
-    override val title: String,
-    override val status: Int? = null,
-    override val instance: String? = null,
-    val detail: String? = null,
-    val forceDeleteAvailable: Boolean,
-) : ProblemDetails()
-
-@Serializable
-@SerialName(ProblemTypes.ALLOWED_ROOT_HAS_WORKSPACES)
-data class AllowedRootHasWorkspacesProblem(
     override val title: String,
     override val status: Int? = null,
     override val instance: String? = null,

@@ -232,7 +232,6 @@ export const RuntimeSettingsSchema = z.strictObject({
   // (`harold.log`), not to stdout; the CLI tails that same file with
   // `harold logs`. A non-null value is an explicit log file path.
   logPath: z.string().min(1).nullable(),
-  allowedRoots: z.array(z.string().min(1)),
 })
 
 export const UpdateRuntimeSettingsBodySchema = z.strictObject({
@@ -242,7 +241,6 @@ export const UpdateRuntimeSettingsBodySchema = z.strictObject({
   bindPort: z.number().int().nonnegative().max(65535).optional(),
   logLevel: LogLevelSchema.optional(),
   logPath: z.union([z.string().min(1), z.null()]).optional(),
-  allowedRoots: z.array(z.string().min(1)).optional(),
 })
 
 export const RuntimeSettingsOverrideSourceSchema = z.enum(["env"])
@@ -267,13 +265,6 @@ export const RuntimeSettingsViewSchema = z.strictObject({
 
 export const UpdateRuntimeSettingsResponseSchema = RuntimeSettingsViewSchema
 
-export const PatchRuntimeSettingsQuerySchema = z.strictObject({
-  force: z
-    .enum(["true", "false"])
-    .optional()
-    .transform((value) => value === "true"),
-})
-
 export type RuntimeSettings = z.infer<typeof RuntimeSettingsSchema>
 export type UpdateRuntimeSettingsBody = z.infer<typeof UpdateRuntimeSettingsBodySchema>
 export type RuntimeSettingsOverrideSource = z.infer<typeof RuntimeSettingsOverrideSourceSchema>
@@ -281,7 +272,6 @@ export type RuntimeSettingsOverrides = z.infer<typeof RuntimeSettingsOverridesSc
 export type RuntimeSettingsEffective = z.infer<typeof RuntimeSettingsEffectiveSchema>
 export type RuntimeSettingsView = z.infer<typeof RuntimeSettingsViewSchema>
 export type UpdateRuntimeSettingsResponse = RuntimeSettingsView
-export type PatchRuntimeSettingsQuery = z.infer<typeof PatchRuntimeSettingsQuerySchema>
 
 export const normalizeAdvertisedUrl = (
   value: string | null | undefined,

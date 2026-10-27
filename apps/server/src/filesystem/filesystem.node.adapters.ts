@@ -1,9 +1,20 @@
 import { accessSync, constants, realpathSync, statSync } from "node:fs"
-import { readdir, realpath, stat } from "node:fs/promises"
+import { mkdir, readdir, realpath, stat } from "node:fs/promises"
+import { homedir } from "node:os"
 import path from "node:path"
 import { expandHomePath } from "core/filesystem/expand.home.path"
-import { isMissingFilesystemError, isPermissionFilesystemError } from "core/filesystem/errors"
-import { CanonicalizePath, ReadDirectoryEntries, StatPath } from "core/filesystem/ports"
+import {
+  isAlreadyExistsFilesystemError,
+  isMissingFilesystemError,
+  isPermissionFilesystemError,
+} from "core/filesystem/errors"
+import {
+  CanonicalizePath,
+  CreateDirectoryPort,
+  GetHomeDirectory,
+  ReadDirectoryEntries,
+  StatPath,
+} from "core/filesystem/ports"
 
 export const makeCanonicalizePath = (): CanonicalizePath => (inputPath) => {
   const expanded = expandHomePath(inputPath)
@@ -66,5 +77,22 @@ export const makeStatPath = (): StatPath => async (inputPath) => {
     return { ok: true, canonicalPath, isDirectory: stats.isDirectory() }
   } catch {
     return { ok: false }
+  }
+}
+
+export const makeGetHomeDirectory = (): GetHomeDirectory => () => homedir()
+
+export const makeCreateDirectory = (): CreateDirectoryPort => async (dirPath) => {
+  try {
+    await mkdir(dirPath)
+    return { ok: true }
+  } catch (error: unknown) {
+    if (isAlreadyExistsFilesystemError(error)) {
+      return { ok: false, error: { kind: "already_exists" } }
+    }
+    if (isPermissionFilesystemError(error)) {
+      return { ok: false, error: { kind: "permission_denied" } }
+    }
+    throw error
   }
 }

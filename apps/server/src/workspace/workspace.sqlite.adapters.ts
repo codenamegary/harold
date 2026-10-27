@@ -7,10 +7,12 @@ import { workspaces } from "../persistence/schema/workspaces"
 import { createWorkspaceId } from "core/workspace/create.workspace.id"
 import {
   DeleteWorkspaceRow,
+  FindWorkspaceByCanonicalPath,
   FindWorkspaceById,
   InsertWorkspace,
   ListAllWorkspaces,
   ListWorkspaces,
+  TouchWorkspaceLastUsedAt,
   UpdateWorkspaceName,
 } from "core/workspace/ports"
 import {
@@ -182,6 +184,38 @@ export const makeFindWorkspaceById =
     return { ok: true, value: rowToWorkspace(row) }
   }
 
+export const makeFindWorkspaceByCanonicalPath =
+  (database: AgentDatabase): FindWorkspaceByCanonicalPath =>
+  ({ canonicalPath }) => {
+    const row = database.db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.canonicalPath, canonicalPath))
+      .get()
+    if (row === undefined) {
+      return { ok: false, error: { kind: "not_found" } }
+    }
+
+    return { ok: true, value: rowToWorkspace(row) }
+  }
+
+export const makeTouchWorkspaceLastUsedAt =
+  (database: AgentDatabase): TouchWorkspaceLastUsedAt =>
+  ({ id }) => {
+    const row = database.db
+      .update(workspaces)
+      .set({ lastUsedAt: nowIso() })
+      .where(eq(workspaces.id, id))
+      .returning()
+      .get()
+
+    if (row === undefined) {
+      return { ok: false, error: { kind: "not_found" } }
+    }
+
+    return { ok: true, value: rowToWorkspace(row) }
+  }
+
 export const makeDeleteWorkspaceRow =
   (database: AgentDatabase): DeleteWorkspaceRow =>
   ({ id }) => {
@@ -196,10 +230,9 @@ export const makeDeleteWorkspaceRow =
 export const makeUpdateWorkspaceName =
   (database: AgentDatabase): UpdateWorkspaceName =>
   ({ id, name }) => {
-    const lastUsedAt = nowIso()
     const row = database.db
       .update(workspaces)
-      .set({ name, lastUsedAt })
+      .set({ name })
       .where(eq(workspaces.id, id))
       .returning()
       .get()

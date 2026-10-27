@@ -25,7 +25,6 @@ const fallbackSeedDefaults: RuntimeSettings = RuntimeSettingsSchema.parse({
   logPath: null,
   advertisedUrl: null,
   advertisedUrlEnabled: true,
-  allowedRoots: [],
 })
 
 const settingsPathFor = (dataDir: string): string => path.join(dataDir, settingsFileName)
@@ -128,5 +127,4 @@ export const seedDefaultsFromConfig = (config: Config): RuntimeSettings =>
     logPath: null,
     advertisedUrl: null,
     advertisedUrlEnabled: true,
-    allowedRoots: [],
   })

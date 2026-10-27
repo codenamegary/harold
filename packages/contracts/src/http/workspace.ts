@@ -2,11 +2,7 @@ import { z } from "zod"
 import { createCollectionSchema } from "./collection"
 import { CursorSchema, IdSchema, TimestampSchema } from "./primitives"
 
-export const WorkspaceStateSchema = z.enum([
-  "available",
-  "missing",
-  "unavailable",
-])
+export const WorkspaceStateSchema = z.enum(["available", "missing", "unavailable"])
 
 export const WorkspaceSchema = z.strictObject({
   id: IdSchema,
@@ -17,13 +13,28 @@ export const WorkspaceSchema = z.strictObject({
   lastUsedAt: TimestampSchema,
 })
 
-export const CreateWorkspaceBodySchema = z.strictObject({
-  name: z.string().min(1).max(80),
+const workspaceName = z.string().min(1).max(80)
+
+export const CreateWorkspaceFolderBodySchema = z.strictObject({
+  source: z.literal("folder"),
   path: z.string().min(1),
+  name: workspaceName.optional(),
 })
 
+export const CreateWorkspaceGitBodySchema = z.strictObject({
+  source: z.literal("git"),
+  url: z.string().min(1),
+  path: z.string().min(1),
+  name: workspaceName.optional(),
+})
+
+export const CreateWorkspaceBodySchema = z.discriminatedUnion("source", [
+  CreateWorkspaceFolderBodySchema,
+  CreateWorkspaceGitBodySchema,
+])
+
 export const UpdateWorkspaceBodySchema = z.strictObject({
-  name: z.string().min(1).max(80),
+  name: workspaceName,
 })
 
 export const WorkspaceCollectionSchema = createCollectionSchema(WorkspaceSchema)
@@ -44,6 +55,8 @@ export const DeleteWorkspaceQuerySchema = z.strictObject({
 
 export type Workspace = z.infer<typeof WorkspaceSchema>
 export type WorkspaceState = z.infer<typeof WorkspaceStateSchema>
+export type CreateWorkspaceFolderBody = z.infer<typeof CreateWorkspaceFolderBodySchema>
+export type CreateWorkspaceGitBody = z.infer<typeof CreateWorkspaceGitBodySchema>
 export type CreateWorkspaceBody = z.infer<typeof CreateWorkspaceBodySchema>
 export type UpdateWorkspaceBody = z.infer<typeof UpdateWorkspaceBodySchema>
 export type WorkspaceCollection = z.infer<typeof WorkspaceCollectionSchema>

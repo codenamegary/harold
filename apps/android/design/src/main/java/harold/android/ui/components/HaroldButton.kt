@@ -26,9 +26,12 @@ enum class HaroldButtonVariant {
     Destructive,
 }
 
-private val ButtonMinHeight = 50.dp
+enum class HaroldButtonSize {
+    Small,
+    Medium,
+}
+
 private val ButtonShape = RoundedCornerShape(14.dp)
-private val ButtonContentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
 
 @Composable
 fun HaroldButton(
@@ -36,14 +39,28 @@ fun HaroldButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     variant: HaroldButtonVariant = HaroldButtonVariant.Primary,
+    size: HaroldButtonSize = HaroldButtonSize.Medium,
     enabled: Boolean = true,
     leadingIcon: (@Composable () -> Unit)? = null,
 ) {
-    val labelStyle = MaterialTheme.typography.titleMedium.copy(
-        fontSize = 16.sp,
-        lineHeight = 22.sp,
-        fontWeight = FontWeight.SemiBold,
-    )
+    val minHeight = when (size) {
+        HaroldButtonSize.Small -> 40.dp
+        HaroldButtonSize.Medium -> 50.dp
+    }
+    val contentPadding = when (size) {
+        HaroldButtonSize.Small -> PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+        HaroldButtonSize.Medium -> PaddingValues(horizontal = 20.dp, vertical = 12.dp)
+    }
+    val labelStyle = when (size) {
+        HaroldButtonSize.Small -> MaterialTheme.typography.labelLarge.copy(
+            fontWeight = FontWeight.SemiBold,
+        )
+        HaroldButtonSize.Medium -> MaterialTheme.typography.titleMedium.copy(
+            fontSize = 16.sp,
+            lineHeight = 22.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
 
     val content: @Composable () -> Unit = {
         Row(
@@ -64,12 +81,12 @@ fun HaroldButton(
                 onClick = onClick,
                 enabled = enabled,
                 shape = ButtonShape,
-                contentPadding = ButtonContentPadding,
+                contentPadding = contentPadding,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                 ),
-                modifier = modifier.defaultMinSize(minHeight = ButtonMinHeight),
+                modifier = modifier.defaultMinSize(minHeight = minHeight),
             ) {
                 content()
             }
@@ -80,7 +97,7 @@ fun HaroldButton(
                 onClick = onClick,
                 enabled = enabled,
                 shape = ButtonShape,
-                contentPadding = ButtonContentPadding,
+                contentPadding = contentPadding,
                 colors = ButtonDefaults.outlinedButtonColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
                     contentColor = MaterialTheme.colorScheme.onSurface,
@@ -89,7 +106,7 @@ fun HaroldButton(
                     width = 1.dp,
                     color = MaterialTheme.colorScheme.outline,
                 ),
-                modifier = modifier.defaultMinSize(minHeight = ButtonMinHeight),
+                modifier = modifier.defaultMinSize(minHeight = minHeight),
             ) {
                 content()
             }
@@ -100,11 +117,11 @@ fun HaroldButton(
                 onClick = onClick,
                 enabled = enabled,
                 shape = ButtonShape,
-                contentPadding = ButtonContentPadding,
+                contentPadding = contentPadding,
                 colors = ButtonDefaults.textButtonColors(
                     contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
-                modifier = modifier.defaultMinSize(minHeight = ButtonMinHeight),
+                modifier = modifier.defaultMinSize(minHeight = minHeight),
             ) {
                 content()
             }
@@ -115,11 +132,11 @@ fun HaroldButton(
                 onClick = onClick,
                 enabled = enabled,
                 shape = ButtonShape,
-                contentPadding = ButtonContentPadding,
+                contentPadding = contentPadding,
                 colors = ButtonDefaults.textButtonColors(
                     contentColor = MaterialTheme.colorScheme.error,
                 ),
-                modifier = modifier.defaultMinSize(minHeight = ButtonMinHeight),
+                modifier = modifier.defaultMinSize(minHeight = minHeight),
             ) {
                 content()
             }

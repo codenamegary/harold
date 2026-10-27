@@ -120,10 +120,28 @@ Commands:
   agent              list, enable, disable, and probe agents
   pair [options]     pair a device by scanning a QR code
   device             manage paired devices
-  workspace          manage registered workspaces
+  workspace          open, clone, list, and remove workspace folders
   logs [options]     tail the Harold daemon log
   connect [options]  verify and persist the advertised endpoint devices pair against
 ```
+
+### Workspaces
+
+A workspace is a bookmark to a project folder on the Harold host. It is not a
+sandbox and not a storage location. Any existing readable folder works, and
+sessions still start in any `cwd` you choose.
+
+```bash
+harold workspace add ~/sites/harold          # already registered is not an error
+harold workspace clone git@github.com:acme/widgets.git --into ~/sites
+harold workspace list
+harold workspace remove harold
+```
+
+`workspace add` finds or creates by canonical path. `workspace clone` creates a
+new folder under `--into`, clones with the host's git setup, then registers it.
+Use `--folder-name` to pick a different folder name and `--name` for the display
+name. Removing a workspace deletes only the bookmark; the folder stays.
 
 ## Android app
 

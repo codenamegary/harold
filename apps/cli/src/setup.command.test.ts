@@ -6,6 +6,7 @@ import { stripVTControlCharacters } from "node:util"
 import YAML from "yaml"
 import { openDatabase } from "server/database"
 import { assembleDeviceSlice } from "server/device"
+import { makeCanonicalizePath, makeReadDirectoryEntries } from "server/filesystem"
 import { assembleWorkspaceSlice } from "server/workspace"
 import { openAgentCli } from "./agent.command"
 import { makeSetupCommand, SetupCommandDeps } from "./setup.command"
@@ -138,10 +139,25 @@ describe("harold setup command wiring", () => {
     expect(exitCode).toBe(0)
     expect(output).toContain("cursor")
 
-    const settings = YAML.parse(await readFile(path.join(dataDir, "settings.yml"), "utf8")) as {
-      allowedRoots: string[]
+    const settings = YAML.parse(
+      await readFile(path.join(dataDir, "settings.yml"), "utf8"),
+    ) as Record<string, unknown>
+    expect("allowedRoots" in settings).toBe(false)
+
+    const database = openDatabase({ dataDir })
+    try {
+      const slice = assembleWorkspaceSlice({
+        database,
+        canonicalizePath: makeCanonicalizePath(),
+        readDirectoryEntries: makeReadDirectoryEntries(),
+        listLiveByWorkspaceRoot: () => [],
+        closeWorkspaceSessions: async () => ({ failures: [] }),
+        unbindWorkspaceSessions: () => undefined,
+      })
+      expect(slice.listAll().map((workspace) => workspace.path)).toContain(workspaceDir)
+    } finally {
+      database.close()
     }
-    expect(settings.allowedRoots).toContain(workspaceDir)
 
     const cli = openAgentCli({ dataDir })
     try {
@@ -163,7 +179,8 @@ describe("harold setup command wiring", () => {
     try {
       const slice = assembleWorkspaceSlice({
         database,
-        getAllowedRoots: () => [workspaceDir],
+        canonicalizePath: makeCanonicalizePath(),
+        readDirectoryEntries: makeReadDirectoryEntries(),
         listLiveByWorkspaceRoot: () => [],
         closeWorkspaceSessions: async () => ({ failures: [] }),
         unbindWorkspaceSessions: () => undefined,

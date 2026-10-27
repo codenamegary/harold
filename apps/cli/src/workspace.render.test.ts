@@ -3,6 +3,8 @@ import { Workspace } from "contracts/http/workspace"
 import {
   WorkspaceColors,
   renderAmbiguousWorkspaceReference,
+  renderCloneDirectoryError,
+  renderFolderCreatedWithoutWorkspace,
   renderRegisterWorkspaceError,
   renderWorkspaceAdded,
   renderWorkspaceDaemonRunningDeleteGuard,
@@ -110,10 +112,16 @@ describe("renderWorkspaceList", () => {
 
 describe("renderWorkspaceAdded", () => {
   test("names the workspace, its path, and its full id", () => {
-    const output = renderWorkspaceAdded(workspace())
+    const output = renderWorkspaceAdded({ workspace: workspace(), created: true })
 
     expect(output).toContain("Added workspace harold (/srv/harold)")
     expect(output).toContain("ws_01J8XYZ000000000000000000")
+  })
+
+  test("reports an already registered path without claiming a new workspace", () => {
+    const output = renderWorkspaceAdded({ workspace: workspace(), created: false })
+
+    expect(output).toBe("Workspace already registered at /srv/harold (harold).")
   })
 })
 
@@ -170,16 +178,6 @@ describe("renderRegisterWorkspaceError", () => {
     expect(output).toBe("/srv/locked is not readable.")
   })
 
-  test("explains an outside allowed root rejection", () => {
-    const output = renderRegisterWorkspaceError({
-      error: { kind: "outside_allowed_root" },
-      path: "/srv/harold",
-    })
-
-    expect(output).toContain("outside the allowed roots")
-    expect(output).toContain("allowedRoots")
-  })
-
   test("explains a duplicate registration", () => {
     const output = renderRegisterWorkspaceError({
       error: { kind: "duplicate_path" },
@@ -187,6 +185,88 @@ describe("renderRegisterWorkspaceError", () => {
     })
 
     expect(output).toBe("A workspace is already registered at /srv/harold.")
+  })
+
+  test("explains an option-like git url", () => {
+    const output = renderRegisterWorkspaceError({
+      error: { kind: "invalid_git_url" },
+      path: "/srv/harold",
+    })
+
+    expect(output).toContain("must not start with a dash")
+  })
+
+  test("explains a non-empty clone destination", () => {
+    const output = renderRegisterWorkspaceError({
+      error: { kind: "destination_not_empty" },
+      path: "/srv/harold",
+    })
+
+    expect(output).toBe("/srv/harold is not empty. Clone into an empty folder.")
+  })
+
+  test("explains a clone failure with the destination and partial-file warning", () => {
+    const output = renderRegisterWorkspaceError({
+      error: {
+        kind: "clone_failed",
+        detail: "Clone failed for /srv/harold: repository not found",
+      },
+      path: "/srv/harold",
+    })
+
+    expect(output).toContain("/srv/harold")
+    expect(output).toContain("partial files may remain")
+  })
+})
+
+describe("renderCloneDirectoryError", () => {
+  test("explains a missing parent", () => {
+    const output = renderCloneDirectoryError({
+      error: { kind: "path", error: { kind: "missing" } },
+      parent: "/srv/parent",
+      destination: "/srv/parent/widgets",
+    })
+
+    expect(output).toBe("No directory at /srv/parent.")
+  })
+
+  test("explains a destination that already exists", () => {
+    const output = renderCloneDirectoryError({
+      error: { kind: "already_exists" },
+      parent: "/srv/parent",
+      destination: "/srv/parent/widgets",
+    })
+
+    expect(output).toContain("/srv/parent/widgets")
+    expect(output).toContain("--folder-name")
+  })
+
+  test("explains an invalid folder name", () => {
+    const output = renderCloneDirectoryError({
+      error: { kind: "invalid_name" },
+      parent: "/srv/parent",
+      destination: "/srv/parent/a/b",
+    })
+
+    expect(output).toContain("not a valid folder name")
+  })
+
+  test("explains a parent that is not writable", () => {
+    const output = renderCloneDirectoryError({
+      error: { kind: "permission_denied" },
+      parent: "/srv/parent",
+      destination: "/srv/parent/widgets",
+    })
+
+    expect(output).toBe("/srv/parent is not writable.")
+  })
+})
+
+describe("renderFolderCreatedWithoutWorkspace", () => {
+  test("says the folder survived without a workspace", () => {
+    expect(renderFolderCreatedWithoutWorkspace("/srv/widgets")).toBe(
+      "The folder /srv/widgets was created, but the workspace was not registered.",
+    )
   })
 })
 

@@ -453,8 +453,15 @@ class AgentAuthControllerTest {
 
         override suspend fun listFilesystemDirectories(
             serverOrigin: String,
-            root: String,
+            root: String?,
         ) = Result.failure<FilesystemDirectoryCollection>(UnsupportedOperationException())
+
+        override suspend fun createFilesystemDirectory(
+            serverOrigin: String,
+            body: harold.android.contracts.CreateFilesystemDirectoryBody,
+        ) = Result.failure<harold.android.contracts.FilesystemDirectoryCreated>(
+            UnsupportedOperationException("unused"),
+        )
 
         override suspend fun createWorkspace(
             serverOrigin: String,

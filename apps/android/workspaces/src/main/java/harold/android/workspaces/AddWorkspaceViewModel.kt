@@ -3,8 +3,10 @@ package harold.android.workspaces
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectory
+import harold.android.contracts.WorkspaceSource
 import harold.android.credentials.SavedHaroldRepository
 import harold.android.navigation.CreatedWorkspaceResult
 import harold.android.navigation.Navigator
@@ -20,72 +22,80 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-sealed interface RootsLoadState {
-    data object Loading : RootsLoadState
-
-    data class Loaded(
-        val roots: List<String>,
-    ) : RootsLoadState
-
-    data object Empty : RootsLoadState
-
-    data class Error(
-        val message: String,
-    ) : RootsLoadState
+enum class AddWorkspaceMode {
+    OpenFolder,
+    CloneRepo,
 }
 
-sealed interface FoldersLoadState {
-    data object Idle : FoldersLoadState
-
-    data object Loading : FoldersLoadState
+sealed interface BrowserLoadState {
+    data object Loading : BrowserLoadState
 
     data class Loaded(
+        val path: String,
+        val parent: String?,
         val folders: List<FilesystemDirectory>,
-    ) : FoldersLoadState
-
-    data object Empty : FoldersLoadState
+    ) : BrowserLoadState
 
     data class Error(
         val message: String,
-    ) : FoldersLoadState
+    ) : BrowserLoadState
 }
 
 data class AddWorkspaceUiState(
     val harolds: List<WorkspaceHaroldBadge> = emptyList(),
     val selectedServerOrigin: String = "",
-    val name: String = "",
-    val selectedRoot: String = "",
-    val selectedFolderPath: String = "",
+    val mode: AddWorkspaceMode = AddWorkspaceMode.OpenFolder,
+    val browserLoadState: BrowserLoadState = BrowserLoadState.Loading,
     val folderQuery: String = "",
-    val rootsLoadState: RootsLoadState = RootsLoadState.Loading,
-    val foldersLoadState: FoldersLoadState = FoldersLoadState.Idle,
+    val selectedFolderPath: String = "",
+    val cloneParent: String = "",
+    val cloneUrl: String = "",
+    val cloneFolderName: String = "",
+    val name: String = "",
     val submitting: Boolean = false,
     val submitError: String? = null,
 ) {
-    val hasNoRoots: Boolean
-        get() = rootsLoadState is RootsLoadState.Empty
+    val isClone: Boolean
+        get() = mode == AddWorkspaceMode.CloneRepo
+
+    val browserPath: String
+        get() = (browserLoadState as? BrowserLoadState.Loaded)?.path.orEmpty()
+
+    val browserParent: String?
+        get() = (browserLoadState as? BrowserLoadState.Loaded)?.parent
+
+    val folders: List<FilesystemDirectory>
+        get() = (browserLoadState as? BrowserLoadState.Loaded)?.folders.orEmpty()
 
     val filteredFolders: List<FilesystemDirectory>
         get() {
-            val loaded = foldersLoadState as? FoldersLoadState.Loaded ?: return emptyList()
             val query = folderQuery.trim()
             if (query.isEmpty()) {
-                return loaded.folders
+                return folders
             }
-            return loaded.folders.filter { folder ->
+            return folders.filter { folder ->
                 folder.name.contains(query, ignoreCase = true) ||
                     folder.path.contains(query, ignoreCase = true)
             }
         }
 
+    val finalPath: String
+        get() = if (isClone) joinFolderPath(cloneParent, cloneFolderName) else selectedFolderPath
+
     val canSubmit: Boolean
-        get() =
-            name.trim().isNotEmpty() &&
-                selectedFolderPath.isNotEmpty() &&
-                !submitting &&
-                !hasNoRoots &&
-                rootsLoadState !is RootsLoadState.Error &&
-                foldersLoadState !is FoldersLoadState.Error
+        get() {
+            if (submitting) return false
+            if (browserLoadState is BrowserLoadState.Error) return false
+            if (name.trim().isEmpty()) return false
+
+            return if (isClone) {
+                cloneUrl.trim().isNotEmpty() &&
+                    cloneParent.isNotEmpty() &&
+                    cloneFolderName.trim().isNotEmpty()
+            } else {
+                selectedFolderPath.isNotEmpty()
+            }
+        }
 }
 
 @HiltViewModel
@@ -128,7 +138,7 @@ class AddWorkspaceViewModel @Inject constructor(
                 selectedServerOrigin = initialOrigin,
             )
         }
-        loadRoots(initialOrigin)
+        loadBrowser(initialOrigin, root = null)
     }
 
     fun onHaroldChanged(serverOrigin: String) {
@@ -138,17 +148,35 @@ class AddWorkspaceViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 selectedServerOrigin = serverOrigin,
-                selectedRoot = "",
-                selectedFolderPath = "",
+                browserLoadState = BrowserLoadState.Loading,
                 folderQuery = "",
+                selectedFolderPath = "",
+                cloneParent = "",
+                cloneUrl = "",
+                cloneFolderName = "",
                 name = "",
-                rootsLoadState = RootsLoadState.Loading,
-                foldersLoadState = FoldersLoadState.Idle,
                 submitError = null,
             )
         }
         viewModelScope.launch {
-            loadRoots(serverOrigin)
+            loadBrowser(serverOrigin, root = null)
+        }
+    }
+
+    fun onModeChanged(mode: AddWorkspaceMode) {
+        if (mode == _uiState.value.mode) {
+            return
+        }
+        _uiState.update {
+            it.copy(
+                mode = mode,
+                selectedFolderPath = "",
+                cloneParent = "",
+                cloneUrl = "",
+                cloneFolderName = "",
+                name = "",
+                submitError = null,
+            )
         }
     }
 
@@ -156,33 +184,118 @@ class AddWorkspaceViewModel @Inject constructor(
         _uiState.update { it.copy(name = name, submitError = null) }
     }
 
-    fun onRootChanged(root: String) {
+    fun onFolderQueryChanged(query: String) {
+        _uiState.update { it.copy(folderQuery = query) }
+    }
+
+    /** Drills into a folder shown in the browser. */
+    fun onFolderSelected(folderPath: String) {
         _uiState.update {
             it.copy(
-                selectedRoot = root,
-                selectedFolderPath = "",
                 folderQuery = "",
-                foldersLoadState = FoldersLoadState.Loading,
+                browserLoadState = BrowserLoadState.Loading,
                 submitError = null,
             )
         }
         viewModelScope.launch {
-            loadFolders(root)
+            loadBrowser(currentOrigin(), folderPath)
         }
     }
 
-    fun onFolderChanged(folderPath: String) {
+    fun onBrowserUp() {
+        val parent = _uiState.value.browserParent ?: return
         _uiState.update {
             it.copy(
-                selectedFolderPath = folderPath,
-                name = folderBasename(folderPath),
+                folderQuery = "",
+                browserLoadState = BrowserLoadState.Loading,
+                submitError = null,
+            )
+        }
+        viewModelScope.launch {
+            loadBrowser(currentOrigin(), parent)
+        }
+    }
+
+    /** Selects the folder the browser is currently showing. */
+    fun onUseCurrentFolder() {
+        val state = _uiState.value
+        val path = state.browserPath
+        if (path.isEmpty()) {
+            return
+        }
+
+        _uiState.update {
+            if (it.isClone) {
+                it.copy(cloneParent = path, submitError = null)
+            } else {
+                it.copy(
+                    selectedFolderPath = path,
+                    name = workspaceNameForPath(path),
+                    submitError = null,
+                )
+            }
+        }
+    }
+
+    fun onCloneUrlChanged(url: String) {
+        val folderName = folderNameFromUrl(url)
+        _uiState.update {
+            it.copy(
+                cloneUrl = url,
+                cloneFolderName = folderName,
+                name = folderName,
                 submitError = null,
             )
         }
     }
 
-    fun onFolderQueryChanged(query: String) {
-        _uiState.update { it.copy(folderQuery = query) }
+    fun onCloneFolderNameChanged(folderName: String) {
+        _uiState.update {
+            it.copy(
+                cloneFolderName = folderName,
+                name = folderName,
+                submitError = null,
+            )
+        }
+    }
+
+    /** Creates one folder under the browser's current path, then selects it. */
+    fun createFolder(folderName: String) {
+        val state = _uiState.value
+        val parent = state.browserPath
+        val origin = currentOrigin()
+        if (parent.isEmpty() || origin.isEmpty()) {
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(submitting = true, submitError = null) }
+
+            userRepository.createFilesystemDirectory(
+                serverOrigin = origin,
+                body = CreateFilesystemDirectoryBody(parent = parent, name = folderName),
+            ).fold(
+                onSuccess = { created ->
+                    _uiState.update { current ->
+                        current.copy(
+                            submitting = false,
+                            browserLoadState = BrowserLoadState.Loading,
+                            selectedFolderPath = if (current.isClone) {
+                                current.selectedFolderPath
+                            } else {
+                                created.path
+                            },
+                            cloneParent = if (current.isClone) created.path else current.cloneParent,
+                            name = if (current.isClone) current.name else created.name,
+                        )
+                    }
+                    loadBrowser(origin, created.path)
+                },
+                onFailure = { error ->
+                    _uiState.update { it.copy(submitting = false, submitError = apiErrorMessage(error)) }
+                },
+            )
+        }
     }
 
     fun submit() {
@@ -191,9 +304,7 @@ class AddWorkspaceViewModel @Inject constructor(
             return
         }
 
-        val origin = state.selectedServerOrigin.ifEmpty {
-            (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin.orEmpty()
-        }
+        val origin = currentOrigin()
         if (origin.isEmpty()) {
             return
         }
@@ -201,71 +312,84 @@ class AddWorkspaceViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(submitting = true, submitError = null) }
 
-            workspaceRepository.create(
-                serverOrigin = origin,
-                body = CreateWorkspaceBody(
-                    name = state.name.trim(),
-                    path = state.selectedFolderPath,
-                ),
-            ).fold(
-                onSuccess = { created ->
-                    _uiState.update { it.copy(submitting = false) }
-                    navigator.reportWorkspaceCreated(
-                        CreatedWorkspaceResult(
-                            workspaceId = created.id,
-                            serverOrigin = origin,
-                        ),
-                    )
-                    navigator.goBack()
-                },
-                onFailure = { error ->
-                    _uiState.update {
-                        it.copy(
-                            submitting = false,
-                            submitError = apiErrorMessage(error),
-                        )
-                    }
-                },
-            )
+            if (state.isClone) {
+                submitClone(origin, state)
+            } else {
+                submitFolder(origin, state)
+            }
         }
     }
 
-    private suspend fun loadRoots(originOverride: String? = null) {
-        val origin = originOverride?.takeIf { it.isNotEmpty() }
-            ?: _uiState.value.selectedServerOrigin.ifEmpty {
-                (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin.orEmpty()
+    private suspend fun submitFolder(origin: String, state: AddWorkspaceUiState) {
+        workspaceRepository.create(
+            serverOrigin = origin,
+            body = CreateWorkspaceBody(
+                source = WorkspaceSource.Folder,
+                path = state.selectedFolderPath,
+                name = state.name.trim(),
+            ),
+        ).fold(
+            onSuccess = { created -> finish(origin, created.id) },
+            onFailure = { error ->
+                _uiState.update { it.copy(submitting = false, submitError = apiErrorMessage(error)) }
+            },
+        )
+    }
+
+    private suspend fun submitClone(origin: String, state: AddWorkspaceUiState) {
+        val destinationName = state.cloneFolderName.trim()
+        val createdFolder = userRepository.createFilesystemDirectory(
+            serverOrigin = origin,
+            body = CreateFilesystemDirectoryBody(parent = state.cloneParent, name = destinationName),
+        )
+
+        if (createdFolder.isFailure) {
+            _uiState.update {
+                it.copy(
+                    submitting = false,
+                    submitError = apiErrorMessage(checkNotNull(createdFolder.exceptionOrNull())),
+                )
             }
-        if (origin.isEmpty()) {
             return
         }
 
-        _uiState.update { it.copy(rootsLoadState = RootsLoadState.Loading) }
+        val destination = createdFolder.getOrThrow().path
 
-        userRepository.getRuntimeSettings(origin).fold(
-            onSuccess = { view ->
-                val roots = view.settings.allowedRoots
-                _uiState.update {
-                    it.copy(
-                        rootsLoadState = if (roots.isEmpty()) {
-                            RootsLoadState.Empty
-                        } else {
-                            RootsLoadState.Loaded(roots)
-                        },
-                    )
-                }
-            },
+        workspaceRepository.create(
+            serverOrigin = origin,
+            body = CreateWorkspaceBody(
+                source = WorkspaceSource.Git,
+                path = destination,
+                name = state.name.trim(),
+                url = state.cloneUrl.trim(),
+            ),
+        ).fold(
+            onSuccess = { created -> finish(origin, created.id) },
             onFailure = { error ->
                 _uiState.update {
-                    it.copy(rootsLoadState = RootsLoadState.Error(apiErrorMessage(error)))
+                    it.copy(
+                        submitting = false,
+                        submitError = "${apiErrorMessage(error)}\n" +
+                            "The folder $destination was created, but the workspace was not " +
+                            "registered. Partial files may remain.",
+                    )
                 }
             },
         )
     }
 
-    private suspend fun loadFolders(root: String) {
-        val origin = _uiState.value.selectedServerOrigin.ifEmpty {
-            (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin.orEmpty()
-        }
+    private fun finish(origin: String, workspaceId: String) {
+        _uiState.update { it.copy(submitting = false) }
+        navigator.reportWorkspaceCreated(
+            CreatedWorkspaceResult(
+                workspaceId = workspaceId,
+                serverOrigin = origin,
+            ),
+        )
+        navigator.goBack()
+    }
+
+    private suspend fun loadBrowser(origin: String, root: String?) {
         if (origin.isEmpty()) {
             return
         }
@@ -274,19 +398,49 @@ class AddWorkspaceViewModel @Inject constructor(
             onSuccess = { collection ->
                 _uiState.update {
                     it.copy(
-                        foldersLoadState = if (collection.items.isEmpty()) {
-                            FoldersLoadState.Empty
-                        } else {
-                            FoldersLoadState.Loaded(collection.items)
-                        },
+                        browserLoadState = BrowserLoadState.Loaded(
+                            path = collection.path,
+                            parent = collection.parent,
+                            folders = collection.items,
+                        ),
                     )
                 }
             },
             onFailure = { error ->
                 _uiState.update {
-                    it.copy(foldersLoadState = FoldersLoadState.Error(apiErrorMessage(error)))
+                    it.copy(browserLoadState = BrowserLoadState.Error(apiErrorMessage(error)))
                 }
             },
         )
     }
+
+    private fun currentOrigin(): String =
+        _uiState.value.selectedServerOrigin.ifEmpty {
+            (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin.orEmpty()
+        }
+}
+
+internal fun joinFolderPath(parent: String, name: String): String {
+    if (parent.isEmpty()) {
+        return name
+    }
+    return if (parent.endsWith("/")) "$parent$name" else "$parent/$name"
+}
+
+internal fun workspaceNameForPath(folderPath: String): String {
+    val segments = folderPath.split('/').filter { segment -> segment.isNotEmpty() }
+    return segments.lastOrNull() ?: folderPath
+}
+
+internal fun folderNameFromUrl(url: String): String {
+    val withoutScheme = url.trim()
+        .trimEnd('/')
+        .replace(Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://"), "")
+    val segments = withoutScheme.split('/', ':').filter { segment -> segment.isNotEmpty() }
+
+    if (segments.size < 2) {
+        return ""
+    }
+
+    return segments.last().removeSuffix(".git")
 }

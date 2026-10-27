@@ -16,8 +16,11 @@ import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AuthSessionAction
 import harold.android.contracts.AuthSessionStatus
 import harold.android.contracts.ConfigValue
+import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateWorkspaceBody
+import harold.android.contracts.LogLevel
+import harold.android.contracts.WorkspaceSource
 import harold.android.contracts.WorkspaceState
 
 @RunWith(RobolectricTestRunner::class)
@@ -375,7 +378,7 @@ class DefaultAgentApiTest {
     }
 
     @Test
-    fun getRuntimeSettingsDecodesAllowedRoots() = runTest {
+    fun getRuntimeSettingsDecodesPayload() = runTest {
         server.enqueue(
             MockResponse()
                 .setResponseCode(200)
@@ -387,8 +390,7 @@ class DefaultAgentApiTest {
                                 "bindHost": "127.0.0.1",
                         "bindPort": 3847,
                         "logLevel": "info",
-                        "logPath": null,
-                        "allowedRoots": ["/home/ops/code"]
+                        "logPath": null
                       },
                       "restartRequired": false,
                       "effective": {
@@ -407,7 +409,7 @@ class DefaultAgentApiTest {
         val recorded = server.takeRequest()
         assertEquals("GET", recorded.method)
         assertEquals("/v1/settings/runtime", recorded.path)
-        assertEquals(listOf("/home/ops/code"), view.settings.allowedRoots)
+        assertEquals(LogLevel.Info, view.settings.logLevel)
     }
 
     @Test
@@ -418,6 +420,8 @@ class DefaultAgentApiTest {
                 .setBody(
                     """
                     {
+                      "path": "/home/ops/code",
+                      "parent": "/home/ops",
                       "items": [
                         { "name": "harold", "path": "/home/ops/code/harold" }
                       ]
@@ -433,12 +437,64 @@ class DefaultAgentApiTest {
 
         val recorded = server.takeRequest()
         assertEquals("/v1/filesystem/directories?root=%2Fhome%2Fops%2Fcode", recorded.path)
+        assertEquals("/home/ops/code", collection.path)
+        assertEquals("/home/ops", collection.parent)
         assertEquals(1, collection.items.size)
         assertEquals("harold", collection.items.single().name)
     }
 
     @Test
-    fun createWorkspacePostsNameAndPath() = runTest {
+    fun listFilesystemDirectoriesOmitsRootQueryForHome() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(
+                    """
+                    {
+                      "path": "/home/ops",
+                      "parent": "/home",
+                      "items": []
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        agentApi.listFilesystemDirectories(serverOrigin = origin()).getOrThrow()
+
+        assertEquals("/v1/filesystem/directories", server.takeRequest().path)
+    }
+
+    @Test
+    fun createFilesystemDirectoryPostsParentAndName() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(201)
+                .setBody(
+                    """
+                    {
+                      "name": "widgets",
+                      "path": "/home/ops/widgets"
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val created = agentApi.createFilesystemDirectory(
+            serverOrigin = origin(),
+            body = CreateFilesystemDirectoryBody(parent = "/home/ops", name = "widgets"),
+        ).getOrThrow()
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/v1/filesystem/directories", recorded.path)
+        val body = recorded.body.readUtf8()
+        assertTrue(body.contains("\"parent\":\"/home/ops\""))
+        assertTrue(body.contains("\"name\":\"widgets\""))
+        assertEquals("/home/ops/widgets", created.path)
+    }
+
+    @Test
+    fun createWorkspacePostsFolderSourceNameAndPath() = runTest {
         server.enqueue(
             MockResponse()
                 .setResponseCode(201)
@@ -459,6 +515,7 @@ class DefaultAgentApiTest {
         val workspace = agentApi.createWorkspace(
             serverOrigin = origin(),
             body = CreateWorkspaceBody(
+                source = WorkspaceSource.Folder,
                 name = "harold",
                 path = "/home/ops/code/harold",
             ),
@@ -467,8 +524,45 @@ class DefaultAgentApiTest {
         val recorded = server.takeRequest()
         assertEquals("POST", recorded.method)
         assertEquals("/v1/workspaces", recorded.path)
-        assertTrue(recorded.body.readUtf8().contains("\"path\":\"/home/ops/code/harold\""))
+        val body = recorded.body.readUtf8()
+        assertTrue(body.contains("\"source\":\"folder\""))
+        assertTrue(body.contains("\"path\":\"/home/ops/code/harold\""))
+        assertTrue(!body.contains("\"url\""))
         assertEquals("ws_01", workspace.id)
+    }
+
+    @Test
+    fun createWorkspacePostsGitSourceUrlAndPath() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(201)
+                .setBody(
+                    """
+                    {
+                      "id": "ws_02",
+                      "name": "widgets",
+                      "path": "/home/ops/widgets",
+                      "state": "available",
+                      "createdAt": "2026-08-10T00:00:00.000Z",
+                      "lastUsedAt": "2026-08-10T00:00:00.000Z"
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        agentApi.createWorkspace(
+            serverOrigin = origin(),
+            body = CreateWorkspaceBody(
+                source = WorkspaceSource.Git,
+                name = "widgets",
+                path = "/home/ops/widgets",
+                url = "https://github.com/acme/widgets.git",
+            ),
+        ).getOrThrow()
+
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue(body.contains("\"source\":\"git\""))
+        assertTrue(body.contains("\"url\":\"https://github.com/acme/widgets.git\""))
     }
 
     @Test

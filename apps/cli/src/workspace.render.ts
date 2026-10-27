@@ -1,6 +1,7 @@
 import { Workspace } from "contracts/http/workspace"
+import { CreateDirectoryError } from "core/filesystem/create.directory.usecase"
+import { RegisterWorkspaceError } from "core/workspace/errors"
 import { DeleteWorkspaceError } from "core/workspace/ports"
-import { WorkspaceRepositoryError } from "core/workspace/errors"
 
 export type WorkspaceColors = Readonly<{
   green: (text: string) => string
@@ -14,6 +15,12 @@ const shortIdLength = "ws_".length + 8
 const shortWorkspaceId = (id: string): string => id.slice(0, shortIdLength)
 
 const workspaceCount = (count: number): string => `${count} workspace${count === 1 ? "" : "s"}`
+
+const pathErrorMessages = {
+  missing: (path: string) => `No directory at ${path}.`,
+  not_directory: (path: string) => `${path} is not a directory.`,
+  unreadable: (path: string) => `${path} is not readable.`,
+} as const
 
 export const renderWorkspaceList = (params: {
   workspaces: ReadonlyArray<Workspace>
@@ -63,8 +70,10 @@ export const renderWorkspaceList = (params: {
   return lines.join("\n")
 }
 
-export const renderWorkspaceAdded = (workspace: Workspace): string =>
-  `Added workspace ${workspace.name} (${workspace.path}) as ${workspace.id}.`
+export const renderWorkspaceAdded = (params: { workspace: Workspace; created: boolean }): string =>
+  params.created
+    ? `Added workspace ${params.workspace.name} (${params.workspace.path}) as ${params.workspace.id}.`
+    : `Workspace already registered at ${params.workspace.path} (${params.workspace.name}).`
 
 export const renderWorkspaceRemoved = (workspace: Workspace): string =>
   `Removed workspace ${workspace.name} (${workspace.path}).`
@@ -75,31 +84,48 @@ export const renderWorkspaceDaemonRunningDeleteGuard = (): string =>
 export const renderWorkspaceDaemonSessionsNotClosed = (): string =>
   "Daemon-held sessions were not closed."
 
-const pathErrorMessages: Record<
-  Extract<WorkspaceRepositoryError, { kind: "path" }>["error"]["kind"],
-  (path: string) => string
-> = {
-  missing: (path) => `No directory at ${path}.`,
-  not_directory: (path) => `${path} is not a directory.`,
-  unreadable: (path) => `${path} is not readable.`,
-}
-
 export const renderRegisterWorkspaceError = (params: {
-  error: WorkspaceRepositoryError
+  error: RegisterWorkspaceError
   path: string
 }): string => {
   const { error, path } = params
 
-  if (error.kind === "path") {
-    return pathErrorMessages[error.error.kind](path)
+  switch (error.kind) {
+    case "path":
+      return pathErrorMessages[error.error.kind](path)
+    case "invalid_git_url":
+      return "The git URL must not start with a dash."
+    case "destination_not_empty":
+      return `${path} is not empty. Clone into an empty folder.`
+    case "clone_failed":
+      return `${error.detail}\nThe destination folder was created; partial files may remain.`
+    case "duplicate_path":
+      return `A workspace is already registered at ${path}.`
+    case "not_found":
+      return "Workspace not found."
   }
-  if (error.kind === "outside_allowed_root") {
-    return "Path is outside the allowed roots. Add its parent directory to allowedRoots in settings.yml first."
+}
+
+export const renderFolderCreatedWithoutWorkspace = (folderPath: string): string =>
+  `The folder ${folderPath} was created, but the workspace was not registered.`
+
+export const renderCloneDirectoryError = (params: {
+  error: CreateDirectoryError
+  parent: string
+  destination: string
+}): string => {
+  const { error, parent, destination } = params
+
+  switch (error.kind) {
+    case "path":
+      return pathErrorMessages[error.error.kind](parent)
+    case "invalid_name":
+      return `${destination} is not a valid folder name.`
+    case "already_exists":
+      return `${destination} already exists. Choose a different name or pass --folder-name.`
+    case "permission_denied":
+      return `${parent} is not writable.`
   }
-  if (error.kind === "duplicate_path") {
-    return `A workspace is already registered at ${path}.`
-  }
-  return "Workspace not found."
 }
 
 export const renderWorkspaceReferenceNotFound = (reference: string): string =>

@@ -417,9 +417,16 @@ private class FakeAgentApi(
 
     override suspend fun listFilesystemDirectories(
         serverOrigin: String,
-        root: String,
+        root: String?,
     ): Result<harold.android.contracts.FilesystemDirectoryCollection> =
         Result.failure(UnsupportedOperationException())
+
+    override suspend fun createFilesystemDirectory(
+        serverOrigin: String,
+        body: harold.android.contracts.CreateFilesystemDirectoryBody,
+    ) = Result.failure<harold.android.contracts.FilesystemDirectoryCreated>(
+        UnsupportedOperationException("unused"),
+    )
 
     override suspend fun createWorkspace(
         serverOrigin: String,

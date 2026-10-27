@@ -16,12 +16,14 @@ import {
   UpdateWorkspaceName,
 } from "core/workspace/ports"
 import {
-  buildConflictProblem,
+  buildCloneFailedProblem,
+  buildDestinationNotEmptyProblem,
   buildInvalidCursorProblem,
+  buildInvalidGitUrlProblem,
   buildNotFoundProblem,
-  buildOutsideAllowedRootProblem,
   buildPathValidationProblem,
   buildWorkspaceActiveSessionsProblem,
+  buildWorkspaceConflictProblem,
 } from "./workspace.problems"
 
 const sendProblem = (
@@ -33,7 +35,7 @@ const sendProblem = (
 ) => reply.status(status).type("application/problem+json").send(problem)
 
 export type WorkspaceRouteDeps = Readonly<{
-  registerWorkspace: (body: CreateWorkspaceBody) => RegisterWorkspaceResult
+  registerWorkspace: (body: CreateWorkspaceBody) => Promise<RegisterWorkspaceResult>
   listWorkspaces: ListWorkspaces
   findWorkspaceById: FindWorkspaceById
   updateWorkspaceName: UpdateWorkspaceName
@@ -43,19 +45,26 @@ export type WorkspaceRouteDeps = Readonly<{
 export const registerWorkspaceRoutes = (app: FastifyInstance, deps: WorkspaceRouteDeps) => {
   app.post("/v1/workspaces", async (request, reply) => {
     const body = CreateWorkspaceBodySchema.parse(request.body)
-    const result = deps.registerWorkspace(body)
+    const result = await deps.registerWorkspace(body)
 
     if (!result.ok) {
-      if (result.error.kind === "path") {
-        return sendProblem(reply, 400, buildPathValidationProblem(result.error.error))
+      switch (result.error.kind) {
+        case "path":
+          return sendProblem(reply, 400, buildPathValidationProblem(result.error.error))
+        case "invalid_git_url":
+          return sendProblem(reply, 400, buildInvalidGitUrlProblem())
+        case "destination_not_empty":
+          return sendProblem(reply, 409, buildDestinationNotEmptyProblem())
+        case "clone_failed":
+          return sendProblem(reply, 422, buildCloneFailedProblem(result.error.detail))
+        case "not_found":
+        case "duplicate_path":
+          return sendProblem(reply, 409, buildWorkspaceConflictProblem())
       }
-      if (result.error.kind === "outside_allowed_root") {
-        return sendProblem(reply, 400, buildOutsideAllowedRootProblem())
-      }
-      return sendProblem(reply, 409, buildConflictProblem())
     }
 
-    return reply.status(201).send(WorkspaceSchema.parse(result.value))
+    const status = result.created ? 201 : 200
+    return reply.status(status).send(WorkspaceSchema.parse(result.value))
   })
 
   app.get("/v1/workspaces", async (request, reply) => {

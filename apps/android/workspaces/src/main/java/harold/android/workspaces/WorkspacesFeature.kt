@@ -39,10 +39,15 @@ class WorkspacesEntryProvider @Inject constructor() : FeatureEntryProvider {
             AddWorkspaceScreen(
                 uiState = uiState,
                 onBack = { navigator.goBack() },
+                onModeChanged = viewModel::onModeChanged,
                 onNameChanged = viewModel::onNameChanged,
-                onRootChanged = viewModel::onRootChanged,
-                onFolderChanged = viewModel::onFolderChanged,
+                onFolderSelected = viewModel::onFolderSelected,
+                onBrowserUp = viewModel::onBrowserUp,
+                onUseCurrentFolder = viewModel::onUseCurrentFolder,
                 onFolderQueryChanged = viewModel::onFolderQueryChanged,
+                onCreateFolder = viewModel::createFolder,
+                onCloneUrlChanged = viewModel::onCloneUrlChanged,
+                onCloneFolderNameChanged = viewModel::onCloneFolderNameChanged,
                 onSubmit = viewModel::submit,
                 onHaroldChanged = viewModel::onHaroldChanged,
             )

@@ -21,7 +21,10 @@ import { assembleRuntimeSettingsSlice } from "../runtime-settings/runtime-settin
 import { AppliedRuntimeSettingsHolder } from "../runtime-settings/applied.runtime.settings"
 import { assembleWorkspaceSlice } from "../workspace/workspace.assembly"
 import { registerFilesystemBrowseRoutes } from "../filesystem/filesystem.routes"
-import { makeCanonicalizePath } from "../filesystem/filesystem.node.adapters"
+import {
+  makeCanonicalizePath,
+  makeReadDirectoryEntries,
+} from "../filesystem/filesystem.node.adapters"
 import { assembleAttachmentsSlice } from "../attachments/attachments.assembly"
 import { registerSessionRoutes } from "../session/session.routes"
 import { makeArchivedAcpSessionsStore } from "../session/session.archived.acp.sessions.sqlite.adapters"
@@ -207,7 +210,6 @@ export const createServer = async ({
     },
   })
   const archivedAcpSessions = makeArchivedAcpSessionsStore(database)
-  const getAllowedRoots = () => runtimeSettingsStore.get().allowedRoots
 
   const sessionHubRef: { current: SessionHub | null } = { current: null }
   const cwdCache = createSessionCwdCache()
@@ -291,7 +293,7 @@ export const createServer = async ({
   const workspace = assembleWorkspaceSlice({
     database,
     canonicalizePath,
-    getAllowedRoots,
+    readDirectoryEntries: makeReadDirectoryEntries(),
     listLiveByWorkspaceRoot: acpSupervisor.listLiveByWorkspaceRoot,
     closeWorkspaceSessions: acpSupervisor.closeWorkspaceSessions,
     unbindWorkspaceSessions: acpSupervisor.unbindWorkspaceSessions,
@@ -299,7 +301,6 @@ export const createServer = async ({
   const attachments = assembleAttachmentsSlice({
     findSessionCwd: cwdCache.get,
     canonicalizePath,
-    getAllowedRoots,
   })
 
   const loadHubSession: SessionHubLoadSession = async ({ agentId, sessionId, cwd }) => {
@@ -388,15 +389,12 @@ export const createServer = async ({
   runtimeStatusService.persistStarting()
 
   workspace.registerRoutes(app)
-  registerFilesystemBrowseRoutes(app, getAllowedRoots)
+  registerFilesystemBrowseRoutes(app)
   attachments.registerRoutes(app)
   agentSettings.registerRoutes(app)
   registerAgentAuthRoutes(app, authBroker, agentExists)
   const runtimeSettings = assembleRuntimeSettingsSlice({
     store: runtimeSettingsStore,
-    canonicalizePath,
-    listAllWorkspaces: workspace.listAll,
-    deleteWorkspace: workspace.deleteWorkspace,
     onLogLevelChanged: (nextLevel) => {
       app.log.level = nextLevel
     },

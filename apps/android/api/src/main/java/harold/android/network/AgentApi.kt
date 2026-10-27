@@ -12,8 +12,10 @@ import harold.android.contracts.AuthSessionAction
 import harold.android.contracts.ConfigValue
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
+import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectoryCollection
+import harold.android.contracts.FilesystemDirectoryCreated
 import harold.android.contracts.PromptRequestBody
 import harold.android.contracts.RuntimeSettingsView
 import harold.android.contracts.SessionCollection
@@ -56,8 +58,13 @@ interface AgentApi {
 
     suspend fun listFilesystemDirectories(
         serverOrigin: String,
-        root: String,
+        root: String? = null,
     ): Result<FilesystemDirectoryCollection>
+
+    suspend fun createFilesystemDirectory(
+        serverOrigin: String,
+        body: CreateFilesystemDirectoryBody,
+    ): Result<FilesystemDirectoryCreated>
 
     suspend fun createWorkspace(
         serverOrigin: String,
