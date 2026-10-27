@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.0.0](https://github.com/codenamegary/harold/compare/v1.4.1...v2.0.0) (2026-10-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* **workspaces:** make workspaces bookmarks to any project folder ([#457](https://github.com/codenamegary/harold/issues/457))
+* **cli:** remove devices with hard delete ([#451](https://github.com/codenamegary/harold/issues/451))
+
+### Features
+
+* **cli:** remove devices with hard delete ([#451](https://github.com/codenamegary/harold/issues/451)) ([41bf5df](https://github.com/codenamegary/harold/commit/41bf5df02477f3b7e1ac9df737fb173c864b3dd9))
+* **workspaces:** make workspaces bookmarks to any project folder ([#457](https://github.com/codenamegary/harold/issues/457)) ([5d7704c](https://github.com/codenamegary/harold/commit/5d7704c74fa99cc5e2947ba60a874c2ee72bbf5f))
+
 ## [1.4.1](https://github.com/codenamegary/harold/compare/v1.4.0...v1.4.1) (2026-10-24)
 
 
