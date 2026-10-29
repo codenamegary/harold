@@ -1002,15 +1002,7 @@ class ChatViewModel @Inject constructor(
             ).copy(sessions = catalog)
         }
         agentAuth.resetFor(row.agentId)
-        if (row.serverOrigin.isNotEmpty()) {
-            watchedOrigin = row.serverOrigin
-            sessionOwner.connect(row.serverOrigin)
-        }
-        if (row.haroldReachable) {
-            sessionOwner.watch(row.agentId, row.sessionId)
-        } else {
-            sessionOwner.watch(null, null)
-        }
+        syncWatch()
         publishRecentSessions()
         syncActiveSessionsFromUiState()
         agentAuth.hydrate(row.agentId)
@@ -1163,16 +1155,38 @@ class ChatViewModel @Inject constructor(
         return titles[key]
     }
 
+    /**
+     * A selected session must always be the watched session. Reachability only
+     * gates the composer, it does not clear the target: the owner can resume
+     * the stream and deliver a prompt after a transient link loss.
+     */
+    private fun syncWatch() {
+        val selected = _uiState.value.selectedSession
+        if (selected == null) {
+            sessionOwner.watch(null, null)
+            return
+        }
+        if (selected.serverOrigin.isNotEmpty()) {
+            watchedOrigin = selected.serverOrigin
+            sessionOwner.connect(selected.serverOrigin)
+        }
+        sessionOwner.watch(selected.agentId, selected.sessionId)
+    }
+
     private fun onHaroldLinks(links: List<HaroldConnection>) {
         val byOrigin = links.associateBy { link -> link.serverOrigin }
         fun reachableFor(row: SessionRow): Boolean {
             val link = byOrigin[row.serverOrigin] ?: return row.haroldReachable
             return when (link.status) {
                 HaroldConnectionStatus.Connected -> true
-                HaroldConnectionStatus.Unreachable,
+                HaroldConnectionStatus.Unreachable -> false
+                // Closed means the link was parked, for example while the
+                // photo picker had the app in the background. It is not a
+                // reachability failure. Keep the last state until the link
+                // reconnects, so a selected session stays watched.
                 HaroldConnectionStatus.Closed,
-                -> false
-                HaroldConnectionStatus.Connecting -> row.haroldReachable
+                HaroldConnectionStatus.Connecting,
+                -> row.haroldReachable
             }
         }
         catalog = catalog.map { row ->
@@ -1181,27 +1195,11 @@ class ChatViewModel @Inject constructor(
         }
         val selected = _uiState.value.selectedSession
         val updatedSelected = selected?.copy(haroldReachable = reachableFor(selected))
-        val becameReachable = selected != null &&
-            !selected.haroldReachable &&
-            updatedSelected?.haroldReachable == true
-        val becameUnreachable = selected != null &&
-            selected.haroldReachable &&
-            updatedSelected?.haroldReachable == false
         _uiState.update { current ->
             current.copy(sessions = catalog, selectedSession = updatedSelected ?: current.selectedSession)
         }
         publishRecentSessions()
-        if (becameUnreachable) {
-            sessionOwner.watch(null, null)
-        }
-        if (becameReachable) {
-            val next = checkNotNull(updatedSelected)
-            if (next.serverOrigin.isNotEmpty()) {
-                watchedOrigin = next.serverOrigin
-                sessionOwner.connect(next.serverOrigin)
-            }
-            sessionOwner.watch(next.agentId, next.sessionId)
-        }
+        syncWatch()
     }
 
     private suspend fun refreshCatalog() = refreshMutex.withLock {
@@ -1255,6 +1253,7 @@ class ChatViewModel @Inject constructor(
         }
         publishRecentSessions()
         syncActiveSessionsFromUiState()
+        syncWatch()
         maybeRestoreLastSession()
     }
 
@@ -1337,6 +1336,7 @@ class ChatViewModel @Inject constructor(
         }
         publishRecentSessions()
         syncActiveSessionsFromUiState()
+        syncWatch()
         maybeRestoreLastSession()
     }
 
