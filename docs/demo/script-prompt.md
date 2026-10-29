@@ -10,6 +10,7 @@ beats. Exact timing, easing, and pixels live in the Remotion project at
 - Multiple-agent support
 - Connecting to existing sessions
 - Creating a new session
+- Workspaces as bookmarks to any project folder
 - Text Chat
 - Voice Chat
 - Attachments
@@ -34,7 +35,7 @@ beats. Exact timing, easing, and pixels live in the Remotion project at
 
 ```text
 intro -> terminal -> phone-pair -> pair-scan -> achievement
--> second-pair -> sessions -> new-session -> text-chat
+-> second-pair -> sessions -> workspaces -> new-session -> text-chat
 -> voice-chat -> outro
 ```
 
@@ -69,7 +70,8 @@ intro -> terminal -> phone-pair -> pair-scan -> achievement
   tag with a drawn leader line and target pulse. The first tap of the shot is
   the anchor. Plays a ping. Eyebrow and hint are optional. Add
   `compact placement=edge` to sit it beside the phone. Add `connector=T` for
-  a T-bracket outside the phone frame.
+  a T-bracket outside the phone frame. Override the anchor with `targetX=` and
+  `targetY=` when the copy should point at a control other than the first tap.
 - `[SPOTLIGHT side=left]` Large copy card with a mono kicker, display title,
   and lime rule. Plays a ping. The kicker and title sit on the following
   indented lines.
@@ -233,6 +235,26 @@ Beats:
 - The Sessions screen closes and the chat opens with that session.
 - The header shows the Couch badge and the session name.
 
+### Scene: workspaces
+
+Enter: The session chat settles. [L1 phone] [PZ:full].
+
+Beats:
+
+- [NOTE "Any folder, bookmarked" label="WORKSPACES"]
+- [TAP "Overflow menu"]
+- [TAP "Workspaces"]
+- The Workspaces screen opens with the bookmarked project folders from both
+  Harolds. Each row shows a Harold badge, folder name, path, and Available.
+- [TAP "Add workspace"]
+- The Add workspace screen opens with the Harold picker, Open folder / Clone
+  repo, the folder browser, Selected folder, and Workspace name.
+- [CALLOUT "Open a folder, or clone a repo" eyebrow="ADD WORKSPACE"
+  hint="Any project folder on the host." compact placement=edge connector=T
+  targetX=0.5 targetY=0.25]
+- The browser shows the demo project folder root with the four project folders.
+- Back to the chat without submitting.
+
 ### Scene: new-session
 
 Enter: The Sessions screen closes. The chat returns with the Couch badge and
@@ -312,7 +334,7 @@ Beats:
 - [PZ:lower-center scale=1.8 focus=0.5,0.84 ~0.55s]
 - [TAP "Send message"]
 - Wait for the response.
-- [PZ:upper-center focus=0.5,0.33 drift=0.22 ~0.55s]
+- [PZ:upper-center focus=0.5,0.45 drift=0.22 ~0.55s]
 - The reply settles.
 
 ### Scene: voice-chat

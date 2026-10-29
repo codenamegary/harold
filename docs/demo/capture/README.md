@@ -5,16 +5,17 @@ Cursor and pi ACP. Instance 2 uses OpenCode. The phone pairs with instance 1 by
 camera, then pairs with instance 2 by typing its endpoint and code. The
 detailed setup spec is in [setup.md](./setup.md).
 
-| File                 | Role                                                                             |
-| -------------------- | -------------------------------------------------------------------------------- |
-| `capture.sh`         | The whole run: two daemons, app install, pair, feed, boot, slices, build         |
-| `seed_sessions.sh`   | Purge and seed the five OpenCode sessions on the Couch workspace                 |
-| `seed_work_session.sh` | Seed one pi ACP session on the Work workspace                                  |
-| `compose_camera.mjs` | Overlay the live QR on the tracked panel after a 40s gate, crop to 1280x960      |
-| `drive_phone.py`     | Walk the app pair -> sessions -> new session -> model/mode/effort -> text and voice chat, one slice per action |
-| `build_capture.py`   | Re-encode the slices, attach the taps, and write `capture.json`                  |
-| `push_assets.sh`     | Push the demo photos and `cat-diary.txt` onto the factory-reset emulator         |
-| `audio-env-shim.c`   | Restore the WAV audio driver variables that the emulator wrapper strips          |
+| File                         | Role                                                                                                                         |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `capture.sh`                 | The whole run: two daemons, app install, pair, feed, boot, slices, build                                                     |
+| `seed_sessions.sh`           | Purge and seed the five OpenCode sessions on the Couch workspace                                                             |
+| `seed_work_session.sh`       | Seed one pi ACP session on the Work workspace                                                                                |
+| `compose_camera.mjs`         | Overlay the live QR on the tracked panel after a 40s gate, crop to 1280x960                                                  |
+| `write_pairing_fixtures.mjs` | Regenerate the Remotion pairing code and QR rows from the live pair JSON                                                     |
+| `drive_phone.py`             | Walk the app pair -> sessions -> workspaces -> new session -> model/mode/effort -> text and voice chat, one slice per action |
+| `build_capture.py`           | Re-encode the slices, attach the taps, and write `capture.json`                                                              |
+| `push_assets.sh`             | Push the demo photos and `cat-diary.txt` onto the factory-reset emulator                                                     |
+| `audio-env-shim.c`           | Restore the WAV audio driver variables that the emulator wrapper strips                                                      |
 
 `assets/virtual-qr-code-webcam.mp4` is the staged clip the camera feed is
 composed from. `assets/cats.zip` holds the demo photos. `assets/cat-diary.txt`
@@ -26,7 +27,7 @@ emulator microphone hears during the voice scene.
 - **Kept, committed:** everything in this directory plus
   `docs/demo/render/public/slices/` and `docs/demo/render/public/capture.json`.
 - **Not kept:** `docs/demo/work/capture/` (composed feed, logs, raw slices,
-  pairing codes, screenshots), the demo data dirs, and the workspace roots.
+  pairing codes, screenshots), the demo data dirs, and the demo project folder roots.
 
 ## How to run
 
@@ -80,13 +81,16 @@ The phone walk records these acts:
 3. Open the session dropdown, tap `See all sessions…`, and show the full
    Sessions screen with the All, Work, and Couch filters. Select the newest
    OpenCode session from Couch.
-4. Start a new session. Select `harold` under Work to show Cursor and pi ACP.
+4. Open Workspaces from the chat overflow menu. Show the bookmark list from
+   both Harolds, then open Add workspace and browse to the demo project folder
+   root. Leave without submitting.
+5. Start a new session. Select `harold` under Work to show Cursor and pi ACP.
    Switch to `yuekbox` under Couch and select OpenCode.
-5. Change the model to `deepseek/DeepSeek V4.1 Flash 1017`, cycle the mode
+6. Change the model to `deepseek/DeepSeek V4.1 Flash 1017`, cycle the mode
    through Plan and Build, set thinking to High, and show the slash commands.
-6. Draft the text prompt, attach a cat photo and `cat-diary.txt`, send, and wait
+7. Draft the text prompt, attach a cat photo and `cat-diary.txt`, send, and wait
    for the reply.
-7. Open voice input, expand it, play `voice-input.wav`, send, and wait for the
+8. Open voice input, expand it, play `voice-input.wav`, send, and wait for the
    reply.
 
 The walk is recorded as named slices. `drive_phone.py` starts one screenrecord

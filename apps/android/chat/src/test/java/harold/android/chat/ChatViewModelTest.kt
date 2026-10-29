@@ -40,6 +40,8 @@ import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.network.AttachmentApi
 import harold.android.network.SessionConfigApi
+import harold.android.session.HaroldConnection
+import harold.android.session.HaroldConnectionStatus
 import harold.android.session.PairedState
 import harold.android.testing.FakeCredentialStore
 import harold.android.session.SessionGateway
@@ -226,13 +228,91 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertEquals("hello", (viewModel.uiState.value.transcript.rows.single() as harold.android.live.TranscriptUserRow).text)
-        assertNull(sessionOwner.target)
+        assertEquals("cursor" to "sess_laptop", sessionOwner.target)
         assertFalse(viewModel.uiState.value.composerEnabled)
         assertEquals(WAITING_FOR_HAROLD, viewModel.uiState.value.composerBlockedMessage)
         viewModel.onComposerTextChanged("more")
         viewModel.submitComposerPrompt()
         advanceUntilIdle()
         assertTrue(sessionOwner.prompts.isEmpty())
+    }
+
+    @Test
+    fun closedHaroldLinkKeepsTheSelectedSessionWatching() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val connections = RecordingHaroldConnections(mutableListOf())
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = sessionOwner,
+            haroldConnections = connections,
+        )
+        advanceUntilIdle()
+        val open = listedSession("sess_laptop", "Alpha").copy(
+            serverOrigin = "http://laptop.local:3847",
+            haroldName = "laptop",
+            haroldColorId = "tide",
+            haroldIconId = "bolt",
+        )
+        connections.connections.value = listOf(
+            HaroldConnection("http://laptop.local:3847", HaroldConnectionStatus.Connected),
+        )
+        viewModel.selectSession(open)
+        advanceUntilIdle()
+        assertEquals("cursor" to "sess_laptop", sessionOwner.target)
+
+        // A link parked in the background is Closed, not Unreachable. It must
+        // not clear the watch or block the composer while it reconnects.
+        connections.connections.value = listOf(
+            HaroldConnection("http://laptop.local:3847", HaroldConnectionStatus.Closed),
+        )
+        advanceUntilIdle()
+
+        assertEquals("cursor" to "sess_laptop", sessionOwner.target)
+        assertTrue(viewModel.uiState.value.composerEnabled)
+        assertNull(viewModel.uiState.value.composerBlockedMessage)
+    }
+
+    @Test
+    fun catalogRefreshKeepsTheUnreachableSessionWatching() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val connections = RecordingHaroldConnections(mutableListOf())
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = sessionOwner,
+            haroldConnections = connections,
+        )
+        advanceUntilIdle()
+        val open = listedSession("sess_laptop", "Alpha").copy(
+            serverOrigin = "http://laptop.local:3847",
+            haroldName = "laptop",
+            haroldColorId = "tide",
+            haroldIconId = "bolt",
+        )
+        connections.connections.value = listOf(
+            HaroldConnection("http://laptop.local:3847", HaroldConnectionStatus.Connected),
+        )
+        viewModel.selectSession(open)
+        advanceUntilIdle()
+        assertEquals("cursor" to "sess_laptop", sessionOwner.target)
+
+        connections.connections.value = listOf(
+            HaroldConnection("http://laptop.local:3847", HaroldConnectionStatus.Unreachable),
+        )
+        advanceUntilIdle()
+        assertEquals("cursor" to "sess_laptop", sessionOwner.target)
+
+        // A catalog refresh repaints the row. The watch must survive until
+        // the link reconnects, so a later prompt can be sent immediately.
+        viewModel.onResume()
+        advanceUntilIdle()
+        connections.connections.value = listOf(
+            HaroldConnection("http://laptop.local:3847", HaroldConnectionStatus.Connected),
+        )
+        advanceUntilIdle()
+
+        assertEquals("cursor" to "sess_laptop", sessionOwner.target)
     }
 
     @Test

@@ -36,9 +36,9 @@ const PAIR_LAND_AT = 20.7
 const PAIR_LAND_SEC = 0.5
 const REcede_AT = 22.8
 const WALK_START = 27.8
-const NEW_SESSION_ZOOM_AT = 54.94
+const NEW_SESSION_ZOOM_AT = 60.27
 const NEW_SESSION_ZOOM_SEC = 0.56
-const NEW_SESSION_OUT_AT = 66.31
+const NEW_SESSION_OUT_AT = 70.59
 const NEW_SESSION_OUT_SEC = 0.8
 
 type TypingWindow = { text: string; fromSec: number; toSec: number }
@@ -232,6 +232,7 @@ type Step = {
 const COMPOSER: Focus = { scale: 2.4, x: 0.5, y: 0.81 }
 const EFFORT: Focus = { scale: 2.6, x: 0.6, y: 0.81 }
 const READ: Focus = { scale: 1.6, x: 0.5, y: 0.33, drift: 0.22 }
+const REPLY_READ: Focus = { scale: 1.6, x: 0.5, y: 0.45, drift: 0.22 }
 
 const MODE_TARGET: AnnotationRect = { x: 0.67, y: 0.776, w: 0.19, h: 0.06 }
 const THINKING_TARGET: AnnotationRect = { x: 0.83, y: 0.776, w: 0.14, h: 0.06 }
@@ -324,6 +325,38 @@ const WALK_STEPS: Step[] = [
   { slice: "session_see_all", startSec: 2.5, rate: 2.5, duration: 2.2, hold: 0.4 },
   { slice: "session_pick", startSec: 2.5, rate: 2.5, duration: 1.0, hold: 0.3 },
   { slice: "session_chat", rate: 2, duration: 1.0, hold: 0.3 },
+  {
+    slice: "workspaces_open",
+    startSec: 8.8,
+    duration: 2.4,
+    hold: 0.6,
+    note: {
+      at: 0.2,
+      hold: 2.2,
+      label: "WORKSPACES",
+      title: "Any folder, bookmarked",
+    },
+  },
+  {
+    slice: "add_workspace_open",
+    startSec: 21.8,
+    duration: 1.4,
+    hold: 0.5,
+    callout: {
+      at: 0.2,
+      hold: 1.7,
+      eyebrow: "ADD WORKSPACE",
+      title: "Open a folder, or clone a repo",
+      hint: "Any project folder on the host.",
+      compact: true,
+      placement: "edge",
+      connector: "t",
+      targetX: 0.5,
+      targetY: 0.25,
+      span: { y: 0.13, h: 0.28 },
+    },
+    focus: { scale: 1.35, x: 0.5, y: 0.36 },
+  },
   { slice: "session_menu_reopen", startSec: 2.4, rate: 2.5, duration: 1.8, hold: 0.4 },
   {
     slice: "new_session",
@@ -493,7 +526,7 @@ const WALK_STEPS: Step[] = [
     focus: { scale: 1.8, x: 0.5, y: 0.84 },
   },
   { slice: "reply_wait", rate: 6, duration: 1.8, hold: 0.2 },
-  { slice: "reply", duration: 2.5, hold: 1.6, focus: READ },
+  { slice: "reply", duration: 2.5, hold: 1.6, focus: REPLY_READ },
   {
     slice: "voice_open",
     startSec: 2.5,
@@ -773,8 +806,7 @@ const buildZoom = (shots: Shot[]): Zoom => {
             x: shot.focus.x ?? (tap ? tap.x / shot.data.width : current.x),
             y: shot.focus.y ?? (tap ? tap.y / shot.data.height : current.y),
           }
-    const same =
-      target.scale === current.scale && target.x === current.x && target.y === current.y
+    const same = target.scale === current.scale && target.x === current.x && target.y === current.y
     if (!same) {
       const landAt = Math.min(shot.at + ZOOM_SEC, nextAt)
       push(scale, shot.at, current.scale)
@@ -915,8 +947,7 @@ const buildCaptions = (shots: Shot[]): CaptionSpec[] => {
   return captions.sort((a, b) => a.at - b.at)
 }
 
-const buildStageCards = (): StageCard[] =>
-  [...FIXED_STAGE_CARDS].sort((a, b) => a.at - b.at)
+const buildStageCards = (): StageCard[] => [...FIXED_STAGE_CARDS].sort((a, b) => a.at - b.at)
 
 const buildSpotlights = (shots: Shot[]): Spotlight[] => {
   const spotlights: Spotlight[] = []

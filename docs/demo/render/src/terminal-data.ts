@@ -11,9 +11,9 @@ export type TermItem =
 // pair-code.txt). The code block mirrors `harold pair` output verbatim;
 // expires is issued + 10 minutes (PAIRING_CODE_TTL_MS in
 // packages/core device.create.pairing.code.usecase).
-export const CODE = "7XK-PUK"
+export const CODE = "BLU-KVM"
 export const ENDPOINT = "http://127.0.0.1:3847"
-export const EXPIRES = "2026-10-22T15:17:55.642Z"
+export const EXPIRES = "2026-10-29T22:11:30.585Z"
 
 export const promptSegs: TermSeg[] = [
   { text: "codenamegary@harold", color: lime },
