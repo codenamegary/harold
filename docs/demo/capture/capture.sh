@@ -4,8 +4,8 @@
 # The capture owns the full environment:
 #   - instance 1 on 127.0.0.1:3847 with cursor and pi-acp
 #   - instance 2 on 127.0.0.1:3848 with opencode
-# Both use fresh data dirs, fresh DBs, and stable workspace roots outside the
-# data dirs. The user's real ~/.harold daemon is never stopped.
+# Both use fresh data dirs, fresh DBs, and stable demo project folder roots
+# outside the data dirs. The user's real ~/.harold daemon is never stopped.
 #
 # The emulator's back camera plays a staged clip with instance 1's live pairing
 # QR pasted over the laptop screen. The phone pairs by camera first, then pairs
@@ -254,6 +254,8 @@ exact = {
     "session_see_all",
     "session_pick",
     "session_chat",
+    "workspaces_open",
+    "add_workspace_open",
     "session_menu_reopen",
     "new_session",
     "workspace_open_work",
@@ -319,9 +321,9 @@ command -v java >/dev/null || [[ -n "${JAVA_HOME:-}" && -x "${JAVA_HOME}/bin/jav
 (cd "$ROOT" && node -e 'require("qrcode")') >/dev/null 2>&1 \
   || die "node module qrcode is not available in $ROOT"
 [[ "$INSTANCE1_WORKSPACES" != "$INSTANCE1_DATA_DIR"/* ]] \
-  || die "instance 1 workspace root must be outside the data dir"
+  || die "instance 1 demo project folder root must be outside the data dir"
 [[ "$INSTANCE2_WORKSPACES" != "$INSTANCE2_DATA_DIR"/* ]] \
-  || die "instance 2 workspace root must be outside the data dir"
+  || die "instance 2 demo project folder root must be outside the data dir"
 
 agent status >/dev/null 2>&1 || die "Cursor agent is not authenticated"
 pi auth check --model "$PI_MODEL" >/dev/null 2>&1 || die "pi is not ready for $PI_MODEL"
@@ -424,6 +426,11 @@ PAIR_JSON=$(harold1 pair --no-wait --json --endpoint loopback | tail -n 1)
 CODE=$(cat "$WORK/pair-code.txt")
 [[ -n "$CODE" ]] || die "no pairing code captured"
 log "code_seen $CODE"
+
+log "pairing_fixtures"
+node "$SCRIPT_DIR/write_pairing_fixtures.mjs" "$PAIR_JSON" "$DEMO/render/src" \
+  >>"$LOG" 2>&1 || die "could not update the Remotion pairing fixtures"
+log "pairing_fixtures_updated"
 
 log "camera_compose"
 node "$SCRIPT_DIR/compose_camera.mjs" "$CAMERA_SOURCE" "$WORK/qr-live.png" "$CAMERA_FILE"
@@ -555,6 +562,7 @@ PROMPT="$PROMPT" \
 MARKS="$MARKS" \
 SLICES="$SLICE_MANIFEST" \
 HAROLD_ROOT="$ROOT" \
+INSTANCE1_WORKSPACES="$INSTANCE1_WORKSPACES" \
 INSTANCE2_DATA_DIR="$INSTANCE2_DATA_DIR" \
 INSTANCE2_PORT="$INSTANCE2_PORT" \
 INSTANCE2_ENDPOINT="$INSTANCE2_ENDPOINT" \

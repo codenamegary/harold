@@ -30,10 +30,18 @@ MARKS = os.environ.get("MARKS", "marks.log")
 SLICES = os.environ.get("SLICES", "slices.json")
 WARM_SECONDS = float(os.environ.get("WARM_SECONDS", "25"))
 SESSION_TITLE = os.environ.get("SESSION_TITLE", "Cat Therapist near me")
+MENU_READY_TITLE = os.environ.get("MENU_READY_TITLE", "Does KGB use cats?")
+WORKSPACE_READY_NAME = os.environ.get("WORKSPACE_READY_NAME", "elt-meeting-agenda")
 HAROLD_ROOT = os.environ.get("HAROLD_ROOT")
 INSTANCE2_DATA_DIR = os.environ.get("INSTANCE2_DATA_DIR")
 INSTANCE2_PORT = os.environ.get("INSTANCE2_PORT", "3848")
 INSTANCE2_ENDPOINT = os.environ.get("INSTANCE2_ENDPOINT", f"http://127.0.0.1:{INSTANCE2_PORT}")
+INSTANCE1_WORKSPACES = os.environ.get(
+    "INSTANCE1_WORKSPACES", os.path.expanduser("~/harold-demo-workspaces/3847")
+)
+WORKSPACE_PARENT = os.path.dirname(INSTANCE1_WORKSPACES)
+WORKSPACE_PARENT_NAME = os.path.basename(WORKSPACE_PARENT)
+WORKSPACE_FOLDER_NAME = os.path.basename(INSTANCE1_WORKSPACES)
 SKIP_RECORD = os.environ.get("SKIP_RECORD") == "1"
 START = time.monotonic()
 
@@ -66,6 +74,23 @@ UI_LABELS = {
     "Color",
     "Icon",
     "Workspaces",
+    "Add workspace",
+    "Open folder",
+    "Clone repo",
+    "Folder",
+    "Up",
+    "New folder",
+    "Filter folders",
+    "Use this folder",
+    "Selected folder",
+    "Workspace name",
+    "Repository URL",
+    "New folder name",
+    "Parent folder",
+    "Destination",
+    "Available",
+    "Missing",
+    "Unavailable",
     "Connected Servers",
     "See all sessions…",
     "Sessions",
@@ -441,6 +466,47 @@ def open_session_menu():
     tap(wait_for(desc="Select session:", substring=True, timeout=15))
     wait_for(text="New session", timeout=10)
     wait_for(text="See all sessions", substring=True, timeout=10)
+    # The cache paints the menu before the refresh finishes. Wait for a row
+    # that is never the header title so the session history beat does not land
+    # on a loading state.
+    wait_for(text=MENU_READY_TITLE, timeout=30)
+
+
+def back_to_chat(tries=5):
+    for _ in range(tries):
+        root = dump_root()
+        if find(root, desc="More chat options") is not None:
+            return
+        adb("shell", "input", "keyevent", "KEYCODE_BACK")
+        time.sleep(0.8)
+    raise TimeoutError("could not return to the chat screen")
+
+
+def open_workspaces():
+    tap_desc("More chat options", timeout=10)
+    wait_for(text="Workspaces", timeout=10)
+    tap_text("Workspaces", timeout=10)
+    wait_for(text="Workspaces", timeout=15)
+    wait_for(text="Available", timeout=30)
+    # The first Couch row is visible on the first screen. yuekbox is further
+    # down the list, so wait for a workspace that proves both Harolds painted.
+    wait_for(text=WORKSPACE_READY_NAME, timeout=30)
+
+
+def open_add_workspace():
+    tap_desc("Add workspace", timeout=10)
+    wait_for(text="Add workspace", timeout=10)
+    wait_for(text="Open folder", timeout=10)
+    # The Harold picker is an EditText when both Harolds are saved, so the
+    # filter must be focused by its label rather than by index.
+    tap_text("Filter folders", timeout=10)
+    type_text(WORKSPACE_PARENT_NAME)
+    wait_for(text=WORKSPACE_PARENT, timeout=10)
+    dismiss_keyboard()
+    tap_text(WORKSPACE_PARENT, timeout=10)
+    wait_for(text=WORKSPACE_FOLDER_NAME, timeout=10)
+    tap_text(WORKSPACE_FOLDER_NAME, timeout=10)
+    wait_for(text="harold", timeout=10)
 
 
 def tap_send_button():
@@ -761,6 +827,18 @@ def main():
         wait_for(text="Message", timeout=45)
         time.sleep(1.5)
         mark("session_history_chat")
+
+    # ── Workspaces: the bookmark list and the add screen. Do not submit.
+    with recorded("workspaces_open"):
+        mark("workspaces_open")
+        open_workspaces()
+        time.sleep(1.2)
+
+    with recorded("add_workspace_open"):
+        mark("add_workspace_open")
+        open_add_workspace()
+        time.sleep(1.4)
+    back_to_chat()
 
     with recorded("session_menu_reopen"):
         open_session_menu()

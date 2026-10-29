@@ -11,10 +11,11 @@ terminal types `harold pair` and prints the QR for the recorded pairing code,
 the phone taps Pair and its camera scans that QR, names the first Harold
 `Work`, and lands on `Device paired.`. The phone then pairs a second Harold
 over the manual endpoint, names it `Couch`, and browses sessions across both
-Harolds. It takes center stage for session history, new session with a
-workspace and agent from each Harold, model/mode/effort, slash commands, a
-drafted prompt with photo and file attachments, the text reply, and voice
-input with its reply. The first pairing lands on a spotlight beat: the phone
+Harolds. It takes center stage for session history, the workspace bookmark
+list and Add workspace browser, a new session with a workspace and agent from
+each Harold, model/mode/effort, slash commands, a drafted prompt with photo and
+file attachments, the text reply, and voice input with its reply. The first
+pairing lands on a spotlight beat: the phone
 stays right, pops once, confetti falls across the stage, and the achievement
 copy fills the left. The first
 pairing also runs in a 2x close-up: the phone frames the top two thirds from

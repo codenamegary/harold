@@ -54,7 +54,7 @@ describe("terminal layout", () => {
 
 describe("phone typing", () => {
   test("keeps the model search on screen with its keys inside the typing window", () => {
-    const clip = playClip("032-model_search.mp4")
+    const clip = playClip("034-model_search.mp4")
     expect(clip.startSec).toBe(2.75)
     expect(clip.startSec + clip.duration * clip.rate).toBeGreaterThanOrEqual(4.5)
 
@@ -65,7 +65,7 @@ describe("phone typing", () => {
   })
 
   test("keeps the whole prompt on screen with its keys inside the typing window", () => {
-    const clip = playClip("042-prompt_type.mp4")
+    const clip = playClip("044-prompt_type.mp4")
     expect(clip.startSec).toBe(0.4)
     expect(clip.rate).toBe(1.3)
     expect(clip.startSec + clip.duration * clip.rate).toBeGreaterThanOrEqual(5.5)
@@ -137,14 +137,59 @@ describe("spotlight beat", () => {
 
 describe("new scenes", () => {
   test("plays the identity screen and both Harolds before the walkthrough moves on", () => {
-    const played = timeline.clips
-      .filter((clip) => clip.kind === "play")
-      .map((clip) => clip.file)
+    const played = timeline.clips.filter((clip) => clip.kind === "play").map((clip) => clip.file)
 
     expect(played.some((file) => file.endsWith("005-first_name.mp4"))).toBe(true)
     expect(played.some((file) => file.endsWith("010-pair_another_details.mp4"))).toBe(true)
-    expect(played.some((file) => file.endsWith("028-agent_pick_couch.mp4"))).toBe(true)
-    expect(played.some((file) => file.endsWith("039-slash_open.mp4"))).toBe(true)
+    expect(played.some((file) => file.endsWith("030-agent_pick_couch.mp4"))).toBe(true)
+    expect(played.some((file) => file.endsWith("041-slash_open.mp4"))).toBe(true)
+  })
+
+  test("plays the workspace list and Add workspace before the new session", () => {
+    const played = timeline.clips
+      .filter((clip) => clip.kind === "play")
+      .map((clip) => ({ file: clip.file, from: clip.from }))
+
+    const workspaces = played.find((clip) => clip.file.endsWith("019-workspaces_open.mp4"))
+    const addWorkspace = played.find((clip) => clip.file.endsWith("020-add_workspace_open.mp4"))
+    const menuReopen = played.find((clip) => clip.file.endsWith("021-session_menu_reopen.mp4"))
+
+    expect(workspaces).toBeDefined()
+    expect(addWorkspace).toBeDefined()
+    expect(menuReopen).toBeDefined()
+    expect(workspaces?.from).toBeLessThan(addWorkspace?.from ?? 0)
+    expect(addWorkspace?.from).toBeLessThan(menuReopen?.from ?? 0)
+  })
+
+  test("notes the workspace bookmarks and callouts the add screen", () => {
+    const note = timeline.notes.find((entry) => entry.title === "Any folder, bookmarked")
+    const callout = timeline.callouts.find(
+      (entry) => entry.title === "Open a folder, or clone a repo",
+    )
+
+    expect(note).toBeDefined()
+    expect(note?.label).toBe("WORKSPACES")
+    expect(note?.at).toBeCloseTo(53.174, 2)
+    expect(callout).toBeDefined()
+    expect(callout?.eyebrow).toBe("ADD WORKSPACE")
+    expect(callout?.hint).toBe("Any project folder on the host.")
+    expect(callout?.at).toBeCloseTo(56.174, 2)
+    expect(callout?.compact).toBe(true)
+    expect(callout?.placement).toBe("edge")
+    expect(callout?.connector).toBe("t")
+    expect(callout?.targetX).toBeCloseTo(0.5, 5)
+    expect(callout?.targetY).toBeCloseTo(0.25, 5)
+    expect(callout?.span).toEqual({ y: 0.13, h: 0.28 })
+    expect(
+      timeline.sounds.some(
+        (sound) => sound.name === "ping" && Math.abs(sound.at - (note?.at ?? 0)) < 0.01,
+      ),
+    ).toBe(true)
+    expect(
+      timeline.sounds.some(
+        (sound) => sound.name === "ping" && Math.abs(sound.at - (callout?.at ?? 0)) < 0.01,
+      ),
+    ).toBe(true)
   })
 
   test("callouts the second pairing and cards the slash command panel", () => {
@@ -161,11 +206,11 @@ describe("new scenes", () => {
     )
 
     expect(caption).toBeDefined()
-    expect(caption?.at).toBeCloseTo(82.75, 2)
+    expect(caption?.at).toBeCloseTo(87.083, 2)
     expect(caption?.top).toBeCloseTo(0.5, 2)
-    expect(
-      timeline.captions.some((entry) => entry.text === "Slash commands from your agent"),
-    ).toBe(false)
+    expect(timeline.captions.some((entry) => entry.text === "Slash commands from your agent")).toBe(
+      false,
+    )
     expect(
       timeline.sounds.some(
         (sound) => sound.name === "ping" && Math.abs(sound.at - (caption?.at ?? 0)) < 0.01,
@@ -180,47 +225,41 @@ describe("new scenes", () => {
 
     expect(annotation).toBeDefined()
     expect(annotation?.nextTitle).toBe("Adjust thinking effort")
-    expect(annotation?.at).toBeCloseTo(74.65, 2)
-    expect(annotation?.moveAt).toBeCloseTo(79.55, 2)
-    expect(annotation?.endAt).toBeCloseTo(82.35, 2)
+    expect(annotation?.at).toBeCloseTo(78.983, 2)
+    expect(annotation?.moveAt).toBeCloseTo(83.883, 2)
+    expect(annotation?.endAt).toBeCloseTo(86.683, 2)
     expect(
-      timeline.captions.some(
-        (caption) => caption.text === "Toggle modes supported by your agent",
-      ),
+      timeline.captions.some((caption) => caption.text === "Toggle modes supported by your agent"),
     ).toBe(false)
-    expect(
-      timeline.captions.some((caption) => caption.text === "Adjust thinking effort"),
-    ).toBe(false)
+    expect(timeline.captions.some((caption) => caption.text === "Adjust thinking effort")).toBe(
+      false,
+    )
     expect(
       timeline.sounds.some(
-        (sound) =>
-          sound.name === "ping" && Math.abs(sound.at - (annotation?.at ?? 0)) < 0.01,
+        (sound) => sound.name === "ping" && Math.abs(sound.at - (annotation?.at ?? 0)) < 0.01,
       ),
     ).toBe(true)
     expect(
       timeline.sounds.some(
-        (sound) =>
-          sound.name === "ping" && Math.abs(sound.at - (annotation?.moveAt ?? 0)) < 0.01,
+        (sound) => sound.name === "ping" && Math.abs(sound.at - (annotation?.moveAt ?? 0)) < 0.01,
       ),
     ).toBe(true)
   })
 
   test("puts the model list callout beside the phone", () => {
-    const callout = timeline.callouts.find(
-      (entry) => entry.title === "Model list from your Agent",
-    )
+    const callout = timeline.callouts.find((entry) => entry.title === "Model list from your Agent")
 
     expect(callout).toBeDefined()
-    expect(callout?.at).toBeCloseTo(69.56, 2)
+    expect(callout?.at).toBeCloseTo(73.953, 2)
     expect(callout?.compact).toBe(true)
     expect(callout?.placement).toBe("edge")
     expect(callout?.connector).toBe("t")
     expect(callout?.span).toEqual({ y: 0.67, h: 0.24 })
     expect(callout?.targetX).toBeCloseTo(0.5, 5)
     expect(callout?.targetY).toBeCloseTo(0.78, 5)
-    expect(
-      timeline.captions.some((caption) => caption.text === "Model list from your Agent"),
-    ).toBe(false)
+    expect(timeline.captions.some((caption) => caption.text === "Model list from your Agent")).toBe(
+      false,
+    )
     expect(
       timeline.sounds.some(
         (sound) => sound.name === "ping" && Math.abs(sound.at - (callout?.at ?? 0)) < 0.01,
@@ -233,10 +272,8 @@ describe("new scenes", () => {
 
     expect(note).toBeDefined()
     expect(note?.label).toBe("MAKE SOME HISTORY")
-    expect(note?.at).toBeCloseTo(54.94, 2)
-    expect(
-      timeline.captions.some((caption) => caption.text === "Start a new session"),
-    ).toBe(false)
+    expect(note?.at).toBeCloseTo(60.274, 2)
+    expect(timeline.captions.some((caption) => caption.text === "Start a new session")).toBe(false)
     expect(
       timeline.sounds.some(
         (sound) => sound.name === "ping" && Math.abs(sound.at - (note?.at ?? 0)) < 0.01,
@@ -252,7 +289,7 @@ describe("new scenes", () => {
     expect(fan).toBeDefined()
     expect(fan?.eyebrow).toBe("SESSION HISTORY")
     expect(fan?.hint).toBe("Past sessions, one tap away.")
-    expect(fan?.at).toBeCloseTo(44.96, 2)
+    expect(fan?.at).toBeCloseTo(45.289, 2)
     expect(
       timeline.captions.some((caption) => caption.text === "Access your agent session history"),
     ).toBe(false)
@@ -272,19 +309,15 @@ describe("new scenes", () => {
     expect(cards.get("Pair with your agents")?.at).toBeCloseTo(13.3, 5)
     expect(timeline.captions).toHaveLength(0)
     expect(
-      timeline.sounds.some(
-        (sound) => sound.name === "ping" && Math.abs(sound.at - 3.9) < 0.01,
-      ),
+      timeline.sounds.some((sound) => sound.name === "ping" && Math.abs(sound.at - 3.9) < 0.01),
     ).toBe(true)
   })
 
   test("puts the prompt card above the composer", () => {
-    const caption = timeline.phoneCaptions.find(
-      (entry) => entry.title === "Send a text Prompt",
-    )
+    const caption = timeline.phoneCaptions.find((entry) => entry.title === "Send a text Prompt")
 
     expect(caption).toBeDefined()
-    expect(caption?.at).toBeCloseTo(86.75, 2)
+    expect(caption?.at).toBeCloseTo(91.063, 2)
     expect(caption?.top).toBeCloseTo(0.33, 2)
     expect(caption?.height).toBe(150)
     expect(
@@ -298,7 +331,7 @@ describe("new scenes", () => {
     const callout = timeline.callouts.find((entry) => entry.title === "Attachments")
 
     expect(callout).toBeDefined()
-    expect(callout?.at).toBeCloseTo(92.25, 2)
+    expect(callout?.at).toBeCloseTo(96.563, 2)
     expect(callout?.eyebrow).toBeUndefined()
     expect(callout?.compact).toBe(true)
     expect(callout?.placement).toBe("edge")
@@ -312,12 +345,12 @@ describe("new scenes", () => {
   })
 
   test("zooms the new session and pulls back on continue", () => {
-    expect(channel(phoneCenterX, 60)).toBeCloseTo(1460, 5)
-    expect(channel(phoneWidth, 60)).toBeCloseTo(760, 5)
-    expect(channel(phoneTop, 60)).toBeCloseTo(-314.5, 5)
-    expect(channel(phoneCenterX, 67.2)).toBeCloseTo(960, 5)
-    expect(channel(phoneWidth, 67.2)).toBeCloseTo(450, 5)
-    expect(channel(phoneTop, 67.2)).toBeCloseTo(30, 5)
+    expect(channel(phoneCenterX, 61)).toBeCloseTo(1460, 5)
+    expect(channel(phoneWidth, 61)).toBeCloseTo(760, 5)
+    expect(channel(phoneTop, 61)).toBeCloseTo(-314.5, 5)
+    expect(channel(phoneCenterX, 71.4)).toBeCloseTo(960, 5)
+    expect(channel(phoneWidth, 71.4)).toBeCloseTo(450, 5)
+    expect(channel(phoneTop, 71.4)).toBeCloseTo(30, 5)
   })
 
   test("anchors the Pair another Harold callout to the overflow tap", () => {

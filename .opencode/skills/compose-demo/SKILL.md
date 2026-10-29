@@ -14,15 +14,16 @@ capturing frames. If a stage fails, fix the script, not the run.
 All under `docs/demo/capture/` unless noted:
 
 - `capture.sh` — the whole run. It stops only the two demo instances, recreates
-  `~/.harold-demo-3847` and `~/.harold-demo-3848`, keeps the workspace roots,
-  re-registers the workspaces, enables `cursor` + `pi-acp` on instance 1 and
-  `opencode` on instance 2, seeds the OpenCode and pi sessions, starts both
+  `~/.harold-demo-3847` and `~/.harold-demo-3848`, keeps the demo project folder
+  roots, re-registers the workspaces, enables `cursor` + `pi-acp` on instance 1
+  and `opencode` on instance 2, seeds the OpenCode and pi sessions, starts both
   source daemons with `bun run dev` on 127.0.0.1:3847 and :3848, issues
-  instance 1's QR, composes the feed, converts `assets/voice-input.wav` for the
-  WAV audio driver, compiles `audio-env-shim.c`, boots the emulator through a
-  transient systemd user unit with `-wipe-data`, pushes assets, builds and
-  installs the app, records one named slice per action while `drive_phone.py`
-  walks both pairings, session history, new session, model/mode/effort,
+  instance 1's QR, regenerates the Remotion pairing code and QR fixtures,
+  composes the feed, converts `assets/voice-input.wav` for the WAV audio
+  driver, compiles `audio-env-shim.c`, boots the emulator through a transient
+  systemd user unit with `-wipe-data`, pushes assets, builds and installs the
+  app, records one named slice per action while `drive_phone.py` walks both
+  pairings, session history, workspaces, new session, model/mode/effort,
   prompt/attachments, text chat, and voice chat, pulls every manifest slice
   with ADB stdin isolated, and builds `docs/demo/render/public/capture.json`.
   It derives `apps/android/local.properties` from the SDK before the install.
@@ -40,11 +41,15 @@ All under `docs/demo/capture/` unless noted:
   component tracking), then a geometry pass (rotate 90° CCW, cover-crop to
   1280x960), then a 120s freeze tail. With a QR arg the source must be the
   1920x1080 staged clip; without one, any aspect works.
+- `write_pairing_fixtures.mjs <pair-json> <render-src>` — regenerates
+  `qr-rows.ts` and the `CODE`/`EXPIRES` values in `terminal-data.ts` from the
+  instance 1 pair JSON, so the drawn terminal QR matches the camera feed.
 - `drive_phone.py` — the UI driver. It pairs the camera Harold and confirms
   `Work`, pairs the second Harold manually as `Couch`, opens the full Sessions
-  screen, starts a session on Work/Cursor then Couch/OpenCode, changes the
-  model, mode, and effort, shows slash commands, sends a prompt with photo and
-  file attachments, then runs voice chat. It records one screenrecord slice per
+  screen, opens Workspaces and the Add workspace browser, starts a session on
+  Work/Cursor then Couch/OpenCode, changes the model, mode, and effort, shows
+  slash commands, sends a prompt with photo and file attachments, then runs
+  voice chat. It records one screenrecord slice per
   action, verifies the remote file exists before continuing, waits for
   screenrecord to finalize on stop, writes `slices.json`, and marks taps plus
   step names in `marks.log`. `--warm` is a manual camera warm-up; the capture
@@ -93,12 +98,12 @@ replace a spotlight with a bottom `caption`.
   path under this worktree (~107 chars) is long enough to fail; copy the
   composed feed to `/tmp/opencode/harold-camera-live.mp4` before boot. The
   QEMU process must hold that file open (`lsof -p <qemu> | grep
-  harold-camera`), otherwise the preview is black.
+harold-camera`), otherwise the preview is black.
 - The microphone is the emulator's built-in WAV driver. `capture.sh` writes
   `/tmp/opencode/harold-qemu-in.wav` at 44.1 kHz stereo S16 with a 1.5s
   lead-in and a 30s silence tail, then boots with
   `LD_PRELOAD=/tmp/opencode/harold-audio-env-shim.so
-  HAROLD_WAV_IN=... HAROLD_WAV_OUT=... -allow-host-audio`. The wrapper
+HAROLD_WAV_IN=... HAROLD_WAV_OUT=... -allow-host-audio`. The wrapper
   strips `QEMU_*`, so the shim sets `QEMU_AUDIO_DRV=wav`,
   `QEMU_WAV_IN_PATH`, and `QEMU_WAV_PATH` inside QEMU.
 - The windowed emulator starts with the host microphone gated off even with
@@ -160,15 +165,17 @@ f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
    fails. `docs/demo/work/capture/capture.log` and `driver.log` hold the
    progress. `capture.log` must show `daemon_start_instance1`,
    `daemon_start_instance2`, `daemons_ready`, `sessions_seeded`,
-   `android_installed`, `slices_pulled`, and `build_capture`.
-   `android-build.log` must show `BUILD SUCCESSFUL`. The seed log must show
+   `pairing_fixtures_updated`, `android_installed`, `slices_pulled`, and
+   `build_capture`. `android-build.log` must show `BUILD SUCCESSFUL`. The seed
+   log must show
    `seeded sessions use {"id":"deepseek-flash","providerID":"deepseek"}`.
-   `capture.json` must list 56 slices:
+   `capture.json` must list 58 slices:
    `pair_idle`, `pair_tap`, `scanner_open`, `scan_wait`, `first_name`,
    `first_confirm`, `paired`, `pair_another_open`, `pair_another_manual`,
    `pair_another_details`, `pair_another_claim`, `pair_another_name`,
    `pair_another_confirm`, `pair_another_done`, `session_menu_open`,
-   `session_see_all`, `session_pick`, `session_chat`, `session_menu_reopen`,
+   `session_see_all`, `session_pick`, `session_chat`, `workspaces_open`,
+   `add_workspace_open`, `session_menu_reopen`,
    `new_session`, `workspace_open_work`, `workspace_pick_work`,
    `agent_open_work`, `agent_pick_work`, `workspace_open_couch`,
    `workspace_pick_couch`, `agent_open_couch`, `agent_pick_couch`, `continue`,
@@ -194,9 +201,8 @@ f.png`): before the 40s gate the clip is inert — jsQR must find nothing.
    If the transcript is empty, confirm `avd hostmicon` and `avd rewindaudio`
    were sent, the QEMU process has `QEMU_AUDIO_DRV=wav` and holds
    `/tmp/opencode/harold-qemu-in.wav` open, and no voice warm-up fixture ran.
-6. **Remotion is in sync.** The timeline still targets the old single-instance
-   slice set. Update `PAIR_STEPS`/`WALK_STEPS` to the 56-slice set before
-   rendering. Do not render until that edit is done.
+6. **Remotion is in sync.** Update `PAIR_STEPS`/`WALK_STEPS` to the 58-slice
+   set before rendering. Do not render until that edit is done.
    `docs/demo/render` reads `public/capture.json` at build time
    (`calculateMetadata`); `src/timeline.ts` holds the slice edit in
    `PAIR_STEPS`/`WALK_STEPS`. After a fresh capture, check the slice names and

@@ -15,7 +15,7 @@ script. Do not depend on instructions in a skill.
 - Stop any previous instance 1 or instance 2 by its data dir or daemon state. Do not stop the user's real `~/.harold` daemon.
 - Remove the previous demo data dirs, create fresh DBs, and register the agents and workspaces again. Do not copy `~/.harold/harold.db` or any previous demo DB.
 - Start both instances from the fresh data dirs. Fail if another process owns port 3847 or 3848.
-- The workspace roots are outside the data dirs. Removing a data dir must not remove a workspace.
+- The demo project folder roots are outside the data dirs. Removing a data dir must not remove a workspace.
 
 ## Agents
 
@@ -26,12 +26,15 @@ script. Do not depend on instructions in a skill.
 
 ## Workspaces
 
-- Instance 1 workspace root: `~/harold-demo-workspaces/3847`.
-- Instance 2 workspace root: `~/harold-demo-workspaces/3848`.
-- Instance 1 workspaces:
+A workspace is a bookmark to a project folder. The demo keeps the project
+folders outside the data dirs and registers each one on a fresh DB.
+
+- Instance 1 demo project folder root: `~/harold-demo-workspaces/3847`.
+- Instance 2 demo project folder root: `~/harold-demo-workspaces/3848`.
+- Instance 1 bookmarked folders:
   - Clone `git@personal:codenamegary/harold.git` into `harold`.
   - Create local repos `cat-screensaver`, `fish-screensaver-for-cats`, and `meow`.
-- Instance 2 workspaces:
+- Instance 2 bookmarked folders:
   - Clone `git@personal:codenamegary/yuekbox.git` into `yuekbox`.
   - Create local repos `pet-me-human`, `thesis-research`, `qbert-nextgen`, and `elt-meeting-agenda`.
 - Keep existing workspace directories. Do not delete them.
@@ -78,6 +81,11 @@ script. Do not depend on instructions in a skill.
 ## Driver and artifacts
 
 - Run `drive_phone.py` after the app is installed and the reverses are set.
+- The Workspaces shot opens Add workspace, filters to the demo project folder
+  root, and drills into the instance 1 folder. It must not submit the form.
+- Regenerate `docs/demo/render/src/qr-rows.ts` and the `CODE`/`EXPIRES` values
+  in `docs/demo/render/src/terminal-data.ts` from the new instance 1 pair JSON.
+  `write_pairing_fixtures.mjs` does this as part of `capture.sh`.
 - Pull the recorded slices, run `build_capture.py`, and write `docs/demo/render/public/capture.json`.
 - Do not reuse slices or captures from a previous run.
 
