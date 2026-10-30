@@ -1,9 +1,6 @@
-import {
-  ClaimPairingCodeResponseSchema,
-  CreatePairingCodeResponseSchema,
-  PAIRING_CODES_PATH,
-  claimPairingCodePath,
-} from "contracts/http/pairing-code"
+import { ClaimPairingCodeResponseSchema, claimPairingCodePath } from "contracts/http/pairing-code"
+import { makeCreatePairingCode } from "core/device/create.pairing.code.usecase"
+import { InsertPairingCode } from "core/device/ports"
 
 export type ClaimPairingCodeBody = {
   name?: string
@@ -17,21 +14,23 @@ export type PairDeviceResult = {
   claim: ReturnType<typeof ClaimPairingCodeResponseSchema.parse>
 }
 
-export const createPairingCode = async (params: { httpBase: string; credential?: string }) => {
-  const response = await fetch(`${params.httpBase}${PAIRING_CODES_PATH}`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      ...(params.credential === undefined ? {} : { authorization: `Bearer ${params.credential}` }),
-    },
-    body: JSON.stringify({}),
-  })
+const DEFAULT_ENDPOINT = "http://192.168.1.20:3847"
 
-  if (response.status !== 201) {
-    throw new Error(`create pairing code failed: ${response.status}`)
+// Minting codes is a host operation against the app's database, so tests pass
+// the server's insert port; only the claim crosses the network (#458).
+export const createPairingCode = async (params: {
+  insertPairingCode: InsertPairingCode
+  endpoint?: string
+}) => {
+  const result = await makeCreatePairingCode({
+    insertPairingCode: params.insertPairingCode,
+  })(params.endpoint ?? DEFAULT_ENDPOINT)
+
+  if (!result.ok) {
+    throw new Error(`create pairing code failed: ${result.error.kind}`)
   }
 
-  return CreatePairingCodeResponseSchema.parse(await response.json())
+  return result.value
 }
 
 export const claimPairingCode = async (params: {
@@ -54,12 +53,13 @@ export const claimPairingCode = async (params: {
 
 export const pairDevice = async (params: {
   httpBase: string
+  insertPairingCode: InsertPairingCode
   body?: ClaimPairingCodeBody
-  credential?: string
+  endpoint?: string
 }): Promise<PairDeviceResult> => {
   const created = await createPairingCode({
-    httpBase: params.httpBase,
-    credential: params.credential,
+    insertPairingCode: params.insertPairingCode,
+    endpoint: params.endpoint,
   })
   const claimed = await claimPairingCode({
     httpBase: params.httpBase,

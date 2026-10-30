@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises"
 import net from "node:net"
 import os from "node:os"
 import path from "node:path"
-import { StatusSchema } from "contracts/http/status"
+import { LivenessSchema } from "contracts/http/status"
 
 const tempDirs: string[] = []
 const serverRoot = path.resolve(import.meta.dir, "../..")
@@ -44,7 +44,7 @@ const readStatusVersion = async (port: number, proc: Bun.Subprocess) => {
     try {
       const response = await fetch(`http://127.0.0.1:${port}/v1/status`)
       if (response.ok) {
-        return StatusSchema.parse(await response.json()).version
+        return LivenessSchema.parse(await response.json()).version
       }
     } catch {
       // not listening yet
@@ -66,7 +66,6 @@ describe("run server", () => {
       cwd: serverRoot,
       env: {
         ...process.env,
-        HAROLD_HOST: "127.0.0.1",
         HAROLD_PORT: String(port),
         HAROLD_DATA_DIR: dataDir,
       },

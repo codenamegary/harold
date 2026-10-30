@@ -3,43 +3,35 @@ import {
   buildAppliedRuntimeSettings,
   buildRuntimeSettingsView,
   computeRestartRequired,
-  resolveEffectiveBind,
+  resolveEffectiveBindOverrides,
+  resolveEffectiveBindPort,
 } from "./resolve.runtime.settings.state"
 
 const persisted = {
-  advertisedUrl: null,
-  advertisedUrlEnabled: true,
-  bindHost: "127.0.0.1" as const,
   bindPort: 3847,
   logLevel: "info" as const,
   logPath: null,
 }
 
-describe("resolveEffectiveBind", () => {
-  test("uses persisted bind when env is unset", () => {
-    expect(
-      resolveEffectiveBind({
-        persisted,
-        envOverrides: {},
-      }),
-    ).toEqual({
-      bindHost: "127.0.0.1",
-      bindPort: 3847,
-      overrides: {},
-    })
+describe("resolveEffectiveBindPort", () => {
+  test("uses persisted port when env is unset", () => {
+    expect(resolveEffectiveBindPort({ persisted, envOverrides: {} })).toBe(3847)
   })
 
   test("prefers env port over persisted", () => {
-    expect(
-      resolveEffectiveBind({
-        persisted,
-        envOverrides: { bindPort: 4123 },
-      }),
-    ).toEqual({
-      bindHost: "127.0.0.1",
-      bindPort: 4123,
+    expect(resolveEffectiveBindPort({ persisted, envOverrides: { bindPort: 4123 } })).toBe(4123)
+  })
+})
+
+describe("resolveEffectiveBindOverrides", () => {
+  test("marks the port as env-overridden", () => {
+    expect(resolveEffectiveBindOverrides({ bindPort: 4123 })).toEqual({
       overrides: { bindPort: "env" },
     })
+  })
+
+  test("reports no overrides when env is unset", () => {
+    expect(resolveEffectiveBindOverrides({})).toEqual({ overrides: {} })
   })
 })
 
@@ -49,7 +41,6 @@ describe("computeRestartRequired", () => {
       computeRestartRequired({
         persisted,
         applied: {
-          bindHost: "127.0.0.1",
           bindPort: 3847,
           logPath: null,
         },
@@ -62,7 +53,6 @@ describe("computeRestartRequired", () => {
       computeRestartRequired({
         persisted: { ...persisted, bindPort: 4000 },
         applied: {
-          bindHost: "127.0.0.1",
           bindPort: 3847,
           logPath: null,
         },
@@ -78,6 +68,11 @@ describe("buildRuntimeSettingsView", () => {
       envOverrides: { bindPort: 4123 },
     })
 
+    expect(applied).toEqual({
+      bindPort: 4123,
+      logPath: null,
+    })
+
     expect(
       buildRuntimeSettingsView({
         persisted,
@@ -88,7 +83,6 @@ describe("buildRuntimeSettingsView", () => {
       settings: persisted,
       restartRequired: true,
       effective: {
-        bindHost: "127.0.0.1",
         bindPort: 4123,
         logPath: null,
       },

@@ -34,15 +34,9 @@ export const localApiUrl = (api: LocalApi): string => {
   return `http://${formattedHost}:${api.port}`
 }
 
-export type AdvertisedEndpoint = Readonly<{
-  url: string | null
-  enabled: boolean
-}>
-
 export type StatusSummary = Readonly<{
   dataDir: string
   localApi: LocalApi
-  advertisedEndpoint: AdvertisedEndpoint
   agents: AgentSummary
   workspaces: number
 }>

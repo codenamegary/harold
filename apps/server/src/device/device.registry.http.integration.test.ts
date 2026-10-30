@@ -1,12 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import {
-  ClaimPairingCodeResponseSchema,
-  CreatePairingCodeResponseSchema,
-  PAIRING_CODES_PATH,
-  claimPairingCodePath,
-} from "contracts/http/pairing-code"
-import { DeviceCollectionSchema, DEVICES_PATH } from "contracts/http/device"
+import { ClaimPairingCodeResponseSchema, claimPairingCodePath } from "contracts/http/pairing-code"
 import { UnauthorizedProblemSchema } from "contracts/http/error"
+import { makeCreatePairingCode } from "core/device/create.pairing.code.usecase"
 import { CreateSessionResponseSchema } from "contracts/http/session"
 import { sessionEventsPath } from "contracts/http/session.stream"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
@@ -14,11 +9,11 @@ import { openSseStream } from "test-support/session-stream"
 import { bootTestApp } from "../test-support/test.harness"
 import { enableAgent } from "../test-support/test.app"
 import { Config } from "../config/config"
+import { assembleDeviceSlice } from "./device.assembly"
+import { makeInsertPairingCode } from "./device.sqlite.adapters"
 import { clearDevicePresence } from "./device.presence"
 
-const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
-  authorization: `Bearer ${app.deviceCredential.credential}`,
-})
+const LAN_ENDPOINT = "http://192.168.1.20:3847"
 
 const whichFn: WhichFn = (binaryName) =>
   binaryName === "agent" ? "/usr/local/bin/agent" : undefined
@@ -45,23 +40,23 @@ const getListeningBase = async (
   }
 }
 
-const pairDevice = async (
-  httpBase: string,
-  body: Record<string, unknown> = {},
-  userCredential?: string,
+// Codes are minted in process (host operation); the claim stays on the wire.
+const seedPairingCode = async (
+  database: Parameters<typeof makeInsertPairingCode>[0]["database"],
 ) => {
-  const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      ...(userCredential === undefined ? {} : { authorization: `Bearer ${userCredential}` }),
-    },
-    body: JSON.stringify({}),
-  })
-  expect(createResponse.status).toBe(201)
-  const created = CreatePairingCodeResponseSchema.parse(await createResponse.json())
+  const result = await makeCreatePairingCode({
+    insertPairingCode: makeInsertPairingCode(database),
+  })(LAN_ENDPOINT)
+  if (!result.ok) throw new Error("failed to seed pairing code")
+  return result.value
+}
 
-  const claimResponse = await fetch(`${httpBase}${claimPairingCodePath(created.code)}`, {
+const claimOverHttp = async (
+  httpBase: string,
+  code: string,
+  body: Record<string, unknown> = {},
+) => {
+  const claimResponse = await fetch(`${httpBase}${claimPairingCodePath(code)}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -70,16 +65,21 @@ const pairDevice = async (
   return ClaimPairingCodeResponseSchema.parse(await claimResponse.json())
 }
 
-const createSession = async (
-  app: { deviceCredential: { credential: string } },
+const pairDevice = async (
+  database: Parameters<typeof makeInsertPairingCode>[0]["database"],
   httpBase: string,
-  cwd: string,
+  body: Record<string, unknown> = {},
 ) => {
+  const created = await seedPairingCode(database)
+  return claimOverHttp(httpBase, created.code, body)
+}
+
+const createSession = async (credential: string, httpBase: string, cwd: string) => {
   const response = await fetch(`${httpBase}/v1/sessions`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      ...authHeaders(app),
+      authorization: `Bearer ${credential}`,
     },
     body: JSON.stringify({ agentId: "cursor", cwd }),
   })
@@ -98,46 +98,27 @@ const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 
 }
 
 describe("device registry and presence", () => {
-  test("GET /v1/devices lists empty and paired devices with offline state", async () => {
+  test("listing devices is a host operation: GET /v1/devices is not registered", async () => {
     const { app, config } = await bootTestApp()
     const { httpBase } = await getListeningBase(app, config)
 
-    const emptyResponse = await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })
-    expect(emptyResponse.status).toBe(200)
-    const empty = DeviceCollectionSchema.parse(await emptyResponse.json())
-    expect(empty.items.map((item) => item.id)).toEqual([app.deviceCredential.deviceId])
-    expect(empty.page.count).toBe(1)
-
-    const paired = await pairDevice(
-      httpBase,
-      { name: "Pixel", platform: "android" },
-      app.deviceCredential.credential,
-    )
-    expect(paired.device.state).toBe("offline")
-
-    const listResponse = await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })
-    expect(listResponse.status).toBe(200)
-    const listed = DeviceCollectionSchema.parse(await listResponse.json())
-    const pixel = listed.items.find((item) => item.id === paired.device.id)
-    expect(pixel?.name).toBe("Pixel")
-    expect(pixel?.state).toBe("offline")
-    expect(listed.page.count).toBe(2)
+    const response = await fetch(`${httpBase}/v1/devices`, {
+      headers: { authorization: `Bearer ${app.deviceCredential.credential}` },
+    })
+    expect(response.status).toBe(404)
   })
 
-  test("claim persists paired device in registry", async () => {
-    const { app, config } = await bootTestApp()
+  test("claim persists paired device in the host-visible registry", async () => {
+    const { app, config, database } = await bootTestApp()
     const { httpBase } = await getListeningBase(app, config)
+    const slice = assembleDeviceSlice({ database })
 
-    const paired = await pairDevice(
-      httpBase,
-      { name: "Watch", platform: "wearos" },
-      app.deviceCredential.credential,
-    )
+    const paired = await pairDevice(database, httpBase, { name: "Watch", platform: "wearos" })
 
-    const listResponse = await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })
-    expect(listResponse.status).toBe(200)
-    const listed = DeviceCollectionSchema.parse(await listResponse.json())
-    expect(listed.items.find((item) => item.id === paired.device.id)).toEqual(
+    const listed = slice.listDevices({ limit: 10 })
+    expect(listed.ok).toBe(true)
+    if (!listed.ok) return
+    expect(listed.value.items.find((item) => item.id === paired.device.id)).toEqual(
       expect.objectContaining({
         id: paired.device.id,
         name: "Watch",
@@ -145,10 +126,11 @@ describe("device registry and presence", () => {
         state: "offline",
       }),
     )
+    expect(listed.value.items.map((item) => item.id)).toContain(app.deviceCredential.deviceId)
   })
 
   test("list state follows SSE stream presence for connect/disconnect", async () => {
-    const { app, config } = await bootTestApp({
+    const { app, config, database } = await bootTestApp({
       whichFn,
       fakeAcpOptions: {
         capabilities: { loadSession: true, sessionClose: true, sessionList: true },
@@ -158,45 +140,36 @@ describe("device registry and presence", () => {
     })
     await enableAgent(app, "cursor", whichFn)
     const { httpBase } = await getListeningBase(app, config)
-    const paired = await pairDevice(httpBase, {}, app.deviceCredential.credential)
-    const created = await createSession(app, httpBase, "/tmp/registry-presence")
-
-    const beforeConnect = DeviceCollectionSchema.parse(
-      await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
+    const slice = assembleDeviceSlice({ database })
+    const paired = await pairDevice(database, httpBase)
+    const created = await createSession(
+      app.deviceCredential.credential,
+      httpBase,
+      "/tmp/registry-presence",
     )
-    expect(beforeConnect.items[0]?.state).toBe("offline")
+
+    const offlineNow = () => {
+      const listed = slice.listDevices({ limit: 10 })
+      if (!listed.ok) throw new Error("list failed")
+      return listed.value.items.find((item) => item.id === paired.device.id)?.state
+    }
+    expect(offlineNow()).toBe("offline")
 
     const deviceStream = await openSseStream({
       url: `${httpBase}${sessionEventsPath(created.sessionId, { agentId: "cursor" })}`,
       credential: paired.credential,
     })
-    await waitFor(async () => {
-      const online = DeviceCollectionSchema.parse(
-        await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
-      )
-      return online.items[0]?.state === "online"
-    })
-
-    const onlineFilter = DeviceCollectionSchema.parse(
-      await (
-        await fetch(`${httpBase}${DEVICES_PATH}?state=online`, { headers: authHeaders(app) })
-      ).json(),
-    )
-    expect(onlineFilter.items).toHaveLength(1)
+    await waitFor(() => offlineNow() === "online")
 
     await deviceStream.close()
-    await waitFor(async () => {
-      const offline = DeviceCollectionSchema.parse(
-        await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
-      )
-      return offline.items[0]?.state === "offline"
-    })
+    await waitFor(() => offlineNow() === "offline")
   })
 
   test("unauthenticated stream requests are rejected and do not mark devices online", async () => {
-    const { app, config } = await bootTestApp()
+    const { app, config, database } = await bootTestApp()
     const { httpBase } = await getListeningBase(app, config)
-    const paired = await pairDevice(httpBase, {}, app.deviceCredential.credential)
+    const slice = assembleDeviceSlice({ database })
+    const paired = await pairDevice(database, httpBase)
 
     const response = await fetch(`${httpBase}/v1/sessions/s1/events?agentId=cursor`)
     expect(response.status).toBe(401)
@@ -204,17 +177,18 @@ describe("device registry and presence", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 100))
 
-    const listed = DeviceCollectionSchema.parse(
-      await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
-    )
-    expect(listed.items[0]?.id).toBe(paired.device.id)
-    expect(listed.items[0]?.state).toBe("offline")
+    const listed = slice.listDevices({ limit: 10 })
+    expect(listed.ok).toBe(true)
+    if (!listed.ok) return
+    const device = listed.value.items.find((item) => item.id === paired.device.id)
+    expect(device?.state).toBe("offline")
   })
 
   test("authenticated device HTTP updates lastSeenAt without flipping online", async () => {
-    const { app, config } = await bootTestApp()
+    const { app, config, database } = await bootTestApp()
     const { httpBase } = await getListeningBase(app, config)
-    const paired = await pairDevice(httpBase, {}, app.deviceCredential.credential)
+    const slice = assembleDeviceSlice({ database })
+    const paired = await pairDevice(database, httpBase)
     const initialLastSeen = paired.device.lastSeenAt
     expect(initialLastSeen).not.toBeNull()
 
@@ -225,13 +199,12 @@ describe("device registry and presence", () => {
     })
     expect(workspaces.status).toBe(200)
 
-    const listed = DeviceCollectionSchema.parse(
-      await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
-    )
-    expect(listed.items[0]?.state).toBe("offline")
-    expect(listed.items[0]?.lastSeenAt).not.toBeNull()
-    expect(Date.parse(listed.items[0]?.lastSeenAt ?? "")).toBeGreaterThan(
-      Date.parse(initialLastSeen ?? ""),
-    )
+    const listed = slice.listDevices({ limit: 10 })
+    expect(listed.ok).toBe(true)
+    if (!listed.ok) return
+    const device = listed.value.items.find((item) => item.id === paired.device.id)
+    expect(device?.state).toBe("offline")
+    expect(device?.lastSeenAt).not.toBeNull()
+    expect(Date.parse(device?.lastSeenAt ?? "")).toBeGreaterThan(Date.parse(initialLastSeen ?? ""))
   })
 })

@@ -23,24 +23,22 @@ import {
   ReadLiveDaemonStateResult,
 } from "core/daemon-state/read.live.usecase"
 import { makeStopLiveDaemon, StopLiveDaemon } from "core/daemon-state/stop.usecase"
+import { detectLanAddress } from "core/network/lan.address"
 import { makeNodeFetchStatusEndpoint } from "core/reachability/node.adapters"
-import { localApiUrl } from "core/status/summary.models"
+import { makeVerifyAdvertisedEndpoint } from "core/reachability/verify.usecase"
 import { parseConfig } from "server/config"
 import { openDatabase } from "server/database"
 import { assembleDeviceSlice } from "server/device"
 import { makeCanonicalizePath, makeReadDirectoryEntries } from "server/filesystem"
-import { makeRuntimeSettingsFileStore, seedDefaultsFromConfig } from "server/runtime-settings"
 import { assembleWorkspaceSlice } from "server/workspace"
 import { disableAgent, enableAgent, openAgentCli } from "./agent.command"
-import { ConnectDeps, runConnect } from "./connect.command"
-import { connectRecipes } from "./connect.recipes"
-import { detectLanAddress } from "./lan.address"
 import {
   StartBackgroundDaemon,
   makeBunSpawnBackgroundDaemon,
   makeStartBackgroundDaemon,
   renderStartDaemonError,
 } from "./daemon.background"
+import { resolvePairingEndpoint } from "./pair.endpoint"
 import { PairActionDeps, executePair } from "./pair.command"
 import { renderTerminalQr } from "./pair.qr"
 import { readRunningView, renderRunningView, RunningView, RunningViewColors } from "./running.view"
@@ -153,11 +151,11 @@ export const parseAgentIds = (raw: string | undefined): readonly string[] | unde
 }
 
 /**
- * Composes the agent, workspace, reachability, and pairing batches into one
- * interactive flow. When no daemon is running, setup starts one detached in
- * the background first: reachability verification and pairing both need it
- * answering, and the daemon keeps serving after setup exits. The running view
- * is printed when the wizard ends against a live daemon.
+ * Composes the agent, workspace, and pairing batches into one interactive
+ * flow. When no daemon is running, setup starts one detached in the
+ * background first: pairing needs it answering, and the daemon keeps serving
+ * after setup exits. The running view is printed when the wizard ends
+ * against a live daemon.
  */
 export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): Promise<number> => {
   const config = parseConfig(process.env)
@@ -168,15 +166,11 @@ export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): P
   const startedDaemon = liveDaemon.ok ? undefined : await deps.startDaemon()
 
   if (startedDaemon !== undefined && !startedDaemon.ok) {
-    deps.writeErr(renderStartDaemonError(startedDaemon.error, config.port, "harold setup"))
+    deps.writeErr(renderStartDaemonError(startedDaemon.error, "harold setup"))
     return 1
   }
 
   const database = openDatabase({ dataDir })
-  const settingsStore = makeRuntimeSettingsFileStore({
-    dataDir,
-    seedDefaults: seedDefaultsFromConfig(config),
-  })
   const agentCli = openAgentCli({ dataDir })
 
   try {
@@ -190,33 +184,9 @@ export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): P
       unbindWorkspaceSessions: () => undefined,
     })
 
-    const which = (binary: string): boolean => Bun.which(binary) !== null
     const writeLine = (line: string): void => deps.writeOut(line)
 
-    const connectDeps: ConnectDeps = {
-      fetchStatus: makeNodeFetchStatusEndpoint(),
-      makeSettingsStore: () => settingsStore,
-      which,
-      writeLine,
-      colors: pc,
-      port: config.port,
-      localUrl: localApiUrl({ host: config.host, port: config.port }),
-      detectLanAddress,
-    }
-
-    // The device slice shares the wizard's settings store so the pairing
-    // step sees an advertised URL persisted earlier in the same run.
-    const deviceSlice = assembleDeviceSlice({
-      database,
-      loopbackEndpoint: localApiUrl({ host: config.host, port: config.port }),
-      getAdvertisedEndpointSettings: () => {
-        const settings = settingsStore.get()
-        return {
-          advertisedUrl: settings.advertisedUrl,
-          advertisedUrlEnabled: settings.advertisedUrlEnabled,
-        }
-      },
-    })
+    const deviceSlice = assembleDeviceSlice({ database })
 
     const pairDeps: PairActionDeps = {
       createPairingCode: deviceSlice.createPairingCode,
@@ -249,22 +219,40 @@ export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): P
             path: workspacePath,
           }),
       },
-      recipes: connectRecipes.map((recipe) => {
-        const detection = recipe.detect({ which })
-        return {
-          id: recipe.id,
-          label: recipe.label,
-          hint: detection.detail,
-          guide: () => recipe.guide({ detection, writeLine }),
-        }
-      }),
-      reachability: {
-        verifyAndPersist: async (advertisedUrl) =>
-          (await runConnect({ options: { advertisedUrl }, dataDir, deps: connectDeps })) === 0,
-      },
       isDaemonRunning: () => deps.readLiveDaemonState().ok,
-      pair: async () =>
-        (await executePair(pairDeps, { endpoint: undefined, wait: true, json: false })) === 0,
+      pair: async () => {
+        const choice = await resolvePairingEndpoint({
+          explicitUrl: undefined,
+          readHistory: () => [],
+          detectLanAddress,
+          port: config.port,
+          verifyEndpoint: makeVerifyAdvertisedEndpoint({
+            fetchStatus: makeNodeFetchStatusEndpoint(),
+          }),
+          isInteractive: process.stdout.isTTY === true,
+          prompts: {
+            select: (message, options, initialValue) =>
+              deps.prompts.select({ message, options, initialValue }),
+            text: (message, placeholder) => deps.prompts.text({ message, placeholder }),
+            isCancel: (value) => deps.prompts.isCancel(value),
+          },
+          writeLine,
+        })
+
+        if (!choice.ok) {
+          deps.writeErr(choice.message)
+          return false
+        }
+
+        return (
+          (await executePair(pairDeps, {
+            endpoint: choice.url,
+            mode: "qr",
+            wait: true,
+            json: false,
+          })) === 0
+        )
+      },
     }
 
     const code = await runSetupWizard(wizardDeps, options)
@@ -292,35 +280,25 @@ export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): P
 const setupOptionsFrom = (options: {
   agents?: string
   workspace?: string
-  advertisedUrl?: string
   pair: boolean
 }): SetupOptions => ({
   agents: parseAgentIds(options.agents),
   workspace: options.workspace,
-  advertisedUrl: options.advertisedUrl,
   pair: options.pair,
 })
 
 export const makeSetupCommand = (overrides: Partial<SetupCommandDeps> = {}): Command => {
   const command = new Command("setup")
-  command.description("configure agents, a workspace, reachability, and pairing")
+  command.description("configure agents, a workspace, and pairing")
   command
     .option("--agents <ids>", "comma-separated agent ids to enable")
     .option("--workspace <path>", "workspace directory to register")
-    .option("--advertised-url <url>", "advertised endpoint URL devices pair against")
     .option("--no-pair", "skip the pairing step")
 
-  command.action(
-    async (options: {
-      agents?: string
-      workspace?: string
-      advertisedUrl?: string
-      pair: boolean
-    }) => {
-      const deps: SetupCommandDeps = makeSetupCommandDeps(overrides)
-      process.exitCode = await runSetup(setupOptionsFrom(options), deps)
-    },
-  )
+  command.action(async (options: { agents?: string; workspace?: string; pair: boolean }) => {
+    const deps: SetupCommandDeps = makeSetupCommandDeps(overrides)
+    process.exitCode = await runSetup(setupOptionsFrom(options), deps)
+  })
 
   return command
 }

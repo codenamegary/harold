@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { AgentSettings } from "contracts/http/agent-settings"
 import { Workspace } from "contracts/http/workspace"
 import { RegisterWorkspaceResult } from "core/workspace/register.usecase"
-import { SetupPrompts, SetupRecipe, runSetupWizard, SetupWizardDeps } from "./setup.wizard"
+import { SetupPrompts, runSetupWizard, SetupWizardDeps } from "./setup.wizard"
 
 const timestamp = "2026-10-04T00:00:00.000Z"
 
@@ -112,7 +112,6 @@ type HarnessOptions = Readonly<{
   agents?: readonly AgentSettings[]
   workspaces?: readonly Workspace[]
   workspaceResult?: RegisterWorkspaceResult
-  verifyResults?: boolean[]
   pairResult?: boolean
   daemonRunning?: boolean
   script?: PromptScript
@@ -124,21 +123,9 @@ const makeHarness = (options: HarnessOptions = {}) => {
   const enabled: string[] = []
   const disabled: string[] = []
   const registered: string[] = []
-  const verified: string[] = []
   const lines: string[] = []
-  const guided: string[] = []
   const pair = { calls: 0 }
   const promptBundle = makePrompts(options.script)
-  const recipes: readonly SetupRecipe[] = [
-    {
-      id: "custom",
-      label: "I already have an endpoint",
-      hint: "user-supplied endpoint",
-      guide: () => {
-        guided.push("custom")
-      },
-    },
-  ]
 
   const findAgent = (id: string): AgentSettings | undefined =>
     agents.find((agent) => agent.id === id)
@@ -187,13 +174,6 @@ const makeHarness = (options: HarnessOptions = {}) => {
         return { ok: true, value, created: true }
       },
     },
-    recipes,
-    reachability: {
-      verifyAndPersist: async (advertisedUrl) => {
-        verified.push(advertisedUrl)
-        return options.verifyResults?.shift() ?? true
-      },
-    },
     pair: async () => {
       pair.calls += 1
       return options.pairResult ?? true
@@ -206,8 +186,6 @@ const makeHarness = (options: HarnessOptions = {}) => {
     enabled,
     disabled,
     registered,
-    verified,
-    guided,
     lines,
     pair,
     calls: promptBundle.calls,
@@ -221,7 +199,7 @@ const makeHarness = (options: HarnessOptions = {}) => {
 const noPrompts = { multiselect: [], text: [], select: [], confirm: [] }
 
 describe("runSetupWizard with flags", () => {
-  test("applies agents, workspace, and reachability flags without prompting", async () => {
+  test("applies agent and workspace flags without prompting", async () => {
     const harness = makeHarness({
       agents: [makeAgent({ id: "cursor", displayName: "Cursor" })],
     })
@@ -229,14 +207,12 @@ describe("runSetupWizard with flags", () => {
     const exitCode = await runSetupWizard(harness.deps, {
       agents: ["cursor"],
       workspace: "/home/dev/project",
-      advertisedUrl: "https://harold.example.com",
       pair: false,
     })
 
     expect(exitCode).toBe(0)
     expect(harness.enabled).toEqual(["cursor"])
     expect(harness.registered).toEqual(["/home/dev/project"])
-    expect(harness.verified).toEqual(["https://harold.example.com"])
     expect(harness.pair.calls).toBe(0)
     expect(harness.calls).toEqual(noPrompts)
   })
@@ -256,7 +232,6 @@ describe("runSetupWizard agents step", () => {
     const exitCode = await runSetupWizard(harness.deps, {
       agents: undefined,
       workspace: "/home/dev/project",
-      advertisedUrl: "https://harold.example.com",
       pair: false,
     })
 
@@ -275,14 +250,13 @@ describe("runSetupWizard agents step", () => {
     const exitCode = await runSetupWizard(harness.deps, {
       agents: ["nope"],
       workspace: "/home/dev/project",
-      advertisedUrl: "https://harold.example.com",
       pair: false,
     })
 
     expect(exitCode).toBe(1)
     expect(harness.enabled).toEqual([])
     expect(harness.registered).toEqual([])
-    expect(harness.verified).toEqual([])
+    expect(harness.pair.calls).toBe(0)
   })
 })
 
@@ -296,7 +270,6 @@ describe("runSetupWizard workspace step", () => {
     const exitCode = await runSetupWizard(harness.deps, {
       agents: ["cursor"],
       workspace: undefined,
-      advertisedUrl: "https://harold.example.com",
       pair: false,
     })
 
@@ -314,7 +287,6 @@ describe("runSetupWizard workspace step", () => {
     const exitCode = await runSetupWizard(harness.deps, {
       agents: ["cursor"],
       workspace: "/home/dev/project",
-      advertisedUrl: "https://harold.example.com",
       pair: false,
     })
 
@@ -331,67 +303,6 @@ describe("runSetupWizard workspace step", () => {
     const exitCode = await runSetupWizard(harness.deps, {
       agents: ["cursor"],
       workspace: "/home/dev/project",
-      advertisedUrl: "https://harold.example.com",
-      pair: false,
-    })
-
-    expect(exitCode).toBe(1)
-    expect(harness.verified).toEqual([])
-  })
-})
-
-describe("runSetupWizard reachability step", () => {
-  test("interactive reachability guides the recipe, then verifies the entered URL", async () => {
-    const harness = makeHarness({
-      agents: [makeAgent({ id: "cursor", displayName: "Cursor" })],
-      script: { select: ["custom"], text: ["https://harold.example.com"] },
-    })
-
-    const exitCode = await runSetupWizard(harness.deps, {
-      agents: ["cursor"],
-      workspace: "/home/dev/project",
-      advertisedUrl: undefined,
-      pair: false,
-    })
-
-    expect(exitCode).toBe(0)
-    expect(harness.guided).toEqual(["custom"])
-    expect(harness.verified).toEqual(["https://harold.example.com"])
-    expect(harness.calls.select[0]?.message).toContain("phone")
-  })
-
-  test("retries after a failed verification when the user asks", async () => {
-    const harness = makeHarness({
-      agents: [makeAgent({ id: "cursor", displayName: "Cursor" })],
-      verifyResults: [false, true],
-      script: {
-        select: ["custom"],
-        text: ["https://bad.example.com", "https://harold.example.com"],
-        confirm: [true],
-      },
-    })
-
-    const exitCode = await runSetupWizard(harness.deps, {
-      agents: ["cursor"],
-      workspace: "/home/dev/project",
-      advertisedUrl: undefined,
-      pair: false,
-    })
-
-    expect(exitCode).toBe(0)
-    expect(harness.verified).toEqual(["https://bad.example.com", "https://harold.example.com"])
-  })
-
-  test("a failed --advertised-url verification stops setup", async () => {
-    const harness = makeHarness({
-      agents: [makeAgent({ id: "cursor", displayName: "Cursor" })],
-      verifyResults: [false],
-    })
-
-    const exitCode = await runSetupWizard(harness.deps, {
-      agents: ["cursor"],
-      workspace: "/home/dev/project",
-      advertisedUrl: "https://bad.example.com",
       pair: false,
     })
 
@@ -421,7 +332,6 @@ describe("runSetupWizard agent probes", () => {
     const exitCode = await runSetupWizard(harness.deps, {
       agents: ["cursor"],
       workspace: "/home/dev/project",
-      advertisedUrl: "https://harold.example.com",
       pair: false,
     })
 
@@ -452,7 +362,6 @@ describe("runSetupWizard agent probes", () => {
     await runSetupWizard(harness.deps, {
       agents: ["cursor"],
       workspace: "/home/dev/project",
-      advertisedUrl: "https://harold.example.com",
       pair: false,
     })
 
@@ -470,7 +379,6 @@ describe("runSetupWizard pair step", () => {
     const exitCode = await runSetupWizard(harness.deps, {
       agents: ["cursor"],
       workspace: "/home/dev/project",
-      advertisedUrl: "https://harold.example.com",
       pair: true,
     })
 
@@ -488,7 +396,6 @@ describe("runSetupWizard pair step", () => {
     const exitCode = await runSetupWizard(harness.deps, {
       agents: ["cursor"],
       workspace: "/home/dev/project",
-      advertisedUrl: "https://harold.example.com",
       pair: true,
     })
 
@@ -506,7 +413,6 @@ describe("runSetupWizard pair step", () => {
     const exitCode = await runSetupWizard(harness.deps, {
       agents: ["cursor"],
       workspace: "/home/dev/project",
-      advertisedUrl: "https://harold.example.com",
       pair: true,
     })
 
@@ -522,7 +428,6 @@ describe("runSetupWizard pair step", () => {
     const exitCode = await runSetupWizard(harness.deps, {
       agents: ["cursor"],
       workspace: "/home/dev/project",
-      advertisedUrl: "https://harold.example.com",
       pair: true,
     })
 

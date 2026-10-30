@@ -1,11 +1,5 @@
 import { AgentSummary, AgentSummaryItem, StatusSummary } from "./status.summary.models"
-import {
-  GetAdvertisedEndpoint,
-  GetAgentSummary,
-  GetDataDir,
-  GetLocalApi,
-  GetWorkspaceCount,
-} from "./status.summary.ports"
+import { GetAgentSummary, GetDataDir, GetLocalApi, GetWorkspaceCount } from "./status.summary.ports"
 
 /**
  * Derives the agent summary from the agent-settings view. Only enabled
@@ -33,7 +27,6 @@ export const summarizeAgents = (items: readonly AgentSummaryItem[]): AgentSummar
 export type GetStatusSummaryDeps = Readonly<{
   getDataDir: GetDataDir
   getLocalApi: GetLocalApi
-  getAdvertisedEndpoint: GetAdvertisedEndpoint
   getAgentSummary: GetAgentSummary
   getWorkspaceCount: GetWorkspaceCount
 }>
@@ -45,7 +38,6 @@ export const makeGetStatusSummary =
   () => ({
     dataDir: deps.getDataDir(),
     localApi: deps.getLocalApi(),
-    advertisedEndpoint: deps.getAdvertisedEndpoint(),
     agents: deps.getAgentSummary(),
     workspaces: deps.getWorkspaceCount(),
   })

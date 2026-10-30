@@ -1,28 +1,16 @@
 import { describe, expect, test } from "bun:test"
-import { Status } from "contracts/http/status"
 import { FetchStatusEndpoint } from "./reachability.ports"
 import {
   makeVerifyAdvertisedEndpoint,
   VerifyAdvertisedEndpointDeps,
 } from "./reachability.verify.usecase"
 
-const statusDocument: Status = {
-  version: "0.2.1",
-  state: "online",
-  bindAddress: "127.0.0.1",
-  port: 3847,
-  startedAt: "2026-01-01T00:00:00.000Z",
-  acp: { state: "ready", activeSessions: 2 },
-}
-
-const okBody = JSON.stringify(statusDocument)
-
 type FetchOverride =
   | { ok: true; response: { status: number; body: string } }
   | { ok: false; detail: string }
 
 const makeDeps = (
-  override: FetchOverride = { ok: true, response: { status: 200, body: okBody } },
+  override: FetchOverride = { ok: true, response: { status: 200, body: "{}" } },
 ): VerifyAdvertisedEndpointDeps & { requestedUrls: string[] } => {
   const requestedUrls: string[] = []
   const fetchStatus: FetchStatusEndpoint = async (statusUrl) => {
@@ -33,7 +21,7 @@ const makeDeps = (
 }
 
 describe("makeVerifyAdvertisedEndpoint", () => {
-  test("verifies an https advertised endpoint against its status document", async () => {
+  test("verifies an https advertised endpoint with a 2xx status probe", async () => {
     const deps = makeDeps()
     const verifyAdvertisedEndpoint = makeVerifyAdvertisedEndpoint(deps)
 
@@ -45,7 +33,6 @@ describe("makeVerifyAdvertisedEndpoint", () => {
         advertisedUrl: "https://agents.example.com",
         statusUrl: "https://agents.example.com/v1/status",
         httpStatus: 200,
-        status: statusDocument,
       },
     })
     expect(deps.requestedUrls).toEqual(["https://agents.example.com/v1/status"])
@@ -134,34 +121,12 @@ describe("makeVerifyAdvertisedEndpoint", () => {
     expect(result).toEqual({ ok: false, error: { kind: "non_2xx", status: 301 } })
   })
 
-  test("reports invalid_body when the response is not JSON", async () => {
+  test("accepts any 2xx body: the probe checks reachability, not the document", async () => {
     const deps = makeDeps({ ok: true, response: { status: 200, body: "<html>" } })
     const verifyAdvertisedEndpoint = makeVerifyAdvertisedEndpoint(deps)
 
     const result = await verifyAdvertisedEndpoint("https://agents.example.com")
 
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.error.kind).toBe("invalid_body")
-      expect(result.error.detail).toContain("JSON")
-    }
-  })
-
-  test("reports invalid_body when the JSON violates the status contract", async () => {
-    const deps = makeDeps({
-      ok: true,
-      response: {
-        status: 200,
-        body: JSON.stringify({ ...statusDocument, bindAddress: "harold.local" }),
-      },
-    })
-    const verifyAdvertisedEndpoint = makeVerifyAdvertisedEndpoint(deps)
-
-    const result = await verifyAdvertisedEndpoint("https://agents.example.com")
-
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.error.kind).toBe("invalid_body")
-    }
+    expect(result.ok).toBe(true)
   })
 })

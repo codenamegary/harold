@@ -4,16 +4,9 @@ import { IdSchema, TimestampSchema } from "./primitives"
 
 export const PAIRING_CODES_PATH = "/v1/pairing-codes" as const
 
-export const PairingCodeValueSchema = z
-  .string()
-  .regex(/^[A-Z0-9]{3}-[A-Z0-9]{3}$/)
+export const PairingCodeValueSchema = z.string().regex(/^[A-Z0-9]{3}-[A-Z0-9]{3}$/)
 
-export const PairingCodeStateSchema = z.enum([
-  "active",
-  "claimed",
-  "expired",
-  "revoked",
-])
+export const PairingCodeStateSchema = z.enum(["active", "claimed", "expired", "revoked"])
 
 export const PairingCodeSchema = z.strictObject({
   id: IdSchema,
@@ -22,16 +15,6 @@ export const PairingCodeSchema = z.strictObject({
   state: PairingCodeStateSchema,
   createdAt: TimestampSchema,
   expiresAt: TimestampSchema,
-})
-
-export const pairingEndpointChoices = ["loopback", "advertised"] as const
-
-export const PairingEndpointChoiceSchema = z.enum(pairingEndpointChoices)
-
-export type PairingEndpointChoice = z.infer<typeof PairingEndpointChoiceSchema>
-
-export const CreatePairingCodeBodySchema = z.strictObject({
-  endpoint: PairingEndpointChoiceSchema.optional(),
 })
 
 export const CreatePairingCodeResponseSchema = PairingCodeSchema
@@ -43,13 +26,11 @@ export const ClaimPairingCodeBodySchema = z.strictObject({
 
 export const ClaimPairingCodeResponseSchema = DeviceCredentialResponseSchema
 
-export const claimPairingCodePath = (code: string) =>
-  `${PAIRING_CODES_PATH}/${code}/claim`
+export const claimPairingCodePath = (code: string) => `${PAIRING_CODES_PATH}/${code}/claim`
 
 export type PairingCode = z.infer<typeof PairingCodeSchema>
 export type PairingCodeState = z.infer<typeof PairingCodeStateSchema>
 export type PairingCodeValue = z.infer<typeof PairingCodeValueSchema>
-export type CreatePairingCodeBody = z.infer<typeof CreatePairingCodeBodySchema>
 export type CreatePairingCodeResponse = z.infer<typeof CreatePairingCodeResponseSchema>
 export type ClaimPairingCodeBody = z.infer<typeof ClaimPairingCodeBodySchema>
 export type ClaimPairingCodeResponse = z.infer<typeof ClaimPairingCodeResponseSchema>

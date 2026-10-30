@@ -9,9 +9,9 @@ script. Do not depend on instructions in a skill.
 ## Instances
 
 - Run both instances from this checkout with `bun run dev` so every command uses `apps/cli/src/main.ts`, not a globally installed `harold`.
-- Instance 1: `HAROLD_HOST=127.0.0.1`, `HAROLD_PORT=3847`, `HAROLD_DATA_DIR=~/.harold-demo-3847`.
-- Instance 2: `HAROLD_HOST=127.0.0.1`, `HAROLD_PORT=3848`, `HAROLD_DATA_DIR=~/.harold-demo-3848`.
-- Write a separate `settings.yml` for each instance. Set `advertisedUrl` to `http://127.0.0.1:<port>`, `bindHost` to `127.0.0.1`, and `bindPort` to the instance port.
+- Instance 1: `HAROLD_PORT=3847`, `HAROLD_DATA_DIR=~/.harold-demo-3847`.
+- Instance 2: `HAROLD_PORT=3848`, `HAROLD_DATA_DIR=~/.harold-demo-3848`.
+- Write a separate `settings.yml` for each instance with `bindPort` set to the instance port. Pairing codes are issued with `--url http://127.0.0.1:<port>` because the emulator reaches the host through `adb reverse`.
 - Stop any previous instance 1 or instance 2 by its data dir or daemon state. Do not stop the user's real `~/.harold` daemon.
 - Remove the previous demo data dirs, create fresh DBs, and register the agents and workspaces again. Do not copy `~/.harold/harold.db` or any previous demo DB.
 - Start both instances from the fresh data dirs. Fail if another process owns port 3847 or 3848.

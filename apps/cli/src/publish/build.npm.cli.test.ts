@@ -108,9 +108,10 @@ describe("build.npm.cli", () => {
     test("lists the user commands on --help", async () => {
       const output = await Bun.$`bun ${path.join(distDir, "harold.js")} --help`.text()
 
-      for (const command of ["start", "setup", "pair", "connect"]) {
+      for (const command of ["start", "setup", "pair", "device"]) {
         expect(output).toContain(command)
       }
+      expect(output).not.toContain("connect")
       // serve is the internal foreground command the daemon spawner re-execs.
       expect(output).not.toMatch(/^\s+serve\b/m)
     })

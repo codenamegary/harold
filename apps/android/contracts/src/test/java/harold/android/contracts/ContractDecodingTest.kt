@@ -382,15 +382,12 @@ class ContractDecodingTest {
             """
             {
               "settings": {
-                "advertisedUrl": null,
-                "bindHost": "127.0.0.1",
                 "bindPort": 3847,
                 "logLevel": "info",
                 "logPath": null
               },
               "restartRequired": false,
               "effective": {
-                "bindHost": "127.0.0.1",
                 "bindPort": 3847,
                 "logPath": null
               },
@@ -410,8 +407,6 @@ class ContractDecodingTest {
                 """
                 {
                   "settings": {
-                    "advertisedUrl": null,
-                    "bindHost": "127.0.0.1",
                     "bindPort": 3847,
                     "logLevel": "info",
                     "logPath": null,
@@ -419,7 +414,6 @@ class ContractDecodingTest {
                   },
                   "restartRequired": false,
                   "effective": {
-                    "bindHost": "127.0.0.1",
                     "bindPort": 3847,
                     "logPath": null
                   },

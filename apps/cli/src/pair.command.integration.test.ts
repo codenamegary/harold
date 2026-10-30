@@ -1,10 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import YAML from "yaml"
 import { parseConfig } from "server/config"
 import { openDatabase } from "server/database"
 import { assembleDeviceSlice } from "server/device"
+import { advertisedEndpointsFileName } from "core/network/advertised.endpoints.node.adapters"
 import { makePairCommand } from "./pair.command"
 
 const runCommand = async (
@@ -36,27 +38,37 @@ const runCommand = async (
 describe("harold pair command wiring", () => {
   let dataDir = ""
   let previousDataDir: string | undefined
+  let server: Bun.Server
+  let endpoint = ""
 
   beforeAll(async () => {
-    const scratch = await mkdtemp(path.join(os.tmpdir(), "harold-cli-pair-"))
+    const scratch = mkdtempSync(path.join(os.tmpdir(), "harold-cli-pair-"))
     dataDir = path.join(scratch, "data")
+    mkdirSync(dataDir, { recursive: true })
     previousDataDir = process.env.HAROLD_DATA_DIR
     process.env.HAROLD_DATA_DIR = dataDir
+
+    // A stand-in daemon: the pair flow probes GET /v1/status before it
+    // advertises an endpoint.
+    server = Bun.serve({
+      port: 0,
+      fetch: () => Response.json({ state: "online", version: "0.0.0-test" }),
+    })
+    endpoint = `http://127.0.0.1:${server.port}`
   })
 
   afterAll(async () => {
+    await server.stop(true)
     if (previousDataDir === undefined) {
       delete process.env.HAROLD_DATA_DIR
     } else {
       process.env.HAROLD_DATA_DIR = previousDataDir
     }
-    if (dataDir !== "") {
-      await rm(path.dirname(dataDir), { recursive: true, force: true })
-    }
+    rmSync(path.dirname(dataDir), { recursive: true, force: true })
   })
 
-  test("--no-wait --json persists a pairing code", async () => {
-    const { output, exitCode } = await runCommand(["--no-wait", "--json"])
+  test("--url --no-wait --json persists a pairing code and remembers the endpoint", async () => {
+    const { output, exitCode } = await runCommand(["--url", endpoint, "--no-wait", "--json"])
 
     expect(exitCode).toBe(0)
 
@@ -67,30 +79,51 @@ describe("harold pair command wiring", () => {
       state: string
       qrUri: string
     }
-    expect(pairing.endpoint).toBe("http://127.0.0.1:3847")
+    expect(pairing.endpoint).toBe(endpoint)
     expect(pairing.state).toBe("active")
     expect(pairing.code).toMatch(/^[A-Z0-9]{3}-[A-Z0-9]{3}$/)
     expect(pairing.qrUri).toContain("harold://pair?v=1")
 
     const config = parseConfig({ HAROLD_DATA_DIR: dataDir })
     const database = openDatabase({ dataDir: config.dataDir })
-    const slice = assembleDeviceSlice({
-      database,
-      loopbackEndpoint: `http://${config.host}:${config.port}`,
-      getAdvertisedEndpointSettings: () => ({
-        advertisedUrl: null,
-        advertisedUrlEnabled: false,
-      }),
-    })
+    const slice = assembleDeviceSlice({ database })
 
     expect(slice.getPairingCodeById(pairing.id)?.state).toBe("active")
     database.close()
+
+    const history = YAML.parse(
+      readFileSync(path.join(dataDir, advertisedEndpointsFileName), "utf8"),
+    ) as { endpoints: Array<{ url: string; source: string }> }
+    expect(history.endpoints[0]?.url).toBe(endpoint)
+    expect(history.endpoints[0]?.source).toBe("manual")
   })
 
-  test("rejects an unknown --endpoint value", async () => {
-    const { errOutput, exitCode } = await runCommand(["--endpoint", "bad", "--no-wait"])
+  test("an unreachable explicit URL fails without creating a code", async () => {
+    // Start and immediately stop a server so the port is guaranteed to
+    // refuse connections instead of hanging the probe.
+    const dead = Bun.serve({ port: 0, fetch: () => new Response("ok") })
+    const deadUrl = `http://127.0.0.1:${dead.port}`
+    await dead.stop(true)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    const { output, errOutput, exitCode } = await runCommand([
+      "--url",
+      deadUrl,
+      "--no-wait",
+      "--json",
+    ])
 
     expect(exitCode).toBe(1)
-    expect(errOutput).toContain('--endpoint must be "loopback" or "advertised".')
+    expect(output).toBe("")
+    expect(errOutput).toContain(deadUrl)
+    expect(errOutput).toContain("not reachable")
+  })
+
+  test("detection is the default: an explicit URL is optional on the happy path", async () => {
+    // History from the first test names this endpoint, so the MRU entry is
+    // probed first and wins without any flag.
+    const { exitCode } = await runCommand(["--no-wait", "--json"])
+
+    expect(exitCode).toBe(0)
   })
 })

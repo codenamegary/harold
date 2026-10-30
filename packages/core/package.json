@@ -10,6 +10,9 @@
     "./status/summary.models": "./src/status/status.summary.models.ts",
     "./status/summary.ports": "./src/status/status.summary.ports.ts",
     "./status/summary.usecase": "./src/status/status.summary.usecase.ts",
+    "./network/lan.address": "./src/network/lan.address.ts",
+    "./network/advertised.endpoints": "./src/network/advertised.endpoints.ts",
+    "./network/advertised.endpoints.node.adapters": "./src/network/advertised.endpoints.file.adapters.ts",
     "./daemon-state/models": "./src/daemon-state/daemon.state.models.ts",
     "./daemon-state/ports": "./src/daemon-state/daemon.state.ports.ts",
     "./daemon-state/node.adapters": "./src/daemon-state/daemon.state.node.adapters.ts",
@@ -74,6 +77,7 @@
   "dependencies": {
     "contracts": "workspace:*",
     "ulid": "^3.0.2",
+    "yaml": "^2.9.0",
     "zod": "catalog:"
   },
   "devDependencies": {

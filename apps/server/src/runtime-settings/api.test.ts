@@ -1,14 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { readFile } from "node:fs/promises"
 import path from "node:path"
-import { ValidationProblemSchema } from "contracts/http/error"
-import {
-  RuntimeSettingsSchema,
-  RuntimeSettingsViewSchema,
-  UpdateRuntimeSettingsResponseSchema,
-} from "contracts/http/runtime-settings"
+import { RuntimeSettingsSchema, RuntimeSettingsViewSchema } from "contracts/http/runtime-settings"
 import YAML from "yaml"
-import { catalogAgentIds } from "core/agent-catalog/generated"
 import { parseConfig } from "../config/config"
 import { readEnvBindOverrides } from "../config/env.bind.overrides"
 import { bootTestApp, bootTestDirectory } from "../test-support/test.harness"
@@ -35,9 +29,8 @@ const createTestApp = (options?: { envBindOverrides?: ReturnType<typeof readEnvB
       const appliedRuntimeSettings = createAppliedRuntimeSettingsHolder(
         buildAppliedRuntimeSettings({ persisted, envOverrides: envBindOverrides }),
       )
-      const applied = appliedRuntimeSettings.get()
       return {
-        config: { ...config, host: applied.bindHost, port: applied.bindPort },
+        config,
         runtimeSettingsStore,
         appliedRuntimeSettings,
         envBindOverrides,
@@ -59,16 +52,12 @@ describe("GET /v1/settings/runtime", () => {
 
     expect(response.statusCode).toBe(200)
     expect(body.settings).toEqual({
-      advertisedUrl: null,
-      advertisedUrlEnabled: true,
-      bindHost: "127.0.0.1",
       bindPort: 3847,
       logLevel: "info",
       logPath: null,
     })
     expect(body.restartRequired).toBe(false)
     expect(body.effective).toEqual({
-      bindHost: "127.0.0.1",
       bindPort: 3847,
       logPath: null,
     })
@@ -96,40 +85,8 @@ describe("GET /v1/settings/runtime", () => {
     expect(body.overrides).toEqual({ bindPort: "env" })
     expect(body.restartRequired).toBe(true)
   })
-})
 
-describe("PATCH /v1/settings/runtime", () => {
-  test("persists live fields without restartRequired", async () => {
-    const { app } = await createTestApp()
-
-    const response = await app.inject({
-      headers: authHeaders(app),
-      method: "PATCH",
-      url: "/v1/settings/runtime",
-      payload: {
-        advertisedUrl: "https://agents.example.com",
-        logLevel: "debug",
-      },
-    })
-
-    const body = UpdateRuntimeSettingsResponseSchema.parse(JSON.parse(response.body))
-
-    expect(response.statusCode).toBe(200)
-    expect(body.restartRequired).toBe(false)
-    expect(body.settings.advertisedUrl).toBe("https://agents.example.com")
-    expect(body.settings.logLevel).toBe("debug")
-    expect(app.log.level).toBe("debug")
-
-    const getResponse = await app.inject({
-      headers: authHeaders(app),
-      method: "GET",
-      url: "/v1/settings/runtime",
-    })
-    const getBody = RuntimeSettingsViewSchema.parse(JSON.parse(getResponse.body))
-    expect(getBody.settings).toEqual(body.settings)
-  })
-
-  test("sets restartRequired when bind port changes", async () => {
+  test("the route is read-only: PATCH is not registered", async () => {
     const { app } = await createTestApp()
 
     const response = await app.inject({
@@ -139,165 +96,7 @@ describe("PATCH /v1/settings/runtime", () => {
       payload: { bindPort: 4000 },
     })
 
-    const body = UpdateRuntimeSettingsResponseSchema.parse(JSON.parse(response.body))
-
-    expect(response.statusCode).toBe(200)
-    expect(body.restartRequired).toBe(true)
-    expect(body.settings.bindPort).toBe(4000)
-    expect(body.effective.bindPort).toBe(3847)
-  })
-
-  test("sets restartRequired when log path changes", async () => {
-    const { app } = await createTestApp()
-
-    const response = await app.inject({
-      headers: authHeaders(app),
-      method: "PATCH",
-      url: "/v1/settings/runtime",
-      payload: { logPath: "/tmp/harold.log" },
-    })
-
-    const body = UpdateRuntimeSettingsResponseSchema.parse(JSON.parse(response.body))
-
-    expect(response.statusCode).toBe(200)
-    expect(body.restartRequired).toBe(true)
-    expect(body.settings.logPath).toBe("/tmp/harold.log")
-  })
-
-  test("clears advertised URL with null", async () => {
-    const { app } = await createTestApp()
-
-    await app.inject({
-      headers: authHeaders(app),
-      method: "PATCH",
-      url: "/v1/settings/runtime",
-      payload: { advertisedUrl: "https://agents.example.com" },
-    })
-
-    const response = await app.inject({
-      headers: authHeaders(app),
-      method: "PATCH",
-      url: "/v1/settings/runtime",
-      payload: { advertisedUrl: null },
-    })
-
-    const body = UpdateRuntimeSettingsResponseSchema.parse(JSON.parse(response.body))
-
-    expect(response.statusCode).toBe(200)
-    expect(body.settings.advertisedUrl).toBeNull()
-  })
-
-  test("clears advertised URL with empty string", async () => {
-    const { app } = await createTestApp()
-
-    await app.inject({
-      headers: authHeaders(app),
-      method: "PATCH",
-      url: "/v1/settings/runtime",
-      payload: { advertisedUrl: "https://agents.example.com" },
-    })
-
-    const response = await app.inject({
-      headers: authHeaders(app),
-      method: "PATCH",
-      url: "/v1/settings/runtime",
-      payload: { advertisedUrl: "" },
-    })
-
-    const body = UpdateRuntimeSettingsResponseSchema.parse(JSON.parse(response.body))
-
-    expect(response.statusCode).toBe(200)
-    expect(body.settings.advertisedUrl).toBeNull()
-  })
-
-  test("returns Problem+JSON for http advertised URL", async () => {
-    const { app } = await createTestApp()
-
-    const response = await app.inject({
-      headers: authHeaders(app),
-      method: "PATCH",
-      url: "/v1/settings/runtime",
-      payload: { advertisedUrl: "http://agents.example.com" },
-    })
-
-    const body = ValidationProblemSchema.parse(JSON.parse(response.body))
-
-    expect(response.statusCode).toBe(400)
-    expect(response.headers["content-type"]).toStartWith("application/problem+json")
-    expect(body.errors[0]?.pointer).toBe("#/advertisedUrl")
-  })
-
-  test("returns Problem+JSON for unknown retired keys", async () => {
-    const { app } = await createTestApp()
-
-    const response = await app.inject({
-      headers: authHeaders(app),
-      method: "PATCH",
-      url: "/v1/settings/runtime",
-      payload: { trustedProxies: ["127.0.0.1"] },
-    })
-
-    const body = ValidationProblemSchema.parse(JSON.parse(response.body))
-
-    expect(response.statusCode).toBe(400)
-    expect(response.headers["content-type"]).toStartWith("application/problem+json")
-    expect(body.errors[0]?.code).toBe("validation.field.invalid")
-    expect(body.errors[0]?.pointer).toBe("#")
-  })
-
-  test("accepts a wildcard bind host and sets restartRequired", async () => {
-    const { app } = await createTestApp()
-
-    const response = await app.inject({
-      headers: authHeaders(app),
-      method: "PATCH",
-      url: "/v1/settings/runtime",
-      payload: { bindHost: "0.0.0.0" },
-    })
-
-    const body = UpdateRuntimeSettingsResponseSchema.parse(JSON.parse(response.body))
-
-    expect(response.statusCode).toBe(200)
-    expect(body.settings.bindHost).toBe("0.0.0.0")
-    expect(body.effective.bindHost).toBe("127.0.0.1")
-    expect(body.restartRequired).toBe(true)
-  })
-
-  test("returns Problem+JSON for a bind host that is not an IP address", async () => {
-    const { app } = await createTestApp()
-
-    const response = await app.inject({
-      headers: authHeaders(app),
-      method: "PATCH",
-      url: "/v1/settings/runtime",
-      payload: { bindHost: "harold.local" },
-    })
-
-    const body = ValidationProblemSchema.parse(JSON.parse(response.body))
-
-    expect(response.statusCode).toBe(400)
-    expect(response.headers["content-type"]).toStartWith("application/problem+json")
-    expect(body.errors[0]?.pointer).toBe("#/bindHost")
-  })
-
-  test("does not touch agent_settings", async () => {
-    const { app, database } = await createTestApp()
-
-    await app.inject({
-      headers: authHeaders(app),
-      method: "PATCH",
-      url: "/v1/settings/runtime",
-      payload: { logLevel: "warn" },
-    })
-
-    const agents = database.sqlite
-      .query<{ agent_id: string; enabled: number }, []>(
-        "SELECT agent_id, enabled FROM agent_settings ORDER BY agent_id",
-      )
-      .all()
-
-    expect(agents.map((agent) => agent.agent_id)).toEqual([...catalogAgentIds])
-    expect(agents.every((agent) => agent.enabled === 0)).toBe(true)
+    expect(response.statusCode).toBe(404)
   })
 })
 
@@ -305,16 +104,8 @@ describe("runtime settings durability", () => {
   test("keeps settings across server restart via settings.yml", async () => {
     const first = await createTestApp()
 
-    await first.app.inject({
-      headers: authHeaders(first.app),
-      method: "PATCH",
-      url: "/v1/settings/runtime",
-      payload: {
-        advertisedUrl: "https://edge.example.com",
-        bindPort: 4100,
-        logLevel: "warn",
-      },
-    })
+    const store = first.runtimeSettingsStore
+    store.save({ ...store.get(), bindPort: 4100, logLevel: "warn" })
 
     const second = await first.reopen()
 
@@ -325,7 +116,6 @@ describe("runtime settings durability", () => {
     })
     const body = RuntimeSettingsViewSchema.parse(JSON.parse(response.body))
 
-    expect(body.settings.advertisedUrl).toBe("https://edge.example.com")
     expect(body.settings.bindPort).toBe(4100)
     expect(body.settings.logLevel).toBe("warn")
   })
@@ -333,7 +123,6 @@ describe("runtime settings durability", () => {
   test("seeds missing settings.yml bind port from env config defaults", async () => {
     const dataDir = await bootTestDirectory()
     const config = parseConfig({
-      HAROLD_HOST: "127.0.0.1",
       HAROLD_PORT: "4123",
       HAROLD_DATA_DIR: dataDir,
     })
@@ -365,5 +154,16 @@ describe("createServer runtime settings seed", () => {
     expect(body.settings.bindPort).toBe(4123)
     const fileRaw = await readFile(path.join(dataDir, settingsFileName), "utf8")
     expect(fileRaw).toContain("bindPort: 4123")
+  })
+
+  test("an unauthenticated client cannot read runtime settings", async () => {
+    const { app } = await createTestApp()
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/settings/runtime",
+    })
+
+    expect(response.statusCode).toBe(401)
   })
 })

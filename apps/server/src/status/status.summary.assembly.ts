@@ -1,5 +1,4 @@
 import {
-  GetAdvertisedEndpoint,
   GetAgentSummary,
   GetDataDir,
   GetLocalApi,
@@ -12,7 +11,7 @@ import { makeListAgentSettings } from "core/agent-settings/list.usecase"
 import { ListAgentSettingsRows } from "core/agent-settings/ports"
 import { validateExecutablePath } from "core/agent-settings/validate-agent-path"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
-import { Config } from "../config/config"
+import { Config, DEFAULT_BIND_HOST } from "../config/config"
 import { readEnvBindOverrides } from "../config/env.bind.overrides"
 import { AgentDatabase } from "../persistence/database"
 import { buildAppliedRuntimeSettings } from "../runtime-settings/resolve.runtime.settings.state"
@@ -31,7 +30,6 @@ export type ComposeStatusSummaryPortsDeps = Readonly<{
 export type StatusSummaryPorts = Readonly<{
   getDataDir: GetDataDir
   getLocalApi: GetLocalApi
-  getAdvertisedEndpoint: GetAdvertisedEndpoint
   getAgentSummary: GetAgentSummary
   getWorkspaceCount: GetWorkspaceCount
 }>
@@ -67,11 +65,7 @@ export const composeStatusSummaryPorts = (
         persisted: deps.getRuntimeSettings(),
         envOverrides: readEnvBindOverrides(env),
       })
-      return { host: applied.bindHost, port: applied.bindPort }
-    },
-    getAdvertisedEndpoint: () => {
-      const settings = deps.getRuntimeSettings()
-      return { url: settings.advertisedUrl, enabled: settings.advertisedUrlEnabled }
+      return { host: DEFAULT_BIND_HOST, port: applied.bindPort }
     },
     getAgentSummary: () => summarizeAgents(listAgentSettings()),
     getWorkspaceCount: makeCountWorkspaces(deps.database),

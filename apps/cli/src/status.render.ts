@@ -27,13 +27,6 @@ const renderRows = (rows: Array<[string, string]>): string => {
   return rows.map(([label, value]) => `  ${padLabel(label, labelWidth)}  ${value}`).join("\n")
 }
 
-const formatAdvertisedEndpoint = (endpoint: { url: string | null; enabled: boolean }): string => {
-  if (endpoint.url === null) {
-    return "disabled"
-  }
-  return endpoint.enabled ? endpoint.url : `${endpoint.url} (disabled)`
-}
-
 const formatAgentSummary = (agents: StatusSummary["agents"]): string => {
   const needsAuth = agents.needsAuth === null ? "unknown" : `${agents.needsAuth}`
   return `${agents.enabled} enabled, ${needsAuth} needs auth`
@@ -43,7 +36,6 @@ export const renderStatusSummary = (summary: StatusSummary): string =>
   renderRows([
     ["data dir", summary.dataDir],
     ["local api", localApiUrl(summary.localApi)],
-    ["advertised endpoint", formatAdvertisedEndpoint(summary.advertisedEndpoint)],
     ["agents", formatAgentSummary(summary.agents)],
     ["workspaces", String(summary.workspaces)],
   ])

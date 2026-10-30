@@ -43,17 +43,9 @@ export type SetupColors = Readonly<{
   yellow: (text: string) => string
 }>
 
-export type SetupRecipe = Readonly<{
-  id: string
-  label: string
-  hint: string
-  guide: () => void
-}>
-
 export type SetupOptions = Readonly<{
   agents: readonly string[] | undefined
   workspace: string | undefined
-  advertisedUrl: string | undefined
   pair: boolean
 }>
 
@@ -72,10 +64,6 @@ export type SetupWizardDeps = Readonly<{
     list: () => readonly Workspace[]
     register: (path: string) => Promise<RegisterWorkspaceResult>
   }>
-  recipes: readonly SetupRecipe[]
-  reachability: Readonly<{
-    verifyAndPersist: (advertisedUrl: string) => Promise<boolean>
-  }>
   isDaemonRunning: () => boolean
   pair: () => Promise<boolean>
 }>
@@ -87,7 +75,8 @@ const renderWelcome = (deps: SetupWizardDeps): void => {
       `Data directory: ${deps.dataDir}`,
       "",
       "This walks through the agents Harold can run, a workspace for them,",
-      "how your phone reaches this machine, and pairing the phone.",
+      "and pairing the phone. Pairing detects the network endpoint to",
+      "advertise; you confirm it before the QR code is printed.",
     ].join("\n"),
     "Welcome",
   )
@@ -273,67 +262,6 @@ const workspaceStep = async (deps: SetupWizardDeps, options: SetupOptions): Prom
   return true
 }
 
-const reachabilityStep = async (deps: SetupWizardDeps, options: SetupOptions): Promise<boolean> => {
-  if (options.advertisedUrl !== undefined) {
-    const persisted = await deps.reachability.verifyAndPersist(options.advertisedUrl)
-    if (!persisted) {
-      deps.writeLine(deps.colors.red(`Could not verify or persist ${options.advertisedUrl}.`))
-      return false
-    }
-
-    return true
-  }
-
-  const selected = await deps.prompts.select({
-    message: "How will your phone reach Harold?",
-    options: deps.recipes.map((recipe) => ({
-      value: recipe.id,
-      label: recipe.label,
-      hint: recipe.hint,
-    })),
-  })
-  if (deps.prompts.isCancel(selected)) {
-    return false
-  }
-
-  deps.recipes.find((recipe) => recipe.id === selected)?.guide()
-
-  for (;;) {
-    const entered = await deps.prompts.text({
-      message: "Advertised URL for your phone",
-      placeholder: "https://harold.example.com or http://192.168.1.10:3847",
-    })
-    if (deps.prompts.isCancel(entered)) {
-      return false
-    }
-
-    const advertisedUrl = entered.trim()
-    if (advertisedUrl === "") {
-      deps.prompts.info(
-        "Skipped reachability. Run `harold connect --advertised-url <url>` or `harold connect --lan` when it is ready.",
-      )
-      return true
-    }
-
-    const persisted = await deps.reachability.verifyAndPersist(advertisedUrl)
-    if (persisted) {
-      return true
-    }
-
-    const retry = await deps.prompts.confirm({
-      message: "Try a different URL?",
-      initialValue: true,
-    })
-    if (deps.prompts.isCancel(retry)) {
-      return false
-    }
-    if (!retry) {
-      deps.prompts.warn("Continuing without a reachable endpoint; pairing will use loopback.")
-      return true
-    }
-  }
-}
-
 const pairStep = async (deps: SetupWizardDeps, options: SetupOptions): Promise<boolean> => {
   if (!options.pair) {
     deps.prompts.info("Skipped pairing. Run `harold pair` when you are ready.")
@@ -377,7 +305,6 @@ export const runSetupWizard = async (
   const steps: ReadonlyArray<() => Promise<boolean>> = [
     () => agentsStep(deps, options),
     () => workspaceStep(deps, options),
-    () => reachabilityStep(deps, options),
     () => pairStep(deps, options),
   ]
 

@@ -5,13 +5,14 @@ import { executePair, PairActionDeps } from "./pair.command"
 
 const FUTURE = "2099-01-01T00:00:00.000Z"
 const NOW = Date.parse("2026-10-04T17:10:05.000Z")
+const LAN_ENDPOINT = "http://192.168.1.20:3847"
 
 const aPairing = (
   overrides: Partial<CreatePairingCodeResponse> = {},
 ): CreatePairingCodeResponse => ({
   id: "pair_1",
   code: "R7K-4MP",
-  endpoint: "http://127.0.0.1:3847",
+  endpoint: LAN_ENDPOINT,
   state: "active",
   createdAt: "2026-10-04T17:10:00.000Z",
   expiresAt: "2026-10-04T17:20:00.000Z",
@@ -35,7 +36,7 @@ type Harness = Readonly<{
   deps: PairActionDeps
   out: string[]
   err: string[]
-  createCalls: Array<{ endpoint?: "loopback" | "advertised" }>
+  createCalls: string[]
   qrCalls: string[]
   readCount: () => number
 }>
@@ -45,12 +46,12 @@ const makeHarness = (
     snapshots?: PairingCodeSnapshot[]
     createResult?:
       | { ok: true; value: CreatePairingCodeResponse }
-      | { ok: false; error: { kind: "advertised_endpoint_unavailable" } }
+      | { ok: false; error: { kind: "pairing_code_not_found" } }
   } = {},
 ): Harness => {
   const out: string[] = []
   const err: string[] = []
-  const createCalls: Array<{ endpoint?: "loopback" | "advertised" }> = []
+  const createCalls: string[] = []
   const qrCalls: string[] = []
   let reads = 0
 
@@ -58,8 +59,8 @@ const makeHarness = (
   const createResult = params.createResult ?? { ok: true, value: aPairing() }
 
   const deps: PairActionDeps = {
-    createPairingCode: async (body) => {
-      createCalls.push(body ?? {})
+    createPairingCode: async (endpoint) => {
+      createCalls.push(endpoint)
       return createResult
     },
     getPairingCodeById: () => {
@@ -82,46 +83,56 @@ const makeHarness = (
 }
 
 describe("executePair", () => {
-  test("renders the summary and QR, then reports a successful claim", async () => {
+  test("renders the summary and QR against the resolved endpoint, then reports the claim", async () => {
     const harness = makeHarness()
 
     const exitCode = await executePair(harness.deps, {
-      endpoint: undefined,
+      endpoint: LAN_ENDPOINT,
+      mode: "qr",
       wait: true,
       json: false,
     })
 
     expect(exitCode).toBe(0)
-    expect(harness.createCalls).toEqual([{}])
+    expect(harness.createCalls).toEqual([LAN_ENDPOINT])
     expect(harness.out.join("\n")).toContain("**R7K-4MP**")
-    expect(harness.out.join("\n")).toContain("http://127.0.0.1:3847")
-    expect(harness.out).toContain("Waiting for a device to scan...")
+    expect(harness.out.join("\n")).toContain(LAN_ENDPOINT)
+    expect(harness.out).toContain("Waiting for a device to claim...")
     expect(harness.out).toContain("Device paired.")
     expect(harness.qrCalls).toEqual([
-      "harold://pair?v=1&endpoint=http%3A%2F%2F127.0.0.1%3A3847&code=R7K-4MP",
+      "harold://pair?v=1&endpoint=http%3A%2F%2F192.168.1.20%3A3847&code=R7K-4MP",
     ])
   })
 
-  test("passes an explicit advertised endpoint choice through", async () => {
+  test("manual mode prints the endpoint and code but skips the QR", async () => {
     const harness = makeHarness()
 
-    await executePair(harness.deps, { endpoint: "advertised", wait: false, json: false })
+    const exitCode = await executePair(harness.deps, {
+      endpoint: LAN_ENDPOINT,
+      mode: "manual",
+      wait: false,
+      json: false,
+    })
 
-    expect(harness.createCalls).toEqual([{ endpoint: "advertised" }])
+    expect(exitCode).toBe(0)
+    expect(harness.qrCalls).toEqual([])
+    expect(harness.out.join("\n")).toContain(LAN_ENDPOINT)
+    expect(harness.out.join("\n")).toContain("R7K-4MP")
   })
 
   test("--no-wait exits after rendering without polling", async () => {
     const harness = makeHarness()
 
     const exitCode = await executePair(harness.deps, {
-      endpoint: undefined,
+      endpoint: LAN_ENDPOINT,
+      mode: "qr",
       wait: false,
       json: false,
     })
 
     expect(exitCode).toBe(0)
     expect(harness.readCount()).toBe(0)
-    expect(harness.out.join("\n")).not.toContain("Waiting for a device to scan...")
+    expect(harness.out.join("\n")).not.toContain("Waiting for a device to claim...")
     expect(harness.out.join("\n")).toContain("**R7K-4MP**")
   })
 
@@ -129,7 +140,8 @@ describe("executePair", () => {
     const harness = makeHarness()
 
     const exitCode = await executePair(harness.deps, {
-      endpoint: undefined,
+      endpoint: LAN_ENDPOINT,
+      mode: "qr",
       wait: false,
       json: true,
     })
@@ -141,11 +153,11 @@ describe("executePair", () => {
     expect(JSON.parse(harness.out[0])).toEqual({
       id: "pair_1",
       code: "R7K-4MP",
-      endpoint: "http://127.0.0.1:3847",
+      endpoint: LAN_ENDPOINT,
       state: "active",
       createdAt: "2026-10-04T17:10:00.000Z",
       expiresAt: "2026-10-04T17:20:00.000Z",
-      qrUri: "harold://pair?v=1&endpoint=http%3A%2F%2F127.0.0.1%3A3847&code=R7K-4MP",
+      qrUri: "harold://pair?v=1&endpoint=http%3A%2F%2F192.168.1.20%3A3847&code=R7K-4MP",
     })
   })
 
@@ -153,7 +165,8 @@ describe("executePair", () => {
     const harness = makeHarness()
 
     const exitCode = await executePair(harness.deps, {
-      endpoint: undefined,
+      endpoint: LAN_ENDPOINT,
+      mode: "qr",
       wait: true,
       json: true,
     })
@@ -167,11 +180,11 @@ describe("executePair", () => {
     expect(JSON.parse(harness.out[0])).toEqual({
       id: "pair_1",
       code: "R7K-4MP",
-      endpoint: "http://127.0.0.1:3847",
+      endpoint: LAN_ENDPOINT,
       state: "active",
       createdAt: "2026-10-04T17:10:00.000Z",
       expiresAt: "2026-10-04T17:20:00.000Z",
-      qrUri: "harold://pair?v=1&endpoint=http%3A%2F%2F127.0.0.1%3A3847&code=R7K-4MP",
+      qrUri: "harold://pair?v=1&endpoint=http%3A%2F%2F192.168.1.20%3A3847&code=R7K-4MP",
     })
     expect(JSON.parse(harness.out[1])).toEqual({
       state: "claimed",
@@ -179,28 +192,30 @@ describe("executePair", () => {
     })
   })
 
-  test("reports an unavailable advertised endpoint", async () => {
+  test("reports a create failure", async () => {
     const harness = makeHarness({
-      createResult: { ok: false, error: { kind: "advertised_endpoint_unavailable" } },
+      createResult: { ok: false, error: { kind: "pairing_code_not_found" } },
     })
 
     const exitCode = await executePair(harness.deps, {
-      endpoint: "advertised",
+      endpoint: LAN_ENDPOINT,
+      mode: "qr",
       wait: false,
       json: false,
     })
 
     expect(exitCode).toBe(1)
-    expect(harness.err.join("\n")).toContain("Advertised endpoint is not available")
+    expect(harness.err.join("\n")).toContain("Pairing code was removed")
   })
 
   test("--json emits a machine-readable create failure", async () => {
     const harness = makeHarness({
-      createResult: { ok: false, error: { kind: "advertised_endpoint_unavailable" } },
+      createResult: { ok: false, error: { kind: "pairing_code_not_found" } },
     })
 
     const exitCode = await executePair(harness.deps, {
-      endpoint: "advertised",
+      endpoint: LAN_ENDPOINT,
+      mode: "qr",
       wait: false,
       json: true,
     })
@@ -209,7 +224,7 @@ describe("executePair", () => {
     expect(harness.err).toHaveLength(1)
     expect(harness.err[0]).not.toContain("\n")
     expect(JSON.parse(harness.err[0])).toEqual({
-      state: "advertised_endpoint_unavailable",
+      state: "pairing_code_not_found",
     })
   })
 
@@ -219,7 +234,8 @@ describe("executePair", () => {
     })
 
     const exitCode = await executePair(harness.deps, {
-      endpoint: undefined,
+      endpoint: LAN_ENDPOINT,
+      mode: "qr",
       wait: true,
       json: false,
     })
@@ -235,7 +251,8 @@ describe("executePair", () => {
     })
 
     const exitCode = await executePair(harness.deps, {
-      endpoint: undefined,
+      endpoint: LAN_ENDPOINT,
+      mode: "qr",
       wait: true,
       json: true,
     })

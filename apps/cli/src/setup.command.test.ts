@@ -1,9 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { stripVTControlCharacters } from "node:util"
-import YAML from "yaml"
 import { openDatabase } from "server/database"
 import { assembleDeviceSlice } from "server/device"
 import { makeCanonicalizePath, makeReadDirectoryEntries } from "server/filesystem"
@@ -139,11 +138,6 @@ describe("harold setup command wiring", () => {
     expect(exitCode).toBe(0)
     expect(output).toContain("cursor")
 
-    const settings = YAML.parse(
-      await readFile(path.join(dataDir, "settings.yml"), "utf8"),
-    ) as Record<string, unknown>
-    expect("allowedRoots" in settings).toBe(false)
-
     const database = openDatabase({ dataDir })
     try {
       const slice = assembleWorkspaceSlice({
@@ -198,27 +192,21 @@ describe("harold setup command wiring", () => {
     expect(output).toContain("Unknown agent id: nope.")
   })
 
-  test("pairs a phone against the advertised endpoint persisted in the same run", async () => {
-    const statusBody = JSON.stringify({
-      version: "0.2.1",
-      state: "online",
-      bindAddress: "127.0.0.1",
-      port: 3847,
-      startedAt: "2026-01-01T00:00:00.000Z",
-      acp: { state: "ready", activeSessions: 0 },
-    })
+  test("pairs a phone against the detected LAN endpoint probed in the same run", async () => {
+    const previousPort = process.env.HAROLD_PORT
     const statusServer = Bun.serve({
       port: 0,
+      hostname: "0.0.0.0",
       fetch: (request) => {
         const url = new URL(request.url)
         return url.pathname === "/v1/status"
-          ? new Response(statusBody, { headers: { "content-type": "application/json" } })
+          ? Response.json({ state: "online", version: "0.2.1" })
           : new Response("not found", { status: 404 })
       },
     })
+    process.env.HAROLD_PORT = String(statusServer.port)
 
     try {
-      const advertisedUrl = `http://127.0.0.1:${statusServer.port}`
       await writeFile(
         path.join(dataDir, "daemon-state.json"),
         JSON.stringify({
@@ -227,35 +215,21 @@ describe("harold setup command wiring", () => {
           status: {
             version: "0.2.1",
             state: "online",
-            bindAddress: "127.0.0.1",
-            port: 3847,
+            bindAddress: "0.0.0.0",
+            port: statusServer.port,
             startedAt: new Date().toISOString(),
             acp: { state: "ready", activeSessions: 0 },
           },
         }),
       )
 
-      const command = startCommand([
-        "--agents",
-        "cursor",
-        "--workspace",
-        workspaceDir,
-        "--advertised-url",
-        advertisedUrl,
-      ])
+      const command = startCommand(["--agents", "cursor", "--workspace", workspaceDir])
 
       const code = await waitForMatch(command.lines, /code\s+([A-Z0-9]{3}-[A-Z0-9]{3})/)
 
       const database = openDatabase({ dataDir })
       try {
-        const slice = assembleDeviceSlice({
-          database,
-          loopbackEndpoint: "http://127.0.0.1:3847",
-          getAdvertisedEndpointSettings: () => ({
-            advertisedUrl,
-            advertisedUrlEnabled: true,
-          }),
-        })
+        const slice = assembleDeviceSlice({ database })
         const claim = await slice.claimPairingCode({ code, body: { name: "Test phone" } })
         expect(claim.ok).toBe(true)
       } finally {
@@ -267,9 +241,13 @@ describe("harold setup command wiring", () => {
 
       expect(exitCode).toBe(0)
       expect(output).toContain("Device paired.")
-      expect(output).toContain(advertisedUrl)
     } finally {
       await statusServer.stop(true)
+      if (previousPort === undefined) {
+        delete process.env.HAROLD_PORT
+      } else {
+        process.env.HAROLD_PORT = previousPort
+      }
       await rm(path.join(dataDir, "daemon-state.json"), { force: true })
     }
   })
@@ -303,7 +281,6 @@ describe("harold setup command wiring", () => {
         summary: {
           dataDir,
           localApi: { host: "127.0.0.1", port: 3847 },
-          advertisedEndpoint: { url: null, enabled: false },
           agents: { enabled: 1, needsAuth: null },
           workspaces: 1,
         },
@@ -318,7 +295,7 @@ describe("harold setup command wiring", () => {
     expect(startDaemonCalls).toBe(1)
     expect(stopDaemonCalls).toBe(0)
     expect(lines.join("\n")).toContain("Harold is running")
-    expect(lines.join("\n")).toContain("harold connect")
+    expect(lines.join("\n")).toContain("harold pair")
   })
 
   test("stops the daemon it started when the wizard fails", async () => {
@@ -345,7 +322,6 @@ describe("harold setup command wiring", () => {
         summary: {
           dataDir,
           localApi: { host: "127.0.0.1", port: 3847 },
-          advertisedEndpoint: { url: null, enabled: false },
           agents: { enabled: 0, needsAuth: null },
           workspaces: 0,
         },
@@ -410,7 +386,6 @@ describe("harold setup command wiring", () => {
         summary: {
           dataDir,
           localApi: { host: "127.0.0.1", port: 3847 },
-          advertisedEndpoint: { url: null, enabled: false },
           agents: { enabled: 1, needsAuth: null },
           workspaces: 1,
         },

@@ -106,7 +106,6 @@ wait_for_device() {
 harold1() {
   (cd "$ROOT" && \
     HAROLD_DATA_DIR="$INSTANCE1_DATA_DIR" \
-    HAROLD_HOST=127.0.0.1 \
     HAROLD_PORT="$INSTANCE1_PORT" \
     bun run dev "$@")
 }
@@ -114,7 +113,6 @@ harold1() {
 harold2() {
   (cd "$ROOT" && \
     HAROLD_DATA_DIR="$INSTANCE2_DATA_DIR" \
-    HAROLD_HOST=127.0.0.1 \
     HAROLD_PORT="$INSTANCE2_PORT" \
     bun run dev "$@")
 }
@@ -123,9 +121,6 @@ write_settings() {
   local data_dir=$1
   local port=$2
   cat >"$data_dir/settings.yml" <<EOF
-advertisedUrl: http://127.0.0.1:$port
-advertisedUrlEnabled: true
-bindHost: 127.0.0.1
 bindPort: $port
 logLevel: info
 logPath: null
@@ -205,7 +200,7 @@ wait_for_status() {
 stop_demo_daemon() {
   local data_dir=$1
   log "daemon_stop $data_dir"
-  (cd "$ROOT" && env -u HAROLD_HOST -u HAROLD_PORT \
+  (cd "$ROOT" && env -u HAROLD_PORT \
     HAROLD_DATA_DIR="$data_dir" bun run dev stop) 2>&1 | tee -a "$LOG" || true
 }
 
@@ -408,7 +403,7 @@ log "daemons_ready"
 # Instance 1's QR is baked into the camera clip. Instance 2's code is issued by
 # drive_phone.py immediately before the manual pairing beat.
 log "pair_issue_instance1"
-PAIR_JSON=$(harold1 pair --no-wait --json --endpoint loopback | tail -n 1)
+PAIR_JSON=$(harold1 pair --no-wait --json --url "$INSTANCE1_ENDPOINT" | tail -n 1)
 (
   cd "$ROOT"
   node -e '

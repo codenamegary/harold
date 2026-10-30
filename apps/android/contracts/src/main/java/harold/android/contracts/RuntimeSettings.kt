@@ -30,11 +30,10 @@ enum class RuntimeSettingsOverrideSource {
     Env,
 }
 
+// The daemon binds every interface and derives the pairing endpoint at pair
+// time, so the runtime settings only carry the port and log configuration.
 @Serializable
 data class RuntimeSettings(
-    val advertisedUrl: String? = null,
-    val advertisedUrlEnabled: Boolean = true,
-    val bindHost: String,
     val bindPort: Int,
     val logLevel: LogLevel,
     val logPath: String? = null,
@@ -42,14 +41,12 @@ data class RuntimeSettings(
 
 @Serializable
 data class RuntimeSettingsEffective(
-    val bindHost: String,
     val bindPort: Int,
     val logPath: String? = null,
 )
 
 @Serializable
 data class RuntimeSettingsOverrides(
-    val bindHost: RuntimeSettingsOverrideSource? = null,
     val bindPort: RuntimeSettingsOverrideSource? = null,
 )
 

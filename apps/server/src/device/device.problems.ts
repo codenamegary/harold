@@ -1,13 +1,12 @@
 import {
   ConflictProblemSchema,
+  ForbiddenProblemSchema,
   NotFoundProblemSchema,
   PROBLEM_TYPES,
   ValidationProblemSchema,
 } from "contracts/http/error"
 
-export const buildPairingCodeNotFoundProblem = (
-  detail = "Unknown pairing code",
-) =>
+export const buildPairingCodeNotFoundProblem = (detail = "Unknown pairing code") =>
   NotFoundProblemSchema.parse({
     type: PROBLEM_TYPES.notFound,
     title: "Pairing code not found",
@@ -15,9 +14,7 @@ export const buildPairingCodeNotFoundProblem = (
     detail,
   })
 
-export const buildPairingCodeClaimedProblem = (
-  detail = "Pairing code has already been claimed",
-) =>
+export const buildPairingCodeClaimedProblem = (detail = "Pairing code has already been claimed") =>
   ConflictProblemSchema.parse({
     type: PROBLEM_TYPES.conflict,
     title: "Pairing code already claimed",
@@ -25,9 +22,7 @@ export const buildPairingCodeClaimedProblem = (
     detail,
   })
 
-export const buildPairingCodeExpiredProblem = (
-  detail = "Pairing code has expired",
-) =>
+export const buildPairingCodeExpiredProblem = (detail = "Pairing code has expired") =>
   ConflictProblemSchema.parse({
     type: PROBLEM_TYPES.conflict,
     title: "Pairing code expired",
@@ -35,9 +30,7 @@ export const buildPairingCodeExpiredProblem = (
     detail,
   })
 
-export const buildPairingCodeRevokedProblem = (
-  detail = "Pairing code has been revoked",
-) =>
+export const buildPairingCodeRevokedProblem = (detail = "Pairing code has been revoked") =>
   ConflictProblemSchema.parse({
     type: PROBLEM_TYPES.conflict,
     title: "Pairing code revoked",
@@ -45,18 +38,12 @@ export const buildPairingCodeRevokedProblem = (
     detail,
   })
 
-export const buildAdvertisedEndpointUnavailableProblem = () =>
-  ValidationProblemSchema.parse({
-    type: PROBLEM_TYPES.validationError,
-    title: "Request validation failed",
-    status: 400,
-    code: "validation.request.invalid",
-    errors: [
-      {
-        pointer: "#/endpoint",
-        code: "validation.pairing.advertised_endpoint.unavailable",
-      },
-    ],
+export const buildDeviceForbiddenProblem = (detail = "Devices can only remove themselves") =>
+  ForbiddenProblemSchema.parse({
+    type: PROBLEM_TYPES.forbidden,
+    title: "Not allowed",
+    status: 403,
+    detail,
   })
 
 export const buildInvalidCursorProblem = () =>

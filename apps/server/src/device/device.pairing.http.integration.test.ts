@@ -3,16 +3,18 @@ import { createHash } from "node:crypto"
 import { eq } from "drizzle-orm"
 import {
   ClaimPairingCodeResponseSchema,
-  CreatePairingCodeResponseSchema,
-  PAIRING_CODES_PATH,
   PairingCodeValueSchema,
   claimPairingCodePath,
 } from "contracts/http/pairing-code"
 import { NotFoundProblemSchema, ConflictProblemSchema } from "contracts/http/error"
+import { makeCreatePairingCode } from "core/device/create.pairing.code.usecase"
 import { bootTestApp } from "../test-support/test.harness"
 import { devices } from "../persistence/schema/devices"
 import { pairingCodes } from "../persistence/schema/pairing-codes"
 import { Config } from "../config/config"
+import { makeInsertPairingCode } from "./device.sqlite.adapters"
+
+const LAN_ENDPOINT = "http://192.168.1.20:3847"
 
 const getListeningHttpBase = async (
   app: {
@@ -30,12 +32,19 @@ const getListeningHttpBase = async (
   return `http://${config.host}:${address.port}`
 }
 
+// Creating pairing codes is a host operation against the same database the
+// daemon serves. The network surface only exposes the claim (#458).
+const seedPairingCode = (
+  database: Parameters<typeof makeInsertPairingCode>[0]["database"],
+  endpoint = LAN_ENDPOINT,
+) => makeCreatePairingCode({ insertPairingCode: makeInsertPairingCode(database) })(endpoint)
+
 describe("pairing HTTP integration", () => {
-  test("create, claim once, second claim fails", async () => {
-    const { app, config, database } = await bootTestApp()
+  test("creating codes is a host operation: POST /v1/pairing-codes is not registered", async () => {
+    const { app, config } = await bootTestApp()
     const httpBase = await getListeningHttpBase(app, config)
 
-    const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
+    const createResponse = await fetch(`${httpBase}/v1/pairing-codes`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -44,19 +53,25 @@ describe("pairing HTTP integration", () => {
       body: JSON.stringify({}),
     })
 
-    expect(createResponse.status).toBe(201)
-    expect(createResponse.headers.get("authorization")).toBeNull()
+    expect(createResponse.status).toBe(404)
+  })
 
-    const created = CreatePairingCodeResponseSchema.parse(await createResponse.json())
-    expect(created.id).toMatch(/^pair_/)
-    expect(PairingCodeValueSchema.parse(created.code)).toBe(created.code)
-    expect(created.state).toBe("active")
-    expect(created.endpoint).toBe(`http://${config.host}:${config.port}`)
-    const ttlMs = Date.parse(created.expiresAt) - Date.parse(created.createdAt)
+  test("claim once, second claim fails", async () => {
+    const { app, config, database } = await bootTestApp()
+    const httpBase = await getListeningHttpBase(app, config)
+    const created = await seedPairingCode(database)
+
+    expect(created.ok).toBe(true)
+    if (!created.ok) return
+    expect(created.value.id).toMatch(/^pair_/)
+    expect(PairingCodeValueSchema.parse(created.value.code)).toBe(created.value.code)
+    expect(created.value.state).toBe("active")
+    expect(created.value.endpoint).toBe(LAN_ENDPOINT)
+    const ttlMs = Date.parse(created.value.expiresAt) - Date.parse(created.value.createdAt)
     expect(ttlMs).toBe(10 * 60 * 1000)
 
     const claimResponse = await fetch(
-      `${httpBase}${claimPairingCodePath(created.code.toLowerCase())}`,
+      `${httpBase}${claimPairingCodePath(created.value.code.toLowerCase())}`,
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -71,15 +86,15 @@ describe("pairing HTTP integration", () => {
     expect(claimed.device.platform).toBe("test-client")
     expect(claimed.device.state).toBe("offline")
     expect(claimed.credential).toMatch(/^devcred_/)
-    expect(claimed.credential.includes(created.code)).toBe(false)
+    expect(claimed.credential.includes(created.value.code)).toBe(false)
 
     const pairingRow = database.db
       .select()
       .from(pairingCodes)
-      .where(eq(pairingCodes.id, created.id))
+      .where(eq(pairingCodes.id, created.value.id))
       .get()
     expect(pairingRow?.codeHash.startsWith("$argon2id$")).toBe(true)
-    expect(pairingRow?.codeHash.includes(created.code)).toBe(false)
+    expect(pairingRow?.codeHash.includes(created.value.code)).toBe(false)
     expect(pairingRow?.state).toBe("claimed")
 
     const deviceRow = database.db
@@ -92,7 +107,7 @@ describe("pairing HTTP integration", () => {
     )
     expect(deviceRow?.credentialHash.includes(claimed.credential)).toBe(false)
 
-    const secondClaim = await fetch(`${httpBase}${claimPairingCodePath(created.code)}`, {
+    const secondClaim = await fetch(`${httpBase}${claimPairingCodePath(created.value.code)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name: "Other" }),
@@ -107,24 +122,17 @@ describe("pairing HTTP integration", () => {
   test("expired pairing codes cannot be claimed", async () => {
     const { app, config, database } = await bootTestApp()
     const httpBase = await getListeningHttpBase(app, config)
+    const created = await seedPairingCode(database)
 
-    const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({}),
-    })
-    const created = CreatePairingCodeResponseSchema.parse(await createResponse.json())
+    if (!created.ok) throw new Error("expected seeded pairing code")
 
     database.db
       .update(pairingCodes)
       .set({ expiresAt: "2020-01-01T00:00:00.000Z" })
-      .where(eq(pairingCodes.id, created.id))
+      .where(eq(pairingCodes.id, created.value.id))
       .run()
 
-    const claimResponse = await fetch(`${httpBase}${claimPairingCodePath(created.code)}`, {
+    const claimResponse = await fetch(`${httpBase}${claimPairingCodePath(created.value.code)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({}),
@@ -151,49 +159,14 @@ describe("pairing HTTP integration", () => {
     NotFoundProblemSchema.parse(await claimResponse.json())
   })
 
-  test("create pairing code uses advertised URL when set", async () => {
-    const { app, config } = await bootTestApp()
-    const httpBase = await getListeningHttpBase(app, config)
-
-    const patchResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
-      method: "PATCH",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({ advertisedUrl: "https://agents.example.com" }),
-    })
-    expect(patchResponse.status).toBe(200)
-
-    const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({}),
-    })
-
-    expect(createResponse.status).toBe(201)
-    const created = CreatePairingCodeResponseSchema.parse(await createResponse.json())
-    expect(created.endpoint).toBe("https://agents.example.com")
-  })
-
   test("claim accepts display name", async () => {
-    const { app, config } = await bootTestApp()
+    const { app, config, database } = await bootTestApp()
     const httpBase = await getListeningHttpBase(app, config)
+    const created = await seedPairingCode(database)
 
-    const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({}),
-    })
-    const created = CreatePairingCodeResponseSchema.parse(await createResponse.json())
+    if (!created.ok) throw new Error("expected seeded pairing code")
 
-    const claimResponse = await fetch(`${httpBase}${claimPairingCodePath(created.code)}`, {
+    const claimResponse = await fetch(`${httpBase}${claimPairingCodePath(created.value.code)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name: "Pixel 8", platform: "android" }),
@@ -203,190 +176,5 @@ describe("pairing HTTP integration", () => {
     const claimed = ClaimPairingCodeResponseSchema.parse(await claimResponse.json())
     expect(claimed.device.name).toBe("Pixel 8")
     expect(claimed.device.platform).toBe("android")
-  })
-
-  test("pairing endpoint uses advertised URL when set, otherwise loopback", async () => {
-    const { app, config } = await bootTestApp()
-    const httpBase = await getListeningHttpBase(app, config)
-
-    const loopbackCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({}),
-    })
-    const loopbackPairing = CreatePairingCodeResponseSchema.parse(await loopbackCreate.json())
-    expect(loopbackPairing.endpoint).toBe(`http://${config.host}:${config.port}`)
-
-    const patchResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
-      method: "PATCH",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({ advertisedUrl: "https://agents.example.com" }),
-    })
-    expect(patchResponse.status).toBe(200)
-
-    const advertisedCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({}),
-    })
-    const advertisedPairing = CreatePairingCodeResponseSchema.parse(await advertisedCreate.json())
-    expect(advertisedPairing.endpoint).toBe("https://agents.example.com")
-
-    const clearResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
-      method: "PATCH",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({ advertisedUrl: null }),
-    })
-    expect(clearResponse.status).toBe(200)
-
-    const clearedCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({}),
-    })
-    const clearedPairing = CreatePairingCodeResponseSchema.parse(await clearedCreate.json())
-    expect(clearedPairing.endpoint).toBe(`http://${config.host}:${config.port}`)
-  })
-
-  test("local pairing after clearing stale advertised URL uses loopback endpoint", async () => {
-    const { app, config } = await bootTestApp()
-    const httpBase = await getListeningHttpBase(app, config)
-
-    const setAdvertisedResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
-      method: "PATCH",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({ advertisedUrl: "https://agents.example.com" }),
-    })
-    expect(setAdvertisedResponse.status).toBe(200)
-
-    const staleCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({}),
-    })
-    const stalePairing = CreatePairingCodeResponseSchema.parse(await staleCreate.json())
-    expect(stalePairing.endpoint).toBe("https://agents.example.com")
-
-    const clearResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
-      method: "PATCH",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({ advertisedUrl: null }),
-    })
-    expect(clearResponse.status).toBe(200)
-
-    const localCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({}),
-    })
-    const localPairing = CreatePairingCodeResponseSchema.parse(await localCreate.json())
-    expect(localPairing.endpoint).toBe(`http://${config.host}:${config.port}`)
-  })
-
-  test("loopback pairing keeps advertised URL when requested", async () => {
-    const { app, config } = await bootTestApp()
-    const httpBase = await getListeningHttpBase(app, config)
-
-    const setAdvertisedResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
-      method: "PATCH",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({ advertisedUrl: "https://agents.example.com" }),
-    })
-    expect(setAdvertisedResponse.status).toBe(200)
-
-    const loopbackCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({ endpoint: "loopback" }),
-    })
-    const loopbackPairing = CreatePairingCodeResponseSchema.parse(await loopbackCreate.json())
-    expect(loopbackPairing.endpoint).toBe(`http://${config.host}:${config.port}`)
-
-    const settingsResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
-      headers: { authorization: `Bearer ${app.deviceCredential.credential}` },
-    })
-    const settingsBody = (await settingsResponse.json()) as {
-      settings: { advertisedUrl: string | null }
-    }
-    expect(settingsBody.settings.advertisedUrl).toBe("https://agents.example.com")
-  })
-
-  test("disabled advertised URL uses loopback until re-enabled", async () => {
-    const { app, config } = await bootTestApp()
-    const httpBase = await getListeningHttpBase(app, config)
-
-    const setAdvertisedResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
-      method: "PATCH",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({ advertisedUrl: "https://agents.example.com" }),
-    })
-    expect(setAdvertisedResponse.status).toBe(200)
-
-    const disableResponse = await fetch(`${httpBase}/v1/settings/runtime`, {
-      method: "PATCH",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({ advertisedUrlEnabled: false }),
-    })
-    expect(disableResponse.status).toBe(200)
-
-    const disabledCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({}),
-    })
-    const disabledPairing = CreatePairingCodeResponseSchema.parse(await disabledCreate.json())
-    expect(disabledPairing.endpoint).toBe(`http://${config.host}:${config.port}`)
-
-    const advertisedCreate = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${app.deviceCredential.credential}`,
-      },
-      body: JSON.stringify({ endpoint: "advertised" }),
-    })
-    expect(advertisedCreate.status).toBe(400)
   })
 })

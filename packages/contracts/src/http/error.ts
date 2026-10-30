@@ -7,6 +7,7 @@ export const PROBLEM_TYPES = {
   conflict: "https://harold.local/problems/conflict",
   unprocessable: "https://harold.local/problems/unprocessable",
   unauthorized: "https://harold.local/problems/unauthorized",
+  forbidden: "https://harold.local/problems/forbidden",
   workspaceActiveSessions: "https://harold.local/problems/workspace-has-active-sessions",
   payloadTooLarge: "https://harold.local/problems/payload-too-large",
   unsupportedMediaType: "https://harold.local/problems/unsupported-media-type",
@@ -62,6 +63,11 @@ export const UnauthorizedProblemSchema = z.strictObject({
   type: z.literal(PROBLEM_TYPES.unauthorized),
 })
 
+export const ForbiddenProblemSchema = z.strictObject({
+  ...InternalProblemFieldsSchema.shape,
+  type: z.literal(PROBLEM_TYPES.forbidden),
+})
+
 export const PayloadTooLargeProblemSchema = z.strictObject({
   ...InternalProblemFieldsSchema.shape,
   type: z.literal(PROBLEM_TYPES.payloadTooLarge),
@@ -85,6 +91,7 @@ export const ProblemDetailsSchema = z.discriminatedUnion("type", [
   ConflictProblemSchema,
   UnprocessableProblemSchema,
   UnauthorizedProblemSchema,
+  ForbiddenProblemSchema,
   WorkspaceActiveSessionsProblemSchema,
 ])
 

@@ -645,11 +645,10 @@ def issue_instance2_code():
         raise RuntimeError("HAROLD_ROOT and INSTANCE2_DATA_DIR are required for manual pairing")
     env = os.environ.copy()
     env["HAROLD_DATA_DIR"] = INSTANCE2_DATA_DIR
-    env["HAROLD_HOST"] = "127.0.0.1"
     env["HAROLD_PORT"] = INSTANCE2_PORT
     result = subprocess.run(
         [
-            "bun", "run", "dev", "pair", "--no-wait", "--json", "--endpoint", "loopback",
+            "bun", "run", "dev", "pair", "--no-wait", "--json", "--url", INSTANCE2_ENDPOINT,
         ],
         cwd=HAROLD_ROOT,
         env=env,

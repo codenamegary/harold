@@ -49,7 +49,7 @@ const openStartDeps = (): StartDeps => {
       now: () => Date.now(),
       sleep,
     }),
-    renderStartError: (error) => renderStartDaemonError(error, config.port, "harold start"),
+    renderStartError: (error) => renderStartDaemonError(error, "harold start"),
     readRunningView: () => readRunningView(config),
     writeOut: (line) => console.log(line),
     writeErr: (line) => console.error(line),

@@ -1,157 +1,19 @@
 import { describe, expect, test } from "bun:test"
 import {
+  AdvertisedUrlSchema,
   RuntimeSettingsSchema,
   RuntimeSettingsViewSchema,
-  UpdateRuntimeSettingsBodySchema,
-  UpdateRuntimeSettingsResponseSchema,
 } from "./runtime-settings"
 
 const validSettings = {
-  advertisedUrl: null,
-  advertisedUrlEnabled: true,
-  bindHost: "127.0.0.1",
   bindPort: 3847,
   logLevel: "info",
   logPath: null,
 } as const
 
 describe("RuntimeSettingsSchema", () => {
-  test("accepts loopback http advertised URL", () => {
-    const settings = {
-      ...validSettings,
-      advertisedUrl: "http://127.0.0.1:3847",
-    }
-
-    expect(RuntimeSettingsSchema.parse(settings)).toEqual(settings)
-  })
-
-  test("accepts http advertised URL on localhost and IPv6 loopback", () => {
-    expect(
-      RuntimeSettingsSchema.safeParse({
-        ...validSettings,
-        advertisedUrl: "http://localhost:3847",
-      }).success,
-    ).toBe(true)
-    expect(
-      RuntimeSettingsSchema.safeParse({
-        ...validSettings,
-        advertisedUrl: "http://[::1]:3847",
-      }).success,
-    ).toBe(true)
-  })
-
   test("accepts seeded defaults", () => {
     expect(RuntimeSettingsSchema.parse(validSettings)).toEqual(validSettings)
-  })
-
-  test("defaults advertisedUrlEnabled to true when omitted", () => {
-    const withoutFlag = {
-      advertisedUrl: validSettings.advertisedUrl,
-      bindHost: validSettings.bindHost,
-      bindPort: validSettings.bindPort,
-      logLevel: validSettings.logLevel,
-      logPath: validSettings.logPath,
-    }
-    expect(RuntimeSettingsSchema.parse(withoutFlag).advertisedUrlEnabled).toBe(true)
-  })
-
-  test("accepts https advertised URL", () => {
-    const settings = {
-      ...validSettings,
-      advertisedUrl: "https://agents.example.com",
-      logLevel: "debug",
-      logPath: "/var/log/harold.log",
-    }
-
-    expect(RuntimeSettingsSchema.parse(settings)).toEqual(settings)
-  })
-
-  test("rejects http advertised URL", () => {
-    expect(() =>
-      RuntimeSettingsSchema.parse({
-        ...validSettings,
-        advertisedUrl: "http://agents.example.com",
-      }),
-    ).toThrow()
-  })
-
-  test("accepts http advertised URLs on private network hosts", () => {
-    const urls = [
-      "http://10.0.0.236:3847",
-      "http://172.16.4.2:3847",
-      "http://192.168.1.10:3847",
-      "http://169.254.10.20:3847",
-      "http://100.64.0.9:3847",
-      "http://[fd00::1]:3847",
-      "http://[fe80::1]:3847",
-      "http://harold.local:3847",
-      "http://harold.internal:3847",
-      "http://harold.home.arpa:3847",
-      "http://harold:3847",
-    ]
-
-    for (const advertisedUrl of urls) {
-      expect(
-        RuntimeSettingsSchema.safeParse({
-          ...validSettings,
-          advertisedUrl,
-        }).success,
-      ).toBe(true)
-    }
-  })
-
-  test("rejects http advertised URLs on public hosts", () => {
-    for (const advertisedUrl of [
-      "http://agents.example.com",
-      "http://8.8.8.8:3847",
-      "http://0.0.0.0:3847",
-      "http://[::]:3847",
-    ]) {
-      expect(
-        RuntimeSettingsSchema.safeParse({
-          ...validSettings,
-          advertisedUrl,
-        }).success,
-      ).toBe(false)
-    }
-  })
-
-  test("rejects malformed loopback http advertised URL", () => {
-    expect(
-      RuntimeSettingsSchema.safeParse({
-        ...validSettings,
-        advertisedUrl: "http://127.0.0.1:notaport",
-      }).success,
-    ).toBe(false)
-  })
-
-  test("rejects malformed https advertised URL", () => {
-    expect(() =>
-      RuntimeSettingsSchema.parse({
-        ...validSettings,
-        advertisedUrl: "https://[",
-      }),
-    ).toThrow()
-  })
-
-  test("accepts wildcard and private bind hosts", () => {
-    for (const bindHost of ["0.0.0.0", "::", "10.0.0.236", "192.168.1.10", "fd00::1"]) {
-      expect(
-        RuntimeSettingsSchema.safeParse({
-          ...validSettings,
-          bindHost,
-        }).success,
-      ).toBe(true)
-    }
-  })
-
-  test("rejects a bind host that is not an IP address", () => {
-    expect(() =>
-      RuntimeSettingsSchema.parse({
-        ...validSettings,
-        bindHost: "harold.local",
-      }),
-    ).toThrow()
   })
 
   test("rejects unknown keys such as the retired trustedProxies", () => {
@@ -171,93 +33,56 @@ describe("RuntimeSettingsSchema", () => {
       }),
     ).toThrow()
   })
-})
 
-describe("UpdateRuntimeSettingsBodySchema", () => {
-  test("accepts partial patch", () => {
-    expect(UpdateRuntimeSettingsBodySchema.parse({ logLevel: "warn" })).toEqual({
-      logLevel: "warn",
-    })
-  })
-
-  test("accepts advertisedUrlEnabled patch", () => {
-    expect(UpdateRuntimeSettingsBodySchema.parse({ advertisedUrlEnabled: false })).toEqual({
-      advertisedUrlEnabled: false,
-    })
-  })
-
-  test("accepts empty string to clear advertised URL", () => {
-    expect(UpdateRuntimeSettingsBodySchema.parse({ advertisedUrl: "" })).toEqual({
-      advertisedUrl: "",
-    })
-  })
-
-  test("accepts null advertised URL", () => {
-    expect(UpdateRuntimeSettingsBodySchema.parse({ advertisedUrl: null })).toEqual({
-      advertisedUrl: null,
-    })
-  })
-
-  test("accepts loopback http advertised URL patch", () => {
-    expect(
-      UpdateRuntimeSettingsBodySchema.parse({ advertisedUrl: "http://localhost:3847" }),
-    ).toEqual({
-      advertisedUrl: "http://localhost:3847",
-    })
-  })
-
-  test("accepts private network http advertised URL patch", () => {
-    expect(
-      UpdateRuntimeSettingsBodySchema.parse({ advertisedUrl: "http://192.168.1.10:3847" }),
-    ).toEqual({
-      advertisedUrl: "http://192.168.1.10:3847",
-    })
-  })
-
-  test("rejects public http advertised URL patch", () => {
-    expect(
-      UpdateRuntimeSettingsBodySchema.safeParse({
-        advertisedUrl: "http://agents.example.com",
-      }).success,
-    ).toBe(false)
-  })
-
-  test("rejects unknown fields", () => {
-    expect(() => UpdateRuntimeSettingsBodySchema.parse({ unknown: true })).toThrow()
-  })
-
-  test("rejects the retired allowedRoots field", () => {
+  test("rejects the retired bind host and advertised keys", () => {
     expect(() =>
-      UpdateRuntimeSettingsBodySchema.parse({ allowedRoots: ["/home/ops/projects"] }),
+      RuntimeSettingsSchema.parse({
+        ...validSettings,
+        bindHost: "0.0.0.0",
+        advertisedUrl: "http://192.168.1.10:3847",
+        advertisedUrlEnabled: true,
+      }),
     ).toThrow()
   })
 })
 
-describe("UpdateRuntimeSettingsResponseSchema", () => {
-  test("includes restartRequired and effective values", () => {
-    const response = {
-      settings: validSettings,
-      restartRequired: true,
-      effective: {
-        bindHost: "127.0.0.1",
-        bindPort: 3847,
-        logPath: null,
-      },
-      overrides: {},
-    }
+describe("AdvertisedUrlSchema", () => {
+  // The schema no longer persists advertised endpoints, but the pair flow
+  // still validates user-entered custom URLs with the shared reachability
+  // rule: https everywhere, http only on loopback and private-network hosts.
+  test("accepts https URLs", () => {
+    expect(AdvertisedUrlSchema.safeParse("https://agents.example.com").success).toBe(true)
+  })
 
-    expect(UpdateRuntimeSettingsResponseSchema.parse(response)).toEqual(response)
+  test("accepts http URLs on loopback and private-network hosts", () => {
+    const urls = [
+      "http://127.0.0.1:3847",
+      "http://localhost:3847",
+      "http://10.0.0.236:3847",
+      "http://192.168.1.10:3847",
+      "http://100.64.0.9:3847",
+      "http://harold.local:3847",
+    ]
+
+    for (const url of urls) {
+      expect(AdvertisedUrlSchema.safeParse(url).success).toBe(true)
+    }
+  })
+
+  test("rejects http URLs on public hosts", () => {
+    for (const url of ["http://agents.example.com", "http://8.8.8.8:3847"]) {
+      expect(AdvertisedUrlSchema.safeParse(url).success).toBe(false)
+    }
   })
 })
 
 describe("RuntimeSettingsViewSchema", () => {
-  test("accepts wrapped runtime settings view", () => {
+  test("accepts wrapped runtime settings view with a port-only override", () => {
     const view = {
       settings: validSettings,
-      restartRequired: false,
+      restartRequired: true,
       effective: {
-        bindHost: "127.0.0.1",
-        bindPort: 3847,
+        bindPort: 4123,
         logPath: null,
       },
       overrides: { bindPort: "env" as const },

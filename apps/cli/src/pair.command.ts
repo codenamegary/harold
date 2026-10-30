@@ -1,48 +1,49 @@
+import { select as clackSelect, text as clackText, isCancel as clackIsCancel } from "@clack/prompts"
 import { Command } from "commander"
 import pc from "picocolors"
-import {
-  CreatePairingCodeBody,
-  PairingEndpointChoice,
-  PairingEndpointChoiceSchema,
-} from "contracts/http/pairing-code"
+import { CreatePairingCodeResponse } from "contracts/http/pairing-code"
 import { formatPairingQrUri } from "contracts/pairing/qr-uri"
 import { CreatePairingCodeResult } from "core/device/create.pairing.code.usecase"
 import { DeviceError } from "core/device/errors"
 import { GetPairingCodeById } from "core/device/ports"
-import { localApiUrl } from "core/status/summary.models"
+import { AdvertisedEndpointEntry } from "core/network/advertised.endpoints"
+import { makeAdvertisedEndpointsFileStore } from "core/network/advertised.endpoints.node.adapters"
+import { detectLanAddress } from "core/network/lan.address"
+import { VerifyAdvertisedEndpoint } from "core/reachability/verify.usecase"
+import { FetchStatusEndpoint } from "core/reachability/ports"
+import { makeNodeFetchStatusEndpoint } from "core/reachability/node.adapters"
+import { makeVerifyAdvertisedEndpoint } from "core/reachability/verify.usecase"
 import { parseConfig } from "server/config"
 import { AgentDatabase, openDatabase } from "server/database"
 import { assembleDeviceSlice, DeviceSlice } from "server/device"
-import { makeRuntimeSettingsFileStore, seedDefaultsFromConfig } from "server/runtime-settings"
 import { renderTerminalQr, RenderQrText } from "./pair.qr"
 import { PairingColors, renderPairingJson, renderPairingSummary } from "./pair.render"
 import { waitForPairingClaim } from "./pair.wait"
+import { resolvePairingEndpoint } from "./pair.endpoint"
 
 type PairCommandContext = Readonly<{
   slice: DeviceSlice
   database: AgentDatabase
+  readHistory: () => ReadonlyArray<AdvertisedEndpointEntry>
+  recordHistory: (used: AdvertisedEndpointEntry) => void
+  verifyEndpoint: VerifyAdvertisedEndpoint
 }>
 
 const openPairCommandContext = (): PairCommandContext => {
   const config = parseConfig(process.env)
   const database = openDatabase({ dataDir: config.dataDir })
-  const runtimeSettingsStore = makeRuntimeSettingsFileStore({
-    dataDir: config.dataDir,
-    seedDefaults: seedDefaultsFromConfig(config),
-  })
-  const slice = assembleDeviceSlice({
-    database,
-    loopbackEndpoint: localApiUrl({ host: config.host, port: config.port }),
-    getAdvertisedEndpointSettings: () => {
-      const settings = runtimeSettingsStore.get()
-      return {
-        advertisedUrl: settings.advertisedUrl,
-        advertisedUrlEnabled: settings.advertisedUrlEnabled,
-      }
-    },
-  })
+  const historyStore = makeAdvertisedEndpointsFileStore({ dataDir: config.dataDir })
+  const fetchStatus: FetchStatusEndpoint = makeNodeFetchStatusEndpoint()
 
-  return { slice, database }
+  return {
+    slice: assembleDeviceSlice({ database }),
+    database,
+    readHistory: historyStore.read,
+    recordHistory: (used) => {
+      historyStore.record(used)
+    },
+    verifyEndpoint: makeVerifyAdvertisedEndpoint({ fetchStatus }),
+  }
 }
 
 const withPairCommandContext = async (
@@ -63,37 +64,21 @@ const pairingErrorMessages: Record<DeviceError["kind"], string> = {
   pairing_code_revoked: "Pairing code was revoked before a device claimed it.",
   pairing_code_race: "Pairing code was claimed by another device.",
   device_not_found: "Device not found.",
-  advertised_endpoint_unavailable:
-    "Advertised endpoint is not available. Set an advertisedUrl in settings.yml or omit --endpoint.",
 }
 
 const renderDeviceError = (error: DeviceError): string => pairingErrorMessages[error.kind]
 
-type ParseEndpointResult =
-  | { ok: true; value: PairingEndpointChoice | undefined }
-  | { ok: false; message: string }
-
-const parseEndpointChoice = (raw: string | undefined): ParseEndpointResult => {
-  if (raw === undefined) {
-    return { ok: true, value: undefined }
-  }
-
-  const parsed = PairingEndpointChoiceSchema.safeParse(raw)
-  if (!parsed.success) {
-    return { ok: false, message: '--endpoint must be "loopback" or "advertised".' }
-  }
-
-  return { ok: true, value: parsed.data }
-}
+export type PairRenderMode = "qr" | "manual"
 
 export type PairActionOptions = Readonly<{
-  endpoint: PairingEndpointChoice | undefined
+  endpoint: string
+  mode: PairRenderMode
   wait: boolean
   json: boolean
 }>
 
 export type PairActionDeps = Readonly<{
-  createPairingCode: (body?: CreatePairingCodeBody) => Promise<CreatePairingCodeResult>
+  createPairingCode: (endpoint: string) => Promise<CreatePairingCodeResult>
   getPairingCodeById: GetPairingCodeById
   renderTerminalQr: RenderQrText
   colors: PairingColors
@@ -104,17 +89,17 @@ export type PairActionDeps = Readonly<{
 }>
 
 /**
- * Creates a pairing code, renders it (human summary + terminal QR, or JSON),
- * then optionally waits for a device to claim it. The transport, clock, and
- * renderers are injected so the command stays testable without a live daemon.
+ * Renders a pairing code against the already-resolved endpoint (human
+ * summary + terminal QR, or JSON), then optionally waits for a device to
+ * claim it. Endpoint selection lives in the command action; the transport,
+ * clock, and renderers are injected so the command stays testable without a
+ * live daemon.
  */
 export const executePair = async (
   deps: PairActionDeps,
   options: PairActionOptions,
 ): Promise<number> => {
-  const created = await deps.createPairingCode(
-    options.endpoint === undefined ? {} : { endpoint: options.endpoint },
-  )
+  const created = await deps.createPairingCode(options.endpoint)
 
   if (!created.ok) {
     if (options.json) {
@@ -125,7 +110,7 @@ export const executePair = async (
     return 1
   }
 
-  const pairing = created.value
+  const pairing: CreatePairingCodeResponse = created.value
   const qrUri = formatPairingQrUri({ endpoint: pairing.endpoint, code: pairing.code })
 
   if (options.json) {
@@ -140,8 +125,17 @@ export const executePair = async (
       }),
     )
     deps.writeOut("")
-    deps.writeOut(await deps.renderTerminalQr(qrUri))
-    deps.writeOut("")
+    if (options.mode === "qr") {
+      deps.writeOut(await deps.renderTerminalQr(qrUri))
+      deps.writeOut("")
+    } else {
+      deps.writeOut(
+        deps.colors.dim(
+          "Manual pairing: choose Enter a code in the app, type this endpoint, then the code.",
+        ),
+      )
+      deps.writeOut("")
+    }
   }
 
   if (!options.wait) {
@@ -149,7 +143,7 @@ export const executePair = async (
   }
 
   if (!options.json) {
-    deps.writeOut("Waiting for a device to scan...")
+    deps.writeOut("Waiting for a device to claim...")
   }
 
   const wait = waitForPairingClaim({
@@ -176,42 +170,131 @@ export const executePair = async (
   return 1
 }
 
+const chooseRenderMode = async (options: {
+  qr?: boolean
+  manual?: boolean
+  json: boolean
+}): Promise<PairRenderMode> => {
+  if (options.json) {
+    return "qr"
+  }
+  if (options.manual) {
+    return "manual"
+  }
+  if (options.qr) {
+    return "qr"
+  }
+
+  if (!process.stdout.isTTY) {
+    return "qr"
+  }
+
+  const selected = await clackSelect<"qr" | "manual">({
+    message: "How will the device pair?",
+    options: [
+      { value: "qr" as const, label: "Scan the QR code" },
+      { value: "manual" as const, label: "Enter the code manually" },
+    ],
+    initialValue: "qr" as const,
+  })
+  if (clackIsCancel(selected)) {
+    return "qr"
+  }
+  return selected
+}
+
 export const makePairCommand = (): Command => {
   const command = new Command("pair")
-  command.description("pair a device by scanning a QR code")
+  command.description("pair a device with a QR code or a manual code")
   command
-    .option("--endpoint <endpoint>", "pairing endpoint (loopback or advertised)")
+    .option(
+      "--url <endpoint>",
+      "endpoint to advertise (default: detection with remembered history)",
+    )
+    .option("--qr", "render the QR code without prompting")
+    .option("--manual", "print the endpoint and code for manual entry, without prompting")
     .option("--no-wait", "print the code and exit without waiting for a device")
     .option("--json", "emit newline-delimited JSON (one object per line)")
 
-  command.action(async (options: { endpoint?: string; wait: boolean; json: boolean }) => {
-    await withPairCommandContext(async (context) => {
-      const endpoint = parseEndpointChoice(options.endpoint)
-      if (!endpoint.ok) {
-        console.error(pc.red(endpoint.message))
-        process.exitCode = 1
-        return
-      }
+  command.action(
+    async (options: {
+      url?: string
+      qr?: boolean
+      manual?: boolean
+      wait: boolean
+      json: boolean
+    }) => {
+      await withPairCommandContext(async (context) => {
+        const choice = await resolvePairingEndpoint({
+          explicitUrl: options.url,
+          readHistory: context.readHistory,
+          detectLanAddress,
+          port: parseConfig(process.env).port,
+          verifyEndpoint: context.verifyEndpoint,
+          isInteractive: process.stdout.isTTY === true,
+          writeLine: (line) => console.log(line),
+          ...(process.stdout.isTTY
+            ? {
+                prompts: {
+                  select: async (message, selectOptions, initialValue) => {
+                    const answer = await clackSelect({
+                      message,
+                      options: selectOptions.map((option) => ({
+                        value: option.value,
+                        label: option.label,
+                        hint: option.hint,
+                      })),
+                      initialValue,
+                    })
+                    return answer
+                  },
+                  text: async (message, placeholder) => {
+                    return clackText({ message, placeholder })
+                  },
+                  isCancel: (value) => clackIsCancel(value),
+                },
+              }
+            : {}),
+        })
 
-      const exitCode = await executePair(
-        {
-          createPairingCode: context.slice.createPairingCode,
-          getPairingCodeById: context.slice.getPairingCodeById,
-          renderTerminalQr,
-          colors: { bold: pc.bold, dim: pc.dim },
-          writeOut: (text) => console.log(text),
-          writeErr: (text) => console.error(text),
-          now: () => new Date(),
-          sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-        },
-        { endpoint: endpoint.value, wait: options.wait, json: options.json },
-      )
+        if (!choice.ok) {
+          console.error(pc.red(choice.message))
+          process.exitCode = 1
+          return
+        }
 
-      if (exitCode !== 0) {
-        process.exitCode = exitCode
-      }
-    })
-  })
+        context.recordHistory({
+          url: choice.url,
+          source: choice.source,
+          lastUsedAt: new Date().toISOString(),
+        })
+
+        const mode = await chooseRenderMode({
+          qr: options.qr,
+          manual: options.manual,
+          json: options.json,
+        })
+
+        const exitCode = await executePair(
+          {
+            createPairingCode: context.slice.createPairingCode,
+            getPairingCodeById: context.slice.getPairingCodeById,
+            renderTerminalQr,
+            colors: { bold: pc.bold, dim: pc.dim },
+            writeOut: (text) => console.log(text),
+            writeErr: (text) => console.error(text),
+            now: () => new Date(),
+            sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+          },
+          { endpoint: choice.url, mode, wait: options.wait, json: options.json },
+        )
+
+        if (exitCode !== 0) {
+          process.exitCode = exitCode
+        }
+      })
+    },
+  )
 
   return command
 }

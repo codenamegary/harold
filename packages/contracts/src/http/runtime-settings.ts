@@ -223,9 +223,6 @@ export const AdvertisedUrlSchema = z
   })
 
 export const RuntimeSettingsSchema = z.strictObject({
-  advertisedUrl: AdvertisedUrlSchema.nullable(),
-  advertisedUrlEnabled: z.boolean().default(true),
-  bindHost: BindHostSchema,
   bindPort: z.number().int().nonnegative().max(65535),
   logLevel: LogLevelSchema,
   // `null` means the daemon writes to the default log file under the data dir
@@ -234,24 +231,13 @@ export const RuntimeSettingsSchema = z.strictObject({
   logPath: z.string().min(1).nullable(),
 })
 
-export const UpdateRuntimeSettingsBodySchema = z.strictObject({
-  advertisedUrl: z.union([AdvertisedUrlSchema, z.null(), z.literal("")]).optional(),
-  advertisedUrlEnabled: z.boolean().optional(),
-  bindHost: BindHostSchema.optional(),
-  bindPort: z.number().int().nonnegative().max(65535).optional(),
-  logLevel: LogLevelSchema.optional(),
-  logPath: z.union([z.string().min(1), z.null()]).optional(),
-})
-
 export const RuntimeSettingsOverrideSourceSchema = z.enum(["env"])
 
 export const RuntimeSettingsOverridesSchema = z.strictObject({
-  bindHost: RuntimeSettingsOverrideSourceSchema.optional(),
   bindPort: RuntimeSettingsOverrideSourceSchema.optional(),
 })
 
 export const RuntimeSettingsEffectiveSchema = z.strictObject({
-  bindHost: BindHostSchema,
   bindPort: z.number().int().nonnegative().max(65535),
   logPath: z.string().min(1).nullable(),
 })
@@ -263,24 +249,8 @@ export const RuntimeSettingsViewSchema = z.strictObject({
   overrides: RuntimeSettingsOverridesSchema,
 })
 
-export const UpdateRuntimeSettingsResponseSchema = RuntimeSettingsViewSchema
-
 export type RuntimeSettings = z.infer<typeof RuntimeSettingsSchema>
-export type UpdateRuntimeSettingsBody = z.infer<typeof UpdateRuntimeSettingsBodySchema>
 export type RuntimeSettingsOverrideSource = z.infer<typeof RuntimeSettingsOverrideSourceSchema>
 export type RuntimeSettingsOverrides = z.infer<typeof RuntimeSettingsOverridesSchema>
 export type RuntimeSettingsEffective = z.infer<typeof RuntimeSettingsEffectiveSchema>
 export type RuntimeSettingsView = z.infer<typeof RuntimeSettingsViewSchema>
-export type UpdateRuntimeSettingsResponse = RuntimeSettingsView
-
-export const normalizeAdvertisedUrl = (
-  value: string | null | undefined,
-): string | null | undefined => {
-  if (value === undefined) {
-    return undefined
-  }
-  if (value === null || value === "") {
-    return null
-  }
-  return value
-}
