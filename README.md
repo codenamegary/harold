@@ -94,8 +94,8 @@ lists those first, most recently used first with that entry preselected,
 followed by every address on this machine a phone could dial, labelled with
 where it came from (history source or interface name). Picking an endpoint
 that does not answer `GET /v1/status` explains why and reopens the list, and
-there is always an option to enter a custom URL. The output carries both
-pairing paths: the terminal QR and the endpoint plus code for manual entry.
+there is always an option to enter a custom URL. The summary carries the
+endpoint and code for manual entry, and the QR encodes both for scanning.
 Pass `--url` to skip the endpoint prompt.
 
 Plain HTTP sends the device credential and session traffic in cleartext. Use it

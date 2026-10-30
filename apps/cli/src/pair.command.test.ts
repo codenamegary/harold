@@ -116,7 +116,9 @@ describe("executePair", () => {
     expect(harness.qrCalls).toHaveLength(1)
     expect(harness.out.join("\n")).toContain(LAN_ENDPOINT)
     expect(harness.out.join("\n")).toContain("R7K-4MP")
-    expect(harness.out.join("\n")).toContain("Manual pairing")
+    // The summary already carries the endpoint and code, so manual entry
+    // needs no extra instruction text.
+    expect(harness.out.join("\n")).not.toContain("Manual pairing")
   })
 
   test("--no-wait exits after rendering without polling", async () => {

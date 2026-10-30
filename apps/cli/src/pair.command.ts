@@ -127,12 +127,6 @@ export const executePair = async (
     deps.writeOut("")
     deps.writeOut(await deps.renderTerminalQr(qrUri))
     deps.writeOut("")
-    deps.writeOut(
-      deps.colors.dim(
-        "Manual pairing: choose Enter a code in the app, type this endpoint, then the code.",
-      ),
-    )
-    deps.writeOut("")
   }
 
   if (!options.wait) {
