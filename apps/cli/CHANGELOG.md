@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.0.0](https://github.com/codenamegary/harold/compare/v2.0.0...v3.0.0) (2026-10-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* **daemon:** HAROLD_HOST is removed; the daemon always binds 0.0.0.0. harold connect is removed. PATCH /v1/settings/runtime, POST /v1/pairing-codes, and GET /v1/devices are gone from the API. GET /v1/status returns only {state, version}. settings.yml no longer accepts bindHost or advertisedUrl keys.
+
+### Features
+
+* **daemon:** serve on the LAN by default with a host-only control plane ([#461](https://github.com/codenamegary/harold/issues/461)) ([89b40bb](https://github.com/codenamegary/harold/commit/89b40bbdec783feee39912723ba0a26d43ef7682))
+
 ## [2.0.0](https://github.com/codenamegary/harold/compare/v1.4.1...v2.0.0) (2026-10-27)
 
 
