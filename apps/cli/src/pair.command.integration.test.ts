@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import YAML from "yaml"
@@ -49,13 +49,23 @@ describe("harold pair command wiring", () => {
     process.env.HAROLD_DATA_DIR = dataDir
 
     // A stand-in daemon: the pair flow probes GET /v1/status before it
-    // advertises an endpoint.
+    // advertises an endpoint. It binds every interface so the detected LAN
+    // address answers, exactly like the real daemon does.
     server = Bun.serve({
       port: 0,
+      hostname: "0.0.0.0",
       fetch: () => Response.json({ state: "online", version: "0.0.0-test" }),
     })
     endpoint = `http://127.0.0.1:${server.port}`
-  })
+
+    // The daemon's port lives in settings.yml, not the environment: pair
+    // must resolve its probe port from the same file.
+    writeFileSync(
+      path.join(dataDir, "settings.yml"),
+      YAML.stringify({ bindPort: server.port, logLevel: "info", logPath: null }),
+      "utf8",
+    )
+  }, 20_000)
 
   afterAll(async () => {
     await server.stop(true)
@@ -125,5 +135,21 @@ describe("harold pair command wiring", () => {
     const { exitCode } = await runCommand(["--no-wait", "--json"])
 
     expect(exitCode).toBe(0)
+  })
+
+  test("the probe port comes from settings.yml when the environment is silent", async () => {
+    // The user-visible failure this pins: with no HAROLD_PORT in the
+    // environment, pair used to probe the 3847 default while the daemon ran
+    // on the settings.yml port, so nothing was ever reachable.
+    rmSync(path.join(dataDir, "advertised-endpoints.yml"), { force: true })
+
+    const { output, errOutput, exitCode } = await runCommand(["--no-wait", "--json"])
+
+    expect(exitCode).toBe(0)
+    expect(errOutput).toBe("")
+
+    const pairing = JSON.parse(output) as { endpoint: string }
+    expect(pairing.endpoint.endsWith(`:${server.port}`)).toBe(true)
+    expect(pairing.endpoint).not.toContain(":3847")
   })
 })

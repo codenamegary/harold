@@ -46,6 +46,7 @@
     "./status-summary": "./src/status/status.summary.assembly.ts",
     "./filesystem/node-adapters": "./src/filesystem/filesystem.node.adapters.ts",
     "./runtime-settings/file-store": "./src/runtime-settings/runtime-settings.file.adapters.ts",
-    "./runtime-settings/update.usecase": "./src/runtime-settings/runtime-settings.update.usecase.ts"
+    "./runtime-settings/effective": "./src/runtime-settings/resolve.runtime.settings.state.ts",
+    "./config/env.bind.overrides": "./src/config/env.bind.overrides.ts"
   }
 }

@@ -19,11 +19,13 @@ import { assembleDeviceSlice, DeviceSlice } from "server/device"
 import { renderTerminalQr, RenderQrText } from "./pair.qr"
 import { PairingColors, renderPairingJson, renderPairingSummary } from "./pair.render"
 import { waitForPairingClaim } from "./pair.wait"
+import { effectiveBindPort } from "./effective.bind"
 import { resolvePairingEndpoint } from "./pair.endpoint"
 
 type PairCommandContext = Readonly<{
   slice: DeviceSlice
   database: AgentDatabase
+  port: number
   readHistory: () => ReadonlyArray<AdvertisedEndpointEntry>
   recordHistory: (used: AdvertisedEndpointEntry) => void
   verifyEndpoint: VerifyAdvertisedEndpoint
@@ -38,6 +40,7 @@ const openPairCommandContext = (): PairCommandContext => {
   return {
     slice: assembleDeviceSlice({ database }),
     database,
+    port: effectiveBindPort(config),
     readHistory: historyStore.read,
     recordHistory: (used) => {
       historyStore.record(used)
@@ -229,7 +232,7 @@ export const makePairCommand = (): Command => {
           explicitUrl: options.url,
           readHistory: context.readHistory,
           listLanAddresses: detectUsableIpv4AddressEntries,
-          port: parseConfig(process.env).port,
+          port: context.port,
           verifyEndpoint: context.verifyEndpoint,
           isInteractive: process.stdout.isTTY === true,
           writeLine: (line) => console.log(line),

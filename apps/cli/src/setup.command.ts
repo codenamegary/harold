@@ -42,6 +42,7 @@ import {
 import { resolvePairingEndpoint } from "./pair.endpoint"
 import { PairActionDeps, executePair } from "./pair.command"
 import { renderTerminalQr } from "./pair.qr"
+import { effectiveBindPort } from "./effective.bind"
 import { readRunningView, renderRunningView, RunningView, RunningViewColors } from "./running.view"
 import { SetupOptions, SetupPrompts, SetupWizardDeps, runSetupWizard } from "./setup.wizard"
 import { defaultWorkspaceName } from "./workspace.command"
@@ -227,7 +228,7 @@ export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): P
           explicitUrl: undefined,
           readHistory: historyStore.read,
           listLanAddresses: detectUsableIpv4AddressEntries,
-          port: config.port,
+          port: effectiveBindPort(config),
           verifyEndpoint: makeVerifyAdvertisedEndpoint({
             fetchStatus: makeNodeFetchStatusEndpoint(),
           }),
