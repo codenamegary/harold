@@ -74,23 +74,9 @@ const buildCandidates = (deps: ResolvePairingEndpointDeps): ReadonlyArray<Candid
     ...detectedCandidates(deps),
   ].filter((candidate, index, all) => all.findIndex((item) => item.url === candidate.url) === index)
 
-const probeAll = async (
-  deps: ResolvePairingEndpointDeps,
-  candidates: ReadonlyArray<Candidate>,
-): Promise<Map<string, ReachabilityFailure | null>> => {
-  const results = await Promise.all(
-    candidates.map(async (candidate) => {
-      const result = await deps.verifyEndpoint(candidate.url)
-      return [candidate.url, result.ok ? null : result.error] as const
-    }),
-  )
-  return new Map(results)
-}
-
 const promptOnce = async (
   deps: ResolvePairingEndpointDeps,
   candidates: ReadonlyArray<Candidate>,
-  failures: Map<string, ReachabilityFailure | null>,
 ): Promise<string | symbol> => {
   const prompts = deps.prompts
   if (prompts === undefined) {
@@ -100,15 +86,11 @@ const promptOnce = async (
   return prompts.select(
     "Which endpoint should the QR code advertise?",
     [
-      ...candidates.map((candidate) => {
-        const failure = failures.get(candidate.url)
-        const reachability = failure === undefined ? "" : failure === null ? "" : " · unreachable"
-        return {
-          value: candidate.url,
-          label: candidate.url,
-          hint: `${candidate.hint}${reachability}`,
-        }
-      }),
+      ...candidates.map((candidate) => ({
+        value: candidate.url,
+        label: candidate.url,
+        hint: candidate.hint,
+      })),
       { value: customOptionValue, label: "Enter a custom URL" },
     ],
     candidates[0]?.url,
@@ -124,9 +106,10 @@ const promptOnce = async (
  *    failing with the probed list when nothing answers.
  * 3. Interactive runs list every candidate immediately — remembered
  *    endpoints first, then this machine's interface addresses — most
- *    recently used first and preselected. Each option is labelled with its
- *    probe result. Picking an unreachable endpoint explains the failure and
- *    reopens the list, so the choice is always a working endpoint.
+ *    recently used first and preselected. Options are labelled with where
+ *    they came from (history source or interface name); the probe happens
+ *    on the pick, and choosing an unreachable endpoint explains the failure
+ *    and reopens the list, so the choice is always a working endpoint.
  * 4. The custom URL option verifies the entered endpoint the same way.
  */
 export const resolvePairingEndpoint = async (
@@ -175,9 +158,7 @@ export const resolvePairingEndpoint = async (
   }
 
   for (;;) {
-    const failures = await probeAll(deps, candidates)
-
-    const selected = await promptOnce(deps, candidates, failures)
+    const selected = await promptOnce(deps, candidates)
     if (prompts.isCancel(selected)) {
       return { ok: false, message: "Pairing cancelled." }
     }
@@ -193,15 +174,15 @@ export const resolvePairingEndpoint = async (
       continue
     }
 
-    const failure = failures.get(selected)
-    if (failure === null || failure === undefined) {
+    const result = await deps.verifyEndpoint(selected)
+    if (result.ok) {
       const chosen = candidates.find((candidate) => candidate.url === selected)
       if (chosen !== undefined) {
         return { ok: true, url: chosen.url, source: chosen.source }
       }
     }
 
-    const detail = failure === null || failure === undefined ? "" : describeFailure(failure)
+    const detail = result.ok ? "" : describeFailure(result.error)
     deps.writeLine(`${selected} is not reachable${detail === "" ? "" : `: ${detail}`}.`)
     deps.writeLine("Is the daemon running? Start it with `harold start`, then pick again.")
   }

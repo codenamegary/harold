@@ -170,11 +170,10 @@ describe("resolvePairingEndpoint", () => {
       "http://10.0.0.236:3847",
       "__custom__",
     ])
-    for (const option of options) {
-      if (option.value !== "__custom__") {
-        expect(option.hint).toContain("unreachable")
-      }
-    }
+    // Hints say where the option came from, never reachability.
+    expect(options[0]?.hint).toBe("detected")
+    expect(options[1]?.hint).toBe("eth0")
+    expect(options[2]?.hint).toBe("eth1")
   })
 
   test("interactive runs list history first, then interface addresses, MRU selected", async () => {
