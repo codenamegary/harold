@@ -71,11 +71,8 @@ const pairingErrorMessages: Record<DeviceError["kind"], string> = {
 
 const renderDeviceError = (error: DeviceError): string => pairingErrorMessages[error.kind]
 
-export type PairRenderMode = "qr" | "manual"
-
 export type PairActionOptions = Readonly<{
   endpoint: string
-  mode: PairRenderMode
   wait: boolean
   json: boolean
 }>
@@ -92,11 +89,11 @@ export type PairActionDeps = Readonly<{
 }>
 
 /**
- * Renders a pairing code against the already-resolved endpoint (human
- * summary + terminal QR, or JSON), then optionally waits for a device to
- * claim it. Endpoint selection lives in the command action; the transport,
- * clock, and renderers are injected so the command stays testable without a
- * live daemon.
+ * Renders a pairing code against the already-resolved endpoint. The human
+ * output always carries both pairing paths: the terminal QR and the endpoint
+ * plus code for manual entry. JSON mode emits machine-readable lines instead.
+ * Endpoint selection lives in the command action; the transport, clock, and
+ * renderers are injected so the command stays testable without a live daemon.
  */
 export const executePair = async (
   deps: PairActionDeps,
@@ -128,17 +125,14 @@ export const executePair = async (
       }),
     )
     deps.writeOut("")
-    if (options.mode === "qr") {
-      deps.writeOut(await deps.renderTerminalQr(qrUri))
-      deps.writeOut("")
-    } else {
-      deps.writeOut(
-        deps.colors.dim(
-          "Manual pairing: choose Enter a code in the app, type this endpoint, then the code.",
-        ),
-      )
-      deps.writeOut("")
-    }
+    deps.writeOut(await deps.renderTerminalQr(qrUri))
+    deps.writeOut("")
+    deps.writeOut(
+      deps.colors.dim(
+        "Manual pairing: choose Enter a code in the app, type this endpoint, then the code.",
+      ),
+    )
+    deps.writeOut("")
   }
 
   if (!options.wait) {
@@ -173,39 +167,6 @@ export const executePair = async (
   return 1
 }
 
-const chooseRenderMode = async (options: {
-  qr?: boolean
-  manual?: boolean
-  json: boolean
-}): Promise<PairRenderMode> => {
-  if (options.json) {
-    return "qr"
-  }
-  if (options.manual) {
-    return "manual"
-  }
-  if (options.qr) {
-    return "qr"
-  }
-
-  if (!process.stdout.isTTY) {
-    return "qr"
-  }
-
-  const selected = await clackSelect<"qr" | "manual">({
-    message: "How will the device pair?",
-    options: [
-      { value: "qr" as const, label: "Scan the QR code" },
-      { value: "manual" as const, label: "Enter the code manually" },
-    ],
-    initialValue: "qr" as const,
-  })
-  if (clackIsCancel(selected)) {
-    return "qr"
-  }
-  return selected
-}
-
 export const makePairCommand = (): Command => {
   const command = new Command("pair")
   command.description("pair a device with a QR code or a manual code")
@@ -214,90 +175,74 @@ export const makePairCommand = (): Command => {
       "--url <endpoint>",
       "endpoint to advertise (default: detection with remembered history)",
     )
-    .option("--qr", "render the QR code without prompting")
-    .option("--manual", "print the endpoint and code for manual entry, without prompting")
     .option("--no-wait", "print the code and exit without waiting for a device")
     .option("--json", "emit newline-delimited JSON (one object per line)")
 
-  command.action(
-    async (options: {
-      url?: string
-      qr?: boolean
-      manual?: boolean
-      wait: boolean
-      json: boolean
-    }) => {
-      await withPairCommandContext(async (context) => {
-        const choice = await resolvePairingEndpoint({
-          explicitUrl: options.url,
-          readHistory: context.readHistory,
-          listLanAddresses: detectUsableIpv4AddressEntries,
-          port: context.port,
-          verifyEndpoint: context.verifyEndpoint,
-          isInteractive: process.stdout.isTTY === true,
-          writeLine: (line) => console.log(line),
-          ...(process.stdout.isTTY
-            ? {
-                prompts: {
-                  select: async (message, selectOptions, initialValue) => {
-                    const answer = await clackSelect({
-                      message,
-                      options: selectOptions.map((option) => ({
-                        value: option.value,
-                        label: option.label,
-                        hint: option.hint,
-                      })),
-                      initialValue,
-                    })
-                    return answer
-                  },
-                  text: async (message, placeholder) => {
-                    return clackText({ message, placeholder })
-                  },
-                  isCancel: (value) => clackIsCancel(value),
+  command.action(async (options: { url?: string; wait: boolean; json: boolean }) => {
+    await withPairCommandContext(async (context) => {
+      const choice = await resolvePairingEndpoint({
+        explicitUrl: options.url,
+        readHistory: context.readHistory,
+        listLanAddresses: detectUsableIpv4AddressEntries,
+        port: context.port,
+        verifyEndpoint: context.verifyEndpoint,
+        isInteractive: process.stdout.isTTY === true,
+        writeLine: (line) => console.log(line),
+        ...(process.stdout.isTTY
+          ? {
+              prompts: {
+                select: async (message, selectOptions, initialValue) => {
+                  const answer = await clackSelect({
+                    message,
+                    options: selectOptions.map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                      hint: option.hint,
+                    })),
+                    initialValue,
+                  })
+                  return answer
                 },
-              }
-            : {}),
-        })
-
-        if (!choice.ok) {
-          console.error(pc.red(choice.message))
-          process.exitCode = 1
-          return
-        }
-
-        context.recordHistory({
-          url: choice.url,
-          source: choice.source,
-          lastUsedAt: new Date().toISOString(),
-        })
-
-        const mode = await chooseRenderMode({
-          qr: options.qr,
-          manual: options.manual,
-          json: options.json,
-        })
-
-        const exitCode = await executePair(
-          {
-            createPairingCode: context.slice.createPairingCode,
-            getPairingCodeById: context.slice.getPairingCodeById,
-            renderTerminalQr,
-            colors: { bold: pc.bold, dim: pc.dim },
-            writeOut: (text) => console.log(text),
-            writeErr: (text) => console.error(text),
-            now: () => new Date(),
-            sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-          },
-          { endpoint: choice.url, mode, wait: options.wait, json: options.json },
-        )
-
-        if (exitCode !== 0) {
-          process.exitCode = exitCode
-        }
+                text: async (message, placeholder) => {
+                  return clackText({ message, placeholder })
+                },
+                isCancel: (value) => clackIsCancel(value),
+              },
+            }
+          : {}),
       })
-    },
-  )
+
+      if (!choice.ok) {
+        console.error(pc.red(choice.message))
+        process.exitCode = 1
+        return
+      }
+
+      context.recordHistory({
+        url: choice.url,
+        source: choice.source,
+        lastUsedAt: new Date().toISOString(),
+      })
+
+      const exitCode = await executePair(
+        {
+          createPairingCode: context.slice.createPairingCode,
+          getPairingCodeById: context.slice.getPairingCodeById,
+          renderTerminalQr,
+          colors: { bold: pc.bold, dim: pc.dim },
+          writeOut: (text) => console.log(text),
+          writeErr: (text) => console.error(text),
+          now: () => new Date(),
+          sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+        },
+        { endpoint: choice.url, wait: options.wait, json: options.json },
+      )
+
+      if (exitCode !== 0) {
+        process.exitCode = exitCode
+      }
+    })
+  })
 
   return command
 }

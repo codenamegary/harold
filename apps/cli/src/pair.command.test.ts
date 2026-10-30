@@ -88,7 +88,6 @@ describe("executePair", () => {
 
     const exitCode = await executePair(harness.deps, {
       endpoint: LAN_ENDPOINT,
-      mode: "qr",
       wait: true,
       json: false,
     })
@@ -104,20 +103,20 @@ describe("executePair", () => {
     ])
   })
 
-  test("manual mode prints the endpoint and code but skips the QR", async () => {
+  test("renders the QR and the manual entry hint together, no mode prompt", async () => {
     const harness = makeHarness()
 
     const exitCode = await executePair(harness.deps, {
       endpoint: LAN_ENDPOINT,
-      mode: "manual",
       wait: false,
       json: false,
     })
 
     expect(exitCode).toBe(0)
-    expect(harness.qrCalls).toEqual([])
+    expect(harness.qrCalls).toHaveLength(1)
     expect(harness.out.join("\n")).toContain(LAN_ENDPOINT)
     expect(harness.out.join("\n")).toContain("R7K-4MP")
+    expect(harness.out.join("\n")).toContain("Manual pairing")
   })
 
   test("--no-wait exits after rendering without polling", async () => {
@@ -125,7 +124,6 @@ describe("executePair", () => {
 
     const exitCode = await executePair(harness.deps, {
       endpoint: LAN_ENDPOINT,
-      mode: "qr",
       wait: false,
       json: false,
     })
@@ -141,7 +139,6 @@ describe("executePair", () => {
 
     const exitCode = await executePair(harness.deps, {
       endpoint: LAN_ENDPOINT,
-      mode: "qr",
       wait: false,
       json: true,
     })
@@ -166,7 +163,6 @@ describe("executePair", () => {
 
     const exitCode = await executePair(harness.deps, {
       endpoint: LAN_ENDPOINT,
-      mode: "qr",
       wait: true,
       json: true,
     })
@@ -199,7 +195,6 @@ describe("executePair", () => {
 
     const exitCode = await executePair(harness.deps, {
       endpoint: LAN_ENDPOINT,
-      mode: "qr",
       wait: false,
       json: false,
     })
@@ -215,7 +210,6 @@ describe("executePair", () => {
 
     const exitCode = await executePair(harness.deps, {
       endpoint: LAN_ENDPOINT,
-      mode: "qr",
       wait: false,
       json: true,
     })
@@ -235,7 +229,6 @@ describe("executePair", () => {
 
     const exitCode = await executePair(harness.deps, {
       endpoint: LAN_ENDPOINT,
-      mode: "qr",
       wait: true,
       json: false,
     })
@@ -252,7 +245,6 @@ describe("executePair", () => {
 
     const exitCode = await executePair(harness.deps, {
       endpoint: LAN_ENDPOINT,
-      mode: "qr",
       wait: true,
       json: true,
     })

@@ -250,7 +250,6 @@ export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): P
         return (
           (await executePair(pairDeps, {
             endpoint: choice.url,
-            mode: "qr",
             wait: true,
             json: false,
           })) === 0
