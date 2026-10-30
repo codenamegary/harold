@@ -1,5 +1,4 @@
 import { FastifyInstance } from "fastify"
-import { CreatePairingCodeBody } from "contracts/http/pairing-code"
 import {
   ClaimPairingCodeCommand,
   ClaimPairingCodeResult,
@@ -20,7 +19,6 @@ import {
 } from "core/device/remove.device.usecase"
 import {
   FindDeviceByCredentialHash,
-  GetAdvertisedEndpointSettings,
   GetPairingCodeById,
   ListDevices,
   TouchDeviceLastSeen,
@@ -45,13 +43,11 @@ import {
 
 export type AssembleDeviceSliceDeps = Readonly<{
   database: AgentDatabase
-  loopbackEndpoint: string
-  getAdvertisedEndpointSettings: GetAdvertisedEndpointSettings
 }>
 
 export type DeviceSlice = Readonly<{
   registerRoutes: (app: FastifyInstance) => void
-  createPairingCode: (body?: CreatePairingCodeBody) => Promise<CreatePairingCodeResult>
+  createPairingCode: (endpoint: string) => Promise<CreatePairingCodeResult>
   claimPairingCode: (command: ClaimPairingCodeCommand) => Promise<ClaimPairingCodeResult>
   getPairingCodeById: GetPairingCodeById
   listDevices: ListDevices
@@ -75,11 +71,7 @@ export const assembleDeviceSlice = (deps: AssembleDeviceSliceDeps): DeviceSlice 
   const removeDeviceRow = makeRemoveDeviceRow(deps.database)
   const listDevices = makeListDevices(deps.database)
 
-  const createPairingCode = makeCreatePairingCode({
-    loopbackEndpoint: deps.loopbackEndpoint,
-    getAdvertisedEndpointSettings: deps.getAdvertisedEndpointSettings,
-    insertPairingCode,
-  })
+  const createPairingCode = makeCreatePairingCode({ insertPairingCode })
   const claimPairingCode = makeClaimPairingCode({
     markExpiredActiveBefore,
     listActivePairingCodes,
@@ -97,9 +89,7 @@ export const assembleDeviceSlice = (deps: AssembleDeviceSliceDeps): DeviceSlice 
   return {
     registerRoutes: (app) => {
       registerDeviceRoutes(app, {
-        createPairingCode,
         claimPairingCode,
-        listDevices,
         removeDevice,
       })
     },

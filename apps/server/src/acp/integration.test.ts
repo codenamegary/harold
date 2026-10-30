@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test"
-import { StatusSchema } from "contracts/http/status"
 import { spawnFakeAcp } from "test-support/spawn"
 import { bootTestApp } from "../test-support/test.harness"
 import { SpawnedAgentProcess } from "./supervisor/models"
@@ -54,14 +53,7 @@ describe("ACP supervisor integration", () => {
 
     await acpSupervisor.start("cursor")
 
-    const statusResponse = await app.inject({
-      headers: authHeaders(app),
-      method: "GET",
-      url: "/v1/status",
-    })
-    const status = StatusSchema.parse(JSON.parse(statusResponse.body))
-
-    expect(status.acp).toEqual({ state: "ready", activeSessions: 0 })
+    expect(acpSupervisor.getStatus()).toEqual({ state: "ready", activeSessions: 0 })
     const inventory = acpSupervisor.getCapabilityInventory("cursor")
     expect(inventoryAdvertisesResumable(inventory)).toBe(false)
     expect(inventoryAdvertisesSessionClose(inventory)).toBe(false)
@@ -80,13 +72,16 @@ describe("ACP supervisor integration", () => {
       reason: "Agent is not enabled",
     })
 
+    // The wire status stays minimal; ACP detail lives on the supervisor.
     const statusResponse = await app.inject({
       headers: authHeaders(app),
       method: "GET",
       url: "/v1/status",
     })
-    const status = StatusSchema.parse(JSON.parse(statusResponse.body))
-    expect(status.acp.state).toBe("stopped")
+    const body = JSON.parse(statusResponse.body)
+    expect(body.state).toBe("starting")
+    expect("acp" in body).toBe(false)
+    expect(acpSupervisor.getStatus().state).toBe("stopped")
   })
 
   test(
@@ -115,14 +110,6 @@ describe("ACP supervisor integration", () => {
       })
 
       expect(acpSupervisor.getStatus().state).toBe("stopped")
-
-      const statusResponse = await app.inject({
-        headers: authHeaders(app),
-        method: "GET",
-        url: "/v1/status",
-      })
-      const status = StatusSchema.parse(JSON.parse(statusResponse.body))
-      expect(status.acp.state).toBe("stopped")
     },
     { timeout: 20_000 },
   )
@@ -145,14 +132,6 @@ describe("ACP supervisor integration", () => {
       expect(enableResponse.statusCode).toBe(200)
       expect(acpSupervisor.getStatus().state).toBe("ready")
       expect(acpSupervisor.getRunningAgentIds()).toEqual(["cursor"])
-
-      const statusResponse = await app.inject({
-        headers: authHeaders(app),
-        method: "GET",
-        url: "/v1/status",
-      })
-      const status = StatusSchema.parse(JSON.parse(statusResponse.body))
-      expect(status.acp.state).toBe("ready")
     },
     { timeout: 20_000 },
   )

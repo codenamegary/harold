@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test"
 import {
   ClaimPairingCodeBodySchema,
   ClaimPairingCodeResponseSchema,
-  CreatePairingCodeBodySchema,
   CreatePairingCodeResponseSchema,
   PAIRING_CODES_PATH,
   PairingCodeSchema,
@@ -63,16 +62,12 @@ describe("PairingCodeSchema", () => {
 
   test("accepts claimed, expired, and revoked states", () => {
     for (const state of ["claimed", "expired", "revoked"] as const) {
-      expect(PairingCodeSchema.parse({ ...validPairingCode, state }).state).toBe(
-        state,
-      )
+      expect(PairingCodeSchema.parse({ ...validPairingCode, state }).state).toBe(state)
     }
   })
 
   test("rejects invalid endpoint", () => {
-    expect(() =>
-      PairingCodeSchema.parse({ ...validPairingCode, endpoint: "not-a-url" }),
-    ).toThrow()
+    expect(() => PairingCodeSchema.parse({ ...validPairingCode, endpoint: "not-a-url" })).toThrow()
   })
 
   test("rejects prototype serverPublicKey", () => {
@@ -94,32 +89,9 @@ describe("PairingCodeSchema", () => {
   })
 })
 
-describe("CreatePairingCodeBodySchema", () => {
-  test("accepts an empty body", () => {
-    expect(CreatePairingCodeBodySchema.parse({})).toEqual({})
-  })
-
-  test("accepts loopback and advertised endpoint choices", () => {
-    expect(CreatePairingCodeBodySchema.parse({ endpoint: "loopback" })).toEqual({
-      endpoint: "loopback",
-    })
-    expect(CreatePairingCodeBodySchema.parse({ endpoint: "advertised" })).toEqual({
-      endpoint: "advertised",
-    })
-  })
-
-  test("rejects client-supplied code", () => {
-    expect(() =>
-      CreatePairingCodeBodySchema.parse({ code: "R7K-4MP" }),
-    ).toThrow()
-  })
-})
-
 describe("CreatePairingCodeResponseSchema", () => {
   test("accepts the pairing code resource", () => {
-    expect(CreatePairingCodeResponseSchema.parse(validPairingCode)).toEqual(
-      validPairingCode,
-    )
+    expect(CreatePairingCodeResponseSchema.parse(validPairingCode)).toEqual(validPairingCode)
   })
 })
 
@@ -139,9 +111,7 @@ describe("ClaimPairingCodeBodySchema", () => {
   })
 
   test("rejects name over 80 characters", () => {
-    expect(() =>
-      ClaimPairingCodeBodySchema.parse({ name: "a".repeat(81) }),
-    ).toThrow()
+    expect(() => ClaimPairingCodeBodySchema.parse({ name: "a".repeat(81) })).toThrow()
   })
 
   test("rejects empty platform", () => {
@@ -169,8 +139,6 @@ describe("ClaimPairingCodeResponseSchema", () => {
   })
 
   test("rejects claim response without credential", () => {
-    expect(() =>
-      ClaimPairingCodeResponseSchema.parse({ device: validDevice }),
-    ).toThrow()
+    expect(() => ClaimPairingCodeResponseSchema.parse({ device: validDevice })).toThrow()
   })
 })

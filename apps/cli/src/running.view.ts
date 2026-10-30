@@ -1,4 +1,4 @@
-import { localApiUrl, StatusSummary } from "core/status/summary.models"
+import { StatusSummary } from "core/status/summary.models"
 import { makeGetStatusSummary } from "core/status/summary.usecase"
 import { Config } from "server/config"
 import { openDatabase } from "server/database"
@@ -31,11 +31,6 @@ export type RunningViewColors = Readonly<{
 export const recommendNextStep = (view: RunningView): NextStep => {
   if (view.summary.agents.enabled === 0 || view.summary.workspaces === 0) {
     return { command: "harold setup", description: "configure agents, a workspace, and pairing" }
-  }
-
-  const endpoint = view.summary.advertisedEndpoint
-  if (endpoint.url === null || !endpoint.enabled) {
-    return { command: "harold connect", description: "verify a reachable endpoint for your phone" }
   }
 
   if (view.devices === 0) {
@@ -80,17 +75,7 @@ export const readRunningView = (config: Config): RunningView => {
         listAgentSettingsRows: makeListAgentSettingsRows(database),
       }),
     )
-    const devices = assembleDeviceSlice({
-      database,
-      loopbackEndpoint: localApiUrl({ host: config.host, port: config.port }),
-      getAdvertisedEndpointSettings: () => {
-        const settings = settingsStore.get()
-        return {
-          advertisedUrl: settings.advertisedUrl,
-          advertisedUrlEnabled: settings.advertisedUrlEnabled,
-        }
-      },
-    }).listDevices({ limit: 1 })
+    const devices = assembleDeviceSlice({ database }).listDevices({ limit: 1 })
 
     return { summary: getStatusSummary(), devices: devices.ok ? devices.value.count : 0 }
   } finally {

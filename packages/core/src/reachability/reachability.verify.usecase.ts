@@ -1,6 +1,5 @@
 import { AdvertisedUrlSchema } from "contracts/http/runtime-settings"
 import {
-  parseStatusDocument,
   ReachabilityFailure,
   statusUrlFor,
   VerifiedAdvertisedEndpoint,
@@ -24,11 +23,11 @@ const invalidSchemeFailure = (advertisedUrl: string): ReachabilityFailure => ({
 const is2xx = (status: number): boolean => status >= 200 && status <= 299
 
 /**
- * Verifies an advertised endpoint the way a device would: resolve the
- * `GET /v1/status` URL, fetch it through the injected port, require 2xx, and
- * parse the body with the Status contract. Validation reuses the shared
- * reachability rule in `contracts/http/runtime-settings`: https everywhere,
- * http only on loopback and private-network hosts.
+ * Probes an endpoint the way a device would: resolve the `GET /v1/status`
+ * URL, fetch it through the injected port, require 2xx. The probe checks
+ * reachability only, so the response body is not parsed. URL validation
+ * reuses the shared reachability rule in `contracts/http/runtime-settings`:
+ * https everywhere, http only on loopback and private-network hosts.
  */
 export const makeVerifyAdvertisedEndpoint =
   (deps: VerifyAdvertisedEndpointDeps): VerifyAdvertisedEndpoint =>
@@ -51,16 +50,10 @@ export const makeVerifyAdvertisedEndpoint =
       }
     }
 
-    const parsed = parseStatusDocument(fetched.response.body)
-    if (!parsed.ok) {
-      return { ok: false, error: { kind: "invalid_body", detail: parsed.detail } }
-    }
-
     const value: VerifiedAdvertisedEndpoint = {
       advertisedUrl,
       statusUrl,
       httpStatus: fetched.response.status,
-      status: parsed.status,
     }
     return { ok: true, value }
   }

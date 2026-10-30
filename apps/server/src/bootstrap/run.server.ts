@@ -1,8 +1,9 @@
 import { createWriteStream } from "node:fs"
+import { appendFileSync } from "node:fs"
 import cliPackageJson from "../../../cli/package.json"
 import { createServer } from "./server"
 import { listen, registerShutdown } from "./shutdown"
-import { ConfigSchema, parseConfig } from "../config/config"
+import { ConfigSchema, DEFAULT_BIND_HOST, parseConfig } from "../config/config"
 import { readEnvBindOverrides } from "../config/env.bind.overrides"
 import { openDatabase } from "../persistence/database"
 import { createAppliedRuntimeSettingsHolder } from "../runtime-settings/applied.runtime.settings"
@@ -14,6 +15,7 @@ import { buildAppliedRuntimeSettings } from "../runtime-settings/resolve.runtime
 import { createRuntime } from "../runtime/runtime"
 import { daemonStateFilePath, makeDaemonStateFileStore } from "core/daemon-state/node.adapters"
 import { resolveDaemonLogPath } from "core/logs/tail.node.adapters"
+import { detectNetworkInterfaces, hasDialableAddress } from "core/network/lan.address"
 import { composeServerGetStatus } from "../status/status.adapters"
 import { startDaemonStateWriter } from "../status/daemon.state.writer"
 
@@ -38,7 +40,7 @@ export const runServer = async (options: RunServerOptions = {}) => {
   )
   const applied = appliedRuntimeSettings.get()
   const config = ConfigSchema.parse({
-    host: applied.bindHost,
+    host: DEFAULT_BIND_HOST,
     port: applied.bindPort,
     dataDir: envConfig.dataDir,
   })
@@ -48,6 +50,24 @@ export const runServer = async (options: RunServerOptions = {}) => {
   // A null logPath means the default file under the data dir.
   const logFilePath = resolveDaemonLogPath(applied.logPath, envConfig.dataDir)
   const logStream = createWriteStream(logFilePath, { flags: "a" })
+
+  // The daemon exists to serve the app. On a machine with no network
+  // address at all nothing can ever pair, so refuse to start instead of
+  // running a daemon only loopback could reach. The gate is lenient: any
+  // non-internal, non-link-local IPv4 address counts, including virtual
+  // interfaces like Tailscale.
+  if (!hasDialableAddress(detectNetworkInterfaces())) {
+    const message = "no network address found. Connect to a network and run `harold start` again."
+    try {
+      appendFileSync(logFilePath, `${new Date().toISOString()} ${message}\n`, "utf8")
+    } catch {
+      // the log file is best-effort; the exit below is the visible failure
+    }
+    logStream.end()
+    database.close()
+    process.exit(1)
+  }
+
   const runtime = createRuntime(cliPackageJson.version)
   const { app, acpSupervisor, runtimeStatusService, warmAgents } = await createServer({
     config,

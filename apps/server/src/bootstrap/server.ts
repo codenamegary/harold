@@ -32,7 +32,6 @@ import { assembleDeviceSlice } from "../device/device.assembly"
 import { createRuntimeStatusService } from "../runtime/status.service"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
 import { ValidateExecutablePathFn } from "core/agent-settings/validate-agent-path"
-import { localApiUrl } from "core/status/summary.models"
 import { createAuthBroker, AuthBroker } from "../agent/auth/broker"
 import { registerAgentAuthRoutes } from "../agent/auth/routes"
 import { createSupervisorAuthHooks } from "../agent/auth/supervisor.hooks"
@@ -173,17 +172,7 @@ export const createServer = async ({
       seedDefaults: seedDefaultsFromConfig(config),
     })
 
-  const device = assembleDeviceSlice({
-    database,
-    loopbackEndpoint: localApiUrl({ host: config.host, port: config.port }),
-    getAdvertisedEndpointSettings: () => {
-      const settings = runtimeSettingsStore.get()
-      return {
-        advertisedUrl: settings.advertisedUrl,
-        advertisedUrlEnabled: settings.advertisedUrlEnabled,
-      }
-    },
-  })
+  const device = assembleDeviceSlice({ database })
   device.registerRoutes(app)
 
   registerAuthMiddleware(app, {
@@ -382,7 +371,7 @@ export const createServer = async ({
     ...(sseHeartbeatMs === undefined ? {} : { sseHeartbeatMs }),
   })
 
-  registerStatusRoutes(app, runtime, config, acpSupervisor)
+  registerStatusRoutes(app, runtime)
   const runtimeStatusService = createRuntimeStatusService({
     runtime,
   })
@@ -395,9 +384,6 @@ export const createServer = async ({
   registerAgentAuthRoutes(app, authBroker, agentExists)
   const runtimeSettings = assembleRuntimeSettingsSlice({
     store: runtimeSettingsStore,
-    onLogLevelChanged: (nextLevel) => {
-      app.log.level = nextLevel
-    },
     appliedRuntimeSettings,
     envBindOverrides,
   })

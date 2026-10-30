@@ -1,14 +1,11 @@
 import { describe, expect, test } from "bun:test"
-import { UnauthorizedProblemSchema } from "contracts/http/error"
-import {
-  ClaimPairingCodeResponseSchema,
-  CreatePairingCodeResponseSchema,
-  PAIRING_CODES_PATH,
-  claimPairingCodePath,
-} from "contracts/http/pairing-code"
 import { eq } from "drizzle-orm"
+import { UnauthorizedProblemSchema } from "contracts/http/error"
+import { ClaimPairingCodeResponseSchema, claimPairingCodePath } from "contracts/http/pairing-code"
+import { makeCreatePairingCode } from "core/device/create.pairing.code.usecase"
 import { bootTestApp, seedTestDevice } from "../test-support/test.harness"
 import { devices } from "../persistence/schema/devices"
+import { makeInsertPairingCode } from "../device/device.sqlite.adapters"
 import { Config } from "../config/config"
 import { BEARER_CHALLENGE } from "./problems"
 
@@ -32,14 +29,16 @@ const getListeningHttpBase = async (
 
 const authHeaders = (credential: string) => ({ authorization: `Bearer ${credential}` })
 
-const createPairingCode = async (httpBase: string, credential: string) => {
-  const createResponse = await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
-    method: "POST",
-    headers: { "content-type": "application/json", ...authHeaders(credential) },
-    body: JSON.stringify({}),
-  })
-  expect(createResponse.status).toBe(201)
-  return CreatePairingCodeResponseSchema.parse(await createResponse.json())
+// Codes are minted in process against the app's database; the claim route
+// stays the only network surface for pairing.
+const seedPairingCode = async (
+  database: Parameters<typeof makeInsertPairingCode>[0]["database"],
+) => {
+  const result = await makeCreatePairingCode({
+    insertPairingCode: makeInsertPairingCode(database),
+  })("http://192.168.1.20:3847")
+  if (!result.ok) throw new Error("failed to seed pairing code")
+  return result.value
 }
 
 const expectUnauthorized = async (response: Response) => {
@@ -58,13 +57,6 @@ describe("device-only HTTP edge", () => {
     await expectUnauthorized(await fetch(`${httpBase}/v1/workspaces`))
     await expectUnauthorized(await fetch(`${httpBase}/v1/sessions`))
     await expectUnauthorized(await fetch(`${httpBase}/v1/settings/agents`))
-    await expectUnauthorized(
-      await fetch(`${httpBase}${PAIRING_CODES_PATH}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({}),
-      }),
-    )
   })
 
   test("valid device Bearer unlocks user HTTP", async () => {
@@ -111,8 +103,8 @@ describe("device-only HTTP edge", () => {
   test("pairing claim stays open without Bearer", async () => {
     const { app, config, database } = await bootTestApp()
     const { httpBase } = await getListeningHttpBase(app, config)
-    const { credential } = seedTestDevice(database)
-    const created = await createPairingCode(httpBase, credential)
+    seedTestDevice(database)
+    const created = await seedPairingCode(database)
 
     const claimResponse = await fetch(`${httpBase}${claimPairingCodePath(created.code)}`, {
       method: "POST",

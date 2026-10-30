@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import net from "node:net"
 import path from "node:path"
-import { StatusSchema } from "contracts/http/status"
+import { LivenessSchema } from "contracts/http/status"
 import {
   InternalProblemSchema,
   ProblemDetailsSchema,
@@ -14,7 +14,7 @@ const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
 })
 
 describe("GET /v1/status", () => {
-  test("returns 200 with a StatusSchema payload", async () => {
+  test("returns 200 with a minimal liveness payload", async () => {
     const { app } = await bootTestApp({
       config: { host: "127.0.0.1", port: 3847 },
       registerTestRoutes: true,
@@ -25,15 +25,16 @@ describe("GET /v1/status", () => {
       method: "GET",
       url: "/v1/status",
     })
-    const body = StatusSchema.parse(JSON.parse(response.body))
+    const body = LivenessSchema.parse(JSON.parse(response.body))
 
     expect(response.statusCode).toBe(200)
     expect(body.version).toBe("0.1.0")
     expect(body.state).toBe("starting")
-    expect(body.bindAddress).toBe("127.0.0.1")
-    expect(body.acp).toEqual({ state: "stopped", activeSessions: 0 })
-    expect(body.startedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
-    expect("uptimeSeconds" in body).toBe(false)
+    // The route is unauthenticated and the daemon serves every interface,
+    // so the payload stays minimal: no bind, uptime, or ACP detail.
+    expect("bindAddress" in body).toBe(false)
+    expect("acp" in body).toBe(false)
+    expect("startedAt" in body).toBe(false)
   })
 })
 

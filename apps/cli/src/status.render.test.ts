@@ -20,7 +20,6 @@ const identityColors: StatusColors = {
 const summary: StatusSummary = {
   dataDir: "/home/me/.harold",
   localApi: { host: "127.0.0.1", port: 3847 },
-  advertisedEndpoint: { url: "https://harold.example.com", enabled: true },
   agents: { enabled: 2, needsAuth: 1 },
   workspaces: 3,
 }
@@ -40,27 +39,14 @@ describe("renderStatusSummary", () => {
 
     expect(output).toContain(summary.dataDir)
     expect(output).toContain("http://127.0.0.1:3847")
-    expect(output).toContain("https://harold.example.com")
     expect(output).toContain("2 enabled, 1 needs auth")
     expect(output).toContain("3")
   })
 
-  test("marks a missing advertised endpoint as disabled", () => {
-    const output = renderStatusSummary({
-      ...summary,
-      advertisedEndpoint: { url: null, enabled: true },
-    })
+  test("does not render an advertised endpoint row: the endpoint is a pair-time choice", () => {
+    const output = renderStatusSummary(summary)
 
-    expect(output).toContain("disabled")
-  })
-
-  test("marks a present but disabled advertised endpoint", () => {
-    const output = renderStatusSummary({
-      ...summary,
-      advertisedEndpoint: { url: "https://harold.example.com", enabled: false },
-    })
-
-    expect(output).toContain("https://harold.example.com (disabled)")
+    expect(output).not.toContain("advertised")
   })
 
   test("renders unknown needs-auth instead of a definitive zero", () => {

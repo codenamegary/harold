@@ -5,7 +5,6 @@ import { RunningView, recommendNextStep, renderRunningView } from "./running.vie
 const summary = (overrides: Partial<StatusSummary> = {}): StatusSummary => ({
   dataDir: "/home/dev/.harold",
   localApi: { host: "127.0.0.1", port: 3847 },
-  advertisedEndpoint: { url: "https://harold.example.com", enabled: true },
   agents: { enabled: 2, needsAuth: 0 },
   workspaces: 1,
   ...overrides,
@@ -25,20 +24,6 @@ describe("recommendNextStep", () => {
 
   test("points at setup when no workspace is registered", () => {
     expect(recommendNextStep(view({ workspaces: 0 })).command).toBe("harold setup")
-  })
-
-  test("points at connect when no advertised endpoint is set", () => {
-    expect(
-      recommendNextStep(view({ advertisedEndpoint: { url: null, enabled: false } })).command,
-    ).toBe("harold connect")
-  })
-
-  test("points at connect when the advertised endpoint is disabled", () => {
-    expect(
-      recommendNextStep(
-        view({ advertisedEndpoint: { url: "https://harold.example.com", enabled: false } }),
-      ).command,
-    ).toBe("harold connect")
   })
 
   test("points at pair when no device is paired", () => {

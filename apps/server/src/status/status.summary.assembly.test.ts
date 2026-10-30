@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { writeFileSync } from "node:fs"
-import path from "node:path"
 import { AgentDatabase } from "../persistence/database"
-import { Config } from "../config/config"
+import { Config, DEFAULT_BIND_HOST } from "../config/config"
 import {
   makeInsertAgentSettingsRow,
   makeListAgentSettingsRows,
@@ -16,7 +14,7 @@ import { bootTestDatabase } from "../test-support/test.harness"
 import { composeStatusSummaryPorts } from "./status.summary.assembly"
 
 const makeConfig = (dataDir: string): Config => ({
-  host: "127.0.0.1",
+  host: DEFAULT_BIND_HOST,
   port: 3847,
   dataDir,
 })
@@ -40,20 +38,19 @@ const composePorts = (
 }
 
 describe("composeStatusSummaryPorts", () => {
-  test("reports the data dir, applied local api, and seeded advertised endpoint", async () => {
+  test("reports the data dir and the applied local api", async () => {
     const { database, dataDir } = await bootTestDatabase()
     const ports = composePorts(database, makeConfig(dataDir), {})
 
     expect(ports.getDataDir()).toBe(dataDir)
-    expect(ports.getLocalApi()).toEqual({ host: "127.0.0.1", port: 3847 })
-    expect(ports.getAdvertisedEndpoint()).toEqual({ url: null, enabled: true })
+    expect(ports.getLocalApi()).toEqual({ host: DEFAULT_BIND_HOST, port: 3847 })
   })
 
-  test("prefers env bind overrides for the local api", async () => {
+  test("prefers env bind overrides for the local api port", async () => {
     const { database, dataDir } = await bootTestDatabase()
     const ports = composePorts(database, makeConfig(dataDir), { HAROLD_PORT: "9999" })
 
-    expect(ports.getLocalApi()).toEqual({ host: "127.0.0.1", port: 9999 })
+    expect(ports.getLocalApi()).toEqual({ host: DEFAULT_BIND_HOST, port: 9999 })
   })
 
   test("counts enabled agents and registered workspaces", async () => {
@@ -83,28 +80,5 @@ describe("composeStatusSummaryPorts", () => {
 
     expect(ports.getAgentSummary()).toEqual({ enabled: 1, needsAuth: null })
     expect(ports.getWorkspaceCount()).toBe(2)
-  })
-
-  test("reads the advertised endpoint from an existing settings.yml", async () => {
-    const { database, dataDir } = await bootTestDatabase()
-    writeFileSync(
-      path.join(dataDir, "settings.yml"),
-      [
-        "advertisedUrl: https://harold.example.com",
-        "advertisedUrlEnabled: false",
-        "bindHost: 127.0.0.1",
-        "bindPort: 3847",
-        "logLevel: info",
-        "logPath: null",
-        "",
-      ].join("\n"),
-    )
-
-    const ports = composePorts(database, makeConfig(dataDir), {})
-
-    expect(ports.getAdvertisedEndpoint()).toEqual({
-      url: "https://harold.example.com",
-      enabled: false,
-    })
   })
 })

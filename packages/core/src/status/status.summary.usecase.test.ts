@@ -4,8 +4,7 @@ import { makeGetStatusSummary, summarizeAgents } from "./status.summary.usecase"
 
 const summary: StatusSummary = {
   dataDir: "/home/me/.harold",
-  localApi: { host: "127.0.0.1", port: 3847 },
-  advertisedEndpoint: { url: "https://harold.example.com", enabled: true },
+  localApi: { host: "0.0.0.0", port: 3847 },
   agents: { enabled: 2, needsAuth: 1 },
   workspaces: 3,
 }
@@ -53,7 +52,6 @@ describe("makeGetStatusSummary", () => {
     const getStatusSummary = makeGetStatusSummary({
       getDataDir: () => summary.dataDir,
       getLocalApi: () => summary.localApi,
-      getAdvertisedEndpoint: () => summary.advertisedEndpoint,
       getAgentSummary: () => summary.agents,
       getWorkspaceCount: () => summary.workspaces,
     })
@@ -66,7 +64,6 @@ describe("makeGetStatusSummary", () => {
     const getStatusSummary = makeGetStatusSummary({
       getDataDir: () => summary.dataDir,
       getLocalApi: () => summary.localApi,
-      getAdvertisedEndpoint: () => summary.advertisedEndpoint,
       getAgentSummary: () => summary.agents,
       getWorkspaceCount: () => workspaces.count,
     })

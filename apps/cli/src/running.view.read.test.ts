@@ -28,7 +28,7 @@ describe("readRunningView", () => {
     const view = readRunningView(parseConfig(process.env))
 
     expect(view.summary.dataDir).toBe(scratch)
-    expect(view.summary.localApi).toEqual({ host: "127.0.0.1", port: 3847 })
+    expect(view.summary.localApi).toEqual({ host: "0.0.0.0", port: 3847 })
     expect(view.summary.workspaces).toBe(0)
     expect(view.devices).toBe(0)
   })

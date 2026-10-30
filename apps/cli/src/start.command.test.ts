@@ -99,7 +99,7 @@ describe("harold start", () => {
   test("fails when the daemon exits before it is ready", async () => {
     const harness = makeDeps({
       startDaemon: async () => ({ ok: false, error: { kind: "daemon_exited", code: 1 } }),
-      renderStartError: (error) => renderStartDaemonError(error, 3847, "harold start"),
+      renderStartError: (error) => renderStartDaemonError(error, "harold start"),
       readRunningView: () => {
         throw new Error("running view must not render when the daemon never started")
       },
@@ -116,7 +116,7 @@ describe("harold start", () => {
   test("fails when the daemon never becomes ready", async () => {
     const harness = makeDeps({
       startDaemon: async () => ({ ok: false, error: { kind: "timed_out" } }),
-      renderStartError: (error) => renderStartDaemonError(error, 3847, "harold start"),
+      renderStartError: (error) => renderStartDaemonError(error, "harold start"),
       readRunningView: () => {
         throw new Error("running view must not render when the daemon never started")
       },

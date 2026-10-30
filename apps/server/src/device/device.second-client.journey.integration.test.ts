@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { eq } from "drizzle-orm"
 import { UnauthorizedProblemSchema, ConflictProblemSchema } from "contracts/http/error"
-import { DeviceCollectionSchema, DEVICES_PATH, devicePath } from "contracts/http/device"
+import { devicePath } from "contracts/http/device"
 import { CreateSessionResponseSchema } from "contracts/http/session"
 import { sessionEventsPath } from "contracts/http/session.stream"
 import { WorkspaceSchema } from "contracts/http/workspace"
@@ -12,6 +12,8 @@ import { claimPairingCode, createPairingCode, pairDevice } from "test-support/se
 import { createSecondClient } from "test-support/second-client"
 import { bootTestApp } from "../test-support/test.harness"
 import { createWorkspaceDir, enableAgent } from "../test-support/test.app"
+import { assembleDeviceSlice } from "./device.assembly"
+import { makeInsertPairingCode } from "./device.sqlite.adapters"
 import { clearDevicePresence } from "./device.presence"
 import { pairingCodes } from "../persistence/schema/pairing-codes"
 
@@ -35,7 +37,7 @@ const waitFor = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 
 describe("second-client journey", () => {
   test("full MS2 lifecycle: pair, reconnect, operate, presence, remove, access loss", async () => {
     const logCapture = createLogCapture()
-    const { app, config, dataDir } = await bootTestApp({
+    const { app, config, dataDir, database } = await bootTestApp({
       logStream: logCapture.stream,
       whichFn,
       fakeAcpOptions: {
@@ -49,11 +51,12 @@ describe("second-client journey", () => {
       app,
       host: config.host,
     })
+    const registry = assembleDeviceSlice({ database })
 
     const paired = await pairDevice({
       httpBase,
+      insertPairingCode: makeInsertPairingCode(database),
       body: { name: "Journey client", platform: "test-second-client" },
-      credential: app.deviceCredential.credential,
     })
 
     const firstClient = createSecondClient({
@@ -94,43 +97,36 @@ describe("second-client journey", () => {
       agentId: "cursor",
       sessionId: created.sessionId,
     })
-    await waitFor(async () => {
-      const online = DeviceCollectionSchema.parse(
-        await (
-          await fetch(`${httpBase}${DEVICES_PATH}`, {
-            headers: { authorization: `Bearer ${app.deviceCredential.credential}` },
-          })
-        ).json(),
-      )
-      return online.items.find((item) => item.id === paired.deviceId)?.state === "online"
-    })
-    const online = DeviceCollectionSchema.parse(
-      await (
-        await fetch(`${httpBase}${DEVICES_PATH}`, {
-          headers: { authorization: `Bearer ${app.deviceCredential.credential}` },
-        })
-      ).json(),
-    )
-    const onlineEntry = online.items.find((item) => item.id === paired.deviceId)
-    expect(onlineEntry?.state).toBe("online")
+    const deviceState = () => {
+      const listed = registry.listDevices({ limit: 10 })
+      if (!listed.ok) throw new Error("list failed")
+      return listed.value.items.find((item) => item.id === paired.deviceId)?.state
+    }
+    await waitFor(() => deviceState() === "online")
+    expect(deviceState()).toBe("online")
 
     const endPromise = deviceStream.waitForEnd()
-    const removeResponse = await fetch(`${httpBase}${devicePath(paired.deviceId)}`, {
+
+    // A device removes only itself. The boot credential belongs to another
+    // device, so removing the paired device from it is forbidden.
+    const hostRemoveAttempt = await fetch(`${httpBase}${devicePath(paired.deviceId)}`, {
       method: "DELETE",
       headers: { authorization: `Bearer ${app.deviceCredential.credential}` },
+    })
+    expect(hostRemoveAttempt.status).toBe(403)
+
+    const removeResponse = await reconnected.fetch(`${devicePath(paired.deviceId)}`, {
+      method: "DELETE",
     })
     expect(removeResponse.status).toBe(204)
 
     await endPromise
 
-    const listedAfterRemove = DeviceCollectionSchema.parse(
-      await (
-        await fetch(`${httpBase}${DEVICES_PATH}`, {
-          headers: { authorization: `Bearer ${app.deviceCredential.credential}` },
-        })
-      ).json(),
-    )
-    expect(listedAfterRemove.items.find((item) => item.id === paired.deviceId)).toBeUndefined()
+    const listedAfterRemove = registry.listDevices({ limit: 10 })
+    if (!listedAfterRemove.ok) throw new Error("list failed")
+    expect(
+      listedAfterRemove.value.items.find((item) => item.id === paired.deviceId),
+    ).toBeUndefined()
 
     const httpDenied = await reconnected.fetch("/v1/workspaces")
     expect(httpDenied.status).toBe(401)
@@ -158,11 +154,9 @@ describe("second-client journey", () => {
       app,
       host: config.host,
     })
+    const insertPairingCode = makeInsertPairingCode(database)
 
-    const created = await createPairingCode({
-      httpBase,
-      credential: app.deviceCredential.credential,
-    })
+    const created = await createPairingCode({ insertPairingCode })
     const firstClaim = await claimPairingCode({
       httpBase,
       code: created.code,
@@ -181,10 +175,7 @@ describe("second-client journey", () => {
     const claimedProblem = ConflictProblemSchema.parse(await secondClaim.response.json())
     expect(claimedProblem.title).toBe("Pairing code already claimed")
 
-    const expiredCandidate = await createPairingCode({
-      httpBase,
-      credential: app.deviceCredential.credential,
-    })
+    const expiredCandidate = await createPairingCode({ insertPairingCode })
     database.db
       .update(pairingCodes)
       .set({ expiresAt: "2020-01-01T00:00:00.000Z" })
@@ -200,10 +191,7 @@ describe("second-client journey", () => {
     const expiredProblem = ConflictProblemSchema.parse(await expiredClaim.response.json())
     expect(expiredProblem.title).toBe("Pairing code expired")
 
-    const regenerated = await createPairingCode({
-      httpBase,
-      credential: app.deviceCredential.credential,
-    })
+    const regenerated = await createPairingCode({ insertPairingCode })
     const recovered = await claimPairingCode({
       httpBase,
       code: regenerated.code,

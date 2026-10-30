@@ -2,11 +2,9 @@ import { confirm as clackConfirm, isCancel as clackIsCancel } from "@clack/promp
 import { Command } from "commander"
 import pc from "picocolors"
 import { Device } from "contracts/http/device"
-import { localApiUrl } from "core/status/summary.models"
 import { parseConfig } from "server/config"
 import { AgentDatabase, openDatabase } from "server/database"
 import { assembleDeviceSlice, DeviceSlice } from "server/device"
-import { makeRuntimeSettingsFileStore, seedDefaultsFromConfig } from "server/runtime-settings"
 import { makeDeviceNameMatcher } from "./device.name.pattern"
 import {
   RemoveDeviceTarget,
@@ -37,21 +35,7 @@ const defaultDeviceCommandDeps: DeviceCommandDeps = {
 const openDeviceCommandContext = (): DeviceCommandContext => {
   const config = parseConfig(process.env)
   const database = openDatabase({ dataDir: config.dataDir })
-  const runtimeSettingsStore = makeRuntimeSettingsFileStore({
-    dataDir: config.dataDir,
-    seedDefaults: seedDefaultsFromConfig(config),
-  })
-  const slice = assembleDeviceSlice({
-    database,
-    loopbackEndpoint: localApiUrl({ host: config.host, port: config.port }),
-    getAdvertisedEndpointSettings: () => {
-      const settings = runtimeSettingsStore.get()
-      return {
-        advertisedUrl: settings.advertisedUrl,
-        advertisedUrlEnabled: settings.advertisedUrlEnabled,
-      }
-    },
-  })
+  const slice = assembleDeviceSlice({ database })
 
   return { slice, database }
 }

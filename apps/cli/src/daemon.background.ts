@@ -69,12 +69,11 @@ export const makeBunSpawnBackgroundDaemon =
  */
 export const renderStartDaemonError = (
   error: StartBackgroundDaemonError,
-  port: number,
   retryCommand: string,
 ): string => {
   switch (error.kind) {
     case "daemon_exited":
-      return `Harold exited before it was ready (exit code ${error.code}). Check for a process already using port ${port}, then run \`${retryCommand}\` again.`
+      return `Harold exited before it was ready (exit code ${error.code}). Check \`harold logs\` for what went wrong, then run \`${retryCommand}\` again.`
     case "timed_out":
       return `Timed out waiting for Harold to start. Check \`harold logs\`, then run \`${retryCommand}\` again.`
   }

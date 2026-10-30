@@ -6,7 +6,8 @@ import {
   ValidationProblemSchema,
 } from "contracts/http/error"
 import { CreateSessionResponseSchema } from "contracts/http/session"
-import { DEVICES_PATH, DeviceCollectionSchema, devicePath } from "contracts/http/device"
+import { devicePath } from "contracts/http/device"
+import { assembleDeviceSlice } from "../device/device.assembly"
 import { sessionEventsPath } from "contracts/http/session.stream"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
 import { createSessionCommands, openSseStream } from "test-support/session-stream"
@@ -359,7 +360,7 @@ describe("GET /v1/sessions/:sessionId/events", () => {
   }, 30_000)
 
   test("client disconnect releases the subscriber and flips presence offline", async () => {
-    const { app, config } = await bootTestApp({
+    const { app, config, database } = await bootTestApp({
       whichFn,
       fakeAcpOptions: {
         capabilities: { loadSession: true, sessionClose: true, sessionList: true },
@@ -369,6 +370,7 @@ describe("GET /v1/sessions/:sessionId/events", () => {
     })
     await enableAgent(app, "cursor", whichFn)
     const httpBase = await getHttpBase(app, config.host)
+    const registry = assembleDeviceSlice({ database })
 
     const created = await createSession(app, "/tmp/sse-presence")
     const stream = await openSseStream({
@@ -379,10 +381,8 @@ describe("GET /v1/sessions/:sessionId/events", () => {
 
     const startedAt = Date.now()
     for (;;) {
-      const listed = DeviceCollectionSchema.parse(
-        await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
-      )
-      if (listed.items[0]?.state === "online") {
+      const listed = registry.listDevices({ limit: 10 })
+      if (listed.ok && listed.value.items[0]?.state === "online") {
         break
       }
       if (Date.now() - startedAt > 5_000) {
@@ -395,10 +395,8 @@ describe("GET /v1/sessions/:sessionId/events", () => {
 
     const startedAt2 = Date.now()
     for (;;) {
-      const listed = DeviceCollectionSchema.parse(
-        await (await fetch(`${httpBase}${DEVICES_PATH}`, { headers: authHeaders(app) })).json(),
-      )
-      if (listed.items[0]?.state === "offline") {
+      const listed = registry.listDevices({ limit: 10 })
+      if (listed.ok && listed.value.items[0]?.state === "offline") {
         break
       }
       if (Date.now() - startedAt2 > 5_000) {

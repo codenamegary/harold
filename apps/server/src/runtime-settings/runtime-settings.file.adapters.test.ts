@@ -23,9 +23,6 @@ describe("makeRuntimeSettingsFileStore", () => {
     const store = makeRuntimeSettingsFileStore({ dataDir })
 
     expect(store.get()).toEqual({
-      advertisedUrl: null,
-      advertisedUrlEnabled: true,
-      bindHost: "127.0.0.1",
       bindPort: 3847,
       logLevel: "info",
       logPath: null,
@@ -41,9 +38,6 @@ describe("makeRuntimeSettingsFileStore", () => {
     const store = makeRuntimeSettingsFileStore({
       dataDir,
       seedDefaults: {
-        advertisedUrl: null,
-        advertisedUrlEnabled: true,
-        bindHost: "127.0.0.1",
         bindPort: 4123,
         logLevel: "info",
         logPath: null,
@@ -63,7 +57,7 @@ describe("makeRuntimeSettingsFileStore", () => {
     expect(() => makeRuntimeSettingsFileStore({ dataDir })).toThrow(/Invalid settings\.yml/)
   })
 
-  test("loads a wildcard bind host", async () => {
+  test("strips retired bind and advertised keys when loading legacy settings.yml", async () => {
     const dataDir = await createTempDataDir()
     const filePath = path.join(dataDir, settingsFileName)
     await writeFile(
@@ -81,8 +75,11 @@ describe("makeRuntimeSettingsFileStore", () => {
 
     const store = makeRuntimeSettingsFileStore({ dataDir })
 
-    expect(store.get().bindHost).toBe("0.0.0.0")
-    expect(store.get().advertisedUrl).toBe("http://10.0.0.236:3847")
+    expect(store.get()).toEqual({
+      bindPort: 3847,
+      logLevel: "info",
+      logPath: null,
+    })
   })
 
   test("refuses to load invalid schema", async () => {
@@ -91,10 +88,7 @@ describe("makeRuntimeSettingsFileStore", () => {
     await writeFile(
       filePath,
       YAML.stringify({
-        advertisedUrl: null,
-        advertisedUrlEnabled: true,
-        bindHost: "harold.local",
-        bindPort: 3847,
+        bindPort: "not-a-port",
         logLevel: "info",
         logPath: null,
       }),
@@ -110,9 +104,6 @@ describe("makeRuntimeSettingsFileStore", () => {
     await writeFile(
       filePath,
       YAML.stringify({
-        advertisedUrl: null,
-        advertisedUrlEnabled: true,
-        bindHost: "127.0.0.1",
         bindPort: 3847,
         logLevel: "info",
         logPath: null,
@@ -130,10 +121,7 @@ describe("makeRuntimeSettingsFileStore", () => {
     await writeFile(
       filePath,
       YAML.stringify({
-        advertisedUrl: null,
-        advertisedUrlEnabled: true,
         trustedProxies: ["127.0.0.1"],
-        bindHost: "127.0.0.1",
         bindPort: 3847,
         logLevel: "info",
         logPath: null,
@@ -167,54 +155,19 @@ describe("makeRuntimeSettingsFileStore", () => {
     expect(reloaded.get().logLevel).toBe("debug")
   })
 
-  test("defaults advertisedUrlEnabled when the file omits it", async () => {
-    const dataDir = await createTempDataDir()
-    const filePath = path.join(dataDir, settingsFileName)
-    await writeFile(
-      filePath,
-      YAML.stringify({
-        advertisedUrl: "https://agents.example.com",
-        bindHost: "127.0.0.1",
-        bindPort: 3847,
-        logLevel: "info",
-        logPath: null,
-      }),
-      "utf8",
-    )
-
-    const store = makeRuntimeSettingsFileStore({ dataDir })
-    expect(store.get().advertisedUrl).toBe("https://agents.example.com")
-    expect(store.get().advertisedUrlEnabled).toBe(true)
-  })
-
   test("save persists the full settings document and keeps the cache in sync", async () => {
     const dataDir = await createTempDataDir()
     const store = makeRuntimeSettingsFileStore({ dataDir })
 
-    const withUrl = store.save({
+    const withLevel = store.save({
       ...store.get(),
-      advertisedUrl: "https://agents.example.com",
       logLevel: "warn",
     })
 
-    expect(withUrl.logLevel).toBe("warn")
+    expect(withLevel.logLevel).toBe("warn")
     expect(store.get().logLevel).toBe("warn")
 
     const parsed = YAML.parse(await readFile(path.join(dataDir, settingsFileName), "utf8"))
-    expect(parsed).toEqual(withUrl)
-  })
-
-  test("save keeps advertisedUrl when only advertisedUrlEnabled changes", async () => {
-    const dataDir = await createTempDataDir()
-    const store = makeRuntimeSettingsFileStore({ dataDir })
-    store.save({ ...store.get(), advertisedUrl: "https://agents.example.com" })
-
-    const result = store.save({
-      ...store.get(),
-      advertisedUrlEnabled: false,
-    })
-
-    expect(result.advertisedUrl).toBe("https://agents.example.com")
-    expect(result.advertisedUrlEnabled).toBe(false)
+    expect(parsed).toEqual(withLevel)
   })
 })

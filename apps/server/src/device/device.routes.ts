@@ -1,22 +1,13 @@
 import {
   ClaimPairingCodeBodySchema,
-  CreatePairingCodeBodySchema,
-  CreatePairingCodeResponseSchema,
   ClaimPairingCodeResponseSchema,
-  PAIRING_CODES_PATH,
   claimPairingCodePath,
 } from "contracts/http/pairing-code"
-import {
-  DeviceCollectionSchema,
-  DEVICES_PATH,
-  devicePath,
-  ListDevicesQuerySchema,
-} from "contracts/http/device"
+import { devicePath } from "contracts/http/device"
 import { FastifyInstance } from "fastify"
 import {
-  buildAdvertisedEndpointUnavailableProblem,
+  buildDeviceForbiddenProblem,
   buildDeviceNotFoundProblem,
-  buildInvalidCursorProblem,
   buildPairingCodeClaimedProblem,
   buildPairingCodeExpiredProblem,
   buildPairingCodeNotFoundProblem,
@@ -27,9 +18,8 @@ import {
   ClaimPairingCodeCommand,
   ClaimPairingCodeResult,
 } from "core/device/claim.pairing.code.usecase"
-import { ListDevices } from "core/device/ports"
-import { CreatePairingCodeResult } from "core/device/create.pairing.code.usecase"
 import { RemoveDeviceCommand, RemoveDeviceResult } from "core/device/remove.device.usecase"
+import { getRequestPrincipal } from "../auth/middleware"
 
 const sendProblem = (
   reply: {
@@ -54,8 +44,6 @@ const problemForError = (error: DeviceError) => {
       return { status: 409, problem: buildPairingCodeExpiredProblem() }
     case "pairing_code_revoked":
       return { status: 409, problem: buildPairingCodeRevokedProblem() }
-    case "advertised_endpoint_unavailable":
-      return { status: 400, problem: buildAdvertisedEndpointUnavailableProblem() }
   }
 }
 
@@ -67,7 +55,6 @@ const isDeviceError = (error: { kind: string }): error is DeviceError => {
     case "pairing_code_race":
     case "pairing_code_expired":
     case "pairing_code_revoked":
-    case "advertised_endpoint_unavailable":
       return true
     default:
       return false
@@ -83,26 +70,14 @@ const sendErrorProblem = (reply: Parameters<typeof sendProblem>[0], error: { kin
 }
 
 export type DeviceRouteDeps = Readonly<{
-  createPairingCode: (body?: {
-    endpoint?: "loopback" | "advertised"
-  }) => Promise<CreatePairingCodeResult>
   claimPairingCode: (command: ClaimPairingCodeCommand) => Promise<ClaimPairingCodeResult>
-  listDevices: ListDevices
   removeDevice: (command: RemoveDeviceCommand) => RemoveDeviceResult
 }>
 
+// Device plane only: a device claims a pairing code and removes itself.
+// Creating pairing codes and listing or removing other devices are host
+// operations owned by the CLI against the same database (#458).
 export const registerDeviceRoutes = (app: FastifyInstance, deps: DeviceRouteDeps) => {
-  app.post(PAIRING_CODES_PATH, async (request, reply) => {
-    const body = CreatePairingCodeBodySchema.parse(request.body ?? {})
-    const result = await deps.createPairingCode(body)
-
-    if (!result.ok) {
-      return sendErrorProblem(reply, result.error)
-    }
-
-    return reply.status(201).send(CreatePairingCodeResponseSchema.parse(result.value))
-  })
-
   app.post(claimPairingCodePath(":code"), async (request, reply) => {
     const { code } = request.params as { code: string }
     const body = ClaimPairingCodeBodySchema.parse(request.body ?? {})
@@ -115,29 +90,13 @@ export const registerDeviceRoutes = (app: FastifyInstance, deps: DeviceRouteDeps
     return reply.status(201).send(ClaimPairingCodeResponseSchema.parse(result.value))
   })
 
-  app.get(DEVICES_PATH, async (request, reply) => {
-    const query = ListDevicesQuerySchema.parse(request.query)
-    const result = deps.listDevices(query)
-
-    if (!result.ok) {
-      return sendProblem(reply, 400, buildInvalidCursorProblem())
-    }
-
-    return reply.status(200).send(
-      DeviceCollectionSchema.parse({
-        items: result.value.items,
-        page: {
-          limit: result.value.limit,
-          nextCursor: result.value.nextCursor,
-          previousCursor: result.value.previousCursor,
-          count: result.value.count,
-        },
-      }),
-    )
-  })
-
   app.delete(devicePath(":deviceId"), async (request, reply) => {
     const { deviceId } = request.params as { deviceId: string }
+    const principal = getRequestPrincipal(request)
+    if (principal?.kind !== "device" || principal.deviceId !== deviceId) {
+      return sendProblem(reply, 403, buildDeviceForbiddenProblem())
+    }
+
     const result = deps.removeDevice({ deviceId })
 
     if (!result.ok) {

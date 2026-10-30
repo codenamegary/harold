@@ -9,13 +9,6 @@ export type PairingCodeSnapshot = Readonly<{
   expiresAt: string
 }>
 
-export type AdvertisedEndpointSettings = Readonly<{
-  advertisedUrl: string | null
-  advertisedUrlEnabled: boolean
-}>
-
-export type GetAdvertisedEndpointSettings = () => AdvertisedEndpointSettings
-
 export type InsertedPairingCode = Readonly<{
   id: string
   createdAt: string

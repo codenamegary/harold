@@ -19,12 +19,9 @@ export type MakeRuntimeSettingsFileStoreOptions = {
 }
 
 const fallbackSeedDefaults: RuntimeSettings = RuntimeSettingsSchema.parse({
-  bindHost: "127.0.0.1",
   bindPort: 3847,
   logLevel: "info",
   logPath: null,
-  advertisedUrl: null,
-  advertisedUrlEnabled: true,
 })
 
 const settingsPathFor = (dataDir: string): string => path.join(dataDir, settingsFileName)
@@ -42,13 +39,20 @@ const formatLoadError = (params: { filePath: string; cause: unknown }): Error =>
   return new Error(`Invalid settings.yml at ${filePath}`)
 }
 
-// `trustedProxies` supported host-proxy classification and is retired; older
-// settings.yml files may still carry the key, so strip it before validating.
+// Retired keys from older settings.yml files are stripped before validating so
+// an existing install keeps booting: `trustedProxies` and the advertised and
+// bind-host settings all left the schema when the daemon moved to a static
+// wildcard bind with a derived, remembered pairing endpoint (#458).
+const retiredKeys = ["trustedProxies", "bindHost", "advertisedUrl", "advertisedUrlEnabled"] as const
+
 const stripRetiredKeys = (value: unknown): unknown => {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return value
   }
-  const { trustedProxies: _retired, ...rest } = value as Record<string, unknown>
+  const rest = { ...(value as Record<string, unknown>) }
+  for (const key of retiredKeys) {
+    delete rest[key]
+  }
   return rest
 }
 
@@ -120,11 +124,8 @@ export const makeRuntimeSettingsFileStore = (
 
 export const seedDefaultsFromConfig = (config: Config): RuntimeSettings =>
   RuntimeSettingsSchema.parse({
-    bindHost: config.host,
     bindPort: config.port,
     logLevel: "info",
     // null selects the default log file under the data dir, not stdout.
     logPath: null,
-    advertisedUrl: null,
-    advertisedUrlEnabled: true,
   })

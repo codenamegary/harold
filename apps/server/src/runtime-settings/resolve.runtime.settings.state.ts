@@ -1,5 +1,4 @@
 import {
-  BindHost,
   RuntimeSettings,
   RuntimeSettingsEffective,
   RuntimeSettingsOverrides,
@@ -9,35 +8,29 @@ import { EnvBindOverrides } from "../config/env.bind.overrides"
 
 export type AppliedRuntimeSettings = RuntimeSettingsEffective
 
-export type ResolveEffectiveBindInput = {
-  persisted: Pick<RuntimeSettings, "bindHost" | "bindPort">
-  envOverrides: EnvBindOverrides
-}
-
-export type ResolveEffectiveBindResult = {
-  bindHost: BindHost
-  bindPort: number
+export type ResolveEffectiveBindOverridesResult = {
   overrides: RuntimeSettingsOverrides
 }
 
-export const resolveEffectiveBind = (
-  input: ResolveEffectiveBindInput,
-): ResolveEffectiveBindResult => {
-  const { persisted, envOverrides } = input
+export const resolveEffectiveBindOverrides = (
+  envOverrides: EnvBindOverrides,
+): ResolveEffectiveBindOverridesResult => {
   const overrides: RuntimeSettingsOverrides = {}
 
-  const bindHost = envOverrides.bindHost === undefined ? persisted.bindHost : envOverrides.bindHost
-  if (envOverrides.bindHost !== undefined) {
-    overrides.bindHost = "env"
-  }
-
-  const bindPort = envOverrides.bindPort === undefined ? persisted.bindPort : envOverrides.bindPort
   if (envOverrides.bindPort !== undefined) {
     overrides.bindPort = "env"
   }
 
-  return { bindHost, bindPort, overrides }
+  return { overrides }
 }
+
+export const resolveEffectiveBindPort = (params: {
+  persisted: RuntimeSettings
+  envOverrides: EnvBindOverrides
+}): number =>
+  params.envOverrides.bindPort === undefined
+    ? params.persisted.bindPort
+    : params.envOverrides.bindPort
 
 export const computeRestartRequired = (params: {
   persisted: RuntimeSettings
@@ -45,25 +38,15 @@ export const computeRestartRequired = (params: {
 }): boolean => {
   const { persisted, applied } = params
 
-  return (
-    persisted.bindHost !== applied.bindHost ||
-    persisted.bindPort !== applied.bindPort ||
-    persisted.logPath !== applied.logPath
-  )
+  return persisted.bindPort !== applied.bindPort || persisted.logPath !== applied.logPath
 }
 
 export const buildAppliedRuntimeSettings = (params: {
   persisted: RuntimeSettings
   envOverrides: EnvBindOverrides
 }): AppliedRuntimeSettings => {
-  const { bindHost, bindPort } = resolveEffectiveBind({
-    persisted: params.persisted,
-    envOverrides: params.envOverrides,
-  })
-
   return {
-    bindHost,
-    bindPort,
+    bindPort: resolveEffectiveBindPort(params),
     logPath: params.persisted.logPath,
   }
 }
@@ -73,10 +56,7 @@ export const buildRuntimeSettingsView = (params: {
   applied: AppliedRuntimeSettings
   envOverrides: EnvBindOverrides
 }): RuntimeSettingsView => {
-  const { overrides } = resolveEffectiveBind({
-    persisted: params.persisted,
-    envOverrides: params.envOverrides,
-  })
+  const { overrides } = resolveEffectiveBindOverrides(params.envOverrides)
 
   return {
     settings: params.persisted,

@@ -81,23 +81,26 @@ exec ssh \
 
 ### Trusted local network over HTTP
 
-Harold binds loopback by default. To reach it from a phone on the same trusted
-network without a TLS proxy:
+Harold serves every interface by default, so a phone on the same network can
+reach it without extra setup:
 
 ```bash
-HAROLD_HOST=0.0.0.0 harold start
-harold connect --lan    # detects the LAN address and persists bindHost + advertisedUrl
-harold pair
+harold start
+harold pair    # lists remembered endpoints and this machine's addresses, prints the QR code
 ```
 
-Pass an address explicitly with `harold connect --lan 192.168.1.10`. The command
-only accepts private-network addresses, never public ones. If Harold was already
-running on the default loopback bind, it saves the settings and prints the
-restart command.
+`harold pair` remembers the endpoints you use. On an interactive terminal it
+lists those first, most recently used first with that entry preselected,
+followed by every address on this machine a phone could dial, labelled with
+where it came from (history source or interface name). Picking an endpoint
+that does not answer `GET /v1/status` explains why and reopens the list, and
+there is always an option to enter a custom URL. The summary carries the
+endpoint and code for manual entry, and the QR encodes both for scanning.
+Pass `--url` to skip the endpoint prompt.
 
 Plain HTTP sends the device credential and session traffic in cleartext. Use it
 only on a network you trust. For public access, use HTTPS through Tailscale, a
-reverse proxy, or a tunnel.
+reverse proxy, or a tunnel, and pair with `harold pair --url https://your-endpoint`.
 
 ## Harold cli
 
@@ -114,15 +117,14 @@ Options:
 
 Commands:
   start              start the Harold daemon in the background
-  setup [options]    configure agents, a workspace, reachability, and pairing
+  setup [options]    configure agents, a workspace, and pairing
   status             show Harold status summary and live daemon state
   stop               stop the running Harold daemon
   agent              list, enable, disable, and probe agents
-  pair [options]     pair a device by scanning a QR code
+  pair [options]     pair a device with a QR code or a manual code
   device             manage paired devices
   workspace          open, clone, list, and remove workspace folders
   logs [options]     tail the Harold daemon log
-  connect [options]  verify and persist the advertised endpoint devices pair against
 ```
 
 ### Workspaces
@@ -166,12 +168,13 @@ bun run dev start
 `bun run dev` runs the CLI. Pass it any command: `bun run dev setup`,
 `bun run dev status`, `bun run dev stop`.
 
-The Harold API listens on `127.0.0.1:3847`. Every route except `GET /v1/status` and the pairing claim requires a device credential (`Authorization: Bearer`). Pair a device with `harold pair` to get one.
+The Harold API serves every interface on port `3847`. Every route except `GET /v1/status` and the pairing claim requires a device credential (`Authorization: Bearer`). Pair a device with `harold pair` to get one.
 
 ## Configuration
 
 | Variable          | Default     | Meaning                              |
 | ----------------- | ----------- | ------------------------------------ |
-| `HAROLD_HOST`     | `127.0.0.1` | Bind address (`0.0.0.0` for the LAN) |
 | `HAROLD_PORT`     | `3847`      | Device API port                      |
 | `HAROLD_DATA_DIR` | `~/.harold` | Database, logs, and runtime settings |
+
+The bind address is not configurable: the daemon always serves every interface so a phone on the network can pair.
