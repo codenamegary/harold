@@ -23,6 +23,7 @@ import {
   ReadLiveDaemonStateResult,
 } from "core/daemon-state/read.live.usecase"
 import { makeStopLiveDaemon, StopLiveDaemon } from "core/daemon-state/stop.usecase"
+import { makeAdvertisedEndpointsFileStore } from "core/network/advertised.endpoints.node.adapters"
 import { detectLanAddress } from "core/network/lan.address"
 import { makeNodeFetchStatusEndpoint } from "core/reachability/node.adapters"
 import { makeVerifyAdvertisedEndpoint } from "core/reachability/verify.usecase"
@@ -221,9 +222,10 @@ export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): P
       },
       isDaemonRunning: () => deps.readLiveDaemonState().ok,
       pair: async () => {
+        const historyStore = makeAdvertisedEndpointsFileStore({ dataDir })
         const choice = await resolvePairingEndpoint({
           explicitUrl: undefined,
-          readHistory: () => [],
+          readHistory: historyStore.read,
           detectLanAddress,
           port: config.port,
           verifyEndpoint: makeVerifyAdvertisedEndpoint({

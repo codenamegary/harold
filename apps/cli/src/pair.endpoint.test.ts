@@ -39,13 +39,14 @@ const makeHarness = (params: HarnessParams = {}) => {
   const selectCalls: Array<{
     message: string
     options: ReadonlyArray<{ value: string; label: string }>
+    initialValue?: string
   }> = []
   const textCalls: string[] = []
   let textIndex = 0
 
   const prompts: EndpointPromptPort = {
-    select: async (message, options) => {
-      selectCalls.push({ message, options })
+    select: async (message, options, initialValue) => {
+      selectCalls.push({ message, options, initialValue })
       return params.selectAnswer ?? options[0]?.value ?? Symbol("cancel")
     },
     text: async (message) => {
@@ -156,23 +157,25 @@ describe("resolvePairingEndpoint", () => {
     expect(harness.textCalls).toHaveLength(1)
   })
 
-  test("interactive ambiguity prompts a selection between reachable candidates", async () => {
+  test("interactive runs always present the history list, most recent first, first entry selected", async () => {
     const harness = makeHarness({
-      history: [entry(OTHER, "manual")],
+      history: [entry(OTHER, "manual"), entry(LAN)],
       reachable: [OTHER, LAN],
       isInteractive: true,
-      selectAnswer: LAN,
     })
 
     const result = await resolvePairingEndpoint(harness.deps)
 
-    expect(result).toEqual({ ok: true, url: LAN, source: "detected" })
+    // The harness answers with the first option when no explicit answer is
+    // scripted, which is exactly the default selection.
+    expect(result).toEqual({ ok: true, url: OTHER, source: "manual" })
     expect(harness.selectCalls).toHaveLength(1)
     const options = harness.selectCalls[0]?.options ?? []
     expect(options.map((option) => option.value)).toEqual([OTHER, LAN, "__custom__"])
+    expect(harness.selectCalls[0]?.initialValue).toBe(OTHER)
   })
 
-  test("a single reachable candidate never prompts", async () => {
+  test("interactive runs prompt even with a single reachable candidate", async () => {
     const harness = makeHarness({
       reachable: [LAN],
       isInteractive: true,
@@ -180,7 +183,21 @@ describe("resolvePairingEndpoint", () => {
 
     const result = await resolvePairingEndpoint(harness.deps)
 
-    expect(result.ok).toBe(true)
+    expect(result).toEqual({ ok: true, url: LAN, source: "detected" })
+    expect(harness.selectCalls).toHaveLength(1)
+    const options = harness.selectCalls[0]?.options ?? []
+    expect(options.map((option) => option.value)).toEqual([LAN, "__custom__"])
+  })
+
+  test("non-interactive runs never prompt and take the first reachable candidate", async () => {
+    const harness = makeHarness({
+      history: [entry(OTHER, "manual"), entry(LAN)],
+      reachable: [OTHER, LAN],
+    })
+
+    const result = await resolvePairingEndpoint(harness.deps)
+
+    expect(result).toEqual({ ok: true, url: OTHER, source: "manual" })
     expect(harness.selectCalls).toHaveLength(0)
   })
 

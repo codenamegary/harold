@@ -89,9 +89,11 @@ harold start
 harold pair    # detects the LAN address, probes it, prints the QR code
 ```
 
-`harold pair` remembers the endpoints you use. The most recent one is offered
-first the next time. Pass `--url` to choose one yourself, or `--manual` to
-print the endpoint and code for manual entry instead of a QR code.
+`harold pair` remembers the endpoints you use. On an interactive terminal it
+offers them as a selectable list, most recently used first with that entry
+preselected, plus an option to enter a custom URL. Pass `--url` to skip the
+prompt, or `--manual` to print the endpoint and code for manual entry
+instead of a QR code.
 
 Plain HTTP sends the device credential and session traffic in cleartext. Use it
 only on a network you trust. For public access, use HTTPS through Tailscale, a

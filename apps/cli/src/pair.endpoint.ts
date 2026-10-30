@@ -107,12 +107,14 @@ const promptForCustomUrl = async (deps: ResolvePairingEndpointDeps): Promise<End
  *
  * 1. An explicit URL wins and is probed once; no fallback.
  * 2. History entries, most recently used first, then fresh interface
- *    detection. Each candidate is probed with `GET /v1/status`; the first
- *    reachable one wins.
- * 3. Interactive runs prompt when more than one candidate is reachable, and
- *    when nothing is reachable they fall back to a custom URL prompt.
- * 4. Non-interactive runs are deterministic and fail with the candidate list
- *    when nothing is reachable.
+ *    detection. Each candidate is probed with `GET /v1/status`; only
+ *    reachable candidates are offered.
+ * 3. Interactive runs always present the reachable candidates as a
+ *    selectable list, most recently used first and selected by default,
+ *    with a custom URL option. Nothing reachable falls back to the custom
+ *    URL prompt.
+ * 4. Non-interactive runs are deterministic (first reachable candidate)
+ *    and fail with the candidate list when nothing is reachable.
  */
 export const resolvePairingEndpoint = async (
   deps: ResolvePairingEndpointDeps,
@@ -162,7 +164,7 @@ export const resolvePairingEndpoint = async (
     }
   }
 
-  if (reachable.length > 1 && deps.isInteractive && deps.prompts !== undefined) {
+  if (deps.isInteractive && deps.prompts !== undefined) {
     const selected = await deps.prompts.select(
       "Which endpoint should the QR code advertise?",
       [
