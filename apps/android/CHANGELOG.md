@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.0.0](https://github.com/codenamegary/harold/compare/harold-android-v2.0.0...harold-android-v3.0.0) (2026-10-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* **daemon:** HAROLD_HOST is removed; the daemon always binds 0.0.0.0. harold connect is removed. PATCH /v1/settings/runtime, POST /v1/pairing-codes, and GET /v1/devices are gone from the API. GET /v1/status returns only {state, version}. settings.yml no longer accepts bindHost or advertisedUrl keys.
+
+### Features
+
+* **daemon:** serve on the LAN by default with a host-only control plane ([#461](https://github.com/codenamegary/harold/issues/461)) ([89b40bb](https://github.com/codenamegary/harold/commit/89b40bbdec783feee39912723ba0a26d43ef7682))
+* **demo:** add the workspaces scene to the capture and cut ([#459](https://github.com/codenamegary/harold/issues/459)) ([c888870](https://github.com/codenamegary/harold/commit/c888870026cfe65bcaddbb7f48da6a8a12229450))
+
 ## [2.0.0](https://github.com/codenamegary/harold/compare/harold-android-v1.4.1...harold-android-v2.0.0) (2026-10-27)
 
 
