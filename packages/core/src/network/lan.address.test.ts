@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import { hasDialableAddress, selectLanAddress, usableIpv4Addresses } from "./lan.address"
+import {
+  hasDialableAddress,
+  selectLanAddress,
+  usableIpv4AddressEntries,
+  usableIpv4Addresses,
+} from "./lan.address"
 
 const entry = (
   address: string,
@@ -60,6 +65,21 @@ describe("usableIpv4Addresses", () => {
         eth0v6: [entry("fd00::1", { family: "IPv6" })],
       }),
     ).toEqual(["172.17.0.1", "100.64.0.9", "10.0.0.236"])
+  })
+})
+
+describe("usableIpv4AddressEntries", () => {
+  test("keeps the owning interface name with each usable address", () => {
+    expect(
+      usableIpv4AddressEntries({
+        lo: [entry("127.0.0.1", { internal: true })],
+        docker0: [entry("172.17.0.1")],
+        eth0: [entry("10.0.0.236"), entry("169.254.10.20")],
+      }),
+    ).toEqual([
+      { name: "docker0", address: "172.17.0.1" },
+      { name: "eth0", address: "10.0.0.236" },
+    ])
   })
 })
 

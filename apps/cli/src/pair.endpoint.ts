@@ -1,10 +1,10 @@
+import { isLoopbackHostname } from "contracts/http/runtime-settings"
 import {
   AdvertisedEndpointEntry,
   AdvertisedEndpointSource,
 } from "core/network/advertised.endpoints"
 import { ReachabilityFailure } from "core/reachability/models"
 import { VerifyAdvertisedEndpoint } from "core/reachability/verify.usecase"
-import { isLoopbackHostname } from "contracts/http/runtime-settings"
 
 export type EndpointPromptPort = Readonly<{
   select: (
@@ -13,13 +13,13 @@ export type EndpointPromptPort = Readonly<{
     initialValue?: string,
   ) => Promise<string | symbol>
   text: (message: string, placeholder?: string) => Promise<string | symbol>
-  isCancel: (value: unknown) => boolean
+  isCancel: (value: unknown) => value is symbol
 }>
 
 export type ResolvePairingEndpointDeps = Readonly<{
   explicitUrl: string | undefined
   readHistory: () => ReadonlyArray<AdvertisedEndpointEntry>
-  detectLanAddress: () => string | null
+  listLanAddresses: () => ReadonlyArray<{ name: string; address: string }>
   port: number
   verifyEndpoint: VerifyAdvertisedEndpoint
   isInteractive: boolean
@@ -31,7 +31,7 @@ export type EndpointChoice =
   | { ok: true; url: string; source: AdvertisedEndpointSource }
   | { ok: false; message: string }
 
-type Candidate = Readonly<{ url: string; source: AdvertisedEndpointSource }>
+type Candidate = Readonly<{ url: string; source: AdvertisedEndpointSource; hint: string }>
 
 const customOptionValue = "__custom__"
 
@@ -54,67 +54,80 @@ const isLoopbackUrl = (url: string): boolean => {
   }
 }
 
-const detectedCandidates = (deps: ResolvePairingEndpointDeps): ReadonlyArray<Candidate> => {
-  const address = deps.detectLanAddress()
-  if (address === null) {
-    return []
-  }
-  const url = `http://${address}:${deps.port}`
-  // A loopback QR is unreachable from a phone. Loopback endpoints exist only
-  // as explicit choices for host-side testing.
-  if (isLoopbackUrl(url)) {
-    return []
-  }
-  return [{ url, source: "detected" }]
+const detectedCandidates = (deps: ResolvePairingEndpointDeps): ReadonlyArray<Candidate> =>
+  deps
+    .listLanAddresses()
+    .map(({ name, address }) => ({
+      url: `http://${address}:${deps.port}`,
+      source: "detected" as const,
+      hint: name,
+    }))
+    .filter((candidate) => !isLoopbackUrl(candidate.url))
+
+const buildCandidates = (deps: ResolvePairingEndpointDeps): ReadonlyArray<Candidate> =>
+  [
+    ...deps.readHistory().map((item) => ({
+      url: item.url,
+      source: item.source,
+      hint: item.source,
+    })),
+    ...detectedCandidates(deps),
+  ].filter((candidate, index, all) => all.findIndex((item) => item.url === candidate.url) === index)
+
+const probeAll = async (
+  deps: ResolvePairingEndpointDeps,
+  candidates: ReadonlyArray<Candidate>,
+): Promise<Map<string, ReachabilityFailure | null>> => {
+  const results = await Promise.all(
+    candidates.map(async (candidate) => {
+      const result = await deps.verifyEndpoint(candidate.url)
+      return [candidate.url, result.ok ? null : result.error] as const
+    }),
+  )
+  return new Map(results)
 }
 
-const promptForCustomUrl = async (deps: ResolvePairingEndpointDeps): Promise<EndpointChoice> => {
+const promptOnce = async (
+  deps: ResolvePairingEndpointDeps,
+  candidates: ReadonlyArray<Candidate>,
+  failures: Map<string, ReachabilityFailure | null>,
+): Promise<string | symbol> => {
   const prompts = deps.prompts
   if (prompts === undefined) {
-    return { ok: false, message: "Pairing cancelled." }
+    return Symbol("cancelled")
   }
 
-  for (;;) {
-    const entered = await prompts.text(
-      "Endpoint URL for the QR code",
-      `http://${deps.detectLanAddress() ?? "192.168.1.10"}:${deps.port} or https://harold.example.com`,
-    )
-    if (prompts.isCancel(entered)) {
-      return { ok: false, message: "Pairing cancelled." }
-    }
-
-    const url = entered
-    if (typeof url === "symbol" || prompts.isCancel(url)) {
-      return { ok: false, message: "Pairing cancelled." }
-    }
-
-    const trimmed = url.trim()
-    if (trimmed === "") {
-      return { ok: false, message: "Pairing cancelled." }
-    }
-
-    const result = await deps.verifyEndpoint(trimmed)
-    if (result.ok) {
-      return { ok: true, url: trimmed, source: "manual" }
-    }
-
-    deps.writeLine(`${trimmed} is not reachable: ${describeFailure(result.error)}`)
-  }
+  return prompts.select(
+    "Which endpoint should the QR code advertise?",
+    [
+      ...candidates.map((candidate) => {
+        const failure = failures.get(candidate.url)
+        const reachability = failure === undefined ? "" : failure === null ? "" : " · unreachable"
+        return {
+          value: candidate.url,
+          label: candidate.url,
+          hint: `${candidate.hint}${reachability}`,
+        }
+      }),
+      { value: customOptionValue, label: "Enter a custom URL" },
+    ],
+    candidates[0]?.url,
+  )
 }
 
 /**
  * Resolves the endpoint a pairing code advertises, in order:
  *
  * 1. An explicit URL wins and is probed once; no fallback.
- * 2. History entries, most recently used first, then fresh interface
- *    detection. Each candidate is probed with `GET /v1/status`; only
- *    reachable candidates are offered.
- * 3. Interactive runs always present the reachable candidates as a
- *    selectable list, most recently used first and selected by default,
- *    with a custom URL option. Nothing reachable falls back to the custom
- *    URL prompt.
- * 4. Non-interactive runs are deterministic (first reachable candidate)
- *    and fail with the candidate list when nothing is reachable.
+ * 2. Non-interactive runs probe history (most recently used first) and then
+ *    every interface address, taking the first reachable candidate and
+ *    failing with the probed list when nothing answers.
+ * 3. Interactive runs list every candidate immediately — remembered
+ *    endpoints first, then this machine's interface addresses — most
+ *    recently used first and preselected. Each option is labelled with its
+ *    probe result. Picking an unreachable endpoint explains the failure and
+ *    reopens the list, so the choice is always a working endpoint.
+ * 4. The custom URL option verifies the entered endpoint the same way.
  */
 export const resolvePairingEndpoint = async (
   deps: ResolvePairingEndpointDeps,
@@ -130,29 +143,16 @@ export const resolvePairingEndpoint = async (
     return { ok: true, url: deps.explicitUrl, source: "manual" }
   }
 
-  const historyCandidates: ReadonlyArray<Candidate> = deps
-    .readHistory()
-    .map((item) => ({ url: item.url, source: item.source }))
+  const candidates = buildCandidates(deps)
 
-  const candidates: ReadonlyArray<Candidate> = [
-    ...historyCandidates,
-    ...detectedCandidates(deps),
-  ].filter((candidate, index, all) => all.findIndex((item) => item.url === candidate.url) === index)
-
-  const reachable: Array<{ candidate: Candidate; failure?: ReachabilityFailure }> = []
-  const unreachable: Array<{ url: string; failure: ReachabilityFailure }> = []
-  for (const candidate of candidates) {
-    const result = await deps.verifyEndpoint(candidate.url)
-    if (result.ok) {
-      reachable.push({ candidate })
-    } else {
+  if (!deps.isInteractive || deps.prompts === undefined) {
+    const unreachable: Array<{ url: string; failure: ReachabilityFailure }> = []
+    for (const candidate of candidates) {
+      const result = await deps.verifyEndpoint(candidate.url)
+      if (result.ok) {
+        return { ok: true, url: candidate.url, source: candidate.source }
+      }
       unreachable.push({ url: candidate.url, failure: result.error })
-    }
-  }
-
-  if (reachable.length === 0) {
-    if (deps.isInteractive && deps.prompts !== undefined) {
-      return promptForCustomUrl(deps)
     }
 
     const probed = unreachable
@@ -164,35 +164,80 @@ export const resolvePairingEndpoint = async (
     }
   }
 
-  if (deps.isInteractive && deps.prompts !== undefined) {
-    const selected = await deps.prompts.select(
-      "Which endpoint should the QR code advertise?",
-      [
-        ...reachable.map((item) => ({
-          value: item.candidate.url,
-          label: item.candidate.url,
-          hint: item.candidate.source,
-        })),
-        { value: customOptionValue, label: "Enter a custom URL" },
-      ],
-      reachable[0]?.candidate.url,
-    )
+  const prompts = deps.prompts
 
-    if (deps.prompts.isCancel(selected)) {
+  if (candidates.length === 0) {
+    const choice = await promptForCustomUrl(deps)
+    if (choice.kind === "ok") {
+      return { ok: true, url: choice.url, source: choice.source }
+    }
+    return { ok: false, message: "Pairing cancelled." }
+  }
+
+  for (;;) {
+    const failures = await probeAll(deps, candidates)
+
+    const selected = await promptOnce(deps, candidates, failures)
+    if (prompts.isCancel(selected)) {
       return { ok: false, message: "Pairing cancelled." }
     }
     if (selected === customOptionValue) {
-      return promptForCustomUrl(deps)
+      const choice = await promptForCustomUrl(deps)
+      if (choice.kind === "ok") {
+        return { ok: true, url: choice.url, source: choice.source }
+      }
+      if (choice.kind === "cancel") {
+        return { ok: false, message: "Pairing cancelled." }
+      }
+      deps.writeLine(choice.message)
+      continue
     }
-    const chosen = reachable.find((item) => item.candidate.url === selected)
-    if (chosen !== undefined) {
-      return { ok: true, url: chosen.candidate.url, source: chosen.candidate.source }
+
+    const failure = failures.get(selected)
+    if (failure === null || failure === undefined) {
+      const chosen = candidates.find((candidate) => candidate.url === selected)
+      if (chosen !== undefined) {
+        return { ok: true, url: chosen.url, source: chosen.source }
+      }
     }
+
+    const detail = failure === null || failure === undefined ? "" : describeFailure(failure)
+    deps.writeLine(`${selected} is not reachable${detail === "" ? "" : `: ${detail}`}.`)
+    deps.writeLine("Is the daemon running? Start it with `harold start`, then pick again.")
+  }
+}
+
+type CustomUrlChoice =
+  | { kind: "ok"; url: string; source: AdvertisedEndpointSource }
+  | { kind: "cancel" }
+  | { kind: "unreachable"; message: string }
+
+const promptForCustomUrl = async (deps: ResolvePairingEndpointDeps): Promise<CustomUrlChoice> => {
+  const prompts = deps.prompts
+  if (prompts === undefined) {
+    return { kind: "cancel" }
   }
 
-  const first = reachable[0]
-  if (first === undefined) {
-    return { ok: false, message: "No reachable endpoint found." }
+  const entered = await prompts.text(
+    "Endpoint URL for the QR code",
+    `http://192.168.1.10:${deps.port} or https://harold.example.com`,
+  )
+  if (prompts.isCancel(entered)) {
+    return { kind: "cancel" }
   }
-  return { ok: true, url: first.candidate.url, source: first.candidate.source }
+
+  const trimmed = entered.trim()
+  if (trimmed === "") {
+    return { kind: "cancel" }
+  }
+
+  const result = await deps.verifyEndpoint(trimmed)
+  if (result.ok) {
+    return { kind: "ok", url: trimmed, source: "manual" }
+  }
+
+  return {
+    kind: "unreachable",
+    message: `${trimmed} is not reachable: ${describeFailure(result.error)}`,
+  }
 }

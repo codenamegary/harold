@@ -86,14 +86,16 @@ reach it without extra setup:
 
 ```bash
 harold start
-harold pair    # detects the LAN address, probes it, prints the QR code
+harold pair    # lists remembered endpoints and this machine's addresses, prints the QR code
 ```
 
 `harold pair` remembers the endpoints you use. On an interactive terminal it
-offers them as a selectable list, most recently used first with that entry
-preselected, plus an option to enter a custom URL. Pass `--url` to skip the
-prompt, or `--manual` to print the endpoint and code for manual entry
-instead of a QR code.
+lists those first, most recently used first with that entry preselected,
+followed by every address on this machine a phone could dial. Each option is
+probed against `GET /v1/status` and labelled with the result, picking an
+unreachable one explains why, and there is always an option to enter a custom
+URL. Pass `--url` to skip the prompt, or `--manual` to print the endpoint and
+code for manual entry instead of a QR code.
 
 Plain HTTP sends the device credential and session traffic in cleartext. Use it
 only on a network you trust. For public access, use HTTPS through Tailscale, a

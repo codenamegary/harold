@@ -24,7 +24,7 @@ import {
 } from "core/daemon-state/read.live.usecase"
 import { makeStopLiveDaemon, StopLiveDaemon } from "core/daemon-state/stop.usecase"
 import { makeAdvertisedEndpointsFileStore } from "core/network/advertised.endpoints.node.adapters"
-import { detectLanAddress } from "core/network/lan.address"
+import { detectUsableIpv4AddressEntries } from "core/network/lan.address"
 import { makeNodeFetchStatusEndpoint } from "core/reachability/node.adapters"
 import { makeVerifyAdvertisedEndpoint } from "core/reachability/verify.usecase"
 import { parseConfig } from "server/config"
@@ -226,7 +226,7 @@ export const runSetup = async (options: SetupOptions, deps: SetupCommandDeps): P
         const choice = await resolvePairingEndpoint({
           explicitUrl: undefined,
           readHistory: historyStore.read,
-          detectLanAddress,
+          listLanAddresses: detectUsableIpv4AddressEntries,
           port: config.port,
           verifyEndpoint: makeVerifyAdvertisedEndpoint({
             fetchStatus: makeNodeFetchStatusEndpoint(),

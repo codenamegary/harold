@@ -8,7 +8,7 @@ import { DeviceError } from "core/device/errors"
 import { GetPairingCodeById } from "core/device/ports"
 import { AdvertisedEndpointEntry } from "core/network/advertised.endpoints"
 import { makeAdvertisedEndpointsFileStore } from "core/network/advertised.endpoints.node.adapters"
-import { detectLanAddress } from "core/network/lan.address"
+import { detectUsableIpv4AddressEntries } from "core/network/lan.address"
 import { VerifyAdvertisedEndpoint } from "core/reachability/verify.usecase"
 import { FetchStatusEndpoint } from "core/reachability/ports"
 import { makeNodeFetchStatusEndpoint } from "core/reachability/node.adapters"
@@ -228,7 +228,7 @@ export const makePairCommand = (): Command => {
         const choice = await resolvePairingEndpoint({
           explicitUrl: options.url,
           readHistory: context.readHistory,
-          detectLanAddress,
+          listLanAddresses: detectUsableIpv4AddressEntries,
           port: parseConfig(process.env).port,
           verifyEndpoint: context.verifyEndpoint,
           isInteractive: process.stdout.isTTY === true,

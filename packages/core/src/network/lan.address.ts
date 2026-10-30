@@ -37,6 +37,14 @@ export const usableIpv4Addresses = (interfaces: NetworkInterfaces): ReadonlyArra
   usableEntries(interfaces).map((candidate) => candidate.address)
 
 /**
+ * Same pool as `usableIpv4Addresses`, with the owning interface name so the
+ * pair flow can label choices a user is picking between.
+ */
+export const usableIpv4AddressEntries = (
+  interfaces: NetworkInterfaces,
+): ReadonlyArray<{ name: string; address: string }> => usableEntries(interfaces)
+
+/**
  * Picks one IPv4 address a phone on the same network can dial. Physical
  * interfaces win over container and VPN bridges; the first usable address is
  * used when there is nothing better.
@@ -63,3 +71,13 @@ export const hasDialableAddress = (interfaces: NetworkInterfaces): boolean =>
 export const detectLanAddress = (): string | null => selectLanAddress(os.networkInterfaces())
 
 export const detectNetworkInterfaces = (): NetworkInterfaces => os.networkInterfaces()
+
+/**
+ * Every address on this machine a phone could conceivably dial, with the
+ * owning interface name. This is what the pair flow lists for selection:
+ * detection alone cannot know which network the phone is on.
+ */
+export const detectUsableIpv4AddressEntries = (): ReadonlyArray<{
+  name: string
+  address: string
+}> => usableIpv4AddressEntries(os.networkInterfaces())
