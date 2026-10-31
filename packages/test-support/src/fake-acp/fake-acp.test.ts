@@ -387,6 +387,46 @@ describe("fake ACP protocol", () => {
     ])
   })
 
+  test("session/prompt can emit form and URL elicitation requests", () => {
+    const config = readFakeAcpConfig({
+      FAKE_ACP_EMIT_ELICITATION_FORM_ON_PROMPT: "true",
+      FAKE_ACP_EMIT_ELICITATION_URL_ON_PROMPT: "true",
+      FAKE_ACP_ELICITATION_URL: "https://example.com/authorize",
+    })
+
+    const { holdPromptResponse, outbound } = handleJsonRpcRequest(
+      {
+        jsonrpc: "2.0",
+        id: 9,
+        method: "session/prompt",
+        params: { sessionId: "session-elicit", prompt: [] },
+      },
+      config,
+      createPromptState(),
+    )
+
+    expect(holdPromptResponse).toBe(true)
+    expect(outbound).toHaveLength(2)
+    expect(outbound[0]).toMatchObject({
+      id: 1007,
+      method: "elicitation/create",
+      params: {
+        mode: "form",
+        sessionId: "session-elicit",
+        requestedSchema: { type: "object" },
+      },
+    })
+    expect(outbound[1]).toMatchObject({
+      id: 1007,
+      method: "elicitation/create",
+      params: {
+        mode: "url",
+        elicitationId: "fake-elicitation-url-1",
+        url: "https://example.com/authorize",
+      },
+    })
+  })
+
   test("session/prompt holds the response and emits wire-shaped updates when enabled", () => {
     const config = readFakeAcpConfig({
       FAKE_ACP_EMIT_SESSION_UPDATES_ON_PROMPT: "true",

@@ -36,17 +36,22 @@ import harold.android.database.session.CachedSession
 import harold.android.database.session.SessionRepository
 import harold.android.di.PreviewDispatcher
 import harold.android.foreground.ActiveSessionSnapshot
-import harold.android.foreground.MarkedPermission
+import harold.android.foreground.MarkedUserInput
 import harold.android.foreground.PermissionAttentionNotifier
 import harold.android.foreground.SessionAttentionMarks
-import harold.android.foreground.permissionNotification
+import harold.android.foreground.userInputKind
+import harold.android.foreground.userInputLabel
+import harold.android.foreground.userInputNotification
 import harold.android.foreground.ActiveSessionTracker
 import harold.android.foreground.OpenSessionRequests
 import harold.android.foreground.SessionForegroundCoordinator
 import harold.android.live.AcpTranscriptState
+import harold.android.live.Elicitation
+import harold.android.live.ElicitationDraft
 import harold.android.live.SessionOwner
 import harold.android.live.SessionSnapshot
 import harold.android.live.emptyAcpTranscript
+import harold.android.live.toContent
 import harold.android.navigation.NavigationPreferences
 import harold.android.navigation.Navigator
 import harold.android.network.AttachmentApi
@@ -77,6 +82,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
@@ -150,6 +156,8 @@ class ChatViewModel @Inject constructor(
     private val transcriptMemory = mutableMapOf<String, AcpTranscriptState>()
     private var watchedOrigin: String? = null
     private var keepRestoredPermission: Boolean = false
+    private var keepRestoredElicitation: Boolean = false
+    private var openElicitationSheetOnArrival: Boolean = false
     private var attachmentLocalIdCounter: Int = 0
     private var catalog: List<SessionRow> = emptyList()
     private val titlePulledSessionIds = mutableSetOf<String>()
@@ -770,6 +778,237 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    fun openElicitationSheet() {
+        _uiState.update { current ->
+            current.copy(elicitationUiState = current.elicitationUiState.copy(showSheet = true))
+        }
+    }
+
+    fun closeElicitationSheet() {
+        // Collapsing keeps the draft so reopening the card never loses answers.
+        _uiState.update { current ->
+            current.copy(elicitationUiState = current.elicitationUiState.copy(showSheet = false))
+        }
+    }
+
+    fun toggleElicitationRaw() {
+        _uiState.update { current ->
+            current.copy(
+                elicitationUiState = current.elicitationUiState.copy(
+                    rawExpanded = !current.elicitationUiState.rawExpanded,
+                ),
+            )
+        }
+    }
+
+    fun onElicitationTextChanged(key: String, text: String) = updateElicitationDraft { draft ->
+        draft.withText(key, text)
+    }
+
+    fun onElicitationSingleSelected(key: String, value: String) = updateElicitationDraft { draft ->
+        draft.withSingle(key, value)
+    }
+
+    fun onElicitationMultiToggled(key: String, value: String) = updateElicitationDraft { draft ->
+        draft.toggleMulti(key, value)
+    }
+
+    fun onElicitationBooleanChanged(key: String, value: Boolean) = updateElicitationDraft { draft ->
+        draft.withBoolean(key, value)
+    }
+
+    fun onElicitationOtherToggled(key: String, selected: Boolean) = updateElicitationDraft { draft ->
+        draft.withOtherSelected(key, selected)
+    }
+
+    fun onElicitationOtherTextChanged(key: String, text: String) = updateElicitationDraft { draft ->
+        draft.withOtherText(key, text)
+    }
+
+    fun onElicitationNext() {
+        val current = _uiState.value
+        val request = current.activeElicitation as? Elicitation.Form ?: return
+        val ui = current.elicitationUiState
+        when (ui.footerAction(request)) {
+            ElicitationFooter.Next -> {
+                _uiState.update { state ->
+                    state.copy(
+                        elicitationUiState = state.elicitationUiState.copy(
+                            stepIndex = state.elicitationUiState.stepIndex + 1,
+                        ),
+                    )
+                }
+            }
+            ElicitationFooter.Review -> {
+                _uiState.update { state ->
+                    state.copy(
+                        elicitationUiState = state.elicitationUiState.copy(review = true),
+                    )
+                }
+            }
+            ElicitationFooter.Submit -> submitElicitation()
+            ElicitationFooter.Open -> Unit
+        }
+    }
+
+    fun onElicitationBack() {
+        _uiState.update { current ->
+            val ui = current.elicitationUiState
+            val request = current.activeElicitation as? Elicitation.Form ?: return@update current
+            when {
+                ui.review -> current.copy(
+                    elicitationUiState = ui.copy(
+                        review = false,
+                        stepIndex = (request.questions.size - 1).coerceAtLeast(0),
+                    ),
+                )
+                ui.stepIndex > 0 -> current.copy(
+                    elicitationUiState = ui.copy(stepIndex = ui.stepIndex - 1),
+                )
+                else -> current
+            }
+        }
+    }
+
+    fun onElicitationEditStep(stepIndex: Int) {
+        _uiState.update { current ->
+            current.copy(
+                elicitationUiState = current.elicitationUiState.copy(
+                    review = false,
+                    stepIndex = stepIndex,
+                ),
+            )
+        }
+    }
+
+    fun submitElicitation() {
+        val current = _uiState.value
+        val request = current.activeElicitation as? Elicitation.Form ?: return
+        if (!current.elicitationUiState.canAdvance(request)) {
+            return
+        }
+        val content = current.elicitationUiState.draft.toContent(request.questions)
+        sendElicitationResult(
+            requestId = request.requestId,
+            result = JsonObject(
+                mapOf(
+                    "action" to JsonPrimitive("accept"),
+                    "content" to content,
+                ),
+            ),
+            action = "accept",
+        )
+    }
+
+    fun declineElicitation() {
+        val request = _uiState.value.activeElicitation ?: return
+        sendElicitationResult(
+            requestId = request.requestId,
+            result = JsonObject(mapOf("action" to JsonPrimitive("decline"))),
+            action = "decline",
+        )
+    }
+
+    fun cancelElicitation() {
+        val request = _uiState.value.activeElicitation ?: return
+        sendElicitationResult(
+            requestId = request.requestId,
+            result = JsonObject(mapOf("action" to JsonPrimitive("cancel"))),
+            action = "cancel",
+        )
+    }
+
+    /** Called only after the browser accepted the URL. */
+    fun acceptElicitationUrl() {
+        val request = _uiState.value.activeElicitation as? Elicitation.Url ?: return
+        sendElicitationResult(
+            requestId = request.requestId,
+            result = JsonObject(mapOf("action" to JsonPrimitive("accept"))),
+            action = "accept",
+        )
+    }
+
+    fun reportElicitationUrlOpenFailure(message: String) {
+        _uiState.update { current ->
+            current.copy(
+                elicitationUiState = current.elicitationUiState.copy(urlOpenError = message),
+            )
+        }
+    }
+
+    fun clearElicitationUrlOpenFailure() {
+        _uiState.update { current ->
+            current.copy(
+                elicitationUiState = current.elicitationUiState.copy(urlOpenError = null),
+            )
+        }
+    }
+
+    fun dismissUrlElicitation(requestId: String) {
+        _uiState.update { current ->
+            current.copy(
+                urlElicitationsWaiting = current.urlElicitationsWaiting
+                    .filterNot { item -> item.requestId == requestId },
+            )
+        }
+    }
+
+    private fun updateElicitationDraft(update: (ElicitationDraft) -> ElicitationDraft) {
+        _uiState.update { current ->
+            current.copy(
+                elicitationUiState = current.elicitationUiState.copy(
+                    draft = update(current.elicitationUiState.draft),
+                    error = null,
+                    urlOpenError = null,
+                ),
+            )
+        }
+    }
+
+    private fun sendElicitationResult(
+        requestId: String,
+        result: JsonObject,
+        action: String,
+    ) {
+        if (_uiState.value.elicitationUiState.submitting) {
+            return
+        }
+        _uiState.update { current ->
+            current.copy(
+                elicitationUiState = current.elicitationUiState.copy(
+                    submitting = true,
+                    submittingAction = action,
+                    error = null,
+                    urlOpenError = null,
+                ),
+            )
+        }
+        viewModelScope.launch {
+            sessionOwner.replyElicitation(requestId = requestId, result = result)
+                .onFailure { error ->
+                    val conflict = error is harold.android.network.AgentApiException &&
+                        (error.error as? harold.android.network.AgentApiError.Problem)?.status == 409
+                    _uiState.update { current ->
+                        current.copy(
+                            elicitationUiState = current.elicitationUiState.copy(
+                                error = if (conflict) "Already resolved" else {
+                                    error.message ?: "Reply failed"
+                                },
+                            ),
+                        )
+                    }
+                }
+            _uiState.update { current ->
+                current.copy(
+                    elicitationUiState = current.elicitationUiState.copy(
+                        submitting = false,
+                        submittingAction = null,
+                    ),
+                )
+            }
+        }
+    }
+
     fun submitCancel() {
         val session = _uiState.value.selectedSession ?: return
         if (!_uiState.value.showComposerCancel) {
@@ -942,45 +1181,58 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun holdPermissionForPrevious(next: SessionRow) {
+    private fun holdUserInputForPrevious(next: SessionRow) {
         val current = _uiState.value.selectedSession ?: return
         if (current.id == next.id) {
             return
         }
-        val request = _uiState.value.activePermissionRequest ?: return
+        val request = _uiState.value.activePermissionRequest
+        val elicitation = _uiState.value.activeElicitation
+        val kind = userInputKind(
+            hasPermission = request != null,
+            hasQuestion = elicitation != null,
+        ) ?: return
         sessionAttention?.mark(
-            MarkedPermission(
+            MarkedUserInput(
                 rowId = current.id,
                 sessionId = current.sessionId,
                 sessionName = current.name,
                 haroldIconId = current.haroldIconId,
                 request = request,
+                elicitation = elicitation,
             ),
         )
         permissionNotifier?.show(
-            permissionNotification(
+            userInputNotification(
                 sessionId = current.id,
                 sessionName = current.name,
                 haroldName = current.haroldName,
                 haroldIconId = current.haroldIconId,
+                kind = kind,
             ),
         )
         catalog = catalog.map { row ->
-            if (row.id == current.id) row.copy(needsAttention = true) else row
+            if (row.id == current.id) {
+                row.copy(needsAttention = true, attentionLabel = userInputLabel(kind))
+            } else {
+                row
+            }
         }
     }
 
     private suspend fun activateSession(row: SessionRow) {
+        openElicitationSheetOnArrival = false
         if (voiceDictationController.state.visible) {
             syncVoiceDictationState(voiceDictationController.cancel())
         }
         navigationPreferences.saveLastSessionId(row.id)
         persistSelectedSession(row.id)
         clearComposer()
-        holdPermissionForPrevious(row)
+        holdUserInputForPrevious(row)
         val restored = sessionAttention?.marked?.value?.get(row.id)
         if (restored != null) {
-            keepRestoredPermission = true
+            keepRestoredPermission = restored.request != null
+            keepRestoredElicitation = restored.elicitation != null
             sessionAttention.clear(row.id)
             permissionNotifier?.clear(restored.rowId)
             catalog = catalog.map { item ->
@@ -998,6 +1250,7 @@ class ChatViewModel @Inject constructor(
                     selectedSession = row.copy(needsAttention = false),
                     transcript = remembered,
                     pendingPermissions = listOfNotNull(restored?.request),
+                    pendingElicitations = listOfNotNull(restored?.elicitation),
                 ),
             ).copy(sessions = catalog)
         }
@@ -1057,15 +1310,49 @@ class ChatViewModel @Inject constructor(
             if (snapshot.pendingPermission != null || snapshot.transcript.live) {
                 keepRestoredPermission = false
             }
+
+            val elicitations = if (
+                snapshot.pendingElicitations.isEmpty() && keepRestoredElicitation
+            ) {
+                current.pendingElicitations
+            } else {
+                snapshot.pendingElicitations
+            }
+            if (snapshot.pendingElicitations.isNotEmpty() || snapshot.transcript.live) {
+                keepRestoredElicitation = false
+            }
+            val activeElicitation = elicitations.firstOrNull()
+            val elicitationUi = when {
+                activeElicitation == null -> ElicitationUiState()
+                current.elicitationUiState.requestId == activeElicitation.requestId ->
+                    current.elicitationUiState
+                else -> ElicitationUiState(
+                    requestId = activeElicitation.requestId,
+                    showSheet = current.elicitationUiState.showSheet,
+                    draft = (activeElicitation as? Elicitation.Form)?.let { form ->
+                        ElicitationDraft.fromQuestions(form.questions)
+                    } ?: ElicitationDraft(),
+                )
+            }
+
             current.copy(
                 transcript = snapshot.transcript,
                 streamReconnecting = snapshot.reconnecting,
                 availableCommands = snapshot.availableCommands,
                 pendingPermissions = permissions,
                 permissionUiState = permissionUi,
+                pendingElicitations = elicitations,
+                elicitationUiState = elicitationUi,
+                urlElicitationsWaiting = snapshot.urlElicitationsAwaitingCompletion,
+                completedElicitationIds = snapshot.completedElicitationIds,
                 extensionUiState = extensionUi,
             )
         }
+        if (openElicitationSheetOnArrival && _uiState.value.activeElicitation != null) {
+            openElicitationSheetOnArrival = false
+            openElicitationSheet()
+        }
+
         syncSelectedState(snapshot.transcript.sessionState)
         val open = _uiState.value.selectedSession
         if (open != null && snapshot.sessionId == open.sessionId) {
@@ -1143,7 +1430,15 @@ class ChatViewModel @Inject constructor(
         val row = catalog.firstOrNull { session -> session.id == sessionId }
             ?: catalog.firstOrNull { session -> session.sessionId == sessionId }
             ?: return
+        // A question tapped from a notification opens its sheet; permissions
+        // already render inline and never auto-open anything. The snapshot may
+        // arrive after the tap, so the flag survives until it does.
         activateSession(row)
+        if (_uiState.value.activeElicitation != null) {
+            openElicitationSheet()
+        } else {
+            openElicitationSheetOnArrival = true
+        }
     }
 
     private fun titleFor(row: SessionRow, titles: Map<String, String>): String? {

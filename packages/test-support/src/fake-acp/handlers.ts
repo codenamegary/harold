@@ -142,6 +142,8 @@ const TERMINAL_CREATE_REQUEST_ID = 1003
 const CURSOR_ASK_QUESTION_ID = 1004
 const CURSOR_CREATE_PLAN_ID = 1005
 const UNKNOWN_EXTENSION_ID = 1006
+export const ELICITATION_REQUEST_ID = 1007
+export const ELICITATION_URL_ID = "fake-elicitation-url-1"
 
 const permissionRequest = (
   sessionId: string,
@@ -217,6 +219,46 @@ const cursorCreatePlanRequest = (sessionId: string): JsonRpcRequest => ({
     toolCallId: "call-plan",
     plan: "Do the thing",
     todos: [{ id: "todo-1", content: "Step one", status: "pending" }],
+  },
+})
+
+const elicitationFormRequest = (sessionId: string): JsonRpcRequest => ({
+  jsonrpc: "2.0",
+  id: ELICITATION_REQUEST_ID,
+  method: "elicitation/create",
+  params: {
+    mode: "form",
+    sessionId,
+    toolCallId: "tool-call-elicitation",
+    message: "Questions",
+    requestedSchema: {
+      type: "object",
+      properties: {
+        q0: {
+          type: "string",
+          title: "Package Manager",
+          oneOf: [
+            { const: "bun", title: "bun" },
+            { const: "npm", title: "npm" },
+          ],
+        },
+        q0_custom: { type: "string", title: "Package Manager (other)" },
+      },
+      required: [],
+    },
+  },
+})
+
+const elicitationUrlRequest = (sessionId: string, url: string): JsonRpcRequest => ({
+  jsonrpc: "2.0",
+  id: ELICITATION_REQUEST_ID,
+  method: "elicitation/create",
+  params: {
+    mode: "url",
+    sessionId,
+    elicitationId: ELICITATION_URL_ID,
+    url,
+    message: "Authorize the fake agent",
   },
 })
 
@@ -478,10 +520,19 @@ const handleSessionPrompt = (
       ]
     : []
 
-  if (permissionOutbound.length > 0) {
+  const elicitationOutbound = [
+    ...(config.emitElicitationFormOnPrompt ? [elicitationFormRequest(sessionId)] : []),
+    ...(config.emitElicitationUrlOnPrompt
+      ? [elicitationUrlRequest(sessionId, config.elicitationUrl)]
+      : []),
+  ]
+
+  const outbound = [...permissionOutbound, ...elicitationOutbound]
+
+  if (outbound.length > 0) {
     return {
       holdPromptResponse: true,
-      outbound: permissionOutbound,
+      outbound,
       notifications: updates.slice(0, 1),
       deferredNotifications: updates.slice(1).map((notification, index) => ({
         delayMs: (index + 1) * 20,

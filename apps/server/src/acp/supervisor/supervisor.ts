@@ -28,7 +28,10 @@ import {
   AcpSupervisorStatus,
   AgentSettingsReader,
   CloseWorkspaceSessionsResult,
+  ElicitationCancelFn,
+  ElicitationCompleteFn,
   LiveWorkspaceSession,
+  RequestElicitationFn,
   RequestExtensionRpcFn,
   RequestPermissionFn,
   SessionConfigHandler,
@@ -112,9 +115,12 @@ export type CreateAcpSupervisorParams = {
   onSessionDiscovered?: SessionDiscoveredHandler
   requestPermission?: RequestPermissionFn
   requestExtensionRpc?: RequestExtensionRpcFn
+  requestElicitation?: RequestElicitationFn
+  onElicitationComplete?: ElicitationCompleteFn
+  onElicitationCancel?: ElicitationCancelFn
   /** Called when an agent sends an extension method with no registered handler. */
   logUnknownExtension?: (method: string) => void
-  onBeforeClearRuntime?: () => void
+  onBeforeClearRuntime?: (agentId: AgentId) => void
   onSupervisorReady?: () => void | Promise<void>
   restartBackoffMs?: ReadonlyArray<number>
   sleepFn?: (ms: number) => Promise<void>
@@ -136,6 +142,9 @@ export const createAcpSupervisor = ({
   onSessionDiscovered,
   requestPermission,
   requestExtensionRpc,
+  requestElicitation,
+  onElicitationComplete,
+  onElicitationCancel,
   logUnknownExtension,
   onBeforeClearRuntime,
   onSupervisorReady,
@@ -164,6 +173,9 @@ export const createAcpSupervisor = ({
     onSessionUpdate,
     requestPermission,
     requestExtensionRpc,
+    requestElicitation,
+    onElicitationComplete,
+    onElicitationCancel,
     logUnknownExtension,
     onBeforeClearRuntime,
     onSupervisorReady,

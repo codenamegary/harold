@@ -140,14 +140,60 @@ export const failWithLogs = (
   throw new Error(`${label}\nstream messages: ${JSON.stringify(client.messages)}\nlogs:\n${logs}`)
 }
 
-/** Answers permission and extension requests until the prompt completes or fails. */
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined
+
+/**
+ * Builds a minimal valid form answer for a smoke run: use the schema default
+ * when present, otherwise the first option, otherwise a type-appropriate value.
+ */
+export const elicitationAcceptContent = (params: unknown): Record<string, unknown> => {
+  const schema = asRecord(asRecord(params)?.["requestedSchema"])
+  const properties = asRecord(schema?.["properties"]) ?? {}
+  const content: Record<string, unknown> = {}
+
+  for (const [key, rawProperty] of Object.entries(properties)) {
+    const property = asRecord(rawProperty) ?? {}
+    if (property["default"] !== undefined) {
+      content[key] = property["default"]
+      continue
+    }
+
+    const type = property["type"]
+    const oneOf = Array.isArray(property["oneOf"]) ? property["oneOf"] : undefined
+    const enumValues = Array.isArray(property["enum"]) ? property["enum"] : undefined
+    if (oneOf !== undefined) {
+      const first = asRecord(oneOf[0])
+      if (first?.["const"] !== undefined) {
+        content[key] = first["const"]
+      }
+    } else if (enumValues !== undefined && enumValues[0] !== undefined) {
+      content[key] = enumValues[0]
+    } else if (type === "boolean") {
+      content[key] = true
+    } else if (type === "number" || type === "integer") {
+      content[key] = 1
+    } else if (type === "array") {
+      content[key] = []
+    } else {
+      content[key] = "smoke"
+    }
+  }
+
+  return content
+}
+
+/** Answers permission, elicitation, and extension requests until the prompt completes. */
 export const drainPrompt = async (params: {
   logCapture: SmokeLogCapture
   client: StreamClient
   commands: SessionCommands
   deadlineMs: number
+  onRequest?: (message: {
+    type: "permission_request" | "elicitation_request" | "extension_request"
+  }) => void
 }): Promise<void> => {
-  const { logCapture, client, commands, deadlineMs } = params
+  const { logCapture, client, commands, deadlineMs, onRequest } = params
   const handledRequestIds = new Set<string>()
 
   const next = async (): Promise<void> => {
@@ -161,7 +207,11 @@ export const drainPrompt = async (params: {
         return true
       }
 
-      if (item.type === "permission_request" || item.type === "extension_request") {
+      if (
+        item.type === "permission_request" ||
+        item.type === "extension_request" ||
+        item.type === "elicitation_request"
+      ) {
         return !handledRequestIds.has(item.requestId)
       }
 
@@ -177,6 +227,7 @@ export const drainPrompt = async (params: {
     }
 
     if (message.type === "permission_request") {
+      onRequest?.({ type: "permission_request" })
       handledRequestIds.add(message.requestId)
       const reply = await commands.replyPermission({
         requestId: message.requestId,
@@ -192,7 +243,30 @@ export const drainPrompt = async (params: {
       return next()
     }
 
+    if (message.type === "elicitation_request") {
+      onRequest?.({ type: "elicitation_request" })
+      handledRequestIds.add(message.requestId)
+      const mode = asRecord(message.params)?.["mode"]
+      const result =
+        mode === "url"
+          ? { action: "decline" }
+          : { action: "accept", content: elicitationAcceptContent(message.params) }
+      const reply = await commands.replyElicitation({
+        requestId: message.requestId,
+        result,
+      })
+      if (reply.status !== 204) {
+        failWithLogs(
+          logCapture,
+          client,
+          `elicitation reply failed: ${reply.status} ${await reply.text()}`,
+        )
+      }
+      return next()
+    }
+
     if (message.type === "extension_request") {
+      onRequest?.({ type: "extension_request" })
       handledRequestIds.add(message.requestId)
       const reply = await commands.replyExtension({ requestId: message.requestId, result: {} })
       if (reply.status !== 204) {

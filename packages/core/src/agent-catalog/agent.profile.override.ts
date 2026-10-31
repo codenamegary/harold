@@ -6,6 +6,11 @@ export type AcpClientCapabilities = {
     readonly writeTextFile: true
   }
   readonly terminal: true
+  /** Advertised to every agent so ACP `elicitation/create` is allowed. */
+  readonly elicitation: {
+    readonly form: Record<string, never>
+    readonly url: Record<string, never>
+  }
   readonly _meta?: {
     readonly parameterizedModelPicker?: boolean
   }
@@ -25,6 +30,10 @@ export const defaultClientCapabilities: AcpClientCapabilities = {
     writeTextFile: true,
   },
   terminal: true,
+  elicitation: {
+    form: {},
+    url: {},
+  },
 }
 
 export const probeEnvOrWhich = (

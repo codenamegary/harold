@@ -8,6 +8,7 @@ import harold.android.contracts.PermissionRequest
 import harold.android.contracts.SessionState
 import harold.android.contracts.catalogSessionKey
 import harold.android.live.AcpTranscriptState
+import harold.android.live.Elicitation
 import harold.android.live.StreamExtension
 import harold.android.live.emptyAcpTranscript
 import harold.android.voice.VoiceDictationUiState
@@ -28,6 +29,8 @@ data class SessionRow(
     val haroldIconId: String = "",
     val haroldReachable: Boolean = true,
     val needsAttention: Boolean = false,
+    /** "Needs answer", "Needs permission", or "Needs input". */
+    val attentionLabel: String = "Needs input",
 ) {
     val id: String
         get() = if (serverOrigin.isEmpty()) {
@@ -86,6 +89,11 @@ data class ChatUiState(
     val streamReconnecting: Boolean = false,
     val pendingPermissions: List<PermissionRequest> = emptyList(),
     val permissionUiState: PermissionUiState = PermissionUiState(),
+    val pendingElicitations: List<Elicitation> = emptyList(),
+    val elicitationUiState: ElicitationUiState = ElicitationUiState(),
+    /** Accepted URL requests waiting for the agent's completion notice. */
+    val urlElicitationsWaiting: List<Elicitation.Url> = emptyList(),
+    val completedElicitationIds: Set<String> = emptySet(),
     val extensionUiState: ExtensionUiState = ExtensionUiState(),
     val notificationPermissionDenied: Boolean = false,
     val voiceDictation: VoiceDictationUiState = VoiceDictationUiState(),
@@ -115,6 +123,14 @@ data class ChatUiState(
     val activePermissionRequest: PermissionRequest?
         get() = activePermissionRequest(pendingPermissions)
 
+    /** Oldest pending agent question, shown as the card above the composer. */
+    val activeElicitation: Elicitation?
+        get() = activeElicitation(pendingElicitations)
+
+    val pendingInputCount: Int
+        get() = pendingPermissions.count { it.status == harold.android.contracts.PermissionStatus.Pending } +
+            pendingElicitations.size
+
     val effectiveSessionState: SessionState?
         get() = resolveEffectiveSessionState(
             sessionId = selectedSession?.sessionId.orEmpty(),
@@ -130,7 +146,8 @@ data class ChatUiState(
                     agentId = session.agentId,
                     sessionId = session.sessionId,
                     sessionState = effectiveSessionState,
-                ) && !composerSubmitting && !streamReconnecting
+                ) && !composerSubmitting && !streamReconnecting &&
+                pendingElicitations.isEmpty()
         }
 
     val isPendingNewSession: Boolean
@@ -181,6 +198,7 @@ internal data class SessionResetKeep(
     val selectedSession: SessionRow? = null,
     val transcript: AcpTranscriptState = emptyAcpTranscript,
     val pendingPermissions: List<PermissionRequest> = emptyList(),
+    val pendingElicitations: List<Elicitation> = emptyList(),
 )
 
 /**
@@ -203,6 +221,10 @@ internal fun ChatUiState.resetSessionScopedState(
     voiceCommandListVisible = false,
     pendingPermissions = keep.pendingPermissions,
     permissionUiState = PermissionUiState(),
+    pendingElicitations = keep.pendingElicitations,
+    elicitationUiState = ElicitationUiState(),
+    urlElicitationsWaiting = emptyList(),
+    completedElicitationIds = emptySet(),
     extensionUiState = ExtensionUiState(),
     streamReconnecting = false,
     cancelSubmitting = false,

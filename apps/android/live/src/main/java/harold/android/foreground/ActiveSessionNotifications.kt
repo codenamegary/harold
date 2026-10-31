@@ -94,7 +94,7 @@ fun buildActiveSessionsNotification(
 
 fun buildPermissionAttentionNotification(
     context: Context,
-    alert: PermissionNotification,
+    alert: UserInputNotification,
 ): Notification {
     ensurePermissionChannel(context)
     val launchIntent = (
@@ -141,10 +141,10 @@ private fun ensurePermissionChannel(context: Context) {
     manager.createNotificationChannel(channel)
 }
 
-class AndroidPermissionAttentionNotifier @Inject constructor(
+class AndroidUserInputAttentionNotifier @Inject constructor(
     @ApplicationContext private val context: Context,
-) : PermissionAttentionNotifier {
-    override fun show(alert: PermissionNotification) {
+) : UserInputAttentionNotifier {
+    override fun show(alert: UserInputNotification) {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.notify(
             permissionNotificationId(alert.openSessionId),

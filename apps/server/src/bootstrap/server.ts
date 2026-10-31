@@ -269,6 +269,22 @@ export const createServer = async ({
         }
         return hub.requestExtensionRpc(input)
       },
+      requestElicitation: (input) => {
+        const hub = sessionHubRef.current
+        if (hub === null) {
+          throw new Error("session hub is not ready")
+        }
+        return hub.requestElicitation(input)
+      },
+      onElicitationComplete: (input) => {
+        sessionHubRef.current?.completeElicitation(input)
+      },
+      onElicitationCancel: (input) => {
+        sessionHubRef.current?.cancelElicitationByAgent(input)
+      },
+      onBeforeClearRuntime: (agentId) => {
+        sessionHubRef.current?.agentExited({ agentId })
+      },
     })
 
   const acpSupervisor = acpSupervisorRef.current
@@ -355,6 +371,9 @@ export const createServer = async ({
       })
       return cancelled.ok ? { ok: true } : { ok: false, reason: cancelled.reason }
     },
+    logElicitation: (event) => {
+      app.log.info(event, "ACP elicitation settled")
+    },
   })
   sessionHubRef.current = sessionHub
 
@@ -401,6 +420,7 @@ export const createServer = async ({
     forgetSessionTitle: sessionTitleCache.forgetSessionTitle,
     isArchivedAcpSession: archivedAcpSessions.isArchived,
     archiveAcpSession: archivedAcpSessions.archive,
+    closeSession: (input) => sessionHub.closeSession(input),
     authBroker,
   })
 

@@ -29,6 +29,7 @@ import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.CreateWorkspaceBody
+import harold.android.contracts.ElicitationReplyBody
 import harold.android.contracts.ExtensionReplyBody
 import harold.android.contracts.FilesystemDirectoryCollection
 import harold.android.contracts.FilesystemDirectoryCreated
@@ -103,6 +104,22 @@ class DefaultAgentApi(
         body = json.encodeToString(
             ExtensionReplyBody.serializer(),
             ExtensionReplyBody(result = result),
+        ),
+        decode = { Unit },
+    )
+
+    override suspend fun replyElicitation(
+        serverOrigin: String,
+        requestId: String,
+        result: JsonElement,
+    ): Result<Unit> = request(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/elicitations/$requestId/replies",
+        query = emptyMap(),
+        method = "POST",
+        body = json.encodeToString(
+            ElicitationReplyBody.serializer(),
+            ElicitationReplyBody(result = result),
         ),
         decode = { Unit },
     )

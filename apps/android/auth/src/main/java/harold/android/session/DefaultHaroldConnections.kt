@@ -176,6 +176,7 @@ private fun isLiveSession(state: SessionState): Boolean =
         SessionState.Starting,
         SessionState.Running,
         SessionState.AwaitingPermission,
+        SessionState.AwaitingAnswer,
         SessionState.Stopping,
         -> true
         SessionState.Idle,

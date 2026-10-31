@@ -39,6 +39,8 @@ fun composerBlockedMessage(sessionState: SessionState?): String? =
             "Session is starting. Wait until it is idle."
         SessionState.AwaitingPermission ->
             "Waiting for permission. Prompts unlock when it is idle."
+        SessionState.AwaitingAnswer ->
+            "Waiting for an answer. Prompts unlock when it is idle."
         SessionState.Stopping ->
             "Session is stopping. Wait for it to finish."
         SessionState.Offline ->
@@ -51,10 +53,12 @@ fun composerBlockedMessage(sessionState: SessionState?): String? =
 fun showComposerCancel(sessionState: SessionState?): Boolean =
     sessionState == SessionState.Running ||
         sessionState == SessionState.Starting ||
-        sessionState == SessionState.AwaitingPermission
+        sessionState == SessionState.AwaitingPermission ||
+        sessionState == SessionState.AwaitingAnswer
 
 fun isSessionRunning(sessionState: SessionState?): Boolean =
     sessionState == SessionState.Running ||
         sessionState == SessionState.Starting ||
         sessionState == SessionState.AwaitingPermission ||
+        sessionState == SessionState.AwaitingAnswer ||
         sessionState == SessionState.Stopping
