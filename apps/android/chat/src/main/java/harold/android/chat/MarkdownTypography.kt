@@ -16,13 +16,13 @@ private const val HEADING_LINE_HEIGHT_RATIO = 1.25f
 
 /**
  * Chat-sized markdown text. The library defaults map headings to the Material display styles
- * (h1 is 57sp), which dwarf the 16sp body on a phone. Here body keeps the theme's bodyLarge
+ * (h1 is 57sp), which dwarf the 16sp body on a phone. Here body keeps the chat body role
  * and headings stay within about 1.4x of it.
  */
 @Composable
 fun haroldMarkdownTypography(): MarkdownTypography {
     val typography = MaterialTheme.typography
-    val body = typography.bodyLarge
+    val body = chatTextRoles().body
     return markdownTypography(
         h1 = typography.titleLarge.copy(fontSize = 22.sp, fontWeight = FontWeight.Bold)
             .withLineHeightRatio(),

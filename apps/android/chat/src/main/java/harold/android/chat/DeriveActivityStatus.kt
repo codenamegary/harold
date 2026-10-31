@@ -47,11 +47,8 @@ fun deriveActivityStatus(
         isActiveToolStatus(tool.status)
     }
     if (activeTool != null) {
-        val toolLabel = shortToolLabel(activeTool).trim()
-        return ActivityStatus(
-            phase = ActivityPhase.UsingTools,
-            label = toolLabel.ifEmpty { "Using tools" },
-        )
+        // The live tool row already names the running call.
+        return null
     }
 
     if (turnHasAssistant(rows, turnId)) {
@@ -62,10 +59,8 @@ fun deriveActivityStatus(
     }
 
     if (toolsForTurn(rows, turnId).isNotEmpty()) {
-        return ActivityStatus(
-            phase = ActivityPhase.Working,
-            label = "Working",
-        )
+        // Completed tools fold into their own row; no extra status text is needed.
+        return null
     }
 
     return ActivityStatus(

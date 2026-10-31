@@ -42,6 +42,32 @@ class HaroldThemeTest {
 
         assertEquals(Lime, primary)
     }
+
+    @Test
+    fun darkTurnPanelsUsePanel2() {
+        var panel: Color? = null
+
+        composeTestRule.setContent {
+            HaroldTheme(darkTheme = true, dynamicColor = false) {
+                panel = MaterialTheme.colorScheme.surfaceContainer
+            }
+        }
+
+        assertEquals(Panel2, panel)
+    }
+
+    @Test
+    fun lightTurnPanelsUseTheLightPanelFill() {
+        var panel: Color? = null
+
+        composeTestRule.setContent {
+            HaroldTheme(darkTheme = false, dynamicColor = false) {
+                panel = MaterialTheme.colorScheme.surfaceContainer
+            }
+        }
+
+        assertEquals(LightPanel2, panel)
+    }
 }
 
 @Composable
