@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.0](https://github.com/codenamegary/harold/compare/harold-android-v3.0.0...harold-android-v3.1.0) (2026-10-31)
+
+
+### Features
+
+* **android:** redesign the chat transcript with turn headers and honest tool rows ([#464](https://github.com/codenamegary/harold/issues/464)) ([60c0a3c](https://github.com/codenamegary/harold/commit/60c0a3c940dfb6aa24e354369f6db9223d292272))
+
 ## [3.0.0](https://github.com/codenamegary/harold/compare/harold-android-v2.0.0...harold-android-v3.0.0) (2026-10-30)
 
 
