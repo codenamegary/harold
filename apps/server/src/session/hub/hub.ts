@@ -250,7 +250,12 @@ export const createSessionHub = ({
   const pendingElicitationByJsonRpcId = new Map<string, string>()
   const recentElicitationsBySession = new Map<
     SessionKey,
-    Array<{ message: SessionStreamServerMessage; at: number }>
+    Array<{
+      /** Replayed ahead of the resolution so clients can rebuild the answer row. */
+      request?: SessionStreamServerMessage
+      message: SessionStreamServerMessage
+      at: number
+    }>
   >()
   const urlElicitations = new Map<
     string,
@@ -699,9 +704,13 @@ export const createSessionHub = ({
     urlElicitations.delete(key)
   }
 
-  const rememberResolvedElicitation = (key: SessionKey, message: SessionStreamServerMessage) => {
+  const rememberResolvedElicitation = (
+    key: SessionKey,
+    request: SessionStreamServerMessage | undefined,
+    message: SessionStreamServerMessage,
+  ) => {
     const list = recentElicitationsBySession.get(key) ?? []
-    list.push({ message, at: now() })
+    list.push({ ...(request === undefined ? {} : { request }), message, at: now() })
     while (list.length > ELICITATION_RESOLVED_CAP) {
       list.shift()
     }
@@ -740,6 +749,17 @@ export const createSessionHub = ({
       reason,
       result,
     }
+    const request: SessionStreamServerMessage | undefined =
+      pending.mode === "form"
+        ? {
+            type: "elicitation_request",
+            requestId,
+            agentId: pending.agentId,
+            sessionId: pending.sessionId,
+            params: pending.params,
+            expiresAt: pending.expiresAt ?? new Date(now() + elicitationTimeoutMs).toISOString(),
+          }
+        : undefined
 
     if (pending.mode === "url" && pending.elicitationId !== undefined) {
       const mappingKey = urlKey(pending.agentId, pending.elicitationId)
@@ -758,7 +778,7 @@ export const createSessionHub = ({
     }
 
     pending.resolve(result)
-    rememberResolvedElicitation(key, message)
+    rememberResolvedElicitation(key, request, message)
     fanOut(key, message)
 
     logElicitation?.({
@@ -827,6 +847,9 @@ export const createSessionHub = ({
     }
 
     for (const entry of pruneRecentElicitations(key)) {
+      if (entry.request !== undefined) {
+        subscriber.sink.send(entry.request)
+      }
       subscriber.sink.send(entry.message)
     }
   }

@@ -126,6 +126,40 @@ class AcpTranscriptReducerTest {
     }
 
     @Test
+    fun reconnectClearsAStaleReplyingState() {
+        var state = applySubscribed(
+            beginUserTurn(emptyAcpTranscript, turnId = "turn-1", text = "go"),
+        )
+        state = foldAcpUpdate(state, ParsedAcpUpdate.AgentMessageChunk("done"))
+
+        assertEquals(SessionState.Running, state.sessionState)
+
+        val resubscribed = applySubscribed(state)
+
+        assertEquals(SessionState.Idle, resubscribed.sessionState)
+    }
+
+    @Test
+    fun reconnectKeepsRunningWhileAToolIsActive() {
+        var state = applySubscribed(
+            beginUserTurn(emptyAcpTranscript, turnId = "turn-1", text = "go"),
+        )
+        state = foldAcpUpdate(
+            state,
+            ParsedAcpUpdate.ToolCall(
+                toolCallId = "t1",
+                toolName = "read",
+                toolKind = harold.android.contracts.ToolKind.Read,
+                status = harold.android.contracts.ToolCallStatus.InProgress,
+            ),
+        )
+
+        val resubscribed = applySubscribed(state)
+
+        assertEquals(SessionState.Running, resubscribed.sessionState)
+    }
+
+    @Test
     fun marksRunningWhenLiveUpdatesArriveAfterSubscribe() {
         val replayed = foldAcpUpdate(
             emptyAcpTranscript,

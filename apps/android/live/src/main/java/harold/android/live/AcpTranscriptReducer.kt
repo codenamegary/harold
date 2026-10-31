@@ -223,11 +223,19 @@ fun applyReconnect(): AcpTranscriptState = AcpTranscriptState(
 )
 
 fun applySubscribed(state: AcpTranscriptState): AcpTranscriptState {
+    val waitingForInput =
+        state.sessionState == SessionState.AwaitingPermission ||
+            state.sessionState == SessionState.AwaitingAnswer
+    val latestTurnId = state.rows.lastOrNull { row -> row is TranscriptUserRow }?.turnId
+    val lastInLatestTurn =
+        latestTurnId?.let { turnId -> state.rows.lastOrNull { row -> row.turnId == turnId } }
+    val staleReply =
+        state.sessionState == SessionState.Running &&
+            lastInLatestTurn is TranscriptAssistantRow
     val nextState =
         if (
-            state.sessionState == SessionState.Running ||
-            state.sessionState == SessionState.AwaitingPermission ||
-            state.sessionState == SessionState.AwaitingAnswer
+            waitingForInput ||
+            (state.sessionState == SessionState.Running && !staleReply)
         ) {
             state.sessionState
         } else {

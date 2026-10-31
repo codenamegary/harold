@@ -287,6 +287,14 @@ describe("session hub elicitation", () => {
         reason: "replied",
       }),
     )
+    const requestIndex = b.findIndex(
+      (message) => message.type === "elicitation_request" && message.requestId === "req-1",
+    )
+    const resolvedIndex = b.findIndex(
+      (message) => message.type === "elicitation_resolved" && message.requestId === "req-1",
+    )
+    expect(requestIndex).toBeGreaterThanOrEqual(0)
+    expect(requestIndex).toBeLessThan(resolvedIndex)
 
     hub.closeSession({ agentId: "opencode", sessionId: "s1" })
     await pending
