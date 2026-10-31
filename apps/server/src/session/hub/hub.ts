@@ -2,7 +2,10 @@ import { AgentAuth } from "contracts/http/agent-auth"
 import { AgentId } from "contracts/http/agent-settings"
 import { AttachmentReference } from "contracts/http/attachments"
 import { SessionConfig } from "contracts/http/config.options"
-import { SessionStreamServerMessage } from "contracts/http/session.stream"
+import {
+  ElicitationResolvedReason,
+  SessionStreamServerMessage,
+} from "contracts/http/session.stream"
 import { sanitizeFailureReason } from "../../acp/sanitize.failure.reason"
 import { parseAvailableCommandsUpdate } from "./commands.available"
 import { CommandsCache, createCommandsCache } from "./commands.cache"
@@ -74,11 +77,31 @@ export type PendingClientRpc = {
   readonly requestId: string
   readonly agentId: AgentId
   readonly sessionId: string
-  readonly kind: "permission" | "extension"
+  readonly kind: "permission" | "extension" | "elicitation"
   readonly method?: string
   readonly params: unknown
+  /** Elicitation only: the agent's JSON-RPC id, used by `$/cancel_request`. */
+  readonly jsonRpcId?: string | number
+  /** Elicitation only: metadata kept for logs and re-emission. */
+  readonly mode?: string
+  readonly fieldCount?: number
+  readonly startedAt?: number
+  readonly expiresAt?: string
+  readonly elicitationId?: string
+  timer?: ReturnType<typeof setTimeout>
   resolve: (result: unknown) => void
   settled: boolean
+}
+
+/** Metadata-only elicitation log event. Never carries params or answers. */
+export type ElicitationLogEvent = {
+  readonly requestId: string
+  readonly agentId: AgentId
+  readonly sessionId: string
+  readonly mode: string
+  readonly fieldCount: number
+  readonly outcome: ElicitationResolvedReason
+  readonly durationMs: number
 }
 
 export type CreateSessionHubParams = {
@@ -93,6 +116,10 @@ export type CreateSessionHubParams = {
   completePromptTurn: PromptCompleteTurn
   cancelSession: SessionHubCancelSession
   createRequestId?: () => string
+  /** One-hour by default. Test seam. */
+  elicitationTimeoutMs?: number
+  now?: () => number
+  logElicitation?: (event: ElicitationLogEvent) => void
 }
 
 export type SessionHub = {
@@ -137,8 +164,23 @@ export type SessionHub = {
     method: string
     params: unknown
   }) => Promise<unknown>
+  requestElicitation: (params: {
+    agentId: AgentId
+    sessionId: string
+    params: unknown
+    jsonRpcId?: string | number
+  }) => Promise<unknown>
   resolvePermissionReply: (params: { requestId: string; optionId: string }) => ResolveReplyResult
   resolveExtensionReply: (params: { requestId: string; result: unknown }) => ResolveReplyResult
+  resolveElicitationReply: (params: { requestId: string; result: unknown }) => ResolveReplyResult
+  /** Agent-sent `elicitation/complete` for a URL elicitation. */
+  completeElicitation: (params: { agentId: AgentId; elicitationId: string }) => void
+  /** Agent-sent `$/cancel_request` for one of its own elicitations. */
+  cancelElicitationByAgent: (params: { agentId: AgentId; jsonRpcId: string | number }) => void
+  /** Session deleted or closed: settle its pending elicitations. */
+  closeSession: (params: { agentId: AgentId; sessionId: string }) => void
+  /** Agent process gone: settle every pending elicitation it owns. */
+  agentExited: (params: { agentId: AgentId }) => void
   /** Awaits every queued/in-flight prompt turn. Lifecycle and test seam. */
   awaitPromptTurns: () => Promise<void>
 }
@@ -154,6 +196,37 @@ export const createSessionCwdCache = (): SessionCwdCache => {
   }
 }
 
+export const DEFAULT_ELICITATION_TIMEOUT_MS = 60 * 60 * 1000
+const ELICITATION_RESOLVED_CAP = 64
+
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined
+
+const readElicitationMode = (params: unknown): string => {
+  const mode = asRecord(params)?.["mode"]
+  return typeof mode === "string" && mode.length > 0 ? mode : "unknown"
+}
+
+const readElicitationFieldCount = (params: unknown): number => {
+  const schema = asRecord(asRecord(params)?.["requestedSchema"])
+  const properties = asRecord(schema?.["properties"])
+  return properties === undefined ? 0 : Object.keys(properties).length
+}
+
+const readElicitationId = (params: unknown): string | undefined => {
+  const value = asRecord(params)?.["elicitationId"]
+  return typeof value === "string" && value.length > 0 ? value : undefined
+}
+
+const readAccepted = (result: unknown): boolean => asRecord(result)?.["action"] === "accept"
+
+const unrefTimer = (timer: ReturnType<typeof setTimeout>) => {
+  const candidate = timer as unknown as { unref?: () => void }
+  candidate.unref?.()
+}
+
+const cancellationResult = (): unknown => ({ action: "cancel" })
+
 export const createSessionHub = ({
   cwdCache,
   commandsCache = createCommandsCache(),
@@ -166,11 +239,33 @@ export const createSessionHub = ({
   completePromptTurn,
   cancelSession,
   createRequestId = () => crypto.randomUUID(),
+  elicitationTimeoutMs = DEFAULT_ELICITATION_TIMEOUT_MS,
+  now = () => Date.now(),
+  logElicitation,
 }: CreateSessionHubParams): SessionHub => {
   const subscribers = new Map<string, SessionHubSubscriber>()
   const subscribersBySession = new Map<SessionKey, Set<string>>()
   const replayTargetBySession = new Map<SessionKey, string>()
   const pendingById = new Map<string, PendingClientRpc>()
+  const pendingElicitationByJsonRpcId = new Map<string, string>()
+  const recentElicitationsBySession = new Map<
+    SessionKey,
+    Array<{
+      /** Replayed ahead of the resolution so clients can rebuild the answer row. */
+      request?: SessionStreamServerMessage
+      message: SessionStreamServerMessage
+      at: number
+    }>
+  >()
+  const urlElicitations = new Map<
+    string,
+    {
+      requestId: string
+      agentId: AgentId
+      sessionId: string
+      timer?: ReturnType<typeof setTimeout>
+    }
+  >()
 
   const sendError = (
     subscriber: SessionHubSubscriber,
@@ -440,6 +535,7 @@ export const createSessionHub = ({
       // without paying for a loadSession replay.
       sendCachedConfig(subscriber, ref)
       sendCachedCommandsAndTitle(subscriber, ref)
+      reemitElicitations(subscriber, ref)
       subscriber.sink.send(
         {
           type: "subscribed",
@@ -477,6 +573,7 @@ export const createSessionHub = ({
     }
 
     sendCachedCommandsAndTitle(subscriber, ref)
+    reemitElicitations(subscriber, ref)
 
     subscriber.sink.send(
       {
@@ -596,6 +693,178 @@ export const createSessionHub = ({
     return "settled"
   }
 
+  const jsonRpcKey = (agentId: AgentId, jsonRpcId: string | number) => `${agentId}:${jsonRpcId}`
+  const urlKey = (agentId: AgentId, elicitationId: string) => `${agentId}:${elicitationId}`
+
+  const forgetUrlElicitation = (key: string) => {
+    const entry = urlElicitations.get(key)
+    if (entry?.timer !== undefined) {
+      clearTimeout(entry.timer)
+    }
+    urlElicitations.delete(key)
+  }
+
+  const rememberResolvedElicitation = (
+    key: SessionKey,
+    request: SessionStreamServerMessage | undefined,
+    message: SessionStreamServerMessage,
+  ) => {
+    const list = recentElicitationsBySession.get(key) ?? []
+    list.push({ ...(request === undefined ? {} : { request }), message, at: now() })
+    while (list.length > ELICITATION_RESOLVED_CAP) {
+      list.shift()
+    }
+    recentElicitationsBySession.set(key, list)
+  }
+
+  const settleElicitation = (
+    requestId: string,
+    reason: ElicitationResolvedReason,
+    result: unknown,
+  ): ResolveReplyResult => {
+    const pending = pendingById.get(requestId)
+    if (pending === undefined) {
+      return settledRequestIds.has(requestId) ? "already_settled" : "unknown"
+    }
+    if (pending.settled || pending.kind !== "elicitation") {
+      return "already_settled"
+    }
+
+    pending.settled = true
+    pendingById.delete(requestId)
+    if (pending.timer !== undefined) {
+      clearTimeout(pending.timer)
+    }
+    if (pending.jsonRpcId !== undefined) {
+      pendingElicitationByJsonRpcId.delete(jsonRpcKey(pending.agentId, pending.jsonRpcId))
+    }
+    rememberSettled(requestId)
+
+    const key = sessionKey(pending.agentId, pending.sessionId)
+    const message: SessionStreamServerMessage = {
+      type: "elicitation_resolved",
+      requestId,
+      agentId: pending.agentId,
+      sessionId: pending.sessionId,
+      reason,
+      result,
+    }
+    const request: SessionStreamServerMessage | undefined =
+      pending.mode === "form"
+        ? {
+            type: "elicitation_request",
+            requestId,
+            agentId: pending.agentId,
+            sessionId: pending.sessionId,
+            params: pending.params,
+            expiresAt: pending.expiresAt ?? new Date(now() + elicitationTimeoutMs).toISOString(),
+          }
+        : undefined
+
+    if (pending.mode === "url" && pending.elicitationId !== undefined) {
+      const mappingKey = urlKey(pending.agentId, pending.elicitationId)
+      if (reason === "replied" && readAccepted(result)) {
+        // Keep the id resolvable for one hour after consent so a late
+        // `elicitation/complete` still reaches the app.
+        const existing = urlElicitations.get(mappingKey)
+        if (existing !== undefined) {
+          const timer = setTimeout(() => forgetUrlElicitation(mappingKey), elicitationTimeoutMs)
+          unrefTimer(timer)
+          urlElicitations.set(mappingKey, { ...existing, timer })
+        }
+      } else {
+        forgetUrlElicitation(mappingKey)
+      }
+    }
+
+    pending.resolve(result)
+    rememberResolvedElicitation(key, request, message)
+    fanOut(key, message)
+
+    logElicitation?.({
+      requestId,
+      agentId: pending.agentId,
+      sessionId: pending.sessionId,
+      mode: pending.mode ?? "unknown",
+      fieldCount: pending.fieldCount ?? 0,
+      outcome: reason,
+      durationMs: now() - (pending.startedAt ?? now()),
+    })
+
+    return "settled"
+  }
+
+  const settleElicitationsWhere = (
+    predicate: (pending: PendingClientRpc) => boolean,
+    reason: ElicitationResolvedReason,
+  ) => {
+    const requestIds = [...pendingById.values()]
+      .filter((pending) => pending.kind === "elicitation" && predicate(pending))
+      .map((pending) => pending.requestId)
+
+    for (const requestId of requestIds) {
+      settleElicitation(requestId, reason, cancellationResult())
+    }
+  }
+
+  const pruneRecentElicitations = (key: SessionKey) => {
+    const list = recentElicitationsBySession.get(key)
+    if (list === undefined) {
+      return []
+    }
+    const cutoff = now() - elicitationTimeoutMs
+    const kept = list.filter((entry) => entry.at >= cutoff)
+    if (kept.length === 0) {
+      recentElicitationsBySession.delete(key)
+      return []
+    }
+    recentElicitationsBySession.set(key, kept)
+    return kept
+  }
+
+  const reemitElicitations = (
+    subscriber: SessionHubSubscriber,
+    ref: { agentId: AgentId; sessionId: string },
+  ) => {
+    const key = sessionKey(ref.agentId, ref.sessionId)
+
+    for (const pending of pendingById.values()) {
+      if (
+        pending.kind !== "elicitation" ||
+        pending.agentId !== ref.agentId ||
+        pending.sessionId !== ref.sessionId
+      ) {
+        continue
+      }
+      subscriber.sink.send({
+        type: "elicitation_request",
+        requestId: pending.requestId,
+        agentId: pending.agentId,
+        sessionId: pending.sessionId,
+        params: pending.params,
+        expiresAt: pending.expiresAt ?? new Date(now() + elicitationTimeoutMs).toISOString(),
+      })
+    }
+
+    for (const entry of pruneRecentElicitations(key)) {
+      if (entry.request !== undefined) {
+        subscriber.sink.send(entry.request)
+      }
+      subscriber.sink.send(entry.message)
+    }
+  }
+
+  const registerUrlElicitation = (pending: PendingClientRpc) => {
+    if (pending.mode !== "url" || pending.elicitationId === undefined) {
+      return
+    }
+    urlElicitations.set(urlKey(pending.agentId, pending.elicitationId), {
+      requestId: pending.requestId,
+      agentId: pending.agentId,
+      sessionId: pending.sessionId,
+    })
+  }
+
   return {
     addSubscriber: (subscriber) => {
       subscribers.set(subscriber.id, subscriber)
@@ -652,6 +921,11 @@ export const createSessionHub = ({
       if (!result.ok) {
         return { ok: false, error: { kind: "rejected", reason: result.reason } }
       }
+
+      settleElicitationsWhere(
+        (pending) => pending.agentId === agentId && pending.sessionId === sessionId,
+        "session_cancelled",
+      )
 
       fanOut(sessionKey(agentId, sessionId), {
         type: "cancelled",
@@ -715,6 +989,55 @@ export const createSessionHub = ({
         }),
         "extension request missing method",
       ),
+    requestElicitation: ({ agentId, sessionId, params, jsonRpcId }) => {
+      const key = sessionKey(agentId, sessionId)
+      const requestId = createRequestId()
+      const mode = readElicitationMode(params)
+      const fieldCount = readElicitationFieldCount(params)
+      const elicitationId = readElicitationId(params)
+      const expiresAt = new Date(now() + elicitationTimeoutMs).toISOString()
+
+      return new Promise((resolve) => {
+        const pending: PendingClientRpc = {
+          requestId,
+          agentId,
+          sessionId,
+          kind: "elicitation",
+          params,
+          resolve: (result) => resolve(result),
+          settled: false,
+          mode,
+          fieldCount,
+          startedAt: now(),
+          expiresAt,
+          ...(jsonRpcId === undefined ? {} : { jsonRpcId }),
+          ...(elicitationId === undefined ? {} : { elicitationId }),
+        }
+        pendingById.set(requestId, pending)
+
+        if (jsonRpcId !== undefined) {
+          pendingElicitationByJsonRpcId.set(jsonRpcKey(agentId, jsonRpcId), requestId)
+        }
+
+        const timer = setTimeout(
+          () => settleElicitation(requestId, "timed_out", cancellationResult()),
+          elicitationTimeoutMs,
+        )
+        unrefTimer(timer)
+        pending.timer = timer
+
+        registerUrlElicitation(pending)
+
+        fanOut(key, {
+          type: "elicitation_request",
+          requestId,
+          agentId,
+          sessionId,
+          params,
+          expiresAt,
+        })
+      })
+    },
     resolvePermissionReply: ({ requestId, optionId }) =>
       settlePending(requestId, {
         outcome: {
@@ -723,6 +1046,59 @@ export const createSessionHub = ({
         },
       }),
     resolveExtensionReply: ({ requestId, result }) => settlePending(requestId, result),
+    resolveElicitationReply: ({ requestId, result }) => {
+      const pending = pendingById.get(requestId)
+      if (pending === undefined || pending.kind !== "elicitation") {
+        return settledRequestIds.has(requestId) ? "already_settled" : "unknown"
+      }
+      return settleElicitation(requestId, "replied", result)
+    },
+    completeElicitation: ({ agentId, elicitationId }) => {
+      const mappingKey = urlKey(agentId, elicitationId)
+      const entry = urlElicitations.get(mappingKey)
+      if (entry === undefined) {
+        return
+      }
+      forgetUrlElicitation(mappingKey)
+      fanOut(sessionKey(entry.agentId, entry.sessionId), {
+        type: "elicitation_completed",
+        elicitationId,
+        requestId: entry.requestId,
+        agentId: entry.agentId,
+        sessionId: entry.sessionId,
+      })
+    },
+    cancelElicitationByAgent: ({ agentId, jsonRpcId }) => {
+      const requestId = pendingElicitationByJsonRpcId.get(jsonRpcKey(agentId, jsonRpcId))
+      if (requestId === undefined) {
+        return
+      }
+      const pending = pendingById.get(requestId)
+      if (pending === undefined || pending.kind !== "elicitation") {
+        return
+      }
+      settleElicitation(requestId, "cancelled_by_agent", cancellationResult())
+    },
+    closeSession: ({ agentId, sessionId }) => {
+      settleElicitationsWhere(
+        (pending) => pending.agentId === agentId && pending.sessionId === sessionId,
+        "session_cancelled",
+      )
+      for (const [mappingKey, entry] of urlElicitations) {
+        if (entry.agentId === agentId && entry.sessionId === sessionId) {
+          forgetUrlElicitation(mappingKey)
+        }
+      }
+      recentElicitationsBySession.delete(sessionKey(agentId, sessionId))
+    },
+    agentExited: ({ agentId }) => {
+      settleElicitationsWhere((pending) => pending.agentId === agentId, "agent_exited")
+      for (const [mappingKey, entry] of urlElicitations) {
+        if (entry.agentId === agentId) {
+          forgetUrlElicitation(mappingKey)
+        }
+      }
+    },
     awaitPromptTurns: () => promptQueue.awaitIdle(),
   }
 }

@@ -115,8 +115,9 @@ fun ChatTranscript(
     rows: List<TranscriptRow>,
     isRunning: Boolean,
     showWelcome: Boolean,
-    hasPendingPermission: Boolean = false,
     modifier: Modifier = Modifier,
+    hasPendingPermission: Boolean = false,
+    hasPendingQuestion: Boolean = false,
 ) {
     val blocks = groupTranscriptRows(rows)
     val listState = rememberLazyListState()
@@ -125,6 +126,7 @@ fun ChatTranscript(
         rows = rows,
         isRunning = isRunning,
         hasPendingPermission = hasPendingPermission,
+        hasPendingQuestion = hasPendingQuestion,
     )
     val showActivity = activity != null
     val streamingRowIndex = liveAssistantRowIndex(rows = rows, isRunning = isRunning)
@@ -299,6 +301,10 @@ private fun TranscriptBlockRow(
         is TranscriptToolRow -> {
             ToolCallGroup(tools = listOf(row))
         }
+
+        is harold.android.live.TranscriptQuestionRow -> {
+            TranscriptQuestionRowView(row = row)
+        }
     }
 }
 
@@ -317,4 +323,5 @@ private fun transcriptRowKey(row: TranscriptRow, index: Int): String =
         is TranscriptAssistantRow,
         -> "${row::class.simpleName}-${row.turnId}-$index"
         is TranscriptToolRow -> "tool-${row.toolCallId}"
+        is harold.android.live.TranscriptQuestionRow -> "question-${row.requestId}"
     }

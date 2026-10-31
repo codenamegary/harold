@@ -14,6 +14,11 @@ data class SessionSnapshot(
     val availableCommands: List<AvailableCommand> = emptyList(),
     val configOptions: List<ConfigOption> = emptyList(),
     val pendingPermission: PermissionRequest? = null,
+    /** Pending agent questions, oldest first, deduplicated by requestId. */
+    val pendingElicitations: List<Elicitation> = emptyList(),
+    /** URL requests accepted locally and waiting for `elicitation_completed`. */
+    val urlElicitationsAwaitingCompletion: List<Elicitation.Url> = emptyList(),
+    val completedElicitationIds: Set<String> = emptySet(),
     val extension: StreamExtension? = null,
     val agentAuth: AgentAuth? = null,
     val authRequired: Boolean = false,

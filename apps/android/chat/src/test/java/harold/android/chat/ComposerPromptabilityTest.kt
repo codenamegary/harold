@@ -56,8 +56,16 @@ class ComposerPromptabilityTest {
     @Test
     fun showsOfflineMessage() {
         assertEquals(
-            "Session reconnecting. Prompts unlock when it is idle again.",
+            "Session reconnecting.",
             composerBlockedMessage(SessionState.Offline),
+        )
+    }
+
+    @Test
+    fun showsAwaitingAnswerMessageWithoutUnlockHint() {
+        assertEquals(
+            "Waiting for an answer.",
+            composerBlockedMessage(SessionState.AwaitingAnswer),
         )
     }
 

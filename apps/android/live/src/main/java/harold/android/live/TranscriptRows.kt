@@ -23,6 +23,16 @@ data class TranscriptAssistantRow(
     val text: String,
 ) : TranscriptRow
 
+/** A resolved agent question. Answers are read-only after resolution. */
+data class TranscriptQuestionRow(
+    override val turnId: String,
+    val requestId: String,
+    val title: String,
+    val answers: List<Pair<String, String>>,
+    /** The ACP tool call this question replaced, when the agent supplied one. */
+    val toolCallId: String? = null,
+) : TranscriptRow
+
 data class TranscriptToolRow(
     override val turnId: String,
     val toolCallId: String,

@@ -177,6 +177,55 @@ fun applyPermissionRequested(state: AcpTranscriptState): AcpTranscriptState =
 fun applyPermissionResolved(state: AcpTranscriptState): AcpTranscriptState =
     state.copy(sessionState = SessionState.Running)
 
+fun applyElicitationRequested(state: AcpTranscriptState): AcpTranscriptState =
+    state.copy(
+        sessionState = SessionState.AwaitingAnswer,
+        segmentBoundary = true,
+    )
+
+fun applyElicitationResolved(
+    state: AcpTranscriptState,
+    hasPending: Boolean,
+): AcpTranscriptState =
+    if (hasPending) {
+        state.copy(sessionState = SessionState.AwaitingAnswer)
+    } else {
+        state.copy(sessionState = SessionState.Running)
+    }
+
+/** Adds a resolved question row once per request. */
+fun appendTranscriptQuestion(
+    state: AcpTranscriptState,
+    requestId: String,
+    title: String,
+    answers: List<Pair<String, String>>,
+    toolCallId: String? = null,
+): AcpTranscriptState {
+    if (state.rows.any { row -> row is TranscriptQuestionRow && row.requestId == requestId }) {
+        return state
+    }
+    val row = TranscriptQuestionRow(
+        turnId = state.currentTurnId,
+        requestId = requestId,
+        title = title,
+        answers = answers,
+        toolCallId = toolCallId,
+    )
+    val toolIndex = toolCallId?.let { id ->
+        state.rows.indexOfLast { candidate ->
+            candidate is TranscriptToolRow &&
+                candidate.turnId == state.currentTurnId &&
+                candidate.toolCallId == id
+        }
+    } ?: -1
+    val rows = if (toolIndex >= 0) {
+        state.rows.toMutableList().also { list -> list[toolIndex] = row }
+    } else {
+        state.rows + row
+    }
+    return state.copy(rows = rows)
+}
+
 fun applyStreamError(state: AcpTranscriptState): AcpTranscriptState =
     state.copy(sessionState = SessionState.Error)
 
@@ -188,10 +237,21 @@ fun applyReconnect(): AcpTranscriptState = AcpTranscriptState(
 )
 
 fun applySubscribed(state: AcpTranscriptState): AcpTranscriptState {
+    val waitingForInput =
+        state.sessionState == SessionState.AwaitingPermission ||
+            state.sessionState == SessionState.AwaitingAnswer
+    val latestTurnId = state.rows.lastOrNull { row -> row is TranscriptUserRow }?.turnId
+    val lastInLatestTurn =
+        latestTurnId?.let { turnId ->
+            state.rows.lastOrNull { row -> row.turnId == turnId && row !is TranscriptQuestionRow }
+        }
+    val staleReply =
+        state.sessionState == SessionState.Running &&
+            lastInLatestTurn is TranscriptAssistantRow
     val nextState =
         if (
-            state.sessionState == SessionState.Running ||
-            state.sessionState == SessionState.AwaitingPermission
+            waitingForInput ||
+            (state.sessionState == SessionState.Running && !staleReply)
         ) {
             state.sessionState
         } else {

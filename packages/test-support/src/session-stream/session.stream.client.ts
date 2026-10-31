@@ -1,6 +1,7 @@
 import {
   sessionCancelPath,
   sessionPromptsPath,
+  elicitationRepliesPath,
   extensionRepliesPath,
   permissionRepliesPath,
   SessionStreamServerMessage,
@@ -255,6 +256,7 @@ export type SessionCommands = {
   cancel: (input: { agentId: string; sessionId: string }) => Promise<Response>
   replyPermission: (input: { requestId: string; optionId: string }) => Promise<Response>
   replyExtension: (input: { requestId: string; result: unknown }) => Promise<Response>
+  replyElicitation: (input: { requestId: string; result: unknown }) => Promise<Response>
 }
 
 /** Client→server REST commands for the session stream protocol. */
@@ -282,5 +284,7 @@ export const createSessionCommands = (params: {
     replyPermission: ({ requestId, optionId }) =>
       post(permissionRepliesPath(requestId), { optionId }),
     replyExtension: ({ requestId, result }) => post(extensionRepliesPath(requestId), { result }),
+    replyElicitation: ({ requestId, result }) =>
+      post(elicitationRepliesPath(requestId), { result }),
   }
 }

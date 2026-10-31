@@ -306,6 +306,142 @@ describe("POST /v1/sessions/:sessionId/cancel", () => {
   })
 })
 
+describe("POST /v1/elicitations/:requestId/replies", () => {
+  test("forwards a form answer to the agent and fans out resolution", async () => {
+    const { app, config } = await bootTestApp({
+      whichFn,
+      fakeAcpOptions: {
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+        sessionNewSessionId: "cmd-http-elicit",
+        sessionLoadSessionId: "cmd-http-elicit",
+        emitElicitationFormOnPrompt: true,
+      },
+    })
+    await enableAgent(app, "cursor", whichFn)
+    await app.listen({ host: config.host, port: 0 })
+
+    const created = await createSession(app, "/tmp/cmd-http-elicit")
+    const client = await openSseStream({
+      url: eventsUrl(app, created.sessionId),
+      credential: app.deviceCredential.credential,
+    })
+    await client.waitFor((message) => message.type === "subscribed")
+
+    const promptResponse = await app.inject({
+      headers: authHeaders(app),
+      method: "POST",
+      url: promptsUrl(created.sessionId),
+      payload: { text: "ask me" },
+    })
+    expect(promptResponse.statusCode).toBe(202)
+
+    const request = await client.waitFor((message) => message.type === "elicitation_request")
+    if (request.type !== "elicitation_request") {
+      throw new Error("expected elicitation_request")
+    }
+    expect(request.params).toMatchObject({
+      mode: "form",
+      message: "Questions",
+    })
+    expect(request.expiresAt.length).toBeGreaterThan(0)
+
+    const result = { action: "accept", content: { q0: "bun" } }
+    const reply = await app.inject({
+      headers: authHeaders(app),
+      method: "POST",
+      url: `/v1/elicitations/${encodeURIComponent(request.requestId)}/replies`,
+      payload: { result },
+    })
+    expect(reply.statusCode).toBe(204)
+
+    const resolved = await client.waitFor((message) => message.type === "elicitation_resolved")
+    expect(resolved).toMatchObject({
+      type: "elicitation_resolved",
+      requestId: request.requestId,
+      reason: "replied",
+      result,
+    })
+
+    const duplicate = await app.inject({
+      headers: authHeaders(app),
+      method: "POST",
+      url: `/v1/elicitations/${encodeURIComponent(request.requestId)}/replies`,
+      payload: { result },
+    })
+    expect(duplicate.statusCode).toBe(409)
+
+    await client.waitFor((message) => message.type === "prompt_complete")
+    await client.close()
+  }, 30_000)
+
+  test("emits elicitation_completed after a URL acceptance", async () => {
+    const { app, config } = await bootTestApp({
+      whichFn,
+      fakeAcpOptions: {
+        capabilities: { loadSession: true, sessionClose: true, sessionList: true },
+        sessionNewSessionId: "cmd-http-elicit-url",
+        sessionLoadSessionId: "cmd-http-elicit-url",
+        emitElicitationUrlOnPrompt: true,
+        elicitationUrl: "https://example.com/authorize",
+      },
+    })
+    await enableAgent(app, "cursor", whichFn)
+    await app.listen({ host: config.host, port: 0 })
+
+    const created = await createSession(app, "/tmp/cmd-http-elicit-url")
+    const client = await openSseStream({
+      url: eventsUrl(app, created.sessionId),
+      credential: app.deviceCredential.credential,
+    })
+    await client.waitFor((message) => message.type === "subscribed")
+
+    await app.inject({
+      headers: authHeaders(app),
+      method: "POST",
+      url: promptsUrl(created.sessionId),
+      payload: { text: "open a url" },
+    })
+
+    const request = await client.waitFor((message) => message.type === "elicitation_request")
+    if (request.type !== "elicitation_request") {
+      throw new Error("expected elicitation_request")
+    }
+    expect(request.params).toMatchObject({
+      mode: "url",
+      url: "https://example.com/authorize",
+    })
+
+    const reply = await app.inject({
+      headers: authHeaders(app),
+      method: "POST",
+      url: `/v1/elicitations/${encodeURIComponent(request.requestId)}/replies`,
+      payload: { result: { action: "accept" } },
+    })
+    expect(reply.statusCode).toBe(204)
+
+    const completed = await client.waitFor((message) => message.type === "elicitation_completed")
+    expect(completed).toMatchObject({
+      type: "elicitation_completed",
+      elicitationId: "fake-elicitation-url-1",
+      requestId: request.requestId,
+    })
+
+    await client.close()
+  }, 30_000)
+
+  test("returns 404 for an unknown elicitation request", async () => {
+    const { app } = await bootTestApp()
+
+    const response = await app.inject({
+      headers: authHeaders(app),
+      method: "POST",
+      url: "/v1/elicitations/req-missing/replies",
+      payload: { result: { action: "cancel" } },
+    })
+    expect(response.statusCode).toBe(404)
+  })
+})
+
 describe("POST /v1/permissions/:requestId/replies", () => {
   test("first reply wins: 204, then 409, and unknown ids get 404", async () => {
     const { app, config } = await bootTestApp({

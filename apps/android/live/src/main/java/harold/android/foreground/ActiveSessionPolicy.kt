@@ -21,18 +21,27 @@ data class RunningNotification(
     val openSessionList: Boolean,
 )
 
-data class PermissionNotification(
+data class UserInputNotification(
     val title: String,
     val text: String,
     val largeIconId: String?,
     val openSessionId: String,
 )
 
+typealias PermissionNotification = UserInputNotification
+
+fun userInputLabel(kind: UserInputKind): String = when (kind) {
+    UserInputKind.Permission -> "Needs permission"
+    UserInputKind.Question -> "Needs answer"
+    UserInputKind.Input -> "Needs input"
+}
+
 fun isUserVisibleActive(state: SessionState): Boolean =
     when (state) {
         SessionState.Starting,
         SessionState.Running,
         SessionState.AwaitingPermission,
+        SessionState.AwaitingAnswer,
         SessionState.Stopping,
         -> true
         SessionState.Idle,
@@ -46,6 +55,7 @@ fun notificationStateLabel(state: SessionState): String =
         SessionState.Starting -> "Starting"
         SessionState.Running -> "Running"
         SessionState.AwaitingPermission -> "Needs permission"
+        SessionState.AwaitingAnswer -> "Needs answer"
         SessionState.Stopping -> "Stopping"
         SessionState.Idle -> "Idle"
         SessionState.Offline -> "Offline"
@@ -57,7 +67,9 @@ fun notificationStateLabel(state: SessionState): String =
  */
 fun activeStatePriority(state: SessionState): Int =
     when (state) {
-        SessionState.AwaitingPermission -> 4
+        SessionState.AwaitingPermission,
+        SessionState.AwaitingAnswer,
+        -> 4
         SessionState.Running -> 3
         SessionState.Starting -> 2
         SessionState.Stopping -> 1
@@ -86,20 +98,34 @@ fun runningNotification(sessions: List<ActiveSessionSnapshot>): RunningNotificat
     )
 }
 
-fun permissionNotification(
+fun userInputNotification(
     sessionId: String,
     sessionName: String,
     haroldName: String,
     haroldIconId: String,
-): PermissionNotification {
-    val text = "$sessionName · Needs permission"
-    return PermissionNotification(
+    kind: UserInputKind,
+): UserInputNotification {
+    val text = "$sessionName · ${userInputLabel(kind)}"
+    return UserInputNotification(
         title = "Harold",
         text = text,
         largeIconId = haroldIconId,
         openSessionId = sessionId,
     )
 }
+
+fun permissionNotification(
+    sessionId: String,
+    sessionName: String,
+    haroldName: String,
+    haroldIconId: String,
+): UserInputNotification = userInputNotification(
+    sessionId = sessionId,
+    sessionName = sessionName,
+    haroldName = haroldName,
+    haroldIconId = haroldIconId,
+    kind = UserInputKind.Permission,
+)
 
 fun notificationCopy(sessions: List<ActiveSessionSnapshot>): NotificationCopy {
     val active = sessions.filter { snapshot -> isUserVisibleActive(snapshot.state) }

@@ -1,3 +1,4 @@
+import { AgentId } from "contracts/http/agent-settings"
 import {
   SetConfigOptionBodySchema,
   SetConfigOptionParamsSchema,
@@ -61,6 +62,7 @@ export type SessionRouteDeps = Readonly<{
   forgetSessionTitle: ForgetSessionTitle
   isArchivedAcpSession: IsArchivedAcpSession
   archiveAcpSession: ArchiveAcpSession
+  closeSession?: (input: { agentId: AgentId; sessionId: string }) => void
   authBroker?: AuthBroker
 }>
 
@@ -77,6 +79,7 @@ export const registerSessionRoutes = (app: FastifyInstance, deps: SessionRouteDe
     ensureSupervisorReady: deps.ensureSupervisorReady,
     advertisesSessionClose: (agentId) => agentAdvertisesSessionClose(deps.acpSupervisor, agentId),
     closeAcpSession: (input) => deps.acpSupervisor.closeAcpSession(input),
+    ...(deps.closeSession === undefined ? {} : { closeSession: deps.closeSession }),
   })
 
   const sendAgentGateProblem = (

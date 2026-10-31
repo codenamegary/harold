@@ -1,5 +1,6 @@
 import { PromptSessionBodySchema } from "contracts/http/session"
 import {
+  ElicitationReplyBodySchema,
   ExtensionReplyBodySchema,
   PermissionReplyBodySchema,
   ReplyParamsSchema,
@@ -10,6 +11,8 @@ import { FastifyInstance } from "fastify"
 import { SessionCommandError, SessionHub } from "./hub/hub"
 import {
   buildAuthRequiredProblem,
+  buildElicitationConflictProblem,
+  buildElicitationNotFoundProblem,
   buildExtensionConflictProblem,
   buildExtensionNotFoundProblem,
   buildPermissionConflictProblem,
@@ -98,6 +101,24 @@ export const registerSessionCommandsRoutes = (
     }
     if (outcome === "already_settled") {
       return sendProblem(reply, 409, buildPermissionConflictProblem())
+    }
+
+    return reply.status(204).send()
+  })
+
+  app.post("/v1/elicitations/:requestId/replies", async (request, reply) => {
+    const params = ReplyParamsSchema.parse(request.params)
+    const body = ElicitationReplyBodySchema.parse(request.body)
+
+    const outcome = deps.sessionHub.resolveElicitationReply({
+      requestId: params.requestId,
+      result: body.result,
+    })
+    if (outcome === "unknown") {
+      return sendProblem(reply, 404, buildElicitationNotFoundProblem())
+    }
+    if (outcome === "already_settled") {
+      return sendProblem(reply, 409, buildElicitationConflictProblem())
     }
 
     return reply.status(204).send()

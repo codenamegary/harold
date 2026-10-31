@@ -604,6 +604,65 @@ class ContractDecodingTest {
             ExtensionReplyBody(result = kotlinx.serialization.json.JsonPrimitive("done")),
         )
         assertEquals("""{"result":"done"}""", extension)
+
+        val elicitation = HaroldJson.encodeToString(
+            ElicitationReplyBody.serializer(),
+            ElicitationReplyBody(
+                result = kotlinx.serialization.json.buildJsonObject {
+                    put("action", kotlinx.serialization.json.JsonPrimitive("accept"))
+                },
+            ),
+        )
+        assertEquals("""{"result":{"action":"accept"}}""", elicitation)
+    }
+
+    @Test
+    fun decodesElicitationStreamMessages() {
+        val request = HaroldJson.decodeFromString(
+            SessionStreamServerMessage.serializer(),
+            """
+            {
+              "type": "elicitation_request",
+              "requestId": "req-1",
+              "agentId": "opencode",
+              "sessionId": "sess_01",
+              "params": { "mode": "form", "sessionId": "sess_01" },
+              "expiresAt": "2026-10-31T05:00:00.000Z"
+            }
+            """.trimIndent(),
+        )
+        val requestMessage = request as SessionStreamServerMessage.ElicitationRequest
+        assertEquals("req-1", requestMessage.requestId)
+        assertEquals("2026-10-31T05:00:00.000Z", requestMessage.expiresAt)
+
+        val resolved = HaroldJson.decodeFromString(
+            SessionStreamServerMessage.serializer(),
+            """
+            {
+              "type": "elicitation_resolved",
+              "requestId": "req-1",
+              "agentId": "opencode",
+              "sessionId": "sess_01",
+              "reason": "replied",
+              "result": { "action": "decline" }
+            }
+            """.trimIndent(),
+        ) as SessionStreamServerMessage.ElicitationResolved
+        assertEquals(ElicitationResolvedReason.Replied, resolved.reason)
+
+        val completed = HaroldJson.decodeFromString(
+            SessionStreamServerMessage.serializer(),
+            """
+            {
+              "type": "elicitation_completed",
+              "elicitationId": "url-1",
+              "requestId": "req-2",
+              "agentId": "opencode",
+              "sessionId": "sess_01"
+            }
+            """.trimIndent(),
+        ) as SessionStreamServerMessage.ElicitationCompleted
+        assertEquals("url-1", completed.elicitationId)
     }
 
     private fun assertThrowsSerialization(block: () -> Unit) {

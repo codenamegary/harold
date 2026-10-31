@@ -126,6 +126,89 @@ class AcpTranscriptReducerTest {
     }
 
     @Test
+    fun aResolvedQuestionReplacesItsToolRowInPlace() {
+        var state = beginUserTurn(emptyAcpTranscript, turnId = "turn-1", text = "go")
+        state = foldAcpUpdate(
+            state,
+            ParsedAcpUpdate.ToolCall(
+                toolCallId = "t1",
+                toolName = "question",
+                toolKind = harold.android.contracts.ToolKind.Execute,
+                status = harold.android.contracts.ToolCallStatus.Completed,
+            ),
+        )
+        state = foldAcpUpdate(state, ParsedAcpUpdate.AgentMessageChunk("after"))
+
+        val withQuestion = appendTranscriptQuestion(
+            state = state,
+            requestId = "req-1",
+            title = "Choose",
+            answers = listOf("Choice" to "Yes"),
+            toolCallId = "t1",
+        )
+
+        assertEquals(
+            listOf("TranscriptUserRow", "TranscriptQuestionRow", "TranscriptAssistantRow"),
+            withQuestion.rows.map { it::class.simpleName },
+        )
+        assertEquals("t1", (withQuestion.rows[1] as TranscriptQuestionRow).toolCallId)
+    }
+
+    @Test
+    fun reconnectClearsAStaleReplyingState() {
+        var state = applySubscribed(
+            beginUserTurn(emptyAcpTranscript, turnId = "turn-1", text = "go"),
+        )
+        state = foldAcpUpdate(state, ParsedAcpUpdate.AgentMessageChunk("done"))
+
+        assertEquals(SessionState.Running, state.sessionState)
+
+        val resubscribed = applySubscribed(state)
+
+        assertEquals(SessionState.Idle, resubscribed.sessionState)
+    }
+
+    @Test
+    fun reconnectClearsAStaleReplyingStateAfterAResolvedQuestionRow() {
+        var state = applySubscribed(
+            beginUserTurn(emptyAcpTranscript, turnId = "turn-1", text = "go"),
+        )
+        state = foldAcpUpdate(state, ParsedAcpUpdate.AgentMessageChunk("done"))
+        state = appendTranscriptQuestion(
+            state = state,
+            requestId = "req-1",
+            title = "Question",
+            answers = listOf("Choice" to "Yes"),
+        )
+
+        assertEquals(SessionState.Running, state.sessionState)
+
+        val resubscribed = applySubscribed(state)
+
+        assertEquals(SessionState.Idle, resubscribed.sessionState)
+    }
+
+    @Test
+    fun reconnectKeepsRunningWhileAToolIsActive() {
+        var state = applySubscribed(
+            beginUserTurn(emptyAcpTranscript, turnId = "turn-1", text = "go"),
+        )
+        state = foldAcpUpdate(
+            state,
+            ParsedAcpUpdate.ToolCall(
+                toolCallId = "t1",
+                toolName = "read",
+                toolKind = harold.android.contracts.ToolKind.Read,
+                status = harold.android.contracts.ToolCallStatus.InProgress,
+            ),
+        )
+
+        val resubscribed = applySubscribed(state)
+
+        assertEquals(SessionState.Running, resubscribed.sessionState)
+    }
+
+    @Test
     fun marksRunningWhenLiveUpdatesArriveAfterSubscribe() {
         val replayed = foldAcpUpdate(
             emptyAcpTranscript,

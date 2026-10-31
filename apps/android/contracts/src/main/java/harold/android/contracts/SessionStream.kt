@@ -26,6 +26,33 @@ data class ExtensionReplyBody(
     val result: JsonElement,
 )
 
+/**
+ * REST body for `POST /v1/elicitations/:requestId/replies`. The result is the
+ * raw ACP response: `{ action: "accept" | "decline" | "cancel", content? }`.
+ */
+@Serializable
+data class ElicitationReplyBody(
+    val result: JsonElement,
+)
+
+@Serializable
+enum class ElicitationResolvedReason {
+    @SerialName("replied")
+    Replied,
+
+    @SerialName("timed_out")
+    TimedOut,
+
+    @SerialName("session_cancelled")
+    SessionCancelled,
+
+    @SerialName("agent_exited")
+    AgentExited,
+
+    @SerialName("cancelled_by_agent")
+    CancelledByAgent,
+}
+
 @Serializable
 sealed interface SessionStreamServerMessage {
     @Serializable
@@ -80,6 +107,35 @@ sealed interface SessionStreamServerMessage {
         val agentId: AgentId,
         val sessionId: String,
         val params: JsonElement,
+    ) : SessionStreamServerMessage
+
+    @Serializable
+    @SerialName("elicitation_request")
+    data class ElicitationRequest(
+        val requestId: String,
+        val agentId: AgentId,
+        val sessionId: String,
+        val params: JsonElement,
+        val expiresAt: String,
+    ) : SessionStreamServerMessage
+
+    @Serializable
+    @SerialName("elicitation_resolved")
+    data class ElicitationResolved(
+        val requestId: String,
+        val agentId: AgentId,
+        val sessionId: String,
+        val reason: ElicitationResolvedReason,
+        val result: JsonElement? = null,
+    ) : SessionStreamServerMessage
+
+    @Serializable
+    @SerialName("elicitation_completed")
+    data class ElicitationCompleted(
+        val elicitationId: String,
+        val requestId: String,
+        val agentId: AgentId,
+        val sessionId: String,
     ) : SessionStreamServerMessage
 
     @Serializable

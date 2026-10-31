@@ -19,6 +19,10 @@ describe("resolveAgentProfile", () => {
           writeTextFile: true,
         },
         terminal: true,
+        elicitation: {
+          form: {},
+          url: {},
+        },
         _meta: {
           parameterizedModelPicker: true,
         },
@@ -47,6 +51,10 @@ describe("resolveAgentProfile", () => {
           writeTextFile: true,
         },
         terminal: true,
+        elicitation: {
+          form: {},
+          url: {},
+        },
       },
     })
 

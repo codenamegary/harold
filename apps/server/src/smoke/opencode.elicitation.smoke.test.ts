@@ -1,0 +1,159 @@
+import { describe, expect, test } from "bun:test"
+import { mkdir, mkdtemp, rm } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
+import { CreateSessionResponseSchema } from "contracts/http/session"
+import { WhichFn } from "core/agent-settings/resolve-agent-path"
+import { createServer } from "../bootstrap/server"
+import { parseConfig } from "../config/config"
+import { openDatabase } from "../persistence/database"
+import { createRuntime } from "../runtime/runtime"
+import {
+  createSmokeLogCapture,
+  drainPrompt,
+  failWithLogs,
+  openStreamClient,
+  seedSmokeDevice,
+  smokeCommands,
+} from "../test-support/session.stream.smoke"
+import {
+  openCodeSmokeConfigContent,
+  resolveOpenCodePath,
+  smokeRunRequested,
+} from "../test-support/smoke.gate"
+
+const OPENCODE_ELICITATION_SMOKE_TIMEOUT_MS = 180_000
+const SUBSCRIBE_TIMEOUT_MS = 30_000
+const PROMPT_TIMEOUT_MS = 120_000
+
+const SMOKE_MODEL = process.env.OPENCODE_SMOKE_MODEL ?? "zai-coding-plan/glm-5.3-flash"
+
+/**
+ * The model does not always choose its question tool, so this smoke stays
+ * opt-in even in the regular smoke job. Run it with both flags set and a real
+ * OpenCode login present.
+ */
+const shouldRunSmoke =
+  process.env.HAROLD_RUN_ELICITATION_SMOKE === "1" &&
+  smokeRunRequested() &&
+  resolveOpenCodePath() !== undefined
+
+/**
+ * Guarded real-agent smoke. It is skipped unless
+ * HAROLD_RUN_ELICITATION_SMOKE=1, HAROLD_RUN_SMOKE=1, and the OpenCode binary
+ * is present, because it needs a live model and login.
+ */
+describe("opencode ACP elicitation smoke", () => {
+  test.skipIf(!shouldRunSmoke)(
+    "renders the question tool's form elicitation and forwards the answer to the model",
+    async () => {
+      const dataDir = await mkdtemp(path.join(os.tmpdir(), "harold-opencode-elicit-"))
+      const workspaceDir = path.join(dataDir, "smoke-project")
+      await mkdir(workspaceDir)
+
+      const previousConfigContent = process.env.OPENCODE_CONFIG_CONTENT
+      process.env.OPENCODE_CONFIG_CONTENT = openCodeSmokeConfigContent(SMOKE_MODEL)
+
+      const detectedPath = resolveOpenCodePath()
+      if (detectedPath === undefined) {
+        throw new Error("opencode binary missing")
+      }
+      const whichFn: WhichFn = (binaryName) =>
+        binaryName === "opencode" ? detectedPath : undefined
+
+      const config = parseConfig({
+        HAROLD_HOST: "127.0.0.1",
+        HAROLD_PORT: "0",
+        HAROLD_DATA_DIR: dataDir,
+      })
+      const database = openDatabase({ dataDir: config.dataDir })
+      const runtime = createRuntime("0.1.0")
+      const logCapture = createSmokeLogCapture()
+      const { app, acpSupervisor } = await createServer({
+        config,
+        runtime,
+        database,
+        whichFn,
+        logStream: logCapture.stream,
+      })
+      const device = seedSmokeDevice(app, database)
+      await app.listen({ host: config.host, port: config.port })
+
+      try {
+        const enableResponse = await app.inject({
+          headers: { authorization: `Bearer ${device.credential}` },
+          method: "PATCH",
+          url: "/v1/settings/agents/opencode",
+          payload: { enabled: true, path: detectedPath },
+        })
+        expect(enableResponse.statusCode).toBe(200)
+
+        const sessionResponse = await app.inject({
+          headers: { authorization: `Bearer ${device.credential}` },
+          method: "POST",
+          url: "/v1/sessions",
+          payload: { agentId: "opencode", cwd: workspaceDir },
+        })
+        expect(sessionResponse.statusCode).toBe(201)
+        const session = CreateSessionResponseSchema.parse(JSON.parse(sessionResponse.body))
+
+        const commands = smokeCommands({ app, credential: device.credential })
+        const client = await openStreamClient({
+          app,
+          credential: device.credential,
+          agentId: "opencode",
+          sessionId: session.sessionId,
+        })
+
+        let sawElicitation = false
+        try {
+          const subscribed = await client.waitFor(
+            (message) => message.type === "subscribed" || message.type === "error",
+            SUBSCRIBE_TIMEOUT_MS,
+          )
+          if (subscribed.type === "error") {
+            failWithLogs(logCapture, client, `subscribe failed: ${subscribed.message}`)
+          }
+
+          await commands.prompt({
+            agentId: "opencode",
+            sessionId: session.sessionId,
+            text:
+              "Use your question tool to ask me which package manager I prefer, " +
+              "with bun and npm as options. After I answer, reply with the selected " +
+              "package manager and nothing else.",
+          })
+
+          await drainPrompt({
+            logCapture,
+            client,
+            commands,
+            deadlineMs: Date.now() + PROMPT_TIMEOUT_MS,
+            onRequest: (message) => {
+              if (message.type === "elicitation_request") {
+                sawElicitation = true
+              }
+            },
+          })
+
+          expect(sawElicitation).toBe(true)
+          expect(client.messages.some((message) => message.type === "error")).toBe(false)
+          expect(client.messages.some((message) => message.type === "prompt_complete")).toBe(true)
+        } finally {
+          await client.close()
+        }
+      } finally {
+        await acpSupervisor.stop()
+        await app.close()
+        database.close()
+        await rm(dataDir, { recursive: true, force: true })
+        if (previousConfigContent === undefined) {
+          delete process.env.OPENCODE_CONFIG_CONTENT
+        } else {
+          process.env.OPENCODE_CONFIG_CONTENT = previousConfigContent
+        }
+      }
+    },
+    OPENCODE_ELICITATION_SMOKE_TIMEOUT_MS,
+  )
+})

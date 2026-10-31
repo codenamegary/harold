@@ -115,6 +115,40 @@ describe("createAcpSupervisor", () => {
     expect(supervisor.getCapabilityInventory("cursor")).toBeNull()
   })
 
+  test("advertises elicitation form and url at initialize", async () => {
+    const mock = createMockTransport()
+    const initializeParams: unknown[] = []
+    mock.setHandler("initialize", (params) => {
+      initializeParams.push(params)
+      return {
+        agentCapabilities: { loadSession: false, sessionCapabilities: {} },
+      }
+    })
+    mock.setHandler("authenticate", () => ({}))
+
+    const supervisor = createAcpSupervisor({
+      agentSettingsRepository: createRepository([
+        { id: "cursor", enabled: true, path: "/bin/agent" },
+      ]),
+      serverVersion: "0.1.0",
+      spawnAgentProcessFn: createMockProcess,
+      createTransportFn: () => mock.transport,
+    })
+    supervisors.push(supervisor)
+
+    await supervisor.start("cursor")
+
+    expect(initializeParams).toEqual([
+      {
+        protocolVersion: 1,
+        clientCapabilities: expect.objectContaining({
+          elicitation: { form: {}, url: {} },
+        }),
+        clientInfo: { name: "harold", version: "0.1.0" },
+      },
+    ])
+  })
+
   test("returns a failed result when the agent is disabled or missing a path", async () => {
     const supervisor = createAcpSupervisor({
       agentSettingsRepository: createRepository([

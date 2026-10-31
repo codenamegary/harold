@@ -1325,6 +1325,220 @@ class DefaultSessionOwnerTest {
         advanceUntilIdle()
     }
 
+    @Test
+    fun elicitationRequestAddsPendingAndResolutionAddsATranscriptRow() = runTest {
+        val factory = ScriptedSessionStreamFactory(listOf(holdOpen()))
+        val owner = owner(factory)
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.Subscribed(agentId = "cursor", sessionId = "sess_02"),
+        )
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.ElicitationRequest(
+                requestId = "elicit_01",
+                agentId = "cursor",
+                sessionId = "sess_02",
+                params = formElicitationParams(),
+                expiresAt = "2026-10-31T05:00:00.000Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(SessionState.AwaitingAnswer, owner.snapshot.value.transcript.sessionState)
+        assertEquals(1, owner.snapshot.value.pendingElicitations.size)
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.ElicitationResolved(
+                requestId = "elicit_01",
+                agentId = "cursor",
+                sessionId = "sess_02",
+                reason = harold.android.contracts.ElicitationResolvedReason.Replied,
+                result = JsonObject(
+                    mapOf(
+                        "action" to JsonPrimitive("accept"),
+                        "content" to JsonObject(mapOf("q0" to JsonPrimitive("bun"))),
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertTrue(owner.snapshot.value.pendingElicitations.isEmpty())
+        assertEquals(SessionState.Running, owner.snapshot.value.transcript.sessionState)
+        val row = owner.snapshot.value.transcript.rows
+            .filterIsInstance<TranscriptQuestionRow>()
+            .single()
+        assertEquals("Package Manager" to "bun", row.answers.single())
+
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun replyElicitationPostsWithoutResolvingLocally() = runTest {
+        val factory = ScriptedSessionStreamFactory(listOf(holdOpen()))
+        val commands = ScriptedCommandApi()
+        val owner = owner(factory, commands)
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.ElicitationRequest(
+                requestId = "elicit_01",
+                agentId = "cursor",
+                sessionId = "sess_02",
+                params = formElicitationParams(),
+                expiresAt = "2026-10-31T05:00:00.000Z",
+            ),
+        )
+        advanceUntilIdle()
+
+        val result = JsonObject(mapOf("action" to JsonPrimitive("decline")))
+        assertTrue(owner.replyElicitation("elicit_01", result).isSuccess)
+        advanceUntilIdle()
+
+        assertEquals(listOf("elicit_01" to result), commands.elicitationReplies)
+        assertEquals(1, owner.snapshot.value.pendingElicitations.size)
+
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun acceptedUrlElicitationWaitsForCompletion() = runTest {
+        val factory = ScriptedSessionStreamFactory(listOf(holdOpen()))
+        val owner = owner(factory)
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.ElicitationRequest(
+                requestId = "elicit_url",
+                agentId = "cursor",
+                sessionId = "sess_02",
+                params = JsonObject(
+                    mapOf(
+                        "mode" to JsonPrimitive("url"),
+                        "sessionId" to JsonPrimitive("sess_02"),
+                        "elicitationId" to JsonPrimitive("url-1"),
+                        "url" to JsonPrimitive("https://example.com/connect"),
+                    ),
+                ),
+                expiresAt = "2026-10-31T05:00:00.000Z",
+            ),
+        )
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.ElicitationResolved(
+                requestId = "elicit_url",
+                agentId = "cursor",
+                sessionId = "sess_02",
+                reason = harold.android.contracts.ElicitationResolvedReason.Replied,
+                result = JsonObject(mapOf("action" to JsonPrimitive("accept"))),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(1, owner.snapshot.value.urlElicitationsAwaitingCompletion.size)
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.ElicitationCompleted(
+                elicitationId = "url-1",
+                requestId = "elicit_url",
+                agentId = "cursor",
+                sessionId = "sess_02",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(setOf("url-1"), owner.snapshot.value.completedElicitationIds)
+
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun streamResetClearsPendingAndUrlWaitingCards() = runTest {
+        val factory = ScriptedSessionStreamFactory(listOf(holdOpen()))
+        val owner = owner(factory)
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.ElicitationRequest(
+                requestId = "elicit_01",
+                agentId = "cursor",
+                sessionId = "sess_02",
+                params = formElicitationParams(),
+                expiresAt = "2026-10-31T05:00:00.000Z",
+            ),
+        )
+        advanceUntilIdle()
+        assertEquals(1, owner.snapshot.value.pendingElicitations.size)
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.StreamReset(agentId = "cursor", sessionId = "sess_02"),
+        )
+        advanceUntilIdle()
+
+        assertTrue(owner.snapshot.value.pendingElicitations.isEmpty())
+        assertTrue(owner.snapshot.value.urlElicitationsAwaitingCompletion.isEmpty())
+
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    private fun formElicitationParams(): JsonObject = JsonObject(
+        mapOf(
+            "mode" to JsonPrimitive("form"),
+            "sessionId" to JsonPrimitive("sess_02"),
+            "message" to JsonPrimitive("Questions"),
+            "requestedSchema" to JsonObject(
+                mapOf(
+                    "type" to JsonPrimitive("object"),
+                    "properties" to JsonObject(
+                        mapOf(
+                            "q0" to JsonObject(
+                                mapOf(
+                                    "type" to JsonPrimitive("string"),
+                                    "title" to JsonPrimitive("Package Manager"),
+                                    "oneOf" to JsonArray(
+                                        listOf(
+                                            JsonObject(
+                                                mapOf(
+                                                    "const" to JsonPrimitive("bun"),
+                                                    "title" to JsonPrimitive("bun"),
+                                                ),
+                                            ),
+                                            JsonObject(
+                                                mapOf(
+                                                    "const" to JsonPrimitive("npm"),
+                                                    "title" to JsonPrimitive("npm"),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                            "q0_custom" to JsonObject(
+                                mapOf(
+                                    "type" to JsonPrimitive("string"),
+                                    "title" to JsonPrimitive("Package Manager (other)"),
+                                ),
+                            ),
+                        ),
+                    ),
+                    "required" to JsonArray(emptyList()),
+                ),
+            ),
+        ),
+    )
+
     private fun TestScope.owner(
         factory: SessionStreamFactory,
         commands: ScriptedCommandApi = ScriptedCommandApi(),
@@ -1522,6 +1736,7 @@ private class ScriptedCommandApi : SessionCommandApi {
     val cancels = mutableListOf<Pair<String, String>>()
     val permissionReplies = mutableListOf<Pair<String, String>>()
     val extensionReplies = mutableListOf<Pair<String, JsonElement>>()
+    val elicitationReplies = mutableListOf<Pair<String, JsonElement>>()
     var promptResult: Result<Unit> = Result.success(Unit)
 
     override suspend fun prompt(
@@ -1558,6 +1773,15 @@ private class ScriptedCommandApi : SessionCommandApi {
         result: JsonElement,
     ): Result<Unit> {
         extensionReplies += requestId to result
+        return Result.success(Unit)
+    }
+
+    override suspend fun replyElicitation(
+        serverOrigin: String,
+        requestId: String,
+        result: JsonElement,
+    ): Result<Unit> {
+        elicitationReplies += requestId to result
         return Result.success(Unit)
     }
 }

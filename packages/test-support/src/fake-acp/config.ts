@@ -20,6 +20,9 @@ export type FakeAcpConfig = FakeAcpCapabilities & {
   emitPermissionRequest: boolean
   emitPermissionRequestNoAllow: boolean
   emitPermissionRequestOnPrompt: boolean
+  emitElicitationFormOnPrompt: boolean
+  emitElicitationUrlOnPrompt: boolean
+  elicitationUrl: string
   emitFsReadRequest: boolean
   emitFsWriteRequest: boolean
   emitTerminalCreateRequest: boolean
@@ -110,6 +113,9 @@ export const readFakeAcpConfig = (
     env.FAKE_ACP_EMIT_PERMISSION_REQUEST_ON_PROMPT,
     false,
   ),
+  emitElicitationFormOnPrompt: parseBooleanEnv(env.FAKE_ACP_EMIT_ELICITATION_FORM_ON_PROMPT, false),
+  emitElicitationUrlOnPrompt: parseBooleanEnv(env.FAKE_ACP_EMIT_ELICITATION_URL_ON_PROMPT, false),
+  elicitationUrl: readEnvString(env, "FAKE_ACP_ELICITATION_URL", "https://example.com/connect"),
   emitFsReadRequest: parseBooleanEnv(env.FAKE_ACP_EMIT_FS_READ_REQUEST, false),
   emitFsWriteRequest: parseBooleanEnv(env.FAKE_ACP_EMIT_FS_WRITE_REQUEST, false),
   emitTerminalCreateRequest: parseBooleanEnv(env.FAKE_ACP_EMIT_TERMINAL_CREATE_REQUEST, false),
@@ -141,6 +147,9 @@ export type FakeAcpEnvOptions = {
   emitPermissionRequest?: boolean
   emitPermissionRequestNoAllow?: boolean
   emitPermissionRequestOnPrompt?: boolean
+  emitElicitationFormOnPrompt?: boolean
+  emitElicitationUrlOnPrompt?: boolean
+  elicitationUrl?: string
   emitFsReadRequest?: boolean
   emitFsWriteRequest?: boolean
   emitTerminalCreateRequest?: boolean
@@ -202,6 +211,15 @@ export const fakeAcpEnvFromCapabilities = (options: FakeAcpEnvOptions): Record<s
     "FAKE_ACP_EMIT_PERMISSION_REQUEST_ON_PROMPT",
     options.emitPermissionRequestOnPrompt,
   ),
+  ...optionalBooleanEnv(
+    "FAKE_ACP_EMIT_ELICITATION_FORM_ON_PROMPT",
+    options.emitElicitationFormOnPrompt,
+  ),
+  ...optionalBooleanEnv(
+    "FAKE_ACP_EMIT_ELICITATION_URL_ON_PROMPT",
+    options.emitElicitationUrlOnPrompt,
+  ),
+  ...stringEnv("FAKE_ACP_ELICITATION_URL", options.elicitationUrl),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_FS_READ_REQUEST", options.emitFsReadRequest),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_FS_WRITE_REQUEST", options.emitFsWriteRequest),
   ...optionalBooleanEnv("FAKE_ACP_EMIT_TERMINAL_CREATE_REQUEST", options.emitTerminalCreateRequest),

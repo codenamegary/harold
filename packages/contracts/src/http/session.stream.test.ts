@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import {
+  ElicitationReplyBodySchema,
   ExtensionReplyBodySchema,
   PermissionReplyBodySchema,
   ReplyParamsSchema,
   SessionCommandParamsSchema,
   SessionCommandQuerySchema,
   SessionStreamServerMessageSchema,
+  elicitationRepliesPath,
   extensionRepliesPath,
   permissionRepliesPath,
   sessionCancelPath,
@@ -100,6 +102,70 @@ describe("session stream contracts", () => {
       type: "extension_request",
       method: "cursor/ask_question",
     })
+  })
+
+  test("parses elicitation request, resolved, and completed frames", () => {
+    expect(
+      SessionStreamServerMessageSchema.parse({
+        type: "elicitation_request",
+        requestId: "req-1",
+        agentId: "opencode",
+        sessionId: "acp-1",
+        params: { mode: "form", sessionId: "acp-1" },
+        expiresAt: "2026-10-31T05:00:00.000Z",
+      }),
+    ).toEqual({
+      type: "elicitation_request",
+      requestId: "req-1",
+      agentId: "opencode",
+      sessionId: "acp-1",
+      params: { mode: "form", sessionId: "acp-1" },
+      expiresAt: "2026-10-31T05:00:00.000Z",
+    })
+
+    expect(
+      SessionStreamServerMessageSchema.parse({
+        type: "elicitation_resolved",
+        requestId: "req-1",
+        agentId: "opencode",
+        sessionId: "acp-1",
+        reason: "replied",
+        result: { action: "accept", content: { q0: "bun" } },
+      }),
+    ).toEqual({
+      type: "elicitation_resolved",
+      requestId: "req-1",
+      agentId: "opencode",
+      sessionId: "acp-1",
+      reason: "replied",
+      result: { action: "accept", content: { q0: "bun" } },
+    })
+
+    expect(
+      SessionStreamServerMessageSchema.parse({
+        type: "elicitation_completed",
+        elicitationId: "url-1",
+        requestId: "req-2",
+        agentId: "opencode",
+        sessionId: "acp-1",
+      }),
+    ).toEqual({
+      type: "elicitation_completed",
+      elicitationId: "url-1",
+      requestId: "req-2",
+      agentId: "opencode",
+      sessionId: "acp-1",
+    })
+
+    expect(() =>
+      SessionStreamServerMessageSchema.parse({
+        type: "elicitation_resolved",
+        requestId: "req-1",
+        agentId: "opencode",
+        sessionId: "acp-1",
+        reason: "unknown_reason",
+      }),
+    ).toThrow()
   })
 
   test("parses prompt_complete and cancelled frames", () => {
@@ -214,9 +280,10 @@ describe("session stream REST paths", () => {
     )
   })
 
-  test("builds permission and extension reply paths with an encoded request id", () => {
+  test("builds permission, extension, and elicitation reply paths with an encoded request id", () => {
     expect(permissionRepliesPath("req:1/two")).toBe("/v1/permissions/req%3A1%2Ftwo/replies")
     expect(extensionRepliesPath("req:1/two")).toBe("/v1/extensions/req%3A1%2Ftwo/replies")
+    expect(elicitationRepliesPath("req:1/two")).toBe("/v1/elicitations/req%3A1%2Ftwo/replies")
   })
 })
 
@@ -252,6 +319,20 @@ describe("session command route params and query", () => {
     expect(() => SessionCommandQuerySchema.parse({})).toThrow()
     expect(() => ReplyParamsSchema.parse({ requestId: "" })).toThrow()
     expect(() => SessionCommandQuerySchema.parse({ agentId: "cursor", extra: true })).toThrow()
+  })
+})
+
+describe("ElicitationReplyBodySchema", () => {
+  test("parses an opaque result body only", () => {
+    const body = { result: { action: "accept", content: { q0: "bun" } } }
+    expect(ElicitationReplyBodySchema.parse(body)).toEqual(body)
+
+    expect(() =>
+      ElicitationReplyBodySchema.parse({
+        requestId: "req-1",
+        result: { action: "cancel" },
+      }),
+    ).toThrow()
   })
 })
 

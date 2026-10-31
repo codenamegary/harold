@@ -17,6 +17,9 @@ enum class SessionState {
     @SerialName("awaiting-permission")
     AwaitingPermission,
 
+    @SerialName("awaiting-answer")
+    AwaitingAnswer,
+
     @SerialName("stopping")
     Stopping,
 

@@ -300,7 +300,7 @@ private fun SessionListRow(
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (session.needsAttention) {
                             Text(
-                                text = "Needs permission",
+                                text = session.attentionLabel,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.testTag("session_attention_${session.id}"),
