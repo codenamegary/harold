@@ -984,6 +984,38 @@ class ChatScreenTest {
     }
 
     @Test
+    fun singleQuestionCardCentersTitleWithAnswerButton() {
+        val request = form(
+            question(
+                key = "color",
+                title = "Favorite color",
+                kind = ElicitationKind.SingleSelect(
+                    listOf(ElicitationOption("red", "Red")),
+                ),
+                required = true,
+            ),
+        )
+
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        selectedSession = elicitationSession(),
+                        pendingElicitations = listOf(request),
+                    ),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("elicitation_card").assertIsDisplayed()
+        val titleBounds = composeTestRule.onNodeWithTag("elicitation_card_title")
+            .fetchSemanticsNode().boundsInRoot
+        val answerBounds = composeTestRule.onNodeWithTag("elicitation_answer_button")
+            .fetchSemanticsNode().boundsInRoot
+        assertEquals(titleBounds.center.y, answerBounds.center.y, 1f)
+    }
+
+    @Test
     fun singleSelectSubmitStaysDisabledUntilRequiredAnswerExists() {
         val request = form(
             question(
