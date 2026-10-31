@@ -1278,7 +1278,7 @@ class ChatScreenTest {
     }
 
     @Test
-    fun transcriptQuestionRowSummarizesAndExpandsAnswers() {
+    fun transcriptQuestionRowShowsAnswersWithoutExpanding() {
         val row = harold.android.live.TranscriptQuestionRow(
             turnId = "turn_01",
             requestId = "req_01",
@@ -1296,13 +1296,9 @@ class ChatScreenTest {
         }
 
         composeTestRule.onNodeWithTag("transcript_question_summary", useUnmergedTree = true)
-            .assertTextContains("Blue", substring = true)
+            .assertTextEquals("Blue · Large")
         composeTestRule.onAllNodesWithTag("transcript_question_answer_0", useUnmergedTree = true)
             .assertCountEquals(0)
-        composeTestRule.onNodeWithTag("transcript_question").performClick()
-
-        composeTestRule.onNodeWithTag("transcript_question_answer_0", useUnmergedTree = true)
-            .assertTextContains("Color: Blue", substring = true)
     }
 
     private fun elicitationSession() = SessionRow(
