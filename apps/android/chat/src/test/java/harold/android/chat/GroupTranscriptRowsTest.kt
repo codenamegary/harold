@@ -67,6 +67,30 @@ class GroupTranscriptRowsTest {
     }
 
     @Test
+    fun hidesAQuestionToolThatAlreadyHasAResolvedQuestionRow() {
+        val rows = listOf(
+            user("turn_1"),
+            tool("t1"),
+            harold.android.live.TranscriptQuestionRow(
+                turnId = "turn_1",
+                requestId = "req-1",
+                title = "Choose",
+                answers = listOf("Choice" to "Yes"),
+                toolCallId = "t1",
+            ),
+            TranscriptAssistantRow(turnId = "turn_1", text = "done"),
+        )
+
+        val blocks = groupTranscriptRows(rows)
+
+        assertEquals(
+            listOf("TurnHeader", "Row", "Row"),
+            blocks.map { it::class.simpleName },
+        )
+        assertTrue(blocks.none { it is TranscriptBlock.ToolRun })
+    }
+
+    @Test
     fun keepsFailedToolsOutOfTheCompletedFold() {
         val rows = listOf(
             user("turn_1"),

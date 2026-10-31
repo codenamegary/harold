@@ -199,6 +199,7 @@ fun appendTranscriptQuestion(
     requestId: String,
     title: String,
     answers: List<Pair<String, String>>,
+    toolCallId: String? = null,
 ): AcpTranscriptState {
     if (state.rows.any { row -> row is TranscriptQuestionRow && row.requestId == requestId }) {
         return state
@@ -208,8 +209,21 @@ fun appendTranscriptQuestion(
         requestId = requestId,
         title = title,
         answers = answers,
+        toolCallId = toolCallId,
     )
-    return state.copy(rows = state.rows + row)
+    val toolIndex = toolCallId?.let { id ->
+        state.rows.indexOfLast { candidate ->
+            candidate is TranscriptToolRow &&
+                candidate.turnId == state.currentTurnId &&
+                candidate.toolCallId == id
+        }
+    } ?: -1
+    val rows = if (toolIndex >= 0) {
+        state.rows.toMutableList().also { list -> list[toolIndex] = row }
+    } else {
+        state.rows + row
+    }
+    return state.copy(rows = rows)
 }
 
 fun applyStreamError(state: AcpTranscriptState): AcpTranscriptState =

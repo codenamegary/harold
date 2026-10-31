@@ -29,6 +29,8 @@ data class TranscriptQuestionRow(
     val requestId: String,
     val title: String,
     val answers: List<Pair<String, String>>,
+    /** The ACP tool call this question replaced, when the agent supplied one. */
+    val toolCallId: String? = null,
 ) : TranscriptRow
 
 data class TranscriptToolRow(

@@ -71,6 +71,8 @@ sealed interface Elicitation {
         override val message: String?,
         override val raw: JsonElement,
         val questions: List<ElicitationQuestion>,
+        /** ACP tool call that raised the question, when the agent supplies it. */
+        val toolCallId: String? = null,
     ) : Elicitation
 
     data class Url(
@@ -222,6 +224,7 @@ private fun parseFormElicitation(
         message = message,
         raw = params,
         questions = questions,
+        toolCallId = fields.stringOrNull("toolCallId"),
     )
 }
 

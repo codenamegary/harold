@@ -1,6 +1,7 @@
 package harold.android.chat
 
 import harold.android.contracts.ToolCallStatus
+import harold.android.live.TranscriptQuestionRow
 import harold.android.live.TranscriptRow
 import harold.android.live.TranscriptToolRow
 import harold.android.live.TranscriptUserRow
@@ -31,12 +32,21 @@ sealed interface TranscriptBlock {
 
 fun groupTranscriptRows(rows: List<TranscriptRow>): List<TranscriptBlock> {
     val blocks = mutableListOf<TranscriptBlock>()
+    val questionToolCallIds = rows
+        .filterIsInstance<TranscriptQuestionRow>()
+        .mapNotNull { row -> row.toolCallId }
+        .toSet()
     var index = 0
 
     while (index < rows.size) {
         val row = rows[index]
         if (row is TranscriptUserRow) {
             blocks.add(TranscriptBlock.TurnHeader(row = row, index = index))
+            index += 1
+            continue
+        }
+
+        if (row is TranscriptToolRow && row.toolCallId in questionToolCallIds) {
             index += 1
             continue
         }

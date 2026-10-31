@@ -680,6 +680,7 @@ class DefaultSessionOwner @Inject constructor(
                             requestId = resolved.requestId,
                             title = resolved.questions.firstOrNull()?.title ?: "Question",
                             answers = elicitationAnswerSummary(resolved.questions, content),
+                            toolCallId = resolved.toolCallId,
                         )
                     }
                     val waiting = if (accepted && resolved is Elicitation.Url) {
