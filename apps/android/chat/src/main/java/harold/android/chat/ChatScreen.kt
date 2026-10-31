@@ -70,6 +70,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import harold.android.chat.auth.AgentAuthPanel
 import harold.android.chat.composer.CommandListPanel
 import harold.android.chat.composer.ComposerConfigActions
@@ -328,7 +329,7 @@ fun ChatScreen(
      * link the user could not open.
      */
     fun openElicitationUrl(url: String, acceptOnSuccess: Boolean) {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        val intent = Intent(Intent.ACTION_VIEW, url.toUri())
         try {
             context.startActivity(intent)
             if (acceptOnSuccess) {

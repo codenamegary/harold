@@ -115,9 +115,9 @@ fun ChatTranscript(
     rows: List<TranscriptRow>,
     isRunning: Boolean,
     showWelcome: Boolean,
+    modifier: Modifier = Modifier,
     hasPendingPermission: Boolean = false,
     hasPendingQuestion: Boolean = false,
-    modifier: Modifier = Modifier,
 ) {
     val blocks = groupTranscriptRows(rows)
     val listState = rememberLazyListState()
