@@ -140,6 +140,26 @@ class AcpTranscriptReducerTest {
     }
 
     @Test
+    fun reconnectClearsAStaleReplyingStateAfterAResolvedQuestionRow() {
+        var state = applySubscribed(
+            beginUserTurn(emptyAcpTranscript, turnId = "turn-1", text = "go"),
+        )
+        state = foldAcpUpdate(state, ParsedAcpUpdate.AgentMessageChunk("done"))
+        state = appendTranscriptQuestion(
+            state = state,
+            requestId = "req-1",
+            title = "Question",
+            answers = listOf("Choice" to "Yes"),
+        )
+
+        assertEquals(SessionState.Running, state.sessionState)
+
+        val resubscribed = applySubscribed(state)
+
+        assertEquals(SessionState.Idle, resubscribed.sessionState)
+    }
+
+    @Test
     fun reconnectKeepsRunningWhileAToolIsActive() {
         var state = applySubscribed(
             beginUserTurn(emptyAcpTranscript, turnId = "turn-1", text = "go"),

@@ -228,7 +228,9 @@ fun applySubscribed(state: AcpTranscriptState): AcpTranscriptState {
             state.sessionState == SessionState.AwaitingAnswer
     val latestTurnId = state.rows.lastOrNull { row -> row is TranscriptUserRow }?.turnId
     val lastInLatestTurn =
-        latestTurnId?.let { turnId -> state.rows.lastOrNull { row -> row.turnId == turnId } }
+        latestTurnId?.let { turnId ->
+            state.rows.lastOrNull { row -> row.turnId == turnId && row !is TranscriptQuestionRow }
+        }
     val staleReply =
         state.sessionState == SessionState.Running &&
             lastInLatestTurn is TranscriptAssistantRow
