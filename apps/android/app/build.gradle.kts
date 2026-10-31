@@ -4,7 +4,7 @@ plugins {
     alias(libs.plugins.harold.android.hilt)
 }
 
-val appVersionName = "3.0.0" // x-release-please-version
+val appVersionName = "3.1.0" // x-release-please-version
 val appVersionCode = run {
     val match = checkNotNull(Regex("""^(\d+)\.(\d+)\.(\d+)$""").matchEntire(appVersionName)) {
         "versionName must be MAJOR.MINOR.PATCH, got $appVersionName"
