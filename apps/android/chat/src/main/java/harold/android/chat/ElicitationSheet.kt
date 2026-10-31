@@ -94,7 +94,6 @@ fun ElicitationSheet(
             is Elicitation.Form -> FormSheet(
                 state = state,
                 request = request,
-                agentName = agentName,
                 onClose = onClose,
                 onRawToggle = onRawToggle,
                 onTextChanged = onTextChanged,
@@ -180,7 +179,6 @@ fun ElicitationSheet(
 private fun FormSheet(
     state: ElicitationUiState,
     request: Elicitation.Form,
-    agentName: String,
     onClose: () -> Unit,
     onRawToggle: () -> Unit,
     onTextChanged: (String, String) -> Unit,
@@ -216,10 +214,8 @@ private fun FormSheet(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SheetHeader(
-            agentName = agentName,
-            currentQuestion = currentQuestion,
-            totalQuestions = total,
-            progress = progress,
+            title = if (total > 1) "Question $currentQuestion of $total" else null,
+            progress = if (total > 1) progress else null,
             onClose = onClose,
             onCancel = onCancel,
             onRawToggle = onRawToggle,
@@ -323,13 +319,11 @@ private fun FormSheet(
 
 @Composable
 private fun SheetHeader(
-    agentName: String,
+    title: String?,
     onClose: () -> Unit,
     onCancel: () -> Unit,
     onRawToggle: () -> Unit,
-    currentQuestion: Int = 0,
-    totalQuestions: Int = 0,
-    progress: Float = 0f,
+    progress: Float? = null,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
@@ -338,20 +332,17 @@ private fun SheetHeader(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = agentName.ifBlank { "Agent" },
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.weight(1f),
-            )
-            if (totalQuestions > 1) {
+            if (title != null) {
                 Text(
-                    text = "$currentQuestion/$totalQuestions",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier
+                        .weight(1f)
                         .padding(end = 4.dp)
                         .testTag("elicitation_question_counter"),
                 )
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
             }
             Box {
                 IconButton(
@@ -400,7 +391,7 @@ private fun SheetHeader(
             }
         }
 
-        if (totalQuestions > 1) {
+        if (progress != null) {
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier
@@ -790,7 +781,7 @@ private fun UrlSheet(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SheetHeader(
-            agentName = agentName,
+            title = agentName.ifBlank { "Agent" },
             onClose = onClose,
             onCancel = onCancel,
             onRawToggle = onRawToggle,

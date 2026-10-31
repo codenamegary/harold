@@ -891,7 +891,6 @@ fun ChatScreen(
 
                 ElicitationPanel(
                     uiState = uiState,
-                    agentLabel = agentName,
                     onAnswer = onElicitationOpen,
                     onOpenWaitingUrl = { url ->
                         openElicitationUrl(url = url, acceptOnSuccess = false)

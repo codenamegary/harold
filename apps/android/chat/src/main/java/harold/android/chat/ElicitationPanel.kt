@@ -31,7 +31,6 @@ private val MIN_TOUCH_TARGET = 48.dp
 @Composable
 fun ElicitationPanel(
     uiState: ChatUiState,
-    agentLabel: String,
     onAnswer: () -> Unit,
     onOpenWaitingUrl: (String) -> Unit,
     onDismissWaitingUrl: (String) -> Unit,
@@ -59,7 +58,6 @@ fun ElicitationPanel(
             else -> {
                 ElicitationCard(
                     elicitation = active,
-                    agentLabel = agentLabel,
                     onAnswer = onAnswer,
                 )
             }
@@ -79,7 +77,6 @@ fun ElicitationPanel(
 @Composable
 fun ElicitationCard(
     elicitation: Elicitation,
-    agentLabel: String,
     onAnswer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -102,11 +99,6 @@ fun ElicitationCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Text(
-                    text = agentLabel.ifBlank { "Agent" },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
                 Text(
                     text = elicitation.cardTitle(),
                     style = MaterialTheme.typography.bodyMedium,
