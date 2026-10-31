@@ -47,6 +47,85 @@ class AcpTranscriptReducerTest {
     }
 
     @Test
+    fun keepsInterleavedTextAndToolsInInsertionOrder() {
+        var state = beginUserTurn(emptyAcpTranscript, turnId = "turn-1", text = "go")
+        state = foldAcpUpdate(state, ParsedAcpUpdate.AgentMessageChunk("first"))
+        state = foldAcpUpdate(state, ParsedAcpUpdate.ToolCall(
+            toolCallId = "t1",
+            toolName = "read",
+            toolKind = harold.android.contracts.ToolKind.Read,
+            status = harold.android.contracts.ToolCallStatus.InProgress,
+        ))
+        state = foldAcpUpdate(state, ParsedAcpUpdate.AgentMessageChunk("second"))
+
+        assertEquals(
+            listOf(
+                "TranscriptUserRow",
+                "TranscriptAssistantRow",
+                "TranscriptToolRow",
+                "TranscriptAssistantRow",
+            ),
+            state.rows.map { it::class.simpleName },
+        )
+        assertEquals("first", (state.rows[1] as TranscriptAssistantRow).text)
+        assertEquals("second", (state.rows[3] as TranscriptAssistantRow).text)
+    }
+
+    @Test
+    fun keepsThinkingInOrderAcrossAToolCall() {
+        var state = beginUserTurn(emptyAcpTranscript, turnId = "turn-1", text = "go")
+        state = foldAcpUpdate(state, ParsedAcpUpdate.AgentThoughtChunk("planning"))
+        state = foldAcpUpdate(state, ParsedAcpUpdate.ToolCall(
+            toolCallId = "t1",
+            toolName = "read",
+            toolKind = harold.android.contracts.ToolKind.Read,
+            status = harold.android.contracts.ToolCallStatus.InProgress,
+        ))
+        state = foldAcpUpdate(state, ParsedAcpUpdate.AgentThoughtChunk("checking"))
+
+        assertEquals(
+            listOf(
+                "TranscriptUserRow",
+                "TranscriptThinkingRow",
+                "TranscriptToolRow",
+                "TranscriptThinkingRow",
+            ),
+            state.rows.map { it::class.simpleName },
+        )
+    }
+
+    @Test
+    fun startsANewSegmentAfterAPermissionPrompt() {
+        var state = beginUserTurn(emptyAcpTranscript, turnId = "turn-1", text = "go")
+        state = foldAcpUpdate(state, ParsedAcpUpdate.AgentMessageChunk("before"))
+        state = applyPermissionRequested(state)
+        state = foldAcpUpdate(state, ParsedAcpUpdate.AgentMessageChunk("after"))
+
+        assertEquals(3, state.rows.size)
+        assertEquals("before", (state.rows[1] as TranscriptAssistantRow).text)
+        assertEquals("after", (state.rows[2] as TranscriptAssistantRow).text)
+    }
+
+    @Test
+    fun startsANewSegmentInANewTurn() {
+        var state = beginUserTurn(emptyAcpTranscript, turnId = "turn-1", text = "first")
+        state = foldAcpUpdate(state, ParsedAcpUpdate.AgentMessageChunk("one"))
+        state = beginUserTurn(state, turnId = "turn-2", text = "second")
+        state = foldAcpUpdate(state, ParsedAcpUpdate.AgentMessageChunk("two"))
+
+        assertEquals(
+            listOf(
+                "TranscriptUserRow",
+                "TranscriptAssistantRow",
+                "TranscriptUserRow",
+                "TranscriptAssistantRow",
+            ),
+            state.rows.map { it::class.simpleName },
+        )
+        assertEquals("two", (state.rows[3] as TranscriptAssistantRow).text)
+    }
+
+    @Test
     fun marksRunningWhenLiveUpdatesArriveAfterSubscribe() {
         val replayed = foldAcpUpdate(
             emptyAcpTranscript,

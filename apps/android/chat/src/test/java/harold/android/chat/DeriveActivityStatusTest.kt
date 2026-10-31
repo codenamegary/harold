@@ -42,7 +42,7 @@ class DeriveActivityStatusTest {
     }
 
     @Test
-    fun returnsUsingToolsAsSinglePrimaryLabel() {
+    fun returnsNoStatusWhileAFriendlyToolRowIsVisible() {
         val rows = listOf(
             user(),
             tool(
@@ -60,11 +60,7 @@ class DeriveActivityStatusTest {
             ),
         )
 
-        assertEquals(
-            ActivityStatus(
-                phase = ActivityPhase.UsingTools,
-                label = "grep · pattern",
-            ),
+        assertNull(
             deriveActivityStatus(
                 rows = rows,
                 isRunning = true,
@@ -109,17 +105,13 @@ class DeriveActivityStatusTest {
     }
 
     @Test
-    fun returnsWorkingAfterToolsCompleteBeforeAssistant() {
+    fun returnsNoStatusAfterToolsCompleteBeforeAssistant() {
         val rows = listOf(
             user(),
             tool(toolCallId = "t1", toolName = "read", status = ToolCallStatus.Completed),
         )
 
-        assertEquals(
-            ActivityStatus(
-                phase = ActivityPhase.Working,
-                label = "Working",
-            ),
+        assertNull(
             deriveActivityStatus(
                 rows = rows,
                 isRunning = true,

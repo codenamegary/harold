@@ -8,6 +8,8 @@ data class AcpTranscriptState(
     val sessionState: SessionState? = null,
     val currentTurnId: String = "replay",
     val live: Boolean = false,
+    /** Set when a permission prompt interrupts the turn, so the next chunk starts a segment. */
+    val segmentBoundary: Boolean = false,
 )
 
 val emptyAcpTranscript = AcpTranscriptState()
@@ -25,6 +27,7 @@ fun beginUserTurn(
     ),
     sessionState = SessionState.Running,
     currentTurnId = turnId,
+    segmentBoundary = false,
 )
 
 fun foldAcpUpdate(
@@ -45,6 +48,7 @@ fun foldAcpUpdate(
                             turnId = nextTurnId,
                             text = parsed.text,
                         ),
+                        segmentBoundary = false,
                     ),
                 )
             } else if (turnHasUserRow(state.rows, turnId)) {
@@ -57,63 +61,51 @@ fun foldAcpUpdate(
                                 (row as TranscriptUserRow).copy(text = row.text + parsed.text)
                             },
                         ),
+                        segmentBoundary = false,
                     ),
                 )
             } else {
                 withLiveRunning(
                     state.copy(
                         rows = state.rows + TranscriptUserRow(turnId = turnId, text = parsed.text),
+                        segmentBoundary = false,
                     ),
                 )
             }
         }
         is ParsedAcpUpdate.AgentThoughtChunk -> {
-            val existing = state.rows.findLast { row ->
-                row is TranscriptThinkingRow && row.turnId == turnId
-            }
-            if (existing == null) {
-                withLiveRunning(
-                    state.copy(
-                        rows = state.rows + TranscriptThinkingRow(turnId = turnId, text = parsed.text),
-                    ),
+            val lastInTurn = state.rows.lastOrNull { row -> row.turnId == turnId }
+            val extendsCurrentSegment =
+                !state.segmentBoundary && lastInTurn is TranscriptThinkingRow
+            val rows = if (extendsCurrentSegment) {
+                updateLastMatching(
+                    rows = state.rows,
+                    match = { row -> row is TranscriptThinkingRow && row.turnId == turnId },
+                    update = { row ->
+                        (row as TranscriptThinkingRow).copy(text = row.text + parsed.text)
+                    },
                 )
             } else {
-                withLiveRunning(
-                    state.copy(
-                        rows = updateLastMatching(
-                            rows = state.rows,
-                            match = { row -> row is TranscriptThinkingRow && row.turnId == turnId },
-                            update = { row ->
-                                (row as TranscriptThinkingRow).copy(text = row.text + parsed.text)
-                            },
-                        ),
-                    ),
-                )
+                state.rows + TranscriptThinkingRow(turnId = turnId, text = parsed.text)
             }
+            withLiveRunning(state.copy(rows = rows, segmentBoundary = false))
         }
         is ParsedAcpUpdate.AgentMessageChunk -> {
-            val existing = state.rows.findLast { row ->
-                row is TranscriptAssistantRow && row.turnId == turnId
-            }
-            if (existing == null) {
-                withLiveRunning(
-                    state.copy(
-                        rows = state.rows + TranscriptAssistantRow(turnId = turnId, text = parsed.text),
-                    ),
+            val lastInTurn = state.rows.lastOrNull { row -> row.turnId == turnId }
+            val extendsCurrentSegment =
+                !state.segmentBoundary && lastInTurn is TranscriptAssistantRow
+            val rows = if (extendsCurrentSegment) {
+                updateLastMatching(
+                    rows = state.rows,
+                    match = { row -> row is TranscriptAssistantRow && row.turnId == turnId },
+                    update = { row ->
+                        (row as TranscriptAssistantRow).copy(text = row.text + parsed.text)
+                    },
                 )
             } else {
-                withLiveRunning(
-                    state.copy(
-                        rows = updateLastMatching(
-                            rows = state.rows,
-                            match = { row -> row is TranscriptAssistantRow && row.turnId == turnId },
-                            update = { row ->
-                                (row as TranscriptAssistantRow).copy(text = row.text + parsed.text)
-                            },
-                        ),
-                    ),
-                )
+                state.rows + TranscriptAssistantRow(turnId = turnId, text = parsed.text)
             }
+            withLiveRunning(state.copy(rows = rows, segmentBoundary = false))
         }
         is ParsedAcpUpdate.ToolCall -> withLiveRunning(
             state.copy(
@@ -177,7 +169,10 @@ fun applyCancelled(state: AcpTranscriptState): AcpTranscriptState =
     state.copy(sessionState = SessionState.Idle)
 
 fun applyPermissionRequested(state: AcpTranscriptState): AcpTranscriptState =
-    state.copy(sessionState = SessionState.AwaitingPermission)
+    state.copy(
+        sessionState = SessionState.AwaitingPermission,
+        segmentBoundary = true,
+    )
 
 fun applyPermissionResolved(state: AcpTranscriptState): AcpTranscriptState =
     state.copy(sessionState = SessionState.Running)
