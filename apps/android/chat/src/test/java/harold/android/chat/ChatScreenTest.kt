@@ -1278,7 +1278,7 @@ class ChatScreenTest {
     }
 
     @Test
-    fun transcriptQuestionRowShowsAnswersWithoutExpanding() {
+    fun transcriptQuestionRowExpandsMultipleAnswers() {
         val row = harold.android.live.TranscriptQuestionRow(
             turnId = "turn_01",
             requestId = "req_01",
@@ -1297,6 +1297,35 @@ class ChatScreenTest {
 
         composeTestRule.onNodeWithTag("transcript_question_summary", useUnmergedTree = true)
             .assertTextEquals("Blue · Large")
+        composeTestRule.onNodeWithTag("transcript_question_toggle", useUnmergedTree = true)
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithTag("transcript_question").performClick()
+
+        composeTestRule.onNodeWithTag("transcript_question_answer_0", useUnmergedTree = true)
+            .assertTextEquals("Color: Blue")
+        composeTestRule.onNodeWithTag("transcript_question_answer_1", useUnmergedTree = true)
+            .assertTextEquals("Size: Large")
+    }
+
+    @Test
+    fun transcriptQuestionRowStaysCompactForOneAnswer() {
+        val row = harold.android.live.TranscriptQuestionRow(
+            turnId = "turn_01",
+            requestId = "req_01",
+            title = "Agent question",
+            answers = listOf("Continue" to "Yes"),
+        )
+
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                TranscriptQuestionRowView(row = row)
+            }
+        }
+
+        composeTestRule.onNodeWithTag("transcript_question_summary", useUnmergedTree = true)
+            .assertTextEquals("Yes")
+        composeTestRule.onAllNodesWithTag("transcript_question_toggle", useUnmergedTree = true)
+            .assertCountEquals(0)
         composeTestRule.onAllNodesWithTag("transcript_question_answer_0", useUnmergedTree = true)
             .assertCountEquals(0)
     }
