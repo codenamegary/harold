@@ -39,7 +39,7 @@ class ChatUiStateTest {
         )
 
         assertEquals(
-            "Session reconnecting. Prompts unlock when it is idle again.",
+            "Session reconnecting.",
             state.composerBlockedMessage,
         )
     }

@@ -38,13 +38,13 @@ fun composerBlockedMessage(sessionState: SessionState?): String? =
         SessionState.Starting ->
             "Session is starting. Wait until it is idle."
         SessionState.AwaitingPermission ->
-            "Waiting for permission. Prompts unlock when it is idle."
+            "Waiting for permission."
         SessionState.AwaitingAnswer ->
-            "Waiting for an answer. Prompts unlock when it is idle."
+            "Waiting for an answer."
         SessionState.Stopping ->
             "Session is stopping. Wait for it to finish."
         SessionState.Offline ->
-            "Session reconnecting. Prompts unlock when it is idle again."
+            "Session reconnecting."
         SessionState.Error ->
             "Session ended with an error. Start a new session to continue."
         else -> null

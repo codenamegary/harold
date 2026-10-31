@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -204,6 +203,11 @@ private fun FormSheet(
         touchedKeys = touchedKeys + key
     }
 
+    val total = questions.size
+    val currentStep = if (total == 0) 0 else state.stepIndex.coerceIn(0, total - 1)
+    val currentQuestion = if (total == 0) 0 else currentStep + 1
+    val progress = if (state.review) 1f else if (total == 0) 0f else currentQuestion.toFloat() / total
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -213,18 +217,13 @@ private fun FormSheet(
     ) {
         SheetHeader(
             agentName = agentName,
+            currentQuestion = currentQuestion,
+            totalQuestions = total,
+            progress = progress,
             onClose = onClose,
             onCancel = onCancel,
             onRawToggle = onRawToggle,
         )
-
-        request.message?.takeIf { it.isNotBlank() }?.let { message ->
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.testTag("elicitation_message"),
-            )
-        }
 
         if (state.rawExpanded) {
             Text(
@@ -280,31 +279,6 @@ private fun FormSheet(
             return@Column
         }
 
-        val total = questions.size.coerceAtLeast(1)
-        val currentStep = state.stepIndex.coerceIn(0, total - 1)
-        val progress = if (state.review) 1f else (currentStep + 1).toFloat() / total
-
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = if (state.review) {
-                    "Review your answers"
-                } else {
-                    "Question ${currentStep + 1} of $total"
-                },
-                style = MaterialTheme.typography.labelLarge,
-            )
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("elicitation_progress"),
-            )
-            StepMarkers(
-                questions = questions,
-                draft = state.draft,
-            )
-        }
-
         if (state.review && questions.size > 1) {
             ReviewAnswers(
                 questions = questions,
@@ -353,98 +327,87 @@ private fun SheetHeader(
     onClose: () -> Unit,
     onCancel: () -> Unit,
     onRawToggle: () -> Unit,
+    currentQuestion: Int = 0,
+    totalQuestions: Int = 0,
+    progress: Float = 0f,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = agentName.ifBlank { "Agent" },
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.weight(1f),
-        )
-        Box {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = agentName.ifBlank { "Agent" },
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+            if (totalQuestions > 1) {
+                Text(
+                    text = "$currentQuestion/$totalQuestions",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .padding(end = 4.dp)
+                        .testTag("elicitation_question_counter"),
+                )
+            }
+            Box {
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                        .testTag("elicitation_sheet_overflow"),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = null,
+                    )
+                }
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(text = "Cancel question") },
+                        onClick = {
+                            menuExpanded = false
+                            onCancel()
+                        },
+                        modifier = Modifier.testTag("elicitation_cancel"),
+                    )
+                    DropdownMenuItem(
+                        text = { Text(text = "Show raw request") },
+                        onClick = {
+                            menuExpanded = false
+                            onRawToggle()
+                        },
+                        modifier = Modifier.testTag("elicitation_raw"),
+                    )
+                }
+            }
             IconButton(
-                onClick = { menuExpanded = true },
+                onClick = onClose,
                 modifier = Modifier
                     .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                    .testTag("elicitation_sheet_overflow"),
+                    .testTag("elicitation_sheet_close"),
             ) {
                 Icon(
-                    imageVector = Icons.Filled.MoreVert,
-                    contentDescription = null,
-                )
-            }
-            DropdownMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false },
-            ) {
-                DropdownMenuItem(
-                    text = { Text(text = "Cancel question") },
-                    onClick = {
-                        menuExpanded = false
-                        onCancel()
-                    },
-                    modifier = Modifier.testTag("elicitation_cancel"),
-                )
-                DropdownMenuItem(
-                    text = { Text(text = "Show raw request") },
-                    onClick = {
-                        menuExpanded = false
-                        onRawToggle()
-                    },
-                    modifier = Modifier.testTag("elicitation_raw"),
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Close question",
                 )
             }
         }
-        IconButton(
-            onClick = onClose,
-            modifier = Modifier
-                .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                .testTag("elicitation_sheet_close"),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Close,
-                contentDescription = "Close question",
-            )
-        }
-    }
-}
 
-@Composable
-private fun StepMarkers(
-    questions: List<ElicitationQuestion>,
-    draft: ElicitationDraft,
-) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        questions.forEachIndexed { index, question ->
-            val invalid = !draft.isQuestionValid(question)
-            val color = if (invalid) {
-                MaterialTheme.colorScheme.error
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            }
-            Box(
+        if (totalQuestions > 1) {
+            LinearProgressIndicator(
+                progress = { progress },
                 modifier = Modifier
-                    .size(20.dp)
-                    .testTag(
-                        if (invalid) {
-                            "elicitation_step_error_$index"
-                        } else {
-                            "elicitation_step_$index"
-                        },
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = if (invalid) "!" else "${index + 1}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = color,
-                    fontWeight = if (invalid) FontWeight.Bold else FontWeight.Normal,
-                )
-            }
+                    .fillMaxWidth()
+                    .padding(top = 4.dp)
+                    .testTag("elicitation_progress"),
+            )
         }
     }
 }

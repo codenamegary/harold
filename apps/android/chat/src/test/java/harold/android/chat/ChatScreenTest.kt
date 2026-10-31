@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -947,6 +948,11 @@ class ChatScreenTest {
                             elicitationUiState = uiState.elicitationUiState.copy(showSheet = true),
                         )
                     },
+                    onElicitationNext = {
+                        uiState = uiState.copy(
+                            elicitationUiState = uiState.elicitationUiState.copy(stepIndex = 1),
+                        )
+                    },
                 )
             }
         }
@@ -960,8 +966,19 @@ class ChatScreenTest {
 
         assertTrue(opened)
         composeTestRule.onNodeWithTag("elicitation_sheet").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("elicitation_question_counter").assertTextEquals("1/2")
+        composeTestRule.onNodeWithTag("elicitation_progress").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Questions").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Question 1 of 2").assertDoesNotExist()
+        composeTestRule.onAllNodesWithTag("elicitation_step_0").assertCountEquals(0)
         composeTestRule.onNodeWithTag("elicitation_question_title")
             .assertTextContains("Favorite color", substring = true)
+
+        composeTestRule.onNodeWithTag("elicitation_next").performClick()
+
+        composeTestRule.onNodeWithTag("elicitation_question_counter").assertTextEquals("2/2")
+        composeTestRule.onNodeWithTag("elicitation_question_title")
+            .assertTextContains("Notify me", substring = true)
     }
 
     @Test
@@ -1007,6 +1024,9 @@ class ChatScreenTest {
             }
         }
 
+        composeTestRule.onAllNodesWithTag("elicitation_question_counter").assertCountEquals(0)
+        composeTestRule.onAllNodesWithTag("elicitation_progress").assertCountEquals(0)
+        composeTestRule.onNodeWithText("Questions").assertDoesNotExist()
         composeTestRule.onNodeWithTag("elicitation_submit").assertIsNotEnabled()
         composeTestRule.onNodeWithTag("elicitation_option_color_blue").performClick()
         composeTestRule.onNodeWithTag("elicitation_submit").assertIsEnabled().performClick()
@@ -1266,7 +1286,7 @@ class ChatScreenTest {
         requestId = "req_01",
         agentId = "cursor",
         sessionId = "sess_01",
-        message = "Need an answer",
+        message = "Questions",
         raw = JsonObject(emptyMap()),
         questions = questions.toList(),
     )
