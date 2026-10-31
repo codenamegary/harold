@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -24,36 +25,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import harold.android.live.TranscriptUserRow
-import harold.android.ui.theme.LightOnSurface
-import harold.android.ui.theme.LightOnSurfaceVariant
-import harold.android.ui.theme.LightPanel2
-import harold.android.ui.theme.LightSurfaceVariant
 import harold.android.ui.theme.Lime
 
 private const val CollapsedPromptLines = 8
-
-/**
- * The prompt header is deliberately inverted: a light panel in both themes so it
- * separates turns from the dark transcript, with the lime rail as the accent.
- */
-internal data class PromptPalette(
-    val background: Color,
-    val content: Color,
-    val muted: Color,
-    val chipBackground: Color,
-)
-
-internal fun promptPalette(): PromptPalette = PromptPalette(
-    background = LightPanel2,
-    content = LightOnSurface,
-    muted = LightOnSurfaceVariant,
-    chipBackground = LightSurfaceVariant,
-)
 
 /** A user prompt as the full-width header of its turn: filled panel, lime accent, selectable text. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -65,13 +43,12 @@ fun TranscriptTurnHeader(
     var expanded by rememberSaveable(row.turnId) { mutableStateOf(false) }
     var overflows by rememberSaveable(row.turnId) { mutableStateOf(false) }
     val roles = chatTextRoles()
-    val palette = promptPalette()
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(palette.background)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
             .height(IntrinsicSize.Min)
             .testTag("transcript_turn_header"),
     ) {
@@ -93,7 +70,7 @@ fun TranscriptTurnHeader(
                 Text(
                     text = row.text,
                     style = roles.prompt,
-                    color = palette.content,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = if (expanded) Int.MAX_VALUE else CollapsedPromptLines,
                     overflow = TextOverflow.Ellipsis,
                     onTextLayout = { result ->
@@ -115,7 +92,7 @@ fun TranscriptTurnHeader(
                     Text(
                         text = if (expanded) "Show less" else "Show full prompt",
                         style = roles.meta,
-                        color = palette.content,
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
@@ -132,12 +109,12 @@ fun TranscriptTurnHeader(
                         Text(
                             text = name,
                             style = roles.meta,
-                            color = palette.muted,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
-                                .background(palette.chipBackground)
+                                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                                 .testTag("attachment_chip"),
                         )
