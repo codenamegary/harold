@@ -18,6 +18,9 @@ import {
   AcpSupervisorState,
   AgentSettingsReader,
   DEFAULT_ACP_RESTART_BACKOFF_MS,
+  ElicitationCancelFn,
+  ElicitationCompleteFn,
+  RequestElicitationFn,
   RequestExtensionRpcFn,
   RequestPermissionFn,
   SessionUpdateHandler,
@@ -49,8 +52,12 @@ export type CreateSupervisorLifecycleParams = {
   onSessionUpdate?: SessionUpdateHandler
   requestPermission?: RequestPermissionFn
   requestExtensionRpc?: RequestExtensionRpcFn
+  requestElicitation?: RequestElicitationFn
+  onElicitationComplete?: ElicitationCompleteFn
+  onElicitationCancel?: ElicitationCancelFn
   logUnknownExtension?: (method: string) => void
-  onBeforeClearRuntime?: () => void
+  /** Called with the agent id before a ready runtime is cleared. */
+  onBeforeClearRuntime?: (agentId: AgentId) => void
   onSupervisorReady?: () => void | Promise<void>
   restartBackoffMs?: ReadonlyArray<number>
   sleepFn?: (ms: number) => Promise<void>
@@ -105,6 +112,9 @@ export const createSupervisorLifecycle = ({
   onSessionUpdate = () => undefined,
   requestPermission = createUnavailableRequestPermission(),
   requestExtensionRpc = createUnavailableRequestExtensionRpc(),
+  requestElicitation,
+  onElicitationComplete,
+  onElicitationCancel,
   logUnknownExtension,
   onBeforeClearRuntime = () => undefined,
   onSupervisorReady = () => undefined,
@@ -165,7 +175,7 @@ export const createSupervisorLifecycle = ({
 
     cancelRestart(agentId)
     if (runtime.state === "ready" || runtime.state === "starting") {
-      onBeforeClearRuntime()
+      onBeforeClearRuntime(agentId)
     }
     clearRuntime(agentId, { keepEntry: true })
     runtime.state = "error"
@@ -180,7 +190,7 @@ export const createSupervisorLifecycle = ({
 
     cancelRestart(agentId)
     if (runtime.state === "ready") {
-      onBeforeClearRuntime()
+      onBeforeClearRuntime(agentId)
     }
     clearRuntime(agentId)
   }
@@ -232,6 +242,9 @@ export const createSupervisorLifecycle = ({
       agentId,
       sessionBindingRegistry,
       requestPermission,
+      ...(requestElicitation === undefined ? {} : { requestElicitation }),
+      ...(onElicitationComplete === undefined ? {} : { onElicitationComplete }),
+      ...(onElicitationCancel === undefined ? {} : { onElicitationCancel }),
       logUnknownExtension,
       extensionHandlers: resolveExtensionHandlers(agentId, requestExtensionRpc),
     })
@@ -252,11 +265,18 @@ export const createSupervisorLifecycle = ({
     const authAdapter = authHooks?.resolveAdapter(agentId)
     const authContext = buildAdapterAuthContext(agentId)
 
+    const negotiatedCapabilities = authAdapter
+      ? authAdapter.clientAuthCapabilities(authContext)
+      : resolved.profile.clientCapabilities
+
     const initResult = await transport.request("initialize", {
       protocolVersion: 1,
-      clientCapabilities: authAdapter
-        ? authAdapter.clientAuthCapabilities(authContext)
-        : resolved.profile.clientCapabilities,
+      clientCapabilities: {
+        ...negotiatedCapabilities,
+        // Every agent gets elicitation, including when a provider auth adapter
+        // replaces the rest of the capability object.
+        elicitation: { form: {}, url: {} },
+      },
       clientInfo: { name: "harold", version: serverVersion },
     })
 
@@ -345,7 +365,7 @@ export const createSupervisorLifecycle = ({
       return
     }
 
-    onBeforeClearRuntime()
+    onBeforeClearRuntime(agentId)
     clearRuntime(agentId, { keepEntry: true })
     beginBoundedRestart(agentId)
   }

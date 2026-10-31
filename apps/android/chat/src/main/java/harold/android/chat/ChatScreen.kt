@@ -1,6 +1,7 @@
 package harold.android.chat
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -167,7 +168,7 @@ private fun SessionDropdownItem(
             )
             if (session.needsAttention) {
                 Text(
-                    text = "Needs permission",
+                    text = session.attentionLabel,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -228,6 +229,25 @@ fun ChatScreen(
     onDisconnectFromServer: () -> Unit = {},
     onPairAnotherHarold: () -> Unit = {},
     onSavedHarolds: () -> Unit = {},
+    agentLabel: String = "",
+    onElicitationOpen: () -> Unit = {},
+    onElicitationClose: () -> Unit = {},
+    onElicitationRawToggle: () -> Unit = {},
+    onElicitationTextChanged: (String, String) -> Unit = { _, _ -> },
+    onElicitationSingleSelected: (String, String) -> Unit = { _, _ -> },
+    onElicitationMultiToggled: (String, String) -> Unit = { _, _ -> },
+    onElicitationBooleanChanged: (String, Boolean) -> Unit = { _, _ -> },
+    onElicitationOtherToggled: (String, Boolean) -> Unit = { _, _ -> },
+    onElicitationOtherTextChanged: (String, String) -> Unit = { _, _ -> },
+    onElicitationNext: () -> Unit = {},
+    onElicitationBack: () -> Unit = {},
+    onElicitationEditStep: (Int) -> Unit = {},
+    onElicitationSubmit: () -> Unit = {},
+    onElicitationDecline: () -> Unit = {},
+    onElicitationCancel: () -> Unit = {},
+    onElicitationUrlAccepted: () -> Unit = {},
+    onElicitationUrlOpenFailed: (String) -> Unit = {},
+    onElicitationDismissWaitingUrl: (String) -> Unit = {},
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     var disconnectConfirmVisible by remember { mutableStateOf(false) }
@@ -258,6 +278,8 @@ fun ChatScreen(
     val composerSelection = composerState.selection
     val selected = uiState.selectedSession
     val sessionLabel = selected?.name ?: "Select session"
+    val agentName = selected?.agentLabel?.ifBlank { selected.agentId }
+        ?: agentLabel.ifBlank { "Agent" }
     val hasSelectedSession = selected != null
     val context = LocalContext.current
     val sessionSelectorContentDescription = stringResource(
@@ -298,6 +320,25 @@ fun ChatScreen(
             Uri.fromParts("package", context.packageName, null),
         )
         context.startActivity(intent)
+    }
+
+    /**
+     * Opens a URL prompt in the browser. The accept reply is sent only after
+     * the Intent resolves, so a device with no browser never acknowledges a
+     * link the user could not open.
+     */
+    fun openElicitationUrl(url: String, acceptOnSuccess: Boolean) {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        try {
+            context.startActivity(intent)
+            if (acceptOnSuccess) {
+                onElicitationUrlAccepted()
+            }
+        } catch (_: ActivityNotFoundException) {
+            onElicitationUrlOpenFailed("No browser available")
+        } catch (_: Exception) {
+            onElicitationUrlOpenFailed("No browser available")
+        }
     }
 
     fun requestRecordAudioPermission() {
@@ -784,6 +825,7 @@ fun ChatScreen(
                             isRunning = uiState.showProgress || uiState.composerSubmitting,
                             showWelcome = uiState.showEmptyWelcome,
                             hasPendingPermission = uiState.activePermissionRequest != null,
+                            hasPendingQuestion = uiState.activeElicitation != null,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -845,6 +887,18 @@ fun ChatScreen(
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                 }
+
+                ElicitationPanel(
+                    uiState = uiState,
+                    agentLabel = agentName,
+                    onAnswer = onElicitationOpen,
+                    onOpenWaitingUrl = { url ->
+                        openElicitationUrl(url = url, acceptOnSuccess = false)
+                    },
+                    onDismissWaitingUrl = onElicitationDismissWaitingUrl,
+                    onCancelRequest = onElicitationCancel,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
 
                 if (uiState.extensionUiState.request != null) {
                     ExtensionPanel(
@@ -923,6 +977,31 @@ fun ChatScreen(
             }
         }
     }
+
+    ElicitationSheet(
+        state = uiState.elicitationUiState,
+        request = uiState.activeElicitation,
+        agentName = agentName,
+        onClose = onElicitationClose,
+        onRawToggle = onElicitationRawToggle,
+        onTextChanged = onElicitationTextChanged,
+        onSingleSelected = onElicitationSingleSelected,
+        onMultiToggled = onElicitationMultiToggled,
+        onBooleanChanged = onElicitationBooleanChanged,
+        onOtherToggled = onElicitationOtherToggled,
+        onOtherTextChanged = onElicitationOtherTextChanged,
+        onBack = onElicitationBack,
+        onNext = onElicitationNext,
+        onEditStep = onElicitationEditStep,
+        onSubmit = onElicitationSubmit,
+        onDecline = onElicitationDecline,
+        onCancel = onElicitationCancel,
+        onOpenUrl = {
+            (uiState.activeElicitation as? harold.android.live.Elicitation.Url)?.let { request ->
+                openElicitationUrl(url = request.url, acceptOnSuccess = true)
+            }
+        },
+    )
 
     VoiceDictationOverlay(
         state = uiState.voiceDictation,

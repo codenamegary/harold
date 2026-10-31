@@ -26,6 +26,7 @@ export type DeleteAcpSessionDeps = Readonly<{
   ensureSupervisorReady: EnsureSupervisorReady
   advertisesSessionClose: AdvertisesSessionClose
   closeAcpSession: CloseAcpSession
+  closeSession?: (input: DeleteAcpSessionInput) => void
 }>
 
 export type DeleteAcpSession = (input: DeleteAcpSessionInput) => Promise<DeleteAcpSessionResult>
@@ -33,6 +34,7 @@ export type DeleteAcpSession = (input: DeleteAcpSessionInput) => Promise<DeleteA
 export const makeDeleteAcpSession =
   (deps: DeleteAcpSessionDeps): DeleteAcpSession =>
   async (input) => {
+    deps.closeSession?.(input)
     deps.archiveAcpSession({
       agentId: input.agentId,
       sessionId: input.sessionId,

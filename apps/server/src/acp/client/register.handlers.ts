@@ -1,5 +1,11 @@
 import { AgentId } from "contracts/http/agent-settings"
 import { RequestExtensionRpcFn } from "../supervisor/models"
+import {
+  createAcpElicitationHandler,
+  readCancelledRequestId,
+  readElicitationCompleteId,
+  RequestElicitationFn,
+} from "./handlers/elicitation"
 import { createAcpFsHandlers } from "./handlers/fs"
 import { createAcpPermissionHandler } from "./handlers/permission"
 import { createAcpTerminalHandlers } from "./handlers/terminal"
@@ -17,6 +23,9 @@ export type RegisterAcpClientHandlersParams = {
     sessionId: string
     params: unknown
   }) => Promise<unknown>
+  requestElicitation?: RequestElicitationFn
+  onElicitationComplete?: (input: { agentId: AgentId; elicitationId: string }) => void
+  onElicitationCancel?: (input: { agentId: AgentId; jsonRpcId: string | number }) => void
   extensionHandlers: ExtensionHandlers
   logUnknownExtension?: (method: string) => void
 }
@@ -32,6 +41,9 @@ export const registerAcpClientHandlers = ({
   agentId,
   sessionBindingRegistry,
   requestPermission,
+  requestElicitation = createUnavailableRequestElicitation(),
+  onElicitationComplete = () => undefined,
+  onElicitationCancel = () => undefined,
   extensionHandlers,
   logUnknownExtension = defaultLogUnknownExtension,
 }: RegisterAcpClientHandlersParams) => {
@@ -40,6 +52,11 @@ export const registerAcpClientHandlers = ({
   const permissionHandlers = createAcpPermissionHandler({
     agentId,
     requestPermission,
+  })
+  const elicitationHandler = createAcpElicitationHandler({
+    agentId,
+    sessionBindingRegistry,
+    requestElicitation,
   })
 
   const coreHandlers: Record<string, AcpRequestHandler> = {
@@ -77,6 +94,31 @@ export const registerAcpClientHandlers = ({
     })
   })
 
+  transport.onRequest("elicitation/create", async ({ id, params }) => {
+    await elicitationHandler.handleElicitationRequest({
+      jsonRpcId: id,
+      params,
+      respond: (result) => transport.respond(id, result),
+      respondError: (code, message) => transport.respondError(id, code, message),
+    })
+  })
+
+  transport.onNotification("elicitation/complete", (params) => {
+    const elicitationId = readElicitationCompleteId(params)
+    if (elicitationId === undefined) {
+      return
+    }
+    onElicitationComplete({ agentId, elicitationId })
+  })
+
+  transport.onNotification("$/cancel_request", (params) => {
+    const jsonRpcId = readCancelledRequestId(params)
+    if (jsonRpcId === undefined) {
+      return
+    }
+    onElicitationCancel({ agentId, jsonRpcId })
+  })
+
   Object.entries(extensionHandlers).forEach(([method, handler]) => {
     registerHandler(method, handler)
   })
@@ -112,6 +154,10 @@ export const createUnavailableRequestPermission =
   (): RegisterAcpClientHandlersParams["requestPermission"] => async () => {
     throw new Error("permission service unavailable")
   }
+
+export const createUnavailableRequestElicitation = (): RequestElicitationFn => async () => {
+  throw new Error("elicitation service unavailable")
+}
 
 export const createUnavailableRequestExtensionRpc = (): RequestExtensionRpcFn => async () => {
   throw new Error("extension request unavailable")

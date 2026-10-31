@@ -5,16 +5,19 @@ import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import harold.android.chat.composer.ComposerConfigActions
 import harold.android.chat.composer.ComposerConfigUi
@@ -29,12 +32,19 @@ import harold.android.contracts.PermissionStatus
 import harold.android.contracts.SelectOption
 import harold.android.contracts.SessionState
 import harold.android.live.AcpTranscriptState
+import harold.android.live.Elicitation
+import harold.android.live.ElicitationKind
+import harold.android.live.ElicitationOption
+import harold.android.live.ElicitationQuestion
 import harold.android.live.TranscriptAssistantRow
 import harold.android.live.TranscriptUserRow
+import harold.android.live.toContent
 import harold.android.ui.promptinput.applyEdit
 import harold.android.ui.theme.HaroldTheme
 import harold.android.voice.VoiceDictationPresentation
 import harold.android.voice.VoiceDictationUiState
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -898,4 +908,381 @@ class ChatScreenTest {
         composeTestRule.onAllNodesWithTag("command_list_panel").assertCountEquals(0)
         composeTestRule.onNodeWithText("/plan make it fast").assertIsDisplayed()
     }
+
+    @Test
+    fun elicitationCardShowsFirstQuestionAndOpensSheet() {
+        var opened = false
+        val request = form(
+            question(
+                key = "color",
+                title = "Favorite color",
+                kind = ElicitationKind.SingleSelect(
+                    listOf(
+                        ElicitationOption("red", "Red"),
+                        ElicitationOption("blue", "Blue"),
+                    ),
+                ),
+                required = true,
+            ),
+            question(
+                key = "notify",
+                title = "Notify me",
+                kind = ElicitationKind.BooleanField,
+            ),
+        )
+        var uiState by mutableStateOf(
+            ChatUiState(
+                selectedSession = elicitationSession(),
+                pendingElicitations = listOf(request),
+            ),
+        )
+
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = uiState,
+                    onElicitationOpen = {
+                        opened = true
+                        uiState = uiState.copy(
+                            elicitationUiState = uiState.elicitationUiState.copy(showSheet = true),
+                        )
+                    },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("elicitation_card").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("elicitation_card_title")
+            .assertTextContains("Favorite color", substring = true)
+        composeTestRule.onNodeWithTag("elicitation_card_more")
+            .assertTextContains("+1 more", substring = true)
+        composeTestRule.onNodeWithTag("elicitation_answer_button").performClick()
+
+        assertTrue(opened)
+        composeTestRule.onNodeWithTag("elicitation_sheet").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("elicitation_question_title")
+            .assertTextContains("Favorite color", substring = true)
+    }
+
+    @Test
+    fun singleSelectSubmitStaysDisabledUntilRequiredAnswerExists() {
+        val request = form(
+            question(
+                key = "color",
+                title = "Favorite color",
+                kind = ElicitationKind.SingleSelect(
+                    listOf(
+                        ElicitationOption("red", "Red"),
+                        ElicitationOption("blue", "Blue"),
+                    ),
+                ),
+                required = true,
+            ),
+        )
+        var submitted = false
+        var uiState by mutableStateOf(
+            ChatUiState(
+                selectedSession = elicitationSession(),
+                pendingElicitations = listOf(request),
+                elicitationUiState = ElicitationUiState(
+                    requestId = request.requestId,
+                    showSheet = true,
+                ),
+            ),
+        )
+
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = uiState,
+                    onElicitationSingleSelected = { key, value ->
+                        uiState = uiState.copy(
+                            elicitationUiState = uiState.elicitationUiState.copy(
+                                draft = uiState.elicitationUiState.draft.withSingle(key, value),
+                            ),
+                        )
+                    },
+                    onElicitationSubmit = { submitted = true },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("elicitation_submit").assertIsNotEnabled()
+        composeTestRule.onNodeWithTag("elicitation_option_color_blue").performClick()
+        composeTestRule.onNodeWithTag("elicitation_submit").assertIsEnabled().performClick()
+
+        assertTrue(submitted)
+        assertEquals(
+            "blue",
+            uiState.elicitationUiState.draft.singleFor("color"),
+        )
+    }
+
+    @Test
+    fun multiSelectOtherSendsBaseValuesAndCustomText() {
+        val request = form(
+            question(
+                key = "choices",
+                title = "Pick two",
+                kind = ElicitationKind.MultiSelect(
+                    options = listOf(
+                        ElicitationOption("a", "Option A"),
+                        ElicitationOption("b", "Option B"),
+                    ),
+                    minItems = 2,
+                ),
+                required = true,
+                otherKey = "choices_custom",
+            ),
+        )
+        var submitted = false
+        var uiState by mutableStateOf(
+            ChatUiState(
+                selectedSession = elicitationSession(),
+                pendingElicitations = listOf(request),
+                elicitationUiState = ElicitationUiState(
+                    requestId = request.requestId,
+                    showSheet = true,
+                ),
+            ),
+        )
+
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = uiState,
+                    onElicitationMultiToggled = { key, value ->
+                        uiState = uiState.copy(
+                            elicitationUiState = uiState.elicitationUiState.copy(
+                                draft = uiState.elicitationUiState.draft.toggleMulti(key, value),
+                            ),
+                        )
+                    },
+                    onElicitationOtherToggled = { key, selected ->
+                        uiState = uiState.copy(
+                            elicitationUiState = uiState.elicitationUiState.copy(
+                                draft = uiState.elicitationUiState.draft
+                                    .withOtherSelected(key, selected),
+                            ),
+                        )
+                    },
+                    onElicitationOtherTextChanged = { key, text ->
+                        uiState = uiState.copy(
+                            elicitationUiState = uiState.elicitationUiState.copy(
+                                draft = uiState.elicitationUiState.draft.withOtherText(key, text),
+                            ),
+                        )
+                    },
+                    onElicitationSubmit = { submitted = true },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("elicitation_option_choices_a").performClick()
+        composeTestRule.onNodeWithTag("elicitation_other_toggle_choices").performClick()
+        composeTestRule.onNodeWithTag("elicitation_submit").assertIsNotEnabled()
+        composeTestRule.onNodeWithTag("elicitation_other_text_choices")
+            .performTextInput("Custom")
+        composeTestRule.onNodeWithTag("elicitation_submit")
+            .assertIsEnabled()
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeTestRule.waitForIdle()
+
+        assertTrue(
+            "draft=${uiState.elicitationUiState.draft}",
+            submitted,
+        )
+        assertEquals(
+            """{"choices":["a"],"choices_custom":"Custom"}""",
+            uiState.elicitationUiState.draft.toContent(listOf(request.questions.first())).toString(),
+        )
+    }
+
+    @Test
+    fun closingAndReopeningTheSheetKeepsTheDraft() {
+        val request = form(
+            question(
+                key = "note",
+                title = "Add a note",
+                kind = ElicitationKind.Text(),
+                required = false,
+            ),
+        )
+        var uiState by mutableStateOf(
+            ChatUiState(
+                selectedSession = elicitationSession(),
+                pendingElicitations = listOf(request),
+                elicitationUiState = ElicitationUiState(
+                    requestId = request.requestId,
+                    showSheet = true,
+                    draft = harold.android.live.ElicitationDraft().withText("note", "Existing"),
+                ),
+            ),
+        )
+
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = uiState,
+                    onElicitationOpen = {
+                        uiState = uiState.copy(
+                            elicitationUiState = uiState.elicitationUiState.copy(showSheet = true),
+                        )
+                    },
+                    onElicitationClose = {
+                        uiState = uiState.copy(
+                            elicitationUiState = uiState.elicitationUiState.copy(showSheet = false),
+                        )
+                    },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("elicitation_sheet_close").performClick()
+        composeTestRule.onAllNodesWithTag("elicitation_sheet").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("elicitation_answer_button").performClick()
+
+        composeTestRule.onNodeWithTag("elicitation_sheet").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("elicitation_field_note")
+            .assertTextContains("Existing", substring = true)
+    }
+
+    @Test
+    fun urlSheetShowsFullUrlHostAndInsecureWarning() {
+        val request = Elicitation.Url(
+            requestId = "req_url",
+            agentId = "cursor",
+            sessionId = "sess_01",
+            message = "Sign in to continue",
+            raw = JsonObject(emptyMap()),
+            elicitationId = "elicit_01",
+            url = "http://example.com/login?code=1",
+            host = "example.com",
+        )
+        var opened = false
+
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ElicitationSheet(
+                    state = ElicitationUiState(requestId = request.requestId, showSheet = true),
+                    request = request,
+                    agentName = "Cursor",
+                    onClose = {},
+                    onRawToggle = {},
+                    onTextChanged = { _, _ -> },
+                    onSingleSelected = { _, _ -> },
+                    onMultiToggled = { _, _ -> },
+                    onBooleanChanged = { _, _ -> },
+                    onOtherToggled = { _, _ -> },
+                    onOtherTextChanged = { _, _ -> },
+                    onBack = {},
+                    onNext = {},
+                    onEditStep = {},
+                    onSubmit = {},
+                    onDecline = {},
+                    onCancel = {},
+                    onOpenUrl = { opened = true },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("elicitation_url").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("elicitation_url_full")
+            .assertTextContains("http://example.com/login?code=1", substring = true)
+        composeTestRule.onNodeWithTag("elicitation_url_host")
+            .assertTextContains("example.com", substring = true)
+        composeTestRule.onNodeWithText("This link is not HTTPS.").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("elicitation_open_link").performClick()
+
+        assertTrue(opened)
+    }
+
+    @Test
+    fun fallbackCardRevealsRawRequestOnlyAfterExpanding() {
+        val request = Elicitation.Unsupported(
+            requestId = "req_unknown",
+            agentId = "cursor",
+            sessionId = "sess_01",
+            message = null,
+            raw = JsonObject(mapOf("mode" to JsonPrimitive("mystery"))),
+            reason = "unknown mode",
+        )
+
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ElicitationFallbackCard(elicitation = request, onCancel = {})
+            }
+        }
+
+        composeTestRule.onNodeWithTag("elicitation_fallback").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag("elicitation_fallback_raw").assertCountEquals(0)
+        composeTestRule.onNodeWithTag("elicitation_fallback_expand").performClick()
+
+        composeTestRule.onNodeWithTag("elicitation_fallback_raw")
+            .assertTextContains("mystery", substring = true)
+    }
+
+    @Test
+    fun transcriptQuestionRowSummarizesAndExpandsAnswers() {
+        val row = harold.android.live.TranscriptQuestionRow(
+            turnId = "turn_01",
+            requestId = "req_01",
+            title = "Agent question",
+            answers = listOf(
+                "Color" to "Blue",
+                "Size" to "Large",
+            ),
+        )
+
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                TranscriptQuestionRowView(row = row)
+            }
+        }
+
+        composeTestRule.onNodeWithTag("transcript_question_summary", useUnmergedTree = true)
+            .assertTextContains("Blue", substring = true)
+        composeTestRule.onAllNodesWithTag("transcript_question_answer_0", useUnmergedTree = true)
+            .assertCountEquals(0)
+        composeTestRule.onNodeWithTag("transcript_question").performClick()
+
+        composeTestRule.onNodeWithTag("transcript_question_answer_0", useUnmergedTree = true)
+            .assertTextContains("Color: Blue", substring = true)
+    }
+
+    private fun elicitationSession() = SessionRow(
+        sessionId = "sess_01",
+        name = "Alpha",
+        cwd = "/tmp/harold",
+        workspaceId = "ws_01",
+        workspaceLabel = "harold",
+        agentId = "cursor",
+        agentLabel = "Cursor",
+        state = SessionState.Idle,
+        updatedAt = "2026-08-05T01:00:00.000Z",
+    )
+
+    private fun form(vararg questions: ElicitationQuestion) = Elicitation.Form(
+        requestId = "req_01",
+        agentId = "cursor",
+        sessionId = "sess_01",
+        message = "Need an answer",
+        raw = JsonObject(emptyMap()),
+        questions = questions.toList(),
+    )
+
+    private fun question(
+        key: String,
+        title: String,
+        kind: ElicitationKind,
+        required: Boolean = false,
+        otherKey: String? = null,
+    ) = ElicitationQuestion(
+        key = key,
+        title = title,
+        description = null,
+        required = required,
+        kind = kind,
+        otherKey = otherKey,
+    )
 }

@@ -85,6 +85,17 @@ export type RequestExtensionRpcFn = (input: {
   params: unknown
 }) => Promise<unknown>
 
+export type RequestElicitationFn = (input: {
+  agentId: AgentId
+  sessionId: string
+  params: unknown
+  jsonRpcId: string | number
+}) => Promise<unknown>
+
+export type ElicitationCompleteFn = (input: { agentId: AgentId; elicitationId: string }) => void
+
+export type ElicitationCancelFn = (input: { agentId: AgentId; jsonRpcId: string | number }) => void
+
 export type LiveWorkspaceSession = {
   readonly acpSessionId: string
   readonly agentId: AgentId

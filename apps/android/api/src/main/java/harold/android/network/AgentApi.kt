@@ -175,4 +175,13 @@ interface SessionCommandApi {
         requestId: String,
         result: JsonElement,
     ): Result<Unit>
+
+    /** Posts the raw ACP elicitation result; the server forwards it untouched. */
+    suspend fun replyElicitation(
+        serverOrigin: String,
+        requestId: String,
+        result: JsonElement,
+    ): Result<Unit> = Result.failure(
+        UnsupportedOperationException("elicitation replies are not supported"),
+    )
 }

@@ -1,6 +1,7 @@
 import { readFakeAcpConfig } from "./config"
 import {
   completePromptIfActive,
+  ELICITATION_REQUEST_ID,
   handleJsonRpcMessage,
   shouldEmitDeferredNotification,
 } from "./handlers"
@@ -25,6 +26,7 @@ export const runFakeAcpStdio = (
   const configState = createFakeAcpConfigState(config.configOptions)
   const buffer: string[] = [""]
   let heldPromptSessionId: string | undefined
+  let heldElicitationId: string | undefined
 
   const scheduleDeferredNotifications = (
     sessionId: string,
@@ -69,7 +71,25 @@ export const runFakeAcpStdio = (
     }
 
     if ("id" in message && !("method" in message)) {
-      if (message.id === PERMISSION_REQUEST_ID && heldPromptSessionId !== undefined) {
+      if (message.id === ELICITATION_REQUEST_ID) {
+        const result = "result" in message ? message.result : undefined
+        const action = (result as { action?: unknown } | undefined)?.action
+        if (action === "accept" && heldElicitationId !== undefined) {
+          output.write(
+            serializeJsonRpcMessage({
+              jsonrpc: "2.0",
+              method: "elicitation/complete",
+              params: { elicitationId: heldElicitationId },
+            }),
+          )
+        }
+        heldElicitationId = undefined
+      }
+
+      if (
+        (message.id === PERMISSION_REQUEST_ID || message.id === ELICITATION_REQUEST_ID) &&
+        heldPromptSessionId !== undefined
+      ) {
         const response = completePromptIfActive(promptState, heldPromptSessionId)
         heldPromptSessionId = undefined
         if (response !== undefined) {
@@ -96,6 +116,14 @@ export const runFakeAcpStdio = (
       output.write(serializeJsonRpcMessage(handled.response))
     }
     handled.outbound.forEach((outboundMessage) => {
+      if (outboundMessage.method === "elicitation/create") {
+        const params = outboundMessage.params as
+          | { mode?: string; elicitationId?: string }
+          | undefined
+        if (params?.mode === "url" && params.elicitationId !== undefined) {
+          heldElicitationId = params.elicitationId
+        }
+      }
       output.write(serializeJsonRpcMessage(outboundMessage))
     })
 
@@ -103,16 +131,20 @@ export const runFakeAcpStdio = (
       request.method === "session/prompt"
         ? (request.params as { sessionId?: string } | undefined)?.sessionId
         : undefined
-    if (promptSessionId !== undefined && handled.holdPromptResponse === true && handled.outbound.length > 0) {
+    if (
+      promptSessionId !== undefined &&
+      handled.holdPromptResponse === true &&
+      handled.outbound.length > 0
+    ) {
       heldPromptSessionId = promptSessionId
     }
     if (promptSessionId !== undefined && handled.deferredNotifications.length > 0) {
       scheduleDeferredNotifications(promptSessionId, handled.deferredNotifications)
     }
     if (
-      promptSessionId !== undefined
-      && handled.holdPromptResponse === true
-      && handled.promptCompletionDelayMs !== undefined
+      promptSessionId !== undefined &&
+      handled.holdPromptResponse === true &&
+      handled.promptCompletionDelayMs !== undefined
     ) {
       schedulePromptCompletion(promptSessionId, handled.promptCompletionDelayMs)
     }

@@ -177,6 +177,41 @@ fun applyPermissionRequested(state: AcpTranscriptState): AcpTranscriptState =
 fun applyPermissionResolved(state: AcpTranscriptState): AcpTranscriptState =
     state.copy(sessionState = SessionState.Running)
 
+fun applyElicitationRequested(state: AcpTranscriptState): AcpTranscriptState =
+    state.copy(
+        sessionState = SessionState.AwaitingAnswer,
+        segmentBoundary = true,
+    )
+
+fun applyElicitationResolved(
+    state: AcpTranscriptState,
+    hasPending: Boolean,
+): AcpTranscriptState =
+    if (hasPending) {
+        state.copy(sessionState = SessionState.AwaitingAnswer)
+    } else {
+        state.copy(sessionState = SessionState.Running)
+    }
+
+/** Adds a resolved question row once per request. */
+fun appendTranscriptQuestion(
+    state: AcpTranscriptState,
+    requestId: String,
+    title: String,
+    answers: List<Pair<String, String>>,
+): AcpTranscriptState {
+    if (state.rows.any { row -> row is TranscriptQuestionRow && row.requestId == requestId }) {
+        return state
+    }
+    val row = TranscriptQuestionRow(
+        turnId = state.currentTurnId,
+        requestId = requestId,
+        title = title,
+        answers = answers,
+    )
+    return state.copy(rows = state.rows + row)
+}
+
 fun applyStreamError(state: AcpTranscriptState): AcpTranscriptState =
     state.copy(sessionState = SessionState.Error)
 
@@ -191,7 +226,8 @@ fun applySubscribed(state: AcpTranscriptState): AcpTranscriptState {
     val nextState =
         if (
             state.sessionState == SessionState.Running ||
-            state.sessionState == SessionState.AwaitingPermission
+            state.sessionState == SessionState.AwaitingPermission ||
+            state.sessionState == SessionState.AwaitingAnswer
         ) {
             state.sessionState
         } else {

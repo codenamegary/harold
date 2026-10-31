@@ -79,6 +79,13 @@ interface SessionOwner {
     suspend fun replyExtension(requestId: String, result: JsonElement): Result<Unit>
 
     /**
+     * Posts a raw ACP elicitation result. The app never resolves the request
+     * locally: it waits for `elicitation_resolved` from the server.
+     */
+    suspend fun replyElicitation(requestId: String, result: JsonElement): Result<Unit> =
+        Result.failure(UnsupportedOperationException("elicitation replies are not supported"))
+
+    /**
      * Seeds a session's config selectors from data the client already has (the
      * create response) so they render before the stream delivers a frame.
      */

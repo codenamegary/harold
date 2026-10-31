@@ -7,6 +7,7 @@ import harold.android.live.TranscriptUserRow
 
 enum class ActivityPhase {
     WaitingForPermission,
+    WaitingForAnswer,
     UsingTools,
     Replying,
     Thinking,
@@ -23,15 +24,30 @@ fun deriveActivityStatus(
     rows: List<TranscriptRow>,
     isRunning: Boolean,
     hasPendingPermission: Boolean,
+    hasPendingQuestion: Boolean = false,
 ): ActivityStatus? {
     if (!isRunning) {
         return null
+    }
+
+    if (hasPendingPermission && hasPendingQuestion) {
+        return ActivityStatus(
+            phase = ActivityPhase.WaitingForAnswer,
+            label = "Waiting for you",
+        )
     }
 
     if (hasPendingPermission) {
         return ActivityStatus(
             phase = ActivityPhase.WaitingForPermission,
             label = "Waiting for permission",
+        )
+    }
+
+    if (hasPendingQuestion) {
+        return ActivityStatus(
+            phase = ActivityPhase.WaitingForAnswer,
+            label = "Waiting for answer",
         )
     }
 

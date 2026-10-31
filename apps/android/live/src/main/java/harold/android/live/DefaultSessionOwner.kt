@@ -41,6 +41,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * One event stream, one unbounded inbox, one pump. Chat never sees a raw
@@ -84,6 +86,9 @@ class DefaultSessionOwner @Inject constructor(
     private var watchSessionId: String? = null
     private var pendingPrompt: String? = null
     private var turnSerial: Int = 0
+
+    /** Last known elicitation per requestId, kept to build resolved summaries. */
+    private val elicitationCatalog = mutableMapOf<String, Elicitation>()
 
     /** Last cursor applied to the snapshot, sent back as SSE Last-Event-ID. */
     @Volatile
@@ -185,6 +190,7 @@ class DefaultSessionOwner @Inject constructor(
             watchSessionId = null
             commandsCatalog.clear()
             configCatalog.clear()
+            elicitationCatalog.clear()
             _sessionTitles.value = emptyMap()
             _snapshot.value = SessionSnapshot()
         }
@@ -205,6 +211,7 @@ class DefaultSessionOwner @Inject constructor(
             backgroundFrameMark = null
             watchAgentId = agentId
             watchSessionId = normalizedSession
+            elicitationCatalog.clear()
             _snapshot.value = emptyLiveSnapshotLocked(reconnecting = false)
         }
         watchChanges.trySend(Unit)
@@ -330,6 +337,16 @@ class DefaultSessionOwner @Inject constructor(
             }
         }
         return commandApi.replyExtension(origin, requestId, result)
+    }
+
+    override suspend fun replyElicitation(requestId: String, result: JsonElement): Result<Unit> {
+        val origin = synchronized(lock) {
+            serverOrigin ?: return Result.failure(
+                IllegalStateException("Not connected to a server"),
+            )
+        }
+        // The server event settles the request; the app never resolves it locally.
+        return commandApi.replyElicitation(origin, requestId, result)
     }
 
     override fun rememberConfig(agentId: AgentId, sessionId: String, configOptions: List<ConfigOption>) {
@@ -512,6 +529,7 @@ class DefaultSessionOwner @Inject constructor(
                 if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
                     return
                 }
+                elicitationCatalog.clear()
                 _snapshot.value = emptyLiveSnapshotLocked(reconnecting = true)
             }
 
@@ -614,6 +632,78 @@ class DefaultSessionOwner @Inject constructor(
                     current.copy(
                         pendingPermission = parsed,
                         transcript = applyPermissionRequested(current.transcript),
+                    )
+                }
+            }
+
+            is SessionStreamServerMessage.ElicitationRequest -> {
+                if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
+                    return
+                }
+                val parsed = parseElicitation(
+                    requestId = message.requestId,
+                    agentId = message.agentId,
+                    sessionId = message.sessionId,
+                    params = message.params,
+                )
+                elicitationCatalog[message.requestId] = parsed
+                _snapshot.update { current ->
+                    val pending = current.pendingElicitations
+                        .filterNot { item -> item.requestId == message.requestId } + parsed
+                    current.copy(
+                        pendingElicitations = pending,
+                        transcript = applyElicitationRequested(current.transcript),
+                        reconnecting = false,
+                    )
+                }
+            }
+
+            is SessionStreamServerMessage.ElicitationResolved -> {
+                if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
+                    return
+                }
+                val resolved = elicitationCatalog[message.requestId]
+                val accepted = (message.result as? JsonObject)
+                    ?.get("action") == JsonPrimitive("accept")
+                _snapshot.update { current ->
+                    val pending = current.pendingElicitations
+                        .filterNot { item -> item.requestId == message.requestId }
+                    var transcript = applyElicitationResolved(
+                        current.transcript,
+                        hasPending = pending.isNotEmpty(),
+                    )
+                    if (accepted && resolved is Elicitation.Form) {
+                        val content = (message.result as? JsonObject)
+                            ?.get("content")
+                        transcript = appendTranscriptQuestion(
+                            state = transcript,
+                            requestId = resolved.requestId,
+                            title = resolved.questions.firstOrNull()?.title ?: "Question",
+                            answers = elicitationAnswerSummary(resolved.questions, content),
+                        )
+                    }
+                    val waiting = if (accepted && resolved is Elicitation.Url) {
+                        current.urlElicitationsAwaitingCompletion
+                            .filterNot { item -> item.requestId == resolved.requestId } + resolved
+                    } else {
+                        current.urlElicitationsAwaitingCompletion
+                    }
+                    current.copy(
+                        pendingElicitations = pending,
+                        transcript = transcript,
+                        urlElicitationsAwaitingCompletion = waiting,
+                    )
+                }
+            }
+
+            is SessionStreamServerMessage.ElicitationCompleted -> {
+                if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
+                    return
+                }
+                _snapshot.update { current ->
+                    current.copy(
+                        completedElicitationIds =
+                            current.completedElicitationIds + message.elicitationId,
                     )
                 }
             }

@@ -10,6 +10,10 @@ export const cursorAgentProfileOverride: AgentProfileOverride = {
       writeTextFile: true,
     },
     terminal: true,
+    elicitation: {
+      form: {},
+      url: {},
+    },
     _meta: {
       parameterizedModelPicker: true,
     },

@@ -210,5 +210,28 @@ class SessionCommandApiTest {
         assertTrue(result.isSuccess)
     }
 
+    @Test
+    fun replyElicitationPostsTheRawResult() = runTest {
+        server.enqueue(MockResponse().setResponseCode(204))
+        val result = kotlinx.serialization.json.buildJsonObject {
+            put("action", kotlinx.serialization.json.JsonPrimitive("cancel"))
+        }
+
+        val reply = commands.replyElicitation(
+            serverOrigin = origin(),
+            requestId = "elicit_01",
+            result = result,
+        )
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/v1/elicitations/elicit_01/replies", recorded.path)
+        assertEquals(
+            """{"result":{"action":"cancel"}}""",
+            recorded.body.readUtf8(),
+        )
+        assertTrue(reply.isSuccess)
+    }
+
     private fun origin(): String = server.url("/").toString()
 }

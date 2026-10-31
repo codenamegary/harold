@@ -155,3 +155,19 @@ export const buildExtensionConflictProblem = (detail = "Extension request alread
     status: 409,
     detail,
   })
+
+export const buildElicitationNotFoundProblem = (detail = "Unknown elicitation request") =>
+  NotFoundProblemSchema.parse({
+    type: PROBLEM_TYPES.notFound,
+    title: "Elicitation request not found",
+    status: 404,
+    detail,
+  })
+
+export const buildElicitationConflictProblem = (detail = "Elicitation request already resolved") =>
+  ConflictProblemSchema.parse({
+    type: PROBLEM_TYPES.conflict,
+    title: "Elicitation request conflict",
+    status: 409,
+    detail,
+  })

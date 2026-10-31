@@ -137,4 +137,34 @@ describe("makeDeleteAcpSession", () => {
     expect(result).toEqual({ ok: true })
     expect(closed).toBe(false)
   })
+
+  test("settles pending session elicitations on delete", async () => {
+    const closedSessions: Array<{ agentId: typeof agentId; sessionId: string }> = []
+
+    const deleteAcpSession = makeDeleteAcpSession({
+      archiveAcpSession: () => undefined,
+      commandsCache: {
+        remember: () => undefined,
+        get: () => undefined,
+        forget: () => undefined,
+      },
+      configCache: {
+        remember: () => undefined,
+        get: () => undefined,
+        forget: () => undefined,
+      },
+      eventLog: noopEventLog,
+      forgetSessionTitle: () => undefined,
+      ensureSupervisorReady: async () => ({ ok: true }),
+      advertisesSessionClose: () => false,
+      closeAcpSession: async () => ({ ok: true }),
+      closeSession: (input) => {
+        closedSessions.push(input)
+      },
+    })
+
+    await deleteAcpSession({ agentId, sessionId: "sess-1" })
+
+    expect(closedSessions).toEqual([{ agentId, sessionId: "sess-1" }])
+  })
 })

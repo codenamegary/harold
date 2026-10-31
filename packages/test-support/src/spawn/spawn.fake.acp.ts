@@ -19,6 +19,9 @@ export type SpawnFakeAcpOptions = {
   emitAvailableCommandsOnNew?: boolean
   emitSessionInfoOnNew?: boolean
   emitPermissionRequestOnPrompt?: boolean
+  emitElicitationFormOnPrompt?: boolean
+  emitElicitationUrlOnPrompt?: boolean
+  elicitationUrl?: string
   emitSessionUpdatesOnPrompt?: boolean
   promptCompletionDelayMs?: number
   sessionNewFailsWithAuthRequired?: boolean
