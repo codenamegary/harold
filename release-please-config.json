@@ -1,11 +1,30 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-  "release-type": "node",
+  "release-type": "simple",
   "include-component-in-tag": false,
   "separate-pull-requests": true,
   "bootstrap-sha": "26e4e1e397c0111d055cedcf909848a3da0b657f",
   "packages": {
-    "apps/cli": {},
+    ".": {
+      "release-type": "simple",
+      "component": "harold",
+      "package-name": "@codenamegary/harold",
+      "changelog-path": "apps/cli/CHANGELOG.md",
+      "version-file": "apps/cli/version.txt",
+      "extra-files": [{ "type": "json", "path": "apps/cli/package.json", "jsonpath": "$.version" }],
+      "exclude-paths": [
+        ".agents",
+        ".cursor",
+        ".github",
+        ".husky",
+        ".opencode",
+        "apps/android",
+        "docs",
+        "packages/test-support",
+        "prototype",
+        "scripts"
+      ]
+    },
     "apps/android": {
       "release-type": "simple",
       "component": "harold-android",
