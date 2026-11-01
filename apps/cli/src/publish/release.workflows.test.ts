@@ -31,22 +31,34 @@ describe("GitHub workflows", () => {
     expect(offenders).toEqual([])
   })
 
-  test("maps release-please outputs with the component path prefix", async () => {
+  test("maps release-please outputs to the package path the action emits", async () => {
     // release-please-action namespaces outputs by component path for any
-    // package not at the repo root (apps/cli--release_created), and only
+    // package not at the repo root (apps/android--release_created), and only
     // emits plain names for the special "." component. Mapping the wrong
-    // name leaves the output empty and silently skips the npm job.
+    // name leaves the output empty and silently skips the publish job.
     const config = JSON.parse(
       await readFile(path.join(repoRoot, "release-please-config.json"), "utf8"),
-    )
-    const workflow = await readFile(path.join(workflowsDir, "release-please.yml"), "utf8")
+    ) as { packages: Record<string, unknown> }
+    const workflow = parse(
+      await readFile(path.join(workflowsDir, "release-please.yml"), "utf8"),
+    ) as { jobs?: Record<string, WorkflowJob> }
+    const outputs = (workflow.jobs?.["release-please"]?.outputs ?? {}) as Record<string, string>
+    const values = Object.values(outputs)
 
     for (const componentPath of Object.keys(config.packages)) {
-      if (componentPath === ".") {
-        continue
-      }
-      expect(workflow).toContain(`${componentPath}--release_created`)
-      expect(workflow).toContain(`${componentPath}--tag_name`)
+      const releaseOutput =
+        componentPath === "."
+          ? "steps.release.outputs.release_created"
+          : `steps.release.outputs['${componentPath}--release_created']`
+      const tagOutput =
+        componentPath === "."
+          ? "steps.release.outputs.tag_name"
+          : `steps.release.outputs['${componentPath}--tag_name']`
+
+      expect(values.some((value) => value.includes(releaseOutput))).toBe(true)
+      expect(values.some((value) => value.includes(tagOutput))).toBe(true)
     }
+
+    expect(values.join("\n")).not.toContain("apps/cli--")
   })
 })

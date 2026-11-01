@@ -20,9 +20,11 @@ jobs:
     outputs:
       # Component paths other than "." namespace outputs as
       # `<path>--<name>`; unscoped names are only emitted for a root
-      # package, which is why the yuekbox workflow can use the plain names.
-      release_created: ${{ steps.release.outputs['apps/cli--release_created'] }}
-      tag_name: ${{ steps.release.outputs['apps/cli--tag_name'] }}
+      # package. The CLI release unit is the root package because the npm
+      # bundle inlines apps/cli, apps/server, packages/core, and
+      # packages/contracts.
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
       android_release_created: ${{ steps.release.outputs['apps/android--release_created'] }}
       android_tag_name: ${{ steps.release.outputs['apps/android--tag_name'] }}
     steps:
