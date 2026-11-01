@@ -1330,6 +1330,42 @@ class ChatScreenTest {
             .assertCountEquals(0)
     }
 
+    @Test
+    fun changesActionShowsBadgeAndForwardsClick() {
+        var clicked = false
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(selectedSession = elicitationSession()),
+                    changesAvailable = true,
+                    changesBadgeCount = 3,
+                    onChangesClick = { clicked = true },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("chat_changes").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("chat_changes_badge", useUnmergedTree = true)
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithTag("chat_changes").performClick()
+
+        assertTrue(clicked)
+    }
+
+    @Test
+    fun changesActionIsHiddenWhenTheSessionIsNotInAGitWorktree() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(selectedSession = elicitationSession()),
+                    changesAvailable = false,
+                )
+            }
+        }
+
+        composeTestRule.onAllNodesWithTag("chat_changes").assertCountEquals(0)
+    }
+
     private fun elicitationSession() = SessionRow(
         sessionId = "sess_01",
         name = "Alpha",

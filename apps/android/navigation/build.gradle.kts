@@ -10,6 +10,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":contracts"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.runtime)
     implementation(libs.androidx.compose.ui)

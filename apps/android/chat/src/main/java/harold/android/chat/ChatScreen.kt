@@ -30,8 +30,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Difference
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -60,6 +63,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -116,6 +120,48 @@ private fun SessionMenuRow(
             ),
             color = if (enabled) color else color.copy(alpha = 0.38f),
         )
+    }
+}
+
+@Composable
+private fun ChangesAction(
+    count: Int,
+    onClick: () -> Unit,
+) {
+    val contentDescription = if (count > 0) {
+        pluralStringResource(
+            R.plurals.chat_changes_content_description_count,
+            count,
+            count,
+        )
+    } else {
+        stringResource(R.string.chat_changes_content_description)
+    }
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+            .testTag("chat_changes")
+            .semantics { this.contentDescription = contentDescription },
+    ) {
+        BadgedBox(
+            badge = {
+                if (count > 0) {
+                    Badge(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.testTag("chat_changes_badge"),
+                    ) {
+                        Text(text = count.toString())
+                    }
+                }
+            },
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Difference,
+                contentDescription = null,
+            )
+        }
     }
 }
 
@@ -195,6 +241,9 @@ fun ChatScreen(
     onSessionSelectorClick: () -> Unit = {},
     onDismissSessionMenu: () -> Unit = {},
     onWorkspacesClick: () -> Unit = {},
+    onChangesClick: () -> Unit = {},
+    changesAvailable: Boolean = false,
+    changesBadgeCount: Int = 0,
     onSessionClick: (SessionRow) -> Unit = {},
     onSeeAllSessionsClick: () -> Unit = {},
     onCreateClick: () -> Unit = {},
@@ -592,6 +641,12 @@ fun ChatScreen(
                     }
                 },
                 actions = {
+                    if (changesAvailable) {
+                        ChangesAction(
+                            count = changesBadgeCount,
+                            onClick = onChangesClick,
+                        )
+                    }
                     IconButton(
                         onClick = { menuExpanded = true },
                         modifier = Modifier

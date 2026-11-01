@@ -50,6 +50,16 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onSessionSelectorClick = viewModel::showPicker,
                 onDismissSessionMenu = viewModel::hidePicker,
                 onWorkspacesClick = navigator::openWorkspaces,
+                onChangesClick = {
+                    uiState.selectedSession?.let { session ->
+                        navigator.openChanges(
+                            serverOrigin = session.serverOrigin,
+                            cwd = session.cwd,
+                        )
+                    }
+                },
+                changesAvailable = uiState.changesAvailable,
+                changesBadgeCount = uiState.changesBadgeCount,
                 onSessionClick = viewModel::selectSession,
                 onSeeAllSessionsClick = {
                     viewModel.hidePicker()

@@ -9,6 +9,7 @@ import harold.android.network.AgentApi
 import harold.android.network.AttachmentApi
 import harold.android.network.DefaultAgentApi
 import harold.android.network.DefaultPairingApi
+import harold.android.network.GitApi
 import harold.android.network.PairingApi
 import harold.android.network.SessionCommandApi
 import harold.android.network.SessionConfigApi
@@ -40,6 +41,10 @@ abstract class ApiModule {
     @Binds
     @Singleton
     abstract fun sessionCommandApi(impl: DefaultAgentApi): SessionCommandApi
+
+    @Binds
+    @Singleton
+    abstract fun gitApi(impl: DefaultAgentApi): GitApi
 
     @Binds
     @Singleton

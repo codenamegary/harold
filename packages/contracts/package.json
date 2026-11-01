@@ -22,6 +22,7 @@
     "./http/connection-test": "./src/http/connection-test.ts",
     "./http/filesystem.browse": "./src/http/filesystem.browse.ts",
     "./http/attachments": "./src/http/attachments.ts",
+    "./http/git": "./src/http/git.ts",
     "./pairing/qr-uri": "./src/pairing/qr-uri.ts",
     "./events/primitives": "./src/events/primitives.ts"
   },

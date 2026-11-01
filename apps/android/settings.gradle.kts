@@ -29,6 +29,7 @@ include(
     ":testing",
     ":pairing",
     ":chat",
+    ":changes",
     ":workspaces",
     ":shell",
 )
