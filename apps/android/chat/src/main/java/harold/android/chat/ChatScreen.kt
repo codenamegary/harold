@@ -172,19 +172,25 @@ private fun ContextUsageLine(
     modifier: Modifier = Modifier,
 ) {
     val text = usage?.let(::formatContextUsage) ?: return
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelMedium.copy(
-            fontFeatureSettings = "tnum",
-        ),
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .testTag("context_usage"),
-    )
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontFeatureSettings = "tnum",
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp)
+                .testTag("context_usage"),
+        )
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+        )
+    }
 }
 
 @Composable
