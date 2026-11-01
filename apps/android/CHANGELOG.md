@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.3.0](https://github.com/codenamegary/harold/compare/harold-android-v3.2.0...harold-android-v3.3.0) (2026-11-01)
+
+
+### Features
+
+* **android:** remember the last workspace, agent, and model ([#477](https://github.com/codenamegary/harold/issues/477)) ([4fc03f2](https://github.com/codenamegary/harold/commit/4fc03f2fed59778757fa1f96ff006d0bb2976f11))
+* **chat:** show context usage in the chat subheader ([#476](https://github.com/codenamegary/harold/issues/476)) ([56fc89c](https://github.com/codenamegary/harold/commit/56fc89c02ec6822b5b317fdf7f92acbc5a66e8ef))
+
+
+### Bug Fixes
+
+* **android:** keep composer config after switching sessions ([#480](https://github.com/codenamegary/harold/issues/480)) ([c6524fd](https://github.com/codenamegary/harold/commit/c6524fd3304093040972d40c4bf2928faa26365e))
+
 ## [3.2.0](https://github.com/codenamegary/harold/compare/harold-android-v3.1.0...harold-android-v3.2.0) (2026-11-01)
 
 
