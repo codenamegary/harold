@@ -84,7 +84,6 @@ import harold.android.chat.composer.filterCommands
 import harold.android.chat.composer.insertSlashShortcut
 import harold.android.chat.composer.removeCommandToken
 import harold.android.contracts.AuthSessionStatus
-import harold.android.live.ContextUsage
 import harold.android.ui.promptinput.PromptEdit
 import harold.android.voice.VoiceDictationPresentation
 
@@ -168,10 +167,12 @@ private fun ChangesAction(
 
 @Composable
 private fun ContextUsageLine(
-    usage: ContextUsage?,
+    text: String?,
     modifier: Modifier = Modifier,
 ) {
-    val text = usage?.let(::formatContextUsage) ?: return
+    if (text == null) {
+        return
+    }
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = text,
@@ -538,6 +539,8 @@ fun ChatScreen(
         )
     }
 
+    val contextUsageText = uiState.contextUsage?.let(::formatContextUsage)
+
     Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
@@ -763,7 +766,7 @@ fun ChatScreen(
                         }
                     },
                 )
-                ContextUsageLine(uiState.contextUsage)
+                ContextUsageLine(contextUsageText)
             }
         },
     ) { innerPadding ->
@@ -773,7 +776,12 @@ fun ChatScreen(
                 .padding(innerPadding)
                 .consumeWindowInsets(innerPadding)
                 .imePadding()
-                .padding(16.dp),
+                .padding(
+                    start = 16.dp,
+                    top = if (contextUsageText != null) 0.dp else 16.dp,
+                    end = 16.dp,
+                    bottom = 16.dp,
+                ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (uiState.connectionBanner != null) {
