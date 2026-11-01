@@ -53,6 +53,7 @@ import { createConfigOptionsCache } from "../session/hub/config.cache"
 import { createConfigOptionsFileCache } from "../session/hub/config.cache.file"
 import { createSessionEventLog } from "../session/hub/event.log"
 import { createSessionTitleCache } from "../session/hub/session.title.cache"
+import { createUsageCache } from "../session/hub/usage.cache"
 import { makeEnsureSessionBound, makeEnsureSupervisorReady } from "../session/session.acp.ready"
 import { makeAcceptPrompt, makeCompletePromptTurn } from "../session/session.prompt.gate.usecase"
 import { SessionHubLoadSession, StartAcpAgent } from "../session/session.ports"
@@ -209,6 +210,7 @@ export const createServer = async ({
   )
   const eventLog = createSessionEventLog()
   const sessionTitleCache = createSessionTitleCache()
+  const usageCache = createUsageCache()
 
   const agentExists = (agentId: string) => agentSettings.hasAgentId(agentId)
 
@@ -341,6 +343,7 @@ export const createServer = async ({
     configCache,
     eventLog,
     sessionTitleCache,
+    usageCache,
     loadSession: loadHubSession,
     runPromptTurn,
     acceptPrompt: makeAcceptPrompt({
@@ -419,6 +422,7 @@ export const createServer = async ({
     commandsCache,
     configCache,
     eventLog,
+    usageCache,
     getSessionTitle: sessionTitleCache.getSessionTitle,
     forgetSessionTitle: sessionTitleCache.forgetSessionTitle,
     isArchivedAcpSession: archivedAcpSessions.isArchived,
