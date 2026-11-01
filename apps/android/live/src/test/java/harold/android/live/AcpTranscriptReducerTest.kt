@@ -47,6 +47,54 @@ class AcpTranscriptReducerTest {
     }
 
     @Test
+    fun storesUsageOnTheTranscriptWithoutAddingRowsOrChangingState() {
+        val live = applySubscribed(emptyAcpTranscript)
+
+        val withUsage = foldAcpUpdate(
+            live,
+            ParsedAcpUpdate.Usage(
+                used = 84200,
+                size = 200000,
+                cost = UsageCost(amount = 0.045, currency = "USD"),
+            ),
+        )
+
+        assertEquals(
+            ContextUsage(
+                used = 84200,
+                size = 200000,
+                cost = UsageCost(amount = 0.045, currency = "USD"),
+            ),
+            withUsage.usage,
+        )
+        assertEquals(emptyList<TranscriptRow>(), withUsage.rows)
+        assertEquals(live.sessionState, withUsage.sessionState)
+    }
+
+    @Test
+    fun aUsageUpdateAfterPromptCompleteKeepsTheSessionIdle() {
+        val idle = applyPromptComplete(applySubscribed(emptyAcpTranscript))
+
+        val withUsage = foldAcpUpdate(
+            idle,
+            ParsedAcpUpdate.Usage(used = 1000, size = 200000),
+        )
+
+        assertEquals(SessionState.Idle, withUsage.sessionState)
+    }
+
+    @Test
+    fun reconnectClearsUsage() {
+        val withUsage = foldAcpUpdate(
+            emptyAcpTranscript,
+            ParsedAcpUpdate.Usage(used = 1000, size = 200000),
+        )
+
+        assertEquals(null, applyReconnect().usage)
+        assertEquals(ContextUsage(used = 1000, size = 200000), withUsage.usage)
+    }
+
+    @Test
     fun keepsInterleavedTextAndToolsInInsertionOrder() {
         var state = beginUserTurn(emptyAcpTranscript, turnId = "turn-1", text = "go")
         state = foldAcpUpdate(state, ParsedAcpUpdate.AgentMessageChunk("first"))

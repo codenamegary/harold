@@ -10,6 +10,7 @@ import harold.android.contracts.PermissionRequest
 import harold.android.contracts.PermissionStatus
 import harold.android.contracts.SessionState
 import harold.android.live.AcpTranscriptState
+import harold.android.live.ContextUsage
 import harold.android.live.emptyAcpTranscript
 
 class ChatUiStateTest {
@@ -67,11 +68,13 @@ class ChatUiStateTest {
             cancelError = "cancel failed",
             changesAvailable = true,
             changesBadgeCount = 17,
+            contextUsage = ContextUsage(used = 1000, size = 200000),
         )
 
         val reset = busy.resetSessionScopedState()
 
         assertNull(reset.selectedSession)
+        assertNull(reset.contextUsage)
         assertEquals(emptyAcpTranscript, reset.transcript)
         assertEquals("", reset.composerText)
         assertFalse(reset.composerSubmitting)
@@ -97,7 +100,11 @@ class ChatUiStateTest {
     @Test
     fun switchingSessionsCarriesTheNextSessionIntoTheReset() {
         val next = sessionRow(SessionState.Idle)
-        val restoredTranscript = AcpTranscriptState(sessionState = SessionState.Offline)
+        val restoredUsage = ContextUsage(used = 1000, size = 200000)
+        val restoredTranscript = AcpTranscriptState(
+            sessionState = SessionState.Offline,
+            usage = restoredUsage,
+        )
         val restoredPermissions = listOf(permissionRequest())
 
         val reset = ChatUiState(composerText = "draft prompt").resetSessionScopedState(
@@ -110,6 +117,7 @@ class ChatUiStateTest {
 
         assertEquals(next, reset.selectedSession)
         assertEquals(restoredTranscript, reset.transcript)
+        assertEquals(restoredUsage, reset.contextUsage)
         assertEquals(restoredPermissions, reset.pendingPermissions)
         assertEquals("", reset.composerText)
         assertNull(reset.composerError)

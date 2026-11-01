@@ -33,12 +33,14 @@ import harold.android.contracts.PermissionStatus
 import harold.android.contracts.SelectOption
 import harold.android.contracts.SessionState
 import harold.android.live.AcpTranscriptState
+import harold.android.live.ContextUsage
 import harold.android.live.Elicitation
 import harold.android.live.ElicitationKind
 import harold.android.live.ElicitationOption
 import harold.android.live.ElicitationQuestion
 import harold.android.live.TranscriptAssistantRow
 import harold.android.live.TranscriptUserRow
+import harold.android.live.UsageCost
 import harold.android.live.toContent
 import harold.android.ui.promptinput.applyEdit
 import harold.android.ui.theme.HaroldTheme
@@ -1364,6 +1366,55 @@ class ChatScreenTest {
         }
 
         composeTestRule.onAllNodesWithTag("chat_changes").assertCountEquals(0)
+    }
+
+    @Test
+    fun showsContextUsageUnderTheTopAppBar() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        selectedSession = elicitationSession(),
+                        contextUsage = ContextUsage(
+                            used = 84200,
+                            size = 200000,
+                            cost = UsageCost(amount = 0.045, currency = "USD"),
+                        ),
+                    ),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("context_usage")
+            .assertIsDisplayed()
+            .assertTextEquals("84.2k / 200k (42%) · $0.045")
+    }
+
+    @Test
+    fun hidesContextUsageUntilTheAgentReportsIt() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(uiState = ChatUiState(selectedSession = elicitationSession()))
+            }
+        }
+
+        composeTestRule.onAllNodesWithTag("context_usage").assertCountEquals(0)
+    }
+
+    @Test
+    fun hidesContextUsageWhenTheWindowSizeIsUnknown() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        selectedSession = elicitationSession(),
+                        contextUsage = ContextUsage(used = 84200, size = 0),
+                    ),
+                )
+            }
+        }
+
+        composeTestRule.onAllNodesWithTag("context_usage").assertCountEquals(0)
     }
 
     private fun elicitationSession() = SessionRow(

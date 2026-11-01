@@ -8,6 +8,7 @@ import harold.android.contracts.PermissionRequest
 import harold.android.contracts.SessionState
 import harold.android.contracts.catalogSessionKey
 import harold.android.live.AcpTranscriptState
+import harold.android.live.ContextUsage
 import harold.android.live.Elicitation
 import harold.android.live.StreamExtension
 import harold.android.live.emptyAcpTranscript
@@ -84,6 +85,8 @@ data class ChatUiState(
     val recentSessionsLoading: Boolean = false,
     val recentSessionsError: String? = null,
     val transcript: AcpTranscriptState = emptyAcpTranscript,
+    /** Latest context window usage for the selected session, if the agent reports it. */
+    val contextUsage: ContextUsage? = null,
     val composerText: String = "",
     val composerSubmitting: Boolean = false,
     val composerError: String? = null,
@@ -216,6 +219,7 @@ internal fun ChatUiState.resetSessionScopedState(
 ): ChatUiState = copy(
     selectedSession = keep.selectedSession,
     transcript = keep.transcript,
+    contextUsage = keep.transcript.usage,
     composerText = "",
     composerSubmitting = false,
     composerError = null,
