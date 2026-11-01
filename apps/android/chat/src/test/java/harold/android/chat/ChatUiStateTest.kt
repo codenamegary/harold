@@ -82,7 +82,6 @@ class ChatUiStateTest {
         assertEquals("", reset.composerText)
         assertFalse(reset.composerSubmitting)
         assertNull(reset.composerError)
-        assertEquals(ComposerConfigUi(), reset.composerConfig)
         assertEquals("", reset.voiceCommandPrefix)
         assertFalse(reset.voiceCommandListVisible)
         assertTrue(reset.pendingPermissions.isEmpty())
@@ -98,6 +97,9 @@ class ChatUiStateTest {
         assertEquals("Reconnecting", reset.connectionBanner)
         assertEquals(busy.sessions, reset.sessions)
         assertEquals(busy.recentSessions, reset.recentSessions)
+        // SessionConfigWriter owns the composer config; clearing it here would
+        // strand the bar whenever the next session has the same options.
+        assertEquals(busy.composerConfig, reset.composerConfig)
     }
 
     @Test
