@@ -166,6 +166,35 @@ private fun ChangesAction(
 }
 
 @Composable
+private fun ContextUsageLine(
+    text: String?,
+    modifier: Modifier = Modifier,
+) {
+    if (text == null) {
+        return
+    }
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontFeatureSettings = "tnum",
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp)
+                .testTag("context_usage"),
+        )
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+        )
+    }
+}
+
+@Composable
 private fun SessionDropdownItem(
     session: SessionRow,
     selected: Boolean,
@@ -510,230 +539,235 @@ fun ChatScreen(
         )
     }
 
+    val contextUsageText = uiState.contextUsage?.let(::formatContextUsage)
+
     Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Box {
-                        TextButton(
-                            onClick = onSessionSelectorClick,
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = MaterialTheme.colorScheme.onSurface,
-                            ),
-                            modifier = Modifier
-                                .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                                .testTag("session_selector")
-                                .semantics {
-                                    contentDescription = sessionSelectorContentDescription
-                                },
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            Column {
+                TopAppBar(
+                    title = {
+                        Box {
+                            TextButton(
+                                onClick = onSessionSelectorClick,
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.onSurface,
+                                ),
+                                modifier = Modifier
+                                    .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                                    .testTag("session_selector")
+                                    .semantics {
+                                        contentDescription = sessionSelectorContentDescription
+                                    },
                             ) {
-                                if (
-                                    selected != null &&
-                                    (
-                                        selected.haroldColorId.isNotEmpty() ||
-                                            selected.haroldIconId.isNotEmpty() ||
-                                            selected.haroldName.isNotEmpty()
-                                        )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 ) {
-                                    HaroldBadge(
-                                        colorId = selected.haroldColorId,
-                                        iconId = selected.haroldIconId,
-                                        size = 24.dp,
-                                        modifier = Modifier.testTag("chat_session_harold_badge"),
+                                    if (
+                                        selected != null &&
+                                        (
+                                            selected.haroldColorId.isNotEmpty() ||
+                                                selected.haroldIconId.isNotEmpty() ||
+                                                selected.haroldName.isNotEmpty()
+                                            )
+                                    ) {
+                                        HaroldBadge(
+                                            colorId = selected.haroldColorId,
+                                            iconId = selected.haroldIconId,
+                                            size = 24.dp,
+                                            modifier = Modifier.testTag("chat_session_harold_badge"),
+                                        )
+                                    }
+                                    Text(
+                                        text = sessionLabel,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("chat_session_label"),
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Filled.ArrowDropDown,
+                                        contentDescription = null,
+                                        modifier = Modifier.requiredSize(28.dp),
                                     )
                                 }
-                                Text(
-                                    text = sessionLabel,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .testTag("chat_session_label"),
+                            }
+
+                            DropdownMenu(
+                                expanded = uiState.pickerVisible,
+                                onDismissRequest = onDismissSessionMenu,
+                                modifier = Modifier
+                                    .widthIn(min = SessionMenuMinWidth, max = 340.dp)
+                                    .testTag("session_menu"),
+                            ) {
+                                SessionMenuRow(
+                                    text = stringResource(R.string.chat_new_session),
+                                    onClick = {
+                                        onDismissSessionMenu()
+                                        onCreateClick()
+                                    },
+                                    color = MaterialTheme.colorScheme.primary,
+                                    leadingContent = {
+                                        Icon(
+                                            imageVector = Icons.Filled.Add,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.requiredSize(20.dp),
+                                        )
+                                    },
+                                    testTag = "session_menu_new",
                                 )
-                                Icon(
-                                    imageVector = Icons.Filled.ArrowDropDown,
-                                    contentDescription = null,
-                                    modifier = Modifier.requiredSize(28.dp),
+
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(vertical = 4.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant,
+                                )
+
+                                if (uiState.recentSessionsLoading && uiState.recentSessions.isEmpty()) {
+                                    SessionMenuRow(
+                                        text = "Loading…",
+                                        onClick = {},
+                                        enabled = false,
+                                        testTag = "session_menu_loading",
+                                    )
+                                } else if (uiState.recentSessionsError != null) {
+                                    SessionMenuRow(
+                                        text = uiState.recentSessionsError,
+                                        onClick = {},
+                                        enabled = false,
+                                        color = MaterialTheme.colorScheme.error,
+                                        testTag = "session_menu_error",
+                                    )
+                                } else {
+                                    uiState.recentSessions.forEach { session ->
+                                        SessionDropdownItem(
+                                            session = session,
+                                            selected = uiState.selectedSession?.id == session.id,
+                                            onClick = {
+                                                onDismissSessionMenu()
+                                                onSessionClick(session)
+                                            },
+                                        )
+                                    }
+                                }
+
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(vertical = 4.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant,
+                                )
+
+                                SessionMenuRow(
+                                    text = stringResource(R.string.sessions_see_all),
+                                    onClick = {
+                                        onDismissSessionMenu()
+                                        onSeeAllSessionsClick()
+                                    },
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    testTag = "session_menu_see_all",
                                 )
                             }
+                        }
+                    },
+                    actions = {
+                        if (changesAvailable) {
+                            ChangesAction(
+                                count = changesBadgeCount,
+                                onClick = onChangesClick,
+                            )
+                        }
+                        IconButton(
+                            onClick = { menuExpanded = true },
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                                .testTag("chat_overflow")
+                                .semantics {
+                                    contentDescription = overflowContentDescription
+                                },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.MoreVert,
+                                contentDescription = null,
+                            )
                         }
 
                         DropdownMenu(
-                            expanded = uiState.pickerVisible,
-                            onDismissRequest = onDismissSessionMenu,
-                            modifier = Modifier
-                                .widthIn(min = SessionMenuMinWidth, max = 340.dp)
-                                .testTag("session_menu"),
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false },
                         ) {
-                            SessionMenuRow(
-                                text = stringResource(R.string.chat_new_session),
-                                onClick = {
-                                    onDismissSessionMenu()
-                                    onCreateClick()
-                                },
-                                color = MaterialTheme.colorScheme.primary,
-                                leadingContent = {
-                                    Icon(
-                                        imageVector = Icons.Filled.Add,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.requiredSize(20.dp),
-                                    )
-                                },
-                                testTag = "session_menu_new",
-                            )
-
-                            HorizontalDivider(
-                                modifier = Modifier.padding(vertical = 4.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant,
-                            )
-
-                            if (uiState.recentSessionsLoading && uiState.recentSessions.isEmpty()) {
-                                SessionMenuRow(
-                                    text = "Loading…",
-                                    onClick = {},
-                                    enabled = false,
-                                    testTag = "session_menu_loading",
-                                )
-                            } else if (uiState.recentSessionsError != null) {
-                                SessionMenuRow(
-                                    text = uiState.recentSessionsError,
-                                    onClick = {},
-                                    enabled = false,
-                                    color = MaterialTheme.colorScheme.error,
-                                    testTag = "session_menu_error",
-                                )
-                            } else {
-                                uiState.recentSessions.forEach { session ->
-                                    SessionDropdownItem(
-                                        session = session,
-                                        selected = uiState.selectedSession?.id == session.id,
-                                        onClick = {
-                                            onDismissSessionMenu()
-                                            onSessionClick(session)
-                                        },
-                                    )
-                                }
-                            }
-
-                            HorizontalDivider(
-                                modifier = Modifier.padding(vertical = 4.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant,
-                            )
-
-                            SessionMenuRow(
-                                text = stringResource(R.string.sessions_see_all),
-                                onClick = {
-                                    onDismissSessionMenu()
-                                    onSeeAllSessionsClick()
-                                },
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                testTag = "session_menu_see_all",
-                            )
-                        }
-                    }
-                },
-                actions = {
-                    if (changesAvailable) {
-                        ChangesAction(
-                            count = changesBadgeCount,
-                            onClick = onChangesClick,
-                        )
-                    }
-                    IconButton(
-                        onClick = { menuExpanded = true },
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                            .testTag("chat_overflow")
-                            .semantics {
-                                contentDescription = overflowContentDescription
-                            },
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.MoreVert,
-                            contentDescription = null,
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false },
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(text = "Workspaces") },
-                            onClick = {
-                                menuExpanded = false
-                                onWorkspacesClick()
-                            },
-                            modifier = Modifier.testTag("workspaces_menu_item"),
-                        )
-                        if (uiState.agentAuth.authSummary?.canLogout == true) {
                             DropdownMenuItem(
+                                text = { Text(text = "Workspaces") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onWorkspacesClick()
+                                },
+                                modifier = Modifier.testTag("workspaces_menu_item"),
+                            )
+                            if (uiState.agentAuth.authSummary?.canLogout == true) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = if (uiState.agentAuth.actionBusy) {
+                                                stringResource(R.string.agent_auth_signing_out)
+                                            } else {
+                                                stringResource(R.string.agent_auth_sign_out)
+                                            },
+                                        )
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onAuthLogout()
+                                    },
+                                    enabled = uiState.agentAuth.canLogoutAction,
+                                    modifier = Modifier.testTag("auth_sign_out_menu_item"),
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text(text = stringResource(R.string.chat_saved_harolds)) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onSavedHarolds()
+                                },
+                                modifier = Modifier.testTag("saved_harolds_menu_item"),
+                            )
+                            DropdownMenuItem(
+                                text = { Text(text = stringResource(R.string.chat_pair_another_harold)) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onPairAnotherHarold()
+                                },
+                                modifier = Modifier.testTag("pair_another_menu_item"),
+                            )
+                            DropdownMenuItem(
+                                leadingIcon = if (hasDisconnectBadge) {
+                                    {
+                                        HaroldBadge(
+                                            colorId = disconnectColorId,
+                                            iconId = disconnectIconId,
+                                            size = 20.dp,
+                                            modifier = Modifier.testTag("disconnect_menu_badge"),
+                                        )
+                                    }
+                                } else {
+                                    null
+                                },
                                 text = {
-                                    Text(
-                                        text = if (uiState.agentAuth.actionBusy) {
-                                            stringResource(R.string.agent_auth_signing_out)
-                                        } else {
-                                            stringResource(R.string.agent_auth_sign_out)
-                                        },
-                                    )
+                                    Text(text = disconnectLabel)
                                 },
                                 onClick = {
                                     menuExpanded = false
-                                    onAuthLogout()
+                                    disconnectConfirmVisible = true
                                 },
-                                enabled = uiState.agentAuth.canLogoutAction,
-                                modifier = Modifier.testTag("auth_sign_out_menu_item"),
+                                modifier = Modifier.testTag("disconnect_menu_item"),
                             )
                         }
-                        DropdownMenuItem(
-                            text = { Text(text = stringResource(R.string.chat_saved_harolds)) },
-                            onClick = {
-                                menuExpanded = false
-                                onSavedHarolds()
-                            },
-                            modifier = Modifier.testTag("saved_harolds_menu_item"),
-                        )
-                        DropdownMenuItem(
-                            text = { Text(text = stringResource(R.string.chat_pair_another_harold)) },
-                            onClick = {
-                                menuExpanded = false
-                                onPairAnotherHarold()
-                            },
-                            modifier = Modifier.testTag("pair_another_menu_item"),
-                        )
-                        DropdownMenuItem(
-                            leadingIcon = if (hasDisconnectBadge) {
-                                {
-                                    HaroldBadge(
-                                        colorId = disconnectColorId,
-                                        iconId = disconnectIconId,
-                                        size = 20.dp,
-                                        modifier = Modifier.testTag("disconnect_menu_badge"),
-                                    )
-                                }
-                            } else {
-                                null
-                            },
-                            text = {
-                                Text(text = disconnectLabel)
-                            },
-                            onClick = {
-                                menuExpanded = false
-                                disconnectConfirmVisible = true
-                            },
-                            modifier = Modifier.testTag("disconnect_menu_item"),
-                        )
-                    }
-                },
-            )
+                    },
+                )
+                ContextUsageLine(contextUsageText)
+            }
         },
     ) { innerPadding ->
         Column(
@@ -742,7 +776,12 @@ fun ChatScreen(
                 .padding(innerPadding)
                 .consumeWindowInsets(innerPadding)
                 .imePadding()
-                .padding(16.dp),
+                .padding(
+                    start = 16.dp,
+                    top = if (contextUsageText != null) 0.dp else 16.dp,
+                    end = 16.dp,
+                    bottom = 16.dp,
+                ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (uiState.connectionBanner != null) {

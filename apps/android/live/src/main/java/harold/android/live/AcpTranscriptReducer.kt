@@ -10,6 +10,8 @@ data class AcpTranscriptState(
     val live: Boolean = false,
     /** Set when a permission prompt interrupts the turn, so the next chunk starts a segment. */
     val segmentBoundary: Boolean = false,
+    /** Latest context usage. Null until the agent sends its first `usage_update`. */
+    val usage: ContextUsage? = null,
 )
 
 val emptyAcpTranscript = AcpTranscriptState()
@@ -107,6 +109,9 @@ fun foldAcpUpdate(
             }
             withLiveRunning(state.copy(rows = rows, segmentBoundary = false))
         }
+        // Usage is bookkeeping, not transcript content. It must not add a row
+        // or move the session state; it can arrive after PromptComplete.
+        is ParsedAcpUpdate.Usage -> state.copy(usage = parsed.usage)
         is ParsedAcpUpdate.ToolCall -> withLiveRunning(
             state.copy(
                 rows = state.rows + TranscriptToolRow(

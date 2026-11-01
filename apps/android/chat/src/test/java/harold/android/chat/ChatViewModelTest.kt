@@ -34,9 +34,11 @@ import harold.android.credentials.SavedHaroldRepository
 import harold.android.credentials.StoredCredential
 import harold.android.database.session.CachedSession
 import harold.android.database.session.SessionRepository
+import harold.android.live.ContextUsage
 import harold.android.live.SessionOwner
 import harold.android.live.SessionSnapshot
 import harold.android.live.TranscriptUserRow
+import harold.android.live.UsageCost
 import harold.android.live.applyReconnect
 import harold.android.live.beginUserTurn
 import harold.android.live.emptyAcpTranscript
@@ -704,6 +706,31 @@ class ChatViewModelTest {
         assertTrue(viewModel.uiState.value.streamReconnecting)
         assertEquals(0, viewModel.uiState.value.transcript.rows.size)
         assertEquals(SessionState.Offline, viewModel.uiState.value.effectiveSessionState)
+    }
+
+    @Test
+    fun liveSnapshotMapsContextUsage() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = sessionOwner,
+        )
+        val usage = ContextUsage(
+            used = 84200,
+            size = 200000,
+            cost = UsageCost(amount = 0.045, currency = "USD"),
+        )
+
+        advanceUntilIdle()
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                transcript = sessionOwner.snapshot.value.transcript.copy(usage = usage),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(usage, viewModel.uiState.value.contextUsage)
     }
 
     @Test

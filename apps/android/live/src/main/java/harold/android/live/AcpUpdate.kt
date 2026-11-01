@@ -30,6 +30,8 @@ sealed interface ParsedAcpUpdate {
 
     data class UserMessageChunk(val text: String) : ParsedAcpUpdate
 
+    data class Usage(val usage: ContextUsage) : ParsedAcpUpdate
+
     data object Ignored : ParsedAcpUpdate
 }
 
@@ -75,6 +77,17 @@ fun parseAcpUpdate(update: JsonElement): ParsedAcpUpdate {
                 return ParsedAcpUpdate.Ignored
             }
             ParsedAcpUpdate.UserMessageChunk(text)
+        }
+        "usage_update" -> {
+            val used = fields.number("used")?.toLong() ?: return ParsedAcpUpdate.Ignored
+            val size = fields.number("size")?.toLong() ?: return ParsedAcpUpdate.Ignored
+            ParsedAcpUpdate.Usage(
+                ContextUsage(
+                    used = used,
+                    size = size,
+                    cost = readUsageCost(fields),
+                ),
+            )
         }
         else -> ParsedAcpUpdate.Ignored
     }
@@ -126,6 +139,16 @@ private fun readToolStatus(fields: JsonObject, default: ToolCallStatus?): ToolCa
         else -> default
     }
 }
+
+private fun readUsageCost(fields: JsonObject): UsageCost? {
+    val cost = fields["cost"] as? JsonObject ?: return null
+    val amount = cost.number("amount") ?: return null
+    val currency = cost.string("currency")?.takeIf { it.isNotBlank() } ?: return null
+    return UsageCost(amount = amount, currency = currency)
+}
+
+private fun JsonObject.number(key: String): Double? =
+    string(key)?.toDoubleOrNull()
 
 private fun JsonObject.string(key: String): String? {
     val value = this[key] as? JsonPrimitive ?: return null

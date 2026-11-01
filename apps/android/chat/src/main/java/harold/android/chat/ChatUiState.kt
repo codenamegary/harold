@@ -8,6 +8,7 @@ import harold.android.contracts.PermissionRequest
 import harold.android.contracts.SessionState
 import harold.android.contracts.catalogSessionKey
 import harold.android.live.AcpTranscriptState
+import harold.android.live.ContextUsage
 import harold.android.live.Elicitation
 import harold.android.live.StreamExtension
 import harold.android.live.emptyAcpTranscript
@@ -115,6 +116,10 @@ data class ChatUiState(
     val activeHaroldColorId: String = "",
     val activeHaroldIconId: String = "",
 ) {
+    /** Latest context window usage for the selected session, if the agent reports it. */
+    val contextUsage: ContextUsage?
+        get() = transcript.usage
+
     val disconnectHaroldName: String
         get() = selectedSession?.haroldName?.takeIf { it.isNotEmpty() } ?: activeHaroldName
 

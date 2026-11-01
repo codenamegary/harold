@@ -79,6 +79,88 @@ class AcpUpdateTest {
     }
 
     @Test
+    fun readsUsageUpdateWithCost() {
+        val parsed = parseAcpUpdate(
+            JsonObject(
+                mapOf(
+                    "sessionUpdate" to JsonPrimitive("usage_update"),
+                    "used" to JsonPrimitive(84200),
+                    "size" to JsonPrimitive(200000),
+                    "cost" to JsonObject(
+                        mapOf(
+                            "amount" to JsonPrimitive(0.045),
+                            "currency" to JsonPrimitive("USD"),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals(
+            ParsedAcpUpdate.Usage(
+                ContextUsage(
+                    used = 84200,
+                    size = 200000,
+                    cost = UsageCost(amount = 0.045, currency = "USD"),
+                ),
+            ),
+            parsed,
+        )
+    }
+
+    @Test
+    fun readsUsageUpdateWithoutCost() {
+        val parsed = parseAcpUpdate(
+            JsonObject(
+                mapOf(
+                    "sessionUpdate" to JsonPrimitive("usage_update"),
+                    "used" to JsonPrimitive(1000),
+                    "size" to JsonPrimitive(200000),
+                ),
+            ),
+        )
+
+        assertEquals(
+            ParsedAcpUpdate.Usage(ContextUsage(used = 1000, size = 200000, cost = null)),
+            parsed,
+        )
+    }
+
+    @Test
+    fun ignoresCostWhenCurrencyIsMissing() {
+        val parsed = parseAcpUpdate(
+            JsonObject(
+                mapOf(
+                    "sessionUpdate" to JsonPrimitive("usage_update"),
+                    "used" to JsonPrimitive(1000),
+                    "size" to JsonPrimitive(200000),
+                    "cost" to JsonObject(mapOf("amount" to JsonPrimitive(0.045))),
+                ),
+            ),
+        )
+
+        assertEquals(
+            ParsedAcpUpdate.Usage(ContextUsage(used = 1000, size = 200000, cost = null)),
+            parsed,
+        )
+    }
+
+    @Test
+    fun ignoresUsageUpdateWithoutSize() {
+        assertEquals(
+            ParsedAcpUpdate.Ignored,
+            parseAcpUpdate(
+                JsonObject(
+                    mapOf(
+                        "sessionUpdate" to JsonPrimitive("usage_update"),
+                        "used" to JsonPrimitive(1000),
+                    ),
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun sessionInfoUpdatesNeverReachTheTranscript() {
         // Titles arrive as the server's session_info frame, not this raw update.
         assertEquals(
