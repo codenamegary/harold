@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.2.0](https://github.com/codenamegary/harold/compare/v3.1.0...v3.2.0) (2026-11-01)
+
+
+### Features
+
+* **hub:** cache the last usage update so context usage survives replay ([#481](https://github.com/codenamegary/harold/issues/481)) ([e8dd6fa](https://github.com/codenamegary/harold/commit/e8dd6fa11d859ef17246b4978f5947575cae0af4))
+
 ## [3.1.0](https://github.com/codenamegary/harold/compare/v3.0.0...v3.1.0) (2026-11-01)
 
 
