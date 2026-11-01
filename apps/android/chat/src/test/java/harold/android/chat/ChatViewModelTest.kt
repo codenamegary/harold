@@ -13,6 +13,12 @@ import harold.android.contracts.ConfigOptionValue
 import harold.android.contracts.ConfigValue
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
+import harold.android.contracts.GitChanges
+import harold.android.contracts.GitFileDiff
+import harold.android.contracts.GitRepository
+import harold.android.contracts.GitScope
+import harold.android.contracts.GitSummary
+import harold.android.contracts.GitWorktreeCollection
 import harold.android.contracts.PageInfo
 import harold.android.contracts.PermissionOption
 import harold.android.contracts.PermissionRequest
@@ -39,6 +45,7 @@ import harold.android.navigation.Navigator
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.network.AttachmentApi
+import harold.android.network.GitApi
 import harold.android.network.SessionConfigApi
 import harold.android.session.HaroldConnection
 import harold.android.session.HaroldConnectionStatus
@@ -1366,6 +1373,86 @@ class ChatViewModelTest {
         assertEquals("", viewModel.uiState.value.voiceCommandPrefix)
     }
 
+    @Test
+    fun changesBadgeLoadsForTheSelectedSession() = runTest(dispatcher) {
+        val gitApi = RecordingGitApi()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            gitApi = gitApi,
+        )
+
+        advanceUntilIdle()
+
+        assertEquals(1, gitApi.summaryCalls.size)
+        assertEquals("sess_02", viewModel.uiState.value.selectedSession?.sessionId)
+        assertTrue(viewModel.uiState.value.changesAvailable)
+        assertEquals(3, viewModel.uiState.value.changesBadgeCount)
+    }
+
+    @Test
+    fun changesBadgeHidesWhenTheSummaryFails() = runTest(dispatcher) {
+        val gitApi = RecordingGitApi(
+            summaryResult = Result.failure(
+                AgentApiException(
+                    AgentApiError.Problem(404, "Not a git repository", "Not a git repository"),
+                ),
+            ),
+        )
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            gitApi = gitApi,
+        )
+
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.changesAvailable)
+        assertEquals(0, viewModel.uiState.value.changesBadgeCount)
+    }
+
+    @Test
+    fun changesBadgeRefreshesWhenATurnFinishes() = runTest(dispatcher) {
+        val gitApi = RecordingGitApi()
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = sessionOwner,
+            gitApi = gitApi,
+        )
+        advanceUntilIdle()
+        assertEquals(1, gitApi.summaryCalls.size)
+
+        sessionOwner.publish(
+            SessionSnapshot(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                transcript = harold.android.live.AcpTranscriptState(
+                    sessionState = SessionState.Running,
+                    live = true,
+                ),
+            ),
+        )
+        advanceUntilIdle()
+        assertEquals(1, gitApi.summaryCalls.size)
+
+        sessionOwner.publish(
+            SessionSnapshot(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                transcript = harold.android.live.AcpTranscriptState(
+                    sessionState = SessionState.Idle,
+                    live = true,
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(2, gitApi.summaryCalls.size)
+        assertEquals(3, viewModel.uiState.value.changesBadgeCount)
+    }
+
     private fun createViewModel(
         repository: ChatFakeUserRepository,
         navigation: ChatFakeNavigationPreferences,
@@ -1374,6 +1461,7 @@ class ChatViewModelTest {
         sessionRepository: SessionRepository = TestSessionRepository(repository),
         configApi: SessionConfigApi = RecordingSessionConfigApi(),
         attachmentApi: AttachmentApi = NoopAttachmentApi(),
+        gitApi: GitApi = RecordingGitApi(),
         savedHaroldRepository: SavedHaroldRepository = SavedHaroldRepository(FakeCredentialStore()),
         navigator: Navigator = Navigator(),
         haroldConnections: harold.android.session.HaroldConnections? = null,
@@ -1388,6 +1476,7 @@ class ChatViewModelTest {
         savedHaroldRepository = savedHaroldRepository,
         attachmentApi = attachmentApi,
         configApi = configApi,
+        gitApi = gitApi,
         navigationPreferences = navigation,
         voiceDictationController = VoiceDictationController(
             speechClient = FakeSpeechRecognitionClient(),
@@ -1615,6 +1704,53 @@ private class RecordingAttachmentApi : AttachmentApi {
         deletes += Triple(agentId, sessionId, attachmentId)
         return Result.success(Unit)
     }
+}
+
+private class RecordingGitApi(
+    private val summaryResult: Result<GitSummary> = Result.success(
+        GitSummary(
+            repository = GitRepository(
+                root = "/tmp/harold",
+                currentWorktreePath = "/tmp/harold",
+                currentBranch = "main",
+                defaultBranch = "main",
+                headSha = "abc123",
+            ),
+            uncommittedFileCount = 3,
+        ),
+    ),
+) : GitApi {
+    val summaryCalls = mutableListOf<Pair<String, String>>()
+
+    override suspend fun getSummary(
+        serverOrigin: String,
+        path: String,
+    ): Result<GitSummary> {
+        summaryCalls += serverOrigin to path
+        return summaryResult
+    }
+
+    override suspend fun listWorktrees(
+        serverOrigin: String,
+        path: String,
+    ): Result<GitWorktreeCollection> =
+        Result.failure(UnsupportedOperationException("not used"))
+
+    override suspend fun getChanges(
+        serverOrigin: String,
+        path: String,
+        scope: GitScope,
+    ): Result<GitChanges> =
+        Result.failure(UnsupportedOperationException("not used"))
+
+    override suspend fun getFileDiff(
+        serverOrigin: String,
+        worktreePath: String,
+        scope: GitScope,
+        filePath: String,
+        oldPath: String?,
+    ): Result<GitFileDiff> =
+        Result.failure(UnsupportedOperationException("not used"))
 }
 
 private class ChatFakeSessionOwner : SessionOwner {

@@ -7,9 +7,8 @@ import harold.android.contracts.GitSummary
 import harold.android.contracts.GitWorktreeCollection
 
 /**
- * Read-only git surface. The server routes are sketched in issue #468, but the
- * mock build binds this to [harold.android.changes.FixtureGitApi] so the UI can
- * be reviewed without a host endpoint.
+ * Read-only git surface for the Changes feature. The routes are path-scoped and
+ * authenticated, matching the `/v1/git/...` routes.
  */
 interface GitApi {
     suspend fun getSummary(

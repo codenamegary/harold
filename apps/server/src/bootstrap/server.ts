@@ -21,6 +21,7 @@ import { assembleRuntimeSettingsSlice } from "../runtime-settings/runtime-settin
 import { AppliedRuntimeSettingsHolder } from "../runtime-settings/applied.runtime.settings"
 import { assembleWorkspaceSlice } from "../workspace/workspace.assembly"
 import { registerFilesystemBrowseRoutes } from "../filesystem/filesystem.routes"
+import { assembleGitSlice } from "../git/git.assembly"
 import {
   makeCanonicalizePath,
   makeReadDirectoryEntries,
@@ -295,6 +296,7 @@ export const createServer = async ({
   })
 
   const canonicalizePath = makeCanonicalizePath()
+  const git = assembleGitSlice({ canonicalizePath })
   const workspace = assembleWorkspaceSlice({
     database,
     canonicalizePath,
@@ -398,6 +400,7 @@ export const createServer = async ({
 
   workspace.registerRoutes(app)
   registerFilesystemBrowseRoutes(app)
+  git.registerRoutes(app)
   attachments.registerRoutes(app)
   agentSettings.registerRoutes(app)
   registerAgentAuthRoutes(app, authBroker, agentExists)

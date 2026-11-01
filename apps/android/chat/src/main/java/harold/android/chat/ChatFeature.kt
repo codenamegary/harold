@@ -58,9 +58,8 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                         )
                     }
                 },
-                changesAvailable = uiState.selectedSession?.cwd?.isNotBlank() == true,
-                // Mock badge until /v1/git/summary is wired to the host.
-                changesBadgeCount = 17,
+                changesAvailable = uiState.changesAvailable,
+                changesBadgeCount = uiState.changesBadgeCount,
                 onSessionClick = viewModel::selectSession,
                 onSeeAllSessionsClick = {
                     viewModel.hidePicker()

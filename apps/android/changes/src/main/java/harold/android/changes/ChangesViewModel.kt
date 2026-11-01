@@ -8,6 +8,7 @@ import harold.android.contracts.GitRepository
 import harold.android.contracts.GitScope
 import harold.android.contracts.GitWorktree
 import harold.android.network.GitApi
+import harold.android.network.apiErrorMessage
 import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -297,7 +298,7 @@ class ChangesViewModel @Inject constructor(
             current.copy(
                 loading = false,
                 refreshing = false,
-                error = failure?.let { "Could not load changes" },
+                error = failure?.let { apiErrorMessage(it) },
                 repository = repository,
                 worktrees = sortWorktrees(worktrees),
                 selectedWorktreePath = selectedPath,
@@ -345,7 +346,7 @@ class ChangesViewModel @Inject constructor(
             current.copy(
                 loading = false,
                 refreshing = false,
-                error = failure?.let { "Could not refresh changes" },
+                error = failure?.let { apiErrorMessage(it) },
                 repository = repository,
                 worktrees = sortWorktrees(worktrees),
                 selectedWorktreePath = selectedPath,
@@ -360,7 +361,7 @@ class ChangesViewModel @Inject constructor(
             it.copy(
                 loading = false,
                 refreshing = false,
-                error = error.message ?: "Could not load changes",
+                error = apiErrorMessage(error),
             )
         }
     }

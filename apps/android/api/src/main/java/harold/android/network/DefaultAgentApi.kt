@@ -33,6 +33,11 @@ import harold.android.contracts.ElicitationReplyBody
 import harold.android.contracts.ExtensionReplyBody
 import harold.android.contracts.FilesystemDirectoryCollection
 import harold.android.contracts.FilesystemDirectoryCreated
+import harold.android.contracts.GitChanges
+import harold.android.contracts.GitFileDiff
+import harold.android.contracts.GitScope
+import harold.android.contracts.GitSummary
+import harold.android.contracts.GitWorktreeCollection
 import harold.android.contracts.InternalProblem
 import harold.android.contracts.ItemCollection
 import harold.android.contracts.NotFoundProblem
@@ -50,7 +55,7 @@ import harold.android.contracts.WorkspaceCollection
 class DefaultAgentApi(
     private val client: OkHttpClient,
     private val json: Json = HaroldJson,
-) : AgentApi, AttachmentApi, SessionConfigApi, SessionCommandApi {
+) : AgentApi, AttachmentApi, SessionConfigApi, SessionCommandApi, GitApi {
     override suspend fun prompt(
         serverOrigin: String,
         agentId: AgentId,
@@ -306,6 +311,67 @@ class DefaultAgentApi(
         json.decodeFromString(AgentSettingsCollection.serializer(), body)
     }
 
+    override suspend fun getSummary(
+        serverOrigin: String,
+        path: String,
+    ): Result<GitSummary> = get(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/git/summary",
+        query = mapOf("path" to path),
+    ) { body ->
+        json.decodeFromString(GitSummary.serializer(), body)
+    }
+
+    override suspend fun listWorktrees(
+        serverOrigin: String,
+        path: String,
+    ): Result<GitWorktreeCollection> = get(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/git/worktrees",
+        query = mapOf("path" to path),
+    ) { body ->
+        json.decodeFromString(GitWorktreeCollection.serializer(), body)
+    }
+
+    override suspend fun getChanges(
+        serverOrigin: String,
+        path: String,
+        scope: GitScope,
+    ): Result<GitChanges> = get(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/git/changes",
+        query = mapOf(
+            "path" to path,
+            "scope" to scope.wireValue(),
+        ),
+    ) { body ->
+        json.decodeFromString(GitChanges.serializer(), body)
+    }
+
+    override suspend fun getFileDiff(
+        serverOrigin: String,
+        worktreePath: String,
+        scope: GitScope,
+        filePath: String,
+        oldPath: String?,
+    ): Result<GitFileDiff> {
+        val query = buildMap {
+            put("path", worktreePath)
+            put("scope", scope.wireValue())
+            put("file", filePath)
+            if (oldPath != null) {
+                put("oldPath", oldPath)
+            }
+        }
+        return get(
+            serverOrigin = serverOrigin,
+            pathSegments = "v1/git/file",
+            query = query,
+        ) { body ->
+            json.decodeFromString(GitFileDiff.serializer(), body)
+        }
+    }
+
     override suspend fun createSession(
         serverOrigin: String,
         body: CreateSessionBody,
@@ -557,3 +623,8 @@ private fun ProblemDetails.detailOrNull(): String? =
         is InternalProblem -> detail
         else -> null
     }
+
+private fun GitScope.wireValue(): String = when (this) {
+    GitScope.Uncommitted -> "uncommitted"
+    GitScope.Branch -> "branch"
+}

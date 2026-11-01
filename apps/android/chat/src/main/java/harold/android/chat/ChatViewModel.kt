@@ -55,6 +55,7 @@ import harold.android.live.toContent
 import harold.android.navigation.NavigationPreferences
 import harold.android.navigation.Navigator
 import harold.android.network.AttachmentApi
+import harold.android.network.GitApi
 import harold.android.network.SessionConfigApi
 import harold.android.network.apiErrorMessage
 import harold.android.credentials.StoredCredential
@@ -94,6 +95,7 @@ class ChatViewModel @Inject constructor(
     private val savedHaroldRepository: SavedHaroldRepository,
     private val attachmentApi: AttachmentApi,
     private val configApi: SessionConfigApi,
+    private val gitApi: GitApi,
     private val navigationPreferences: NavigationPreferences,
     private val activeSessionTracker: ActiveSessionTracker? = null,
     private val sessionForegroundCoordinator: SessionForegroundCoordinator? = null,
@@ -164,6 +166,8 @@ class ChatViewModel @Inject constructor(
     private var lastLiveWatchKey: String? = null
     private var lastAuthRequired: Boolean = false
     private var pendingCreateInFlight = false
+    private var changesBadgeJob: Job? = null
+    private var changesBadgeKey: String? = null
 
     init {
         voiceDictationController.onStateChanged = ::syncVoiceDictationState
@@ -300,6 +304,7 @@ class ChatViewModel @Inject constructor(
 
     fun onResume() {
         sessionOwner.onForeground()
+        refreshChangesBadge()
         val origin = selectedOrPairedOrigin() ?: return
         sessionForegroundCoordinator?.setServerOrigin(origin)
         viewModelScope.launch {
@@ -309,6 +314,82 @@ class ChatViewModel @Inject constructor(
 
     fun onBackground() {
         sessionOwner.onBackground()
+    }
+
+    private fun refreshChangesBadge() {
+        val selected = _uiState.value.selectedSession
+        val origin = selectedOrPairedOrigin()
+        val cwd = selected?.cwd.orEmpty()
+        if (
+            selected == null ||
+            origin == null ||
+            selected.sessionId.isEmpty() ||
+            cwd.isEmpty()
+        ) {
+            clearChangesBadge()
+            return
+        }
+
+        val key = "${selected.id}|$origin|$cwd"
+        if (changesBadgeKey == key && changesBadgeJob?.isActive == true) {
+            return
+        }
+        changesBadgeKey = key
+        changesBadgeJob?.cancel()
+        changesBadgeJob = viewModelScope.launch {
+            val result = gitApi.getSummary(serverOrigin = origin, path = cwd)
+            if (changesBadgeKey != key) {
+                return@launch
+            }
+            result.fold(
+                onSuccess = { summary ->
+                    _uiState.update { current ->
+                        if (
+                            changesBadgeKey == key &&
+                            current.selectedSession?.id == selected.id
+                        ) {
+                            current.copy(
+                                changesAvailable = true,
+                                changesBadgeCount = summary.uncommittedFileCount,
+                            )
+                        } else {
+                            current
+                        }
+                    }
+                },
+                onFailure = {
+                    _uiState.update { current ->
+                        if (
+                            changesBadgeKey == key &&
+                            current.selectedSession?.id == selected.id
+                        ) {
+                            current.copy(
+                                changesAvailable = false,
+                                changesBadgeCount = 0,
+                            )
+                        } else {
+                            current
+                        }
+                    }
+                },
+            )
+        }
+    }
+
+    private fun clearChangesBadge() {
+        changesBadgeKey = null
+        changesBadgeJob?.cancel()
+        changesBadgeJob = null
+        _uiState.update { current ->
+            if (current.changesAvailable || current.changesBadgeCount != 0) {
+                current.copy(
+                    changesAvailable = false,
+                    changesBadgeCount = 0,
+                )
+            } else {
+                current
+            }
+        }
     }
 
     fun dismissNotificationPermissionPrompt() {
@@ -512,6 +593,7 @@ class ChatViewModel @Inject constructor(
         sessionOwner.watch(agentId, null)
         syncActiveSessionsFromUiState()
         agentAuth.hydrate(agentId)
+        clearChangesBadge()
     }
 
     private fun createPendingSessionAfterLogin(agentId: AgentId, status: AgentAuthStatus) {
@@ -1178,6 +1260,11 @@ class ChatViewModel @Inject constructor(
                 activeSessionTracker?.replaceAll(emptyList())
                 sessionForegroundCoordinator?.onSessionsChanged()
             }
+            if (_uiState.value.selectedSession == null) {
+                clearChangesBadge()
+            } else {
+                refreshChangesBadge()
+            }
         }
     }
 
@@ -1256,6 +1343,7 @@ class ChatViewModel @Inject constructor(
         }
         agentAuth.resetFor(row.agentId)
         syncWatch()
+        refreshChangesBadge()
         publishRecentSessions()
         syncActiveSessionsFromUiState()
         agentAuth.hydrate(row.agentId)
@@ -1263,6 +1351,7 @@ class ChatViewModel @Inject constructor(
 
     private fun applyLiveSnapshot(snapshot: SessionSnapshot) {
         val selected = _uiState.value.selectedSession
+        val previousState = _uiState.value.effectiveSessionState
         if (
             selected != null &&
             !selected.haroldReachable &&
@@ -1354,9 +1443,18 @@ class ChatViewModel @Inject constructor(
         }
 
         syncSelectedState(snapshot.transcript.sessionState)
-        val open = _uiState.value.selectedSession
+        val current = _uiState.value
+        if (
+            snapshot.sessionId != null &&
+            snapshot.sessionId == current.selectedSession?.sessionId &&
+            previousState == SessionState.Running &&
+            current.effectiveSessionState == SessionState.Idle
+        ) {
+            refreshChangesBadge()
+        }
+        val open = current.selectedSession
         if (open != null && snapshot.sessionId == open.sessionId) {
-            transcriptMemory[open.id] = _uiState.value.transcript
+            transcriptMemory[open.id] = current.transcript
         }
 
         if (snapshot.authRequired && !lastAuthRequired) {
@@ -1675,6 +1773,7 @@ class ChatViewModel @Inject constructor(
                 }
                 sessionOwner.watch(row.agentId, row.sessionId)
             }
+            refreshChangesBadge()
             return
         }
         activateSession(row)
@@ -1685,6 +1784,7 @@ class ChatViewModel @Inject constructor(
             ?: return
         _uiState.update { current -> current.copy(selectedSession = row) }
         syncAttachmentGating()
+        refreshChangesBadge()
     }
 
     private fun persistSelectedSession(sessionKey: String) {
@@ -1709,6 +1809,9 @@ class ChatViewModel @Inject constructor(
         _uiState.update { current ->
             val reset = if (selectedWasDeleted) current.resetSessionScopedState() else current
             reset.copy(sessions = catalog, pickerVisible = false)
+        }
+        if (selectedWasDeleted) {
+            clearChangesBadge()
         }
         publishRecentSessions()
         syncActiveSessionsFromUiState()

@@ -65,6 +65,8 @@ class ChatUiStateTest {
             streamReconnecting = true,
             cancelSubmitting = true,
             cancelError = "cancel failed",
+            changesAvailable = true,
+            changesBadgeCount = 17,
         )
 
         val reset = busy.resetSessionScopedState()
@@ -84,6 +86,8 @@ class ChatUiStateTest {
         assertFalse(reset.cancelSubmitting)
         assertNull(reset.cancelError)
         assertFalse(reset.pickerVisible)
+        assertFalse(reset.changesAvailable)
+        assertEquals(0, reset.changesBadgeCount)
         // Outside the reset policy: switching sessions leaves these alone.
         assertEquals("Reconnecting", reset.connectionBanner)
         assertEquals(busy.sessions, reset.sessions)

@@ -75,6 +75,10 @@ data class ChatUiState(
     /** True while the network refresh is running. Cached content stays visible. */
     val isRefreshing: Boolean = false,
     val sessionsError: String? = null,
+    /** True when the selected session's cwd resolved to a git worktree. */
+    val changesAvailable: Boolean = false,
+    /** Uncommitted changed-file count. Zero hides the badge, not the icon. */
+    val changesBadgeCount: Int = 0,
     val pickerVisible: Boolean = false,
     val recentSessions: List<SessionRow> = emptyList(),
     val recentSessionsLoading: Boolean = false,
@@ -230,4 +234,6 @@ internal fun ChatUiState.resetSessionScopedState(
     cancelSubmitting = false,
     cancelError = null,
     pickerVisible = false,
+    changesAvailable = false,
+    changesBadgeCount = 0,
 )

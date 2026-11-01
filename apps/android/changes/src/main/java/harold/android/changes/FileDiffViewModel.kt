@@ -8,6 +8,7 @@ import harold.android.contracts.GitFileDiff
 import harold.android.contracts.GitFileStatus
 import harold.android.contracts.GitScope
 import harold.android.network.GitApi
+import harold.android.network.apiErrorMessage
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -91,7 +92,7 @@ class FileDiffViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             loading = false,
-                            error = error.message ?: "Could not load this diff",
+                            error = apiErrorMessage(error),
                         )
                     }
                 },

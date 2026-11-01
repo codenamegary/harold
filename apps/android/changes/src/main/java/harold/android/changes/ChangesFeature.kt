@@ -20,7 +20,6 @@ import harold.android.navigation.Changes
 import harold.android.navigation.FeatureEntryProvider
 import harold.android.navigation.FileDiff
 import harold.android.navigation.Navigator
-import harold.android.network.GitApi
 import javax.inject.Inject
 
 class ChangesEntryProvider @Inject constructor() : FeatureEntryProvider {
@@ -102,11 +101,4 @@ abstract class ChangesFeatureModule {
     @Binds
     @IntoSet
     abstract fun entryProvider(impl: ChangesEntryProvider): FeatureEntryProvider
-
-    /**
-     * Mock-only binding. When the server slice lands, replace this with
-     * `DefaultGitApi` in `ApiModule` and delete [FixtureGitApi].
-     */
-    @Binds
-    abstract fun gitApi(impl: FixtureGitApi): GitApi
 }
