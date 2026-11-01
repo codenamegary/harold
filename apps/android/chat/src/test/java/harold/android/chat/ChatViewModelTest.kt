@@ -43,6 +43,7 @@ import harold.android.live.applyReconnect
 import harold.android.live.beginUserTurn
 import harold.android.live.emptyAcpTranscript
 import harold.android.navigation.NavigationPreferences
+import harold.android.navigation.LastSessionSelection
 import harold.android.navigation.Navigator
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
@@ -72,8 +73,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.JsonArray
@@ -1039,6 +1042,388 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun openingASessionRemembersItsWorkspaceAndAgent() = runTest(dispatcher) {
+        val preferences = FakeSessionPreferences()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(),
+            sessionPreferences = preferences,
+        )
+        advanceUntilIdle()
+        val remote = listedSession("sess_remote", "Remote").copy(
+            serverOrigin = REMOTE_ORIGIN,
+        )
+
+        viewModel.selectSession(remote)
+        advanceUntilIdle()
+
+        assertEquals(
+            LastSessionSelection(
+                serverOrigin = REMOTE_ORIGIN,
+                workspaceId = "ws_01",
+                agentId = "cursor",
+            ),
+            preferences.savedSelections.last(),
+        )
+    }
+
+    @Test
+    fun creatingASessionRemembersItsWorkspaceAndAgent() = runTest(dispatcher) {
+        val preferences = FakeSessionPreferences()
+        val repository = ChatFakeUserRepository()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            sessionPreferences = preferences,
+        )
+        advanceUntilIdle()
+
+        createSessionThroughRoute(repository, preferences)
+
+        assertEquals(
+            LastSessionSelection(
+                serverOrigin = ORIGIN,
+                workspaceId = "ws_01",
+                agentId = "cursor",
+            ),
+            preferences.savedSelections.last(),
+        )
+    }
+
+    @Test
+    fun confirmedModelPickRemembersTheModelForTheAgent() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val preferences = FakeSessionPreferences()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = sessionOwner,
+            sessionPreferences = preferences,
+        )
+
+        advanceUntilIdle()
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                configOptions = listOf(modelOption("m1", listOf("m1", "m2"))),
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.onModelPick("m2")
+        advanceUntilIdle()
+        assertNull(preferences.model(ORIGIN, "cursor"))
+
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                configOptions = listOf(modelOption("m2", listOf("m1", "m2"))),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals("m2", preferences.model(ORIGIN, "cursor"))
+    }
+
+    @Test
+    fun rejectedModelPickIsNotRemembered() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val configApi = RecordingSessionConfigApi().apply {
+            result = Result.failure(
+                AgentApiException(
+                    AgentApiError.Problem(status = 409, title = "Conflict", detail = "Rejected"),
+                ),
+            )
+        }
+        val preferences = FakeSessionPreferences()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = sessionOwner,
+            configApi = configApi,
+            sessionPreferences = preferences,
+        )
+
+        advanceUntilIdle()
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                configOptions = listOf(modelOption("m1", listOf("m1", "m2"))),
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.onModelPick("m2")
+        advanceUntilIdle()
+
+        assertEquals(1, configApi.calls.size)
+        assertNull(preferences.model(ORIGIN, "cursor"))
+    }
+
+    @Test
+    fun confirmedModelPickIsScopedToTheHaroldsAgent() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val preferences = FakeSessionPreferences()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = sessionOwner,
+            sessionPreferences = preferences,
+        )
+        advanceUntilIdle()
+
+        viewModel.selectSession(
+            listedSession("sess_remote", "Remote").copy(serverOrigin = REMOTE_ORIGIN),
+        )
+        advanceUntilIdle()
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                agentId = "cursor",
+                sessionId = "sess_remote",
+                configOptions = listOf(modelOption("m1", listOf("m1", "m2"))),
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.onModelPick("m2")
+        advanceUntilIdle()
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                configOptions = listOf(modelOption("m2", listOf("m1", "m2"))),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals("m2", preferences.model(REMOTE_ORIGIN, "cursor"))
+        assertNull(preferences.model(ORIGIN, "cursor"))
+    }
+
+    @Test
+    fun aNewSessionAppliesTheRememberedModelBeforeTheFirstPrompt() = runTest(dispatcher) {
+        val preferences = FakeSessionPreferences().apply {
+            seedModel(ORIGIN, "cursor", "m2")
+        }
+        val repository = ChatFakeUserRepository()
+        val sessionOwner = ChatFakeSessionOwner()
+        val configApi = RecordingSessionConfigApi()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = sessionOwner,
+            configApi = configApi,
+            sessionPreferences = preferences,
+        )
+        advanceUntilIdle()
+
+        startCreateSessionThroughRoute(repository, preferences)
+
+        assertEquals("sess_new", viewModel.uiState.value.selectedSession?.sessionId)
+        assertTrue(viewModel.uiState.value.modelSyncPending)
+        assertTrue(viewModel.uiState.value.composerEnabled)
+        assertFalse(viewModel.uiState.value.submitEnabled)
+
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                agentId = "cursor",
+                sessionId = "sess_new",
+                configOptions = listOf(modelOption("m1", listOf("m1", "m2"))),
+            ),
+        )
+        runCurrent()
+
+        assertEquals(ConfigValue.Text("m2"), configApi.calls.single().value)
+        assertTrue(viewModel.uiState.value.modelSyncPending)
+
+        viewModel.onComposerTextChanged("hello")
+        viewModel.submitComposerPrompt()
+        runCurrent()
+        assertTrue(sessionOwner.prompts.isEmpty())
+
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                configOptions = listOf(modelOption("m2", listOf("m1", "m2"))),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.modelSyncPending)
+        assertTrue(viewModel.uiState.value.submitEnabled)
+        assertEquals("m2", preferences.model(ORIGIN, "cursor"))
+    }
+
+    @Test
+    fun anUnavailableRememberedModelIsIgnoredWithoutAnError() = runTest(dispatcher) {
+        val preferences = FakeSessionPreferences().apply {
+            seedModel(ORIGIN, "cursor", "m_gone")
+        }
+        val repository = ChatFakeUserRepository()
+        val sessionOwner = ChatFakeSessionOwner()
+        val configApi = RecordingSessionConfigApi()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = sessionOwner,
+            configApi = configApi,
+            sessionPreferences = preferences,
+        )
+        advanceUntilIdle()
+
+        startCreateSessionThroughRoute(repository, preferences)
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                agentId = "cursor",
+                sessionId = "sess_new",
+                configOptions = listOf(modelOption("m1", listOf("m1"))),
+            ),
+        )
+        runCurrent()
+
+        assertTrue(configApi.calls.isEmpty())
+        assertFalse(viewModel.uiState.value.modelSyncPending)
+        assertNull(viewModel.uiState.value.composerError)
+        assertTrue(viewModel.uiState.value.submitEnabled)
+    }
+
+    @Test
+    fun duplicateConfigFramesDoNotRepeatTheRememberedModelWrite() = runTest(dispatcher) {
+        val preferences = FakeSessionPreferences().apply {
+            seedModel(ORIGIN, "cursor", "m2")
+        }
+        val repository = ChatFakeUserRepository()
+        val sessionOwner = ChatFakeSessionOwner()
+        val configApi = RecordingSessionConfigApi()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = sessionOwner,
+            configApi = configApi,
+            sessionPreferences = preferences,
+        )
+        advanceUntilIdle()
+
+        startCreateSessionThroughRoute(repository, preferences)
+        val configSnapshot = sessionOwner.snapshot.value.copy(
+            agentId = "cursor",
+            sessionId = "sess_new",
+            configOptions = listOf(modelOption("m1", listOf("m1", "m2"))),
+        )
+        sessionOwner.publish(configSnapshot)
+        runCurrent()
+        sessionOwner.publish(configSnapshot)
+        runCurrent()
+        sessionOwner.publish(configSnapshot)
+        runCurrent()
+
+        assertEquals(1, configApi.calls.size)
+    }
+
+    @Test
+    fun aSlowModelWriteFallsBackAfterTheTimeout() = runTest(dispatcher) {
+        val preferences = FakeSessionPreferences().apply {
+            seedModel(ORIGIN, "cursor", "m2")
+        }
+        val repository = ChatFakeUserRepository()
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = sessionOwner,
+            sessionPreferences = preferences,
+        )
+        advanceUntilIdle()
+
+        startCreateSessionThroughRoute(repository, preferences)
+        assertTrue(viewModel.uiState.value.modelSyncPending)
+
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                agentId = "cursor",
+                sessionId = "sess_new",
+                configOptions = emptyList(),
+            ),
+        )
+        runCurrent()
+        assertTrue(viewModel.uiState.value.modelSyncPending)
+
+        advanceTimeBy(ChatViewModel.MODEL_SYNC_TIMEOUT_MS + 1)
+        runCurrent()
+
+        assertFalse(viewModel.uiState.value.modelSyncPending)
+        assertTrue(viewModel.uiState.value.submitEnabled)
+    }
+
+    @Test
+    fun aModelPickBeforeTheSyncSettlesCancelsTheRememberedWrite() = runTest(dispatcher) {
+        val preferences = FakeSessionPreferences().apply {
+            seedModel(ORIGIN, "cursor", "m2")
+            loadModelGate = CompletableDeferred()
+        }
+        val repository = ChatFakeUserRepository()
+        val sessionOwner = ChatFakeSessionOwner()
+        val configApi = RecordingSessionConfigApi()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = sessionOwner,
+            configApi = configApi,
+            sessionPreferences = preferences,
+        )
+        advanceUntilIdle()
+
+        startCreateSessionThroughRoute(repository, preferences)
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                agentId = "cursor",
+                sessionId = "sess_new",
+                configOptions = listOf(modelOption("m1", listOf("m1", "m2"))),
+            ),
+        )
+        runCurrent()
+        assertTrue(configApi.calls.isEmpty())
+
+        viewModel.onModelPick("m1")
+        runCurrent()
+
+        assertEquals(listOf(ConfigValue.Text("m1")), configApi.calls.map { call -> call.value })
+        assertFalse(viewModel.uiState.value.modelSyncPending)
+
+        preferences.loadModelGate?.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(1, configApi.calls.size)
+    }
+
+    @Test
+    fun reopeningAnExistingSessionDoesNotOverrideItsModel() = runTest(dispatcher) {
+        val preferences = FakeSessionPreferences().apply {
+            seedModel(ORIGIN, "cursor", "m2")
+        }
+        val sessionOwner = ChatFakeSessionOwner()
+        val configApi = RecordingSessionConfigApi()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = sessionOwner,
+            configApi = configApi,
+            sessionPreferences = preferences,
+        )
+        advanceUntilIdle()
+
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                configOptions = listOf(modelOption("m1", listOf("m1", "m2"))),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertTrue(configApi.calls.isEmpty())
+        assertFalse(viewModel.uiState.value.modelSyncPending)
+    }
+
+    @Test
     fun modeCycleUsesTheReservedOptionId() = runTest(dispatcher) {
         val sessionOwner = ChatFakeSessionOwner()
         val configApi = RecordingSessionConfigApi()
@@ -1545,6 +1930,7 @@ class ChatViewModelTest {
         gitApi: GitApi = RecordingGitApi(),
         savedHaroldRepository: SavedHaroldRepository = SavedHaroldRepository(FakeCredentialStore()),
         navigator: Navigator = Navigator(),
+        sessionPreferences: FakeSessionPreferences = FakeSessionPreferences(),
         haroldConnections: harold.android.session.HaroldConnections? = null,
         sessionAttention: harold.android.foreground.SessionAttentionMarks? = null,
         permissionNotifier: harold.android.foreground.PermissionAttentionNotifier? = null,
@@ -1559,6 +1945,7 @@ class ChatViewModelTest {
         configApi = configApi,
         gitApi = gitApi,
         navigationPreferences = navigation,
+        sessionPreferences = sessionPreferences,
         voiceDictationController = VoiceDictationController(
             speechClient = FakeSpeechRecognitionClient(),
             silenceScheduler = ImmediateVoiceDictationRestartScheduler(),
@@ -1575,7 +1962,10 @@ class ChatViewModelTest {
     private fun pairedGateway(): FakeSessionGateway =
         FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel"))
 
-    private fun TestScope.createSessionThroughRoute(repository: ChatFakeUserRepository) {
+    private fun TestScope.createSessionThroughRoute(
+        repository: ChatFakeUserRepository,
+        sessionPreferences: FakeSessionPreferences = FakeSessionPreferences(),
+    ) {
         val route = CreateSessionViewModel(
             sessionGateway = pairedGateway(),
             sessionRepository = TestSessionRepository(repository),
@@ -1583,12 +1973,31 @@ class ChatViewModelTest {
             userRepository = repository,
             sessionCommands = sessionCommands,
             navigator = Navigator(),
+            sessionPreferences = sessionPreferences,
         )
         advanceUntilIdle()
         route.onWorkspaceChanged("ws_01")
         route.onAgentChanged("cursor")
         route.submit()
         advanceUntilIdle()
+    }
+
+    private fun TestScope.startCreateSessionThroughRoute(
+        repository: ChatFakeUserRepository,
+        sessionPreferences: FakeSessionPreferences,
+    ) {
+        val route = CreateSessionViewModel(
+            sessionGateway = pairedGateway(),
+            sessionRepository = TestSessionRepository(repository),
+            workspaceRepository = TestWorkspaceRepository(repository),
+            userRepository = repository,
+            sessionCommands = sessionCommands,
+            navigator = Navigator(),
+            sessionPreferences = sessionPreferences,
+        )
+        runCurrent()
+        route.submit()
+        runCurrent()
     }
 
     @Test
@@ -1704,16 +2113,20 @@ class ChatViewModelTest {
         assertEquals("The session folder is unavailable", pending.error)
     }
 
-    private fun modelOption(currentValue: String): SelectOption = SelectOption(
+    private fun modelOption(
+        currentValue: String,
+        options: List<String> = listOf(currentValue),
+    ): SelectOption = SelectOption(
         id = "model",
         name = "Model",
         category = "model",
         currentValue = currentValue,
-        options = listOf(ConfigOptionValue(value = currentValue, name = currentValue)),
+        options = options.map { value -> ConfigOptionValue(value = value, name = value) },
     )
 
     private companion object {
         const val ORIGIN = "http://127.0.0.1:8787"
+        const val REMOTE_ORIGIN = "http://desktop.local:3847"
     }
 }
 
@@ -1727,6 +2140,7 @@ private class RecordingSessionConfigApi : SessionConfigApi {
     )
 
     val calls = mutableListOf<Call>()
+    var result: Result<Unit> = Result.success(Unit)
 
     override suspend fun setConfigOption(
         serverOrigin: String,
@@ -1736,7 +2150,7 @@ private class RecordingSessionConfigApi : SessionConfigApi {
         value: ConfigValue,
     ): Result<Unit> {
         calls += Call(serverOrigin, agentId, sessionId, configId, value)
-        return Result.success(Unit)
+        return result
     }
 }
 

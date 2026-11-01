@@ -87,6 +87,8 @@ data class ChatUiState(
     val transcript: AcpTranscriptState = emptyAcpTranscript,
     val composerText: String = "",
     val composerSubmitting: Boolean = false,
+    /** A newly created session is applying its remembered model; block submit only. */
+    val modelSyncPending: Boolean = false,
     val composerError: String? = null,
     val composerConfig: ComposerConfigUi = ComposerConfigUi(),
     val cancelSubmitting: Boolean = false,
@@ -159,6 +161,10 @@ data class ChatUiState(
                 pendingElicitations.isEmpty()
         }
 
+    /** Typing stays enabled while the remembered model lands; sending waits. */
+    val submitEnabled: Boolean
+        get() = composerEnabled && !modelSyncPending
+
     val isPendingNewSession: Boolean
         get() = selectedSession?.sessionId?.isEmpty() == true
 
@@ -228,6 +234,7 @@ internal fun ChatUiState.resetSessionScopedState(
     transcript = keep.transcript,
     composerText = "",
     composerSubmitting = false,
+    modelSyncPending = false,
     composerError = null,
     availableCommands = emptyList(),
     voiceCommandPrefix = "",

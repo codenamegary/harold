@@ -4,6 +4,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import app.cash.turbine.test
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -145,6 +146,79 @@ class SessionConfigWriterTest {
         assertTrue(api.calls.isEmpty())
         assertEquals("m1", writer.state.value.model?.selectValue())
         assertFalse(writer.state.value.saving)
+    }
+
+    @Test
+    fun confirmedEchoEmitsTheSettledModelWrite() = runTest {
+        val api = FakeSessionConfigApi()
+        val writer = SessionConfigWriter(api, this)
+        writer.onSnapshot(ORIGIN, "cursor", "sess_01", listOf(selectOption("model", "m1")))
+
+        writer.settled.test {
+            writer.set("model", ConfigValue.Text("m2"))
+            advanceUntilIdle()
+            writer.onSnapshot(ORIGIN, "cursor", "sess_01", listOf(selectOption("model", "m2")))
+
+            val settled = awaitItem()
+            assertEquals(ORIGIN, settled.serverOrigin)
+            assertEquals("cursor", settled.agentId)
+            assertEquals("sess_01", settled.sessionId)
+            assertEquals("model", settled.configId)
+            assertEquals(ConfigValue.Text("m2"), settled.value)
+            assertTrue(settled.isModel)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun failedWriteEmitsNoSettledValue() = runTest {
+        val api = FakeSessionConfigApi()
+        api.result = Result.failure(
+            AgentApiException(
+                AgentApiError.Problem(status = 409, title = "Conflict", detail = "Agent is disabled"),
+            ),
+        )
+        val writer = SessionConfigWriter(api, this)
+        writer.onSnapshot(ORIGIN, "cursor", "sess_01", listOf(selectOption("model", "m1")))
+
+        writer.settled.test {
+            writer.set("model", ConfigValue.Text("m2"))
+            advanceUntilIdle()
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun aNonModelEchoIsNotReportedAsAModelWrite() = runTest {
+        val api = FakeSessionConfigApi()
+        val writer = SessionConfigWriter(api, this)
+        writer.onSnapshot(ORIGIN, "cursor", "sess_01", listOf(selectOption("mode", "ask")))
+
+        writer.settled.test {
+            writer.set("mode", ConfigValue.Text("plan"))
+            advanceUntilIdle()
+            writer.onSnapshot(ORIGIN, "cursor", "sess_01", listOf(selectOption("mode", "plan")))
+
+            assertFalse(awaitItem().isModel)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun duplicateEchoesEmitOnlyOnce() = runTest {
+        val api = FakeSessionConfigApi()
+        val writer = SessionConfigWriter(api, this)
+        writer.onSnapshot(ORIGIN, "cursor", "sess_01", listOf(selectOption("model", "m1")))
+
+        writer.settled.test {
+            writer.set("model", ConfigValue.Text("m2"))
+            advanceUntilIdle()
+            writer.onSnapshot(ORIGIN, "cursor", "sess_01", listOf(selectOption("model", "m2")))
+            awaitItem()
+            writer.onSnapshot(ORIGIN, "cursor", "sess_01", listOf(selectOption("model", "m2")))
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     private fun selectOption(id: String, currentValue: String): SelectOption = SelectOption(

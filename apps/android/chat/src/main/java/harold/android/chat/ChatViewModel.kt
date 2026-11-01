@@ -25,6 +25,7 @@ import harold.android.contracts.ConfigOptionValue
 import harold.android.contracts.ConfigValue
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
+import harold.android.contracts.SelectOption
 import harold.android.contracts.SessionState
 import harold.android.contracts.Workspace
 import harold.android.contracts.catalogSessionKey
@@ -52,8 +53,10 @@ import harold.android.live.SessionOwner
 import harold.android.live.SessionSnapshot
 import harold.android.live.emptyAcpTranscript
 import harold.android.live.toContent
+import harold.android.navigation.LastSessionSelection
 import harold.android.navigation.NavigationPreferences
 import harold.android.navigation.Navigator
+import harold.android.navigation.SessionPreferences
 import harold.android.network.AttachmentApi
 import harold.android.network.GitApi
 import harold.android.network.SessionConfigApi
@@ -74,6 +77,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -97,6 +101,7 @@ class ChatViewModel @Inject constructor(
     private val configApi: SessionConfigApi,
     private val gitApi: GitApi,
     private val navigationPreferences: NavigationPreferences,
+    private val sessionPreferences: SessionPreferences,
     private val activeSessionTracker: ActiveSessionTracker? = null,
     private val sessionForegroundCoordinator: SessionForegroundCoordinator? = null,
     private val openSessionRequests: OpenSessionRequests? = null,
@@ -168,6 +173,11 @@ class ChatViewModel @Inject constructor(
     private var pendingCreateInFlight = false
     private var changesBadgeJob: Job? = null
     private var changesBadgeKey: String? = null
+    private var pendingModelApply: PendingModelApply? = null
+    private var pendingModelValue: String? = null
+    private var pendingModelValueLoaded: Boolean = false
+    private var modelSyncTimeoutJob: Job? = null
+    private val appliedModelSessions = mutableSetOf<String>()
 
     init {
         voiceDictationController.onStateChanged = ::syncVoiceDictationState
@@ -231,6 +241,21 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             configWriter.state.collect { config ->
                 _uiState.update { current -> current.copy(composerConfig = config) }
+            }
+        }
+
+        viewModelScope.launch {
+            configWriter.settled.collect { settled ->
+                if (!settled.isModel) return@collect
+                val model = (settled.value as? ConfigValue.Text)?.value ?: return@collect
+                sessionPreferences.saveLastModel(
+                    serverOrigin = settled.serverOrigin,
+                    agentId = settled.agentId,
+                    model = model,
+                )
+                finishModelSync(
+                    modelSyncKey(settled.serverOrigin, settled.agentId, settled.sessionId),
+                )
             }
         }
 
@@ -434,6 +459,8 @@ class ChatViewModel @Inject constructor(
 
     fun onModelPick(value: String) {
         val configId = _uiState.value.composerConfig.model?.id ?: return
+        // A pick wins over the remembered model that is still on its way.
+        pendingModelApply?.let { pending -> finishModelSync(pending.key) }
         configWriter.set(configId, ConfigValue.Text(value))
     }
 
@@ -568,7 +595,9 @@ class ChatViewModel @Inject constructor(
             haroldColorId = created.haroldColorId,
             haroldIconId = created.haroldIconId,
         )
+        markModelApplyPending(row)
         activateSession(row)
+        startModelSync()
         refreshCatalog()
     }
 
@@ -642,7 +671,7 @@ class ChatViewModel @Inject constructor(
         val session = _uiState.value.selectedSession ?: return
         val prompt = composerState.text.toString().trim()
 
-        if (prompt.isEmpty() || !_uiState.value.composerEnabled) {
+        if (prompt.isEmpty() || !_uiState.value.submitEnabled) {
             return
         }
 
@@ -1312,7 +1341,12 @@ class ChatViewModel @Inject constructor(
         if (voiceDictationController.state.visible) {
             syncVoiceDictationState(voiceDictationController.cancel())
         }
+        val applyPendingModel = pendingModelApply?.key == sessionModelKey(row)
+        if (!applyPendingModel) {
+            cancelModelApply()
+        }
         navigationPreferences.saveLastSessionId(row.id)
+        saveLastSelection(row)
         persistSelectedSession(row.id)
         clearComposer()
         holdUserInputForPrevious(row)
@@ -1339,7 +1373,10 @@ class ChatViewModel @Inject constructor(
                     pendingPermissions = listOfNotNull(restored?.request),
                     pendingElicitations = listOfNotNull(restored?.elicitation),
                 ),
-            ).copy(sessions = catalog)
+            ).copy(
+                sessions = catalog,
+                modelSyncPending = applyPendingModel,
+            )
         }
         agentAuth.resetFor(row.agentId)
         syncWatch()
@@ -1377,6 +1414,7 @@ class ChatViewModel @Inject constructor(
             sessionId = snapshot.sessionId,
             configOptions = snapshot.configOptions,
         )
+        applyRememberedModelIfPossible()
 
         _uiState.update { current ->
             val extension = snapshot.extension
@@ -1856,6 +1894,132 @@ class ChatViewModel @Inject constructor(
             }
     }
 
+    private suspend fun saveLastSelection(row: SessionRow) {
+        if (row.workspaceId.isEmpty() || row.agentId.isEmpty()) {
+            return
+        }
+        val origin = row.serverOrigin.ifEmpty {
+            (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin.orEmpty()
+        }
+        if (origin.isEmpty()) {
+            return
+        }
+        sessionPreferences.saveLastSessionSelection(
+            LastSessionSelection(
+                serverOrigin = origin,
+                workspaceId = row.workspaceId,
+                agentId = row.agentId,
+            ),
+        )
+    }
+
+    /**
+     * A created session applies its remembered model once the config option arrives.
+     * The pending key means "block submit until this settles, or until the timeout".
+     */
+    private fun markModelApplyPending(row: SessionRow) {
+        val key = sessionModelKey(row)
+        if (key.isEmpty()) {
+            return
+        }
+        val pending = PendingModelApply(
+            serverOrigin = row.serverOrigin.ifEmpty {
+                (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin.orEmpty()
+            },
+            agentId = row.agentId,
+            sessionId = row.sessionId,
+        )
+        pendingModelApply = pending
+        pendingModelValue = null
+        pendingModelValueLoaded = false
+        appliedModelSessions.remove(key)
+    }
+
+    private fun startModelSync() {
+        val pending = pendingModelApply ?: return
+        modelSyncTimeoutJob?.cancel()
+        modelSyncTimeoutJob = viewModelScope.launch {
+            val remembered = sessionPreferences.loadLastModel(
+                serverOrigin = pending.serverOrigin,
+                agentId = pending.agentId,
+            )
+            if (pendingModelApply != pending) {
+                return@launch
+            }
+            pendingModelValue = remembered
+            pendingModelValueLoaded = true
+            if (remembered == null) {
+                finishModelSync(pending.key)
+                return@launch
+            }
+            applyRememberedModelIfPossible()
+            delay(MODEL_SYNC_TIMEOUT_MS)
+            finishModelSync(pending.key)
+        }
+    }
+
+    private fun applyRememberedModelIfPossible() {
+        val pending = pendingModelApply ?: return
+        val selected = _uiState.value.selectedSession ?: return
+        if (sessionModelKey(selected) != pending.key) {
+            return
+        }
+        if (!pendingModelValueLoaded) {
+            return
+        }
+        val remembered = pendingModelValue ?: run {
+            finishModelSync(pending.key)
+            return
+        }
+        // Cached and fresh config frames both arrive; write once per session.
+        if (pending.key in appliedModelSessions) {
+            return
+        }
+        val option = configWriter.state.value.model as? SelectOption ?: return
+        if (option.options.none { value -> value.value == remembered }) {
+            finishModelSync(pending.key)
+            return
+        }
+        appliedModelSessions.add(pending.key)
+        if (option.currentValue == remembered) {
+            finishModelSync(pending.key)
+            return
+        }
+        configWriter.set(option.id, ConfigValue.Text(remembered))
+    }
+
+    private fun finishModelSync(key: String) {
+        if (pendingModelApply?.key != key) {
+            return
+        }
+        pendingModelApply = null
+        pendingModelValue = null
+        pendingModelValueLoaded = false
+        modelSyncTimeoutJob?.cancel()
+        modelSyncTimeoutJob = null
+        _uiState.update { current ->
+            if (current.modelSyncPending) current.copy(modelSyncPending = false) else current
+        }
+    }
+
+    private fun cancelModelApply() {
+        pendingModelApply = null
+        pendingModelValue = null
+        pendingModelValueLoaded = false
+        modelSyncTimeoutJob?.cancel()
+        modelSyncTimeoutJob = null
+    }
+
+    private fun sessionModelKey(row: SessionRow): String {
+        val origin = row.serverOrigin.ifEmpty {
+            (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin.orEmpty()
+        }
+        if (origin.isEmpty() || row.sessionId.isEmpty()) {
+            return ""
+        }
+        return modelSyncKey(origin, row.agentId, row.sessionId)
+    }
+
     private fun pendingSessionRow(workspace: WorkspaceRow, agentId: AgentId): SessionRow =
         SessionRow(
             sessionId = "",
@@ -1896,5 +2060,18 @@ class ChatViewModel @Inject constructor(
         const val KEY_SELECTED_SESSION_ID = "selected_session_id"
         const val RECENT_SESSIONS_LIMIT = 5
         const val NEW_SESSION_NAME = "New session"
+        const val MODEL_SYNC_TIMEOUT_MS = 3_000L
+
+        fun modelSyncKey(serverOrigin: String, agentId: AgentId, sessionId: String): String =
+            "$serverOrigin|$agentId|$sessionId"
+    }
+
+    private data class PendingModelApply(
+        val serverOrigin: String,
+        val agentId: AgentId,
+        val sessionId: String,
+    ) {
+        val key: String
+            get() = modelSyncKey(serverOrigin, agentId, sessionId)
     }
 }

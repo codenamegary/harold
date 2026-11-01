@@ -1028,6 +1028,7 @@ fun ChatScreen(
                 PromptComposer(
                     composerState = composerState,
                     composerEnabled = composerEnabled,
+                    submitEnabled = uiState.submitEnabled,
                     config = uiState.composerConfig,
                     configActions = composerActions,
                     showCancel = uiState.showComposerCancel,

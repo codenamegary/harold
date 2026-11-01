@@ -14,6 +14,10 @@ abstract class NavigationModule {
     @Singleton
     abstract fun navigationPreferences(impl: DefaultNavigationPreferences): NavigationPreferences
 
+    @Binds
+    @Singleton
+    abstract fun sessionPreferences(impl: DefaultSessionPreferences): SessionPreferences
+
     @Multibinds
     abstract fun entryProviders(): Set<FeatureEntryProvider>
 
