@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.1.0](https://github.com/codenamegary/harold/compare/v3.0.0...v3.1.0) (2026-11-01)
+
+
+### Features
+
+* **acp:** pass through elicitation so agent questions work on Android ([#467](https://github.com/codenamegary/harold/issues/467)) ([b8063a7](https://github.com/codenamegary/harold/commit/b8063a7dc2529596d0b362fed646ea9f744b7c63))
+* **git:** review changes and worktrees from chat ([#469](https://github.com/codenamegary/harold/issues/469)) ([4eccd80](https://github.com/codenamegary/harold/commit/4eccd808b5ca6f0689671645418b04b9f86b5cee))
+
+
+### Bug Fixes
+
+* **ci:** load the z.ai smoke config from the session cwd ([#470](https://github.com/codenamegary/harold/issues/470)) ([71088d8](https://github.com/codenamegary/harold/commit/71088d8235fd8c5f86edc00a39eedb38e45ba25d))
+* **release:** cover the bundled CLI in release-please ([#472](https://github.com/codenamegary/harold/issues/472)) ([457ab04](https://github.com/codenamegary/harold/commit/457ab0495e783097ed323d2dde4632662e85214a))
+
 ## [3.0.0](https://github.com/codenamegary/harold/compare/v2.0.0...v3.0.0) (2026-10-30)
 
 
