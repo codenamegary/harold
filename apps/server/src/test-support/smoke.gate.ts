@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process"
+import { writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
@@ -41,6 +42,18 @@ export const openCodeSmokeConfigContent = (model: string): string =>
       },
     },
   })
+
+/**
+ * `opencode acp` ignores OPENCODE_CONFIG_CONTENT, so the smoke config must be
+ * a project opencode.json in the session cwd for ACP to load it. See
+ * https://github.com/anomalyco/opencode/issues/34638.
+ */
+export const writeOpenCodeSmokeConfig = async (
+  directory: string,
+  model: string,
+): Promise<void> => {
+  await writeFile(path.join(directory, "opencode.json"), openCodeSmokeConfigContent(model))
+}
 
 export const resolveOpenCodePath = (): string | undefined => {
   try {

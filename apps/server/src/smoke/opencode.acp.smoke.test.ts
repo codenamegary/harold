@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { isModelOption } from "contracts/http/config.options"
 import { CreateSessionResponseSchema, SessionCollectionSchema } from "contracts/http/session"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
 import { createServer } from "../bootstrap/server"
@@ -23,9 +24,9 @@ const authHeaders = (app: { deviceCredential: { credential: string } }) => ({
 })
 
 import {
-  openCodeSmokeConfigContent,
   resolveOpenCodePath,
   smokeRunRequested,
+  writeOpenCodeSmokeConfig,
 } from "../test-support/smoke.gate"
 
 const OPENCODE_SMOKE_TIMEOUT_MS = 180_000
@@ -74,9 +75,7 @@ describe("opencode ACP smoke", () => {
       const dataDir = await mkdtemp(path.join(os.tmpdir(), "harold-opencode-smoke-"))
       const workspaceDir = path.join(dataDir, "smoke-project")
       await mkdir(workspaceDir)
-
-      const previousConfigContent = process.env.OPENCODE_CONFIG_CONTENT
-      process.env.OPENCODE_CONFIG_CONTENT = openCodeSmokeConfigContent(SMOKE_MODEL)
+      await writeOpenCodeSmokeConfig(workspaceDir, SMOKE_MODEL)
       // opencode's zai-coding-plan provider reads ZHIPU_API_KEY; an empty
       // value from a missing secret must not shadow a local auth login.
       for (const key of ["ZHIPU_API_KEY", "OPENCODE_API_KEY"]) {
@@ -141,6 +140,8 @@ describe("opencode ACP smoke", () => {
         )
         expect(sessionResponse.statusCode).toBe(201)
         const session = CreateSessionResponseSchema.parse(JSON.parse(sessionResponse.body))
+        const modelOption = session.configOptions.find(isModelOption)
+        expect(modelOption).toMatchObject({ type: "select", currentValue: SMOKE_MODEL })
 
         const listResponse = await app.inject({
           headers: authHeaders(app),
@@ -208,11 +209,6 @@ describe("opencode ACP smoke", () => {
         await app.close()
         database.close()
         await rm(dataDir, { recursive: true, force: true })
-        if (previousConfigContent === undefined) {
-          delete process.env.OPENCODE_CONFIG_CONTENT
-        } else {
-          process.env.OPENCODE_CONFIG_CONTENT = previousConfigContent
-        }
       }
     },
     OPENCODE_SMOKE_TIMEOUT_MS,

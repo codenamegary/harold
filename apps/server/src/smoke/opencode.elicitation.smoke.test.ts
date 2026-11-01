@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { isModelOption } from "contracts/http/config.options"
 import { CreateSessionResponseSchema } from "contracts/http/session"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
 import { createServer } from "../bootstrap/server"
@@ -17,9 +18,9 @@ import {
   smokeCommands,
 } from "../test-support/session.stream.smoke"
 import {
-  openCodeSmokeConfigContent,
   resolveOpenCodePath,
   smokeRunRequested,
+  writeOpenCodeSmokeConfig,
 } from "../test-support/smoke.gate"
 
 const OPENCODE_ELICITATION_SMOKE_TIMEOUT_MS = 180_000
@@ -50,9 +51,7 @@ describe("opencode ACP elicitation smoke", () => {
       const dataDir = await mkdtemp(path.join(os.tmpdir(), "harold-opencode-elicit-"))
       const workspaceDir = path.join(dataDir, "smoke-project")
       await mkdir(workspaceDir)
-
-      const previousConfigContent = process.env.OPENCODE_CONFIG_CONTENT
-      process.env.OPENCODE_CONFIG_CONTENT = openCodeSmokeConfigContent(SMOKE_MODEL)
+      await writeOpenCodeSmokeConfig(workspaceDir, SMOKE_MODEL)
 
       const detectedPath = resolveOpenCodePath()
       if (detectedPath === undefined) {
@@ -96,6 +95,8 @@ describe("opencode ACP elicitation smoke", () => {
         })
         expect(sessionResponse.statusCode).toBe(201)
         const session = CreateSessionResponseSchema.parse(JSON.parse(sessionResponse.body))
+        const modelOption = session.configOptions.find(isModelOption)
+        expect(modelOption).toMatchObject({ type: "select", currentValue: SMOKE_MODEL })
 
         const commands = smokeCommands({ app, credential: device.credential })
         const client = await openStreamClient({
@@ -147,11 +148,6 @@ describe("opencode ACP elicitation smoke", () => {
         await app.close()
         database.close()
         await rm(dataDir, { recursive: true, force: true })
-        if (previousConfigContent === undefined) {
-          delete process.env.OPENCODE_CONFIG_CONTENT
-        } else {
-          process.env.OPENCODE_CONFIG_CONTENT = previousConfigContent
-        }
       }
     },
     OPENCODE_ELICITATION_SMOKE_TIMEOUT_MS,
