@@ -89,6 +89,7 @@ dependencies {
     implementation(project(":design"))
     implementation(project(":pairing"))
     implementation(project(":chat"))
+    implementation(project(":changes"))
     implementation(project(":workspaces"))
     implementation(project(":shell"))
 

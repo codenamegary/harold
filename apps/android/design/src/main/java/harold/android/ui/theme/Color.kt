@@ -40,3 +40,13 @@ val LightPrimaryContainer = Color(0xFFD9F9A8)
 val LightSecondaryContainer = Color(0xFFE6E0FF)
 val LightErrorContainer = Color(0xFFFFDAD6)
 val LightOnErrorContainer = Color(0xFF410002)
+
+// Diff surfaces. Additions borrow the lime brand, deletions use the danger red.
+val DiffAdditionBackground = Color(0xFF10251A)
+val DiffAdditionText = Color(0xFF8BE28B)
+val DiffDeletionBackground = Color(0xFF2B1416)
+val DiffDeletionText = Color(0xFFFF9B95)
+val LightDiffAdditionBackground = Color(0xFFE8F8E5)
+val LightDiffAdditionText = Color(0xFF176B2C)
+val LightDiffDeletionBackground = Color(0xFFFFEDEA)
+val LightDiffDeletionText = Color(0xFF9B1C15)

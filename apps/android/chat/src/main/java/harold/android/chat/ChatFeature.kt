@@ -50,6 +50,17 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onSessionSelectorClick = viewModel::showPicker,
                 onDismissSessionMenu = viewModel::hidePicker,
                 onWorkspacesClick = navigator::openWorkspaces,
+                onChangesClick = {
+                    uiState.selectedSession?.let { session ->
+                        navigator.openChanges(
+                            serverOrigin = session.serverOrigin,
+                            cwd = session.cwd,
+                        )
+                    }
+                },
+                changesAvailable = uiState.selectedSession?.cwd?.isNotBlank() == true,
+                // Mock badge until /v1/git/summary is wired to the host.
+                changesBadgeCount = 17,
                 onSessionClick = viewModel::selectSession,
                 onSeeAllSessionsClick = {
                     viewModel.hidePicker()

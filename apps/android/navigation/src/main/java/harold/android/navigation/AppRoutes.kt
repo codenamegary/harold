@@ -1,6 +1,7 @@
 package harold.android.navigation
 
 import androidx.navigation3.runtime.NavKey
+import harold.android.contracts.GitScope
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -29,3 +30,18 @@ data object AddWorkspace : AppRoute
 
 @Serializable
 data object SavedHarolds : AppRoute
+
+@Serializable
+data class Changes(
+    val serverOrigin: String,
+    val cwd: String,
+) : AppRoute
+
+@Serializable
+data class FileDiff(
+    val serverOrigin: String,
+    val worktreePath: String,
+    val scope: GitScope,
+    val filePath: String,
+    val oldPath: String? = null,
+) : AppRoute

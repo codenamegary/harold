@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="changes_title">Changes</string>
+    <string name="changes_back_content_description">Go back from changes</string>
+    <string name="changes_worktree_control_content_description">Switch worktree. Current branch %1$s</string>
+    <string name="changes_collapse_all_content_description">Collapse all folders</string>
+    <string name="changes_expand_all_content_description">Expand all folders</string>
+    <string name="changes_refresh_content_description">Refresh changes</string>
+    <string name="changes_worktree_footer_label">Worktree</string>
+    <string name="changes_worktree_dirty_short">%1$d dirty</string>
+    <string name="changes_worktree_current">Current</string>
+    <string name="changes_worktree_viewing">Viewing</string>
+    <string name="changes_worktree_main">main</string>
+    <string name="changes_worktree_clean">Clean</string>
+    <string name="changes_scope_uncommitted">Uncommitted</string>
+    <string name="changes_scope_against">Against %1$s</string>
+    <string name="changes_empty_uncommitted_title">No uncommitted changes</string>
+    <string name="changes_empty_uncommitted_body">This worktree is clean. Tap against %1$s to review committed work.</string>
+    <string name="changes_empty_clean_body">This worktree has nothing uncommitted.</string>
+    <string name="changes_empty_branch_title">No changes against %1$s</string>
+    <string name="changes_empty_branch_body">This branch is level with the default branch.</string>
+    <string name="changes_error_title">Could not load changes</string>
+    <string name="changes_retry">Retry</string>
+    <string name="changes_loading">Loading changes</string>
+    <string name="changes_binary">Binary</string>
+    <string name="changes_submodule">Submodule</string>
+    <string name="changes_status_added">Added</string>
+    <string name="changes_status_modified">Modified</string>
+    <string name="changes_status_deleted">Deleted</string>
+    <string name="changes_status_renamed">Renamed</string>
+    <string name="changes_status_copied">Copied</string>
+    <string name="changes_status_type_changed">Type changed</string>
+    <string name="changes_status_untracked">Untracked</string>
+    <string name="changes_status_conflicted">Conflicted</string>
+    <string name="file_diff_back_content_description">Go back to changes</string>
+    <string name="file_diff_binary_notice">Binary file changed</string>
+    <string name="file_diff_binary_body">The preview does not render binary contents.</string>
+    <string name="file_diff_submodule_notice">Submodule pointer changed</string>
+    <string name="file_diff_submodule_body">Commit-by-commit submodule history is out of scope for this view.</string>
+    <string name="file_diff_truncated">Diff truncated at 2,000 lines.</string>
+    <string name="file_diff_loading">Loading file diff</string>
+    <string name="file_diff_error_title">Could not load this diff</string>
+    <string name="file_diff_retry">Retry</string>
+    <string name="file_diff_empty">No hunks in this diff.</string>
+    <string name="file_diff_scope_uncommitted">Uncommitted changes</string>
+    <string name="file_diff_scope_branch">Branch changes</string>
+    <plurals name="changes_file_count">
+        <item quantity="one">%d file</item>
+        <item quantity="other">%d files</item>
+    </plurals>
+    <plurals name="changes_dirty_file_count">
+        <item quantity="one">%d uncommitted file</item>
+        <item quantity="other">%d uncommitted files</item>
+    </plurals>
+</resources>

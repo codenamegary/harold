@@ -6,6 +6,7 @@
     <string name="notification_permission_not_now">Not now</string>
     <string name="notification_permission_not_now_content_description">Dismiss notification permission prompt</string>
     <string name="chat_session_selector_content_description">Select session: %1$s</string>
+    <string name="chat_changes_content_description">Changes</string>
     <string name="chat_overflow_content_description">More chat options</string>
     <string name="chat_send_content_description">Send message</string>
     <string name="chat_attach_photo_content_description">Attach photo</string>
@@ -78,4 +79,8 @@
     <string name="chat_disconnect_confirm_body">This device will be unpaired. You will need to scan a pairing QR or enter a code again to reconnect.</string>
     <string name="chat_disconnect_confirm">Disconnect</string>
     <string name="chat_disconnect_cancel">Cancel</string>
+    <plurals name="chat_changes_content_description_count">
+        <item quantity="one">Changes, %d uncommitted file</item>
+        <item quantity="other">Changes, %d uncommitted files</item>
+    </plurals>
 </resources>

@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.savedstate.SavedStateRegistry
+import harold.android.contracts.GitScope
 import dagger.hilt.android.scopes.ActivityRetainedScoped
 import javax.inject.Inject
 import kotlinx.coroutines.channels.Channel
@@ -106,6 +107,34 @@ class Navigator @Inject constructor() {
         if (CreateSession in backStack) {
             workspaceCreatedChannel.trySend(result)
         }
+    }
+
+    fun openChanges(serverOrigin: String, cwd: String) {
+        if (backStack.isEmpty()) {
+            return
+        }
+        backStack.add(Changes(serverOrigin = serverOrigin, cwd = cwd))
+    }
+
+    fun openFileDiff(
+        serverOrigin: String,
+        worktreePath: String,
+        scope: GitScope,
+        filePath: String,
+        oldPath: String? = null,
+    ) {
+        if (backStack.isEmpty()) {
+            return
+        }
+        backStack.add(
+            FileDiff(
+                serverOrigin = serverOrigin,
+                worktreePath = worktreePath,
+                scope = scope,
+                filePath = filePath,
+                oldPath = oldPath,
+            ),
+        )
     }
 
     fun openSavedHarolds() {
