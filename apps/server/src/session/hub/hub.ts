@@ -13,6 +13,8 @@ import { ConfigOptionsCache, createConfigOptionsCache } from "./config.cache"
 import { createSessionEventLog, SessionEventLog } from "./event.log"
 import { parseSessionInfoUpdate } from "./session.info"
 import { createSessionTitleCache, SessionTitleCache } from "./session.title.cache"
+import { createUsageCache, UsageCache } from "./usage.cache"
+import { parseUsageUpdate } from "./usage.update"
 import { createPromptQueue } from "./prompt.queue"
 import { makeApplySessionTitle } from "../session.apply.title.usecase"
 import { PromptAccept, PromptCompleteTurn } from "../session.prompt.gate.usecase"
@@ -109,6 +111,7 @@ export type CreateSessionHubParams = {
   commandsCache?: CommandsCache
   configCache?: ConfigOptionsCache
   sessionTitleCache?: SessionTitleCache
+  usageCache?: UsageCache
   eventLog?: SessionEventLog
   loadSession: SessionHubLoadSession
   runPromptTurn: SessionPromptTurn
@@ -232,6 +235,7 @@ export const createSessionHub = ({
   commandsCache = createCommandsCache(),
   configCache = createConfigOptionsCache(),
   sessionTitleCache = createSessionTitleCache(),
+  usageCache = createUsageCache(),
   eventLog = createSessionEventLog(),
   loadSession,
   runPromptTurn,
@@ -482,6 +486,22 @@ export const createSessionHub = ({
     })
   }
 
+  const sendCachedUsage = (
+    subscriber: SessionHubSubscriber,
+    ref: { agentId: AgentId; sessionId: string },
+  ) => {
+    const cachedUsage = usageCache.get(ref)
+    if (cachedUsage === undefined) {
+      return
+    }
+    subscriber.sink.send({
+      type: "session_update",
+      agentId: ref.agentId,
+      sessionId: ref.sessionId,
+      update: cachedUsage,
+    })
+  }
+
   const sendCachedCommandsAndTitle = (
     subscriber: SessionHubSubscriber,
     ref: { agentId: AgentId; sessionId: string },
@@ -535,6 +555,7 @@ export const createSessionHub = ({
       // without paying for a loadSession replay.
       sendCachedConfig(subscriber, ref)
       sendCachedCommandsAndTitle(subscriber, ref)
+      sendCachedUsage(subscriber, ref)
       reemitElicitations(subscriber, ref)
       subscriber.sink.send(
         {
@@ -573,6 +594,7 @@ export const createSessionHub = ({
     }
 
     sendCachedCommandsAndTitle(subscriber, ref)
+    sendCachedUsage(subscriber, ref)
     reemitElicitations(subscriber, ref)
 
     subscriber.sink.send(
@@ -943,6 +965,11 @@ export const createSessionHub = ({
       const sessionInfo = parseSessionInfoUpdate(update)
       if (sessionInfo !== null && sessionInfo.title !== undefined) {
         applySessionTitle({ agentId, sessionId, title: sessionInfo.title })
+      }
+
+      const usageUpdate = parseUsageUpdate(update)
+      if (usageUpdate !== null) {
+        usageCache.remember({ agentId, sessionId, update: usageUpdate })
       }
 
       fanOut(sessionKey(agentId, sessionId), {

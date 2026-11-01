@@ -11,6 +11,12 @@ const noopEventLog = {
   forget: () => undefined,
 }
 
+const noopUsageCache = {
+  remember: () => undefined,
+  get: () => undefined,
+  forget: () => undefined,
+}
+
 describe("makeDeleteAcpSession", () => {
   test("returns after archive without waiting for session/close", async () => {
     const closeStarted = { value: false }
@@ -24,6 +30,7 @@ describe("makeDeleteAcpSession", () => {
     const forgottenTitles: Array<{ agentId: typeof agentId; sessionId: string }> = []
     const forgottenConfigs: Array<{ agentId: typeof agentId; sessionId: string }> = []
     const forgottenEventLogs: Array<{ agentId: typeof agentId; sessionId: string }> = []
+    const forgottenUsage: Array<{ agentId: typeof agentId; sessionId: string }> = []
 
     const deleteAcpSession = makeDeleteAcpSession({
       archiveAcpSession: () => undefined,
@@ -47,6 +54,13 @@ describe("makeDeleteAcpSession", () => {
           forgottenEventLogs.push(params)
         },
       },
+      usageCache: {
+        remember: () => undefined,
+        get: () => undefined,
+        forget: (params) => {
+          forgottenUsage.push(params)
+        },
+      },
       forgetSessionTitle: (params) => {
         forgottenTitles.push(params)
       },
@@ -67,6 +81,7 @@ describe("makeDeleteAcpSession", () => {
     expect(forgottenTitles).toEqual([{ agentId, sessionId: "sess-1" }])
     expect(forgottenConfigs).toEqual([{ agentId, sessionId: "sess-1" }])
     expect(forgottenEventLogs).toEqual([{ agentId, sessionId: "sess-1" }])
+    expect(forgottenUsage).toEqual([{ agentId, sessionId: "sess-1" }])
     expect(closeStarted.value).toBe(true)
     expect(closeFinished.value).toBe(false)
 
@@ -90,6 +105,7 @@ describe("makeDeleteAcpSession", () => {
         forget: () => undefined,
       },
       eventLog: noopEventLog,
+      usageCache: noopUsageCache,
       forgetSessionTitle: () => undefined,
       ensureSupervisorReady: async () => ({ ok: true }),
       advertisesSessionClose: () => false,
@@ -120,6 +136,7 @@ describe("makeDeleteAcpSession", () => {
         forget: () => undefined,
       },
       eventLog: noopEventLog,
+      usageCache: noopUsageCache,
       forgetSessionTitle: () => undefined,
       ensureSupervisorReady: async () => ({
         ok: false,
@@ -154,6 +171,7 @@ describe("makeDeleteAcpSession", () => {
         forget: () => undefined,
       },
       eventLog: noopEventLog,
+      usageCache: noopUsageCache,
       forgetSessionTitle: () => undefined,
       ensureSupervisorReady: async () => ({ ok: true }),
       advertisesSessionClose: () => false,

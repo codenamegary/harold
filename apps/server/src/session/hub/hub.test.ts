@@ -706,6 +706,55 @@ describe("session hub", () => {
     ).toBe(true)
   })
 
+  test("replays the latest usage update after a full replay", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/proj" })
+
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const first = {
+      sessionUpdate: "usage_update",
+      used: 84200,
+      size: 200000,
+      cost: { amount: 0.045, currency: "USD" },
+    }
+    const second = {
+      sessionUpdate: "usage_update",
+      used: 120000,
+      size: 200000,
+      cost: { amount: 0.09, currency: "USD" },
+    }
+
+    hub.handleSessionUpdate({ agentId: "cursor", sessionId: "s1", update: first })
+    hub.handleSessionUpdate({ agentId: "cursor", sessionId: "s1", update: second })
+
+    const a = collectSink()
+    hub.addSubscriber({ id: "a", sink: a.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    const usageUpdates = a.messages.filter(
+      (m) =>
+        m.type === "session_update" &&
+        (m.update as { sessionUpdate?: string }).sessionUpdate === "usage_update",
+    )
+    expect(usageUpdates).toEqual([
+      {
+        type: "session_update",
+        agentId: "cursor",
+        sessionId: "s1",
+        update: second,
+      },
+    ])
+    const usageIndex = a.messages.findIndex((m) => m === usageUpdates[0])
+    const subscribedIndex = a.messages.findIndex((m) => m.type === "subscribed")
+    expect(usageIndex).toBeLessThan(subscribedIndex)
+  })
+
   test("forgotten commands are not snapshotted on subscribe", async () => {
     const cwdCache = createSessionCwdCache()
     cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/proj" })
@@ -1257,6 +1306,58 @@ describe("session hub session info", () => {
       type: "session_update",
       update: commands,
     })
+  })
+
+  test("resume resends cached usage after catch-up", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/tmp/a" })
+
+    const hub = createSessionHub({
+      cwdCache,
+      eventLog: createSessionEventLog({ createEpoch: () => "epoch" }),
+      loadSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
+      cancelSession: async () => ({ ok: true }),
+    })
+
+    const usage = {
+      sessionUpdate: "usage_update",
+      used: 84200,
+      size: 200000,
+      cost: { amount: 0.045, currency: "USD" },
+    }
+    hub.handleSessionUpdate({ agentId: "cursor", sessionId: "s1", update: usage })
+
+    const first = collectSink()
+    hub.addSubscriber({ id: "a", sink: first.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+    const cursor = subscribedCursor(first.frames)
+
+    hub.handleSessionUpdate({
+      agentId: "cursor",
+      sessionId: "s1",
+      update: { sessionUpdate: "agent_message_chunk", text: "missed" },
+    })
+    hub.removeSubscriber("a")
+
+    const resumed = collectSink()
+    hub.addSubscriber({ id: "b", sink: resumed.sink, sessionKey: null })
+    await hub.subscribe({
+      subscriberId: "b",
+      agentId: "cursor",
+      sessionId: "s1",
+      lastEventId: cursor,
+    })
+
+    expect(resumed.messages.map((message) => message.type)).toEqual([
+      "session_update",
+      "session_update",
+      "subscribed",
+    ])
+    expect(resumed.messages[0]).toMatchObject({
+      update: { sessionUpdate: "agent_message_chunk", text: "missed" },
+    })
+    expect(resumed.messages[1]).toMatchObject({ update: usage })
   })
 
   test("resume catches up a title rename that happened while disconnected", async () => {

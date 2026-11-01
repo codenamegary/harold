@@ -20,6 +20,7 @@ import { CommandsCache } from "./hub/commands.cache"
 import { ConfigOptionsCache } from "./hub/config.cache"
 import { SessionEventLog } from "./hub/event.log"
 import { SessionCwdCache } from "./hub/hub"
+import { UsageCache } from "./hub/usage.cache"
 import { agentAdvertisesSessionClose, agentAdvertisesSessionList } from "./session.acp.ready"
 import { makeDeleteAcpSession } from "./session.delete.acp.session.usecase"
 import { makeResolveAgentGate, AgentGateError } from "./session.resolve.agent.gate.usecase"
@@ -58,6 +59,7 @@ export type SessionRouteDeps = Readonly<{
   commandsCache: CommandsCache
   configCache: ConfigOptionsCache
   eventLog: SessionEventLog
+  usageCache: UsageCache
   getSessionTitle: GetSessionTitle
   forgetSessionTitle: ForgetSessionTitle
   isArchivedAcpSession: IsArchivedAcpSession
@@ -75,6 +77,7 @@ export const registerSessionRoutes = (app: FastifyInstance, deps: SessionRouteDe
     commandsCache: deps.commandsCache,
     configCache: deps.configCache,
     eventLog: deps.eventLog,
+    usageCache: deps.usageCache,
     forgetSessionTitle: deps.forgetSessionTitle,
     ensureSupervisorReady: deps.ensureSupervisorReady,
     advertisesSessionClose: (agentId) => agentAdvertisesSessionClose(deps.acpSupervisor, agentId),
