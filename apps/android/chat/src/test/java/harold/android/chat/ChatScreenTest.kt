@@ -1375,10 +1375,12 @@ class ChatScreenTest {
                 ChatScreen(
                     uiState = ChatUiState(
                         selectedSession = elicitationSession(),
-                        contextUsage = ContextUsage(
-                            used = 84200,
-                            size = 200000,
-                            cost = UsageCost(amount = 0.045, currency = "USD"),
+                        transcript = AcpTranscriptState(
+                            usage = ContextUsage(
+                                used = 84200,
+                                size = 200000,
+                                cost = UsageCost(amount = 0.045, currency = "USD"),
+                            ),
                         ),
                     ),
                 )
@@ -1388,6 +1390,26 @@ class ChatScreenTest {
         composeTestRule.onNodeWithTag("context_usage")
             .assertIsDisplayed()
             .assertTextEquals("84.2k / 200k (42%) · $0.045")
+    }
+
+    @Test
+    fun showsContextUsageWithoutCostSegmentWhenCostIsAbsent() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ChatScreen(
+                    uiState = ChatUiState(
+                        selectedSession = elicitationSession(),
+                        transcript = AcpTranscriptState(
+                            usage = ContextUsage(used = 84200, size = 200000),
+                        ),
+                    ),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("context_usage")
+            .assertIsDisplayed()
+            .assertTextEquals("84.2k / 200k (42%)")
     }
 
     @Test
@@ -1408,7 +1430,9 @@ class ChatScreenTest {
                 ChatScreen(
                     uiState = ChatUiState(
                         selectedSession = elicitationSession(),
-                        contextUsage = ContextUsage(used = 84200, size = 0),
+                        transcript = AcpTranscriptState(
+                            usage = ContextUsage(used = 84200, size = 0),
+                        ),
                     ),
                 )
             }

@@ -85,8 +85,6 @@ data class ChatUiState(
     val recentSessionsLoading: Boolean = false,
     val recentSessionsError: String? = null,
     val transcript: AcpTranscriptState = emptyAcpTranscript,
-    /** Latest context window usage for the selected session, if the agent reports it. */
-    val contextUsage: ContextUsage? = null,
     val composerText: String = "",
     val composerSubmitting: Boolean = false,
     val composerError: String? = null,
@@ -118,6 +116,10 @@ data class ChatUiState(
     val activeHaroldColorId: String = "",
     val activeHaroldIconId: String = "",
 ) {
+    /** Latest context window usage for the selected session, if the agent reports it. */
+    val contextUsage: ContextUsage?
+        get() = transcript.usage
+
     val disconnectHaroldName: String
         get() = selectedSession?.haroldName?.takeIf { it.isNotEmpty() } ?: activeHaroldName
 
@@ -219,7 +221,6 @@ internal fun ChatUiState.resetSessionScopedState(
 ): ChatUiState = copy(
     selectedSession = keep.selectedSession,
     transcript = keep.transcript,
-    contextUsage = keep.transcript.usage,
     composerText = "",
     composerSubmitting = false,
     composerError = null,

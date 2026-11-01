@@ -69,7 +69,6 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -168,15 +167,20 @@ private fun ChangesAction(
 }
 
 @Composable
-private fun ContextUsageLine(usage: ContextUsage?) {
+private fun ContextUsageLine(
+    usage: ContextUsage?,
+    modifier: Modifier = Modifier,
+) {
     val text = usage?.let(::formatContextUsage) ?: return
     Text(
         text = text,
-        style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace),
+        style = MaterialTheme.typography.labelMedium.copy(
+            fontFeatureSettings = "tnum",
+        ),
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .testTag("context_usage"),

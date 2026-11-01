@@ -71,4 +71,12 @@ class ContextUsageFormatTest {
             ),
         )
     }
+
+    @Test
+    fun computesPercentBeyondOneHundredWhenTokensExceedContextSize() {
+        assertEquals(
+            "210k / 200k (105%)",
+            formatContextUsage(ContextUsage(used = 210000, size = 200000)),
+        )
+    }
 }

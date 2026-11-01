@@ -53,9 +53,11 @@ class AcpTranscriptReducerTest {
         val withUsage = foldAcpUpdate(
             live,
             ParsedAcpUpdate.Usage(
-                used = 84200,
-                size = 200000,
-                cost = UsageCost(amount = 0.045, currency = "USD"),
+                ContextUsage(
+                    used = 84200,
+                    size = 200000,
+                    cost = UsageCost(amount = 0.045, currency = "USD"),
+                ),
             ),
         )
 
@@ -77,7 +79,7 @@ class AcpTranscriptReducerTest {
 
         val withUsage = foldAcpUpdate(
             idle,
-            ParsedAcpUpdate.Usage(used = 1000, size = 200000),
+            ParsedAcpUpdate.Usage(ContextUsage(used = 1000, size = 200000)),
         )
 
         assertEquals(SessionState.Idle, withUsage.sessionState)
@@ -87,7 +89,7 @@ class AcpTranscriptReducerTest {
     fun reconnectClearsUsage() {
         val withUsage = foldAcpUpdate(
             emptyAcpTranscript,
-            ParsedAcpUpdate.Usage(used = 1000, size = 200000),
+            ParsedAcpUpdate.Usage(ContextUsage(used = 1000, size = 200000)),
         )
 
         assertEquals(null, applyReconnect().usage)

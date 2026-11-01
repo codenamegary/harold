@@ -111,7 +111,7 @@ fun foldAcpUpdate(
         }
         // Usage is bookkeeping, not transcript content. It must not add a row
         // or move the session state; it can arrive after PromptComplete.
-        is ParsedAcpUpdate.Usage -> state.copy(usage = parsed.toContextUsage())
+        is ParsedAcpUpdate.Usage -> state.copy(usage = parsed.usage)
         is ParsedAcpUpdate.ToolCall -> withLiveRunning(
             state.copy(
                 rows = state.rows + TranscriptToolRow(

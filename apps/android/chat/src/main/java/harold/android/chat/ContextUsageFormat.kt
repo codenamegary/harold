@@ -13,7 +13,7 @@ internal fun formatContextUsage(usage: ContextUsage): String? {
     if (usage.size <= 0) {
         return null
     }
-    val percent = (usage.used.toDouble() / usage.size * 100).roundToInt().coerceIn(0, 100)
+    val percent = (usage.used.toDouble() / usage.size * 100).roundToInt().coerceAtLeast(0)
     val base = "${compactTokenCount(usage.used)} / ${compactTokenCount(usage.size)} ($percent%)"
     return usage.cost?.let { cost -> "$base · ${formatUsageCost(cost)}" } ?: base
 }

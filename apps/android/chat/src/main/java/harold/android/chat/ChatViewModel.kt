@@ -1426,7 +1426,6 @@ class ChatViewModel @Inject constructor(
 
             current.copy(
                 transcript = snapshot.transcript,
-                contextUsage = snapshot.transcript.usage,
                 streamReconnecting = snapshot.reconnecting,
                 availableCommands = snapshot.availableCommands,
                 pendingPermissions = permissions,

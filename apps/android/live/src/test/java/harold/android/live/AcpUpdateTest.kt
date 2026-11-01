@@ -98,9 +98,11 @@ class AcpUpdateTest {
 
         assertEquals(
             ParsedAcpUpdate.Usage(
-                used = 84200,
-                size = 200000,
-                cost = UsageCost(amount = 0.045, currency = "USD"),
+                ContextUsage(
+                    used = 84200,
+                    size = 200000,
+                    cost = UsageCost(amount = 0.045, currency = "USD"),
+                ),
             ),
             parsed,
         )
@@ -119,7 +121,26 @@ class AcpUpdateTest {
         )
 
         assertEquals(
-            ParsedAcpUpdate.Usage(used = 1000, size = 200000, cost = null),
+            ParsedAcpUpdate.Usage(ContextUsage(used = 1000, size = 200000, cost = null)),
+            parsed,
+        )
+    }
+
+    @Test
+    fun ignoresCostWhenCurrencyIsMissing() {
+        val parsed = parseAcpUpdate(
+            JsonObject(
+                mapOf(
+                    "sessionUpdate" to JsonPrimitive("usage_update"),
+                    "used" to JsonPrimitive(1000),
+                    "size" to JsonPrimitive(200000),
+                    "cost" to JsonObject(mapOf("amount" to JsonPrimitive(0.045))),
+                ),
+            ),
+        )
+
+        assertEquals(
+            ParsedAcpUpdate.Usage(ContextUsage(used = 1000, size = 200000, cost = null)),
             parsed,
         )
     }

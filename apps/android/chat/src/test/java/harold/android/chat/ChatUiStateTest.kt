@@ -53,7 +53,11 @@ class ChatUiStateTest {
             sessions = listOf(sessionRow(SessionState.Running)),
             recentSessions = listOf(sessionRow(SessionState.Running)),
             pickerVisible = true,
-            transcript = AcpTranscriptState(sessionState = SessionState.Running, live = true),
+            transcript = AcpTranscriptState(
+                sessionState = SessionState.Running,
+                live = true,
+                usage = ContextUsage(used = 1000, size = 200000),
+            ),
             composerText = "draft prompt",
             composerSubmitting = true,
             composerError = "send failed",
@@ -68,7 +72,6 @@ class ChatUiStateTest {
             cancelError = "cancel failed",
             changesAvailable = true,
             changesBadgeCount = 17,
-            contextUsage = ContextUsage(used = 1000, size = 200000),
         )
 
         val reset = busy.resetSessionScopedState()
