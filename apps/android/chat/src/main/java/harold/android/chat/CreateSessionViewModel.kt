@@ -14,7 +14,9 @@ import harold.android.database.session.SessionRepository
 import harold.android.database.workspace.CachedWorkspace
 import harold.android.database.workspace.WorkspaceRepository
 import harold.android.navigation.CreatedWorkspaceResult
+import harold.android.navigation.LastSessionSelection
 import harold.android.navigation.Navigator
+import harold.android.navigation.SessionPreferences
 import harold.android.network.apiErrorMessage
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
@@ -35,6 +37,7 @@ class CreateSessionViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val sessionCommands: SessionCommands,
     private val navigator: Navigator,
+    private val sessionPreferences: SessionPreferences,
     private val savedHaroldRepository: SavedHaroldRepository? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(CreateSessionUiState())
@@ -46,10 +49,14 @@ class CreateSessionViewModel @Inject constructor(
     private var savedHarolds: List<StoredCredential> = emptyList()
     private var pairedOrigin: String? = null
     private var pendingCreatedWorkspace: CreatedWorkspaceResult? = null
+    private var rememberedSelection: LastSessionSelection? = null
 
     init {
         viewModelScope.launch {
             loadHaroldMetadata()
+            // The first Room emission must already know the remembered pair,
+            // otherwise the first workspace wins before the value arrives.
+            rememberedSelection = sessionPreferences.loadLastSessionSelection()
             observeWorkspaces()
             refreshWorkspaces()
         }
@@ -202,9 +209,13 @@ class CreateSessionViewModel @Inject constructor(
         val pendingId = pendingCreatedWorkspace?.let { created ->
             workspaceId(created.serverOrigin, created.workspaceId)
         }
-        val selected = rows.firstOrNull { row -> row.id == current.selectedWorkspaceId }
-            ?: rows.firstOrNull { row -> row.id == pendingId }
-            ?: rows.firstOrNull()
+        val pendingRow = pendingId?.let { id -> rows.firstOrNull { row -> row.id == id } }
+        val explicitRow = rows.firstOrNull { row -> row.id == current.selectedWorkspaceId }
+        val rememberedRow = rememberedSelection?.let { remembered ->
+            val rememberedId = workspaceId(remembered.serverOrigin, remembered.workspaceId)
+            rows.firstOrNull { row -> row.id == rememberedId }
+        }
+        val selected = pendingRow ?: explicitRow ?: rememberedRow ?: rows.firstOrNull()
         val agentsForSelection = selected != null && selected.serverOrigin == agentsOrigin
 
         _uiState.update { state ->
@@ -305,15 +316,27 @@ class CreateSessionViewModel @Inject constructor(
         val agents = cachedAgents
             .filter { agent -> agent.enabled }
             .map { agent -> AgentOption(id = agent.agentId, displayName = agent.displayName) }
+        val rememberedAgent = rememberedAgentForSelectedWorkspace()
+            ?.takeIf { remembered -> agents.any { agent -> agent.id == remembered } }
         _uiState.update { current ->
             current.copy(
                 agents = agents,
                 selectedAgentId = current.selectedAgentId
                     ?.takeIf { selected -> agents.any { agent -> agent.id == selected } }
+                    ?: rememberedAgent
                     ?: agents.firstOrNull()?.id,
                 error = null,
             )
         }
+    }
+
+    private fun rememberedAgentForSelectedWorkspace(): AgentId? {
+        val remembered = rememberedSelection ?: return null
+        val selected = _uiState.value.workspaces
+            .firstOrNull { row -> row.id == _uiState.value.selectedWorkspaceId }
+            ?: return null
+        val rememberedId = workspaceId(remembered.serverOrigin, remembered.workspaceId)
+        return remembered.agentId.takeIf { selected.id == rememberedId }
     }
 
     private suspend fun agentNeedsLogin(serverOrigin: String, agentId: AgentId): Boolean =

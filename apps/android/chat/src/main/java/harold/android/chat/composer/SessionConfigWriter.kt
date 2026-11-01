@@ -3,15 +3,20 @@ package harold.android.chat.composer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import harold.android.contracts.AgentId
 import harold.android.contracts.BooleanOption
+import harold.android.contracts.ConfigCategory
 import harold.android.contracts.ConfigOption
 import harold.android.contracts.ConfigValue
 import harold.android.contracts.SelectOption
+import harold.android.contracts.categoryOf
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.network.SessionConfigApi
@@ -29,6 +34,9 @@ class SessionConfigWriter(
 ) {
     private val _state = MutableStateFlow(ComposerConfigUi())
     val state: StateFlow<ComposerConfigUi> = _state.asStateFlow()
+
+    private val _settled = MutableSharedFlow<SettledWrite>(extraBufferCapacity = 16)
+    val settled: SharedFlow<SettledWrite> = _settled.asSharedFlow()
 
     private var target: Target? = null
     private var options: List<ConfigOption> = emptyList()
@@ -59,6 +67,19 @@ class SessionConfigWriter(
         if (settling != null && options.currentValue(settling.configId) == settling.value) {
             pending = null
             error = null
+            _settled.tryEmit(
+                SettledWrite(
+                    serverOrigin = nextTarget?.serverOrigin.orEmpty(),
+                    agentId = nextTarget?.agentId.orEmpty(),
+                    sessionId = nextTarget?.sessionId.orEmpty(),
+                    configId = settling.configId,
+                    value = settling.value,
+                    isModel = configOptions
+                        .firstOrNull { option -> option.id == settling.configId }
+                        ?.let { option -> categoryOf(option) == ConfigCategory.Model }
+                        ?: false,
+                ),
+            )
         }
         emit()
     }
@@ -142,3 +163,13 @@ class SessionConfigWriter(
         val value: ConfigValue,
     )
 }
+
+/** A write the server confirmed by echoing the new value in a snapshot. */
+data class SettledWrite(
+    val serverOrigin: String,
+    val agentId: AgentId,
+    val sessionId: String,
+    val configId: String,
+    val value: ConfigValue,
+    val isModel: Boolean,
+)

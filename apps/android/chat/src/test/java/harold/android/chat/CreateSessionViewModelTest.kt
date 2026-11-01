@@ -20,6 +20,7 @@ import harold.android.navigation.AddWorkspace
 import harold.android.navigation.Chat
 import harold.android.navigation.CreateSession
 import harold.android.navigation.CreatedWorkspaceResult
+import harold.android.navigation.LastSessionSelection
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.session.PairedState
@@ -325,6 +326,223 @@ class CreateSessionViewModelTest {
         assertEquals("claude", viewModel.uiState.value.selectedAgentId)
     }
 
+    @Test
+    fun preselectsTheRememberedWorkspaceAndAgent() = runTest {
+        val repository = HaroldCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(
+                    workspace("ws_notes", WorkspaceState.Available, name = "notes"),
+                    workspace("ws_server", WorkspaceState.Available, name = "server"),
+                ),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(
+                    agent("cursor", enabled = true),
+                    agent("codex", enabled = true),
+                ),
+            ),
+        )
+        val preferences = FakeSessionPreferences(
+            selection = LastSessionSelection(
+                serverOrigin = LAPTOP,
+                workspaceId = "ws_server",
+                agentId = "codex",
+            ),
+        )
+
+        val viewModel = viewModel(
+            repository = repository,
+            savedHarolds = saved(harold(LAPTOP, "laptop", "tide", "bolt")),
+            sessionPreferences = preferences,
+        )
+
+        assertEquals("$LAPTOP|ws_server", viewModel.uiState.value.selectedWorkspaceId)
+        assertEquals("codex", viewModel.uiState.value.selectedAgentId)
+    }
+
+    @Test
+    fun missingRememberedWorkspaceFallsBackToTheFirstWorkspaceAndAgent() = runTest {
+        val repository = HaroldCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(workspace("ws_notes", WorkspaceState.Available, name = "notes")),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(
+                    agent("cursor", enabled = true),
+                    agent("codex", enabled = true),
+                ),
+            ),
+        )
+        val preferences = FakeSessionPreferences(
+            selection = LastSessionSelection(
+                serverOrigin = LAPTOP,
+                workspaceId = "ws_gone",
+                agentId = "codex",
+            ),
+        )
+
+        val viewModel = viewModel(
+            repository = repository,
+            savedHarolds = saved(harold(LAPTOP, "laptop", "tide", "bolt")),
+            sessionPreferences = preferences,
+        )
+
+        assertEquals("$LAPTOP|ws_notes", viewModel.uiState.value.selectedWorkspaceId)
+        assertEquals("cursor", viewModel.uiState.value.selectedAgentId)
+    }
+
+    @Test
+    fun disabledRememberedAgentKeepsTheWorkspaceAndUsesTheFirstEnabledAgent() = runTest {
+        val repository = HaroldCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(workspace("ws_notes", WorkspaceState.Available, name = "notes")),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(
+                    agent("cursor", enabled = true),
+                    agent("codex", enabled = false),
+                ),
+            ),
+        )
+        val preferences = FakeSessionPreferences(
+            selection = LastSessionSelection(
+                serverOrigin = LAPTOP,
+                workspaceId = "ws_notes",
+                agentId = "codex",
+            ),
+        )
+
+        val viewModel = viewModel(
+            repository = repository,
+            savedHarolds = saved(harold(LAPTOP, "laptop", "tide", "bolt")),
+            sessionPreferences = preferences,
+        )
+
+        assertEquals("$LAPTOP|ws_notes", viewModel.uiState.value.selectedWorkspaceId)
+        assertEquals("cursor", viewModel.uiState.value.selectedAgentId)
+    }
+
+    @Test
+    fun rememberedWorkspaceFromAnUnpairedHaroldFallsBack() = runTest {
+        val repository = HaroldCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(workspace("ws_laptop", WorkspaceState.Available, name = "notes")),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(agent("cursor", enabled = true)),
+            ),
+        )
+        val preferences = FakeSessionPreferences(
+            selection = LastSessionSelection(
+                serverOrigin = DESKTOP,
+                workspaceId = "ws_desktop",
+                agentId = "codex",
+            ),
+        )
+
+        val viewModel = viewModel(
+            repository = repository,
+            savedHarolds = saved(harold(LAPTOP, "laptop", "tide", "bolt")),
+            sessionPreferences = preferences,
+        )
+
+        assertEquals("$LAPTOP|ws_laptop", viewModel.uiState.value.selectedWorkspaceId)
+        assertEquals("cursor", viewModel.uiState.value.selectedAgentId)
+    }
+
+    @Test
+    fun explicitSelectionBeatsTheRememberedSelectionOnLaterEmissions() = runTest {
+        val repository = HaroldCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to listOf(
+                    workspace("ws_laptop", WorkspaceState.Available, name = "notes"),
+                    workspace("ws_other", WorkspaceState.Available, name = "other"),
+                ),
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(
+                    agent("cursor", enabled = true),
+                    agent("codex", enabled = true),
+                ),
+            ),
+        )
+        val workspaceRepository = TestWorkspaceRepository(repository)
+        val preferences = FakeSessionPreferences(
+            selection = LastSessionSelection(
+                serverOrigin = LAPTOP,
+                workspaceId = "ws_laptop",
+                agentId = "cursor",
+            ),
+        )
+        val viewModel = viewModel(
+            repository = repository,
+            workspaceRepository = workspaceRepository,
+            savedHarolds = saved(harold(LAPTOP, "laptop", "tide", "bolt")),
+            sessionPreferences = preferences,
+        )
+        val other = viewModel.uiState.value.workspaces.single { row -> row.id == "$LAPTOP|ws_other" }
+
+        viewModel.onWorkspaceChanged(other.id)
+        workspaceRepository.seed(
+            LAPTOP,
+            listOf(
+                workspace("ws_laptop", WorkspaceState.Available, name = "notes"),
+                workspace("ws_other", WorkspaceState.Available, name = "other"),
+                workspace("ws_new", WorkspaceState.Available, name = "new"),
+            ),
+        )
+
+        assertEquals("$LAPTOP|ws_other", viewModel.uiState.value.selectedWorkspaceId)
+    }
+
+    @Test
+    fun aNewlyCreatedWorkspaceBeatsTheRememberedSelection() = runTest {
+        val navigator = testNavigator()
+        navigator.openCreateSession()
+        val laptopWorkspaces = mutableListOf(workspace("ws_laptop", WorkspaceState.Available, name = "notes"))
+        val desktopWorkspaces = mutableListOf(workspace("ws_desktop", WorkspaceState.Available, name = "docs"))
+        val repository = HaroldCreateRepository(
+            workspaces = mapOf(
+                LAPTOP to laptopWorkspaces,
+                DESKTOP to desktopWorkspaces,
+            ),
+            agents = mapOf(
+                LAPTOP to listOf(agent("cursor", enabled = true)),
+                DESKTOP to listOf(agent("claude", enabled = true)),
+            ),
+        )
+        val workspaceRepository = TestWorkspaceRepository(repository)
+        val preferences = FakeSessionPreferences(
+            selection = LastSessionSelection(
+                serverOrigin = LAPTOP,
+                workspaceId = "ws_laptop",
+                agentId = "cursor",
+            ),
+        )
+        val viewModel = viewModel(
+            navigator = navigator,
+            repository = repository,
+            workspaceRepository = workspaceRepository,
+            savedHarolds = saved(
+                harold(LAPTOP, "laptop", "tide", "bolt"),
+                harold(DESKTOP, "desktop", "ink", "mark"),
+            ),
+            sessionPreferences = preferences,
+        )
+        assertEquals("$LAPTOP|ws_laptop", viewModel.uiState.value.selectedWorkspaceId)
+
+        viewModel.openNewWorkspace()
+        val fresh = workspace("ws_new", WorkspaceState.Available, name = "fresh")
+        desktopWorkspaces += fresh
+        workspaceRepository.seed(DESKTOP, listOf(fresh))
+        navigator.reportWorkspaceCreated(
+            CreatedWorkspaceResult(workspaceId = "ws_new", serverOrigin = DESKTOP),
+        )
+
+        assertEquals("$DESKTOP|ws_new", viewModel.uiState.value.selectedWorkspaceId)
+        assertEquals("claude", viewModel.uiState.value.selectedAgentId)
+    }
+
     private fun viewModel(
         commands: RecordingSessionCommands = RecordingSessionCommands(),
         navigator: harold.android.navigation.Navigator = testNavigator(),
@@ -332,6 +550,7 @@ class CreateSessionViewModelTest {
         sessionRepository: SessionRepository = TestSessionRepository(repository),
         workspaceRepository: WorkspaceRepository = TestWorkspaceRepository(repository),
         savedHarolds: SavedHaroldRepository? = null,
+        sessionPreferences: FakeSessionPreferences = FakeSessionPreferences(),
     ): CreateSessionViewModel = CreateSessionViewModel(
         sessionGateway = FakeSessionGateway(PAIRED),
         sessionRepository = sessionRepository,
@@ -340,6 +559,7 @@ class CreateSessionViewModelTest {
         sessionCommands = commands,
         navigator = navigator,
         savedHaroldRepository = savedHarolds,
+        sessionPreferences = sessionPreferences,
     )
 
     private fun repository(

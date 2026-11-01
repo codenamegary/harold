@@ -56,6 +56,7 @@ private val MIN_TOUCH_TARGET = 48.dp
 fun PromptComposer(
     composerState: TextFieldState,
     composerEnabled: Boolean,
+    submitEnabled: Boolean,
     showCancel: Boolean,
     cancelSubmitting: Boolean,
     supportsImages: Boolean,
@@ -112,7 +113,7 @@ fun PromptComposer(
                 VoiceActionRail(
                     voice = voice,
                     composerEnabled = composerEnabled,
-                    sendEnabled = composerEnabled && voiceMessage.isNotBlank(),
+                    sendEnabled = submitEnabled && voiceMessage.isNotBlank(),
                     commandListVisible = voiceCommandListVisible,
                     onKeyboard = onVoiceKeyboard,
                     onExpand = onVoiceExpand,
@@ -157,7 +158,7 @@ fun PromptComposer(
                     )
                     TextActionRail(
                         composerEnabled = composerEnabled,
-                        sendEnabled = composerEnabled && composerState.text.isNotBlank(),
+                        sendEnabled = submitEnabled && composerState.text.isNotBlank(),
                         showCancel = showCancel,
                         cancelSubmitting = cancelSubmitting,
                         voiceMicEnabled = voiceMicEnabled,
