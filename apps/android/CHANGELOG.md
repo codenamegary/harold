@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.2.0](https://github.com/codenamegary/harold/compare/harold-android-v3.1.0...harold-android-v3.2.0) (2026-11-01)
+
+
+### Features
+
+* **git:** review changes and worktrees from chat ([#469](https://github.com/codenamegary/harold/issues/469)) ([4eccd80](https://github.com/codenamegary/harold/commit/4eccd808b5ca6f0689671645418b04b9f86b5cee))
+
 ## [3.1.0](https://github.com/codenamegary/harold/compare/harold-android-v3.0.0...harold-android-v3.1.0) (2026-10-31)
 
 
