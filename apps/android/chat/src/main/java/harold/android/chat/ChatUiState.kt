@@ -210,6 +210,11 @@ internal data class SessionResetKeep(
  * clears every session-scoped surface back to its default; the keep slot
  * carries what the next session brings with it. A new session-scoped
  * [ChatUiState] field gets exactly one edit here.
+ *
+ * [ChatUiState.composerConfig] is the exception. The composer's SessionConfigWriter
+ * owns it for the watched session and only publishes when the options differ, so
+ * clearing it here would leave the bar empty whenever the next session happens
+ * to have the same model, mode and effort.
  */
 internal fun ChatUiState.resetSessionScopedState(
     keep: SessionResetKeep = SessionResetKeep(),
@@ -219,7 +224,6 @@ internal fun ChatUiState.resetSessionScopedState(
     composerText = "",
     composerSubmitting = false,
     composerError = null,
-    composerConfig = ComposerConfigUi(),
     availableCommands = emptyList(),
     voiceCommandPrefix = "",
     voiceCommandListVisible = false,

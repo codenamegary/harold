@@ -81,6 +81,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -955,6 +956,59 @@ class ChatViewModelTest {
             "m2",
             (viewModel.uiState.value.composerConfig.model as SelectOption).currentValue,
         )
+    }
+
+    @Test
+    fun switchingSessionsWithTheSameConfigKeepsComposerControls() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = sessionOwner,
+        )
+        advanceUntilIdle()
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                configOptions = listOf(modelOption(currentValue = "m1")),
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.selectSession(listedSession("sess_01", "Beta"))
+        advanceUntilIdle()
+
+        val model = viewModel.uiState.value.composerConfig.model
+        assertNotNull(model)
+        assertEquals("m1", (model as SelectOption).currentValue)
+    }
+
+    @Test
+    fun reselectingTheCurrentSessionKeepsComposerControls() = runTest(dispatcher) {
+        val sessionOwner = ChatFakeSessionOwner()
+        val viewModel = createViewModel(
+            repository = ChatFakeUserRepository(),
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            sessionOwner = sessionOwner,
+        )
+        advanceUntilIdle()
+        sessionOwner.publish(
+            sessionOwner.snapshot.value.copy(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                configOptions = listOf(modelOption(currentValue = "m1")),
+            ),
+        )
+        advanceUntilIdle()
+        val current = viewModel.uiState.value.sessions.first { row -> row.sessionId == "sess_02" }
+
+        viewModel.selectSession(current)
+        advanceUntilIdle()
+
+        val model = viewModel.uiState.value.composerConfig.model
+        assertNotNull(model)
+        assertEquals("m1", (model as SelectOption).currentValue)
     }
 
     @Test
