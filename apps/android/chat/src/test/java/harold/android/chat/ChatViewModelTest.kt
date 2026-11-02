@@ -1858,6 +1858,29 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun changesBadgeUsesTheSelectedWorktreePath() = runTest(dispatcher) {
+        val gitApi = RecordingGitApi()
+        val repository = ChatFakeUserRepository(
+            extraSessions = listOf(
+                session("sess_02", "Alpha").copy(worktreePath = "/tmp/harold-feature"),
+            ),
+        )
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            gitApi = gitApi,
+        )
+
+        advanceUntilIdle()
+
+        assertEquals(
+            ORIGIN to "/tmp/harold-feature",
+            gitApi.summaryCalls.last(),
+        )
+        assertEquals(3, viewModel.uiState.value.changesBadgeCount)
+    }
+
+    @Test
     fun changesBadgeHidesWhenTheSummaryFails() = runTest(dispatcher) {
         val gitApi = RecordingGitApi(
             summaryResult = Result.failure(
@@ -1925,11 +1948,13 @@ class ChatViewModelTest {
         val repository = ChatFakeUserRepository()
         val sessionRepository = TestSessionRepository(repository)
         val sessionOwner = ChatFakeSessionOwner()
+        val gitApi = RecordingGitApi()
         val viewModel = createViewModel(
             repository = repository,
             navigation = ChatFakeNavigationPreferences(),
             sessionOwner = sessionOwner,
             sessionRepository = sessionRepository,
+            gitApi = gitApi,
         )
         advanceUntilIdle()
         val open = viewModel.uiState.value.sessions.first { row -> row.sessionId == "sess_01" }
@@ -1956,6 +1981,10 @@ class ChatViewModelTest {
                 .first { cached -> cached.session.sessionId == "sess_01" }
                 .session
                 .worktreePath,
+        )
+        assertEquals(
+            ORIGIN to "/repo/.worktrees/feat-x",
+            gitApi.summaryCalls.last(),
         )
     }
 

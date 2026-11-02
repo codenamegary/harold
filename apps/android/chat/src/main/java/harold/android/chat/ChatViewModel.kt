@@ -344,25 +344,25 @@ class ChatViewModel @Inject constructor(
     private fun refreshChangesBadge() {
         val selected = _uiState.value.selectedSession
         val origin = selectedOrPairedOrigin()
-        val cwd = selected?.cwd.orEmpty()
+        val path = selected?.worktreePath ?: selected?.cwd.orEmpty()
         if (
             selected == null ||
             origin == null ||
             selected.sessionId.isEmpty() ||
-            cwd.isEmpty()
+            path.isEmpty()
         ) {
             clearChangesBadge()
             return
         }
 
-        val key = "${selected.id}|$origin|$cwd"
+        val key = "${selected.id}|$origin|$path"
         if (changesBadgeKey == key && changesBadgeJob?.isActive == true) {
             return
         }
         changesBadgeKey = key
         changesBadgeJob?.cancel()
         changesBadgeJob = viewModelScope.launch {
-            val result = gitApi.getSummary(serverOrigin = origin, path = cwd)
+            val result = gitApi.getSummary(serverOrigin = origin, path = path)
             if (changesBadgeKey != key) {
                 return@launch
             }
@@ -1480,6 +1480,7 @@ class ChatViewModel @Inject constructor(
             openElicitationSheet()
         }
 
+        applySnapshotWorktreePath(snapshot)
         syncSelectedState(snapshot.transcript.sessionState)
         val current = _uiState.value
         if (
@@ -1494,7 +1495,6 @@ class ChatViewModel @Inject constructor(
         if (open != null && snapshot.sessionId == open.sessionId) {
             transcriptMemory[open.id] = current.transcript
         }
-        applySnapshotWorktreePath(snapshot)
 
         if (snapshot.authRequired && !lastAuthRequired) {
             val agentId = snapshot.agentId
@@ -1548,6 +1548,7 @@ class ChatViewModel @Inject constructor(
                 worktreePath = snapshot.worktreePath,
             )
         }
+        refreshChangesBadge()
     }
 
     private fun applySessionTitles(titles: Map<String, String>) {
