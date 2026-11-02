@@ -22,4 +22,7 @@ data class SessionSnapshot(
     val extension: StreamExtension? = null,
     val agentAuth: AgentAuth? = null,
     val authRequired: Boolean = false,
+    val worktreePath: String? = null,
+    /** True once a `session_worktree_path` event supplied [worktreePath]. */
+    val worktreePathKnown: Boolean = false,
 )

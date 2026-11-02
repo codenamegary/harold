@@ -11,9 +11,11 @@ import {
   PromptSessionResponseSchema,
   SessionCollectionSchema,
   SessionSchema,
+  SetSessionWorktreePathBodySchema,
   UpdateSessionBodySchema,
   deleteSessionPath,
   sessionPath,
+  sessionWorktreePathPath,
 } from "./session"
 
 const validTurnId = "turn_01JFC8C7E77NQCFH0RF9Z22JHH"
@@ -118,6 +120,7 @@ describe("CreateSessionResponseSchema", () => {
     cwd: "/tmp/project",
     title: "acp-session-1",
     updatedAt: "2026-08-11T12:00:00.000Z",
+    worktreePath: null,
   } as const
 
   const modelOption = {
@@ -248,6 +251,7 @@ describe("SessionCollectionSchema", () => {
     cwd: "/tmp/project",
     title: "Auth flow",
     updatedAt: "2026-08-11T12:00:00.000Z",
+    worktreePath: "/tmp/project/.worktrees/feat-auth",
   } as const
 
   test("accepts an ACP catalog collection", () => {
@@ -274,6 +278,34 @@ describe("deleteSessionPath", () => {
     expect(deleteSessionPath("acp:1/two", { agentId: "cursor" })).toBe(
       "/v1/sessions/acp%3A1%2Ftwo?agentId=cursor",
     )
+    expect(sessionWorktreePathPath("acp:1/two")).toBe("/v1/sessions/acp%3A1%2Ftwo/worktree-path")
+  })
+})
+
+describe("SetSessionWorktreePathBodySchema", () => {
+  test("accepts a path and null", () => {
+    expect(
+      SetSessionWorktreePathBodySchema.parse({
+        agentId: "cursor",
+        worktreePath: "/repo/.worktrees/feat-x",
+      }),
+    ).toEqual({
+      agentId: "cursor",
+      worktreePath: "/repo/.worktrees/feat-x",
+    })
+    expect(
+      SetSessionWorktreePathBodySchema.parse({
+        agentId: "cursor",
+        worktreePath: null,
+      }),
+    ).toEqual({ agentId: "cursor", worktreePath: null })
+  })
+
+  test("rejects an empty path and a missing agentId", () => {
+    expect(() =>
+      SetSessionWorktreePathBodySchema.parse({ agentId: "cursor", worktreePath: "" }),
+    ).toThrow()
+    expect(() => SetSessionWorktreePathBodySchema.parse({ worktreePath: "/repo" })).toThrow()
   })
 })
 

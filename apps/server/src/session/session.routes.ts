@@ -12,8 +12,11 @@ import {
   DeleteSessionQuerySchema,
   ListSessionsQuerySchema,
   SessionCollectionSchema,
+  SessionWorktreePathParamsSchema,
+  SetSessionWorktreePathBodySchema,
 } from "contracts/http/session"
 import { FastifyInstance } from "fastify"
+import { ListGitWorktrees } from "core/git/worktrees.usecase"
 import { AcpSupervisor } from "../acp/supervisor/supervisor"
 import { AuthBroker } from "../agent/auth/broker"
 import { CommandsCache } from "./hub/commands.cache"
@@ -29,8 +32,12 @@ import {
   EnsureSupervisorReady,
   FindAgentSettings,
   ForgetSessionTitle,
+  ForgetSessionWorktreePath,
   GetSessionTitle,
+  GetSessionWorktreePath,
   IsArchivedAcpSession,
+  ListSessionWorktreePaths,
+  SetSessionWorktreePath,
 } from "./session.ports"
 import {
   buildAcpUnavailableProblem,
@@ -64,6 +71,16 @@ export type SessionRouteDeps = Readonly<{
   forgetSessionTitle: ForgetSessionTitle
   isArchivedAcpSession: IsArchivedAcpSession
   archiveAcpSession: ArchiveAcpSession
+  listWorktrees: ListGitWorktrees
+  getSessionWorktreePath: GetSessionWorktreePath
+  listSessionWorktreePaths: ListSessionWorktreePaths
+  setSessionWorktreePath: SetSessionWorktreePath
+  forgetSessionWorktreePath: ForgetSessionWorktreePath
+  broadcastSessionWorktreePath: (params: {
+    agentId: AgentId
+    sessionId: string
+    worktreePath: string | null
+  }) => void
   closeSession?: (input: { agentId: AgentId; sessionId: string }) => void
   authBroker?: AuthBroker
 }>
@@ -79,6 +96,7 @@ export const registerSessionRoutes = (app: FastifyInstance, deps: SessionRouteDe
     eventLog: deps.eventLog,
     usageCache: deps.usageCache,
     forgetSessionTitle: deps.forgetSessionTitle,
+    forgetSessionWorktreePath: deps.forgetSessionWorktreePath,
     ensureSupervisorReady: deps.ensureSupervisorReady,
     advertisesSessionClose: (agentId) => agentAdvertisesSessionClose(deps.acpSupervisor, agentId),
     closeAcpSession: (input) => deps.acpSupervisor.closeAcpSession(input),
@@ -151,6 +169,7 @@ export const registerSessionRoutes = (app: FastifyInstance, deps: SessionRouteDe
         cwd: body.cwd,
         title: acpResult.acpSessionId,
         updatedAt,
+        worktreePath: null,
         configOptions: acpResult.configOptions,
       }),
     )
@@ -189,12 +208,20 @@ export const registerSessionRoutes = (app: FastifyInstance, deps: SessionRouteDe
       })
     })
 
+    const worktreePaths = new Map(
+      deps
+        .listSessionWorktreePaths()
+        .map((row) => [`${row.agentId}\0${row.sessionId}`, row.worktreePath]),
+    )
+
     const items = visible.map((session) => {
       const pushedTitle = deps.getSessionTitle({
         agentId: session.agentId,
         sessionId: session.sessionId,
       })
-      return pushedTitle === undefined ? session : { ...session, title: pushedTitle }
+      const worktreePath = worktreePaths.get(`${session.agentId}\0${session.sessionId}`) ?? null
+      const row = { ...session, worktreePath }
+      return pushedTitle === undefined ? row : { ...row, title: pushedTitle }
     })
 
     return reply.status(200).send(
@@ -202,6 +229,71 @@ export const registerSessionRoutes = (app: FastifyInstance, deps: SessionRouteDe
         items,
       }),
     )
+  })
+
+  app.put("/v1/sessions/:sessionId/worktree-path", async (request, reply) => {
+    const params = SessionWorktreePathParamsSchema.parse(request.params)
+    const body = SetSessionWorktreePathBodySchema.parse(request.body)
+
+    const gate = await resolveAgentGate({ agentId: body.agentId })
+    if (!gate.ok) {
+      return sendAgentGateProblem(reply, gate.error)
+    }
+
+    const cwd = deps.cwdCache.get({
+      agentId: body.agentId,
+      sessionId: params.sessionId,
+    })
+    if (cwd === undefined) {
+      return sendProblem(reply, 404, buildSessionNotFoundProblem())
+    }
+
+    if (body.worktreePath !== null) {
+      const listed = await deps.listWorktrees({ path: cwd })
+      const listedPaths = listed.ok ? listed.value.items.map((item) => item.path) : []
+      if (!listedPaths.includes(body.worktreePath)) {
+        return sendProblem(
+          reply,
+          422,
+          ValidationProblemSchema.parse({
+            type: PROBLEM_TYPES.validationError,
+            title: "Worktree path rejected",
+            status: 422,
+            code: "validation.worktreePath.notFound",
+            errors: [{ pointer: "#/worktreePath", code: "validation.worktreePath.notFound" }],
+          }),
+        )
+      }
+    }
+
+    const previous =
+      deps.getSessionWorktreePath({
+        agentId: body.agentId,
+        sessionId: params.sessionId,
+      }) ?? null
+    if (body.worktreePath === null) {
+      deps.forgetSessionWorktreePath({
+        agentId: body.agentId,
+        sessionId: params.sessionId,
+      })
+    } else {
+      deps.setSessionWorktreePath({
+        agentId: body.agentId,
+        sessionId: params.sessionId,
+        worktreePath: body.worktreePath,
+        updatedAt: new Date().toISOString(),
+      })
+    }
+
+    if (previous !== body.worktreePath) {
+      deps.broadcastSessionWorktreePath({
+        agentId: body.agentId,
+        sessionId: params.sessionId,
+        worktreePath: body.worktreePath,
+      })
+    }
+
+    return reply.status(204).send()
   })
 
   app.put("/v1/sessions/:sessionId/config-options/:configId", async (request, reply) => {

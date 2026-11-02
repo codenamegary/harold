@@ -1494,6 +1494,7 @@ class ChatViewModel @Inject constructor(
         if (open != null && snapshot.sessionId == open.sessionId) {
             transcriptMemory[open.id] = current.transcript
         }
+        applySnapshotWorktreePath(snapshot)
 
         if (snapshot.authRequired && !lastAuthRequired) {
             val agentId = snapshot.agentId
@@ -1504,6 +1505,49 @@ class ChatViewModel @Inject constructor(
             }
         }
         lastAuthRequired = snapshot.authRequired
+    }
+
+    /**
+     * A worktree path event is a targeted update. The transcript snapshot is
+     * rebuilt for every frame, so only a frame that actually carried a path
+     * may touch the cached row.
+     */
+    private fun applySnapshotWorktreePath(snapshot: SessionSnapshot) {
+        // A null path only means "clear" when a worktree event delivered it.
+        // Every initial/reset snapshot also carries null, and clearing then
+        // would wipe the cached path before the agent touches a worktree.
+        if (snapshot.worktreePath == null && !snapshot.worktreePathKnown) {
+            return
+        }
+        val open = _uiState.value.selectedSession ?: return
+        if (
+            snapshot.agentId != open.agentId ||
+            snapshot.sessionId != open.sessionId ||
+            snapshot.worktreePath == open.worktreePath
+        ) {
+            return
+        }
+        val origin = open.serverOrigin.ifEmpty { pairedOrigin.orEmpty() }
+        if (origin.isEmpty() || open.sessionId.isEmpty()) {
+            return
+        }
+
+        val updated = open.copy(worktreePath = snapshot.worktreePath)
+        catalog = catalog.map { row -> if (row.id == updated.id) updated else row }
+        _uiState.update { current ->
+            current.copy(
+                selectedSession = updated,
+                sessions = catalog,
+            )
+        }
+        viewModelScope.launch {
+            sessionRepository.updateWorktreePath(
+                serverOrigin = origin,
+                agentId = open.agentId,
+                sessionId = open.sessionId,
+                worktreePath = snapshot.worktreePath,
+            )
+        }
     }
 
     private fun applySessionTitles(titles: Map<String, String>) {

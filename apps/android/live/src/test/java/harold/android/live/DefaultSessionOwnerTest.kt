@@ -1297,6 +1297,66 @@ class DefaultSessionOwnerTest {
     }
 
     @Test
+    fun worktreePathFrameUpdatesTheWatchedSnapshot() = runTest {
+        val factory = ScriptedSessionStreamFactory(listOf(holdOpen()))
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionWorktreePath(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                worktreePath = "/repo/.worktrees/feat-x",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals("/repo/.worktrees/feat-x", owner.snapshot.value.worktreePath)
+        assertTrue(owner.snapshot.value.worktreePathKnown)
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionWorktreePath(
+                agentId = "cursor",
+                sessionId = "sess_02",
+                worktreePath = null,
+            ),
+        )
+        advanceUntilIdle()
+
+        assertNull(owner.snapshot.value.worktreePath)
+        assertTrue(owner.snapshot.value.worktreePathKnown)
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun worktreePathFrameForAnotherSessionLeavesTheSnapshotAlone() = runTest {
+        val factory = ScriptedSessionStreamFactory(listOf(holdOpen()))
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_02")
+        advanceUntilIdle()
+
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionWorktreePath(
+                agentId = "cursor",
+                sessionId = "sess_01",
+                worktreePath = "/repo/.worktrees/feat-x",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertNull(owner.snapshot.value.worktreePath)
+        assertFalse(owner.snapshot.value.worktreePathKnown)
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
     fun promptCompleteEmitsAPromptCompletionForTheWatchedSession() = runTest {
         val factory = ScriptedSessionStreamFactory(
             listOf(holdOpen()),

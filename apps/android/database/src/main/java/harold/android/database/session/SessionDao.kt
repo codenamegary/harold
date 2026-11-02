@@ -33,6 +33,19 @@ abstract class SessionDao {
         sessionId: String,
     )
 
+    @Query(
+        "UPDATE sessions SET worktreePath = :worktreePath " +
+            "WHERE serverOrigin = :serverOrigin " +
+            "AND agentId = :agentId AND sessionId = :sessionId " +
+            "AND (worktreePath IS NOT :worktreePath)",
+    )
+    abstract suspend fun updateWorktreePath(
+        serverOrigin: String,
+        agentId: AgentId,
+        sessionId: String,
+        worktreePath: String?,
+    ): Int
+
     @Query("DELETE FROM sessions WHERE serverOrigin = :serverOrigin")
     abstract suspend fun deleteByOrigin(serverOrigin: String)
 

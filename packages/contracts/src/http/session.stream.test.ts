@@ -287,6 +287,43 @@ describe("session stream REST paths", () => {
   })
 })
 
+describe("SessionStreamWorktreePathSchema", () => {
+  test("parses path and null values", () => {
+    expect(
+      SessionStreamServerMessageSchema.parse({
+        type: "session_worktree_path",
+        agentId: "cursor",
+        sessionId: "acp-1",
+        worktreePath: "/repo/.worktrees/feat-x",
+      }),
+    ).toEqual({
+      type: "session_worktree_path",
+      agentId: "cursor",
+      sessionId: "acp-1",
+      worktreePath: "/repo/.worktrees/feat-x",
+    })
+
+    expect(
+      SessionStreamServerMessageSchema.parse({
+        type: "session_worktree_path",
+        agentId: "cursor",
+        sessionId: "acp-1",
+        worktreePath: null,
+      }),
+    ).toMatchObject({ worktreePath: null })
+  })
+
+  test("rejects missing fields", () => {
+    expect(() =>
+      SessionStreamServerMessageSchema.parse({
+        type: "session_worktree_path",
+        agentId: "cursor",
+        sessionId: "acp-1",
+      }),
+    ).toThrow()
+  })
+})
+
 describe("PermissionReplyBodySchema", () => {
   test("parses only the optionId body", () => {
     expect(PermissionReplyBodySchema.parse({ optionId: "allow-once" })).toEqual({

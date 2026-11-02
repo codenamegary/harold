@@ -54,7 +54,10 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                     uiState.selectedSession?.let { session ->
                         navigator.openChanges(
                             serverOrigin = session.serverOrigin,
+                            agentId = session.agentId,
+                            sessionId = session.sessionId,
                             cwd = session.cwd,
+                            worktreePath = session.worktreePath,
                         )
                     }
                 },

@@ -29,6 +29,8 @@ import {
 import { assembleAttachmentsSlice } from "../attachments/attachments.assembly"
 import { registerSessionRoutes } from "../session/session.routes"
 import { makeArchivedAcpSessionsStore } from "../session/session.archived.acp.sessions.sqlite.adapters"
+import { makeSessionWorktreePathStore } from "../session/session.worktree.path.sqlite.adapters"
+import { createSessionWorktreePathTracker } from "../session/session.worktree.path.tracker"
 import { assembleDeviceSlice } from "../device/device.assembly"
 import { createRuntimeStatusService } from "../runtime/status.service"
 import { WhichFn } from "core/agent-settings/resolve-agent-path"
@@ -201,6 +203,7 @@ export const createServer = async ({
     },
   })
   const archivedAcpSessions = makeArchivedAcpSessionsStore(database)
+  const sessionWorktreePaths = makeSessionWorktreePathStore(database)
 
   const sessionHubRef: { current: SessionHub | null } = { current: null }
   const cwdCache = createSessionCwdCache()
@@ -299,6 +302,13 @@ export const createServer = async ({
 
   const canonicalizePath = makeCanonicalizePath()
   const git = assembleGitSlice({ canonicalizePath })
+  const sessionWorktreePathTracker = createSessionWorktreePathTracker({
+    listWorktrees: git.listWorktrees,
+    getSessionWorktreePath: sessionWorktreePaths.get,
+    setSessionWorktreePath: sessionWorktreePaths.set,
+    now: () => new Date().toISOString(),
+    log: ({ error, message }) => app.log.warn({ err: error }, message),
+  })
   const workspace = assembleWorkspaceSlice({
     database,
     canonicalizePath,
@@ -376,6 +386,7 @@ export const createServer = async ({
       })
       return cancelled.ok ? { ok: true } : { ok: false, reason: cancelled.reason }
     },
+    worktreePathTracker: sessionWorktreePathTracker,
     logElicitation: (event) => {
       app.log.info(event, "ACP elicitation settled")
     },
@@ -427,6 +438,12 @@ export const createServer = async ({
     forgetSessionTitle: sessionTitleCache.forgetSessionTitle,
     isArchivedAcpSession: archivedAcpSessions.isArchived,
     archiveAcpSession: archivedAcpSessions.archive,
+    listWorktrees: git.listWorktrees,
+    getSessionWorktreePath: sessionWorktreePaths.get,
+    listSessionWorktreePaths: sessionWorktreePaths.list,
+    setSessionWorktreePath: sessionWorktreePaths.set,
+    forgetSessionWorktreePath: sessionWorktreePaths.forget,
+    broadcastSessionWorktreePath: sessionHub.broadcastWorktreePath,
     closeSession: (input) => sessionHub.closeSession(input),
     authBroker,
   })

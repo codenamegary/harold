@@ -47,6 +47,7 @@ import harold.android.contracts.PromptRequestBody
 import harold.android.contracts.RuntimeSettingsView
 import harold.android.contracts.Session
 import harold.android.contracts.SessionCollection
+import harold.android.contracts.SetSessionWorktreePathBody
 import harold.android.contracts.UnauthorizedProblem
 import harold.android.contracts.UnprocessableProblem
 import harold.android.contracts.Workspace
@@ -382,6 +383,19 @@ class DefaultAgentApi(
     ) { responseBody ->
         json.decodeFromString(CreateSessionResponse.serializer(), responseBody)
     }
+
+    override suspend fun updateSessionWorktreePath(
+        serverOrigin: String,
+        sessionId: String,
+        body: SetSessionWorktreePathBody,
+    ): Result<Unit> = request(
+        serverOrigin = serverOrigin,
+        pathSegments = "v1/sessions/$sessionId/worktree-path",
+        query = emptyMap(),
+        method = "PUT",
+        body = json.encodeToString(SetSessionWorktreePathBody.serializer(), body),
+        decode = { Unit },
+    )
 
     override suspend fun getAgentAuth(
         serverOrigin: String,

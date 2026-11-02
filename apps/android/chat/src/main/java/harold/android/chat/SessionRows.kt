@@ -20,6 +20,7 @@ fun Session.toSessionRow(
         agentLabel = agentLabels[agentId] ?: agentId,
         state = SessionState.Idle,
         updatedAt = updatedAt,
+        worktreePath = worktreePath,
     )
 }
 
@@ -34,4 +35,5 @@ fun CachedSession.toSessionRow(): SessionRow = SessionRow(
     state = SessionState.Idle,
     updatedAt = session.updatedAt,
     serverOrigin = serverOrigin,
+    worktreePath = session.worktreePath,
 )

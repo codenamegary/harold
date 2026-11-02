@@ -20,6 +20,7 @@ import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.LogLevel
+import harold.android.contracts.SetSessionWorktreePathBody
 import harold.android.contracts.WorkspaceSource
 import harold.android.contracts.WorkspaceState
 
@@ -157,6 +158,45 @@ class DefaultAgentApiTest {
         val error = errorOf(agentApi.listWorkspaces(serverOrigin = origin(), limit = 1))
 
         assertTrue("expected transport error but was $error", error is AgentApiError.Transport)
+    }
+
+    @Test
+    fun updateSessionWorktreePathPutsTheBody() = runTest {
+        server.enqueue(MockResponse().setResponseCode(204))
+
+        val result = agentApi.updateSessionWorktreePath(
+            serverOrigin = origin(),
+            sessionId = "sess_01",
+            body = SetSessionWorktreePathBody(
+                agentId = "cursor",
+                worktreePath = "/repo/.worktrees/feat-x",
+            ),
+        )
+
+        val recorded = server.takeRequest()
+        assertEquals("PUT", recorded.method)
+        assertEquals("/v1/sessions/sess_01/worktree-path", recorded.path)
+        assertEquals(
+            """{"agentId":"cursor","worktreePath":"/repo/.worktrees/feat-x"}""",
+            recorded.body.readUtf8(),
+        )
+        assertTrue(result.isSuccess)
+    }
+
+    @Test
+    fun updateSessionWorktreePathSerializesNullAsAClear() = runTest {
+        server.enqueue(MockResponse().setResponseCode(204))
+
+        agentApi.updateSessionWorktreePath(
+            serverOrigin = origin(),
+            sessionId = "sess_01",
+            body = SetSessionWorktreePathBody(agentId = "cursor", worktreePath = null),
+        )
+
+        assertEquals(
+            """{"agentId":"cursor","worktreePath":null}""",
+            server.takeRequest().body.readUtf8(),
+        )
     }
 
     @Test

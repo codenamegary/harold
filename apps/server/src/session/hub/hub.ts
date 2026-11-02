@@ -18,6 +18,7 @@ import { parseUsageUpdate } from "./usage.update"
 import { createPromptQueue } from "./prompt.queue"
 import { makeApplySessionTitle } from "../session.apply.title.usecase"
 import { PromptAccept, PromptCompleteTurn } from "../session.prompt.gate.usecase"
+import { SessionWorktreePathTracker } from "../session.worktree.path.tracker"
 import {
   SessionCommandError,
   SessionHubCancelSession,
@@ -118,6 +119,7 @@ export type CreateSessionHubParams = {
   acceptPrompt: PromptAccept
   completePromptTurn: PromptCompleteTurn
   cancelSession: SessionHubCancelSession
+  worktreePathTracker: SessionWorktreePathTracker
   createRequestId?: () => string
   /** One-hour by default. Test seam. */
   elicitationTimeoutMs?: number
@@ -156,6 +158,11 @@ export type SessionHub = {
     configOptions: SessionConfig
   }) => void
   broadcastAuthSessionUpdated: (params: { agentId: AgentId; auth: AgentAuth }) => void
+  broadcastWorktreePath: (params: {
+    agentId: AgentId
+    sessionId: string
+    worktreePath: string | null
+  }) => void
   requestPermission: (params: {
     agentId: AgentId
     sessionId: string
@@ -242,6 +249,7 @@ export const createSessionHub = ({
   acceptPrompt,
   completePromptTurn,
   cancelSession,
+  worktreePathTracker,
   createRequestId = () => crypto.randomUUID(),
   elicitationTimeoutMs = DEFAULT_ELICITATION_TIMEOUT_MS,
   now = () => Date.now(),
@@ -333,7 +341,7 @@ export const createSessionHub = ({
   const refForMessage = (
     message: SessionStreamServerMessage,
   ): { agentId: AgentId; sessionId: string } | undefined => {
-    if (message.type === "session_info") {
+    if (message.type === "session_info" || message.type === "session_worktree_path") {
       return { agentId: message.agentId, sessionId: message.sessionId }
     }
     return undefined
@@ -393,6 +401,28 @@ export const createSessionHub = ({
     },
   })
 
+  const settleWorktreePath = async (ref: { agentId: AgentId; sessionId: string }) => {
+    const cwd = cwdCache.get(ref)
+    if (cwd === undefined) {
+      return
+    }
+
+    try {
+      const change = await worktreePathTracker.finishTurn({ ...ref, cwd })
+      if (change !== null) {
+        fanOutToAll({
+          type: "session_worktree_path",
+          agentId: ref.agentId,
+          sessionId: ref.sessionId,
+          worktreePath: change.worktreePath,
+        })
+      }
+    } catch {
+      // Detection is best effort. A tracker bug must not fail the turn.
+      worktreePathTracker.forget(ref)
+    }
+  }
+
   type PromptJob = {
     agentId: AgentId
     sessionId: string
@@ -403,6 +433,7 @@ export const createSessionHub = ({
   const executePromptTurn = async (job: PromptJob): Promise<void> => {
     const key = sessionKey(job.agentId, job.sessionId)
     const ref = { agentId: job.agentId, sessionId: job.sessionId }
+    worktreePathTracker.startTurn(ref)
     try {
       const outcome = await runPromptTurn({
         agentId: job.agentId,
@@ -413,12 +444,14 @@ export const createSessionHub = ({
           : {}),
       })
       const settled = await completePromptTurn({ agentId: job.agentId, outcome })
+      await settleWorktreePath(ref)
       if (settled.ok) {
         fanOut(key, { type: "prompt_complete", ...ref })
         return
       }
       fanOut(key, { type: "error", message: settled.reason, ...ref })
     } catch (error: unknown) {
+      await settleWorktreePath(ref)
       fanOut(key, {
         type: "error",
         message: sanitizeFailureReason(error, "Prompt turn failed"),
@@ -949,6 +982,8 @@ export const createSessionHub = ({
         "session_cancelled",
       )
 
+      await settleWorktreePath({ agentId, sessionId })
+
       fanOut(sessionKey(agentId, sessionId), {
         type: "cancelled",
         agentId,
@@ -957,6 +992,8 @@ export const createSessionHub = ({
       return { ok: true }
     },
     handleSessionUpdate: ({ agentId, sessionId, update }) => {
+      worktreePathTracker.observeUpdate({ agentId, sessionId, update })
+
       const commandsUpdate = parseAvailableCommandsUpdate(update)
       if (commandsUpdate !== null) {
         commandsCache.remember({ agentId, sessionId, update: commandsUpdate })
@@ -993,6 +1030,14 @@ export const createSessionHub = ({
         type: "auth_session_updated",
         agentId,
         auth,
+      })
+    },
+    broadcastWorktreePath: ({ agentId, sessionId, worktreePath }) => {
+      fanOutToAll({
+        type: "session_worktree_path",
+        agentId,
+        sessionId,
+        worktreePath,
       })
     },
     requestPermission: ({ agentId, sessionId, params }) =>
@@ -1107,6 +1152,7 @@ export const createSessionHub = ({
       settleElicitation(requestId, "cancelled_by_agent", cancellationResult())
     },
     closeSession: ({ agentId, sessionId }) => {
+      worktreePathTracker.forget({ agentId, sessionId })
       settleElicitationsWhere(
         (pending) => pending.agentId === agentId && pending.sessionId === sessionId,
         "session_cancelled",

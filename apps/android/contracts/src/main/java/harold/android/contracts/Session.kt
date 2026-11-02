@@ -37,6 +37,7 @@ data class Session(
     val cwd: String,
     val title: String,
     val updatedAt: String,
+    val worktreePath: String? = null,
 )
 
 @Serializable

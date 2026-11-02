@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.savedstate.SavedStateRegistry
+import harold.android.contracts.AgentId
 import harold.android.contracts.GitScope
 import dagger.hilt.android.scopes.ActivityRetainedScoped
 import javax.inject.Inject
@@ -109,11 +110,25 @@ class Navigator @Inject constructor() {
         }
     }
 
-    fun openChanges(serverOrigin: String, cwd: String) {
+    fun openChanges(
+        serverOrigin: String,
+        agentId: AgentId,
+        sessionId: String,
+        cwd: String,
+        worktreePath: String?,
+    ) {
         if (backStack.isEmpty()) {
             return
         }
-        backStack.add(Changes(serverOrigin = serverOrigin, cwd = cwd))
+        backStack.add(
+            Changes(
+                serverOrigin = serverOrigin,
+                agentId = agentId,
+                sessionId = sessionId,
+                cwd = cwd,
+                worktreePath = worktreePath,
+            ),
+        )
     }
 
     fun openFileDiff(

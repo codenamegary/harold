@@ -9,6 +9,7 @@ import {
 import { createCommandsCache } from "./commands.cache"
 import { createSessionEventLog } from "./event.log"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
+import { SessionWorktreePathTracker } from "../session.worktree.path.tracker"
 
 type SentFrame = {
   message: SessionStreamServerMessage
@@ -54,10 +55,18 @@ const okCompletePromptTurn =
   async ({ outcome }) =>
     outcome
 
+const noopWorktreePathTracker = (): SessionWorktreePathTracker => ({
+  startTurn: () => undefined,
+  observeUpdate: () => undefined,
+  finishTurn: async () => null,
+  forget: () => undefined,
+})
+
 const okPromptDeps = () => ({
   runPromptTurn: okPromptTurn(),
   acceptPrompt: okAcceptPrompt(),
   completePromptTurn: okCompletePromptTurn(),
+  worktreePathTracker: noopWorktreePathTracker(),
 })
 
 describe("session hub", () => {
@@ -517,6 +526,7 @@ describe("session hub", () => {
           challenges += 1
         },
       }),
+      worktreePathTracker: noopWorktreePathTracker(),
       cancelSession: async () => ({ ok: true }),
     })
 
@@ -1358,6 +1368,82 @@ describe("session hub session info", () => {
       update: { sessionUpdate: "agent_message_chunk", text: "missed" },
     })
     expect(resumed.messages[1]).toMatchObject({ update: usage })
+  })
+
+  test("prompt turns drive worktree detection and broadcast a change", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/repo" })
+    const calls: string[] = []
+    let release: (() => void) | undefined
+    const runCompletion = new Promise<{ ok: true }>((resolve) => {
+      release = () => resolve({ ok: true })
+    })
+    const tracker: SessionWorktreePathTracker = {
+      startTurn: () => calls.push("start"),
+      observeUpdate: () => calls.push("observe"),
+      finishTurn: async ({ cwd }) => {
+        calls.push(`finish:${cwd}`)
+        return { worktreePath: "/repo/.worktrees/feat-x" }
+      },
+      forget: () => undefined,
+    }
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
+      runPromptTurn: async () => runCompletion,
+      worktreePathTracker: tracker,
+      cancelSession: async () => ({ ok: true }),
+    })
+    const sink = collectSink()
+    hub.addSubscriber({ id: "a", sink: sink.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    await hub.prompt({ agentId: "cursor", sessionId: "s1", text: "edit it" })
+    hub.handleSessionUpdate({
+      agentId: "cursor",
+      sessionId: "s1",
+      update: { sessionUpdate: "tool_call", toolCallId: "t1", kind: "edit" },
+    })
+    release?.()
+    await hub.awaitPromptTurns()
+
+    expect(calls).toEqual(["start", "observe", "finish:/repo"])
+    expect(sink.messages).toContainEqual({
+      type: "session_worktree_path",
+      agentId: "cursor",
+      sessionId: "s1",
+      worktreePath: "/repo/.worktrees/feat-x",
+    })
+  })
+
+  test("worktree detection failure does not fail the prompt turn", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/repo" })
+    const tracker: SessionWorktreePathTracker = {
+      startTurn: () => undefined,
+      observeUpdate: () => undefined,
+      finishTurn: async () => {
+        throw new Error("tracker exploded")
+      },
+      forget: () => undefined,
+    }
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
+      worktreePathTracker: tracker,
+      cancelSession: async () => ({ ok: true }),
+    })
+    const sink = collectSink()
+    hub.addSubscriber({ id: "a", sink: sink.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    await hub.prompt({ agentId: "cursor", sessionId: "s1", text: "edit it" })
+    await hub.awaitPromptTurns()
+
+    expect(sink.messages.some((message) => message.type === "prompt_complete")).toBe(true)
+    expect(sink.messages.some((message) => message.type === "error")).toBe(false)
   })
 
   test("resume catches up a title rename that happened while disconnected", async () => {

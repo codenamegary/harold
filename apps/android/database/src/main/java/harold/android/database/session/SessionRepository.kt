@@ -59,6 +59,13 @@ interface SessionRepository {
         agentId: AgentId,
         sessionId: String,
     ): Result<Unit>
+
+    suspend fun updateWorktreePath(
+        serverOrigin: String,
+        agentId: AgentId,
+        sessionId: String,
+        worktreePath: String?,
+    )
 }
 
 class DefaultSessionRepository @Inject constructor(
@@ -190,6 +197,15 @@ class DefaultSessionRepository @Inject constructor(
         sessionDao.delete(serverOrigin, agentId, sessionId)
     }
 
+    override suspend fun updateWorktreePath(
+        serverOrigin: String,
+        agentId: AgentId,
+        sessionId: String,
+        worktreePath: String?,
+    ) {
+        sessionDao.updateWorktreePath(serverOrigin, agentId, sessionId, worktreePath)
+    }
+
     private fun cachedSessions(entities: List<SessionEntity>): List<CachedSession> =
         entities.map { entity ->
             CachedSession(
@@ -235,5 +251,6 @@ private fun Session.toEntity(
     workspaceId = workspaceId,
     workspaceName = workspaceName,
     agentLabel = agentLabel,
+    worktreePath = worktreePath,
 )
 

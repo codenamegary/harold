@@ -174,6 +174,13 @@ export const SessionStreamSessionInfoSchema = z.strictObject({
   title: z.string().nullable(),
 })
 
+export const SessionStreamWorktreePathSchema = z.strictObject({
+  type: z.literal("session_worktree_path"),
+  agentId: AgentIdSchema,
+  sessionId: z.string().min(1),
+  worktreePath: z.string().min(1).nullable(),
+})
+
 export const SessionStreamServerMessageSchema = z.discriminatedUnion("type", [
   SessionStreamSessionUpdateSchema,
   SessionStreamResetSchema,
@@ -189,6 +196,7 @@ export const SessionStreamServerMessageSchema = z.discriminatedUnion("type", [
   SessionStreamCancelledSchema,
   SessionStreamAuthSessionUpdatedSchema,
   SessionStreamSessionInfoSchema,
+  SessionStreamWorktreePathSchema,
 ])
 
 export type SessionStreamServerMessage = z.infer<typeof SessionStreamServerMessageSchema>

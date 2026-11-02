@@ -124,6 +124,25 @@ class TestSessionRepository(
         }
     }
 
+    override suspend fun updateWorktreePath(
+        serverOrigin: String,
+        agentId: AgentId,
+        sessionId: String,
+        worktreePath: String?,
+    ) {
+        sessions.value = sessions.value.map { cached ->
+            if (
+                cached.serverOrigin == serverOrigin &&
+                cached.session.agentId == agentId &&
+                cached.session.sessionId == sessionId
+            ) {
+                cached.copy(session = cached.session.copy(worktreePath = worktreePath))
+            } else {
+                cached
+            }
+        }
+    }
+
     fun seed(sessions: List<CachedSession>) {
         this.sessions.value = sessions
     }

@@ -18,6 +18,7 @@ data class SessionEntity(
     val workspaceId: String,
     val workspaceName: String,
     val agentLabel: String,
+    val worktreePath: String? = null,
 )
 
 fun SessionEntity.toSession(): Session = Session(
@@ -26,4 +27,5 @@ fun SessionEntity.toSession(): Session = Session(
     cwd = cwd,
     title = title,
     updatedAt = updatedAt,
+    worktreePath = worktreePath,
 )

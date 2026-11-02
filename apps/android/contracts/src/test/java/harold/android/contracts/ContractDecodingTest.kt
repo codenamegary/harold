@@ -665,6 +665,69 @@ class ContractDecodingTest {
         assertEquals("url-1", completed.elicitationId)
     }
 
+    @Test
+    fun decodesSessionCollectionWithWorktreePaths() {
+        val collection = HaroldJson.decodeFromString(
+            SessionCollection.serializer(),
+            """
+            {
+              "items": [
+                {
+                  "agentId": "cursor",
+                  "sessionId": "sess_01",
+                  "cwd": "/repo",
+                  "title": "Feature",
+                  "updatedAt": "2026-08-05T01:00:00.000Z",
+                  "worktreePath": "/repo/.worktrees/feat-x"
+                },
+                {
+                  "agentId": "cursor",
+                  "sessionId": "sess_02",
+                  "cwd": "/repo",
+                  "title": "Main",
+                  "updatedAt": "2026-08-05T01:00:00.000Z",
+                  "worktreePath": null
+                }
+              ]
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals("/repo/.worktrees/feat-x", collection.items[0].worktreePath)
+        assertNull(collection.items[1].worktreePath)
+    }
+
+    @Test
+    fun decodesSessionWorktreePathStreamMessages() {
+        val message = HaroldJson.decodeFromString(
+            SessionStreamServerMessage.serializer(),
+            """
+            {
+              "type": "session_worktree_path",
+              "agentId": "cursor",
+              "sessionId": "sess_01",
+              "worktreePath": "/repo/.worktrees/feat-x"
+            }
+            """.trimIndent(),
+        ) as SessionStreamServerMessage.SessionWorktreePath
+
+        assertEquals("/repo/.worktrees/feat-x", message.worktreePath)
+
+        val cleared = HaroldJson.decodeFromString(
+            SessionStreamServerMessage.serializer(),
+            """
+            {
+              "type": "session_worktree_path",
+              "agentId": "cursor",
+              "sessionId": "sess_01",
+              "worktreePath": null
+            }
+            """.trimIndent(),
+        ) as SessionStreamServerMessage.SessionWorktreePath
+
+        assertNull(cleared.worktreePath)
+    }
+
     private fun assertThrowsSerialization(block: () -> Unit) {
         val thrown = runCatching(block).exceptionOrNull()
 

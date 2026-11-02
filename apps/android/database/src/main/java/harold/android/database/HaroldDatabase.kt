@@ -15,7 +15,7 @@ import harold.android.database.workspace.WorkspaceEntity
         SessionEntity::class,
         AgentEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class HaroldDatabase : RoomDatabase() {

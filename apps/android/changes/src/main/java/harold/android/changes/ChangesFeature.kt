@@ -27,8 +27,20 @@ class ChangesEntryProvider @Inject constructor() : FeatureEntryProvider {
         scope.entry<Changes> { route ->
             val viewModel: ChangesViewModel = hiltViewModel()
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-            LaunchedEffect(route.serverOrigin, route.cwd) {
-                viewModel.start(serverOrigin = route.serverOrigin, cwd = route.cwd)
+            LaunchedEffect(
+                route.serverOrigin,
+                route.agentId,
+                route.sessionId,
+                route.cwd,
+                route.worktreePath,
+            ) {
+                viewModel.start(
+                    serverOrigin = route.serverOrigin,
+                    agentId = route.agentId,
+                    sessionId = route.sessionId,
+                    cwd = route.cwd,
+                    worktreePath = route.worktreePath,
+                )
             }
             ResumeChanges(viewModel)
             ChangesScreen(

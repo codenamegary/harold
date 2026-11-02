@@ -68,7 +68,11 @@ class DefaultSessionRepositoryTest {
 
     @Test
     fun refreshCachesSessionsWithWorkspaceAndAgentLabels() = runTest {
-        api.sessions = Result.success(SessionCollection(listOf(session("sess_01", "Alpha"))))
+        api.sessions = Result.success(
+            SessionCollection(
+                listOf(session("sess_01", "Alpha").copy(worktreePath = "/repo/.worktrees/a")),
+            ),
+        )
 
         val result = repository.refresh(ORIGIN)
 
@@ -77,6 +81,20 @@ class DefaultSessionRepositoryTest {
         assertEquals("harold", cached.workspaceName)
         assertEquals("ws_01", cached.workspaceId)
         assertEquals("Cursor", cached.agentLabel)
+        assertEquals("/repo/.worktrees/a", cached.session.worktreePath)
+    }
+
+    @Test
+    fun updateWorktreePathTargetsTheCachedRow() = runTest {
+        api.sessions = Result.success(SessionCollection(listOf(session("sess_01", "Alpha"))))
+        repository.refresh(ORIGIN)
+
+        repository.updateWorktreePath(ORIGIN, "cursor", "sess_01", "/repo/.worktrees/feat-x")
+
+        assertEquals(
+            "/repo/.worktrees/feat-x",
+            repository.observeSessions(ORIGIN).first().single().session.worktreePath,
+        )
     }
 
     @Test
