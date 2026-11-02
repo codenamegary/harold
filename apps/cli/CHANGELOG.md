@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.2.1](https://github.com/codenamegary/harold/compare/v3.2.0...v3.2.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* **cli:** use full ids and remove workspaces without a daemon guard ([#483](https://github.com/codenamegary/harold/issues/483)) ([a044e8d](https://github.com/codenamegary/harold/commit/a044e8d7f06f5163b38f5258a93c6a8c2d912c19))
+
 ## [3.2.0](https://github.com/codenamegary/harold/compare/v3.1.0...v3.2.0) (2026-11-01)
 
 
