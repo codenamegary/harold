@@ -2,12 +2,6 @@ import path, { basename } from "node:path"
 import { Command } from "commander"
 import pc from "picocolors"
 import { CreateWorkspaceBodySchema } from "contracts/http/workspace"
-import {
-  daemonStateFilePath,
-  makeDaemonStateFileStore,
-  makeNodeProcessAlive,
-} from "core/daemon-state/node.adapters"
-import { makeReadLiveDaemonState, ReadLiveDaemonState } from "core/daemon-state/read.live.usecase"
 import { makeCreateDirectory, CreateDirectory } from "core/filesystem/create.directory.usecase"
 import { expandHomePath } from "core/filesystem/expand.home.path"
 import { CanonicalizePath } from "core/workspace/ports"
@@ -27,8 +21,6 @@ import {
   renderFolderCreatedWithoutWorkspace,
   renderRegisterWorkspaceError,
   renderWorkspaceAdded,
-  renderWorkspaceDaemonRunningDeleteGuard,
-  renderWorkspaceDaemonSessionsNotClosed,
   renderWorkspaceList,
   renderWorkspaceReferenceNotFound,
   renderWorkspaceRemoved,
@@ -39,7 +31,6 @@ type WorkspaceCommandContext = Readonly<{
   canonicalizePath: CanonicalizePath
   createDirectory: CreateDirectory
   database: AgentDatabase
-  readLiveDaemonState: ReadLiveDaemonState
 }>
 
 const openWorkspaceCommandContext = (): WorkspaceCommandContext => {
@@ -58,14 +49,8 @@ const openWorkspaceCommandContext = (): WorkspaceCommandContext => {
     canonicalizePath,
     createDirectory: makeCreateDirectoryAdapter(),
   })
-  const readLiveDaemonState = makeReadLiveDaemonState({
-    readDaemonState: makeDaemonStateFileStore({
-      path: daemonStateFilePath(config.dataDir),
-    }).read,
-    isProcessAlive: makeNodeProcessAlive(),
-  })
 
-  return { slice, canonicalizePath, createDirectory, database, readLiveDaemonState }
+  return { slice, canonicalizePath, createDirectory, database }
 }
 
 const withWorkspaceCommandContext = async (
@@ -206,8 +191,7 @@ export const makeWorkspaceCommand = (): Command => {
     .command("remove")
     .description("remove a registered workspace by id, canonical path, or unique name")
     .argument("<reference>", "workspace id, canonical path, or unique name")
-    .option("--force", "skip the live-daemon active-session guard")
-    .action((reference: string, options: { force?: boolean }) =>
+    .action((reference: string) =>
       withWorkspaceCommandContext(async (context) => {
         const resolve = makeResolveWorkspaceReference({
           canonicalizePath: context.canonicalizePath,
@@ -225,12 +209,6 @@ export const makeWorkspaceCommand = (): Command => {
           return
         }
 
-        const daemonRunning = context.readLiveDaemonState().ok
-        if (daemonRunning && !options.force) {
-          reportError(renderWorkspaceDaemonRunningDeleteGuard())
-          return
-        }
-
         const deleted = await context.slice.deleteWorkspace({
           workspaceId: resolved.value.id,
           force: false,
@@ -243,9 +221,6 @@ export const makeWorkspaceCommand = (): Command => {
         }
 
         console.log(renderWorkspaceRemoved(resolved.value))
-        if (daemonRunning) {
-          console.log(renderWorkspaceDaemonSessionsNotClosed())
-        }
       }),
     )
 

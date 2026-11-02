@@ -10,10 +10,6 @@ export type WorkspaceColors = Readonly<{
   dim: (text: string) => string
 }>
 
-const shortIdLength = "ws_".length + 8
-
-const shortWorkspaceId = (id: string): string => id.slice(0, shortIdLength)
-
 const workspaceCount = (count: number): string => `${count} workspace${count === 1 ? "" : "s"}`
 
 const pathErrorMessages = {
@@ -40,7 +36,7 @@ export const renderWorkspaceList = (params: {
 
   const header = ["ID", "NAME", "PATH", "STATE"]
   const rows = workspaces.map((workspace) => [
-    shortWorkspaceId(workspace.id),
+    workspace.id,
     workspace.name,
     workspace.path,
     workspace.state,
@@ -77,12 +73,6 @@ export const renderWorkspaceAdded = (params: { workspace: Workspace; created: bo
 
 export const renderWorkspaceRemoved = (workspace: Workspace): string =>
   `Removed workspace ${workspace.name} (${workspace.path}).`
-
-export const renderWorkspaceDaemonRunningDeleteGuard = (): string =>
-  "The daemon is running and may hold active sessions for this workspace. Pass --force to remove it without closing those sessions."
-
-export const renderWorkspaceDaemonSessionsNotClosed = (): string =>
-  "Daemon-held sessions were not closed."
 
 export const renderRegisterWorkspaceError = (params: {
   error: RegisterWorkspaceError
@@ -138,7 +128,7 @@ export const renderAmbiguousWorkspaceReference = (params: {
   const lines = [
     `More than one workspace is named "${params.reference}":`,
     ...params.workspaces.map(
-      (workspace) => `  ${shortWorkspaceId(workspace.id)}  ${workspace.name}  ${workspace.path}`,
+      (workspace) => `  ${workspace.id}  ${workspace.name}  ${workspace.path}`,
     ),
   ]
   return lines.join("\n")

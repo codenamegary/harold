@@ -188,18 +188,15 @@ describe("harold device remove --name", () => {
     })
   })
 
-  test("reports an ambiguous id prefix", async () => {
+  test("rejects an id prefix", async () => {
     await withDataDir(async (dataDir) => {
-      const deviceIds = seedDevices(dataDir, ["GPhone", "Pixel"])
+      seedDevices(dataDir, ["GPhone", "Pixel"])
 
       const { output, errOutput, exitCode } = await runCommand(["remove", "device_", "--yes"])
 
       expect(exitCode).toBe(1)
       expect(output).toBe("")
-      expect(errOutput).toContain('More than one device matches id "device_":')
-      expect(errOutput).toContain(deviceIds[0])
-      expect(errOutput).toContain(deviceIds[1])
-      expect(errOutput).toContain("Use a longer id.")
+      expect(errOutput).toContain("No device matches that id.")
     })
   })
 

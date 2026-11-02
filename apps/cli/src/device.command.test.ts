@@ -107,15 +107,14 @@ describe("harold device", () => {
     expect(output).toContain("PLATFORM")
     expect(output).toContain("STATE")
     expect(output).toContain("PAIRED AT")
-    expect(output).toContain(deviceId.slice(0, "device_".length + 8))
+    expect(output).toContain(deviceId)
     expect(output).toContain("Connection test probe")
     expect(output).toContain("offline")
     expect(output).toContain("1 device")
   })
 
-  test("remove deletes the device by the short id shown in the list", async () => {
-    const shortId = deviceId.slice(0, "device_".length + 8)
-    const { output, exitCode } = await runCommand(["remove", shortId, "--yes"])
+  test("remove deletes the device by the id shown in the list", async () => {
+    const { output, exitCode } = await runCommand(["remove", deviceId, "--yes"])
 
     expect(exitCode).toBe(0)
     expect(output).toBe(`Removed device Connection test probe (${deviceId}).`)

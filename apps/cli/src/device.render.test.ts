@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Device } from "contracts/http/device"
 import {
-  renderAmbiguousDeviceId,
   renderDeviceList,
   renderDeviceNameNoMatch,
   renderDeviceRemoveError,
@@ -30,7 +29,7 @@ describe("renderDeviceList", () => {
     expect(renderDeviceList({ devices: [], colors })).toBe("No devices paired yet.")
   })
 
-  test("prints a table of paired devices with a short id", () => {
+  test("prints a table of paired devices with full ids", () => {
     const output = renderDeviceList({
       devices: [
         aDevice({ id: "device_01JABCDEFGHIJKLMNOPQRSTUV", name: "iPhone" }),
@@ -44,7 +43,8 @@ describe("renderDeviceList", () => {
     expect(output).toContain("PLATFORM")
     expect(output).toContain("STATE")
     expect(output).toContain("PAIRED AT")
-    expect(output).toContain("device_01JABCDE")
+    expect(output).toContain("device_01JABCDEFGHIJKLMNOPQRSTUV")
+    expect(output).toContain("device_01JZYXWVUTSRQPONMLKJIHGF")
     expect(output).toContain("iPhone")
     expect(output).toContain("ios")
     expect(output).toContain("offline")
@@ -112,27 +112,6 @@ describe("renderDeviceRemoveError", () => {
 describe("renderDeviceNameNoMatch", () => {
   test("includes the name pattern that matched nothing", () => {
     expect(renderDeviceNameNoMatch("*gphone*")).toBe('No devices match name pattern "*gphone*".')
-  })
-})
-
-describe("renderAmbiguousDeviceId", () => {
-  test("lists the candidate ids and asks for a longer id", () => {
-    expect(
-      renderAmbiguousDeviceId({
-        reference: "device_",
-        devices: [
-          aDevice({ id: "device_01JABCDEFGHIJKLMNOPQRSTUV", name: "Pixel" }),
-          aDevice({ id: "device_01JZYXWVUTSRQPONMLKJIHGF", name: "iPhone" }),
-        ],
-      }),
-    ).toBe(
-      [
-        'More than one device matches id "device_":',
-        "  device_01JABCDEFGHIJKLMNOPQRSTUV  Pixel",
-        "  device_01JZYXWVUTSRQPONMLKJIHGF  iPhone",
-        "Use a longer id.",
-      ].join("\n"),
-    )
   })
 })
 
