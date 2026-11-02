@@ -178,6 +178,17 @@ describe("harold workspace", () => {
     expect(output).toBe(`Removed workspace custom (${customDir}).`)
   })
 
+  test("remove resolves the full id shown by list", async () => {
+    await runCommand(["add", customDir, "--name", "custom"])
+    const { output: listOutput } = await runCommand(["list"])
+    const listedId = workspaceIdFrom(listOutput)
+
+    const { output, exitCode } = await runCommand(["remove", listedId])
+
+    expect(exitCode).toBe(0)
+    expect(output).toBe(`Removed workspace custom (${customDir}).`)
+  })
+
   test("list reports the empty state", async () => {
     const { output, exitCode } = await runCommand(["list"])
 
@@ -192,64 +203,19 @@ describe("harold workspace", () => {
     expect(output).toContain('No workspace matches "nope".')
   })
 
-  test("remove refuses while a live daemon is running without --force", async () => {
+  test("remove deletes while a live daemon is running", async () => {
     await writeLiveDaemonState(dataDir)
-    await runCommand(["add", guardDir])
-
-    const { output, exitCode } = await runCommand(["remove", guardDir])
-
-    expect(exitCode).toBe(1)
-    expect(output).toContain("daemon is running")
-    expect(output).toContain("--force")
-
-    const { output: listOutput } = await runCommand(["list"])
-    expect(listOutput).toContain(guardDir)
-
-    await removeDaemonState(dataDir)
-    const cleanup = await runCommand(["remove", guardDir])
-    expect(cleanup.exitCode).toBe(0)
-  })
-
-  test("remove with --force deletes while a live daemon is running and warns sessions were not closed", async () => {
-    await writeLiveDaemonState(dataDir)
-    await runCommand(["add", guardDir])
-
-    const { output, exitCode } = await runCommand(["remove", guardDir, "--force"])
-
-    expect(exitCode).toBe(0)
-    expect(output).toContain(`Removed workspace guard (${guardDir}).`)
-    expect(output).toContain("not closed")
-
-    const { output: listOutput } = await runCommand(["list"])
-    expect(listOutput).toBe("No workspaces registered yet.")
-
-    await removeDaemonState(dataDir)
-  })
-
-  test("remove deletes without --force when no live daemon is running", async () => {
     await runCommand(["add", guardDir])
 
     const { output, exitCode } = await runCommand(["remove", guardDir])
 
     expect(exitCode).toBe(0)
     expect(output).toBe(`Removed workspace guard (${guardDir}).`)
-    expect(output).not.toContain("not closed")
 
     const { output: listOutput } = await runCommand(["list"])
     expect(listOutput).toBe("No workspaces registered yet.")
-  })
 
-  test("remove with --force still deletes when no live daemon is running", async () => {
-    await runCommand(["add", guardDir])
-
-    const { output, exitCode } = await runCommand(["remove", guardDir, "--force"])
-
-    expect(exitCode).toBe(0)
-    expect(output).toBe(`Removed workspace guard (${guardDir}).`)
-    expect(output).not.toContain("not closed")
-
-    const { output: listOutput } = await runCommand(["list"])
-    expect(listOutput).toBe("No workspaces registered yet.")
+    await removeDaemonState(dataDir)
   })
 
   describe("clone", () => {

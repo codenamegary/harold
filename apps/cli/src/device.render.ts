@@ -11,10 +11,6 @@ export type RemoveDeviceTarget =
   | Readonly<{ kind: "id"; deviceId: string }>
   | Readonly<{ kind: "name"; pattern: string }>
 
-const shortIdLength = "device_".length + 8
-
-const shortDeviceId = (id: string): string => id.slice(0, shortIdLength)
-
 const deviceCount = (count: number): string => `${count} device${count === 1 ? "" : "s"}`
 
 export const renderDeviceList = (params: {
@@ -35,7 +31,7 @@ export const renderDeviceList = (params: {
   const header = ["ID", "NAME", "PLATFORM", "STATE", "PAIRED AT"]
   const stateColumn = 3
   const rows = devices.map((device) => [
-    shortDeviceId(device.id),
+    device.id,
     device.name,
     device.platform ?? "-",
     device.state,
@@ -78,16 +74,6 @@ export const renderDeviceRemoveError = (error: DeviceError): string => {
 
 export const renderDeviceNameNoMatch = (pattern: string): string =>
   `No devices match name pattern "${pattern}".`
-
-export const renderAmbiguousDeviceId = (params: {
-  reference: string
-  devices: ReadonlyArray<Device>
-}): string =>
-  [
-    `More than one device matches id "${params.reference}":`,
-    ...params.devices.map((device) => `  ${device.id}  ${device.name}`),
-    "Use a longer id.",
-  ].join("\n")
 
 export const renderRemoveDevicesConfirmation = (params: {
   count: number

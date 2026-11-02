@@ -8,7 +8,6 @@ import { assembleDeviceSlice, DeviceSlice } from "server/device"
 import { makeDeviceNameMatcher } from "./device.name.pattern"
 import {
   RemoveDeviceTarget,
-  renderAmbiguousDeviceId,
   renderDeviceList,
   renderDeviceNameNoMatch,
   renderDeviceRemoveError,
@@ -73,31 +72,9 @@ const listAllDevices = (slice: DeviceSlice): Device[] | undefined => {
   return devices
 }
 
-type DeviceIdResolution =
-  | Readonly<{ kind: "unique"; device: Device }>
-  | Readonly<{ kind: "ambiguous"; devices: Device[] }>
-  | Readonly<{ kind: "not_found" }>
-
 type DevicesToRemove =
   | Readonly<{ ok: true; devices: Device[] }>
   | Readonly<{ ok: false; message: string }>
-
-const resolveDeviceId = (devices: ReadonlyArray<Device>, reference: string): DeviceIdResolution => {
-  const exact = devices.find((device) => device.id === reference)
-  if (exact !== undefined) {
-    return { kind: "unique", device: exact }
-  }
-
-  const matches = devices.filter((device) => device.id.startsWith(reference))
-  if (matches.length === 0) {
-    return { kind: "not_found" }
-  }
-  if (matches.length === 1) {
-    return { kind: "unique", device: matches[0] }
-  }
-
-  return { kind: "ambiguous", devices: matches }
-}
 
 const findDevicesToRemove = (params: {
   devices: ReadonlyArray<Device>
@@ -112,18 +89,10 @@ const findDevicesToRemove = (params: {
       : { ok: true, devices: matches }
   }
 
-  const resolved = resolveDeviceId(devices, target.deviceId)
-  if (resolved.kind === "not_found") {
-    return { ok: false, message: renderDeviceRemoveError({ kind: "device_not_found" }) }
-  }
-  if (resolved.kind === "ambiguous") {
-    return {
-      ok: false,
-      message: renderAmbiguousDeviceId({ reference: target.deviceId, devices: resolved.devices }),
-    }
-  }
-
-  return { ok: true, devices: [resolved.device] }
+  const device = devices.find((candidate) => candidate.id === target.deviceId)
+  return device === undefined
+    ? { ok: false, message: renderDeviceRemoveError({ kind: "device_not_found" }) }
+    : { ok: true, devices: [device] }
 }
 
 const removeDevices = async (params: {

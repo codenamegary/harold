@@ -37,6 +37,22 @@ describe("resolveWorkspaceReference", () => {
     expect(result).toEqual({ ok: true, value: harold })
   })
 
+  test("does not resolve a workspace id prefix", () => {
+    const harold = workspace({ id: "ws_01J8XYZ000000000000000000" })
+    const resolve = makeResolveWorkspaceReference({
+      canonicalizePath: () => ({ ok: false, error: { kind: "missing" } }),
+      findWorkspaceById: () => ({ ok: false, error: { kind: "not_found" } }),
+      listAllWorkspaces: () => [harold],
+    })
+
+    const result = resolve("ws_01J8XYZ")
+
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: "not_found", reference: "ws_01J8XYZ" },
+    })
+  })
+
   test("resolves a canonical path after the id misses", () => {
     const harold = workspace()
     const resolve = makeResolveWorkspaceReference({

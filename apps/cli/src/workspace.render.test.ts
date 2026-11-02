@@ -7,8 +7,6 @@ import {
   renderFolderCreatedWithoutWorkspace,
   renderRegisterWorkspaceError,
   renderWorkspaceAdded,
-  renderWorkspaceDaemonRunningDeleteGuard,
-  renderWorkspaceDaemonSessionsNotClosed,
   renderWorkspaceList,
   renderWorkspaceReferenceNotFound,
   renderWorkspaceRemoved,
@@ -32,7 +30,7 @@ const workspace = (overrides: Partial<Workspace>): Workspace => ({
 })
 
 describe("renderWorkspaceList", () => {
-  test("renders a table with short id, name, path, and state", () => {
+  test("renders a table with id, name, path, and state", () => {
     const output = renderWorkspaceList({
       workspaces: [
         workspace({ id: "ws_01J8XYZ000000000000000000", name: "harold", path: "/srv/harold" }),
@@ -52,8 +50,7 @@ describe("renderWorkspaceList", () => {
     expect(lines[0]).toContain("NAME")
     expect(lines[0]).toContain("PATH")
     expect(lines[0]).toContain("STATE")
-    expect(lines[1]).toContain("ws_01J8XYZ0")
-    expect(lines[1]).not.toContain("ws_01J8XYZ000000000000000000")
+    expect(lines[1]).toContain("ws_01J8XYZ000000000000000000")
     expect(lines[1]).toContain("harold")
     expect(lines[1]).toContain("/srv/harold")
     expect(lines[1]).toContain("available")
@@ -130,23 +127,6 @@ describe("renderWorkspaceRemoved", () => {
     const output = renderWorkspaceRemoved(workspace())
 
     expect(output).toBe("Removed workspace harold (/srv/harold).")
-  })
-})
-
-describe("renderWorkspaceDaemonRunningDeleteGuard", () => {
-  test("explains the daemon guard and points at --force", () => {
-    const output = renderWorkspaceDaemonRunningDeleteGuard()
-
-    expect(output).toContain("daemon is running")
-    expect(output).toContain("--force")
-  })
-})
-
-describe("renderWorkspaceDaemonSessionsNotClosed", () => {
-  test("reports that daemon-held sessions were not closed", () => {
-    const output = renderWorkspaceDaemonSessionsNotClosed()
-
-    expect(output).toContain("not closed")
   })
 })
 
@@ -290,6 +270,7 @@ describe("renderAmbiguousWorkspaceReference", () => {
     })
 
     expect(output).toContain('More than one workspace is named "harold"')
+    expect(output).toContain("ws_01J8XYZ000000000000000000")
     expect(output).toContain("/srv/harold")
     expect(output).toContain("/srv/other/harold")
   })
