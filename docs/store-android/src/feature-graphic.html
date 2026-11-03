@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Harold feature graphic</title>
+    <style>
+      @font-face {
+        font-family: "Geist";
+        src: url("fonts/geist-latin.woff2") format("woff2");
+        font-style: normal;
+        font-weight: 100 900;
+      }
+
+      @font-face {
+        font-family: "Geist Mono";
+        src: url("fonts/geist-mono-latin.woff2") format("woff2");
+        font-style: normal;
+        font-weight: 100 900;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1024px;
+        height: 500px;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      body {
+        background: #080a0d;
+        color: #c4cad3;
+        font-family: "Geist", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .canvas {
+        position: relative;
+        width: 1024px;
+        height: 500px;
+        overflow: hidden;
+        background:
+          radial-gradient(460px 300px at 20% 48%, rgba(182, 243, 107, 0.13), transparent 72%),
+          radial-gradient(420px 280px at 92% 92%, rgba(157, 140, 255, 0.09), transparent 74%),
+          #080a0d;
+      }
+
+      .grid {
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+        background-size: 64px 64px;
+        mask-image: radial-gradient(circle at 38% 50%, #000 0, transparent 78%);
+      }
+
+      .mark {
+        position: absolute;
+        left: 112px;
+        top: 178px;
+        width: 144px;
+        height: 144px;
+        border-radius: 30px;
+        box-shadow:
+          0 0 0 1px rgba(182, 243, 107, 0.5),
+          0 28px 60px -18px rgba(182, 243, 107, 0.45);
+      }
+
+      .rule {
+        position: absolute;
+        left: 288px;
+        top: 180px;
+        width: 2px;
+        height: 140px;
+        border-radius: 2px;
+        background: linear-gradient(180deg, #b6f36b, #9d8cff);
+        opacity: 0.9;
+      }
+
+      .copy {
+        position: absolute;
+        left: 316px;
+        top: 158px;
+        width: 600px;
+      }
+
+      .kicker {
+        margin: 0 0 18px;
+        font-family: "Geist Mono", monospace;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.18em;
+        color: #b6f36b;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 64px;
+        font-weight: 800;
+        line-height: 0.93;
+        letter-spacing: -0.045em;
+        color: #fff;
+      }
+
+      h1 .go {
+        display: inline-block;
+        color: #b6f36b;
+        transform: skewX(-10deg);
+        transform-origin: 0 100%;
+        text-shadow: 0 0 46px rgba(182, 243, 107, 0.35);
+      }
+
+      .subhead {
+        margin: 24px 0 0;
+        max-width: 500px;
+        font-size: 21px;
+        font-weight: 400;
+        line-height: 1.35;
+        color: #c4cad3;
+      }
+
+      .meta {
+        position: absolute;
+        left: 316px;
+        bottom: 42px;
+        margin: 0;
+        font-family: "Geist Mono", monospace;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.14em;
+        color: #5d6674;
+      }
+
+      .meta b {
+        color: #8c96a5;
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="canvas">
+      <div class="grid"></div>
+      <svg class="mark" viewBox="0 0 108 108" fill="none" aria-hidden="true">
+        <rect width="108" height="108" rx="27" fill="#B6F36B" />
+        <path
+          fill="#10150C"
+          d="M36,26 L52,26 L47,48 L65,48 L70,26 L86,26 L74,82 L58,82 L63,60 L45,60 L40,82 L24,82 Z"
+        />
+      </svg>
+      <div class="rule"></div>
+      <div class="copy">
+        <p class="kicker">HAROLD FOR ANDROID</p>
+        <h1>Your agents,<br /><span class="go">to go.</span></h1>
+        <p class="subhead">Plan, build, review, and ship from your phone.</p>
+      </div>
+      <p class="meta"><b>ACP AGENTS</b> · QR PAIRING · YOUR MACHINE</p>
+    </div>
+  </body>
+</html>
