@@ -253,7 +253,7 @@ describe("phone stage", () => {
 
   test("docks the phone right for the final spotlight", () => {
     const prReply = shot("pr_reply")
-    const dockedAt = prReply.from + 0.6
+    const dockedAt = prReply.from + 1.0 + 0.5
 
     expect(channel(timeline.phoneStage.width, dockedAt)).toBeCloseTo(760, 5)
     expect(channel(timeline.phoneStage.centerX, dockedAt)).toBeCloseTo(1460, 5)

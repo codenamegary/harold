@@ -671,6 +671,7 @@ def verify_remote_pr():
 def nudge_for_question():
     print("  no question card after the plan; sending the nudge", flush=True)
     mark("plan_nudge")
+    wait_for_chat(timeout=15)
     tap_edit_text(0, settle=0.6)
     type_text(PLAN_NUDGE)
     time.sleep(0.8)
@@ -960,7 +961,7 @@ def main():
         mark("build_finished")
 
     with recorded("build_reply"):
-        time.sleep(3.0)
+        time.sleep(3.5)
         mark("build_reply_visible")
 
     with recorded("usage"):

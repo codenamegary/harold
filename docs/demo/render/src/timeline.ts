@@ -629,7 +629,10 @@ const buildPhoneStage = (story: Shot[]): PhoneStage => {
   const zoomAt = Math.max(WALK_START + 0.3, newSession.at + newSession.duration)
   const outAt = Math.max(zoomAt + STORY_ZOOM_SEC, continueShot.at + continueShot.duration)
   // The final spotlight needs the phone out of the copy's side.
-  const dockAt = prReply?.at ?? outAt + STORY_OUT_SEC
+  // Dock when the PR spotlight starts, not when the reply clip lands, so the
+  // hold before the spotlight stays readable in place.
+  const spotlightLead = prReply?.spotlight?.at ?? 1.0
+  const dockAt = prReply !== undefined ? prReply.at + spotlightLead - 0.2 : outAt + STORY_OUT_SEC
   return {
     width: [
       ...PAIR_PHONE_WIDTH,
