@@ -1,7 +1,7 @@
 import { Easing, interpolate, useVideoConfig } from "remotion"
 import { CardFace } from "./cardFace"
 import { phoneScreenRect } from "./phone"
-import { type PhoneCaption, type Zoom } from "./timeline"
+import { type PhoneCaption, type PhoneStage, type Zoom } from "./timeline"
 
 const CARD_W = 600
 const FADE_SEC = 0.55
@@ -14,9 +14,10 @@ export const PhoneCardView: React.FC<{
   caption: PhoneCaption
   sec: number
   zoom: Zoom
+  phoneStage: PhoneStage
   videoWidth: number
   videoHeight: number
-}> = ({ caption, sec, zoom, videoWidth, videoHeight }) => {
+}> = ({ caption, sec, zoom, phoneStage, videoWidth, videoHeight }) => {
   const { width: stageW, height: stageH } = useVideoConfig()
   const { at, hold, title, top, height } = caption
   const since = sec - at
@@ -24,7 +25,7 @@ export const PhoneCardView: React.FC<{
     return null
   }
 
-  const screen = phoneScreenRect(sec, stageW, stageH, videoWidth, videoHeight, zoom)
+  const screen = phoneScreenRect(sec, stageW, stageH, videoWidth, videoHeight, phoneStage, zoom)
   const reveal = interpolate(since, [0, 0.35], [0, 1], { ...clamp, easing: ease })
   const leave = interpolate(since, [hold, hold + FADE_SEC], [0, 1], {
     ...clamp,

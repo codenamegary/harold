@@ -2,7 +2,7 @@ import { Easing, interpolate, useVideoConfig } from "remotion"
 import { displayFamily, monoFamily } from "./fonts"
 import { phoneScreenRect } from "./phone"
 import { ink, inkOnLime, lime } from "./theme"
-import { type Callout, type Zoom } from "./timeline"
+import { type Callout, type PhoneStage, type Zoom } from "./timeline"
 
 const CARD_H = 196
 const HOLE = 30
@@ -16,9 +16,10 @@ export const CalloutView: React.FC<{
   callout: Callout
   sec: number
   zoom: Zoom
+  phoneStage: PhoneStage
   videoWidth: number
   videoHeight: number
-}> = ({ callout, sec, zoom, videoWidth, videoHeight }) => {
+}> = ({ callout, sec, zoom, phoneStage, videoWidth, videoHeight }) => {
   const { width: stageW, height: stageH } = useVideoConfig()
   const {
     at,
@@ -58,7 +59,7 @@ export const CalloutView: React.FC<{
   const translateY = drop + liftOut
   const rotate = tilt + swing - leave * 4
 
-  const screen = phoneScreenRect(sec, stageW, stageH, videoWidth, videoHeight, zoom)
+  const screen = phoneScreenRect(sec, stageW, stageH, videoWidth, videoHeight, phoneStage, zoom)
   const anchorX = screen.left + targetX * screen.width
   const anchorY = screen.top + targetY * screen.height
 

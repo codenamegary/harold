@@ -2,8 +2,12 @@
 """Drive the Harold Android app through the demo flow.
 
 Assumes the app was just cleared and is showing the unpaired screen. The back
-camera plays the composed QR clip, so the first Harold pairs by camera. The
-second Harold is paired by typing its endpoint and code.
+camera plays the composed QR clip, so the first Harold pairs by camera.
+
+The story starts from the paired chat. The driver opens the session menu, starts
+a new session on the cat-screensaver feature worktree, plans the feature in Plan
+mode with the spec and a cat photo attached, answers the agent's question,
+builds, reviews the branch diff and worktrees, and asks for a draft PR.
 
 The walk is recorded as named slices: one screenrecord file per action, from
 the tap through the wait for the UI to settle. Remotion schedules the slices.
@@ -15,7 +19,6 @@ import json
 import os
 import re
 import shlex
-import socket
 import subprocess
 import sys
 import time
@@ -23,116 +26,44 @@ import xml.etree.ElementTree as ET
 from contextlib import contextmanager
 
 SERIAL = os.environ.get("SERIAL", "emulator-5554")
-PROMPT = os.environ.get("PROMPT", "Do you think my cat's behaviour is strange?")
-MODEL = os.environ.get("MODEL", "deepseek/DeepSeek V4.1 Flash 1017")
-EFFORT_TARGET = os.environ.get("EFFORT_TARGET", "High")
 MARKS = os.environ.get("MARKS", "marks.log")
 SLICES = os.environ.get("SLICES", "slices.json")
 WARM_SECONDS = float(os.environ.get("WARM_SECONDS", "25"))
-SESSION_TITLE = os.environ.get("SESSION_TITLE", "Cat Therapist near me")
 MENU_READY_TITLE = os.environ.get("MENU_READY_TITLE", "Does KGB use cats?")
-WORKSPACE_READY_NAME = os.environ.get("WORKSPACE_READY_NAME", "elt-meeting-agenda")
 HAROLD_ROOT = os.environ.get("HAROLD_ROOT")
-INSTANCE2_DATA_DIR = os.environ.get("INSTANCE2_DATA_DIR")
-INSTANCE2_PORT = os.environ.get("INSTANCE2_PORT", "3848")
-INSTANCE2_ENDPOINT = os.environ.get("INSTANCE2_ENDPOINT", f"http://127.0.0.1:{INSTANCE2_PORT}")
 INSTANCE1_WORKSPACES = os.environ.get(
     "INSTANCE1_WORKSPACES", os.path.expanduser("~/harold-demo-workspaces/3847")
 )
-WORKSPACE_PARENT = os.path.dirname(INSTANCE1_WORKSPACES)
-WORKSPACE_PARENT_NAME = os.path.basename(WORKSPACE_PARENT)
-WORKSPACE_FOLDER_NAME = os.path.basename(INSTANCE1_WORKSPACES)
+CAT_SCREENSAVER_WORKTREE = os.environ.get(
+    "CAT_SCREENSAVER_WORKTREE",
+    os.path.expanduser("~/cat-screensaver-worktrees/cat-mode"),
+)
+DEMO_REPO = os.environ.get("DEMO_REPO", "codenamegary/cat-screensaver")
 SKIP_RECORD = os.environ.get("SKIP_RECORD") == "1"
 START = time.monotonic()
 
-UI_LABELS = {
-    "New session",
-    "Select session",
-    "Disconnect from server",
-    "Message",
-    "Chat with an agent",
-    "Start a new session or pick an existing one.",
-    "GENERAL",
-    "provider/model",
-    "mode",
-    "AGENT",
-    "Thinking",
-    "Working",
-    "Replying",
-    "Waiting for permission",
-    "Stop",
-    "Harold",
-    "Not paired",
-    "Pair device",
-    "Pair",
-    "Harold endpoint",
-    "Pairing code",
-    "Claim pairing code",
-    "Use scanner",
-    "Enter manually",
-    "Name",
-    "Color",
-    "Icon",
-    "Workspaces",
-    "Add workspace",
-    "Open folder",
-    "Clone repo",
-    "Folder",
-    "Up",
-    "New folder",
-    "Filter folders",
-    "Use this folder",
-    "Selected folder",
-    "Workspace name",
-    "Repository URL",
-    "New folder name",
-    "Parent folder",
-    "Destination",
-    "Available",
-    "Missing",
-    "Unavailable",
-    "Connected Servers",
-    "See all sessions…",
-    "Sessions",
-    "Search sessions",
-    "All",
-    "Work",
-    "Couch",
-    "Choose a workspace and agent to start the session.",
-    "Choose workspace",
-    "Choose agent",
-    "New workspace",
-    "Continue",
-    "Cursor",
-    "OpenCode",
-    "pi ACP",
-    "Search models",
-    "Model",
-    "Commands",
-    "Close command list",
-    "Attach photo",
-    "Attach files",
-    "Dictate with voice",
-    "Send message",
-    "/init",
-    "/review",
-    "/compact",
-}
-
-VOICE_LABELS = {
-    "Start speaking…",
-    "Voice input",
-    "Cancel",
-    "Mute voice input",
-    "Unmute voice input",
-    "Switch to keyboard input",
-    "Expand voice input",
-    "Collapse voice input",
-    "Send message",
-    "Browse commands",
-    "/",
-    "Start voice input over",
-}
+PLAN_PROMPT = (
+    "Read the attached spec and the photo of Mia. Plan only; do not edit files. "
+    "Plan a small cat mode for this screensaver. Do not build yet. Use your "
+    "question tool exactly once, for one question only: should cat mode be a "
+    "settings toggle or automatic? The options must be exactly Settings toggle "
+    "and Automatic. Do not ask about anything else."
+)
+PLAN_NUDGE = (
+    "Use your question tool exactly once, for one question only: should cat "
+    "mode be a settings toggle or automatic? The options must be exactly "
+    "Settings toggle and Automatic. Do not ask about anything else."
+)
+BUILD_PROMPT = (
+    "Settings toggle. Implement only the plan now. Put the toggle in "
+    "src/settings.js, put the cat behavior in src/cat-mode.js, add tests, and "
+    "commit every change on feat/cat-mode so the worktree is clean. Do not add "
+    "unrelated features and do not open a PR."
+)
+PR_PROMPT = (
+    "Push feat/cat-mode and open a draft PR against main with gh. End with "
+    "the PR URL."
+)
 
 
 def mark(name):
@@ -432,6 +363,32 @@ def wait_until_missing(text, timeout=10.0):
     raise TimeoutError(f"text={text!r} never disappeared")
 
 
+def chip_text(prefix, timeout=15.0):
+    node = wait_for(desc=prefix, substring=True, timeout=timeout)
+    return node.get("content-desc") or ""
+
+
+def select_deepseek_model():
+    current = chip_text("Model:")
+    if "deepseek" in current.lower() and "flash" in current.lower():
+        print(f"  model already {current}", flush=True)
+        return
+    print(f"  switching model from {current}", flush=True)
+    mark("model_select_start")
+    tap_desc("Model:", timeout=10, substring=True)
+    wait_for(text="Search models", timeout=10)
+    tap_text("Search models", timeout=5, settle=0.5)
+    type_text("deepseek")
+    time.sleep(1.2)
+    tap_text("DeepSeek V4.1 Flash", timeout=15, substring=True, settle=0.8)
+    wait_until_missing("Search models", timeout=10)
+    selected = chip_text("Model:")
+    if "deepseek" not in selected.lower() or "flash" not in selected.lower():
+        raise RuntimeError(f"model did not switch to deepseek flash (got {selected!r})")
+    print(f"  model selected: {selected}", flush=True)
+    mark("model_select_done")
+
+
 def chip_value(prefix, timeout=15.0):
     node = wait_for(desc=prefix, substring=True, timeout=timeout)
     text = node.get("content-desc") or ""
@@ -467,8 +424,8 @@ def open_session_menu():
     wait_for(text="New session", timeout=10)
     wait_for(text="See all sessions", substring=True, timeout=10)
     # The cache paints the menu before the refresh finishes. Wait for a row
-    # that is never the header title so the session history beat does not land
-    # on a loading state.
+    # that is never the header title so the history beat does not land on a
+    # loading state.
     wait_for(text=MENU_READY_TITLE, timeout=30)
 
 
@@ -482,35 +439,32 @@ def back_to_chat(tries=5):
     raise TimeoutError("could not return to the chat screen")
 
 
-def open_workspaces():
-    tap_desc("More chat options", timeout=10)
-    wait_for(text="Workspaces", timeout=10)
-    tap_text("Workspaces", timeout=10)
-    wait_for(text="Workspaces", timeout=15)
-    wait_for(text="Available", timeout=30)
-    # The first Couch row is visible on the first screen. yuekbox is further
-    # down the list, so wait for a workspace that proves both Harolds painted.
-    wait_for(text=WORKSPACE_READY_NAME, timeout=30)
-
-
-def open_add_workspace():
-    tap_desc("Add workspace", timeout=10)
-    wait_for(text="Add workspace", timeout=10)
-    wait_for(text="Open folder", timeout=10)
-    # The Harold picker is an EditText when both Harolds are saved, so the
-    # filter must be focused by its label rather than by index.
-    tap_text("Filter folders", timeout=10)
-    type_text(WORKSPACE_PARENT_NAME)
-    wait_for(text=WORKSPACE_PARENT, timeout=10)
-    dismiss_keyboard()
-    tap_text(WORKSPACE_PARENT, timeout=10)
-    wait_for(text=WORKSPACE_FOLDER_NAME, timeout=10)
-    tap_text(WORKSPACE_FOLDER_NAME, timeout=10)
-    wait_for(text="harold", timeout=10)
-
-
 def tap_send_button():
     tap(wait_for(desc="Send message", timeout=10), settle=0.5)
+
+
+def composer_text():
+    nodes = edit_text_nodes()
+    if not nodes:
+        return ""
+    return (nodes[0].get("text") or "").strip()
+
+
+def submit_composer(timeout=20.0):
+    """Tap Send until the composer clears or a turn starts."""
+    for attempt in range(3):
+        tap_send_button()
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            if not composer_text():
+                return
+            if find(dump_root(), desc="Cancel run") is not None:
+                return
+            time.sleep(0.5)
+        print(f"  send did not take (attempt {attempt + 1}); retrying", flush=True)
+        mark("send_retry")
+        time.sleep(1.0)
+    raise RuntimeError("the composer did not submit after three tries")
 
 
 def wait_for_photo_picker(timeout=20.0):
@@ -544,175 +498,275 @@ def wait_for_attached_photo(timeout=15.0):
 
 
 def wait_for_file_picker(timeout=20.0):
-    return wait_for(text="cat-diary.txt", timeout=timeout)
+    return wait_for(text="cat-mode.md", timeout=timeout)
 
 
-def wait_for_agent_turn(prompt, timeout=300.0):
-    start = time.time()
-    saw_running = False
-    while time.time() - start < timeout:
-        root = dump_root()
-        if find(root, desc="Cancel run") is not None or find(root, text="Replying") is not None:
-            saw_running = True
-            break
-        if time.time() - start > 6.0:
-            for node in root.iter("node"):
-                value = (node.get("text") or "").strip()
-                if (
-                    value
-                    and value != prompt
-                    and value not in UI_LABELS
-                    and len(value) >= 30
-                ):
-                    saw_running = True
-                    break
-        if saw_running:
-            break
-        time.sleep(0.8)
+# --- Agent turn state --------------------------------------------------------
 
-    if not saw_running:
-        return False
 
-    quiet = 0
-    while time.time() - start < timeout:
-        root = dump_root()
-        running = (
-            find(root, desc="Cancel run") is not None
-            or find(root, text="Replying") is not None
-        )
-        if running:
-            quiet = 0
-        else:
-            quiet += 1
-            if quiet >= 3:
-                return True
-        time.sleep(1.0)
+def has_question(root):
+    return find(root, text="Answer") is not None
+
+
+def has_permission(root):
+    for node in root.iter("node"):
+        if "Permission required for" in (node.get("text") or ""):
+            return True
     return False
 
 
-def rewind_audio():
-    match = re.search(r"-(\d+)$", SERIAL)
-    port = int(match.group(1)) if match else 5554
-    token_path = os.path.expanduser("~/.emulator_console_auth_token")
-    try:
-        token = open(token_path).read().strip()
-    except OSError:
-        token = ""
-
-    try:
-        with socket.create_connection(("127.0.0.1", port), timeout=3) as console:
-            console.settimeout(1.0)
-            if token:
-                console.sendall(f"auth {token}\n".encode())
-                time.sleep(0.1)
-            console.sendall(b"avd hostmicon\n")
-            time.sleep(0.2)
-            console.sendall(b"avd rewindaudio\n")
-            time.sleep(0.3)
-    except OSError as error:
-        raise RuntimeError(f"could not prepare the emulator WAV input: {error}") from error
-    print("  enabled and rewound the WAV microphone input", flush=True)
+def is_running(root):
+    if find(root, desc="Cancel run") is not None:
+        return True
+    for label in (
+        "Replying",
+        "Thinking",
+        "Working",
+        "Waiting for answer",
+        "Waiting for permission",
+    ):
+        if find(root, text=label) is not None:
+            return True
+    return False
 
 
-def wait_for_voice_transcript(timeout=40.0):
+def turn_state(root):
+    """Return question, permission, running, or idle. Question wins."""
+    if has_question(root):
+        return "question"
+    if has_permission(root):
+        return "permission"
+    if is_running(root):
+        return "running"
+    return "idle"
+
+
+def answer_permission(root):
+    nodes = find_all(root, desc="Permission option:", substring=True)
+    if not nodes:
+        return False
+    tap(nodes[0], settle=0.3)
+    return True
+
+
+def wait_for_turn(timeout=300.0):
+    """Wait for a turn to settle. Permission requests are answered silently."""
+    start = time.time()
+    saw_running = False
+    quiet = 0
+    while time.time() - start < timeout:
+        root = dump_root()
+        state = turn_state(root)
+        if state == "question":
+            return "question"
+        if state == "permission":
+            if not answer_permission(root):
+                raise RuntimeError("permission panel has no permission option")
+            mark("permission_answered")
+            saw_running = True
+            quiet = 0
+            time.sleep(0.8)
+            continue
+        if state == "running":
+            saw_running = True
+            quiet = 0
+        else:
+            quiet += 1
+            if saw_running and quiet >= 3:
+                return "idle"
+            # A fast turn can finish before the cancel button paints. Give it
+            # a short grace before accepting idle.
+            if not saw_running and quiet >= 4:
+                return "idle"
+        time.sleep(1.0)
+    raise TimeoutError("agent turn did not settle")
+
+
+def wait_for_usage(timeout=20.0):
     deadline = time.time() + timeout
-    last = ""
-    stable_since = None
     while time.time() < deadline:
-        value = None
         for node in dump_root().iter("node"):
-            candidate = (node.get("text") or "").strip()
-            if not candidate or candidate in VOICE_LABELS:
-                continue
-            if candidate in {"›_", "/"} or re.match(r"^\d{1,2}:\d{2}$", candidate):
-                continue
-            if len(candidate) >= 20:
-                value = candidate
-                break
-        if value is not None:
-            if value == last:
-                if stable_since is not None and time.time() - stable_since >= 1.0:
-                    return value
-            else:
-                last = value
-                stable_since = time.time()
+            value = (node.get("text") or "").strip()
+            if re.search(r"\([0-9]+%\)", value) and "$" in value:
+                return value
         time.sleep(0.5)
-    return last or None
+    raise TimeoutError("context usage line never appeared")
 
 
-def issue_instance2_code():
-    if not HAROLD_ROOT or not INSTANCE2_DATA_DIR:
-        raise RuntimeError("HAROLD_ROOT and INSTANCE2_DATA_DIR are required for manual pairing")
-    env = os.environ.copy()
-    env["HAROLD_DATA_DIR"] = INSTANCE2_DATA_DIR
-    env["HAROLD_PORT"] = INSTANCE2_PORT
+def scroll_chat_to_bottom(max_swipes=12):
+    for _ in range(max_swipes):
+        root = dump_root()
+        if find(root, text="Jump to latest") is None:
+            return
+        scrolled = False
+        for node in root.iter("node"):
+            if node.get("scrollable") != "true":
+                continue
+            bounds = node.get("bounds") or ""
+            match = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds)
+            if match is None:
+                continue
+            x1, y1, x2, y2 = (int(value) for value in match.groups())
+            x = (x1 + x2) // 2
+            adb(
+                "shell", "input", "swipe",
+                str(x), str(y1 + int((y2 - y1) * 0.8)),
+                str(x), str(y1 + int((y2 - y1) * 0.2)),
+                "220",
+            )
+            scrolled = True
+            break
+        if not scrolled:
+            return
+        time.sleep(0.5)
+
+
+def find_pr_url(root):
+    for node in root.iter("node"):
+        for key in ("text", "content-desc"):
+            value = node.get(key) or ""
+            match = re.search(r"https://github\.com/[^\s]*/pull/[0-9]+", value)
+            if match:
+                return match.group(0)
+    joined = " ".join(
+        (node.get("text") or "") + " " + (node.get("content-desc") or "")
+        for node in root.iter("node")
+    )
+    match = re.search(r"https://github\.com/[^\s]*/pull/[0-9]+", joined)
+    return match.group(0) if match else None
+
+
+def wait_for_pr_url(timeout=30.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        url = find_pr_url(dump_root())
+        if url is not None:
+            return url
+        scroll_chat_to_bottom(max_swipes=1)
+        time.sleep(0.5)
+    raise TimeoutError("the PR URL never appeared in the chat")
+
+
+def verify_remote_pr():
     result = subprocess.run(
         [
-            "bun", "run", "dev", "pair", "--no-wait", "--json", "--url", INSTANCE2_ENDPOINT,
+            "gh", "pr", "list", "--repo", DEMO_REPO,
+            "--head", "feat/cat-mode", "--state", "open",
+            "--json", "number,isDraft,url",
         ],
-        cwd=HAROLD_ROOT,
-        env=env,
         capture_output=True,
         text=True,
         timeout=120,
     )
     if result.returncode != 0:
-        raise RuntimeError(f"instance 2 pair failed: {result.stderr.strip()}")
-    lines = [line for line in result.stdout.splitlines() if line.strip()]
-    if not lines:
-        raise RuntimeError("instance 2 pair returned no JSON")
-    payload = json.loads(lines[-1])
-    code = payload.get("code")
-    if not code:
-        raise RuntimeError("instance 2 pair returned no code")
-    return code
+        raise RuntimeError(f"gh pr list failed: {result.stderr.strip()}")
+    pull_requests = json.loads(result.stdout or "[]")
+    drafts = [pull for pull in pull_requests if pull.get("isDraft")]
+    if not drafts:
+        raise RuntimeError(f"no open draft PR for feat/cat-mode: {pull_requests}")
+    print(f"  draft PR: {drafts[0]['url']}", flush=True)
+    return drafts[0]["url"]
 
 
-def voice_scene():
-    mark("voice_play_start")
-    rewind_audio()
+def nudge_for_question():
+    print("  no question card after the plan; sending the nudge", flush=True)
+    mark("plan_nudge")
+    tap_edit_text(0, settle=0.6)
+    type_text(PLAN_NUDGE)
+    time.sleep(0.8)
+    submit_composer()
 
-    with recorded("voice_open"):
-        mark("voice_open")
-        tap_desc("Dictate with voice", timeout=15)
-        wait_for(desc="Mute voice input", timeout=20)
-        time.sleep(0.8)
 
-    with recorded("voice_expand"):
-        mark("voice_expanded")
-        tap_desc("Expand voice input", timeout=10)
-        wait_for(desc="Collapse voice input", timeout=10)
-        time.sleep(0.8)
+def git_status():
+    if not CAT_SCREENSAVER_WORKTREE:
+        return ""
+    result = subprocess.run(
+        ["git", "-C", CAT_SCREENSAVER_WORKTREE, "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"git status failed: {result.stderr.strip()}")
+    return result.stdout.strip()
 
-    transcript = None
-    with recorded("voice_transcript"):
-        transcript = wait_for_voice_transcript(timeout=40)
-        if transcript is None:
-            mark("voice_transcript_timeout")
-            print("no voice transcript detected", file=sys.stderr)
-        else:
-            mark("voice_play_done")
-            mark("voice_transcript")
-            print(f"voice transcript: {transcript[:120]}", flush=True)
-            time.sleep(1.0)
-    if transcript is None:
-        return None
 
-    with recorded("voice_send"):
-        tap_send_button()
-        mark("tap_voice_send")
-        time.sleep(1.0)
+def reset_plan_edits():
+    if not CAT_SCREENSAVER_WORKTREE:
+        return
+    dirty = git_status()
+    if not dirty:
+        return
+    print(f"  plan turn left changes; resetting:\n{dirty}", flush=True)
+    mark("plan_edits_reset")
+    subprocess.run(
+        ["git", "-C", CAT_SCREENSAVER_WORKTREE, "reset", "--hard", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    subprocess.run(
+        ["git", "-C", CAT_SCREENSAVER_WORKTREE, "clean", "-fd"],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
 
-    with recorded("voice_reply_wait"):
-        if not wait_for_agent_turn(transcript):
-            mark("voice_reply_timeout")
-            print("no voice reply detected in time", file=sys.stderr)
-            return None
 
-    with recorded("voice_reply"):
-        time.sleep(2.5)
-        mark("voice_reply_visible")
-    return transcript
+def verify_build_commit():
+    if not CAT_SCREENSAVER_WORKTREE:
+        return
+    branch = subprocess.run(
+        ["git", "-C", CAT_SCREENSAVER_WORKTREE, "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    ).stdout.strip()
+    if branch != "feat/cat-mode":
+        raise RuntimeError(f"the build is on {branch!r}, not feat/cat-mode")
+    count = subprocess.run(
+        ["git", "-C", CAT_SCREENSAVER_WORKTREE, "rev-list", "--count", "origin/main..HEAD"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    ).stdout.strip()
+    if not count.isdigit() or int(count) < 1:
+        raise RuntimeError("the build did not commit on feat/cat-mode")
+    dirty = git_status()
+    if dirty:
+        raise RuntimeError(f"the build left uncommitted changes:\n{dirty}")
+    print(f"  build committed {count} change(s) on feat/cat-mode", flush=True)
+
+
+def question_count(root):
+    for node in root.iter("node"):
+        match = re.search(r"Question 1 of (\d+)", node.get("text") or "")
+        if match:
+            return int(match.group(1))
+    return 1
+
+
+def open_changes():
+    tap_desc("Changes", timeout=15, substring=True)
+    wait_for(text="No uncommitted changes", timeout=30)
+
+
+def open_worktrees():
+    tap_text("Worktree", timeout=15)
+    wait_for(text="feat/cat-mode", timeout=15)
+    wait_for(text="main", timeout=15)
+
+
+def close_worktrees():
+    adb("shell", "input", "keyevent", "KEYCODE_BACK")
+    time.sleep(1.0)
+
+
+def leave_changes():
+    tap_desc("Go back from changes", timeout=10)
+    wait_for_chat(timeout=30)
 
 
 def warm():
@@ -741,8 +795,7 @@ def main():
 
     with recorded("scan_wait"):
         wait_for_identity(timeout=120)
-        sleep_for = 1.0
-        time.sleep(sleep_for)
+        time.sleep(1.0)
         mark("first_identity_visible")
 
     with recorded("first_name"):
@@ -760,135 +813,29 @@ def main():
         time.sleep(5.0)
         mark("paired_chat_visible")
 
-    # ── Second pairing: phone only, no terminal. Issue the code immediately
-    # before the scene so it is well inside its 10 minute lifetime.
-    code = issue_instance2_code()
-    mark("pair2_code_issued")
-
-    with recorded("pair_another_open"):
-        tap_desc("More chat options", timeout=10)
-        wait_for(text="Pair", timeout=10)
-        tap_text("Pair", timeout=10)
-        wait_for(text="Pair device", timeout=30)
-        mark("pair_another_scanner")
-
-    with recorded("pair_another_manual"):
-        tap_text("Enter manually", timeout=10)
-        wait_for(text="Claim pairing code", timeout=10)
-        mark("pair_another_form")
-
-    with recorded("pair_another_details"):
-        tap_edit_text(0)
-        type_text(INSTANCE2_ENDPOINT)
-        tap_edit_text(1)
-        type_text(code)
-        time.sleep(1.2)
-        mark("pair_another_details_typed")
-
-    with recorded("pair_another_claim"):
-        dismiss_keyboard()
-        tap_desc("Claim pairing code", timeout=10)
-        wait_for_identity(timeout=30)
-        mark("pair_another_identity")
-
-    with recorded("pair_another_name"):
-        replace_edit_text(0, "Couch")
-        time.sleep(1.5)
-        mark("pair_another_name_typed")
-
-    with recorded("pair_another_confirm"):
-        dismiss_keyboard()
-        tap_text("Pair", timeout=10)
-        wait_for_session_selector(timeout=60)
-        mark("pair_another_paired")
-
-    with recorded("pair_another_done"):
-        time.sleep(4.0)
-        mark("pair_another_done")
-
-    # ── Session history: dropdown, full Sessions screen, pick Couch/OpenCode.
+    # ── Session menu, then New session on the cat-screensaver worktree.
     with recorded("session_menu_open"):
         open_session_menu()
-
-    with recorded("session_see_all"):
-        tap_text("See all sessions", timeout=10, substring=True)
-        wait_for(text="Sessions", timeout=15)
-        wait_for(text=SESSION_TITLE, timeout=30)
-        time.sleep(1.0)
-        mark("sessions_screen")
-
-    with recorded("session_pick"):
-        tap_text(SESSION_TITLE, timeout=10)
-        wait_for(desc="Model:", substring=True, timeout=45)
-        mark("session_history_selected")
-
-    with recorded("session_chat"):
-        wait_for(text="Message", timeout=45)
-        time.sleep(1.5)
-        mark("session_history_chat")
-
-    # ── Workspaces: the bookmark list and the add screen. Do not submit.
-    with recorded("workspaces_open"):
-        mark("workspaces_open")
-        open_workspaces()
         time.sleep(1.2)
+        mark("session_history_visible")
 
-    with recorded("add_workspace_open"):
-        mark("add_workspace_open")
-        open_add_workspace()
-        time.sleep(1.4)
-    back_to_chat()
-
-    with recorded("session_menu_reopen"):
-        open_session_menu()
-
-    # ── New session: Work + Cursor, then Couch + OpenCode.
     with recorded("new_session"):
         tap_text("New session", timeout=10, prefer="smallest")
         wait_for(text="Choose a workspace and agent to start the session.", timeout=15)
         mark("new_session_screen")
 
-    with recorded("workspace_open_work"):
+    with recorded("workspace_open"):
         tap_edit_text(0)
         wait_for(text="New workspace", timeout=10)
-        wait_for(text="harold", timeout=10)
+        wait_for(text="cat-screensaver", timeout=15)
+        wait_for(text=CAT_SCREENSAVER_WORKTREE, timeout=15)
         time.sleep(0.8)
 
-    with recorded("workspace_pick_work"):
-        tap_text("harold", timeout=10, prefer="largest")
+    with recorded("workspace_pick"):
+        tap_text("cat-screensaver", timeout=10, prefer="largest")
+        wait_for(text="OpenCode", timeout=15)
         time.sleep(0.6)
-        mark("workspace_work")
-
-    with recorded("agent_open_work"):
-        tap_edit_text(1)
-        wait_for(text="Cursor", timeout=10)
-        wait_for(text="pi ACP", timeout=10)
-        time.sleep(0.8)
-
-    with recorded("agent_pick_work"):
-        tap_text("Cursor", timeout=10, prefer="largest")
-        time.sleep(0.6)
-        mark("agent_work")
-
-    with recorded("workspace_open_couch"):
-        tap_edit_text(0)
-        wait_for(text="New workspace", timeout=10)
-        time.sleep(0.6)
-
-    with recorded("workspace_pick_couch"):
-        tap_text_scroll("yuekbox", timeout=15, prefer="largest")
-        time.sleep(0.6)
-        mark("workspace_couch")
-
-    with recorded("agent_open_couch"):
-        tap_edit_text(1)
-        wait_for(text="OpenCode", timeout=10)
-        time.sleep(0.8)
-
-    with recorded("agent_pick_couch"):
-        tap_text("OpenCode", timeout=10, prefer="largest")
-        time.sleep(0.6)
-        mark("agent_couch")
+        mark("workspace_picked")
 
     with recorded("continue"):
         tap_text("Continue", timeout=10)
@@ -899,64 +846,22 @@ def main():
         wait_for(text="Message", timeout=60)
         time.sleep(1.0)
 
-    # ── Composer: model, mode, effort, slash commands, prompt, attachments.
-    with recorded("model_open"):
-        tap_desc("Model:", timeout=10, substring=True)
-        wait_for(text="Search models", timeout=10)
+    # Pin the new session to DeepSeek Flash. This happens before the story
+    # recording starts; the model picker is not a scene in the cut.
+    select_deepseek_model()
 
-    with recorded("model_search"):
-        tap_text("Search models", timeout=5, settle=0.5)
-        adb("shell", "input", "text", "deepseek")
-        time.sleep(1.2)
-
-    with recorded("model_pick"):
-        tap_text(MODEL, timeout=15, settle=0.8)
-        wait_until_missing("Search models", timeout=10)
-        mark("model_picked")
-
-    if chip_value("Mode:").lower() != "build":
-        tap_until_value("Mode:", "Build", tries=4)
+    # ── Plan: switch to Plan, type the prompt, attach the spec and photo.
     with recorded("mode_plan"):
         mark("mode_plan")
-        tap_until_value("Mode:", "Plan", tries=2)
+        tap_until_value("Mode:", "Plan", tries=3)
         time.sleep(1.0)
-
-    with recorded("mode_build"):
-        tap_until_value("Mode:", "Build", tries=2)
-        time.sleep(1.0)
-        mark("mode_build")
-
-    effort_node = wait_for(desc="Thinking:", substring=True)
-    effort_x, effort_y = bounds_center(effort_node.get("bounds"))
-    mark("effort_start")
-    for step in range(1, 5):
-        if chip_value("Thinking:").lower() == EFFORT_TARGET.lower():
-            break
-        with recorded(f"effort_{step}"):
-            tap_point(effort_x, effort_y, settle=1.2)
-    if chip_value("Thinking:").lower() != EFFORT_TARGET.lower():
-        with recorded("effort_fix"):
-            tap_until_value("Thinking:", EFFORT_TARGET, tries=4)
-    mark("effort_set")
-
-    with recorded("slash_open"):
-        tap_desc("Browse commands", timeout=10)
-        wait_for(text="Commands", timeout=10)
-        wait_for(text="/init", timeout=10)
-        time.sleep(1.0)
-        mark("slash_commands_open")
-
-    with recorded("slash_close"):
-        tap_desc("Close command list", timeout=10)
-        wait_for(text="Message", timeout=10)
-        time.sleep(0.5)
 
     with recorded("prompt_focus"):
         mark("prompt_start")
         tap_text("Message", timeout=10, settle=0.8)
 
     with recorded("prompt_type"):
-        type_text(PROMPT)
+        type_text(PLAN_PROMPT)
         time.sleep(2.0)
         mark("prompt_typed")
 
@@ -981,28 +886,149 @@ def main():
 
     with recorded("file_pick"):
         tap(wait_for_file_picker(), settle=1.0)
-        wait_for(desc="Remove cat-diary.txt", timeout=10)
+        wait_for(desc="Remove cat-mode.md", timeout=10)
         mark("file_attached")
         time.sleep(1.0)
 
     with recorded("send"):
-        tap_send_button()
+        submit_composer()
         mark("tap_send")
         time.sleep(4.0)
 
-    with recorded("reply_wait"):
-        if not wait_for_agent_turn(PROMPT):
-            mark("reply_timeout")
-            print("no transcript reply detected in time", file=sys.stderr)
-            return 1
+    with recorded("plan_wait"):
+        state = wait_for_turn()
+        if state == "idle":
+            nudge_for_question()
+            state = wait_for_turn()
+        if state != "question":
+            raise RuntimeError(f"plan turn ended as {state!r} without a question card")
+        mark("question_asked")
 
-    with recorded("reply"):
-        time.sleep(2.5)
-        mark("reply_visible")
+    with recorded("plan_reply"):
+        time.sleep(3.0)
+        if not has_question(dump_root()):
+            raise RuntimeError("the question card disappeared before plan_reply")
+        mark("plan_reply_visible")
+
+    with recorded("elicitation_open"):
+        tap_text("Answer", timeout=10)
+        wait_for(text="Decline", timeout=10)
+        if question_count(dump_root()) != 1:
+            raise RuntimeError("the agent asked more than one question")
+        mark("elicitation_sheet_open")
+
+    with recorded("elicitation_pick"):
+        tap_text("Settings toggle", timeout=10, substring=True)
+        time.sleep(0.8)
+        mark("settings_toggle_picked")
+
+    with recorded("elicitation_submit"):
+        for _ in range(4):
+            if find(dump_root(), text="Submit") is not None:
+                break
+            tap_text("Next", timeout=5)
+            time.sleep(0.6)
+        tap_text("Submit", timeout=10)
+        if wait_for_turn() != "idle":
+            raise RuntimeError("the agent asked another question after submit")
+        mark("answer_submitted")
+
+    reset_plan_edits()
+
+    # ── Build: switch to Build and send the implementation prompt.
+    with recorded("mode_build"):
+        mark("mode_build")
+        tap_until_value("Mode:", "Build", tries=3)
         time.sleep(1.0)
 
-    if voice_scene() is None:
-        return 1
+    with recorded("build_prompt"):
+        tap_text("Message", timeout=10, settle=0.8)
+        type_text(BUILD_PROMPT)
+        time.sleep(2.0)
+        mark("build_prompt_typed")
+
+    with recorded("build_send"):
+        submit_composer()
+        mark("tap_build_send")
+        time.sleep(3.0)
+
+    with recorded("build_wait"):
+        state = wait_for_turn()
+        if state != "idle":
+            raise RuntimeError(f"build turn ended as {state!r}")
+        verify_build_commit()
+        mark("build_finished")
+
+    with recorded("build_reply"):
+        time.sleep(3.0)
+        mark("build_reply_visible")
+
+    with recorded("usage"):
+        usage = wait_for_usage()
+        print(f"  usage line: {usage}", flush=True)
+        mark("usage_visible")
+        time.sleep(3.0)
+
+    # ── Changes: clean uncommitted view, branch review, settings diff.
+    with recorded("changes_open"):
+        open_changes()
+        mark("changes_clean")
+
+    with recorded("changes_branch"):
+        tap_text("Against main", timeout=10, substring=True)
+        wait_for(text="settings.js", timeout=20)
+        mark("branch_scope")
+
+    with recorded("changes_file"):
+        tap_text("settings.js", timeout=10, substring=True)
+        wait_for(text="Branch changes", timeout=20)
+        time.sleep(1.0)
+        if find(dump_root(), text="catMode", substring=True) is None:
+            raise RuntimeError("the settings diff does not show catMode")
+        mark("settings_diff_visible")
+
+    with recorded("changes_back"):
+        tap_desc("Go back to changes", timeout=10)
+        wait_for(text="settings.js", timeout=15)
+        mark("changes_list_again")
+
+    with recorded("worktrees_open"):
+        open_worktrees()
+        mark("worktree_sheet_open")
+
+    with recorded("worktrees_close"):
+        close_worktrees()
+        mark("worktree_sheet_closed")
+
+    leave_changes()
+
+    # ── PR: ask for a draft PR and hold on the URL in the reply.
+    with recorded("pr_prompt"):
+        tap_text("Message", timeout=10, settle=0.8)
+        mark("pr_prompt_focus")
+
+    with recorded("pr_send"):
+        type_text(PR_PROMPT)
+        time.sleep(1.5)
+        submit_composer()
+        mark("tap_pr_send")
+        time.sleep(3.0)
+
+    with recorded("pr_wait"):
+        state = wait_for_turn()
+        if state != "idle":
+            raise RuntimeError(f"PR turn ended as {state!r}")
+        mark("pr_finished")
+
+    scroll_chat_to_bottom()
+
+    with recorded("pr_reply"):
+        url = wait_for_pr_url(timeout=30)
+        print(f"  PR URL in chat: {url}", flush=True)
+        mark("pr_url_visible")
+        verify_remote_pr()
+        time.sleep(3.0)
+
     time.sleep(0.5)
     mark("done")
     return 0

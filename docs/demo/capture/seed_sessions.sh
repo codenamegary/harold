@@ -58,7 +58,7 @@ OPENCODE_DB=$(cd "$SEED_CWD" && opencode debug paths | awk '$1 == "db" { print $
 # The demo workspace is disposable. Purge its OpenCode history so the full
 # Sessions screen cannot show sessions from earlier capture runs. The main
 # checkout is left alone unless SEED_PURGE=1 is explicit.
-if [[ "$SEED_CWD" == "$HOME/harold-demo-workspaces/"* || "${SEED_PURGE:-0}" == "1" ]]; then
+if [[ "$SEED_CWD" == "$HOME/harold-demo-workspaces/"* || "$SEED_CWD" == "$HOME/cat-screensaver-worktrees/"* || "${SEED_PURGE:-0}" == "1" ]]; then
   echo "purging OpenCode sessions in $SEED_CWD"
   (cd "$SEED_CWD" && opencode session list) |
     awk -F'\t' 'NF { print $1 }' |

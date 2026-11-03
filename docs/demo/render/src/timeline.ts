@@ -1,5 +1,5 @@
 import { Easing } from "remotion"
-import { pairSegs, statusSegs, type TermItem } from "./terminal-data"
+import { pairSegs, statusSegs, waitingSegs, type TermItem } from "./terminal-data"
 
 export type CaptureTap = { x: number; y: number; atSec: number }
 
@@ -36,10 +36,8 @@ const PAIR_LAND_AT = 20.7
 const PAIR_LAND_SEC = 0.5
 const REcede_AT = 22.8
 const WALK_START = 27.8
-const NEW_SESSION_ZOOM_AT = 60.27
-const NEW_SESSION_ZOOM_SEC = 0.56
-const NEW_SESSION_OUT_AT = 70.59
-const NEW_SESSION_OUT_SEC = 0.8
+const STORY_ZOOM_SEC = 0.56
+const STORY_OUT_SEC = 0.8
 
 type TypingWindow = { text: string; fromSec: number; toSec: number }
 
@@ -230,9 +228,16 @@ type Step = {
 }
 
 const COMPOSER: Focus = { scale: 2.4, x: 0.5, y: 0.81 }
-const EFFORT: Focus = { scale: 2.6, x: 0.6, y: 0.81 }
-const READ: Focus = { scale: 1.6, x: 0.5, y: 0.33, drift: 0.22 }
 const REPLY_READ: Focus = { scale: 1.6, x: 0.5, y: 0.45, drift: 0.22 }
+const HEADER: Focus = { scale: 2.2, x: 0.5, y: 0.08 }
+const DIFF: Focus = { scale: 1.35, x: 0.5, y: 0.45 }
+
+export const PLAN_PROMPT =
+  "Read the attached spec and the photo of Mia. Plan only; do not edit files. Plan a small cat mode for this screensaver. Do not build yet. Use your question tool exactly once, for one question only: should cat mode be a settings toggle or automatic? The options must be exactly Settings toggle and Automatic. Do not ask about anything else."
+export const BUILD_PROMPT =
+  "Settings toggle. Implement only the plan now. Put the toggle in src/settings.js, put the cat behavior in src/cat-mode.js, add tests, and commit every change on feat/cat-mode so the worktree is clean. Do not add unrelated features and do not open a PR."
+export const PR_PROMPT =
+  "Push feat/cat-mode and open a draft PR against main with gh. End with the PR URL."
 
 const MODE_TARGET: AnnotationRect = { x: 0.67, y: 0.776, w: 0.19, h: 0.06 }
 const THINKING_TARGET: AnnotationRect = { x: 0.83, y: 0.776, w: 0.14, h: 0.06 }
@@ -266,287 +271,283 @@ const PAIR_STEPS: Step[] = [
   },
 ]
 
-// The walk starts after the paired home. Every shot starts where the previous
-// one ends plus its hold, so changing one duration moves the rest.
-const WALK_STEPS: Step[] = [
-  {
-    slice: "pair_another_open",
-    startSec: 2.4,
-    rate: 2,
-    duration: 3.8,
-    hold: 0.3,
-    callout: {
-      at: 0.2,
-      hold: 2.4,
-      eyebrow: "MULTI-HAROLD",
-      title: "Pair another Harold",
-      hint: "One phone, two Harolds.",
-    },
-  },
-  { slice: "pair_another_manual", startSec: 2.9, rate: 1.5, duration: 1.7, hold: 0.3 },
-  {
-    slice: "pair_another_details",
-    startSec: 2.8,
-    rate: 1.5,
-    duration: 4.0,
-    hold: 0.3,
-    typing: [
-      { text: "http://127.0.0.1:3848", fromSec: 3.55, toSec: 5.95 },
-      { text: "GTN-5DK", fromSec: 7.2, toSec: 8.6 },
-    ],
-    focus: { scale: 1.8, x: 0.5, y: 0.22 },
-  },
-  { slice: "pair_another_claim", startSec: 2.8, rate: 2, duration: 1.4, hold: 0.4 },
-  {
-    slice: "pair_another_name",
-    startSec: 2.7,
-    rate: 1.5,
-    duration: 2.0,
-    hold: 0.4,
-    typing: { text: "Couch", fromSec: 4.3, toSec: 5.15 },
-    focus: { scale: 1.7, x: 0.5, y: 0.3 },
-  },
-  { slice: "pair_another_confirm", startSec: 2.9, rate: 2, duration: 1.5, hold: 0.3 },
-  { slice: "pair_another_done", duration: 0.8, hold: 0.3 },
+// The story starts after the paired home. Every shot starts where the previous
+// one ends plus its hold, so changing one duration moves the rest. The walk is
+// one real job: new session, plan, attachments, question, build, usage,
+// changes, worktrees, and a draft PR.
+const STORY_STEPS: Step[] = [
   {
     slice: "session_menu_open",
     startSec: 2.4,
     rate: 2,
     duration: 2.2,
-    hold: 0.5,
-    cards: {
-      at: 0.2,
-      hold: 4.0,
-      eyebrow: "SESSION HISTORY",
-      title: "Access your agent session history",
-      hint: "Past sessions, one tap away.",
-    },
+    hold: 0.8,
   },
-  { slice: "session_see_all", startSec: 2.5, rate: 2.5, duration: 2.2, hold: 0.4 },
-  { slice: "session_pick", startSec: 2.5, rate: 2.5, duration: 1.0, hold: 0.3 },
-  { slice: "session_chat", rate: 2, duration: 1.0, hold: 0.3 },
-  {
-    slice: "workspaces_open",
-    startSec: 8.8,
-    duration: 2.4,
-    hold: 0.6,
-    note: {
-      at: 0.2,
-      hold: 2.2,
-      label: "WORKSPACES",
-      title: "Any folder, bookmarked",
-    },
-  },
-  {
-    slice: "add_workspace_open",
-    startSec: 21.8,
-    duration: 1.4,
-    hold: 0.5,
-    callout: {
-      at: 0.2,
-      hold: 1.7,
-      eyebrow: "ADD WORKSPACE",
-      title: "Open a folder, or clone a repo",
-      hint: "Any project folder on the host.",
-      compact: true,
-      placement: "edge",
-      connector: "t",
-      targetX: 0.5,
-      targetY: 0.25,
-      span: { y: 0.13, h: 0.28 },
-    },
-    focus: { scale: 1.35, x: 0.5, y: 0.36 },
-  },
-  { slice: "session_menu_reopen", startSec: 2.4, rate: 2.5, duration: 1.8, hold: 0.4 },
   {
     slice: "new_session",
-    startSec: 2.5,
+    startSec: 2.2,
     rate: 2,
-    duration: 1.15,
-    hold: 0.3,
+    duration: 1.3,
+    hold: 0.4,
     note: {
       at: 0.2,
-      hold: 2.8,
-      label: "MAKE SOME HISTORY",
-      title: "Start a new Session",
+      hold: 2.4,
+      label: "NEW SESSION",
+      title: "Start something new",
     },
   },
-  { slice: "workspace_open_work", startSec: 2.6, rate: 2.5, duration: 1.8, hold: 0.3 },
-  { slice: "workspace_pick_work", startSec: 2.5, rate: 2, duration: 0.5, hold: 0.2 },
-  { slice: "agent_open_work", startSec: 2.6, rate: 2.5, duration: 1.65, hold: 0.3 },
-  { slice: "agent_pick_work", startSec: 2.5, rate: 2, duration: 0.4, hold: 0.2 },
-  { slice: "workspace_open_couch", startSec: 2.6, rate: 2, duration: 1.1, hold: 0.3 },
-  { slice: "workspace_pick_couch", startSec: 2.6, rate: 1.5, duration: 1.4, hold: 0.3 },
-  { slice: "agent_open_couch", startSec: 2.6, rate: 2, duration: 1.05, hold: 0.3 },
-  { slice: "agent_pick_couch", startSec: 2.5, rate: 2, duration: 0.4, hold: 0.2 },
-  { slice: "continue", startSec: 2.6, rate: 2.5, duration: 2.0, hold: 0.2 },
-  { slice: "session_create_wait", rate: 2, duration: 1.0, hold: 0.2 },
-  {
-    slice: "model_open",
-    startSec: 2.6,
-    rate: 2,
-    duration: 1.2,
-    hold: 0.3,
-    callout: {
-      at: 0.2,
-      hold: 1.7,
-      eyebrow: "YOUR AGENT",
-      title: "Model list from your Agent",
-      hint: "Pick one to continue.",
-      compact: true,
-      placement: "edge",
-      connector: "t",
-      span: { y: 0.67, h: 0.24 },
-      targetX: 0.5,
-      targetY: 0.78,
-    },
-    focus: { scale: 1.7, x: 0.5, y: 0.72 },
-  },
-  {
-    slice: "model_search",
-    startSec: 2.75,
-    duration: 2.2,
-    typing: { text: "deepseek", fromSec: 3.4, toSec: 4.5 },
-    hold: 0.3,
-    focus: { scale: 1.7, x: 0.5, y: 0.72 },
-  },
-  {
-    slice: "model_pick",
-    startSec: 2.5,
-    rate: 2,
-    duration: 0.8,
-    hold: 0.3,
-    focus: { scale: 1.7, x: 0.5, y: 0.72 },
-  },
+  { slice: "workspace_open", startSec: 2.6, rate: 2.5, duration: 1.8, hold: 0.3 },
+  { slice: "workspace_pick", startSec: 2.5, rate: 2, duration: 1.2, hold: 0.3 },
+  { slice: "continue", startSec: 2.6, rate: 2.5, duration: 2.2, hold: 0.2 },
+  { slice: "session_create_wait", rate: 2, duration: 1.2, hold: 0.3 },
   {
     slice: "mode_plan",
     startSec: 4.5,
     rate: 1.5,
-    duration: 1.5,
-    hold: 1.0,
-    annotation: {
+    duration: 1.6,
+    hold: 1.2,
+    callout: {
       at: 0.2,
-      title: "Toggle modes supported by your agent",
-      nextTitle: "Adjust thinking effort",
-      nextSlice: "effort_1",
-      endSlice: "effort_3",
-      target: MODE_TARGET,
-      nextTarget: THINKING_TARGET,
+      hold: 2.2,
+      eyebrow: "PLAN",
+      title: "Use your agent’s plan mode",
     },
     focus: COMPOSER,
-  },
-  { slice: "mode_build", startSec: 4.8, rate: 1.5, duration: 1.4, hold: 1.0, focus: COMPOSER },
-  {
-    slice: "effort_1",
-    startSec: 0.5,
-    duration: 0.8,
-    hold: 0.25,
-    focus: EFFORT,
-  },
-  { slice: "effort_2", startSec: 0.5, duration: 0.8, hold: 0.25, focus: EFFORT },
-  { slice: "effort_3", startSec: 0.5, duration: 0.8, hold: 0.3, focus: EFFORT },
-  {
-    slice: "slash_open",
-    startSec: 2.6,
-    rate: 2.5,
-    duration: 2.0,
-    hold: 1.0,
-    phoneCaption: {
-      at: 0.2,
-      hold: 2.0,
-      title: "Slash commands from your agent",
-      top: 0.5,
-    },
-    focus: { scale: 1.6, x: 0.5, y: 0.3 },
-  },
-  {
-    slice: "slash_close",
-    startSec: 2.6,
-    rate: 2,
-    duration: 0.8,
-    hold: 0.5,
-    focus: { scale: 1.6, x: 0.5, y: 0.3 },
   },
   {
     slice: "prompt_focus",
     startSec: 2.5,
     rate: 2,
-    duration: 0.5,
+    duration: 0.6,
     hold: 0.2,
-    phoneCaption: {
-      at: 0.2,
-      hold: 2.6,
-      title: "Send a text Prompt",
-      top: 0.33,
-      height: 150,
-    },
-    focus: { scale: 1.8, x: 0.5, y: 0.52 },
+    focus: COMPOSER,
   },
   {
     slice: "prompt_type",
-    startSec: 0.4,
-    rate: 1.3,
-    duration: 4.1,
-    typing: {
-      text: "Do you think my cat's behaviour is strange?",
-      fromSec: 0.55,
-      toSec: 5.5,
-    },
-    hold: 0.7,
-    focus: { scale: 1.8, x: 0.5, y: 0.52 },
+    startSec: 0.2,
+    rate: 3,
+    duration: 4.2,
+    typing: { text: PLAN_PROMPT, fromSec: 0.4, toSec: 12.6 },
+    hold: 0.8,
+    focus: COMPOSER,
   },
   {
     slice: "photo_open",
     startSec: 2.6,
     rate: 2,
-    duration: 1.1,
+    duration: 1.3,
     hold: 0.3,
+    focus: { scale: 1.5, x: 0.5, y: 0.72 },
+  },
+  { slice: "photo_pick", startSec: 2.2, rate: 1.5, duration: 0.9, hold: 0.3 },
+  { slice: "photo_add", startSec: 2.6, rate: 2, duration: 1.2, hold: 0.3 },
+  { slice: "file_open", startSec: 2.6, rate: 2, duration: 1.1, hold: 0.3 },
+  {
+    slice: "file_pick",
+    startSec: 2.7,
+    rate: 2,
+    duration: 1.2,
+    hold: 0.4,
     callout: {
       at: 0.2,
       hold: 2.6,
-      title: "Attachments",
+      eyebrow: "ATTACHMENTS",
+      title: "Give it the spec",
+      hint: "A markdown file and a photo of Mia.",
       side: "right",
       compact: true,
       placement: "edge",
       connector: "t",
-      span: { y: 0.12, h: 0.62 },
-      targetY: 0.43,
+      targetX: 0.22,
+      targetY: 0.93,
     },
+    focus: { scale: 1.5, x: 0.5, y: 0.8 },
   },
-  { slice: "photo_pick", startSec: 2.6, rate: 2, duration: 0.8, hold: 0.3 },
-  { slice: "photo_add", startSec: 2.6, rate: 2, duration: 1.1, hold: 0.3 },
-  { slice: "file_open", startSec: 2.6, rate: 2, duration: 1.0, hold: 0.3 },
-  { slice: "file_pick", startSec: 2.7, rate: 2, duration: 1.0, hold: 0.25 },
   {
     slice: "send",
+    startSec: 2.8,
+    rate: 2,
+    duration: 1.3,
+    hold: 0.2,
+    focus: { scale: 1.8, x: 0.5, y: 0.84 },
+  },
+  { slice: "plan_wait", rate: 4, duration: 1.8, hold: 0.3 },
+  {
+    slice: "plan_reply",
+    duration: 3.2,
+    hold: 2.4,
+    focus: REPLY_READ,
+    callout: {
+      at: 0.4,
+      hold: 2.6,
+      eyebrow: "AGENT QUESTION",
+      title: "Get grilled",
+      hint: "Interactive question tooling.",
+      side: "right",
+      targetX: 0.5,
+      targetY: 0.82,
+    },
+  },
+  { slice: "elicitation_open", startSec: 1.5, rate: 2, duration: 1.4, hold: 0.3 },
+  { slice: "elicitation_pick", startSec: 1.2, rate: 2, duration: 1.4, hold: 0.3 },
+  { slice: "elicitation_submit", startSec: 3.2, rate: 2, duration: 2.2, hold: 0.8 },
+  {
+    slice: "mode_build",
+    startSec: 4.8,
+    rate: 1.5,
+    duration: 1.5,
+    hold: 1.2,
+    callout: {
+      at: 0.2,
+      hold: 2.0,
+      eyebrow: "BUILD",
+      title: "Execute the plan",
+    },
+    focus: COMPOSER,
+  },
+  {
+    slice: "build_prompt",
+    startSec: 0.2,
+    rate: 4,
+    duration: 4.0,
+    typing: { text: BUILD_PROMPT, fromSec: 0.4, toSec: 16.0 },
+    hold: 0.8,
+    focus: COMPOSER,
+  },
+  {
+    slice: "build_send",
     startSec: 2.8,
     rate: 2,
     duration: 1.2,
     hold: 0.2,
     focus: { scale: 1.8, x: 0.5, y: 0.84 },
   },
-  { slice: "reply_wait", rate: 6, duration: 1.8, hold: 0.2 },
-  { slice: "reply", duration: 2.5, hold: 1.6, focus: REPLY_READ },
+  { slice: "build_wait", rate: 8, duration: 2.5, hold: 0.3 },
   {
-    slice: "voice_open",
-    startSec: 2.5,
-    rate: 2,
-    duration: 1.3,
-    hold: 0.4,
-    focus: { scale: 1.9, x: 0.5, y: 0.9 },
-  },
-  { slice: "voice_expand", startSec: 3.0, rate: 2, duration: 1.4, hold: 0.6 },
-  {
-    slice: "voice_transcript",
-    startSec: 0.4,
-    rate: 2,
+    slice: "build_reply",
     duration: 3.2,
-    hold: 0.2,
-    focus: { scale: 1.5, x: 0.5, y: 0.22 },
+    hold: 2.5,
+    focus: REPLY_READ,
   },
-  { slice: "voice_send", startSec: 3.0, rate: 2, duration: 0.9, hold: 0.2 },
-  { slice: "voice_reply_wait", rate: 6, duration: 1.7, hold: 0.2 },
-  { slice: "voice_reply", duration: 2.5, hold: 1.6, focus: READ },
+  {
+    slice: "usage",
+    duration: 3.0,
+    hold: 1.5,
+    focus: HEADER,
+    callout: {
+      at: 0.2,
+      hold: 2.8,
+      eyebrow: "USAGE",
+      title: "Know what it cost",
+      hint: "Tokens and dollars, in the header.",
+      side: "right",
+      compact: true,
+      placement: "edge",
+      connector: "t",
+      targetX: 0.45,
+      targetY: 0.08,
+      span: { y: 0.04, h: 0.12 },
+    },
+  },
+  {
+    slice: "changes_open",
+    startSec: 1.0,
+    rate: 2,
+    duration: 1.8,
+    hold: 0.5,
+    callout: {
+      at: 0.2,
+      hold: 2.2,
+      eyebrow: "CHANGES",
+      title: "Review the code",
+    },
+  },
+  { slice: "changes_branch", startSec: 1.0, rate: 2, duration: 1.8, hold: 0.5 },
+  {
+    slice: "changes_file",
+    startSec: 4.0,
+    rate: 2,
+    duration: 1.8,
+    hold: 0.8,
+    focus: DIFF,
+    callout: {
+      at: 0.2,
+      hold: 2.6,
+      eyebrow: "CHANGES",
+      title: "Pretty diffs!",
+      side: "right",
+      compact: true,
+      placement: "edge",
+      connector: "t",
+      targetX: 0.5,
+      targetY: 0.46,
+    },
+  },
+  { slice: "changes_back", startSec: 1.0, rate: 2, duration: 1.6, hold: 0.4 },
+  {
+    slice: "worktrees_open",
+    startSec: 4.0,
+    rate: 2,
+    duration: 1.6,
+    hold: 0.8,
+    callout: {
+      at: 0.2,
+      hold: 2.8,
+      eyebrow: "WORKTREES",
+      title: "Auto-detect, or choose",
+      hint: "Pick the worktree to inspect.",
+      side: "right",
+      compact: true,
+      placement: "edge",
+      connector: "t",
+      targetX: 0.5,
+      targetY: 0.68,
+    },
+  },
+  { slice: "worktrees_close", startSec: 0.1, rate: 1.5, duration: 0.9, hold: 0.3 },
+  {
+    slice: "pr_prompt",
+    startSec: 1.0,
+    rate: 2,
+    duration: 1.4,
+    hold: 0.3,
+    focus: { scale: 2.0, x: 0.5, y: 0.81 },
+  },
+  {
+    slice: "pr_send",
+    startSec: 0.1,
+    rate: 4,
+    duration: 3.8,
+    typing: { text: PR_PROMPT, fromSec: 0.4, toSec: 12.0 },
+    hold: 0.3,
+    focus: { scale: 1.8, x: 0.5, y: 0.84 },
+    callout: {
+      at: 0.2,
+      hold: 2.2,
+      eyebrow: "DRAFT PR",
+      title: "Just like always",
+      hint: "The agent pushes and opens it.",
+      side: "right",
+      compact: true,
+      placement: "edge",
+      connector: "t",
+      targetX: 0.9,
+      targetY: 0.93,
+    },
+  },
+  { slice: "pr_wait", rate: 6, duration: 2.5, hold: 0.3 },
+  {
+    slice: "pr_reply",
+    duration: 3.2,
+    hold: 4.0,
+    spotlight: {
+      at: 1.0,
+      hold: 3.2,
+      side: "left",
+      kicker: "The whole loop",
+      title: "From plan to PR",
+    },
+  },
 ]
 
 type Shot = Step & {
@@ -579,7 +580,7 @@ const shotDuration = (step: Step, data: CaptureSlice): number => {
   return Math.max(0.05, Math.min(step.duration ?? fallback, available))
 }
 
-const buildShots = (slices: CaptureSlice[]): { pair: Shot[]; walk: Shot[] } => {
+const buildShots = (slices: CaptureSlice[]): { pair: Shot[]; story: Shot[] } => {
   const byName = new Map(slices.map((slice) => [slice.name, slice]))
   const resolve = (step: Step): Shot => {
     const data = byName.get(step.slice)
@@ -599,9 +600,9 @@ const buildShots = (slices: CaptureSlice[]): { pair: Shot[]; walk: Shot[] } => {
   }
 
   const pair = PAIR_STEPS.map((step) => resolve(step))
-  const walk: Shot[] = []
+  const story: Shot[] = []
   let at = WALK_START
-  for (const step of WALK_STEPS) {
+  for (const step of STORY_STEPS) {
     if (!byName.has(step.slice)) {
       if (step.required === false) {
         continue
@@ -610,10 +611,54 @@ const buildShots = (slices: CaptureSlice[]): { pair: Shot[]; walk: Shot[] } => {
     }
     const shot = resolve(step)
     shot.at = at
-    walk.push(shot)
+    story.push(shot)
     at += shot.duration + (shot.hold ?? 0)
   }
-  return { pair, walk }
+  return { pair, story }
+}
+
+const buildPhoneStage = (story: Shot[]): PhoneStage => {
+  const newSession = story.find((shot) => shot.slice === "new_session")
+  const continueShot = story.find((shot) => shot.slice === "continue")
+  const prReply = story.find((shot) => shot.slice === "pr_reply")
+  if (newSession === undefined || continueShot === undefined) {
+    throw new Error("the story needs new_session and continue shots to place the phone")
+  }
+  // Enlarge when the new session form opens, hold through workspace selection,
+  // and pull back after Continue.
+  const zoomAt = Math.max(WALK_START + 0.3, newSession.at + newSession.duration)
+  const outAt = Math.max(zoomAt + STORY_ZOOM_SEC, continueShot.at + continueShot.duration)
+  // The final spotlight needs the phone out of the copy's side.
+  const dockAt = prReply?.at ?? outAt + STORY_OUT_SEC
+  return {
+    width: [
+      ...PAIR_PHONE_WIDTH,
+      [zoomAt, 450],
+      [zoomAt + STORY_ZOOM_SEC, 760],
+      [outAt, 760],
+      [outAt + STORY_OUT_SEC, 450],
+      [dockAt, 450],
+      [dockAt + STORY_ZOOM_SEC, 760],
+    ],
+    centerX: [
+      ...PAIR_PHONE_CENTER_X,
+      [zoomAt, 960],
+      [zoomAt + STORY_ZOOM_SEC, 1460],
+      [outAt, 1460],
+      [outAt + STORY_OUT_SEC, 960],
+      [dockAt, 960],
+      [dockAt + STORY_ZOOM_SEC, 1460],
+    ],
+    top: [
+      ...PAIR_PHONE_TOP,
+      [zoomAt, 30],
+      [zoomAt + STORY_ZOOM_SEC, -314.5],
+      [outAt, -314.5],
+      [outAt + STORY_OUT_SEC, 30],
+      [dockAt, 30],
+      [dockAt + STORY_ZOOM_SEC, -314.5],
+    ],
+  }
 }
 
 const buildClips = (shots: Shot[]): PhoneClip[] => {
@@ -726,32 +771,24 @@ export const termX: Keyframes = [
 // framed terminal. The Pair tap starts a 2x close-up of the top two thirds.
 // That framing holds through the scanner and name entry. Right after the
 // confirm tap it pans up to the centered close-up, so the landing screen is
-// readable before the spotlight copy lands. The phone only takes center stage
-// when the walkthrough starts.
-export const phoneWidth: Keyframes = [
+// readable before the spotlight copy lands. The phone takes center stage when
+// the story starts.
+const PAIR_PHONE_WIDTH: Keyframes = [
   [PHONE_IN_AT, 380],
   [PAIR_ZOOM_AT, 380],
   [PAIR_ZOOM_AT + PAIR_ZOOM_SEC, 760],
   [REcede_AT, 760],
   [27.0, 760],
   [27.8, 450],
-  [NEW_SESSION_ZOOM_AT, 450],
-  [NEW_SESSION_ZOOM_AT + NEW_SESSION_ZOOM_SEC, 760],
-  [NEW_SESSION_OUT_AT, 760],
-  [NEW_SESSION_OUT_AT + NEW_SESSION_OUT_SEC, 450],
 ]
-export const phoneCenterX: Keyframes = [
+const PAIR_PHONE_CENTER_X: Keyframes = [
   [PHONE_IN_AT, 2440],
   [PHONE_IN_AT + 1.7, 1460],
   [REcede_AT, 1460],
   [27.0, 1460],
   [27.8, 960],
-  [NEW_SESSION_ZOOM_AT, 960],
-  [NEW_SESSION_ZOOM_AT + NEW_SESSION_ZOOM_SEC, 1460],
-  [NEW_SESSION_OUT_AT, 1460],
-  [NEW_SESSION_OUT_AT + NEW_SESSION_OUT_SEC, 960],
 ]
-export const phoneTop: Keyframes = [
+const PAIR_PHONE_TOP: Keyframes = [
   [PHONE_IN_AT, 108],
   [PAIR_ZOOM_AT, 108],
   [PAIR_ZOOM_AT + PAIR_ZOOM_SEC, 0],
@@ -759,11 +796,14 @@ export const phoneTop: Keyframes = [
   [PAIR_LAND_AT + PAIR_LAND_SEC, -314.5],
   [27.0, -314.5],
   [27.8, 30],
-  [NEW_SESSION_ZOOM_AT, 30],
-  [NEW_SESSION_ZOOM_AT + NEW_SESSION_ZOOM_SEC, -314.5],
-  [NEW_SESSION_OUT_AT, -314.5],
-  [NEW_SESSION_OUT_AT + NEW_SESSION_OUT_SEC, 30],
 ]
+
+export type PhoneStage = {
+  width: Keyframes
+  centerX: Keyframes
+  top: Keyframes
+}
+
 // The screen starts black and fades the app in as the phone settles.
 export const phoneBlack: Keyframes = [
   [PHONE_IN_AT, 1],
@@ -845,7 +885,7 @@ const transcript = (pairedRenderSec: number): TermItem[] => {
   items.push({
     kind: "output",
     at: 13.45,
-    segs: [{ text: "Waiting for a device to scan..." }],
+    segs: waitingSegs,
   })
   items.push({
     kind: "output",
@@ -1180,6 +1220,7 @@ export type Timeline = {
   celebrations: Celebration[]
   sounds: Sound[]
   zoom: Zoom
+  phoneStage: PhoneStage
   endSec: number
 }
 
@@ -1195,8 +1236,8 @@ const tapRenderSec = (shot: Shot | undefined): number | null => {
  * The whole cut, derived from the captured slices.
  */
 export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
-  const { pair, walk } = buildShots(slices)
-  const shots = [...pair, ...walk].sort((a, b) => a.at - b.at)
+  const { pair, story } = buildShots(slices)
+  const shots = [...pair, ...story].sort((a, b) => a.at - b.at)
   const clips = buildClips(shots)
   const ripples = buildRipples(shots)
   const captions = buildCaptions(shots)
@@ -1224,7 +1265,7 @@ export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
     tapRenderSec(pair.find((shot) => shot.slice === "first_confirm")) ??
     pair.find((shot) => shot.slice === "paired")?.at ??
     20.4
-  const last = walk[walk.length - 1]
+  const last = story[story.length - 1]
   const endSec = last.at + last.duration + (last.hold ?? 0)
   return {
     terminal: transcript(pairedRenderSec),
@@ -1241,6 +1282,7 @@ export const buildTimeline = (slices: CaptureSlice[]): Timeline => {
     celebrations,
     sounds,
     zoom: buildZoom(shots),
+    phoneStage: buildPhoneStage(story),
     endSec,
   }
 }

@@ -25,9 +25,6 @@ import {
   buildTimeline,
   channel,
   phoneBlack,
-  phoneCenterX,
-  phoneTop,
-  phoneWidth,
   TERM_BOX,
   TERM_ORIGIN,
   termOpacity,
@@ -204,10 +201,10 @@ const PhoneStage: React.FC<{
   const frame = useCurrentFrame()
   const { fps, width: stageW, height: stageH } = useVideoConfig()
   const sec = frame / fps
-  const screenWidth = channel(phoneWidth, sec)
+  const screenWidth = channel(timeline.phoneStage.width, sec)
   const size = phoneFrameSize(videoWidth, videoHeight, screenWidth)
-  const left = channel(phoneCenterX, sec) - size.frameWidth / 2
-  const top = channel(phoneTop, sec)
+  const left = channel(timeline.phoneStage.centerX, sec) - size.frameWidth / 2
+  const top = channel(timeline.phoneStage.top, sec)
   const active = timeline.ripples
     .map((ripple) => ({ ...ripple, progress: rippleProgress(sec, ripple.at) }))
     .filter((ripple) => ripple.progress > 0 && ripple.progress < 1)
@@ -376,6 +373,7 @@ export const Demo: React.FC<DemoProps> = ({ slices, videoWidth, videoHeight }) =
           callout={callout}
           sec={sec}
           zoom={timeline.zoom}
+          phoneStage={timeline.phoneStage}
           videoWidth={videoWidth}
           videoHeight={videoHeight}
         />
@@ -386,6 +384,7 @@ export const Demo: React.FC<DemoProps> = ({ slices, videoWidth, videoHeight }) =
           annotation={annotation}
           sec={sec}
           zoom={timeline.zoom}
+          phoneStage={timeline.phoneStage}
           videoWidth={videoWidth}
           videoHeight={videoHeight}
         />
@@ -396,6 +395,7 @@ export const Demo: React.FC<DemoProps> = ({ slices, videoWidth, videoHeight }) =
           caption={caption}
           sec={sec}
           zoom={timeline.zoom}
+          phoneStage={timeline.phoneStage}
           videoWidth={videoWidth}
           videoHeight={videoHeight}
         />

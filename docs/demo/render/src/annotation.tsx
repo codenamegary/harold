@@ -2,7 +2,7 @@ import { Easing, interpolate, useVideoConfig } from "remotion"
 import { sansFamily } from "./fonts"
 import { phoneScreenRect } from "./phone"
 import { ink, lime, paper } from "./theme"
-import { type Annotation, type AnnotationRect, type Zoom } from "./timeline"
+import { type Annotation, type AnnotationRect, type PhoneStage, type Zoom } from "./timeline"
 
 const CARD_W = 600
 const CARD_H = 190
@@ -24,9 +24,10 @@ export const AnnotationView: React.FC<{
   annotation: Annotation
   sec: number
   zoom: Zoom
+  phoneStage: PhoneStage
   videoWidth: number
   videoHeight: number
-}> = ({ annotation, sec, zoom, videoWidth, videoHeight }) => {
+}> = ({ annotation, sec, zoom, phoneStage, videoWidth, videoHeight }) => {
   const { width: stageW, height: stageH } = useVideoConfig()
   const { at, moveAt, endAt, title, nextTitle, target, nextTarget } = annotation
   if (sec < at || sec > endAt + FADE_SEC) {
@@ -34,7 +35,7 @@ export const AnnotationView: React.FC<{
   }
 
   const since = sec - at
-  const screen = phoneScreenRect(sec, stageW, stageH, videoWidth, videoHeight, zoom)
+  const screen = phoneScreenRect(sec, stageW, stageH, videoWidth, videoHeight, phoneStage, zoom)
   const reveal = interpolate(since, [0, 0.35], [0, 1], { ...clamp, easing: ease })
   const leave = interpolate(sec, [endAt, endAt + FADE_SEC], [0, 1], {
     ...clamp,

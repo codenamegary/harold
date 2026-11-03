@@ -1,13 +1,18 @@
-import { AbsoluteFill, Freeze, interpolate, OffthreadVideo, staticFile, useVideoConfig } from "remotion"
+import {
+  AbsoluteFill,
+  Freeze,
+  interpolate,
+  OffthreadVideo,
+  staticFile,
+  useVideoConfig,
+} from "remotion"
 import {
   channel,
   clipFrame,
-  phoneCenterX,
-  phoneTop,
-  phoneWidth,
   rippleColor,
   rippleDuration,
   type PhoneClip,
+  type PhoneStage,
   type Zoom,
 } from "./timeline"
 import { line } from "./theme"
@@ -41,12 +46,13 @@ export const phoneScreenRect = (
   stageH: number,
   videoWidth: number,
   videoHeight: number,
+  phoneStage: PhoneStage,
   zoom: Zoom,
 ): PhoneScreenRect => {
-  const screenWidth = channel(phoneWidth, sec)
+  const screenWidth = channel(phoneStage.width, sec)
   const size = phoneFrameSize(videoWidth, videoHeight, screenWidth)
-  const left = channel(phoneCenterX, sec) - size.frameWidth / 2
-  const top = channel(phoneTop, sec)
+  const left = channel(phoneStage.centerX, sec) - size.frameWidth / 2
+  const top = channel(phoneStage.top, sec)
   const scale = channel(zoom.scale, sec)
   const bezel = (size.frameWidth - size.screenWidth) / 2
   const originX = bezel + channel(zoom.x, sec) * size.screenWidth

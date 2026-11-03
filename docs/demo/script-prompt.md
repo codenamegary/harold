@@ -7,15 +7,14 @@ beats. Exact timing, easing, and pixels live in the Remotion project at
 ## Features to highlight
 
 - Pairing
-- Multiple-agent support
-- Connecting to existing sessions
-- Creating a new session
-- Workspaces as bookmarks to any project folder
-- Text Chat
-- Voice Chat
+- One real session from plan to PR
+- Plan mode
 - Attachments
-- Multiple Harold instances
-- Slash commands
+- Agent questions
+- Changes and diffs
+- Worktrees
+- Draft PR
+- Usage and cost
 
 ## Notation
 
@@ -35,8 +34,8 @@ beats. Exact timing, easing, and pixels live in the Remotion project at
 
 ```text
 intro -> terminal -> phone-pair -> pair-scan -> achievement
--> second-pair -> sessions -> workspaces -> new-session -> text-chat
--> voice-chat -> outro
+-> new-session -> plan -> question -> build -> usage -> changes
+-> worktrees -> pr -> outro
 ```
 
 ## Vocabulary
@@ -134,10 +133,11 @@ Beats:
 - [KR "harold start"] then press Enter.
 - The terminal zooms out to show the server status.
 - The server prints its status.
-- [KR "harold pair"] then press Enter.
+- [KR "harold pair"] then press Enter. The instance is on the default port
+  3847, so the command stays `harold pair` rather than spelling out `--url`.
 - The QR code appears.
 - [CARD "Generate a secure temporary pairing code" place=stage]
-- The last output reads `Waiting for a device to scan...`
+- The last output reads `Waiting for a device to claim...`
 
 ### Scene: phone-pair
 
@@ -157,7 +157,7 @@ Beats:
 ### Scene: pair-scan
 
 Enter: The terminal QR is on the left, showing
-`Waiting for a device to scan...`. [L2C term|phone]. The phone holds [PZ:top-two-thirds].
+`Waiting for a device to claim...`. [L2C term|phone]. The phone holds [PZ:top-two-thirds].
 
 Beats:
 
@@ -188,178 +188,141 @@ Beats:
 - [CF]
 - The phone holds the centered close-up.
 
-### Scene: second-pair
-
-Enter: [L1 phone ~0.8s] [PZ:full ~0.8s]. The phone returns to center. The
-terminal stays off screen.
-
-Beats:
-
-- [CALLOUT "Pair another Harold" eyebrow="MULTI-HAROLD" hint="One phone, two Harolds." side=right]
-- [TAP "Overflow menu"]
-- [TAP "Pair"]
-- The Pair device screen opens with the scanner. No terminal is visible.
-- [TAP "Enter manually"]
-- The manual pairing form appears with the Harold endpoint and Pairing code
-  fields.
-- [TAP "Harold endpoint field"]
-- [KR "http://127.0.0.1:3848"]
-- [TAP "Pairing code field"]
-- [KR "instance 2 pairing code"]
-- [TAP "Claim pairing code"]
-- The identity screen appears with the suggested name `127.0.0.1 2`, Tide,
-  and Bolt.
-- [TAP "Name field"]
-- [KR "Couch"]
-- Leave Tide and Bolt selected.
-- Dismiss the keyboard.
-- [TAP "Pair"]
-- The chat returns with both Harolds connected.
-
-### Scene: sessions
-
-Enter: The chat settles with both Harolds connected. The session history
-cards spread in. [L1 phone] [PZ:full].
-
-Beats:
-
-- [CARDS "Access your agent session history" eyebrow="SESSION HISTORY" hint="Past sessions, one tap away."]
-- [TAP "Session dropdown"]
-- The dropdown shows recent sessions with Harold badges and a
-  `See all sessions...` item.
-- [TAP "See all sessions..."]
-- The Sessions screen opens with the search field, the All, Work, and Couch
-  filter chips, and the merged session list.
-- Each row shows a Harold badge, title, workspace, agent, and state.
-- [TAP "Newest OpenCode session from Couch"]
-- The Sessions screen closes and the chat opens with that session.
-- The header shows the Couch badge and the session name.
-
-### Scene: workspaces
-
-Enter: The session chat settles. [L1 phone] [PZ:full].
-
-Beats:
-
-- [NOTE "Any folder, bookmarked" label="WORKSPACES"]
-- [TAP "Overflow menu"]
-- [TAP "Workspaces"]
-- The Workspaces screen opens with the bookmarked project folders from both
-  Harolds. Each row shows a Harold badge, folder name, path, and Available.
-- [TAP "Add workspace"]
-- The Add workspace screen opens with the Harold picker, Open folder / Clone
-  repo, the folder browser, Selected folder, and Workspace name.
-- [CALLOUT "Open a folder, or clone a repo" eyebrow="ADD WORKSPACE"
-  hint="Any project folder on the host." compact placement=edge connector=T
-  targetX=0.5 targetY=0.25]
-- The browser shows the demo project folder root with the four project folders.
-- Back to the chat without submitting.
-
 ### Scene: new-session
 
-Enter: The Sessions screen closes. The chat returns with the Couch badge and
-session name. The phone moves right and zooms in on the new session form.
-[L2C copy|phone ~0.56s] [PZ:center-two-thirds].
+Enter: The phone returns to center after the achievement. The session menu
+opens on the cat history. [L1 phone] [PZ:full].
 
 Beats:
 
-- [NOTE "Start a new Session" label="MAKE SOME HISTORY"]
 - [TAP "Session dropdown"]
+- The menu shows the five cat sessions and `New session`.
+- [NOTE "Start something new" label="NEW SESSION"]
 - [TAP "New session"]
-- Wait for the New session screen to populate.
+- The New session form opens. The phone enlarges to [PZ:center-two-thirds].
+- The header may show the provisional `New session - <timestamp>` title until
+  the agent generates a name. The cut does not caption it; the final PR reply
+  shows the generated title.
 - [TAP "Workspace dropdown"]
-- The menu shows `New workspace` and workspaces from both Harolds, each with a
-  Harold badge and path.
-- [TAP "harold under Work"]
-- [TAP "Agent dropdown"]
-- The menu shows Cursor and pi ACP.
-- [TAP "Cursor"]
-- [TAP "Workspace dropdown"]
-- Scroll if needed.
-- [TAP "yuekbox under Couch"]
-- [TAP "Agent dropdown"]
-- [TAP "OpenCode"]
+- The menu shows the four workspaces. `cat-screensaver` points at the
+  `cat-mode` worktree.
+- [TAP "cat-screensaver"]
+- OpenCode is the only enabled agent and is already selected.
 - [TAP "Continue"]
-- [L1 phone ~0.8s] [PZ:full ~0.8s]
-- The phone pulls back to center as the session is created.
+- The phone pulls back to center as the chat opens. [L1 phone] [PZ:full].
 
-### Scene: text-chat
+### Scene: plan
 
-Enter: The New session screen closes. The chat returns with the new session
-selected. The composer shows the model, mode, and thinking chips. [L1 phone]
-[PZ:full].
+Enter: The new chat settles. The composer shows the OpenCode model and mode
+chips. [L1 phone] [PZ:full].
 
 Beats:
 
-- [TAP "Model chip"]
-- [PZ:lower-center ~0.55s]
-- The Model sheet opens.
-- [CALLOUT "Model list from your Agent" eyebrow="YOUR AGENT" hint="Pick one to continue." compact placement=edge connector=T]
-- [TAP "Search models"]
-- [KR "deepseek"]
-- [TAP "deepseek/DeepSeek V4.1 Flash 1017"]
-- [PZ:lower-center scale=2.4 focus=0.5,0.81 ~0.55s]
-- [BOX "Toggle modes supported by your agent" -> "Adjust thinking effort"]
+- [CALLOUT "Use your agent’s plan mode" eyebrow="PLAN"]
 - [TAP "Mode chip until PLAN"]
-- Wait 2s.
-- [TAP "Mode chip until BUILD"]
-- Wait 2s.
-- [PZ:lower-right ~0.55s]
-- [BOX moves to the thinking bars]
-- [TAP "Thinking bars"]
-- Wait 1s.
-- [TAP "Thinking bars"]
-- Wait 1s.
-- [TAP "Thinking bars"]
-- Wait 1s.
-- If the toast is not `Thinking set to High`, tap once more and wait 1s.
-- [PZ:upper-center ~0.55s]
-- [TAP "Slash button"]
-- The Commands panel opens with `/init`, `/review`, and `/compact`.
-- [CARD "Slash commands from your agent"]
-- [TAP "Close command list"]
-- [PZ:lower-center scale=2.4 focus=0.5,0.81 ~0.55s]
-- [CARD "Send a text Prompt"]
-- [KR "Do you think my cat's behaviour is strange?"]
-- Wait 2s.
-- Do not send the prompt. Leave it drafted.
-- [CALLOUT "Attachments" compact placement=edge connector=T]
-- [PZ:full ~0.55s]
+- [TAP "Message field"]
+- [KR "Read the attached spec and the photo of Mia. Plan only; do not edit files. Plan a small cat mode for this screensaver. Do not build yet. Use your question tool exactly once, for one question only: should cat mode be a settings toggle or automatic? The options must be exactly Settings toggle and Automatic. Do not ask about anything else."]
 - [TAP "Attach photo"]
 - Wait for the photo picker.
-- [TAP "Third cat picture"]
+- [TAP "Third cat photo"]
 - [TAP "Add (1)"]
 - [TAP "Attach files"]
-- [TAP "cat-diary.txt"]
-- [PZ:lower-center scale=1.8 focus=0.5,0.84 ~0.55s]
+- [TAP "cat-mode.md"]
+- [CALLOUT "Give it the spec" eyebrow="ATTACHMENTS" hint="A markdown file and a photo of Mia." compact placement=edge connector=T]
+- The composer shows the cat photo and the markdown file chips.
 - [TAP "Send message"]
-- Wait for the response.
-- [PZ:upper-center focus=0.5,0.45 drift=0.22 ~0.55s]
-- The reply settles.
 
-### Scene: voice-chat
+### Scene: question
 
-Enter: The text reply settles. [L1 phone] [PZ:full].
+Enter: The plan turn runs. The phone stays on the chat. [L1 phone] [PZ:full].
 
 Beats:
 
-- [TAP "Dictate with voice"]
-- The inline voice rail opens and starts listening.
-- [PZ:lower-center scale=1.9 focus=0.5,0.9 ~0.55s]
-- The mic control reads `Mute voice input`, and the transcript begins to appear.
-- [TAP "Expand voice input"]
-- The full-screen overlay opens with `Collapse voice input` and
-  `Switch to keyboard input`.
-- [PZ:upper-center scale=1.5 focus=0.5,0.22 ~0.55s]
-- Play `voice-input.wav` as the virtual mic input.
+- The agent replies with a short plan.
+- The question card appears above the composer.
+- If the turn idles without a question card, the driver sends the nudge:
+  `Before you build, use your question tool to ask whether cat mode should be a settings toggle or automatic.`
+- If there is still no question card, the capture fails.
+- [CALLOUT "Get grilled" eyebrow="AGENT QUESTION" hint="Interactive question tooling."]
+- [TAP "Answer"]
+- The question sheet opens with `Settings toggle` and `Automatic`.
+- [TAP "Settings toggle"]
+- [TAP "Submit"]
+- The sheet closes and the agent settles.
+
+### Scene: build
+
+Enter: The plan turn settles. [L1 phone] [PZ:full].
+
+Beats:
+
+- [CALLOUT "Execute the plan" eyebrow="BUILD"]
+- [TAP "Mode chip until BUILD"]
+- [TAP "Message field"]
+- [KR "Settings toggle. Implement only the plan now. Put the toggle in src/settings.js, put the cat behavior in src/cat-mode.js, add tests, and commit every change on feat/cat-mode so the worktree is clean. Do not add unrelated features and do not open a PR."]
 - [TAP "Send message"]
-- Wait for the response.
-- [PZ:upper-center focus=0.5,0.33 drift=0.22 ~0.55s]
+- The agent edits `settings.js`, adds `cat-mode.js` and its tests, and commits
+  on `feat/cat-mode`. Any permission request is answered silently.
 - The reply settles.
+
+### Scene: usage
+
+Enter: The build reply settles. [L1 phone] [PZ:full].
+
+Beats:
+
+- [PZ:upper-center scale=2.2 focus=0.5,0.08]
+- [CALLOUT "Know what it cost" eyebrow="USAGE" hint="Tokens and dollars, in the header." compact placement=edge connector=T]
+- The context and cost line under the header reads its live value.
+- The driver fails if the line is missing.
+
+### Scene: changes
+
+Enter: The usage hold ends. [L1 phone] [PZ:full].
+
+Beats:
+
+- [CALLOUT "Review the code" eyebrow="CHANGES"]
+- [TAP "Changes icon"]
+- The Changes screen opens on the uncommitted scope with
+  `No uncommitted changes`.
+- [TAP "Against main"]
+- The file list shows the branch changes against `main`.
+- [TAP "settings.js"]
+- [PZ:full] [CALLOUT "Pretty diffs!" eyebrow="CHANGES" compact placement=edge connector=T]
+- The diff shows the cat mode toggle in `settings.js`.
+- [TAP "Back to changes"]
+
+### Scene: worktrees
+
+Enter: The Changes list is back. [L1 phone] [PZ:full].
+
+Beats:
+
+- [TAP "Worktree footer"]
+- [CALLOUT "Auto-detect, or choose" eyebrow="WORKTREES" hint="Pick the worktree to inspect." compact placement=edge connector=T]
+- The sheet lists `main` and `feat/cat-mode`.
+- [TAP "Dismiss"]
+
+### Scene: pr
+
+Enter: The chat is back. [L1 phone] [PZ:full].
+
+Beats:
+
+- [TAP "Message field"]
+- [KR "Push feat/cat-mode and open a draft PR against main with gh. End with the PR URL."]
+- [CALLOUT "Just like always" eyebrow="DRAFT PR" hint="The agent pushes and opens it." compact placement=edge connector=T]
+- [TAP "Send message"]
+- The agent runs git and `gh`, then replies with the real draft PR URL.
+- The driver holds on the URL and verifies the draft PR with `gh pr list`.
+- [SPOTLIGHT side=left]
+  kicker: The whole loop
+  title: From plan to PR
 
 ### Scene: outro
 
-Enter: The voice reply settles. The phone fades out. The outro fades in.
+Enter: The PR reply settles. The phone fades out. The outro fades in.
 
 Beats:
 
