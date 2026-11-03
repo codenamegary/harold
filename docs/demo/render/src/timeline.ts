@@ -133,20 +133,21 @@ export type AnnotationRect = { x: number; y: number; w: number; h: number }
 
 export type Annotation = {
   at: number
-  moveAt: number
+  moveAt?: number
   endAt: number
   title: string
-  nextTitle: string
+  nextTitle?: string
   target: AnnotationRect
-  nextTarget: AnnotationRect
+  nextTarget?: AnnotationRect
 }
 
 type AnnotationSpec = {
   at?: number
+  hold?: number
   title: string
-  nextTitle: string
-  nextSlice: string
-  endSlice: string
+  nextTitle?: string
+  nextSlice?: string
+  endSlice?: string
   target?: AnnotationRect
   nextTarget?: AnnotationRect
 }
@@ -239,8 +240,8 @@ export const BUILD_PROMPT =
 export const PR_PROMPT =
   "Push feat/cat-mode and open a draft PR against main with gh. End with the PR URL."
 
-const MODE_TARGET: AnnotationRect = { x: 0.67, y: 0.776, w: 0.19, h: 0.06 }
-const THINKING_TARGET: AnnotationRect = { x: 0.83, y: 0.776, w: 0.14, h: 0.06 }
+export const MODE_TARGET: AnnotationRect = { x: 0.67, y: 0.776, w: 0.19, h: 0.06 }
+export const THINKING_TARGET: AnnotationRect = { x: 0.83, y: 0.776, w: 0.14, h: 0.06 }
 
 // The pairing act is interleaved with the terminal stage, so its shots keep
 // fixed render starts. Gaps between them become holds on the previous frame.
@@ -306,11 +307,10 @@ const STORY_STEPS: Step[] = [
     rate: 1.5,
     duration: 1.6,
     hold: 1.2,
-    callout: {
+    annotation: {
       at: 0.2,
-      hold: 2.2,
-      eyebrow: "PLAN",
-      title: "Use your agent’s plan mode",
+      title: "Toggle modes supported by your agent",
+      target: MODE_TARGET,
     },
     focus: COMPOSER,
   },
@@ -397,11 +397,10 @@ const STORY_STEPS: Step[] = [
     rate: 1.5,
     duration: 1.5,
     hold: 1.2,
-    callout: {
+    annotation: {
       at: 0.2,
-      hold: 2.0,
-      eyebrow: "BUILD",
       title: "Execute the plan",
+      target: MODE_TARGET,
     },
     focus: COMPOSER,
   },
@@ -626,7 +625,7 @@ const buildPhoneStage = (story: Shot[]): PhoneStage => {
   }
   // Enlarge when the new session form opens, hold through workspace selection,
   // and pull back after Continue.
-  const zoomAt = Math.max(WALK_START + 0.3, newSession.at + newSession.duration)
+  const zoomAt = newSession.at
   const outAt = Math.max(zoomAt + STORY_ZOOM_SEC, continueShot.at + continueShot.duration)
   // The final spotlight needs the phone out of the copy's side.
   // Dock when the PR spotlight starts, not when the reply clip lands, so the
@@ -655,8 +654,8 @@ const buildPhoneStage = (story: Shot[]): PhoneStage => {
     top: [
       ...PAIR_PHONE_TOP,
       [zoomAt, 30],
-      [zoomAt + STORY_ZOOM_SEC, -314.5],
-      [outAt, -314.5],
+      [zoomAt + STORY_ZOOM_SEC, 0],
+      [outAt, 0],
       [outAt + STORY_OUT_SEC, 30],
       [dockAt, 30],
       [dockAt + STORY_ZOOM_SEC, -314.5],
@@ -1074,21 +1073,26 @@ const buildAnnotations = (shots: Shot[]): Annotation[] => {
     if (shot.annotation === undefined) {
       continue
     }
-    const next = bySlice.get(shot.annotation.nextSlice)
-    const end = bySlice.get(shot.annotation.endSlice)
-    if (next === undefined || end === undefined) {
+    const hasNext = shot.annotation.nextSlice !== undefined
+    const next = hasNext ? bySlice.get(shot.annotation.nextSlice!) : undefined
+    const end = shot.annotation.endSlice ? bySlice.get(shot.annotation.endSlice) : shot
+    if (hasNext && next === undefined) {
       throw new Error(
-        `annotation on "${shot.slice}" is missing "${shot.annotation.nextSlice}" or "${shot.annotation.endSlice}"`,
+        `annotation on "${shot.slice}" is missing "${shot.annotation.nextSlice}"`,
       )
     }
+    const endAt =
+      shot.annotation.hold !== undefined
+        ? shot.at + (shot.annotation.at ?? 0.2) + shot.annotation.hold
+        : (end?.at ?? shot.at) + (end?.duration ?? shot.duration) + (end?.hold ?? 0) - 0.2
     annotations.push({
       at: shot.at + (shot.annotation.at ?? 0.2),
-      moveAt: next.at + 0.2,
-      endAt: end.at + end.duration + (end.hold ?? 0) - 0.2,
+      moveAt: next ? next.at + 0.2 : undefined,
+      endAt,
       title: shot.annotation.title,
       nextTitle: shot.annotation.nextTitle,
       target: shot.annotation.target ?? MODE_TARGET,
-      nextTarget: shot.annotation.nextTarget ?? THINKING_TARGET,
+      nextTarget: shot.annotation.nextTarget,
     })
   }
   return annotations.sort((a, b) => a.at - b.at)
@@ -1197,7 +1201,9 @@ const buildSounds = (
   // [BOX] a pair of soft pings as the box lands and moves.
   for (const annotation of annotations) {
     sounds.push({ at: annotation.at, name: "ping", volume: 0.65 })
-    sounds.push({ at: annotation.moveAt, name: "ping", volume: 0.65 })
+    if (annotation.moveAt !== undefined) {
+      sounds.push({ at: annotation.moveAt, name: "ping", volume: 0.65 })
+    }
   }
   // [CARD] a soft ping when the in-phone or stage card lands.
   for (const caption of [...phoneCaptions, ...stageCards]) {

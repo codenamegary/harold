@@ -42,24 +42,27 @@ export const AnnotationView: React.FC<{
     easing: ease,
   })
   const presence = Math.min(reveal, 1 - leave)
-  const moveProgress = interpolate(sec, [moveAt, moveAt + 0.55], [0, 1], {
-    ...clamp,
-    easing: ease,
-  })
-  const modeTextOpacity = interpolate(sec, [moveAt - 0.25, moveAt - 0.05], [1, 0], {
-    ...clamp,
-    easing: ease,
-  })
-  const nextTextOpacity = interpolate(sec, [moveAt + 0.1, moveAt + 0.35], [0, 1], {
-    ...clamp,
-    easing: ease,
-  })
+  const moveProgress =
+    moveAt !== undefined && nextTarget !== undefined
+      ? interpolate(sec, [moveAt, moveAt + 0.55], [0, 1], { ...clamp, easing: ease })
+      : 0
+  const modeTextOpacity =
+    moveAt !== undefined && nextTitle !== undefined
+      ? interpolate(sec, [moveAt - 0.25, moveAt - 0.05], [1, 0], { ...clamp, easing: ease })
+      : 1
+  const nextTextOpacity =
+    moveAt !== undefined && nextTitle !== undefined
+      ? interpolate(sec, [moveAt + 0.1, moveAt + 0.35], [0, 1], { ...clamp, easing: ease })
+      : 0
   const ruleIn = interpolate(since, [0.2, 0.6], [0, 1], { ...clamp, easing: ease })
   const lineDraw = interpolate(since, [0.2, 0.7], [0, 1], { ...clamp, easing: ease })
 
   const cardLeft = screen.left + screen.width / 2 - CARD_W / 2
   const cardTop = screen.top + screen.height * CARD_TOP
-  const boxRect = mixRect(target, nextTarget, moveProgress)
+  const boxRect =
+    nextTarget !== undefined && moveAt !== undefined
+      ? mixRect(target, nextTarget, moveProgress)
+      : target
   const box = {
     left: screen.left + boxRect.x * screen.width,
     top: screen.top + boxRect.y * screen.height,
@@ -145,20 +148,22 @@ export const AnnotationView: React.FC<{
           >
             {title}
           </div>
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              fontFamily: sansFamily,
-              fontSize: 32,
-              fontWeight: 600,
-              lineHeight: 1.05,
-              letterSpacing: "-0.02em",
-              opacity: nextTextOpacity,
-            }}
-          >
-            {nextTitle}
-          </div>
+          {nextTitle !== undefined ? (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                fontFamily: sansFamily,
+                fontSize: 32,
+                fontWeight: 600,
+                lineHeight: 1.05,
+                letterSpacing: "-0.02em",
+                opacity: nextTextOpacity,
+              }}
+            >
+              {nextTitle}
+            </div>
+          ) : null}
         </div>
         <div
           style={{

@@ -237,11 +237,11 @@ describe("phone stage", () => {
     const newSession = shot("new_session")
     const workspace = shot("workspace_open")
     const continued = shot("continue")
-    const zoomedAt = newSession.from + newSession.duration
+    const zoomedAt = newSession.from
 
     expect(channel(timeline.phoneStage.width, zoomedAt + 0.6)).toBeCloseTo(760, 5)
     expect(channel(timeline.phoneStage.centerX, zoomedAt + 0.6)).toBeCloseTo(1460, 5)
-    expect(channel(timeline.phoneStage.top, zoomedAt + 0.6)).toBeCloseTo(-314.5, 5)
+    expect(channel(timeline.phoneStage.top, zoomedAt + 0.6)).toBeCloseTo(0, 5)
     expect(channel(timeline.phoneStage.width, workspace.from + 0.5)).toBeCloseTo(760, 5)
     expect(
       channel(timeline.phoneStage.width, continued.from + continued.duration + 0.9),
@@ -269,11 +269,12 @@ describe("locked captions", () => {
     expect(note?.label).toBe("NEW SESSION")
   })
 
-  test("callouts the plan mode chip", () => {
-    const callout = timeline.callouts.find((entry) => entry.title === "Use your agent’s plan mode")
+  test("boxes the plan mode chip", () => {
+    const annotation = timeline.annotations.find(
+      (entry) => entry.title === "Toggle modes supported by your agent",
+    )
 
-    expect(callout).toBeDefined()
-    expect(callout?.eyebrow).toBe("PLAN")
+    expect(annotation).toBeDefined()
   })
 
   test("callouts the attachments with the exact copy", () => {
@@ -292,11 +293,10 @@ describe("locked captions", () => {
     expect(callout?.hint).toBe("Interactive question tooling.")
   })
 
-  test("callouts build mode", () => {
-    const callout = timeline.callouts.find((entry) => entry.title === "Execute the plan")
+  test("boxes build mode", () => {
+    const annotation = timeline.annotations.find((entry) => entry.title === "Execute the plan")
 
-    expect(callout).toBeDefined()
-    expect(callout?.eyebrow).toBe("BUILD")
+    expect(annotation).toBeDefined()
   })
 
   test("callouts usage and zooms to the header", () => {
