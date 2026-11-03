@@ -2,7 +2,9 @@ package harold.android.database
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.migration.Migration
 import androidx.room.withTransaction
+import androidx.sqlite.db.SupportSQLiteDatabase
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -38,7 +40,7 @@ abstract class DatabaseModule {
             context,
             HaroldDatabase::class.java,
             "harold.db",
-        ).build()
+        ).addMigrations(MIGRATION_1_2).build()
 
         @Provides
         fun workspaceDao(database: HaroldDatabase): WorkspaceDao = database.workspaceDao()
@@ -62,6 +64,12 @@ abstract class DatabaseModule {
             sessionDao = sessionDao,
             agentDao = agentDao,
         )
+    }
+}
+
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE sessions ADD COLUMN worktreePath TEXT")
     }
 }
 

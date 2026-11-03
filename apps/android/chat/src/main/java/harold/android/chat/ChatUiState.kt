@@ -24,6 +24,7 @@ data class SessionRow(
     val agentLabel: String,
     val state: SessionState,
     val updatedAt: String,
+    val worktreePath: String? = null,
     val serverOrigin: String = "",
     val haroldName: String = "",
     val haroldColorId: String = "",

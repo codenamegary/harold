@@ -7,7 +7,9 @@ import harold.android.contracts.GitChanges
 import harold.android.contracts.GitRepository
 import harold.android.contracts.GitScope
 import harold.android.contracts.GitWorktree
+import harold.android.contracts.SetSessionWorktreePathBody
 import harold.android.network.GitApi
+import harold.android.network.SessionWorktreePathApi
 import harold.android.network.apiErrorMessage
 import javax.inject.Inject
 import kotlinx.coroutines.Job
@@ -64,24 +66,37 @@ data class ChangesUiState(
 @HiltViewModel
 class ChangesViewModel @Inject constructor(
     private val gitApi: GitApi,
+    private val agentApi: SessionWorktreePathApi,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ChangesUiState())
     val uiState: StateFlow<ChangesUiState> = _uiState.asStateFlow()
 
     private var startedKey: String? = null
     private var serverOrigin: String = ""
+    private var agentId: String = ""
+    private var sessionId: String = ""
     private var cwd: String = ""
+    private var routeWorktreePath: String? = null
     private var loadJob: Job? = null
     private var refreshJob: Job? = null
 
-    fun start(serverOrigin: String, cwd: String) {
-        val key = "$serverOrigin|$cwd"
+    fun start(
+        serverOrigin: String,
+        agentId: String,
+        sessionId: String,
+        cwd: String,
+        worktreePath: String?,
+    ) {
+        val key = "$serverOrigin|$agentId|$sessionId|$cwd|$worktreePath"
         if (startedKey == key) {
             return
         }
         startedKey = key
         this.serverOrigin = serverOrigin
+        this.agentId = agentId
+        this.sessionId = sessionId
         this.cwd = cwd
+        this.routeWorktreePath = worktreePath
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             _uiState.update {
@@ -99,7 +114,19 @@ class ChangesViewModel @Inject constructor(
                 showInitialError(error)
                 return@launch
             }
-            val selectedPath = summary.repository.currentWorktreePath
+            val storedPath = worktreePath?.takeIf { candidate ->
+                worktrees.any { worktree -> worktree.path == candidate }
+            }
+            if (worktreePath != null && storedPath == null) {
+                runCatching {
+                    agentApi.updateSessionWorktreePath(
+                        serverOrigin = serverOrigin,
+                        sessionId = sessionId,
+                        body = SetSessionWorktreePathBody(agentId, null),
+                    ).getOrThrow()
+                }
+            }
+            val selectedPath = storedPath ?: summary.repository.currentWorktreePath
             val repository = if (selectedPath == cwd) {
                 summary.repository
             } else {
@@ -207,6 +234,21 @@ class ChangesViewModel @Inject constructor(
                 error = null,
             )
         }
+        viewModelScope.launch {
+            agentApi.updateSessionWorktreePath(
+                serverOrigin = serverOrigin,
+                sessionId = sessionId,
+                body = SetSessionWorktreePathBody(agentId, path),
+            ).onFailure { error ->
+                _uiState.update { current ->
+                    if (current.selectedWorktreePath != path) {
+                        current
+                    } else {
+                        current.copy(error = apiErrorMessage(error))
+                    }
+                }
+            }
+        }
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             val repository = runCatching {
@@ -268,7 +310,13 @@ class ChangesViewModel @Inject constructor(
             return
         }
         startedKey = null
-        start(serverOrigin, cwd)
+        start(
+            serverOrigin = serverOrigin,
+            agentId = agentId,
+            sessionId = sessionId,
+            cwd = cwd,
+            worktreePath = routeWorktreePath,
+        )
     }
 
     private suspend fun loadGroups(
@@ -298,7 +346,7 @@ class ChangesViewModel @Inject constructor(
             current.copy(
                 loading = false,
                 refreshing = false,
-                error = failure?.let { apiErrorMessage(it) },
+                error = failure?.let { apiErrorMessage(it) } ?: current.error,
                 repository = repository,
                 worktrees = sortWorktrees(worktrees),
                 selectedWorktreePath = selectedPath,
@@ -346,7 +394,7 @@ class ChangesViewModel @Inject constructor(
             current.copy(
                 loading = false,
                 refreshing = false,
-                error = failure?.let { apiErrorMessage(it) },
+                error = failure?.let { apiErrorMessage(it) } ?: current.error,
                 repository = repository,
                 worktrees = sortWorktrees(worktrees),
                 selectedWorktreePath = selectedPath,

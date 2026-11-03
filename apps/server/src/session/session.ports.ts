@@ -90,6 +90,26 @@ export type ForgetSessionTitle = (params: SessionTitleKey) => void
 
 export type BroadcastSessionTitle = (params: SessionTitleKey & { title: string | null }) => void
 
+// Session worktree paths
+export type SessionWorktreePathKey = {
+  agentId: AgentId
+  sessionId: string
+}
+
+export type SessionWorktreePathRow = SessionWorktreePathKey & {
+  worktreePath: string
+}
+
+export type GetSessionWorktreePath = (params: SessionWorktreePathKey) => string | undefined
+
+export type ListSessionWorktreePaths = () => ReadonlyArray<SessionWorktreePathRow>
+
+export type SetSessionWorktreePath = (
+  params: SessionWorktreePathKey & { worktreePath: string; updatedAt: string },
+) => void
+
+export type ForgetSessionWorktreePath = (params: SessionWorktreePathKey) => void
+
 // Prompt auth gating
 export type EnsureReadyForPrompt = (agentId: AgentId) => Promise<{ ok: true } | { ok: false }>
 

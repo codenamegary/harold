@@ -6,6 +6,7 @@ import {
   SessionStreamSink,
 } from "./hub"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
+import { SessionWorktreePathTracker } from "../session.worktree.path.tracker"
 
 const collectSink = (): {
   sink: SessionStreamSink
@@ -26,6 +27,13 @@ const createHarness = (options?: {
   cwdCache.remember({ agentId: "opencode", sessionId: "s1", cwd: "/tmp/a" })
   cwdCache.remember({ agentId: "opencode", sessionId: "s2", cwd: "/tmp/b" })
 
+  const worktreePathTracker: SessionWorktreePathTracker = {
+    startTurn: () => undefined,
+    observeUpdate: () => undefined,
+    finishTurn: async () => null,
+    forget: () => undefined,
+  }
+
   let nextRequest = 0
   const hub = createSessionHub({
     cwdCache,
@@ -35,6 +43,7 @@ const createHarness = (options?: {
     acceptPrompt: async () => ({ ok: true }),
     completePromptTurn: async ({ outcome }) => outcome,
     cancelSession: async () => ({ ok: true }),
+    worktreePathTracker,
     elicitationTimeoutMs: options?.elicitationTimeoutMs ?? 60_000,
     ...(options?.logElicitation === undefined ? {} : { logElicitation: options.logElicitation }),
   })

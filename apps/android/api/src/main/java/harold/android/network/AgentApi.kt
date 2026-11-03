@@ -19,6 +19,7 @@ import harold.android.contracts.FilesystemDirectoryCreated
 import harold.android.contracts.PromptRequestBody
 import harold.android.contracts.RuntimeSettingsView
 import harold.android.contracts.SessionCollection
+import harold.android.contracts.SetSessionWorktreePathBody
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import kotlinx.serialization.json.JsonElement
@@ -48,7 +49,18 @@ class AgentApiException(
     val error: AgentApiError,
 ) : Exception()
 
-interface AgentApi {
+/** Write surface for the server-owned worktree path on a session. */
+interface SessionWorktreePathApi {
+    suspend fun updateSessionWorktreePath(
+        serverOrigin: String,
+        sessionId: String,
+        body: SetSessionWorktreePathBody,
+    ): Result<Unit> = Result.failure(
+        UnsupportedOperationException("worktree path updates are not supported"),
+    )
+}
+
+interface AgentApi : SessionWorktreePathApi {
     suspend fun listWorkspaces(
         serverOrigin: String,
         limit: Int,

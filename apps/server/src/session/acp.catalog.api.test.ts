@@ -60,6 +60,7 @@ describe("ACP catalog sessions HTTP", () => {
         cwd: "/tmp/catalog-project",
         title: "catalog-created-1",
         updatedAt: expect.any(String),
+        worktreePath: null,
       },
     ])
   })

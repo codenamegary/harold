@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { createAcpPromptTurn } from "./acp.hub.prompt"
 import { createSessionCwdCache, createSessionHub, SessionStreamSink } from "./hub"
 import { SessionStreamServerMessage } from "contracts/http/session.stream"
+import { SessionWorktreePathTracker } from "../session.worktree.path.tracker"
 
 const collectSink = (): {
   sink: SessionStreamSink
@@ -25,6 +26,12 @@ const okPromptDeps = () => ({
   }: {
     outcome: { ok: true } | { ok: false; reason: string }
   }) => outcome,
+  worktreePathTracker: {
+    startTurn: () => undefined,
+    observeUpdate: () => undefined,
+    finishTurn: async () => null,
+    forget: () => undefined,
+  } satisfies SessionWorktreePathTracker,
 })
 
 const completedStartPrompt = () => async () => ({

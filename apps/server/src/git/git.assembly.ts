@@ -4,7 +4,7 @@ import { makeGetGitFileDiff } from "core/git/file.diff.usecase"
 import { RunGit } from "core/git/ports"
 import { makeResolveRepository } from "core/git/resolve.repository.usecase"
 import { makeGetGitSummary } from "core/git/summary.usecase"
-import { makeListGitWorktrees } from "core/git/worktrees.usecase"
+import { ListGitWorktrees, makeListGitWorktrees } from "core/git/worktrees.usecase"
 import { FastifyInstance } from "fastify"
 import { makeRunGit } from "./git.node.adapters"
 import { registerGitRoutes } from "./git.routes"
@@ -15,6 +15,7 @@ export type AssembleGitSliceDeps = Readonly<{
 }>
 
 export type GitSlice = Readonly<{
+  listWorktrees: ListGitWorktrees
   registerRoutes: (app: FastifyInstance) => void
 }>
 
@@ -30,6 +31,7 @@ export const assembleGitSlice = (deps: AssembleGitSliceDeps): GitSlice => {
   const getFileDiff = makeGetGitFileDiff({ resolveRepository, getChanges, runGit })
 
   return {
+    listWorktrees,
     registerRoutes: (app) => {
       registerGitRoutes(app, {
         getSummary,

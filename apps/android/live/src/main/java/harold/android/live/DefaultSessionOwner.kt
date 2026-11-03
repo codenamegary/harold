@@ -760,6 +760,19 @@ class DefaultSessionOwner @Inject constructor(
                 // client, so this skips the watch filter.
                 applySessionTitleLocked(message.agentId, message.sessionId, message.title)
             }
+
+            is SessionStreamServerMessage.SessionWorktreePath -> {
+                if (!belongsToWatchLocked(message.agentId, message.sessionId)) {
+                    return
+                }
+                _snapshot.update { current ->
+                    current.copy(
+                        worktreePath = message.worktreePath,
+                        worktreePathKnown = true,
+                        reconnecting = false,
+                    )
+                }
+            }
         }
     }
 

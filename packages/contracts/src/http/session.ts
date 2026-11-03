@@ -13,6 +13,9 @@ export const sessionPath = (sessionId: string) =>
 export const deleteSessionPath = (sessionId: string, query: { agentId: AgentId }) =>
   `${sessionPath(sessionId)}?agentId=${encodeURIComponent(query.agentId)}`
 
+export const sessionWorktreePathPath = (sessionId: string) =>
+  `${sessionPath(sessionId)}/worktree-path`
+
 export const SessionStateSchema = z.enum([
   "starting",
   "idle",
@@ -43,6 +46,7 @@ export const AcpSessionSchema = z.strictObject({
   cwd: z.string(),
   title: z.string(),
   updatedAt: TimestampSchema,
+  worktreePath: z.string().min(1).nullable(),
 })
 
 export const CreateSessionBodySchema = z.strictObject({
@@ -62,6 +66,11 @@ export const UpdateSessionBodySchema = z.strictObject({
   name: z.string().min(1).max(120),
 })
 
+export const SetSessionWorktreePathBodySchema = z.strictObject({
+  agentId: AgentIdSchema,
+  worktreePath: z.string().min(1).nullable(),
+})
+
 export const SessionCollectionSchema = z.strictObject({
   items: z.array(AcpSessionSchema),
 })
@@ -75,6 +84,10 @@ export const DeleteSessionQuerySchema = z.strictObject({
 })
 
 export const DeleteSessionParamsSchema = z.strictObject({
+  sessionId: z.string().min(1),
+})
+
+export const SessionWorktreePathParamsSchema = z.strictObject({
   sessionId: z.string().min(1),
 })
 
@@ -104,10 +117,12 @@ export type AcpSession = z.infer<typeof AcpSessionSchema>
 export type CreateSessionBody = z.infer<typeof CreateSessionBodySchema>
 export type CreateSessionResponse = z.infer<typeof CreateSessionResponseSchema>
 export type UpdateSessionBody = z.infer<typeof UpdateSessionBodySchema>
+export type SetSessionWorktreePathBody = z.infer<typeof SetSessionWorktreePathBodySchema>
 export type SessionCollection = z.infer<typeof SessionCollectionSchema>
 export type ListSessionsQuery = z.infer<typeof ListSessionsQuerySchema>
 export type DeleteSessionQuery = z.infer<typeof DeleteSessionQuerySchema>
 export type DeleteSessionParams = z.infer<typeof DeleteSessionParamsSchema>
+export type SessionWorktreePathParams = z.infer<typeof SessionWorktreePathParamsSchema>
 export type SessionDeleteTarget = z.infer<typeof SessionDeleteTargetSchema>
 export type PromptSessionBody = z.infer<typeof PromptSessionBodySchema>
 export type PromptSessionResponse = z.infer<typeof PromptSessionResponseSchema>

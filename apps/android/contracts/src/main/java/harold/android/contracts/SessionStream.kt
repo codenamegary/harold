@@ -174,6 +174,14 @@ sealed interface SessionStreamServerMessage {
         val sessionId: String,
         val title: String?,
     ) : SessionStreamServerMessage
+
+    @Serializable
+    @SerialName("session_worktree_path")
+    data class SessionWorktreePath(
+        val agentId: AgentId,
+        val sessionId: String,
+        val worktreePath: String?,
+    ) : SessionStreamServerMessage
 }
 
 fun catalogSessionKey(agentId: AgentId, sessionId: String): String = "$agentId:$sessionId"

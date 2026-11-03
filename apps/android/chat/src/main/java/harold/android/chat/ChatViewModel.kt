@@ -344,25 +344,25 @@ class ChatViewModel @Inject constructor(
     private fun refreshChangesBadge() {
         val selected = _uiState.value.selectedSession
         val origin = selectedOrPairedOrigin()
-        val cwd = selected?.cwd.orEmpty()
+        val path = selected?.worktreePath ?: selected?.cwd.orEmpty()
         if (
             selected == null ||
             origin == null ||
             selected.sessionId.isEmpty() ||
-            cwd.isEmpty()
+            path.isEmpty()
         ) {
             clearChangesBadge()
             return
         }
 
-        val key = "${selected.id}|$origin|$cwd"
+        val key = "${selected.id}|$origin|$path"
         if (changesBadgeKey == key && changesBadgeJob?.isActive == true) {
             return
         }
         changesBadgeKey = key
         changesBadgeJob?.cancel()
         changesBadgeJob = viewModelScope.launch {
-            val result = gitApi.getSummary(serverOrigin = origin, path = cwd)
+            val result = gitApi.getSummary(serverOrigin = origin, path = path)
             if (changesBadgeKey != key) {
                 return@launch
             }
@@ -1480,6 +1480,7 @@ class ChatViewModel @Inject constructor(
             openElicitationSheet()
         }
 
+        applySnapshotWorktreePath(snapshot)
         syncSelectedState(snapshot.transcript.sessionState)
         val current = _uiState.value
         if (
@@ -1504,6 +1505,50 @@ class ChatViewModel @Inject constructor(
             }
         }
         lastAuthRequired = snapshot.authRequired
+    }
+
+    /**
+     * A worktree path event is a targeted update. The transcript snapshot is
+     * rebuilt for every frame, so only a frame that actually carried a path
+     * may touch the cached row.
+     */
+    private fun applySnapshotWorktreePath(snapshot: SessionSnapshot) {
+        // A null path only means "clear" when a worktree event delivered it.
+        // Every initial/reset snapshot also carries null, and clearing then
+        // would wipe the cached path before the agent touches a worktree.
+        if (snapshot.worktreePath == null && !snapshot.worktreePathKnown) {
+            return
+        }
+        val open = _uiState.value.selectedSession ?: return
+        if (
+            snapshot.agentId != open.agentId ||
+            snapshot.sessionId != open.sessionId ||
+            snapshot.worktreePath == open.worktreePath
+        ) {
+            return
+        }
+        val origin = open.serverOrigin.ifEmpty { pairedOrigin.orEmpty() }
+        if (origin.isEmpty() || open.sessionId.isEmpty()) {
+            return
+        }
+
+        val updated = open.copy(worktreePath = snapshot.worktreePath)
+        catalog = catalog.map { row -> if (row.id == updated.id) updated else row }
+        _uiState.update { current ->
+            current.copy(
+                selectedSession = updated,
+                sessions = catalog,
+            )
+        }
+        viewModelScope.launch {
+            sessionRepository.updateWorktreePath(
+                serverOrigin = origin,
+                agentId = open.agentId,
+                sessionId = open.sessionId,
+                worktreePath = snapshot.worktreePath,
+            )
+        }
+        refreshChangesBadge()
     }
 
     private fun applySessionTitles(titles: Map<String, String>) {

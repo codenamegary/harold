@@ -9,7 +9,7 @@ import { bootTestDirectory, registerTestCleanup } from "../test-support/test.har
 const migrationsFolder = path.join(import.meta.dir, "drizzle")
 const ms1MigrationCount = 4
 const migrationsBeforeDropRevokedAt = 10
-const currentMigrationCount = 11
+const currentMigrationCount = 12
 
 const tableNames = (sqlite: Database) =>
   sqlite
@@ -114,6 +114,14 @@ describe("drizzle migrations", () => {
       "spawn_snapshot",
       "args",
     ])
+
+    expect(tables).toContain("session_worktree_path")
+    expect(
+      database.sqlite
+        .query<{ name: string }, []>("PRAGMA table_info(session_worktree_path)")
+        .all()
+        .map((row) => row.name),
+    ).toEqual(["agent_id", "session_id", "worktree_path", "updated_at"])
 
     expect(migrationCount(database.sqlite)).toBe(currentMigrationCount)
 

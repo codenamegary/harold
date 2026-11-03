@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -92,6 +93,42 @@ class ChatCacheDaoTest {
         assertEquals(
             listOf("sess_02"),
             sessionDao.observeAll().first().map { session -> session.sessionId },
+        )
+    }
+
+    @Test
+    fun updateWorktreePathIsTargetedAndSkipsUnchangedRows() = runTest {
+        sessionDao.upsertAll(
+            listOf(
+                session(sessionId = "sess_01"),
+                session(sessionId = "sess_02"),
+            ),
+        )
+
+        assertEquals(
+            1,
+            sessionDao.updateWorktreePath(ORIGIN, "cursor", "sess_01", "/repo/.worktrees/feat-x"),
+        )
+
+        val rows = sessionDao.observeAll().first()
+        assertEquals(
+            "/repo/.worktrees/feat-x",
+            rows.first { row -> row.sessionId == "sess_01" }.worktreePath,
+        )
+        assertNull(rows.first { row -> row.sessionId == "sess_02" }.worktreePath)
+
+        assertEquals(
+            0,
+            sessionDao.updateWorktreePath(ORIGIN, "cursor", "sess_01", "/repo/.worktrees/feat-x"),
+        )
+        assertEquals(
+            1,
+            sessionDao.updateWorktreePath(ORIGIN, "cursor", "sess_01", null),
+        )
+        assertNull(
+            sessionDao.observeAll().first()
+                .first { row -> row.sessionId == "sess_01" }
+                .worktreePath,
         )
     }
 

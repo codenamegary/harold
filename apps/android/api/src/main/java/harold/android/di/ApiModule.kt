@@ -13,6 +13,7 @@ import harold.android.network.GitApi
 import harold.android.network.PairingApi
 import harold.android.network.SessionCommandApi
 import harold.android.network.SessionConfigApi
+import harold.android.network.SessionWorktreePathApi
 import harold.android.stream.OkHttpSseSessionStreamFactory
 import harold.android.stream.SessionStreamFactory
 import javax.inject.Singleton
@@ -45,6 +46,10 @@ abstract class ApiModule {
     @Binds
     @Singleton
     abstract fun gitApi(impl: DefaultAgentApi): GitApi
+
+    @Binds
+    @Singleton
+    abstract fun sessionWorktreePathApi(impl: DefaultAgentApi): SessionWorktreePathApi
 
     @Binds
     @Singleton

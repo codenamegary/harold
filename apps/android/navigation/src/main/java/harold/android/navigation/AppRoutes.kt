@@ -1,6 +1,7 @@
 package harold.android.navigation
 
 import androidx.navigation3.runtime.NavKey
+import harold.android.contracts.AgentId
 import harold.android.contracts.GitScope
 import kotlinx.serialization.Serializable
 
@@ -34,7 +35,10 @@ data object SavedHarolds : AppRoute
 @Serializable
 data class Changes(
     val serverOrigin: String,
+    val agentId: AgentId,
+    val sessionId: String,
     val cwd: String,
+    val worktreePath: String? = null,
 ) : AppRoute
 
 @Serializable

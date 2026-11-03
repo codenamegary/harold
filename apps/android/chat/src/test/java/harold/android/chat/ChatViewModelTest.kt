@@ -70,6 +70,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -1857,6 +1858,29 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun changesBadgeUsesTheSelectedWorktreePath() = runTest(dispatcher) {
+        val gitApi = RecordingGitApi()
+        val repository = ChatFakeUserRepository(
+            extraSessions = listOf(
+                session("sess_02", "Alpha").copy(worktreePath = "/tmp/harold-feature"),
+            ),
+        )
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
+            gitApi = gitApi,
+        )
+
+        advanceUntilIdle()
+
+        assertEquals(
+            ORIGIN to "/tmp/harold-feature",
+            gitApi.summaryCalls.last(),
+        )
+        assertEquals(3, viewModel.uiState.value.changesBadgeCount)
+    }
+
+    @Test
     fun changesBadgeHidesWhenTheSummaryFails() = runTest(dispatcher) {
         val gitApi = RecordingGitApi(
             summaryResult = Result.failure(
@@ -1917,6 +1941,70 @@ class ChatViewModelTest {
 
         assertEquals(2, gitApi.summaryCalls.size)
         assertEquals(3, viewModel.uiState.value.changesBadgeCount)
+    }
+
+    @Test
+    fun liveWorktreePathEventUpdatesRoomAndTheSelectedSession() = runTest(dispatcher) {
+        val repository = ChatFakeUserRepository()
+        val sessionRepository = TestSessionRepository(repository)
+        val sessionOwner = ChatFakeSessionOwner()
+        val gitApi = RecordingGitApi()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = sessionOwner,
+            sessionRepository = sessionRepository,
+            gitApi = gitApi,
+        )
+        advanceUntilIdle()
+        val open = viewModel.uiState.value.sessions.first { row -> row.sessionId == "sess_01" }
+        viewModel.selectSession(open)
+        advanceUntilIdle()
+
+        sessionOwner.publish(
+            SessionSnapshot(
+                agentId = "cursor",
+                sessionId = "sess_01",
+                worktreePath = "/repo/.worktrees/feat-x",
+                worktreePathKnown = true,
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(
+            "/repo/.worktrees/feat-x",
+            viewModel.uiState.value.selectedSession?.worktreePath,
+        )
+        assertEquals(
+            "/repo/.worktrees/feat-x",
+            sessionRepository.observeSessions().first()
+                .first { cached -> cached.session.sessionId == "sess_01" }
+                .session
+                .worktreePath,
+        )
+        assertEquals(
+            ORIGIN to "/repo/.worktrees/feat-x",
+            gitApi.summaryCalls.last(),
+        )
+
+        sessionOwner.publish(
+            SessionSnapshot(
+                agentId = "cursor",
+                sessionId = "sess_01",
+                worktreePath = null,
+                worktreePathKnown = true,
+            ),
+        )
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.selectedSession?.worktreePath)
+        assertNull(
+            sessionRepository.observeSessions().first()
+                .first { cached -> cached.session.sessionId == "sess_01" }
+                .session
+                .worktreePath,
+        )
+        assertEquals(ORIGIN to "/tmp/harold", gitApi.summaryCalls.last())
     }
 
     private fun createViewModel(
