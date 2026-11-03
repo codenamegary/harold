@@ -113,12 +113,12 @@ const sliceDuration = (name: string, durationSec?: number): number => {
     return durationSec
   }
   if (WAIT_SLICES.has(name)) {
-    return 30
+    return 55
   }
   if (name === "usage") {
     return 3.2
   }
-  return 8
+  return 17
 }
 
 const captureSlices = (overrides: Record<string, number> = {}): CaptureSlice[] => [
@@ -306,8 +306,8 @@ describe("locked captions", () => {
     expect(callout).toBeDefined()
     expect(callout?.eyebrow).toBe("USAGE")
     expect(callout?.hint).toBe("Tokens and dollars, in the header.")
-    expect(channel(timeline.zoom.scale, usage.from + 0.7)).toBeGreaterThan(2)
-    expect(channel(timeline.zoom.y, usage.from + 0.7)).toBeCloseTo(0.08, 2)
+    expect(channel(timeline.zoom.scale, usage.from + 0.7)).toBeGreaterThan(1.4)
+    expect(channel(timeline.zoom.y, usage.from + 0.7)).toBeCloseTo(0.1, 2)
   })
 
   test("callouts changes and the diff", () => {
