@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Google Play app icon. Full-bleed square, no alpha, no pre-rounded corners. -->
+  <rect width="512" height="512" fill="#B6F36B" />
+  <g transform="translate(256 256) scale(5.9) translate(-55 -54)">
+    <path
+      fill="#10150C"
+      d="M36,26 L52,26 L47,48 L65,48 L70,26 L86,26 L74,82 L58,82 L63,60 L45,60 L40,82 L24,82 Z"
+    />
+  </g>
+</svg>
