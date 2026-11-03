@@ -1,40 +1,41 @@
 # Demo capture
 
-`capture.sh` records the phone walk with two Harold instances. Instance 1 uses
-Cursor and pi ACP. Instance 2 uses OpenCode. The phone pairs with instance 1 by
-camera, then pairs with instance 2 by typing its endpoint and code. The
-detailed setup spec is in [setup.md](./setup.md).
+`capture.sh` records the phone walk with one Harold instance. The instance uses
+OpenCode only. The phone pairs with it by camera, then starts a new session on
+a private `cat-screensaver` feature worktree and takes one real feature from
+plan to draft PR. The detailed setup spec is in [setup.md](./setup.md).
 
-| File                         | Role                                                                                                                         |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `capture.sh`                 | The whole run: two daemons, app install, pair, feed, boot, slices, build                                                     |
-| `seed_sessions.sh`           | Purge and seed the five OpenCode sessions on the Couch workspace                                                             |
-| `seed_work_session.sh`       | Seed one pi ACP session on the Work workspace                                                                                |
-| `compose_camera.mjs`         | Overlay the live QR on the tracked panel after a 40s gate, crop to 1280x960                                                  |
-| `write_pairing_fixtures.mjs` | Regenerate the Remotion pairing code and QR rows from the live pair JSON                                                     |
-| `drive_phone.py`             | Walk the app pair -> sessions -> workspaces -> new session -> model/mode/effort -> text and voice chat, one slice per action |
-| `build_capture.py`           | Re-encode the slices, attach the taps, and write `capture.json`                                                              |
-| `push_assets.sh`             | Push the demo photos and `cat-diary.txt` onto the factory-reset emulator                                                     |
-| `audio-env-shim.c`           | Restore the WAV audio driver variables that the emulator wrapper strips                                                      |
+| File                         | Role                                                                                                              |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `capture.sh`                 | The whole run: prepare the private repo, one daemon, app install, pair, feed, boot, slices, build                  |
+| `seed_sessions.sh`           | Purge and seed the five cat sessions in the feature worktree                                                       |
+| `compose_camera.mjs`         | Overlay the live QR on the tracked panel after a 40s gate, crop to 1280x960                                       |
+| `write_pairing_fixtures.mjs` | Regenerate the Remotion pairing code and QR rows from the live pair JSON                                          |
+| `drive_phone.py`             | Walk the app pair -> session menu -> new session -> plan -> question -> build -> usage -> changes -> worktrees -> PR |
+| `build_capture.py`           | Re-encode the slices, attach the taps, and write `capture.json`                                                    |
+| `push_assets.sh`             | Push the demo photos, `cat-mode.md`, and `cat-diary.txt` onto the factory-reset emulator                          |
+| `fixtures/cat-screensaver/`  | The seed project pushed to the private demo repo                                                                  |
 
 `assets/virtual-qr-code-webcam.mp4` is the staged clip the camera feed is
-composed from. `assets/cats.zip` holds the demo photos. `assets/cat-diary.txt`
-is the document for file attachments. `assets/voice-input.wav` is the speech the
-emulator microphone hears during the voice scene.
+composed from. `assets/cats.zip` holds the demo photos. `assets/cat-mode.md`
+is the spec attachment for the feature. `assets/cat-diary.txt` is kept for
+other demos. `assets/voice-input.wav` and `audio-env-shim.c` are unused by this
+cut.
 
 ## What is kept and what is not
 
 - **Kept, committed:** everything in this directory plus
   `docs/demo/render/public/slices/` and `docs/demo/render/public/capture.json`.
 - **Not kept:** `docs/demo/work/capture/` (composed feed, logs, raw slices,
-  pairing codes, screenshots), the demo data dirs, and the demo project folder roots.
+  pairing codes, screenshots), the demo data dir, the demo project folder
+  root, and the cat-screensaver worktree.
 
 ## How to run
 
-Needs `bun`, `opencode`, `pi`, the Cursor `agent`, `sqlite3`, `adb`, `node`,
-`ffmpeg`, `ffprobe`, `python3`, `cc`, a JDK, the Android SDK, and the 36.5+
-emulator at `~/android/emulator` (set `EMULATOR` to override). The emulator needs
-the videofile camera and the WAV audio driver.
+Needs `bun`, `opencode`, `gh`, `git`, `sqlite3`, `adb`, `node`, `ffmpeg`,
+`ffprobe`, `python3`, `unzip`, a JDK, and the Android SDK with the 36.5+
+emulator at `~/android/emulator` (set `EMULATOR` to override). The emulator
+needs the videofile camera. Audio is not used.
 
 ```sh
 bash docs/demo/capture/capture.sh
@@ -44,20 +45,23 @@ The script uses these fixed demo resources:
 
 - Instance 1: `127.0.0.1:3847`, `~/.harold-demo-3847`,
   `~/harold-demo-workspaces/3847`
-- Instance 2: `127.0.0.1:3848`, `~/.harold-demo-3848`,
-  `~/harold-demo-workspaces/3848`
+- Private demo repo: `codenamegary/cat-screensaver`
+- Main clone: `~/harold-demo-workspaces/3847/cat-screensaver`
+- Feature worktree: `~/cat-screensaver-worktrees/cat-mode` on
+  `feat/cat-mode`
+- Workspace name for the feature worktree: `cat-screensaver`
 
-It stops only the two demo instances. The real `~/.harold` daemon is left alone.
-Each run recreates the demo data dirs and DBs, keeps the workspace directories,
-re-registers the workspaces, and enables the agents again. The workspace clones
-are pulled with `--ff-only`. Local repos are initialized with an initial commit.
-The demo workspace OpenCode history is purged before the five fixed sessions are
-seeded. The Work pi session is replaced each run.
+It stops only the demo instance. The real `~/.harold` daemon is left alone.
+Each run recreates the demo data dir and DB, keeps the workspace directories,
+and re-registers the workspaces and the OpenCode agent. The workspace clone is
+pulled with `--ff-only`. The private demo repo is rewritten from
+`fixtures/cat-screensaver`, old open PRs for `feat/cat-mode` are closed, the
+remote and local branch are deleted, `main` is reset to `origin/main`, and the
+feature worktree is recreated. The cat history is seeded in that worktree, then
+the worktree is reset again so the recorded story starts clean.
 
-Instance 1's live QR is baked into the camera clip. Instance 2's pairing code is
-issued by `drive_phone.py` immediately before the manual pairing beat. The
-emulator boots through a transient systemd user unit so QEMU survives the shell.
-The script sets both `adb reverse` mappings after boot.
+Instance 1's live QR is baked into the camera clip. The emulator boots through
+a transient systemd user unit so QEMU survives the shell.
 
 `capture.sh` writes `docs/demo/render/public/slices/` and
 `docs/demo/render/public/capture.json`. Preview or render from
@@ -73,28 +77,50 @@ bun run render
 
 The phone walk records these acts:
 
-1. First pair by camera. The scanner is replaced by the Harold identity screen.
-   The user names it `Work`, keeps Violet and the Harold mark, and taps Pair.
-2. Pair another Harold from the chat overflow menu. No terminal is visible. The
-   user enters `http://127.0.0.1:3848` and the instance 2 code, then names it
-   `Couch` with Tide and Bolt.
-3. Open the session dropdown, tap `See all sessions…`, and show the full
-   Sessions screen with the All, Work, and Couch filters. Select the newest
-   OpenCode session from Couch.
-4. Open Workspaces from the chat overflow menu. Show the bookmark list from
-   both Harolds, then open Add workspace and browse to the demo project folder
-   root. Leave without submitting.
-5. Start a new session. Select `harold` under Work to show Cursor and pi ACP.
-   Switch to `yuekbox` under Couch and select OpenCode.
-6. Change the model to `deepseek/DeepSeek V4.1 Flash 1017`, cycle the mode
-   through Plan and Build, set thinking to High, and show the slash commands.
-7. Draft the text prompt, attach a cat photo and `cat-diary.txt`, send, and wait
-   for the reply.
-8. Open voice input, expand it, play `voice-input.wav`, send, and wait for the
-   reply.
+1. Pair by camera. The scanner is replaced by the Harold identity screen. The
+   user names it `Work`, keeps Violet and the Harold mark, and taps Pair. The
+   achievement is unchanged.
+2. Open the session menu on the five cat sessions, then start a new session.
+   Pick the `cat-screensaver` workspace whose path ends in `cat-mode`. OpenCode
+   is the only enabled agent, so it is already selected.
+3. Pin the new session to `deepseek/deepseek-flash` before recording the story.
+   Switch to Plan mode, type the plan prompt, and attach a cat photo and
+   `cat-mode.md`.
+4. Send the plan. The agent replies with a short plan and asks one question:
+   `Settings toggle` or `Automatic`. Answer `Settings toggle`, then Submit.
+5. Switch to Build and send the implementation prompt. The agent adds
+   `cat-mode.js`, wires the toggle in `settings.js`, adds tests, and commits on
+   `feat/cat-mode`. Any permission request is answered silently.
+6. Hold on the context and cost line under the header.
+7. Open Changes on the clean uncommitted scope, switch to `Against main`, open
+   the `settings.js` diff, and return to the list.
+8. Open the Worktree footer and show `main` and `feat/cat-mode`.
+9. Ask for a draft PR. The agent runs git and `gh`; the driver holds on the URL
+   in the reply and verifies the draft PR with `gh pr list`.
 
 The walk is recorded as named slices. `drive_phone.py` starts one screenrecord
 file per action in `/data/local/tmp`, writes the slice manifest, and marks each
 tap. `build_capture.py` re-encodes the slices into `public/slices/`, attaches the
 taps that landed inside each slice, and writes `capture.json`. There is no
 stitched video.
+
+## Slice list
+
+Intro:
+
+`pair_idle`, `pair_tap`, `scanner_open`, `scan_wait`, `first_name`,
+`first_confirm`, `paired`
+
+Story:
+
+`session_menu_open`, `new_session`, `workspace_open`, `workspace_pick`,
+`continue`, `session_create_wait`, `mode_plan`, `prompt_focus`, `prompt_type`,
+`photo_open`, `photo_pick`, `photo_add`, `file_open`, `file_pick`, `send`,
+`plan_wait`, `plan_reply`, `elicitation_open`, `elicitation_pick`,
+`elicitation_submit`, `mode_build`, `build_prompt`, `build_send`, `build_wait`,
+`build_reply`, `usage`, `changes_open`, `changes_branch`, `changes_file`,
+`changes_back`, `worktrees_open`, `worktrees_close`, `pr_prompt`, `pr_send`,
+`pr_wait`, `pr_reply`
+
+The capture requires all 43 slices. There are no optional question, usage,
+branch-scope, or PR URL paths.

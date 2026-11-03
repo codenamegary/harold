@@ -4,8 +4,9 @@
 # capture.sh boots the AVD with -wipe-data, so the emulator starts with no
 # prior photos, downloads, app data, or permissions. cats.zip is extracted
 # into the capture work directory and its photos are pushed to DCIM/Camera;
-# cat-diary.txt is pushed to Download. A MediaStore scan follows so the Android
-# photo picker, file picker, and gallery see the deployed assets.
+# cat-mode.md and cat-diary.txt are pushed to Download. A MediaStore scan
+# follows so the Android photo picker, file picker, and gallery see the
+# deployed assets.
 set -euo pipefail
 
 SERIAL="${SERIAL:-emulator-5554}"
@@ -14,7 +15,10 @@ DEMO=$(cd "$SCRIPT_DIR/.." && pwd)
 WORK="${WORK:-$DEMO/work/capture}"
 ASSETS="$SCRIPT_DIR/assets"
 ARCHIVE="${PHOTOS_ARCHIVE:-$ASSETS/cats.zip}"
-DOCUMENT="${DOCUMENT_SOURCE:-$ASSETS/cat-diary.txt}"
+DOCUMENTS=(
+  "${SPEC_SOURCE:-$ASSETS/cat-mode.md}"
+  "${DIARY_SOURCE:-$ASSETS/cat-diary.txt}"
+)
 PHOTOS_DIR="${PHOTOS_DIR:-/sdcard/DCIM/Camera}"
 DOCUMENTS_DIR="${DOCUMENTS_DIR:-/sdcard/Download}"
 EXTRACT_DIR="$WORK/photos"
@@ -25,7 +29,9 @@ for tool in adb unzip; do
   command -v "$tool" >/dev/null || die "$tool is not on PATH"
 done
 [[ -f "$ARCHIVE" ]] || die "photo archive not found at $ARCHIVE (set PHOTOS_ARCHIVE)"
-[[ -f "$DOCUMENT" ]] || die "document not found at $DOCUMENT (set DOCUMENT_SOURCE)"
+for document in "${DOCUMENTS[@]}"; do
+  [[ -f "$document" ]] || die "document not found at $document"
+done
 
 # The first boot after -wipe-data can briefly drop adb while system services
 # and package manager settle. Wait for the device instead of failing the run.
@@ -79,7 +85,9 @@ adb -s "$SERIAL" shell mkdir -p "$(shell_quote "$DOCUMENTS_DIR")" >/dev/null
 while IFS= read -r -d '' source; do
   push_file "$source" "$PHOTOS_DIR"
 done < <(find "$EXTRACT_DIR" -type f -print0 | sort -z)
-push_file "$DOCUMENT" "$DOCUMENTS_DIR"
+for document in "${DOCUMENTS[@]}"; do
+  push_file "$document" "$DOCUMENTS_DIR"
+done
 
 # Rescan even when nothing was pushed: an earlier run may have copied the
 # files but failed before the scan landed.

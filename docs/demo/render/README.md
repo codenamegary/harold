@@ -8,20 +8,23 @@ opening scene (types `harold start` and prints the server status, zoomed in
 close and fixed in place), then the pairing flow - the terminal zooms out to
 sit fully in frame on the left, the phone slides in to the right of it, the
 terminal types `harold pair` and prints the QR for the recorded pairing code,
-the phone taps Pair and its camera scans that QR, names the first Harold
-`Work`, and lands on `Device paired.`. The phone then pairs a second Harold
-over the manual endpoint, names it `Couch`, and browses sessions across both
-Harolds. It takes center stage for session history, the workspace bookmark
-list and Add workspace browser, a new session with a workspace and agent from
-each Harold, model/mode/effort, slash commands, a drafted prompt with photo and
-file attachments, the text reply, and voice input with its reply. The first
-pairing lands on a spotlight beat: the phone
-stays right, pops once, confetti falls across the stage, and the achievement
-copy fills the left. The first
-pairing also runs in a 2x close-up: the phone frames the top two thirds from
-the Pair tap through the scanner and name entry, then pans up after the
-confirm so the landing screen is visible. It ends on an outro slide with the
-install command and the site URL.
+the phone taps Pair and its camera scans that QR, names the Harold `Work`, and
+lands on `Device paired.`. The first pairing lands on a spotlight beat: the
+phone stays right, pops once, confetti falls across the stage, and the
+achievement copy fills the left. The first pairing also runs in a 2x close-up:
+the phone frames the top two thirds from the Pair tap through the scanner and
+name entry, then pans up after the confirm so the landing screen is visible.
+
+After the achievement the cut is one continuous job from the couch. The phone
+starts a new session on the `cat-screensaver` feature worktree, switches to
+Plan mode, attaches the spec and a cat photo, and sends the plan prompt. The
+agent asks one question; the sheet shows `Settings toggle` and `Automatic`, and
+the answer `Settings toggle` is submitted. Build mode implements the toggle,
+adds tests, and commits on `feat/cat-mode`. The cut holds on the context and
+cost line, reviews the clean uncommitted state and the branch diff against
+`main`, shows the worktree sheet with `main` and `feat/cat-mode`, then asks for
+a draft PR and holds on the URL in the reply. It ends on the `From plan to PR`
+spotlight and the existing outro slide.
 
 | File               | Role                                                                                                |
 | ------------------ | --------------------------------------------------------------------------------------------------- |
@@ -40,7 +43,7 @@ install command and the site URL.
 Six routines run through the walkthrough, matching the script:
 
 - **[KR] keystroke** — every typed character plays `public/sfx/key.wav`;
-  Enter plays `public/sfx/enter.wav` (terminal commands, model search, prompt).
+  Enter plays `public/sfx/enter.wav` (terminal commands and phone prompts).
 - **[TAP] tap** — every tap blooms a ring on the phone screen and plays
   `public/sfx/tap.wav`. Positions and in-slice times come from
   `capture.json`; `timeline.ts` maps them onto the shot.
@@ -70,20 +73,29 @@ celebrate: { at: 1.7, hold: 1.3, confetti: true },
 ```
 
 `at` and `hold` are seconds after the shot starts. The default side is `left`.
-The paired beat docks a 2x close-up (760px wide) on the right. The phone dock
-lives in the `phoneWidth`, `phoneCenterX`, and `phoneTop` channels, so keep it
-on the right through the hold and move it back to center before the next walk
-step. `SpotlightView` is the text card, centered in the free side of the
-stage. `celebration.ts` is the reusable [POP] motion.
+The paired beat docks a 2x close-up (760px wide) on the right. The final
+spotlight is `From plan to PR` with the kicker `The whole loop`.
+
+## Phone stage
+
+The pairing stage channels live in `PAIR_PHONE_WIDTH`,
+`PAIR_PHONE_CENTER_X`, and `PAIR_PHONE_TOP`. The story windows are derived in
+`buildTimeline` from the `new_session` and `continue` shots and exposed as
+`Timeline.phoneStage`:
+
+- Enlarge when the new session form opens.
+- Hold the large framing through workspace selection.
+- Pull back after Continue.
+
+`Demo.tsx`, the callouts, the phone cards, and the annotations read the derived
+stage so overlays track the phone during the story zoom.
 
 The phone screen is a sequence of captured slices, not one stitched video.
-`WALK_STEPS` and `PAIR_STEPS` in `timeline.ts` choose each slice's in-point,
+`STORY_STEPS` and `PAIR_STEPS` in `timeline.ts` choose each slice's in-point,
 rate, render duration, and hold. Typing windows are source times, so the key
 sounds follow the recorded typing even when the shot is trimmed or retimed.
-The scanner opening, the identity typing, and the long session-creation,
-reply-stream, and voice-reply waits are compressed there too. The rendered cut is silent on
-the phone screen itself: `voice-input.wav` exists only as the emulator's
-microphone feed during capture and is never played in the video.
+The long plan, build, and PR waits are compressed there too. The rendered cut
+is silent on the phone screen itself: the capture has no microphone input.
 
 The slices and `capture.json` are committed under `public/`, so the cut
 renders offline from a fresh clone. Run the capture script only when you want
