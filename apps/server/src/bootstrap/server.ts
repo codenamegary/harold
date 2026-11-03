@@ -1,4 +1,5 @@
 import Fastify, { FastifyInstance, FastifyRequest } from "fastify"
+import { existsSync } from "node:fs"
 import path from "node:path"
 import { Writable } from "node:stream"
 import multipart from "@fastify/multipart"
@@ -306,6 +307,8 @@ export const createServer = async ({
     listWorktrees: git.listWorktrees,
     getSessionWorktreePath: sessionWorktreePaths.get,
     setSessionWorktreePath: sessionWorktreePaths.set,
+    forgetSessionWorktreePath: sessionWorktreePaths.forget,
+    pathExists: existsSync,
     now: () => new Date().toISOString(),
     log: ({ error, message }) => app.log.warn({ err: error }, message),
   })

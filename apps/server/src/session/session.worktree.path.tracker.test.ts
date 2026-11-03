@@ -21,10 +21,15 @@ const trackerHarness = (
   options: {
     paths?: string[]
     stored?: string
+    exists?: boolean
     listError?: unknown
   } = {},
 ) => {
-  const calls = { list: 0, set: [] as Array<{ worktreePath: string }> }
+  const calls = {
+    list: 0,
+    set: [] as Array<{ worktreePath: string }>,
+    forget: [] as Array<{ agentId: string; sessionId: string }>,
+  }
   const logs: string[] = []
   const tracker = createSessionWorktreePathTracker({
     listWorktrees: async () => {
@@ -38,6 +43,10 @@ const trackerHarness = (
     setSessionWorktreePath: (params) => {
       calls.set.push({ worktreePath: params.worktreePath })
     },
+    forgetSessionWorktreePath: (params) => {
+      calls.forget.push(params)
+    },
+    pathExists: () => options.exists ?? true,
     now: () => "2026-11-02T00:00:00.000Z",
     log: ({ message }) => {
       logs.push(message)
@@ -162,6 +171,51 @@ describe("session worktree path tracker", () => {
 
     expect(await tracker.finishTurn({ ...ref, cwd: "/repo" })).toBeNull()
     expect(calls.list).toBe(0)
+  })
+
+  test("clears a stored path whose directory is gone without listing worktrees", async () => {
+    const { tracker, calls } = trackerHarness({
+      stored: "/repo/.worktrees/gone",
+      exists: false,
+    })
+    tracker.startTurn(ref)
+
+    expect(await tracker.finishTurn({ ...ref, cwd: "/repo" })).toEqual({
+      worktreePath: null,
+    })
+    expect(calls.forget).toEqual([ref])
+    expect(calls.list).toBe(0)
+
+    expect(await tracker.finishTurn({ ...ref, cwd: "/repo" })).toBeNull()
+    expect(calls.forget).toHaveLength(1)
+  })
+
+  test("keeps a stored path that still exists", async () => {
+    const { tracker, calls } = trackerHarness({
+      stored: "/repo/.worktrees/a",
+      exists: true,
+    })
+    tracker.startTurn(ref)
+
+    expect(await tracker.finishTurn({ ...ref, cwd: "/repo" })).toBeNull()
+    expect(calls.forget).toEqual([])
+    expect(calls.list).toBe(0)
+  })
+
+  test("replaces a stale stored path with a matching candidate", async () => {
+    const { tracker, calls } = trackerHarness({
+      paths: ["/repo/.worktrees/new"],
+      stored: "/repo/.worktrees/gone",
+      exists: false,
+    })
+    tracker.startTurn(ref)
+    tracker.observeUpdate({ ...ref, update: edit("t1", "/repo/.worktrees/new/file.ts") })
+
+    expect(await tracker.finishTurn({ ...ref, cwd: "/repo" })).toEqual({
+      worktreePath: "/repo/.worktrees/new",
+    })
+    expect(calls.forget).toEqual([ref])
+    expect(calls.set).toEqual([{ worktreePath: "/repo/.worktrees/new" }])
   })
 
   test("keeps the stored path when no candidate matches a worktree", async () => {

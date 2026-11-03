@@ -1,5 +1,6 @@
 import { ListGitWorktrees } from "core/git/worktrees.usecase"
 import {
+  ForgetSessionWorktreePath,
   GetSessionWorktreePath,
   SessionWorktreePathKey,
   SetSessionWorktreePath,
@@ -16,7 +17,7 @@ export type SessionWorktreePathTracker = {
   observeUpdate: (params: SessionWorktreePathKey & { update: unknown }) => void
   finishTurn: (
     params: SessionWorktreePathKey & { cwd: string },
-  ) => Promise<{ worktreePath: string } | null>
+  ) => Promise<{ worktreePath: string | null } | null>
   forget: (ref: SessionWorktreePathKey) => void
 }
 
@@ -24,6 +25,8 @@ export type CreateSessionWorktreePathTrackerParams = {
   listWorktrees: ListGitWorktrees
   getSessionWorktreePath: GetSessionWorktreePath
   setSessionWorktreePath: SetSessionWorktreePath
+  forgetSessionWorktreePath: ForgetSessionWorktreePath
+  pathExists: (path: string) => boolean
   now: () => string
   log: (params: { error: unknown; message: string }) => void
 }
@@ -43,6 +46,8 @@ export const createSessionWorktreePathTracker = ({
   listWorktrees,
   getSessionWorktreePath,
   setSessionWorktreePath,
+  forgetSessionWorktreePath,
+  pathExists,
   now,
   log,
 }: CreateSessionWorktreePathTrackerParams): SessionWorktreePathTracker => {
@@ -89,18 +94,25 @@ export const createSessionWorktreePathTracker = ({
         return null
       }
       states.delete(key)
-      if (state.candidates.size === 0) {
-        return null
-      }
 
       try {
+        const stored = getSessionWorktreePath(ref)
+        const storedMissing = stored !== undefined && !pathExists(stored)
+        if (storedMissing) {
+          forgetSessionWorktreePath(ref)
+        }
+
+        if (state.candidates.size === 0) {
+          return storedMissing ? { worktreePath: null } : null
+        }
+
         const listed = await listWorktrees({ path: cwd })
         if (!listed.ok) {
           log({
             error: listed.error,
             message: "session worktree path detection could not list worktrees",
           })
-          return null
+          return storedMissing ? { worktreePath: null } : null
         }
 
         const candidates = [...state.candidates.values()].sort(
@@ -116,10 +128,10 @@ export const createSessionWorktreePathTracker = ({
           )
           .find((worktree) => worktree !== undefined)?.path
         if (worktreePath === undefined) {
-          return null
+          return storedMissing ? { worktreePath: null } : null
         }
 
-        if (getSessionWorktreePath(ref) === worktreePath) {
+        if (worktreePath === stored) {
           return null
         }
 

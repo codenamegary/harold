@@ -1417,6 +1417,37 @@ describe("session hub session info", () => {
     })
   })
 
+  test("prompt turns broadcast a cleared worktree path", async () => {
+    const cwdCache = createSessionCwdCache()
+    cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/repo" })
+    const tracker: SessionWorktreePathTracker = {
+      startTurn: () => undefined,
+      observeUpdate: () => undefined,
+      finishTurn: async () => ({ worktreePath: null }),
+      forget: () => undefined,
+    }
+    const hub = createSessionHub({
+      cwdCache,
+      loadSession: async () => ({ ok: true }),
+      ...okPromptDeps(),
+      worktreePathTracker: tracker,
+      cancelSession: async () => ({ ok: true }),
+    })
+    const sink = collectSink()
+    hub.addSubscriber({ id: "a", sink: sink.sink, sessionKey: null })
+    await hub.subscribe({ subscriberId: "a", agentId: "cursor", sessionId: "s1" })
+
+    await hub.prompt({ agentId: "cursor", sessionId: "s1", text: "delete it" })
+    await hub.awaitPromptTurns()
+
+    expect(sink.messages).toContainEqual({
+      type: "session_worktree_path",
+      agentId: "cursor",
+      sessionId: "s1",
+      worktreePath: null,
+    })
+  })
+
   test("worktree detection failure does not fail the prompt turn", async () => {
     const cwdCache = createSessionCwdCache()
     cwdCache.remember({ agentId: "cursor", sessionId: "s1", cwd: "/repo" })

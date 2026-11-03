@@ -1986,6 +1986,25 @@ class ChatViewModelTest {
             ORIGIN to "/repo/.worktrees/feat-x",
             gitApi.summaryCalls.last(),
         )
+
+        sessionOwner.publish(
+            SessionSnapshot(
+                agentId = "cursor",
+                sessionId = "sess_01",
+                worktreePath = null,
+                worktreePathKnown = true,
+            ),
+        )
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.selectedSession?.worktreePath)
+        assertNull(
+            sessionRepository.observeSessions().first()
+                .first { cached -> cached.session.sessionId == "sess_01" }
+                .session
+                .worktreePath,
+        )
+        assertEquals(ORIGIN to "/tmp/harold", gitApi.summaryCalls.last())
     }
 
     private fun createViewModel(
