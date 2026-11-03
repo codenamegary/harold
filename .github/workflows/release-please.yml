@@ -53,7 +53,7 @@ jobs:
 
   # Called directly instead of on `release: published`. When release-please
   # falls back to GITHUB_TOKEN, the release it creates starts no workflows,
-  # and the release would ship without an APK.
+  # and the release would ship without an APK or Play build.
   android:
     needs: release-please
     if: needs.release-please.outputs.android_release_created == 'true'
@@ -62,4 +62,5 @@ jobs:
     uses: ./.github/workflows/release-android.yml
     with:
       tag: ${{ needs.release-please.outputs.android_tag_name }}
+      publish_to_play: true
     secrets: inherit

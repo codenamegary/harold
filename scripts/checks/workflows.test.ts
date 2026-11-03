@@ -2,13 +2,21 @@ import { describe, expect, test } from "bun:test"
 import { join } from "node:path"
 import { Glob } from "bun"
 
+type WorkflowInput = Readonly<{
+  default?: string | boolean
+  required?: boolean
+  type?: string
+}>
+
 type Trigger = Readonly<{
   branches?: readonly string[]
   paths?: readonly string[]
   "paths-ignore"?: readonly string[]
+  inputs?: Readonly<Record<string, WorkflowInput>>
 }>
 
 type Step = Readonly<{
+  if?: string
   uses?: string
   run?: string
   env?: Readonly<Record<string, string | undefined>>
@@ -19,6 +27,7 @@ type Job = Readonly<{
   if?: string
   needs?: string | readonly string[]
   steps?: readonly Step[]
+  with?: Readonly<Record<string, string | boolean | undefined>>
 }>
 
 type Workflow = Readonly<{
@@ -134,5 +143,38 @@ describe("ci.yml", () => {
     expect(step?.env?.OPENCODE_SMOKE_MODEL).toBe("zai-coding-plan/glm-5.3-flash")
     // opencode's zai-coding-plan provider reads ZHIPU_API_KEY from the env.
     expect(step?.env?.ZHIPU_API_KEY).toBe("${{ secrets.ZAI_CODING_API_KEY }}")
+  })
+})
+
+describe("release-android.yml", () => {
+  test("builds and uploads an AAB to the configured Play track", async () => {
+    const workflow = await loadWorkflow(`${workflowsRoot}/release-android.yml`)
+    const steps = workflow.jobs?.build?.steps ?? []
+
+    const build = steps.find((step) => step.run?.includes("assembleRelease"))
+    expect(build?.run).toContain("bundleRelease")
+
+    const upload = steps.find((step) => step.uses === "r0adkll/upload-google-play@v1")
+    expect(upload?.if).toContain("inputs.publish_to_play")
+    expect(upload?.with).toEqual(
+      expect.objectContaining({
+        serviceAccountJsonPlainText: "${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}",
+        packageName: "harold.android",
+        releaseFiles: "apps/android/app/build/outputs/bundle/release/app-release.aab",
+        tracks: "${{ vars.PLAY_TRACK || 'internal' }}",
+        status: "completed",
+      }),
+    )
+  })
+
+  test("manual rebuilds do not publish unless requested", async () => {
+    const workflow = await loadWorkflow(`${workflowsRoot}/release-android.yml`)
+    expect(workflow.on?.workflow_call?.inputs?.publish_to_play?.default).toBe(false)
+    expect(workflow.on?.workflow_dispatch?.inputs?.publish_to_play?.default).toBe(false)
+  })
+
+  test("release-please publishes Android releases to Play automatically", async () => {
+    const workflow = await loadWorkflow(`${workflowsRoot}/release-please.yml`)
+    expect(workflow.jobs?.android?.with?.publish_to_play).toBe(true)
   })
 })
