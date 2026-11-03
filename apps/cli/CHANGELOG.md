@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.3.0](https://github.com/codenamegary/harold/compare/v3.2.1...v3.3.0) (2026-11-03)
+
+
+### Features
+
+* **sessions:** track worktree path from agent edits ([#487](https://github.com/codenamegary/harold/issues/487)) ([ab7dba3](https://github.com/codenamegary/harold/commit/ab7dba3235c3569edd81c3da0ce92a1a53cf1b76))
+
 ## [3.2.1](https://github.com/codenamegary/harold/compare/v3.2.0...v3.2.1) (2026-11-02)
 
 
