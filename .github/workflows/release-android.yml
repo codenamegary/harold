@@ -1,12 +1,18 @@
 name: release-android
 
-# Builds the signed release APK for a harold-android-v* tag and attaches it
-# to that tag's GitHub Release. Called by the Release Please workflow when
-# an Android release is created, and dispatchable by hand to rebuild the
-# APK for an existing release.
+# Builds the signed release APK and AAB for a harold-android-v* tag. The APK
+# is attached to that tag's GitHub Release and the downloads site. The AAB is
+# uploaded to the Google Play track named by the PLAY_TRACK repository
+# variable. Called by the Release Please workflow when an Android release is
+# created, and dispatchable by hand to rebuild an existing release.
 #
 # Signing uses the distribution key in repo secrets. Every release must be
 # signed with that same key, or installed users cannot update in place.
+#
+# Play publishing needs GOOGLE_PLAY_SERVICE_ACCOUNT_JSON with app-level
+# "Release apps to testing tracks" permission. Manual runs only publish when
+# publish_to_play is true. Rebuilding an old tag reuses its versionCode, which
+# Play rejects.
 on:
   workflow_call:
     inputs:
@@ -14,12 +20,22 @@ on:
         description: Release tag to build (for example harold-android-v1.1.0)
         required: true
         type: string
+      publish_to_play:
+        description: Upload the AAB to the track named by PLAY_TRACK
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       tag:
         description: Release tag to build (for example harold-android-v1.1.0)
         required: true
         type: string
+      publish_to_play:
+        description: Upload the AAB to the track named by PLAY_TRACK
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -75,13 +91,13 @@ jobs:
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/harold-dist.jks"
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/harold-dist.jks" >> "$GITHUB_ENV"
 
-      - name: Build the release APK
+      - name: Build the release APK and AAB
         working-directory: apps/android
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew --no-daemon --stacktrace assembleRelease
+        run: ./gradlew --no-daemon --stacktrace assembleRelease bundleRelease
 
       - name: Verify and name the APK
         run: |
@@ -189,3 +205,16 @@ jobs:
           scp "${OPTS[@]}" manifest.json "$VPS_HOST:$VPS_DEST/.manifest.tmp"
           ssh "${OPTS[@]}" "$VPS_HOST" "cd '$VPS_DEST' && mv .apk.tmp harold-android-$VERSION.apk && mv .manifest.tmp manifest.json"
           rm -f id_ed25519
+
+      # Play rejects a second upload with the same versionCode. Manual rebuilds
+      # of an old tag therefore stay opt-in. Release Please passes true.
+      - name: Upload the AAB to Google Play
+        if: ${{ inputs.publish_to_play }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: harold.android
+          releaseFiles: apps/android/app/build/outputs/bundle/release/app-release.aab
+          tracks: ${{ vars.PLAY_TRACK || 'internal' }}
+          status: completed
+          releaseName: ${{ inputs.tag }}
