@@ -10,8 +10,9 @@ The public demo server runs at `https://harold-demo.codenamegary.com`. A Play re
 
 - Endpoint: `https://harold-demo.codenamegary.com`
 - Pairing code: `DEM-O01`
+- Hosted QR: `https://harold-demo.codenamegary.com/review-pairing-qr.png`
 
-The demo server accepts any code shaped `XXX-XXX`, so this code does not expire. See [apps/demo-server/README.md](../../apps/demo-server/README.md) for the demo data and privacy notes.
+The demo server serves the same QR at the hosted URL, so the public image and the file in this folder cannot drift. The demo server accepts any code shaped `XXX-XXX`, so this code does not expire. See [apps/demo-server/README.md](../../apps/demo-server/README.md) for the demo data and privacy notes.
 
 ## Files
 
@@ -33,7 +34,7 @@ The demo server accepts any code shaped `XXX-XXX`, so this code does not expire.
 
 - The icon uses the slanted prism from `apps/android/app/src/main/res/drawable/ic_launcher_foreground.xml` on the brand lime background.
 - The feature graphic uses the Geist and Geist Mono fonts from Google Fonts. The font files and OFL license are in `src/fonts`.
-- The review pairing QR encodes the demo server endpoint and code as a `harold://pair` URI. The generator lives in `src/pairing-qr.ts`.
+- The review pairing QR encodes the demo server endpoint and code as a `harold://pair` URI. The generator lives in `src/pairing-qr.ts`, and the demo server serves the image at `/review-pairing-qr.png`.
 - The screenshots come from the recorded demo slices in `docs/demo/render/public/slices`. The build script extracts one stable frame from each clip.
 
 ## Rebuild

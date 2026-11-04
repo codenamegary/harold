@@ -114,9 +114,10 @@ The public review server is the demo Harold at `https://harold-demo.codenamegary
 
 - Endpoint: `https://harold-demo.codenamegary.com`
 - Pairing code: `DEM-O01`
-- QR code: include `review-pairing-qr.png` in the review instructions or attach it as a screenshot
+- QR code URL: `https://harold-demo.codenamegary.com/review-pairing-qr.png`
+- QR file: `review-pairing-qr.png` (the same image, for upload)
 
-The reviewer can scan the QR code with the app or enter the endpoint and code by hand. The demo server accepts any code shaped `XXX-XXX`, so the code does not expire. Each claim creates a fresh demo device, and the credential stays valid across demo server restarts.
+The reviewer can scan the QR code with the app or enter the endpoint and code by hand. The demo server serves the QR from the public URL and redeploys when the checked-in image changes. The demo server accepts any code shaped `XXX-XXX`, so the code does not expire. Each claim creates a fresh demo device, and the credential stays valid across demo server restarts.
 
 The QR encodes `harold://pair?v=1&endpoint=https%3A%2F%2Fharold-demo.codenamegary.com&code=DEM-O01`.
 
@@ -138,7 +139,7 @@ The app is a utility for developers. It does not include ads or purchases. It ha
 
 - [ ] Publish the privacy policy and replace the TODO link.
 - [ ] Confirm the contact email in Play Console.
-- [ ] Provide review access to the demo server with `review-pairing-qr.png`.
+- [ ] Provide review access to the demo server with the hosted QR URL.
 - [ ] Complete the Data safety form.
 - [ ] Complete the Content rating questionnaire.
 - [ ] Confirm the app name and short description character counts.
