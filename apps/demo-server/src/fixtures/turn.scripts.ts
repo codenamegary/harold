@@ -155,7 +155,7 @@ const cannedReplies: ReadonlyArray<CannedReply> = [
       },
     ],
     message:
-      "The toggle is in good shape. The stored preference wins first, then the system setting, and the fallback stays readable.\n\nNothing else needs a change in this demo.",
+      "The toggle is in good shape. The stored preference wins first, then the system setting, and the fallback stays readable.\n\nNothing else needs a change.",
   },
   {
     thought: "A quick comparison of the two theme paths is enough here.",
@@ -174,10 +174,10 @@ const cannedReplies: ReadonlyArray<CannedReply> = [
       },
     ],
     message:
-      "Both paths resolve to the same tokens now, so the light and dark themes stay in sync.\n\nI kept the edit small on purpose. This is the second canned demo reply.",
+      "Both paths resolve to the same tokens now, so the light and dark themes stay in sync.\n\nI kept the edit small.",
   },
   {
-    thought: "I will run the demo check and report the result.",
+    thought: "I will run the theme check and report the result.",
     tools: [
       {
         toolCallId: "canned-exec",
@@ -186,8 +186,7 @@ const cannedReplies: ReadonlyArray<CannedReply> = [
         title: "bun test",
       },
     ],
-    message:
-      "The demo check is clean. This session is only for the store review, so the command output is fictional.\n\nSend another prompt to see the final demo message.",
+    message: "The theme check is clean. Send another prompt if you want another pass.",
   },
 ]
 
