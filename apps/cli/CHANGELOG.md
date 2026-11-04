@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.4.1](https://github.com/codenamegary/harold/compare/v3.4.0...v3.4.1) (2026-11-04)
+
+
+### Documentation
+
+* **store:** add Play foreground service demo video ([#499](https://github.com/codenamegary/harold/issues/499)) ([99536f1](https://github.com/codenamegary/harold/commit/99536f1b9789e692a3b6db02d846c78a0c3a5810))
+
 ## [3.4.0](https://github.com/codenamegary/harold/compare/v3.3.0...v3.4.0) (2026-11-04)
 
 
