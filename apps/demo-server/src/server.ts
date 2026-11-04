@@ -16,6 +16,7 @@ import {
 } from "./routes/git.routes"
 import { internalError, notFound, rateLimited, unauthorized } from "./routes/http"
 import { claimPairingCodeResponse } from "./routes/pairing.routes"
+import { reviewForegroundServiceVideoResponse } from "./routes/review.foreground.service.routes"
 import { reviewPairingQrResponse } from "./routes/review.pairing.qr.routes"
 import {
   deleteDeviceResponse,
@@ -294,6 +295,9 @@ export const createDemoApp = (options: DemoAppOptions = {}): DemoApp => {
       }
       if (method === "GET" && path === "/review-pairing-qr.png") {
         return reviewPairingQrResponse()
+      }
+      if (method === "GET" && path === "/foreground-service-demo.mp4") {
+        return reviewForegroundServiceVideoResponse()
       }
       if (method === "GET" && path.startsWith("/demo/attachments/")) {
         const response = demoAttachmentResponse(path)

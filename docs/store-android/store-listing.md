@@ -121,6 +121,26 @@ The reviewer can scan the QR code with the app or enter the endpoint and code by
 
 The QR encodes `harold://pair?v=1&endpoint=https%3A%2F%2Fharold-demo.codenamegary.com&code=DEM-O01`.
 
+## Foreground service declaration
+
+Play Console asks for the foreground service type, a description, the user impact if the task is deferred or interrupted, and a demo video.
+
+- Type: **Special use**
+- Video: `https://harold-demo.codenamegary.com/foreground-service-demo.mp4`
+- File: `foreground-service-demo.mp4`
+
+Description:
+
+> Harold lets the user start and monitor AI coding sessions from the app. While one or more sessions are active, a foreground service keeps the connection to the session event stream open so the user receives live progress and prompts that need their input. The service stops when no sessions are active.
+
+User impact if deferred:
+
+> If the service cannot start, Android may stop the app in the background. The user stops receiving live session progress and input prompts until they reopen the app.
+
+User impact if interrupted:
+
+> If the system stops the service, the session event stream disconnects. The notification disappears and the user may not see that a session is waiting for input.
+
 ## Data safety draft
 
 Review this against the current Play data safety form before submitting.
@@ -140,6 +160,7 @@ The app is a utility for developers. It does not include ads or purchases. It ha
 - [ ] Publish the privacy policy and replace the TODO link.
 - [ ] Confirm the contact email in Play Console.
 - [ ] Provide review access to the demo server with the hosted QR URL.
+- [ ] Complete the Foreground Service permissions declaration with the hosted video URL.
 - [ ] Complete the Data safety form.
 - [ ] Complete the Content rating questionnaire.
 - [ ] Confirm the app name and short description character counts.

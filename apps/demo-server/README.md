@@ -69,6 +69,7 @@ metadata. The full transcript is rebuilt from fixed scripts.
 - `GET /healthz`
 - `GET /v1/status`
 - `GET /review-pairing-qr.png` (the Play review pairing QR)
+- `GET /foreground-service-demo.mp4` (the Play foreground-service demo video)
 - `POST /v1/pairing-codes/:code/claim`
 - `GET /v1/settings/runtime`
 - `GET /v1/settings/agents`

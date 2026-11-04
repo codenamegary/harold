@@ -20,6 +20,10 @@ echo "review pairing qr"
 curl -fsS -o /dev/null "$BASE_URL/review-pairing-qr.png"
 echo "qr served"
 
+echo "foreground service demo video"
+curl -fsS -o /dev/null "$BASE_URL/foreground-service-demo.mp4"
+echo "video served"
+
 echo "claim"
 CLAIM="$(curl -fsS -X POST -H 'content-type: application/json' -d '{"name":"ignored"}' "$BASE_URL/v1/pairing-codes/$CODE/claim")"
 TOKEN="$(printf '%s' "$CLAIM" | json_field credential)"
