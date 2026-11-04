@@ -6,7 +6,7 @@ import {
   staticLimitFrames,
   turnOneElicitationAnswer,
   turnOneElicitationParams,
-  turnOneExtensionParams,
+  turnOneFailureFrames,
   turnOneFinalFrames,
   turnOneIntroFrames,
   turnOnePermissionParams,
@@ -190,6 +190,13 @@ const runTurn = async (params: StartTurnParams, turnRecord: DemoTurnRecord): Pro
     record.permissionOptionId = "allow-once"
   }
 
+  for (const frame of turnOneFailureFrames(identity)) {
+    if (!(await emit(frame))) {
+      finishCancelled()
+      return
+    }
+  }
+
   const elicitationRequestId = requestId("req_demo_elicitation")
   record.elicitationRequestId = elicitationRequestId
   if (store.hasSubscribers(deviceId, session.id)) {
@@ -217,27 +224,6 @@ const runTurn = async (params: StartTurnParams, turnRecord: DemoTurnRecord): Pro
     })
   } else {
     record.elicitationAccepted = true
-  }
-
-  const extensionRequestId = requestId("req_demo_extension")
-  record.extensionRequestId = extensionRequestId
-  if (store.hasSubscribers(deviceId, session.id)) {
-    store.broadcast(deviceId, session.id, {
-      type: "extension_request",
-      requestId: extensionRequestId,
-      method: "demo/ask_details",
-      agentId: identity.agentId,
-      sessionId: identity.sessionId,
-      params: turnOneExtensionParams,
-    })
-    const reply = await waitForReply("extension", extensionRequestId)
-    if (reply.cancelled === true || !stillActive()) {
-      finishCancelled()
-      return
-    }
-    record.extensionReplied = true
-  } else {
-    record.extensionReplied = true
   }
 
   for (const frame of withoutPromptComplete(turnOneFinalFrames(identity))) {

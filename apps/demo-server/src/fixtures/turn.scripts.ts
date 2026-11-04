@@ -1,4 +1,3 @@
-import { EXPIRY_NOTICE } from "./demo.constants"
 import { promptCompleteFrame, sessionUpdateFrame, textChunk } from "../sse/frames"
 import { DemoServerFrame, DemoSessionUpdate } from "../sse/frames"
 
@@ -39,25 +38,34 @@ export const turnOneIntroFrames = (session: SessionIdentity): ReadonlyArray<Demo
     frame(
       textChunk(
         "agent_thought_chunk",
-        "I will start with the toggle, then show a permission, a question, and an extension request.",
+        "The user wants me to run the tests and fix anything that fails. I will start with the theme test command.",
       ),
     ),
     frame(
       textChunk(
         "agent_message_chunk",
-        [
-          EXPIRY_NOTICE,
-          "",
-          "Here is the full demo transcript. I will read the toggle, edit it, and run the check.",
-        ].join("\n"),
+        "The user wants me to run the tests and fix anything that fails. I'll run the theme tests first, then fix the failure.",
       ),
     ),
     frame(toolCall("turn1-read", "read", "read", "pending", "src/theme/toggle.ts")),
     frame(toolCallUpdate("turn1-read", "completed")),
-    frame(toolCall("turn1-edit", "edit", "edit", "in_progress", "src/theme/toggle.ts")),
-    frame(toolCallUpdate("turn1-edit", "completed")),
-    frame(toolCall("turn1-exec", "bash", "execute", "in_progress", "bun test")),
+    frame(toolCall("turn1-exec", "bash", "execute", "pending", "bun test src/theme")),
+    frame(toolCallUpdate("turn1-exec", "in_progress")),
+  ]
+}
+
+export const turnOneFailureFrames = (session: SessionIdentity): ReadonlyArray<DemoServerFrame> => {
+  const frame = (update: DemoSessionUpdate) =>
+    sessionUpdateFrame(session.agentId, session.sessionId, update)
+
+  return [
     frame(toolCallUpdate("turn1-exec", "failed")),
+    frame(
+      textChunk(
+        "agent_message_chunk",
+        "The theme tests failed on the dark mode contrast check. I need to know which target to patch.",
+      ),
+    ),
   ]
 }
 
@@ -66,6 +74,8 @@ export const turnOneFinalFrames = (session: SessionIdentity): ReadonlyArray<Demo
     sessionUpdateFrame(session.agentId, session.sessionId, update)
 
   return [
+    frame(toolCall("turn1-edit", "edit", "edit", "pending", "src/theme/toggle.ts")),
+    frame(toolCallUpdate("turn1-edit", "completed")),
     frame({
       sessionUpdate: "usage_update",
       used: 58_200,
@@ -75,19 +85,7 @@ export const turnOneFinalFrames = (session: SessionIdentity): ReadonlyArray<Demo
     frame(
       textChunk(
         "agent_message_chunk",
-        [
-          "### Demo turn complete",
-          "",
-          "The toggle now reads a stored preference, falls back to the system setting, and keeps the theme tokens in one place.",
-          "",
-          "| Check | Result |",
-          "| --- | --- |",
-          "| Read tool | Completed |",
-          "| Edit tool | Completed |",
-          "| Execute tool | Failed on purpose |",
-          "",
-          "The execute failure is intentional so the review app can show a failed tool row. Send another prompt for a short canned reply.",
-        ].join("\n"),
+        "I applied the contrast fix to `src/theme/toggle.ts` and reran the theme tests. They pass.",
       ),
     ),
     promptCompleteFrame(session.agentId, session.sessionId),
@@ -98,7 +96,7 @@ export const turnOnePermissionParams = {
   toolCall: {
     toolCallId: "turn1-exec",
     name: "bash",
-    title: "Run the demo test command",
+    title: "Run the theme test command",
     kind: "execute",
   },
   options: [
@@ -109,48 +107,28 @@ export const turnOnePermissionParams = {
 
 export const turnOneElicitationParams = {
   mode: "form",
-  message: "The demo agent has a couple of questions before it finishes.",
+  message: "The theme tests failed on the dark mode contrast check.",
   toolCallId: "turn1-question",
   requestedSchema: {
     type: "object",
     properties: {
-      note: {
-        type: "string",
-        title: "What should the demo note say?",
-        description: "A short note for the transcript.",
-        minLength: 1,
-        maxLength: 120,
-      },
       target: {
         type: "string",
-        title: "Which target should the demo use?",
+        title: "Which target should I patch?",
         oneOf: [
           { const: "preview", title: "Preview" },
           { const: "release", title: "Release" },
         ],
       },
-      includeBanner: {
-        type: "boolean",
-        title: "Include the banner?",
-        default: true,
-      },
     },
-    required: ["note", "target"],
+    required: ["target"],
   },
-}
-
-export const turnOneExtensionParams = {
-  prompt: "Pick a demo detail level.",
-  choices: ["summary", "details"],
-  default: "summary",
 }
 
 export const turnOneElicitationAnswer = {
   action: "accept",
   content: {
-    note: "Looks good to me",
     target: "preview",
-    includeBanner: true,
   },
 }
 

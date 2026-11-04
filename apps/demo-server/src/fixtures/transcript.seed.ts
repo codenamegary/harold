@@ -56,38 +56,26 @@ export const seedTranscriptFrames = (session: SessionIdentity): ReadonlyArray<De
     frame(
       textChunk(
         "agent_thought_chunk",
-        "I will start by reading the toggle and the theme tokens it depends on.",
+        "The user wants me to review the dark mode toggle. I will start by reading the toggle and the theme tokens it depends on.",
       ),
     ),
     frame(
       textChunk(
         "agent_message_chunk",
-        "I found a small accessibility issue in the toggle. Let me check the token setup before I change anything.\n",
+        "The user wants me to review the dark mode toggle. I'll start by reading the toggle and the theme tokens it depends on.",
       ),
     ),
     frame(toolCall("seed-read-1", "read", "read", "pending", "src/theme/toggle.ts")),
     frame(toolCallUpdate("seed-read-1", "completed")),
-    frame(toolCall("seed-edit-1", "edit", "edit", "in_progress", "src/theme/toggle.ts")),
-    frame(toolCallUpdate("seed-edit-1", "completed")),
-    frame(toolCall("seed-exec-1", "bash", "execute", "in_progress", "bun test src/theme")),
-    frame(toolCallUpdate("seed-exec-1", "failed")),
-    frame(usageUpdate),
+    frame(toolCall("seed-read-2", "read", "read", "pending", "src/theme/tokens.css")),
+    frame(toolCallUpdate("seed-read-2", "completed")),
     frame(
       textChunk(
         "agent_message_chunk",
-        [
-          "### Review complete",
-          "",
-          "The toggle now respects a stored preference before falling back to the system setting.",
-          "",
-          "- Added `themeStorageKey` as a single source of truth",
-          "- Read the stored preference before the media query",
-          "- Kept the change focused to `src/theme/toggle.ts`",
-          "",
-          "The theme test command is not configured in this demo, so that step failed. Nothing else needs a change.",
-        ].join("\n"),
+        "I found a contrast issue in the toggle. I'm checking the token setup before I change anything.",
       ),
     ),
+    frame(usageUpdate),
     promptCompleteFrame(agentId, sessionId),
   ]
 }

@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test"
-import { EXPIRY_NOTICE } from "../src/fixtures/demo.constants"
 import { AURORA_WORKSPACE_PATH } from "../src/fixtures/workspaces"
 import {
   authedFetch,
@@ -43,17 +42,6 @@ const replyElicitation = async (
     body: "{this is not json",
   })
 
-const replyExtension = async (
-  server: TestServer,
-  credential: string,
-  requestId: string,
-): Promise<Response> =>
-  authedFetch(server, credential, `/v1/extensions/${requestId}/replies`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: "{this is not json either",
-  })
-
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null
 
@@ -84,13 +72,6 @@ const permissionRequestId = (frame: TestFrame): string => {
 const elicitationRequestId = (frame: TestFrame): string => {
   if (frame.type !== "elicitation_request") {
     throw new Error(`Expected elicitation_request, got ${frame.type}`)
-  }
-  return frame.requestId
-}
-
-const extensionRequestId = (frame: TestFrame): string => {
-  if (frame.type !== "extension_request") {
-    throw new Error(`Expected extension_request, got ${frame.type}`)
   }
   return frame.requestId
 }
@@ -132,18 +113,8 @@ const runTurnOne = async (
     (await replyElicitation(server, credential, elicitationRequestId(elicitation.frame))).status,
   ).toBe(204)
 
-  const extension = await sse.waitFor((frame) => frame.type === "extension_request", {
-    after: elicitation.index + 1,
-  })
-  expect(
-    sse.frames.slice(extension.index + 1).some((frame) => frame.type === "prompt_complete"),
-  ).toBe(false)
-  expect(
-    (await replyExtension(server, credential, extensionRequestId(extension.frame))).status,
-  ).toBe(204)
-
   const end = await sse.waitFor((frame) => frame.type === "prompt_complete", {
-    after: extension.index + 1,
+    after: elicitation.index + 1,
   })
   return { frames: sse.frames.slice(start, end.index + 1), sse, start, end: end.index }
 }
@@ -178,7 +149,7 @@ const withServer = async (testBody: (server: TestServer) => Promise<void>) => {
 }
 
 describe("scripted turns", () => {
-  test("turn 1 returns the full transcript and waits for each panel", async () => {
+  test("turn 1 waits for the permission and question panels", async () => {
     await withServer(async (server) => {
       const claimed = await claimDevice(server)
       const credential = claimed.credential
@@ -218,13 +189,15 @@ describe("scripted turns", () => {
             const kind = asRecord(frame.update)?.toolKind
             return typeof kind === "string" ? kind : null
           })
-        expect(toolKinds).toEqual(["read", "edit", "execute"])
+        expect(toolKinds).toEqual(["read", "execute", "edit"])
 
-        const firstAssistant = frames.find((frame) => updateKind(frame) === "agent_message_chunk")
-        expect(firstAssistant).toBeDefined()
-        if (firstAssistant !== undefined) {
-          expect(updateText(firstAssistant)).toStartWith(EXPIRY_NOTICE)
-        }
+        const assistantMessages = frames
+          .filter((frame) => updateKind(frame) === "agent_message_chunk")
+          .map(updateText)
+          .filter((value): value is string => value !== null)
+        expect(assistantMessages[0]).toContain("run the theme tests")
+        expect(assistantMessages.at(-1)).toContain("contrast fix")
+        expect(frames.some((frame) => frame.type === "extension_request")).toBe(false)
 
         const usage = frames.find((frame) => updateKind(frame) === "usage_update")
         expect(usage).toBeDefined()
@@ -238,6 +211,30 @@ describe("scripted turns", () => {
 
         expect(frames.filter((frame) => frame.type === "prompt_complete")).toHaveLength(1)
         expect(frames.some((frame) => frame.type === "elicitation_resolved")).toBe(true)
+      } finally {
+        await sse.close()
+      }
+    })
+  })
+
+  test("seeded transcript is an in-progress review, not a completed one", async () => {
+    await withServer(async (server) => {
+      const claimed = await claimDevice(server)
+      const sse = await openSse({
+        server,
+        credential: claimed.credential,
+        sessionId: SESSION_ID,
+      })
+      try {
+        const end = await sse.waitFor((frame) => frame.type === "prompt_complete")
+        const text = sse.frames
+          .slice(0, end.index + 1)
+          .map(updateText)
+          .filter((value): value is string => value !== null)
+          .join("\n")
+        expect(text).toContain("The user wants me to review the dark mode toggle")
+        expect(text).toContain("I found a contrast issue")
+        expect(text).not.toContain("Review complete")
       } finally {
         await sse.close()
       }
