@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.4.0](https://github.com/codenamegary/harold/compare/v3.3.0...v3.4.0) (2026-11-04)
+
+
+### Features
+
+* **demo:** add fake Harold server for app review ([#494](https://github.com/codenamegary/harold/issues/494)) ([369853a](https://github.com/codenamegary/harold/commit/369853ae26af261a8377af56d37cbed63b36b1ac)), closes [#493](https://github.com/codenamegary/harold/issues/493)
+
 ## [3.3.0](https://github.com/codenamegary/harold/compare/v3.2.1...v3.3.0) (2026-11-03)
 
 
