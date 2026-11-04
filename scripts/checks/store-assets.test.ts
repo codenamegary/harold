@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import { join } from "node:path"
 import { Glob } from "bun"
+import {
+  REVIEW_CODE,
+  REVIEW_ENDPOINT,
+  renderReviewPairingQrPng,
+  reviewPairingUri,
+} from "../../docs/store-android/src/pairing-qr"
 
 const repoRoot = join(import.meta.dir, "../..")
 const storeRoot = join(repoRoot, "docs/store-android")
@@ -75,6 +81,39 @@ describe("Google Play store assets", () => {
         png.width * 16 === png.height * 9 || png.width * 9 === png.height * 16,
         `${file} is 16:9 or 9:16`,
       ).toBe(true)
+    }
+  })
+
+  test("review pairing QR matches the demo server pairing URI", async () => {
+    expect(REVIEW_ENDPOINT).toBe("https://harold-demo.codenamegary.com")
+    expect(REVIEW_CODE).toBe("DEM-O01")
+    expect(reviewPairingUri()).toBe(
+      "harold://pair?v=1&endpoint=https%3A%2F%2Fharold-demo.codenamegary.com&code=DEM-O01",
+    )
+
+    const file = "review-pairing-qr.png"
+    await expectFileWithin(file, megabyte)
+    const png = await readPng(file)
+    expect(png.width).toBe(1024)
+    expect(png.height).toBe(1024)
+
+    // Regenerate and compare bytes so the checked-in image cannot drift from
+    // the URI, size, or error correction level the docs promise.
+    const generated = await renderReviewPairingQrPng()
+    const committed = new Uint8Array(await Bun.file(join(storeRoot, file)).arrayBuffer())
+    expect(Buffer.from(committed).equals(generated), `${file} is current`).toBe(true)
+  })
+
+  test("review access docs point at the demo server and QR", async () => {
+    const readme = await Bun.file(join(storeRoot, "README.md")).text()
+    const listing = await Bun.file(join(storeRoot, "store-listing.md")).text()
+    const appAccess = section(listing, "## App access for review")
+
+    for (const doc of [readme, appAccess]) {
+      expect(doc).toContain("review-pairing-qr.png")
+      expect(doc).toContain(REVIEW_ENDPOINT)
+      expect(doc).toContain(REVIEW_CODE)
+      expect(doc).toContain("XXX-XXX")
     }
   })
 

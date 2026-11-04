@@ -110,14 +110,15 @@ The screenshots come from the recorded demo walk in `docs/demo/render/public/sli
 
 Harold needs a reachable Harold server and a paired device. A reviewer cannot pass the pairing screen without one.
 
-Before submitting, provide a review server and a live pairing code in Play Console under **App access**:
+The public review server is the demo Harold at `https://harold-demo.codenamegary.com`. In Play Console under **App access**, provide:
 
-1. Run the Harold CLI on a review host.
-2. Pair a device with `harold pair --url https://<review-host>`.
-3. Put the endpoint and a current pairing code in the review instructions.
-4. Include the QR code as a screenshot if the reviewer can scan it.
+- Endpoint: `https://harold-demo.codenamegary.com`
+- Pairing code: `DEM-O01`
+- QR code: include `review-pairing-qr.png` in the review instructions or attach it as a screenshot
 
-Use a dedicated review device. Remove it with `harold device` after the review.
+The reviewer can scan the QR code with the app or enter the endpoint and code by hand. The demo server accepts any code shaped `XXX-XXX`, so the code does not expire. Each claim creates a fresh demo device, and the credential stays valid across demo server restarts.
+
+The QR encodes `harold://pair?v=1&endpoint=https%3A%2F%2Fharold-demo.codenamegary.com&code=DEM-O01`.
 
 ## Data safety draft
 
@@ -137,7 +138,7 @@ The app is a utility for developers. It does not include ads or purchases. It ha
 
 - [ ] Publish the privacy policy and replace the TODO link.
 - [ ] Confirm the contact email in Play Console.
-- [ ] Provide review access to a live Harold server and pairing code.
+- [ ] Provide review access to the demo server with `review-pairing-qr.png`.
 - [ ] Complete the Data safety form.
 - [ ] Complete the Content rating questionnaire.
 - [ ] Confirm the app name and short description character counts.

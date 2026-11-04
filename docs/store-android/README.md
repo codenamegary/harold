@@ -2,12 +2,24 @@
 
 Ready-to-upload Google Play assets for the Harold Android app. The listing copy is in [store-listing.md](./store-listing.md). The privacy policy draft is in [privacy-policy.md](./privacy-policy.md).
 
+## Review pairing
+
+The public demo server runs at `https://harold-demo.codenamegary.com`. A Play reviewer can scan the QR code below with the app, or enter the endpoint and code by hand.
+
+![Pairing QR for the demo server](./review-pairing-qr.png)
+
+- Endpoint: `https://harold-demo.codenamegary.com`
+- Pairing code: `DEM-O01`
+
+The demo server accepts any code shaped `XXX-XXX`, so this code does not expire. See [apps/demo-server/README.md](../../apps/demo-server/README.md) for the demo data and privacy notes.
+
 ## Files
 
 | File                           | Use                  | Spec                                |
 | ------------------------------ | -------------------- | ----------------------------------- |
 | `app-icon-512x512.png`         | Play store icon      | 512 x 512 PNG, opaque, under 1 MB   |
 | `feature-graphic-1024x500.png` | Play feature graphic | 1,024 x 500 PNG, under 15 MB        |
+| `review-pairing-qr.png`        | Review pairing QR    | 1,024 x 1,024 PNG, under 1 MB       |
 | `phone-01-pairing.png`         | Phone screenshot 1   | 1,080 x 1,920 PNG, 9:16, under 8 MB |
 | `phone-02-sessions.png`        | Phone screenshot 2   | 1,080 x 1,920 PNG, 9:16, under 8 MB |
 | `phone-03-plan.png`            | Phone screenshot 3   | 1,080 x 1,920 PNG, 9:16, under 8 MB |
@@ -21,21 +33,22 @@ Ready-to-upload Google Play assets for the Harold Android app. The listing copy 
 
 - The icon uses the slanted prism from `apps/android/app/src/main/res/drawable/ic_launcher_foreground.xml` on the brand lime background.
 - The feature graphic uses the Geist and Geist Mono fonts from Google Fonts. The font files and OFL license are in `src/fonts`.
+- The review pairing QR encodes the demo server endpoint and code as a `harold://pair` URI. The generator lives in `src/pairing-qr.ts`.
 - The screenshots come from the recorded demo slices in `docs/demo/render/public/slices`. The build script extracts one stable frame from each clip.
 
 ## Rebuild
 
-Needs ImageMagick, ffmpeg, and a Chrome binary.
+Needs ImageMagick, ffmpeg, a Chrome binary, and Bun.
 
 ```sh
 bash docs/store-android/src/build-assets.sh
 ```
 
-The script rebuilds the icon, feature graphic, and all eight screenshots. Set `CHROME` if Chrome is not on the path.
+The script rebuilds the icon, feature graphic, review pairing QR, and all eight screenshots. Set `CHROME` if Chrome is not on the path.
 
 ## Validate
 
-The store asset check verifies the Play size, dimension, format, and aspect ratio limits:
+The store asset check verifies the Play size, dimension, format, and aspect ratio limits. It also checks that the review pairing QR matches the demo server URI:
 
 ```sh
 bun test scripts/checks/store-assets.test.ts
