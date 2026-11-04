@@ -146,6 +146,13 @@ describe("ci.yml", () => {
   })
 })
 
+describe("deploy-demo-server.yml", () => {
+  test("redeploys when the review pairing QR changes", async () => {
+    const workflow = await loadWorkflow(`${workflowsRoot}/deploy-demo-server.yml`)
+    expect(workflow.on?.push?.paths).toContain("docs/store-android/review-pairing-qr.png")
+  })
+})
+
 describe("release-android.yml", () => {
   test("builds and uploads an AAB to the configured Play track", async () => {
     const workflow = await loadWorkflow(`${workflowsRoot}/release-android.yml`)

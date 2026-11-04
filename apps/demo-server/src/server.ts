@@ -16,6 +16,7 @@ import {
 } from "./routes/git.routes"
 import { internalError, notFound, rateLimited, unauthorized } from "./routes/http"
 import { claimPairingCodeResponse } from "./routes/pairing.routes"
+import { reviewPairingQrResponse } from "./routes/review.pairing.qr.routes"
 import {
   deleteDeviceResponse,
   elicitationReplyResponse,
@@ -290,6 +291,9 @@ export const createDemoApp = (options: DemoAppOptions = {}): DemoApp => {
       }
       if (method === "GET" && path === "/v1/status") {
         return statusResponse()
+      }
+      if (method === "GET" && path === "/review-pairing-qr.png") {
+        return reviewPairingQrResponse()
       }
       if (method === "GET" && path.startsWith("/demo/attachments/")) {
         const response = demoAttachmentResponse(path)

@@ -7,8 +7,9 @@ name: deploy-demo-server
 # pull, install, restart.
 #
 # Triggers on the demo server itself, on the contracts package that defines
-# its wire format, and on bun.lock, since dependency changes are installed by
-# the deploy. Reuses the same VPS secrets as publish-demo and release-android.
+# its wire format, on the review pairing QR it serves, and on bun.lock, since
+# dependency changes are installed by the deploy. Reuses the same VPS secrets
+# as publish-demo and release-android.
 on:
   push:
     branches:
@@ -16,6 +17,7 @@ on:
     paths:
       - "apps/demo-server/**"
       - "packages/contracts/**"
+      - "docs/store-android/review-pairing-qr.png"
       - "bun.lock"
   workflow_dispatch:
 

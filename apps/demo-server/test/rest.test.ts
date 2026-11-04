@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { join } from "node:path"
 import { AgentAuthSchema } from "contracts/http/agent-auth"
 import { AgentSettingsCollectionSchema } from "contracts/http/agent-settings"
 import { AttachmentDescriptorSchema } from "contracts/http/attachments"
@@ -60,6 +61,24 @@ describe("demo server REST contracts", () => {
         state: "online",
         version: "1.0.0",
       })
+    })
+  })
+
+  test("serves the Play review pairing QR as a public PNG", async () => {
+    await withServer(async (server) => {
+      const response = await fetch(`${server.url}/review-pairing-qr.png`)
+      expect(response.status).toBe(200)
+      expect(response.headers.get("content-type")).toBe("image/png")
+
+      // The route must serve the checked-in store asset byte for byte, so the
+      // public URL and the file uploaded to Play cannot drift.
+      const source = new Uint8Array(
+        await Bun.file(
+          join(import.meta.dir, "../../../docs/store-android/review-pairing-qr.png"),
+        ).arrayBuffer(),
+      )
+      const served = new Uint8Array(await response.arrayBuffer())
+      expect(Buffer.from(served).equals(Buffer.from(source))).toBe(true)
     })
   })
 

@@ -111,6 +111,7 @@ describe("Google Play store assets", () => {
 
     for (const doc of [readme, appAccess]) {
       expect(doc).toContain("review-pairing-qr.png")
+      expect(doc).toContain("https://harold-demo.codenamegary.com/review-pairing-qr.png")
       expect(doc).toContain(REVIEW_ENDPOINT)
       expect(doc).toContain(REVIEW_CODE)
       expect(doc).toContain("XXX-XXX")
