@@ -33,8 +33,8 @@ force re-pairing, because the token carries its device id.
 - Three sessions, newest first.
 - One rich transcript on every seeded session with thinking, Markdown, read,
   edit, execute, usage, and a failed tool row.
-- Turn 1 of every session runs the full demo: permission, elicitation form, and
-  extension panels, then the final answer.
+- Turn 1 of every session runs the full demo: permission and elicitation form,
+  then the final answer.
 - Turns 2 and 3 return short canned replies.
 - Turn 4 and later return a fixed end-of-demo block.
 - `aurora-web` has 3 uncommitted files, 2 worktrees, and a non-empty diff.
@@ -69,6 +69,7 @@ metadata. The full transcript is rebuilt from fixed scripts.
 - `GET /healthz`
 - `GET /v1/status`
 - `GET /review-pairing-qr.png` (the Play review pairing QR)
+- `GET /foreground-service-demo.mp4` (the Play foreground-service demo video)
 - `POST /v1/pairing-codes/:code/claim`
 - `GET /v1/settings/runtime`
 - `GET /v1/settings/agents`

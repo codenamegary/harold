@@ -9,8 +9,6 @@ export const MAX_TURNS_PER_SESSION = 3
 
 export const PROMPT_PLACEHOLDER = "[prompt text omitted in demo]"
 
-export const EXPIRY_NOTICE = "Demo note: this session expires 15 minutes after creation."
-
 export const DEMO_AGENT_ID = "opencode"
 export const DEMO_AGENT_DISPLAY_NAME = "opencode"
 export const DEMO_AGENT_PATH = "/home/demo/.local/bin/opencode"

@@ -147,9 +147,10 @@ describe("ci.yml", () => {
 })
 
 describe("deploy-demo-server.yml", () => {
-  test("redeploys when the review pairing QR changes", async () => {
+  test("redeploys when a served review asset changes", async () => {
     const workflow = await loadWorkflow(`${workflowsRoot}/deploy-demo-server.yml`)
     expect(workflow.on?.push?.paths).toContain("docs/store-android/review-pairing-qr.png")
+    expect(workflow.on?.push?.paths).toContain("docs/store-android/foreground-service-demo.mp4")
   })
 })
 

@@ -104,6 +104,26 @@ describe("Google Play store assets", () => {
     expect(Buffer.from(committed).equals(generated), `${file} is current`).toBe(true)
   })
 
+  test("foreground service demo video is a compact MP4 with a hosted URL", async () => {
+    const file = "foreground-service-demo.mp4"
+    const path = join(storeRoot, file)
+    const video = Bun.file(path)
+    expect(video.size, `${file} exists`).toBeGreaterThan(100_000)
+    expect(video.size, `${file} is under 20 MB`).toBeLessThanOrEqual(20 * megabyte)
+
+    // MP4 files carry an ftyp box at bytes 4..8. This catches a git-lfs
+    // pointer or a truncated recording without pulling ffprobe into CI.
+    const header = new Uint8Array(await video.slice(4, 8).arrayBuffer())
+    expect(new TextDecoder().decode(header), `${file} is an MP4`).toBe("ftyp")
+
+    const readme = await Bun.file(join(storeRoot, "README.md")).text()
+    const listing = await Bun.file(join(storeRoot, "store-listing.md")).text()
+    for (const doc of [readme, listing]) {
+      expect(doc).toContain(file)
+      expect(doc).toContain("https://harold-demo.codenamegary.com/foreground-service-demo.mp4")
+    }
+  })
+
   test("review access docs point at the demo server and QR", async () => {
     const readme = await Bun.file(join(storeRoot, "README.md")).text()
     const listing = await Bun.file(join(storeRoot, "store-listing.md")).text()

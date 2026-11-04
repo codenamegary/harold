@@ -82,6 +82,24 @@ describe("demo server REST contracts", () => {
     })
   })
 
+  test("serves the Play foreground-service demo video as a public MP4", async () => {
+    await withServer(async (server) => {
+      const response = await fetch(`${server.url}/foreground-service-demo.mp4`)
+      expect(response.status).toBe(200)
+      expect(response.headers.get("content-type")).toBe("video/mp4")
+
+      // The hosted video is the exact file submitted to Play Console, so the
+      // declaration link cannot drift from the checked-in asset.
+      const source = new Uint8Array(
+        await Bun.file(
+          join(import.meta.dir, "../../../docs/store-android/foreground-service-demo.mp4"),
+        ).arrayBuffer(),
+      )
+      const served = new Uint8Array(await response.arrayBuffer())
+      expect(Buffer.from(served).equals(Buffer.from(source))).toBe(true)
+    })
+  })
+
   test("claim ignores the body, fixes the device name, and issues a credential", async () => {
     await withServer(async (server) => {
       const claimed = await claimDevice(server, "DEM-O01", JSON.stringify({ name: "Other" }))
