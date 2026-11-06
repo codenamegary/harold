@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import harold.android.credentials.CredentialHolder
 import harold.android.credentials.CredentialStore
+import harold.android.credentials.HaroldTransport
 
 class DefaultSessionGateway(
     private val credentialStore: CredentialStore,
@@ -17,8 +18,12 @@ class DefaultSessionGateway(
     override suspend fun refresh() {
         val saved = credentialStore.list()
 
+        // Only hub credentials belong in the OkHttp interceptor. Direct SSH
+        // material stays in the encrypted roster and is resolved by :transport.
         credentialHolder.publish(
-            saved.associate { harold -> harold.serverOrigin to harold.credential },
+            saved
+                .filter { harold -> harold.transport == HaroldTransport.Server }
+                .associate { harold -> harold.serverOrigin to harold.credential },
         )
 
         val stored = saved.firstOrNull()
@@ -29,7 +34,8 @@ class DefaultSessionGateway(
                 serverOrigin = stored.serverOrigin,
                 deviceId = stored.deviceId,
                 deviceName = stored.deviceName,
-                )
+                transport = stored.transport,
+            )
         }
         connections.refresh()
     }

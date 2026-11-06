@@ -1,5 +1,6 @@
 package harold.android.shell
 
+import harold.android.credentials.HaroldTransport
 import harold.android.stream.ConnectionState
 import harold.android.stream.ConnectionStatus
 import harold.android.session.PairedState
@@ -49,7 +50,11 @@ fun ShellUiState.fromPairedState(pairedState: PairedState): ShellUiState =
 
         is PairedState.Paired -> copy(
             status = buildString {
-                append("Paired to ")
+                if (pairedState.transport == HaroldTransport.Ssh) {
+                    append("Direct SSH to ")
+                } else {
+                    append("Paired to ")
+                }
                 append(pairedState.serverOrigin)
                 pairedState.deviceName?.let { name ->
                     append("\n")

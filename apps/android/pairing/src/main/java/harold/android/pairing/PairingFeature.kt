@@ -10,16 +10,45 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
+import harold.android.navigation.AddConnection
 import harold.android.navigation.AppRoute
 import harold.android.navigation.FeatureEntryProvider
 import harold.android.navigation.Navigator
 import harold.android.navigation.Pairing
 import harold.android.navigation.SavedHarolds
+import harold.android.navigation.SshSetup
 import javax.inject.Inject
 import javax.inject.Singleton
 
 class PairingEntryProvider @Inject constructor() : FeatureEntryProvider {
     override fun register(scope: EntryProviderScope<AppRoute>, navigator: Navigator) {
+        scope.entry<AddConnection> {
+            AddConnectionScreen(
+                onBack = { navigator.goBack() },
+                onHub = { navigator.openPairing() },
+                onSsh = { navigator.openSshSetup() },
+            )
+        }
+        scope.entry<SshSetup> {
+            val viewModel: SshSetupViewModel = hiltViewModel()
+            val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+            SshSetupScreen(
+                uiState = uiState,
+                onBack = viewModel::onBack,
+                onHostChanged = viewModel::onHostChanged,
+                onPortChanged = viewModel::onPortChanged,
+                onUserChanged = viewModel::onUserChanged,
+                onNameChanged = viewModel::onNameChanged,
+                onAuthModeChanged = viewModel::onAuthModeChanged,
+                onImportedKeyChanged = viewModel::onImportedKeyChanged,
+                onPasswordChanged = viewModel::onPasswordChanged,
+                onColorSelected = viewModel::onColorSelected,
+                onIconSelected = viewModel::onIconSelected,
+                onTrustChanged = viewModel::onTrustChanged,
+                onTest = viewModel::testConnection,
+                onSave = viewModel::save,
+            )
+        }
         scope.entry<Pairing> {
             val viewModel: PairingViewModel = hiltViewModel()
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -46,6 +75,7 @@ class PairingEntryProvider @Inject constructor() : FeatureEntryProvider {
             SavedHaroldsScreen(
                 uiState = uiState,
                 onBack = { navigator.goBack() },
+                onAdd = { navigator.openAddConnection() },
                 onEdit = viewModel::startEdit,
                 onRemove = viewModel::remove,
                 onNameChanged = viewModel::onNameChanged,

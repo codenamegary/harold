@@ -71,6 +71,7 @@ class DefaultPairingCoordinator @Inject constructor(
                     name = appearance.name,
                     colorId = appearance.colorId,
                     iconId = appearance.iconId,
+                    transport = harold.android.credentials.HaroldTransport.Server,
                 )
 
                 credentialStore.save(stored)
@@ -86,6 +87,6 @@ class DefaultPairingCoordinator @Inject constructor(
 
     companion object {
         private const val PLATFORM = "android"
-        private const val FORMAT_VERSION = 1
+        private const val FORMAT_VERSION = 2
     }
 }

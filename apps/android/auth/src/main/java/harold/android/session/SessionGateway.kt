@@ -9,6 +9,8 @@ sealed interface PairedState {
         val serverOrigin: String,
         val deviceId: String,
         val deviceName: String?,
+        val transport: harold.android.credentials.HaroldTransport =
+            harold.android.credentials.HaroldTransport.Server,
     ) : PairedState
 }
 

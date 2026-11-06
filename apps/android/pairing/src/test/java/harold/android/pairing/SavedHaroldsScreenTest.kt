@@ -34,6 +34,7 @@ class SavedHaroldsScreenTest {
                         ),
                     ),
                     onBack = {},
+                    onAdd = {},
                     onEdit = {},
                     onRemove = {},
                     onNameChanged = {},
@@ -45,7 +46,7 @@ class SavedHaroldsScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Connected Servers").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Connections").assertIsDisplayed()
         composeTestRule.onNodeWithText("laptop").assertIsDisplayed()
         composeTestRule.onNodeWithText("http://laptop.local:3847").assertIsDisplayed()
         composeTestRule.onNodeWithTag("saved_harold_badge_http://laptop.local:3847").assertIsDisplayed()

@@ -49,6 +49,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import harold.android.credentials.HaroldTransport
 import harold.android.ui.components.HaroldBadge
 import harold.android.ui.components.HaroldButton
 import harold.android.ui.components.HaroldButtonVariant
@@ -489,14 +490,19 @@ fun ChatScreen(
     val disconnectName = uiState.disconnectHaroldName
     val disconnectColorId = uiState.disconnectHaroldColorId
     val disconnectIconId = uiState.disconnectHaroldIconId
+    val isDirectConnection =
+        uiState.selectedSession?.haroldTransport == HaroldTransport.Ssh
     val hasDisconnectBadge =
         disconnectColorId.isNotEmpty() ||
             disconnectIconId.isNotEmpty() ||
             disconnectName.isNotEmpty()
-    val disconnectLabel = if (disconnectName.isNotEmpty()) {
-        stringResource(R.string.chat_disconnect_server_named, disconnectName)
-    } else {
-        stringResource(R.string.chat_disconnect_from_server)
+    val disconnectLabel = when {
+        isDirectConnection && disconnectName.isNotEmpty() ->
+            stringResource(R.string.chat_remove_ssh_named, disconnectName)
+        isDirectConnection -> stringResource(R.string.chat_remove_ssh)
+        disconnectName.isNotEmpty() ->
+            stringResource(R.string.chat_disconnect_server_named, disconnectName)
+        else -> stringResource(R.string.chat_disconnect_from_server)
     }
 
     if (disconnectConfirmVisible) {
@@ -504,14 +510,26 @@ fun ChatScreen(
             onDismissRequest = { disconnectConfirmVisible = false },
             title = {
                 Text(
-                    text = if (disconnectName.isNotEmpty()) {
-                        stringResource(R.string.chat_disconnect_confirm_title_named, disconnectName)
-                    } else {
-                        stringResource(R.string.chat_disconnect_confirm_title)
+                    text = when {
+                        isDirectConnection && disconnectName.isNotEmpty() ->
+                            stringResource(R.string.chat_remove_ssh_confirm_title_named, disconnectName)
+                        isDirectConnection ->
+                            stringResource(R.string.chat_remove_ssh_confirm_title)
+                        disconnectName.isNotEmpty() ->
+                            stringResource(R.string.chat_disconnect_confirm_title_named, disconnectName)
+                        else -> stringResource(R.string.chat_disconnect_confirm_title)
                     },
                 )
             },
-            text = { Text(text = stringResource(R.string.chat_disconnect_confirm_body)) },
+            text = {
+                Text(
+                    text = if (isDirectConnection) {
+                        stringResource(R.string.chat_remove_ssh_confirm_body)
+                    } else {
+                        stringResource(R.string.chat_disconnect_confirm_body)
+                    },
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -522,7 +540,13 @@ fun ChatScreen(
                         .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                         .testTag("disconnect_confirm"),
                 ) {
-                    Text(text = stringResource(R.string.chat_disconnect_confirm))
+                    Text(
+                        text = if (isDirectConnection) {
+                            stringResource(R.string.chat_remove_ssh_confirm)
+                        } else {
+                            stringResource(R.string.chat_disconnect_confirm)
+                        },
+                    )
                 }
             },
             dismissButton = {

@@ -10,6 +10,13 @@ class SavedHaroldRepository(
 ) {
     suspend fun list(): List<StoredCredential> = store.list()
 
+    suspend fun find(connectionId: String): StoredCredential? =
+        store.list().find { harold -> harold.serverOrigin == connectionId }
+
+    suspend fun save(credential: StoredCredential) {
+        store.save(credential)
+    }
+
     suspend fun edit(
         serverOrigin: String,
         name: String,

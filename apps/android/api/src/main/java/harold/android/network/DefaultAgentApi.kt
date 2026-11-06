@@ -56,7 +56,7 @@ import harold.android.contracts.WorkspaceCollection
 class DefaultAgentApi(
     private val client: OkHttpClient,
     private val json: Json = HaroldJson,
-) : AgentApi, AttachmentApi, SessionConfigApi, SessionCommandApi, GitApi {
+) : AgentTransportApi {
     override suspend fun prompt(
         serverOrigin: String,
         agentId: AgentId,

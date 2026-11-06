@@ -43,6 +43,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import harold.android.credentials.HaroldTransport
 import harold.android.ui.components.HaroldBadge
 import harold.android.ui.components.LoadingSkeletonList
 
@@ -290,7 +291,16 @@ private fun SessionListRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "${session.workspaceLabel} · ${session.agentLabel} · ${sessionStatusLabel(session.state)}",
+                    text = buildString {
+                        append(session.workspaceLabel)
+                        append(" · ")
+                        append(session.agentLabel)
+                        if (session.haroldTransport == HaroldTransport.Ssh) {
+                            append(" · Direct")
+                        }
+                        append(" · ")
+                        append(sessionStatusLabel(session.state))
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

@@ -3,6 +3,7 @@ package harold.android.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import harold.android.credentials.HaroldTransport
 import harold.android.credentials.SavedHaroldRepository
 import harold.android.credentials.StoredCredential
 import harold.android.database.session.CachedSession
@@ -181,6 +182,7 @@ class SessionsViewModel @Inject constructor(
                 haroldName = harold?.name.orEmpty(),
                 haroldColorId = harold?.colorId.orEmpty(),
                 haroldIconId = harold?.iconId.orEmpty(),
+                haroldTransport = harold?.transport ?: HaroldTransport.Server,
                 haroldReachable = session.serverOrigin !in unreachableOrigins,
             )
             pushedTitles[row.id]?.let { title -> row.copy(name = title) } ?: row

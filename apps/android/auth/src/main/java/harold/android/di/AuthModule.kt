@@ -17,9 +17,7 @@ import harold.android.network.serverOriginFromEndpoint
 import harold.android.session.DefaultHaroldConnections
 import harold.android.session.DefaultSessionGateway
 import harold.android.session.HaroldConnections
-import harold.android.session.HaroldReachability
 import harold.android.session.SessionGateway
-import harold.android.session.WorkspaceHaroldReachability
 import harold.android.user.DefaultUserRepository
 import harold.android.user.UserRepository
 import javax.inject.Singleton
@@ -43,9 +41,6 @@ abstract class AuthModule {
     @Binds
     @Singleton
     abstract fun haroldConnections(impl: DefaultHaroldConnections): HaroldConnections
-
-    @Binds
-    abstract fun haroldReachability(impl: WorkspaceHaroldReachability): HaroldReachability
 
     companion object {
         @Provides

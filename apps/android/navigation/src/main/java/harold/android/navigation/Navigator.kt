@@ -69,6 +69,27 @@ class Navigator @Inject constructor() {
         replaceWith(Shell)
     }
 
+    fun openAddConnection() {
+        if (backStack.isEmpty()) {
+            pairingQueued = true
+            return
+        }
+        if (backStack.lastOrNull() == AddConnection) {
+            return
+        }
+        backStack.add(AddConnection)
+    }
+
+    fun openSshSetup() {
+        if (backStack.isEmpty()) {
+            return
+        }
+        if (backStack.lastOrNull() == SshSetup) {
+            return
+        }
+        backStack.add(SshSetup)
+    }
+
     fun openPairing() {
         if (backStack.isEmpty()) {
             pairingQueued = true

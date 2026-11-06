@@ -29,6 +29,17 @@ harold pair  # generate a code and show a QR code
 
 3. Launch the app, hit `pair` and scan the QR code from your terminal.
 
+## Two ways to connect
+
+Harold Hub is the existing server path: QR pairing, HTTP and SSE, live
+multi-device sessions, and centralized replay. Harold Direct is new: the app
+connects over SSH and runs the agent's ACP process directly, with no Harold
+process or extra port on the host. Both modes live in the same app and the same
+saved-connection list.
+
+See [docs/direct-mode.md](docs/direct-mode.md) for host requirements, key
+enrollment, host state, locks, and the capability matrix.
+
 ## Connecting to Harold
 
 Harold is a proxy, you can point to it just like any other http server. Harold only needs to know what endpoint you've setup to embed it in the QR code, though you can also pair manually using the generated code. You can connect via...

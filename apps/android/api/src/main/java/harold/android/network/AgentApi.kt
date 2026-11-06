@@ -47,7 +47,19 @@ sealed interface AgentApiError {
 
 class AgentApiException(
     val error: AgentApiError,
-) : Exception()
+) : Exception(
+    when (error) {
+        is AgentApiError.Unauthorized -> error.detail ?: "Unauthorized"
+        is AgentApiError.Problem -> error.detail ?: error.title
+        is AgentApiError.Decode -> error.cause.message ?: "Unexpected response"
+        is AgentApiError.Transport -> error.cause.message ?: "Transport error"
+    },
+    when (error) {
+        is AgentApiError.Decode -> error.cause
+        is AgentApiError.Transport -> error.cause
+        else -> null
+    },
+)
 
 /** Write surface for the server-owned worktree path on a session. */
 interface SessionWorktreePathApi {
@@ -59,6 +71,9 @@ interface SessionWorktreePathApi {
         UnsupportedOperationException("worktree path updates are not supported"),
     )
 }
+
+/** All surfaces a transport adapter provides for one saved connection. */
+interface AgentTransportApi : AgentApi, AttachmentApi, SessionConfigApi, SessionCommandApi, GitApi
 
 interface AgentApi : SessionWorktreePathApi {
     suspend fun listWorkspaces(

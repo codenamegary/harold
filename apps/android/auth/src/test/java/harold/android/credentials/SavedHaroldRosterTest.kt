@@ -69,6 +69,54 @@ class SavedHaroldRosterTest {
     fun aMissingRosterIsAnEmptyList() {
         assertEquals(emptyList<StoredCredential>(), decodeSavedHarolds(null))
     }
+
+    @Test
+    fun rowsWrittenBeforeDirectModeDecodeAsServerConnections() {
+        val raw = """[
+            {
+              "formatVersion": 1,
+              "deviceId": "device_laptop",
+              "serverOrigin": "http://laptop.local:3847",
+              "deviceName": "Pixel",
+              "credential": "devcred_laptop",
+              "name": "laptop",
+              "colorId": "ink",
+              "iconId": "mark"
+            }
+        ]"""
+
+        val saved = decodeSavedHarolds(raw).single()
+
+        assertEquals(HaroldTransport.Server, saved.transport)
+        assertEquals(null, saved.ssh)
+    }
+
+    @Test
+    fun aDirectConnectionRoundTripsItsSshKeyAndFingerprint() {
+        val direct = StoredCredential(
+            formatVersion = 2,
+            deviceId = "SHA256:abc",
+            serverOrigin = "ssh://gary@laptop.local:22",
+            deviceName = "laptop.local",
+            credential = "",
+            name = "laptop direct",
+            colorId = "tide",
+            iconId = "terminal",
+            transport = HaroldTransport.Ssh,
+            ssh = SshConfig(
+                host = "laptop.local",
+                port = 22,
+                user = "gary",
+                auth = SshAuth.PrivateKey(
+                    pem = "-----BEGIN OPENSSH PRIVATE KEY-----\nkey\n-----END OPENSSH PRIVATE KEY-----",
+                    publicKey = "ssh-ed25519 AAAA harold",
+                ),
+                hostKeyFingerprint = "SHA256:abc",
+            ),
+        )
+
+        assertEquals(listOf(direct), decodeSavedHarolds(encodeSavedHarolds(listOf(direct))))
+    }
 }
 
 private fun savedHarold(

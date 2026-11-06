@@ -44,6 +44,7 @@ class BuildConventionsTest {
             ":navigation",
             ":contracts",
             ":api",
+            ":transport",
             ":auth",
             ":live",
             ":voice",

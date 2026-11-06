@@ -62,7 +62,7 @@ class ShellViewModel @Inject constructor(
     }
 
     fun onPairClick() {
-        navigator.openPairing()
+        navigator.openAddConnection()
     }
 
     fun onForeground() {

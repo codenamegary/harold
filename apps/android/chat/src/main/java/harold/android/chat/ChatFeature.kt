@@ -100,7 +100,7 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onAuthCancel = viewModel::onAuthCancel,
                 onAuthLogout = viewModel::onAuthLogout,
                 onDisconnectFromServer = viewModel::disconnectFromServer,
-                onPairAnotherHarold = navigator::openPairing,
+                onPairAnotherHarold = navigator::openAddConnection,
                 onSavedHarolds = navigator::openSavedHarolds,
                 agentLabel = uiState.selectedSession?.agentLabel.orEmpty(),
                 onElicitationOpen = viewModel::openElicitationSheet,

@@ -3,13 +3,17 @@ package harold.android.pairing
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import harold.android.credentials.HaroldTransport
 import harold.android.credentials.SavedHaroldRepository
 import harold.android.credentials.forgetSavedHarold
 import harold.android.credentials.settleAfterForget
-import harold.android.user.UserRepository
 import harold.android.live.SessionOwner
 import harold.android.navigation.Navigator
+import harold.android.session.HaroldConnection
+import harold.android.session.HaroldConnectionStatus
+import harold.android.session.HaroldConnections
 import harold.android.session.SessionGateway
+import harold.android.user.UserRepository
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +27,8 @@ data class SavedHaroldRow(
     val name: String,
     val colorId: String,
     val iconId: String,
+    val transport: HaroldTransport = HaroldTransport.Server,
+    val status: HaroldConnectionStatus = HaroldConnectionStatus.Closed,
 )
 
 data class SavedHaroldsUiState(
@@ -40,12 +46,19 @@ class SavedHaroldsViewModel @Inject constructor(
     private val sessionGateway: SessionGateway,
     private val sessionOwner: SessionOwner,
     private val navigator: Navigator,
+    private val connections: HaroldConnections,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SavedHaroldsUiState())
     val uiState: StateFlow<SavedHaroldsUiState> = _uiState.asStateFlow()
 
+    private var saved: List<SavedHaroldRow> = emptyList()
+
     init {
         viewModelScope.launch { reload() }
+        viewModelScope.launch {
+            connections.connections.collect { links -> applyLinks(links) }
+        }
+        viewModelScope.launch { connections.refresh() }
     }
 
     fun startEdit(serverOrigin: String) {
@@ -58,24 +71,6 @@ class SavedHaroldsViewModel @Inject constructor(
                 iconId = row.iconId,
             )
         }
-    }
-
-    fun cancelEdit() {
-        _uiState.update { current ->
-            current.copy(editingOrigin = null, name = "", colorId = "", iconId = "")
-        }
-    }
-
-    fun onNameChanged(value: String) {
-        _uiState.update { current -> current.copy(name = value) }
-    }
-
-    fun onColorSelected(colorId: String) {
-        _uiState.update { current -> current.copy(colorId = colorId) }
-    }
-
-    fun onIconSelected(iconId: String) {
-        _uiState.update { current -> current.copy(iconId = iconId) }
     }
 
     fun saveEdit() {
@@ -113,22 +108,56 @@ class SavedHaroldsViewModel @Inject constructor(
                 connect = sessionOwner::connect,
                 showPairing = {
                     navigator.showShell()
-                    navigator.openPairing()
+                    navigator.openAddConnection()
                 },
             )
+            connections.refresh()
             reload()
         }
     }
 
+    fun onNameChanged(value: String) {
+        _uiState.update { current -> current.copy(name = value) }
+    }
+
+    fun onColorSelected(colorId: String) {
+        _uiState.update { current -> current.copy(colorId = colorId) }
+    }
+
+    fun onIconSelected(iconId: String) {
+        _uiState.update { current -> current.copy(iconId = iconId) }
+    }
+
+    fun cancelEdit() {
+        _uiState.update { current ->
+            current.copy(
+                editingOrigin = null,
+                name = "",
+                colorId = "",
+                iconId = "",
+            )
+        }
+    }
+
     private suspend fun reload() {
-        val rows = repository.list().map { harold ->
+        saved = repository.list().map { harold ->
             SavedHaroldRow(
                 serverOrigin = harold.serverOrigin,
                 deviceId = harold.deviceId,
                 name = harold.name,
                 colorId = harold.colorId,
                 iconId = harold.iconId,
+                transport = harold.transport,
             )
+        }
+        _uiState.update { current -> current.copy(rows = saved) }
+        applyLinks(connections.connections.value)
+    }
+
+    private fun applyLinks(links: List<HaroldConnection>) {
+        val byOrigin = links.associateBy { link -> link.serverOrigin }
+        val rows = saved.map { row ->
+            row.copy(status = byOrigin[row.serverOrigin]?.status ?: HaroldConnectionStatus.Closed)
         }
         _uiState.update { current -> current.copy(rows = rows) }
     }

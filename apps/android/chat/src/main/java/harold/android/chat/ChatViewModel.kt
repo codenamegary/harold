@@ -14,6 +14,7 @@ import harold.android.chat.composer.SessionConfigWriter
 import harold.android.chat.composer.completeSlashCommand
 import harold.android.chat.composer.supportsFileAttachments
 import harold.android.chat.composer.supportsImageAttachments
+import harold.android.credentials.HaroldTransport
 import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AgentId
@@ -1789,6 +1790,7 @@ class ChatViewModel @Inject constructor(
                     haroldName = harold?.name.orEmpty(),
                     haroldColorId = harold?.colorId.orEmpty(),
                     haroldIconId = harold?.iconId.orEmpty(),
+                    haroldTransport = harold?.transport ?: HaroldTransport.Server,
                     haroldReachable = cached.serverOrigin !in unreachableOrigins,
                 )
                 titleFor(row, pushedTitles)?.let { title -> row.copy(name = title) } ?: row

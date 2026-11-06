@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Card
@@ -23,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -35,6 +37,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import harold.android.ui.components.HaroldAppearanceEditor
 import harold.android.ui.components.HaroldBadge
+import harold.android.credentials.HaroldTransport
+import harold.android.session.HaroldConnectionStatus
 import harold.android.ui.components.HaroldButton
 import harold.android.ui.components.HaroldButtonVariant
 
@@ -45,6 +49,7 @@ private val MIN_TOUCH_TARGET = 48.dp
 fun SavedHaroldsScreen(
     uiState: SavedHaroldsUiState,
     onBack: () -> Unit,
+    onAdd: () -> Unit,
     onEdit: (String) -> Unit,
     onRemove: (String) -> Unit,
     onNameChanged: (String) -> Unit,
@@ -71,6 +76,19 @@ fun SavedHaroldsScreen(
                         )
                     }
                 },
+                actions = {
+                    IconButton(
+                        onClick = onAdd,
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                            .testTag("saved_harolds_add"),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = stringResource(R.string.saved_harolds_add),
+                        )
+                    }
+                },
             )
         },
     ) { innerPadding ->
@@ -82,6 +100,14 @@ fun SavedHaroldsScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            HaroldButton(
+                text = stringResource(R.string.saved_harolds_add),
+                onClick = onAdd,
+                variant = HaroldButtonVariant.Primary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("saved_harolds_add_button"),
+            )
             uiState.rows.forEach { row ->
                 val isEditing = uiState.editingOrigin == row.serverOrigin
                 Card(
@@ -171,6 +197,24 @@ fun SavedHaroldsScreen(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    TransportPill(transport = row.transport)
+                                    Text(
+                                        text = statusLabel(row.status),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (row.status == HaroldConnectionStatus.Unreachable) {
+                                            MaterialTheme.colorScheme.error
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        modifier = Modifier.testTag(
+                                            "saved_harold_status_${row.serverOrigin}",
+                                        ),
+                                    )
+                                }
                             }
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -208,4 +252,33 @@ fun SavedHaroldsScreen(
             Spacer(modifier = Modifier.height(8.dp))
         }
     }
+}
+
+
+@Composable
+private fun TransportPill(transport: HaroldTransport) {
+    val label = when (transport) {
+        HaroldTransport.Server -> stringResource(R.string.transport_server)
+        HaroldTransport.Ssh -> stringResource(R.string.transport_ssh)
+    }
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier
+                .padding(horizontal = 8.dp, vertical = 2.dp)
+                .testTag("saved_harold_transport_${transport.name.lowercase()}"),
+        )
+    }
+}
+
+private fun statusLabel(status: HaroldConnectionStatus): String = when (status) {
+    HaroldConnectionStatus.Connecting -> "Connecting"
+    HaroldConnectionStatus.Connected -> "Connected"
+    HaroldConnectionStatus.Unreachable -> "Unreachable"
+    HaroldConnectionStatus.Closed -> "Offline"
 }

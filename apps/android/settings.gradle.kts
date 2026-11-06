@@ -21,6 +21,7 @@ include(
     ":navigation",
     ":contracts",
     ":api",
+    ":transport",
     ":database",
     ":auth",
     ":live",

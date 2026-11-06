@@ -38,6 +38,8 @@ internal fun encodeSavedHarolds(saved: List<StoredCredential>): String =
                     put("name", harold.name)
                     put("colorId", harold.colorId)
                     put("iconId", harold.iconId)
+                    put("transport", harold.transport.storageValue)
+                    harold.ssh?.let { ssh -> put("ssh", encodeSsh(ssh)) }
                 },
             )
         }
@@ -59,9 +61,68 @@ internal fun decodeSavedHarolds(raw: String?): List<StoredCredential> {
             name = harold.requireString("name"),
             colorId = harold.requireString("colorId"),
             iconId = harold.requireString("iconId"),
+            // Rows written before direct mode existed decode as server rows.
+            transport = harold.optionalString("transport").toTransport(),
+            ssh = harold["ssh"]?.let { value ->
+                if (value is JsonNull) null else decodeSsh(value.jsonObject)
+            },
         )
     }
 }
+
+private fun encodeSsh(ssh: SshConfig): JsonObject = buildJsonObject {
+    put("host", ssh.host)
+    put("port", ssh.port)
+    put("user", ssh.user)
+    put("hostKeyFingerprint", ssh.hostKeyFingerprint)
+    put(
+        "auth",
+        buildJsonObject {
+            when (val auth = ssh.auth) {
+                is SshAuth.PrivateKey -> {
+                    put("type", "private_key")
+                    put("pem", auth.pem)
+                    put("publicKey", auth.publicKey)
+                }
+                is SshAuth.Password -> {
+                    put("type", "password")
+                    put("secret", auth.secret)
+                }
+            }
+        },
+    )
+}
+
+private fun decodeSsh(element: JsonObject): SshConfig {
+    val auth = element.getValue("auth").jsonObject
+    val sshAuth = when (auth.requireString("type")) {
+        "private_key" -> SshAuth.PrivateKey(
+            pem = auth.requireString("pem"),
+            publicKey = auth.requireString("publicKey"),
+        )
+        "password" -> SshAuth.Password(secret = auth.requireString("secret"))
+        else -> error("Unknown SSH auth type")
+    }
+    return SshConfig(
+        host = element.requireString("host"),
+        port = element.requireInt("port"),
+        user = element.requireString("user"),
+        auth = sshAuth,
+        hostKeyFingerprint = element.requireString("hostKeyFingerprint"),
+    )
+}
+
+private val HaroldTransport.storageValue: String
+    get() = when (this) {
+        HaroldTransport.Server -> "server"
+        HaroldTransport.Ssh -> "ssh"
+    }
+
+private fun String?.toTransport(): HaroldTransport =
+    when (this) {
+        "ssh" -> HaroldTransport.Ssh
+        else -> HaroldTransport.Server
+    }
 
 private fun JsonObject.requireString(key: String): String = getValue(key).jsonPrimitive.content
 

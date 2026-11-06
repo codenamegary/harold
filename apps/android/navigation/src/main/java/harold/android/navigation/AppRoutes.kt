@@ -12,6 +12,12 @@ sealed interface AppRoute : NavKey
 data object Shell : AppRoute
 
 @Serializable
+data object AddConnection : AppRoute
+
+@Serializable
+data object SshSetup : AppRoute
+
+@Serializable
 data object Pairing : AppRoute
 
 @Serializable

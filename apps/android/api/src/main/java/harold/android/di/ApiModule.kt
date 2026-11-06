@@ -5,55 +5,24 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import harold.android.network.AgentApi
-import harold.android.network.AttachmentApi
 import harold.android.network.DefaultAgentApi
 import harold.android.network.DefaultPairingApi
-import harold.android.network.GitApi
 import harold.android.network.PairingApi
-import harold.android.network.SessionCommandApi
-import harold.android.network.SessionConfigApi
-import harold.android.network.SessionWorktreePathApi
 import harold.android.stream.OkHttpSseSessionStreamFactory
-import harold.android.stream.SessionStreamFactory
 import javax.inject.Singleton
 import okhttp3.OkHttpClient
 
-/** Server clients. The [AuthenticatedClient] comes from `:auth`, which owns the bearer token. */
+/**
+ * Server clients. The [AuthenticatedClient] comes from `:auth`, which owns
+ * the bearer token. `:transport` binds the transport-neutral interfaces so
+ * the app can route between hub HTTP and direct SSH.
+ */
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class ApiModule {
     @Binds
     @Singleton
     abstract fun pairingApi(impl: DefaultPairingApi): PairingApi
-
-    @Binds
-    @Singleton
-    abstract fun agentApi(impl: DefaultAgentApi): AgentApi
-
-    @Binds
-    @Singleton
-    abstract fun attachmentApi(impl: DefaultAgentApi): AttachmentApi
-
-    @Binds
-    @Singleton
-    abstract fun sessionConfigApi(impl: DefaultAgentApi): SessionConfigApi
-
-    @Binds
-    @Singleton
-    abstract fun sessionCommandApi(impl: DefaultAgentApi): SessionCommandApi
-
-    @Binds
-    @Singleton
-    abstract fun gitApi(impl: DefaultAgentApi): GitApi
-
-    @Binds
-    @Singleton
-    abstract fun sessionWorktreePathApi(impl: DefaultAgentApi): SessionWorktreePathApi
-
-    @Binds
-    @Singleton
-    abstract fun sessionStreamFactory(impl: OkHttpSseSessionStreamFactory): SessionStreamFactory
 
     companion object {
         @Provides

@@ -4,8 +4,9 @@ import harold.android.credentials.SavedHaroldRepository
 import harold.android.user.UserRepository
 import harold.android.credentials.StoredCredential
 import harold.android.navigation.Navigator
-import harold.android.navigation.Pairing
+import harold.android.navigation.AddConnection
 import harold.android.navigation.Shell
+import harold.android.session.InactiveHaroldConnections
 import harold.android.session.PairedState
 import harold.android.testing.FakeCredentialStore
 import harold.android.testing.FakeSessionGateway
@@ -74,7 +75,7 @@ class SavedHaroldsViewModelTest {
         viewModel.remove("http://laptop.local:3847")
 
         assertEquals(emptyList<StoredCredential>(), store.list())
-        assertEquals(listOf(Shell, Pairing), navigator.backStack.toList())
+        assertEquals(listOf(Shell, AddConnection), navigator.backStack.toList())
     }
 }
 
@@ -87,6 +88,7 @@ private fun viewModel(
     sessionGateway = FakeSessionGateway(PairedState.Paired("http://laptop.local:3847", "device_laptop", "Pixel")),
     sessionOwner = NoopSessionOwner(),
     navigator = navigator,
+    connections = InactiveHaroldConnections,
 )
 
 private suspend fun storeWithTwo(): FakeCredentialStore {

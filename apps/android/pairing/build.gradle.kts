@@ -12,6 +12,7 @@ dependencies {
     implementation(project(":api"))
     implementation(project(":auth"))
     implementation(project(":live"))
+    implementation(project(":transport"))
     implementation(project(":design"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.bundles.feature)

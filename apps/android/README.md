@@ -44,7 +44,24 @@ The application id was renamed to `harold.android` (formerly `server.agent.andro
 
 ## Transport
 
-Every build type allows cleartext HTTP traffic, so the app can pair with a LAN host over `http://`. One network security config in `src/main` sets this. No trust-all TLS.
+The app has two saved-connection transports:
+
+- **Harold Hub** uses HTTP and SSE to a Harold daemon. Pairing is a QR code or
+  a manual code. The server owns sessions, replay, and fan-out.
+- **Harold Direct** uses SSH and runs `agent acp` directly. Pairing is SSH key
+  enrollment. Each app connection owns one ACP process and no Harold process
+  runs on the host.
+
+`StoredCredential.transport` defaults to `Server`, so credentials written before
+direct mode still decode unchanged. SSH rows use a synthetic
+`ssh://user@host:port` roster key. Keys and passwords are stored in the same
+encrypted roster as server credentials. Host keys are pinned by SHA-256
+fingerprint.
+
+Direct-mode host state lives under `~/.harold/direct/`: one JSON file per
+session, `flock` locks per active session, uploads, and a workspace list.
+
+Every build type allows cleartext HTTP traffic, so the app can pair with a LAN host over `http://`. One network security config in `src/main` sets this. No trust-all TLS. SSH is a raw TCP connection and is not affected by the HTTP cleartext policy.
 
 ## Debug and release builds
 

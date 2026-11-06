@@ -70,8 +70,14 @@
     <string name="agent_auth_done_succeeded">Signed in</string>
     <string name="agent_auth_done_cancelled">Cancelled</string>
     <string name="agent_auth_done_failed">Sign-in failed</string>
-    <string name="chat_pair_another_harold">Pair</string>
-    <string name="chat_saved_harolds">Connected Servers</string>
+    <string name="chat_pair_another_harold">Add connection</string>
+    <string name="chat_saved_harolds">Connections</string>
+    <string name="chat_remove_ssh">Remove SSH connection</string>
+    <string name="chat_remove_ssh_named">Remove %1$s</string>
+    <string name="chat_remove_ssh_confirm_title">Remove SSH connection?</string>
+    <string name="chat_remove_ssh_confirm_title_named">Remove %1$s?</string>
+    <string name="chat_remove_ssh_confirm_body">This removes the saved SSH key and connection from this device. The host\'s authorized_keys entry is unchanged.</string>
+    <string name="chat_remove_ssh_confirm">Remove</string>
     <string name="chat_disconnect_from_server">Disconnect from server</string>
     <string name="chat_disconnect_server_named">Disconnect %1$s</string>
     <string name="chat_disconnect_confirm_title">Disconnect from server?</string>
