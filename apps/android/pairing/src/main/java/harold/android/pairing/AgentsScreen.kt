@@ -24,6 +24,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +36,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -72,6 +75,8 @@ fun AgentsScreen(
     onCreateCustom: () -> Unit,
     onCancelCreateCustom: () -> Unit,
 ) {
+    val addCustomContentDescription = stringResource(R.string.agents_custom_add)
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -116,6 +121,23 @@ fun AgentsScreen(
                     }
                 },
             )
+        },
+        floatingActionButton = {
+            if (!uiState.showCreateCustom) {
+                FloatingActionButton(
+                    onClick = onStartCreateCustom,
+                    modifier = Modifier
+                        .testTag("agents_add_custom")
+                        .semantics {
+                            contentDescription = addCustomContentDescription
+                        },
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Add,
+                        contentDescription = null,
+                    )
+                }
+            }
         },
     ) { innerPadding ->
         Column(
@@ -222,17 +244,6 @@ fun AgentsScreen(
                         onDelete = onDelete,
                     )
                 }
-            }
-
-            if (!uiState.showCreateCustom) {
-                HaroldButton(
-                    text = stringResource(R.string.agents_custom_add),
-                    onClick = onStartCreateCustom,
-                    variant = HaroldButtonVariant.Secondary,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("agents_add_custom"),
-                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
