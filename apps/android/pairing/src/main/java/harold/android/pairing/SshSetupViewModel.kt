@@ -7,12 +7,17 @@ import harold.android.credentials.HaroldTransport
 import harold.android.credentials.SavedHaroldRepository
 import harold.android.credentials.SshAuth
 import harold.android.credentials.SshConfig
+import harold.android.credentials.SshCredential
+import harold.android.credentials.SshCredentialKind
+import harold.android.credentials.SshCredentialStore
 import harold.android.credentials.StoredCredential
 import harold.android.navigation.Navigator
 import harold.android.session.SessionGateway
 import harold.android.transport.ssh.GeneratedSshKey
-import harold.android.transport.ssh.SshEnrollment
+import harold.android.transport.ssh.SshProbe
 import harold.android.transport.ssh.SshKeyGenerator
+import java.time.Instant
+import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +31,13 @@ enum class SshAuthMode {
     Password,
 }
 
+data class SavedSshCredential(
+    val id: String,
+    val name: String,
+    val kind: SshCredentialKind,
+    val publicKey: String? = null,
+)
+
 data class SshSetupUiState(
     val host: String = "",
     val port: String = "22",
@@ -37,20 +49,34 @@ data class SshSetupUiState(
     val password: String = "",
     val colorId: String = "tide",
     val iconId: String = "terminal",
+    val savedCredentials: List<SavedSshCredential> = emptyList(),
+    val selectedCredentialId: String? = null,
+    val credentialName: String = defaultCredentialName(SshAuthMode.GeneratedKey),
+    val saveCredentialForReuse: Boolean = true,
     val testedFingerprint: String? = null,
     val trusted: Boolean = false,
     val testing: Boolean = false,
     val saving: Boolean = false,
     val errorMessage: String? = null,
 ) {
-    val publicKey: String? get() = generatedKey?.publicKey
+    val selectedCredential: SavedSshCredential?
+        get() = savedCredentials.find { credential -> credential.id == selectedCredentialId }
+
+    val publicKey: String?
+        get() = selectedCredential?.publicKey ?: generatedKey?.publicKey
+
     val canTest: Boolean
         get() = host.isNotBlank() && port.toIntOrNull() != null && user.isNotBlank() &&
-            when (authMode) {
-                SshAuthMode.GeneratedKey -> generatedKey != null
-                SshAuthMode.ImportedKey -> importedKey.isNotBlank()
-                SshAuthMode.Password -> password.isNotBlank()
+            if (selectedCredentialId != null) {
+                selectedCredential != null
+            } else {
+                when (authMode) {
+                    SshAuthMode.GeneratedKey -> generatedKey != null
+                    SshAuthMode.ImportedKey -> importedKey.isNotBlank()
+                    SshAuthMode.Password -> password.isNotBlank()
+                }
             }
+
     val canSave: Boolean get() = canTest && testedFingerprint != null && trusted && !saving
 }
 
@@ -58,13 +84,20 @@ data class SshSetupUiState(
 class SshSetupViewModel @Inject constructor(
     private val repository: SavedHaroldRepository,
     private val gateway: SessionGateway,
-    private val enrollment: SshEnrollment,
+    private val enrollment: SshProbe,
     private val navigator: Navigator,
+    private val credentials: SshCredentialStore,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(
         SshSetupUiState(generatedKey = pendingKey()),
     )
     val uiState: StateFlow<SshSetupUiState> = _uiState.asStateFlow()
+
+    private var loadedCredentials: List<SshCredential> = emptyList()
+
+    init {
+        viewModelScope.launch { reloadCredentials() }
+    }
 
     fun onHostChanged(value: String) {
         _uiState.update { state ->
@@ -74,6 +107,14 @@ class SshSetupViewModel @Inject constructor(
                     suggestedName(value.trim())
                 } else {
                     state.name
+                },
+                credentialName = if (
+                    state.credentialName.isBlank() ||
+                    state.credentialName == defaultCredentialName(state.authMode, state.host)
+                ) {
+                    defaultCredentialName(state.authMode, value.trim())
+                } else {
+                    state.credentialName
                 },
                 testedFingerprint = null,
                 trusted = false,
@@ -101,12 +142,52 @@ class SshSetupViewModel @Inject constructor(
 
     fun onAuthModeChanged(mode: SshAuthMode) {
         _uiState.update { state ->
+            val nextName = if (
+                state.credentialName.isBlank() ||
+                state.credentialName == defaultCredentialName(state.authMode, state.host)
+            ) {
+                defaultCredentialName(mode, state.host)
+            } else {
+                state.credentialName
+            }
             state.copy(
                 authMode = mode,
+                credentialName = nextName,
                 testedFingerprint = null,
                 trusted = false,
                 errorMessage = null,
             )
+        }
+    }
+
+    fun onCredentialSelected(id: String?) {
+        _uiState.update { state ->
+            state.copy(
+                selectedCredentialId = id,
+                credentialName = if (state.credentialName.isBlank()) {
+                    defaultCredentialName(state.authMode, state.host)
+                } else {
+                    state.credentialName
+                },
+                testedFingerprint = null,
+                trusted = false,
+                errorMessage = null,
+            )
+        }
+    }
+
+    fun onCredentialNameChanged(value: String) {
+        _uiState.update { state -> state.copy(credentialName = value) }
+    }
+
+    fun onSaveCredentialForReuseChanged(value: Boolean) {
+        _uiState.update { state -> state.copy(saveCredentialForReuse = value) }
+    }
+
+    fun onDeleteCredential(id: String) {
+        viewModelScope.launch {
+            credentials.remove(id)
+            reloadCredentials()
         }
     }
 
@@ -136,7 +217,7 @@ class SshSetupViewModel @Inject constructor(
 
     fun testConnection() {
         val state = _uiState.value
-        val config = state.toConfig() ?: return
+        val config = buildConfig() ?: return
         if (!state.canTest || state.testing) {
             return
         }
@@ -168,13 +249,30 @@ class SshSetupViewModel @Inject constructor(
 
     fun save() {
         val state = _uiState.value
-        val config = state.toConfig() ?: return
+        val config = buildConfig() ?: return
         val fingerprint = state.testedFingerprint ?: return
         if (!state.canSave) {
             return
         }
         _uiState.update { current -> current.copy(saving = true, errorMessage = null) }
         viewModelScope.launch {
+            val savedCredential = if (state.selectedCredentialId == null && state.saveCredentialForReuse) {
+                val credential = buildCredential(state, config.auth)
+                runCatching { credentials.save(credential) }.onFailure { error ->
+                    _uiState.update { current ->
+                        current.copy(
+                            saving = false,
+                            errorMessage = error.message ?: "Could not save the SSH credential.",
+                        )
+                    }
+                    return@launch
+                }
+                credential
+            } else {
+                state.selectedCredentialId?.let { id -> credentials.touch(id) }
+                null
+            }
+
             val saved = StoredCredential(
                 formatVersion = FORMAT_VERSION,
                 deviceId = fingerprint,
@@ -189,6 +287,9 @@ class SshSetupViewModel @Inject constructor(
             )
             repository.save(saved)
             gateway.refresh()
+            if (savedCredential?.kind == SshCredentialKind.PrivateKey) {
+                pendingKeyValue = null
+            }
             _uiState.update { current -> current.copy(saving = false) }
             navigator.showChat()
         }
@@ -197,6 +298,89 @@ class SshSetupViewModel @Inject constructor(
     fun onBack() {
         navigator.goBack()
     }
+
+    private suspend fun reloadCredentials() {
+        val saved = credentials.list()
+        loadedCredentials = saved
+        _uiState.update { state ->
+            val rows = saved.map { credential ->
+                SavedSshCredential(
+                    id = credential.id,
+                    name = credential.name,
+                    kind = credential.kind,
+                    publicKey = credential.publicKey,
+                )
+            }
+            val selectedStillExists = rows.any { row -> row.id == state.selectedCredentialId }
+            state.copy(
+                savedCredentials = rows,
+                selectedCredentialId = if (selectedStillExists) state.selectedCredentialId else null,
+                credentialName = if (state.credentialName.isBlank()) {
+                    defaultCredentialName(state.authMode, state.host)
+                } else {
+                    state.credentialName
+                },
+            )
+        }
+    }
+
+    private fun buildCredential(state: SshSetupUiState, auth: SshAuth): SshCredential {
+        val defaultName = defaultCredentialName(state.authMode, state.host)
+        val name = state.credentialName.trim().ifBlank { defaultName }
+        val kind = when (auth) {
+            is SshAuth.PrivateKey -> SshCredentialKind.PrivateKey
+            is SshAuth.Password -> SshCredentialKind.Password
+        }
+        val existing = loadedCredentials.find { credential ->
+            credential.name.equals(name, ignoreCase = true) && credential.kind == kind
+        }
+        val now = Instant.now().toString()
+        return SshCredential(
+            id = existing?.id ?: "sshcred_${UUID.randomUUID()}",
+            name = name,
+            kind = kind,
+            privateKeyPem = (auth as? SshAuth.PrivateKey)?.pem,
+            publicKey = (auth as? SshAuth.PrivateKey)?.publicKey,
+            password = (auth as? SshAuth.Password)?.secret,
+            createdAt = existing?.createdAt ?: now,
+            lastUsedAt = now,
+        )
+    }
+
+    private fun buildConfig(): SshConfig? {
+        val state = _uiState.value
+        val portNumber = state.port.toIntOrNull() ?: return null
+        if (state.host.isBlank() || state.user.isBlank()) {
+            return null
+        }
+        val auth = if (state.selectedCredentialId != null) {
+            selectedAuth() ?: return null
+        } else {
+            when (state.authMode) {
+                SshAuthMode.GeneratedKey -> {
+                    val key = state.generatedKey ?: return null
+                    SshAuth.PrivateKey(pem = key.privateKeyPem, publicKey = key.publicKey)
+                }
+                SshAuthMode.ImportedKey -> SshAuth.PrivateKey(
+                    pem = state.importedKey.trim(),
+                    publicKey = "",
+                )
+                SshAuthMode.Password -> SshAuth.Password(secret = state.password)
+            }
+        }
+        return SshConfig(
+            host = state.host,
+            port = portNumber,
+            user = state.user,
+            auth = auth,
+            hostKeyFingerprint = "",
+        )
+    }
+
+    private fun selectedAuth(): SshAuth? =
+        loadedCredentials
+            .find { credential -> credential.id == _uiState.value.selectedCredentialId }
+            ?.toAuth()
 
     companion object {
         private const val FORMAT_VERSION = 2
@@ -212,30 +396,14 @@ class SshSetupViewModel @Inject constructor(
 
         fun suggestedName(host: String): String =
             host.substringBefore('.').ifBlank { "ssh" }
+    }
+}
 
-        private fun SshSetupUiState.toConfig(): SshConfig? {
-            val portNumber = port.toIntOrNull() ?: return null
-            if (host.isBlank() || user.isBlank()) {
-                return null
-            }
-            val auth = when (authMode) {
-                SshAuthMode.GeneratedKey -> {
-                    val key = generatedKey ?: return null
-                    SshAuth.PrivateKey(pem = key.privateKeyPem, publicKey = key.publicKey)
-                }
-                SshAuthMode.ImportedKey -> SshAuth.PrivateKey(
-                    pem = importedKey.trim(),
-                    publicKey = "",
-                )
-                SshAuthMode.Password -> SshAuth.Password(secret = password)
-            }
-            return SshConfig(
-                host = host,
-                port = portNumber,
-                user = user,
-                auth = auth,
-                hostKeyFingerprint = "",
-            )
-        }
+fun defaultCredentialName(mode: SshAuthMode, host: String = ""): String {
+    val prefix = host.substringBefore('.').ifBlank { "Phone" }
+    return when (mode) {
+        SshAuthMode.GeneratedKey -> "$prefix SSH key"
+        SshAuthMode.ImportedKey -> "$prefix imported key"
+        SshAuthMode.Password -> "$prefix SSH password"
     }
 }

@@ -17,6 +17,8 @@ import harold.android.transport.routing.RoutingSessionStreamFactory
 import harold.android.transport.routing.TransportHaroldReachability
 import harold.android.transport.ssh.JschSshConnectionFactory
 import harold.android.transport.ssh.SshConnectionFactory
+import harold.android.transport.ssh.SshEnrollment
+import harold.android.transport.ssh.SshProbe
 import javax.inject.Singleton
 
 @Module
@@ -57,4 +59,8 @@ abstract class TransportModule {
     @Binds
     @Singleton
     abstract fun sshConnectionFactory(impl: JschSshConnectionFactory): SshConnectionFactory
+
+    @Binds
+    @Singleton
+    abstract fun sshProbe(impl: SshEnrollment): SshProbe
 }

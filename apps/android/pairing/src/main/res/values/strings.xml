@@ -52,6 +52,8 @@
     <string name="ssh_auth_help_import_body">Use an existing OpenSSH private key. Useful when you already manage keys or need to reuse a specific identity. The private key is stored in the encrypted list of saved connections.</string>
     <string name="ssh_auth_help_password_title">Password</string>
     <string name="ssh_auth_help_password_body">Use the SSH password for this connection. Easiest for a quick setup. The password is stored encrypted on the phone and is sent to the host only during SSH authentication. Prefer a key when the host supports one.</string>
+    <string name="ssh_auth_help_reuse_title">Saved credentials</string>
+    <string name="ssh_auth_help_reuse_body">Give a key or password a name and save it for reuse. Saved credentials are encrypted on this device and can be selected when you add another SSH connection. They are never sent to a Harold server.</string>
     <string name="ssh_auth_help_pinning_title">Host key pinning</string>
     <string name="ssh_auth_help_pinning_body">On the first connection, Harold shows the host key fingerprint. It pins that key and refuses to connect if the host key changes later.</string>
     <string name="ssh_auth_help_close">Got it</string>
@@ -68,5 +70,19 @@
     <string name="ssh_fingerprint_label">Host key fingerprint</string>
     <string name="ssh_trust_label">I trust this host key</string>
     <string name="ssh_save_button">Save SSH host</string>
+    <string name="ssh_saved_credential_label">Saved credential</string>
+    <string name="ssh_credential_new">Create a new credential</string>
+    <string name="ssh_credential_manage">Manage</string>
+    <string name="ssh_credential_name_label">Credential name</string>
+    <string name="ssh_credential_save_for_reuse">Save for reuse on this device</string>
+    <string name="ssh_credential_kind_key">Private key</string>
+    <string name="ssh_credential_kind_password">Password</string>
+    <string name="ssh_credential_public_key_label">Public key</string>
+    <string name="ssh_credential_password_saved">Password saved on this device.</string>
+    <string name="ssh_credential_manager_title">Saved SSH credentials</string>
+    <string name="ssh_credential_manager_note">Connections that already use a credential keep their copy.</string>
+    <string name="ssh_credential_manager_empty">No saved credentials yet.</string>
+    <string name="ssh_credential_delete">Remove</string>
+    <string name="ssh_credential_done">Done</string>
     <string name="pairing_camera_permission_required">Camera permission is required to scan pairing QR codes.</string>
 </resources>

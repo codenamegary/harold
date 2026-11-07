@@ -61,6 +61,12 @@ fingerprint.
 Direct-mode host state lives under `~/.harold/direct/`: one JSON file per
 session, `flock` locks per active session, uploads, and a workspace list.
 
+SSH keys and passwords can be named and saved for reuse. Saved credentials
+live in a separate encrypted store with its own Android Keystore key, and the
+SSH setup screen can select an existing entry or create a new one. A saved
+connection copies the material it needs, so removing a saved credential does
+not break an existing connection.
+
 Every build type allows cleartext HTTP traffic, so the app can pair with a LAN host over `http://`. One network security config in `src/main` sets this. No trust-all TLS. SSH is a raw TCP connection and is not affected by the HTTP cleartext policy.
 
 ## Debug and release builds

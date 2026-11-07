@@ -11,7 +11,9 @@ import harold.android.database.LocalCacheCleaner
 import harold.android.credentials.CredentialHolder
 import harold.android.credentials.CredentialStore
 import harold.android.credentials.DefaultCredentialStore
+import harold.android.credentials.DefaultSshCredentialStore
 import harold.android.credentials.SavedHaroldRepository
+import harold.android.credentials.SshCredentialStore
 import harold.android.network.BearerAuthInterceptor
 import harold.android.network.serverOriginFromEndpoint
 import harold.android.session.DefaultHaroldConnections
@@ -33,6 +35,10 @@ abstract class AuthModule {
     @Binds
     @Singleton
     abstract fun credentialStore(impl: DefaultCredentialStore): CredentialStore
+
+    @Binds
+    @Singleton
+    abstract fun sshCredentialStore(impl: DefaultSshCredentialStore): SshCredentialStore
 
     @Binds
     @Singleton
@@ -72,6 +78,12 @@ abstract class AuthModule {
         fun defaultCredentialStore(
             @ApplicationContext context: Context,
         ): DefaultCredentialStore = DefaultCredentialStore(context)
+
+        @Provides
+        @Singleton
+        fun defaultSshCredentialStore(
+            @ApplicationContext context: Context,
+        ): DefaultSshCredentialStore = DefaultSshCredentialStore(context)
 
         @Provides
         @Singleton

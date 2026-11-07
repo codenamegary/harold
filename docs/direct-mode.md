@@ -41,6 +41,23 @@ Saved connections show a `Server` or `SSH` badge. SSH keys and passwords live
 in the encrypted saved-connection store on the device. The host key is pinned by SHA-256
 fingerprint on every later connection.
 
+### Saved credentials
+
+When adding an SSH host, give the key or password a name and save it for reuse.
+The next SSH setup can select it from the saved-credential dropdown instead of
+generating or importing another one. The `Manage` link opens the saved SSH
+credential list, where entries can be removed.
+
+Saved SSH credentials live in a separate encrypted store on the phone,
+protected by its own Android Keystore key. A saved connection copies the
+credential material it needs, so removing a saved credential never breaks an
+existing connection.
+
+Android does not provide a system-wide SSH key or password vault. Credential
+Manager and Autofill handle app and website passwords and passkeys. KeyChain
+handles X.509 client certificates with a system picker. SSH credentials are
+therefore app-owned and encrypted by the app.
+
 ## Session flow
 
 An app connection owns its agent process:

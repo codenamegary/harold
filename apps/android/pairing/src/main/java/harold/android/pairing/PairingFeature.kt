@@ -47,6 +47,10 @@ class PairingEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onTrustChanged = viewModel::onTrustChanged,
                 onTest = viewModel::testConnection,
                 onSave = viewModel::save,
+                onCredentialSelected = viewModel::onCredentialSelected,
+                onCredentialNameChanged = viewModel::onCredentialNameChanged,
+                onSaveCredentialForReuseChanged = viewModel::onSaveCredentialForReuseChanged,
+                onDeleteCredential = viewModel::onDeleteCredential,
             )
         }
         scope.entry<Pairing> {
