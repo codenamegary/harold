@@ -244,15 +244,11 @@ fun HaroldAppearanceEditor(
             }
         }
 
-        OutlinedTextField(
+        HaroldTextField(
             value = name,
             onValueChange = onNameChanged,
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag(nameFieldTag),
-            label = { Text(text = nameLabel) },
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
+            label = nameLabel,
+            fieldTestTag = nameFieldTag,
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
