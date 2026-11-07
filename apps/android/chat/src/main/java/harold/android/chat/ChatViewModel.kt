@@ -14,8 +14,6 @@ import harold.android.chat.composer.SessionConfigWriter
 import harold.android.chat.composer.completeSlashCommand
 import harold.android.chat.composer.supportsFileAttachments
 import harold.android.chat.composer.supportsImageAttachments
-import harold.android.credentials.HaroldTransport
-import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AgentId
 import harold.android.contracts.AgentSettings
@@ -127,10 +125,8 @@ class ChatViewModel @Inject constructor(
      */
     private val agentAuth = AgentAuthController(
         userRepository = userRepository,
-        scope = viewModelScope,
         origin = ::selectedOrPairedOrigin,
         selectedAgent = { _uiState.value.selectedSession?.agentId },
-        onAuthenticated = ::createPendingSessionAfterLogin,
     )
 
     /**
@@ -171,7 +167,6 @@ class ChatViewModel @Inject constructor(
     private val titlePulledSessionIds = mutableSetOf<String>()
     private var lastLiveWatchKey: String? = null
     private var lastAuthRequired: Boolean = false
-    private var pendingCreateInFlight = false
     private var changesBadgeJob: Job? = null
     private var changesBadgeKey: String? = null
     private var pendingModelApply: PendingModelApply? = null
@@ -624,48 +619,6 @@ class ChatViewModel @Inject constructor(
         syncActiveSessionsFromUiState()
         agentAuth.hydrate(agentId)
         clearChangesBadge()
-    }
-
-    private fun createPendingSessionAfterLogin(agentId: AgentId, status: AgentAuthStatus) {
-        val pending = _uiState.value.selectedSession ?: return
-        if (
-            status != AgentAuthStatus.Authenticated ||
-            pending.sessionId.isNotEmpty() ||
-            pending.agentId != agentId ||
-            pendingCreateInFlight
-        ) {
-            return
-        }
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired
-        val origin = pending.serverOrigin.ifEmpty { paired?.serverOrigin } ?: return
-
-        pendingCreateInFlight = true
-        viewModelScope.launch {
-            sessionRepository.createSession(
-                serverOrigin = origin,
-                body = CreateSessionBody(agentId = agentId, cwd = pending.cwd),
-            ).fold(
-                onSuccess = { created ->
-                    if (_uiState.value.selectedSession == pending) {
-                        openCreatedSession(
-                            SessionCommand.Created(
-                                response = created,
-                                serverOrigin = origin,
-                                haroldName = pending.haroldName,
-                                haroldColorId = pending.haroldColorId,
-                                haroldIconId = pending.haroldIconId,
-                            ),
-                        )
-                    } else {
-                        refreshCatalog()
-                    }
-                },
-                onFailure = { error ->
-                    _uiState.update { current -> current.copy(composerError = apiErrorMessage(error)) }
-                },
-            )
-            pendingCreateInFlight = false
-        }
     }
 
     fun submitComposerPrompt() {
@@ -1208,26 +1161,6 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun onAuthSignIn() {
-        val session = _uiState.value.selectedSession ?: return
-        agentAuth.signIn(session.agentId)
-    }
-
-    fun onAuthConfirm(stepId: String) {
-        val selected = _uiState.value.selectedSession ?: return
-        agentAuth.confirm(selected.agentId, stepId)
-    }
-
-    fun onAuthCancel() {
-        val selected = _uiState.value.selectedSession ?: return
-        agentAuth.cancel(selected.agentId)
-    }
-
-    fun onAuthLogout() {
-        val selected = _uiState.value.selectedSession ?: return
-        agentAuth.logout(selected.agentId)
-    }
-
     fun disconnectFromServer() {
         viewModelScope.launch {
             val selectedOrigin = _uiState.value.selectedSession?.serverOrigin?.takeIf { it.isNotEmpty() }
@@ -1239,13 +1172,10 @@ class ChatViewModel @Inject constructor(
             }
             val paired = sessionGateway.pairedState.value as? PairedState.Paired
             val originToRemove = targetSaved?.serverOrigin ?: paired?.serverOrigin
-            val deviceIdToRemove = targetSaved?.deviceId ?: paired?.deviceId
 
-            if (originToRemove != null && deviceIdToRemove != null) {
+            if (originToRemove != null) {
                 val remains = forgetSavedHarold(
                     serverOrigin = originToRemove,
-                    deviceId = deviceIdToRemove,
-                    revoke = userRepository::revokeDevice,
                     repository = savedHaroldRepository,
                 )
                 settleAfterForget(
@@ -1256,7 +1186,7 @@ class ChatViewModel @Inject constructor(
                     connect = sessionOwner::connect,
                     showPairing = {
                         navigator.showShell()
-                        navigator.openPairing()
+                        navigator.openAddConnection()
                     },
                 )
                 clearPersistedSession()
@@ -1279,7 +1209,7 @@ class ChatViewModel @Inject constructor(
                 }
             } else {
                 navigator.showShell()
-                navigator.openPairing()
+                navigator.openAddConnection()
                 clearPersistedSession()
                 _uiState.update { current ->
                     current.copy(
@@ -1501,7 +1431,7 @@ class ChatViewModel @Inject constructor(
             val agentId = snapshot.agentId
             if (agentId != null) {
                 viewModelScope.launch {
-                    agentAuth.hydrate(agentId, autoStartLogin = true)
+                    agentAuth.hydrate(agentId)
                 }
             }
         }
@@ -1790,7 +1720,6 @@ class ChatViewModel @Inject constructor(
                     haroldName = harold?.name.orEmpty(),
                     haroldColorId = harold?.colorId.orEmpty(),
                     haroldIconId = harold?.iconId.orEmpty(),
-                    haroldTransport = harold?.transport ?: HaroldTransport.Server,
                     haroldReachable = cached.serverOrigin !in unreachableOrigins,
                 )
                 titleFor(row, pushedTitles)?.let { title -> row.copy(name = title) } ?: row

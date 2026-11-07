@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tiny ACP agent used by the direct-mode integration test.
+"""Tiny ACP agent used by the SSH integration test.
 
 Exercises initialize, session/new, session/load, prompt, permission, terminal,
 config options, and cancellation without a model provider.
@@ -20,7 +20,7 @@ def log(message: str) -> None:
             log_file.write(message + "\n")
 
 
-SESSION_ID = "ses_fake_direct"
+SESSION_ID = "ses_test_opencode"
 next_id = 1000
 pending: dict[int, str] = {}
 

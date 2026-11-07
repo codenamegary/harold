@@ -310,7 +310,7 @@ private fun ShellScreenLivePreview() {
         ShellScreen(
             uiState = ShellUiState()
                 .fromPairedState(
-                    PairedState.Paired("http://127.0.0.1:8787", "device_01", "Pixel 8"),
+                    PairedState.Paired("ssh://gary@127.0.0.1:22", "Pixel 8"),
                 )
                 .fromConnectionState(ConnectionState(status = ConnectionStatus.Live))
                 .fromWorkspaceProbe(WorkspaceProbe.Loaded(count = 4)),
@@ -327,7 +327,7 @@ private fun ShellScreenAuthFailedPreview() {
         ShellScreen(
             uiState = ShellUiState()
                 .fromPairedState(
-                    PairedState.Paired("http://127.0.0.1:8787", "device_01", "Pixel 8"),
+                    PairedState.Paired("ssh://gary@127.0.0.1:22", "Pixel 8"),
                 )
                 .fromConnectionState(
                     ConnectionState(status = ConnectionStatus.AuthFailed(detail = null)),

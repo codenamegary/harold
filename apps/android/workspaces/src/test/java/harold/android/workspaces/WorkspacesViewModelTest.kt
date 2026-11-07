@@ -45,7 +45,7 @@ class WorkspacesViewModelTest {
     @Test
     fun loadsWorkspaces() = runTest(dispatcher) {
         val viewModel = WorkspacesViewModel(
-            sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
+            sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "Pixel")),
             workspaceRepository = FakeWorkspaceRepository(),
         )
 
@@ -60,7 +60,7 @@ class WorkspacesViewModelTest {
     @Test
     fun reportsEmptyWorkspaces() = runTest(dispatcher) {
         val viewModel = WorkspacesViewModel(
-            sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
+            sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "Pixel")),
             workspaceRepository = FakeWorkspaceRepository(workspaces = emptyList()),
         )
 
@@ -73,7 +73,7 @@ class WorkspacesViewModelTest {
     @Test
     fun reportsApiFailure() = runTest(dispatcher) {
         val viewModel = WorkspacesViewModel(
-            sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
+            sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "Pixel")),
             workspaceRepository = FakeWorkspaceRepository(
                 apiFailure = AgentApiException(AgentApiError.Transport(RuntimeException("boom"))),
             ),
@@ -128,7 +128,7 @@ class WorkspacesViewModelTest {
         )
         repository.seed(listOf(CachedWorkspace(ORIGIN, workspace())))
         val viewModel = WorkspacesViewModel(
-            sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
+            sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "Pixel")),
             workspaceRepository = repository,
         )
 
@@ -161,14 +161,19 @@ private fun storedHarold(
     colorId: String,
     iconId: String,
 ) = StoredCredential(
-    formatVersion = 1,
-    deviceId = "device_$name",
+    formatVersion = 3,
     serverOrigin = serverOrigin,
     deviceName = "Pixel",
-    credential = "devcred_$name",
     name = name,
     colorId = colorId,
     iconId = iconId,
+    ssh = harold.android.credentials.SshConfig(
+        host = serverOrigin,
+        port = 22,
+        user = "gary",
+        auth = harold.android.credentials.SshAuth.Password(secret = "hunter2"),
+        hostKeyFingerprint = "SHA256:abc",
+    ),
 )
 
 private class FakeWorkspaceRepository(

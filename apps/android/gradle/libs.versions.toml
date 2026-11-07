@@ -81,19 +81,19 @@ bouncycastle = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.re
 
 [bundles]
 compose-ui = [
-    "androidx-compose-ui",
-    "androidx-compose-ui-tooling-preview",
-    "androidx-compose-material3",
-    "androidx-compose-material-icons-extended",
-    "androidx-lifecycle-runtime-compose",
-    "androidx-lifecycle-viewmodel-compose",
+  "androidx-compose-ui",
+  "androidx-compose-ui-tooling-preview",
+  "androidx-compose-material3",
+  "androidx-compose-material-icons-extended",
+  "androidx-lifecycle-runtime-compose",
+  "androidx-lifecycle-viewmodel-compose",
 ]
 compose-debug = ["androidx-compose-ui-tooling", "androidx-compose-ui-test-manifest"]
 feature = [
-    "androidx-activity-compose",
-    "androidx-navigation3-runtime",
-    "androidx-hilt-lifecycle-viewmodel-compose",
-    "kotlinx-coroutines-android",
+  "androidx-activity-compose",
+  "androidx-navigation3-runtime",
+  "androidx-hilt-lifecycle-viewmodel-compose",
+  "kotlinx-coroutines-android",
 ]
 unit-test = ["junit", "robolectric", "kotlinx-coroutines-test", "turbine"]
 

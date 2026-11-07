@@ -23,16 +23,15 @@ class DefaultCredentialStoreInstrumentedTest {
     }
 
     @Test
-    fun savesAndRestoresCredential() = runTest {
+    fun savesAndRestoresConnection() = runTest {
         val credential = StoredCredential(
-            formatVersion = 1,
-            deviceId = "device_01",
-            serverOrigin = "http://127.0.0.1:3847",
+            formatVersion = 3,
+            serverOrigin = "ssh://gary@127.0.0.1:22",
             deviceName = "Google Pixel 8",
-            credential = "devcred_roundtrip_secret",
             name = "laptop",
             colorId = "ink",
             iconId = "mark",
+            ssh = sshConfig(),
         )
 
         store.save(credential)
@@ -41,17 +40,16 @@ class DefaultCredentialStoreInstrumentedTest {
     }
 
     @Test
-    fun clearRemovesStoredCredential() = runTest {
+    fun clearRemovesStoredConnection() = runTest {
         store.save(
             StoredCredential(
-                formatVersion = 1,
-                deviceId = "device_01",
-                serverOrigin = "http://127.0.0.1:3847",
+                formatVersion = 3,
+                serverOrigin = "ssh://gary@127.0.0.1:22",
                 deviceName = "Google Pixel 8",
-                credential = "devcred_clear_me",
                 name = "laptop",
                 colorId = "ink",
                 iconId = "mark",
+                ssh = sshConfig(),
             ),
         )
 
@@ -61,32 +59,25 @@ class DefaultCredentialStoreInstrumentedTest {
     }
 
     @Test
-    fun newGatewayRestoresPairedCredentialAfterSimulatedRestart() = runTest {
+    fun newGatewayRestoresPairedConnectionAfterSimulatedRestart() = runTest {
         val credential = StoredCredential(
-            formatVersion = 1,
-            deviceId = "device_restart",
-            serverOrigin = "http://10.0.2.2:3847",
+            formatVersion = 3,
+            serverOrigin = "ssh://gary@10.0.2.2:22",
             deviceName = "Emulator",
-            credential = "devcred_restart_secret",
             name = "laptop",
             colorId = "ink",
             iconId = "mark",
+            ssh = sshConfig(),
         )
         store.save(credential)
 
-        val holder = CredentialHolder()
-        val gateway = DefaultSessionGateway(
-            credentialStore = store,
-            credentialHolder = holder,
-        )
+        val gateway = DefaultSessionGateway(credentialStore = store)
 
         gateway.refresh()
 
-        assertEquals("devcred_restart_secret", holder.credentialFor("http://10.0.2.2:3847"))
         assertEquals(
             PairedState.Paired(
-                serverOrigin = "http://10.0.2.2:3847",
-                deviceId = "device_restart",
+                serverOrigin = "ssh://gary@10.0.2.2:22",
                 deviceName = "Emulator",
             ),
             gateway.pairedState.value,
@@ -97,33 +88,34 @@ class DefaultCredentialStoreInstrumentedTest {
     fun clearLocalAccessSurvivesAcrossNewGateway() = runTest {
         store.save(
             StoredCredential(
-                formatVersion = 1,
-                deviceId = "device_clear",
-                serverOrigin = "http://10.0.2.2:3847",
+                formatVersion = 3,
+                serverOrigin = "ssh://gary@10.0.2.2:22",
                 deviceName = "Emulator",
-                credential = "devcred_clear",
                 name = "laptop",
                 colorId = "ink",
                 iconId = "mark",
+                ssh = sshConfig(),
             ),
         )
 
-        val first = DefaultSessionGateway(
-            credentialStore = store,
-            credentialHolder = CredentialHolder(),
-        )
+        val first = DefaultSessionGateway(credentialStore = store)
         first.refresh()
         first.clearLocalAccess()
 
-        val second = DefaultSessionGateway(
-            credentialStore = store,
-            credentialHolder = CredentialHolder(),
-        )
+        val second = DefaultSessionGateway(credentialStore = store)
         second.refresh()
 
         assertEquals(PairedState.NotPaired, second.pairedState.value)
         assertEquals(emptyList<StoredCredential>(), store.list())
     }
+
+    private fun sshConfig() = SshConfig(
+        host = "host.local",
+        port = 22,
+        user = "gary",
+        auth = SshAuth.Password(secret = "hunter2"),
+        hostKeyFingerprint = "SHA256:abc",
+    )
 
     companion object {
         private lateinit var store: DefaultCredentialStore

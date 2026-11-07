@@ -29,10 +29,9 @@ class NavigatorTest {
     }
 
     @Test
-    fun pairingSuccessReplacesTheStackWithChat() {
+    fun savingAConnectionReplacesTheStackWithChat() {
         val navigator = Navigator()
         navigator.start(paired = false)
-        navigator.openPairing()
 
         navigator.showChat()
 
@@ -40,15 +39,14 @@ class NavigatorTest {
     }
 
     @Test
-    fun pairingRequestedBeforeStartSitsOnTopOfTheChosenRoute() {
+    fun addConnectionOpensSshSetup() {
         val navigator = Navigator()
+        navigator.start(paired = true)
+        navigator.openSavedHarolds()
 
-        navigator.openPairing()
-        assertTrue(navigator.backStack.isEmpty())
+        navigator.openAddConnection()
 
-        navigator.start(paired = false)
-
-        assertEquals(listOf(Shell, Pairing), navigator.backStack.toList())
+        assertEquals(listOf(Chat, SavedHarolds, SshSetup), navigator.backStack.toList())
     }
 
     @Test

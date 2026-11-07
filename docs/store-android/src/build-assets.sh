@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rebuild the Play icon, feature graphic, review pairing QR, and phone screenshots.
+# Rebuild the Play icon and the feature graphic.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
@@ -26,14 +26,7 @@ convert -background none "$src/app-icon.svg" -resize 512x512 \
   --screenshot="$store/feature-graphic-1024x500.png" \
   "file://$src/feature-graphic.html" >/dev/null 2>&1
 
-# The review QR points at the public demo server and a non-expiring code.
-bun run "$src/build-pairing-qr.ts"
-
-bash "$src/build-screenshots.sh"
-
 printf '\n'
 identify -format '%f  %wx%h  %b\n' \
   "$store/app-icon-512x512.png" \
-  "$store/feature-graphic-1024x500.png" \
-  "$store/review-pairing-qr.png" \
-  "$store"/phone-*.png
+  "$store/feature-graphic-1024x500.png"

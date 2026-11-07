@@ -7,10 +7,7 @@ sealed interface PairedState {
 
     data class Paired(
         val serverOrigin: String,
-        val deviceId: String,
         val deviceName: String?,
-        val transport: harold.android.credentials.HaroldTransport =
-            harold.android.credentials.HaroldTransport.Server,
     ) : PairedState
 }
 
@@ -20,8 +17,8 @@ interface SessionGateway {
     suspend fun refresh()
 
     /**
-     * Deletes the stored credential and published bearer token. Used when the
-     * server rejects the device so the user returns to pairing.
+     * Deletes every saved connection. Used when the last connection is
+     * removed so the user returns to host setup.
      */
     suspend fun clearLocalAccess()
 }

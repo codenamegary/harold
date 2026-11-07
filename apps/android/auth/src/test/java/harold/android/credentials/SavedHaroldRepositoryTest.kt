@@ -12,9 +12,9 @@ import org.junit.Test
 
 class SavedHaroldRepositoryTest {
     @Test
-    fun editChangesTheNameColorAndIconAndLeavesTheCredential() = runTest {
-        val laptop = harold("http://laptop.local:3847", "devcred_laptop", "laptop", "tide", "bolt")
-        val desktop = harold("http://desktop.local:3847", "devcred_desktop", "desktop", "ink", "mark")
+    fun editChangesTheNameColorAndIconAndLeavesTheConnection() = runTest {
+        val laptop = harold("ssh://gary@laptop.local:22", "laptop", "tide", "bolt")
+        val desktop = harold("ssh://gary@desktop.local:22", "desktop", "ink", "mark")
         val store = FakeCredentialStore()
         store.save(laptop)
         store.save(desktop)
@@ -29,7 +29,6 @@ class SavedHaroldRepositoryTest {
 
         val saved = store.list()
         val edited = saved.single { item -> item.serverOrigin == laptop.serverOrigin }
-        assertEquals("devcred_laptop", edited.credential)
         assertEquals("work", edited.name)
         assertEquals("ink", edited.colorId)
         assertEquals("home", edited.iconId)
@@ -38,8 +37,8 @@ class SavedHaroldRepositoryTest {
 
     @Test
     fun removeDropsOneHaroldAndReportsWhenAnyRemain() = runTest {
-        val laptop = harold("http://laptop.local:3847", "devcred_laptop", "laptop", "tide", "bolt")
-        val desktop = harold("http://desktop.local:3847", "devcred_desktop", "desktop", "ink", "mark")
+        val laptop = harold("ssh://gary@laptop.local:22", "laptop", "tide", "bolt")
+        val desktop = harold("ssh://gary@desktop.local:22", "desktop", "ink", "mark")
         val store = FakeCredentialStore()
         store.save(laptop)
         store.save(desktop)
@@ -53,7 +52,7 @@ class SavedHaroldRepositoryTest {
 
     @Test
     fun removingTheLastHaroldLeavesNone() = runTest {
-        val laptop = harold("http://laptop.local:3847", "devcred_laptop", "laptop", "tide", "bolt")
+        val laptop = harold("ssh://gary@laptop.local:22", "laptop", "tide", "bolt")
         val store = FakeCredentialStore()
         store.save(laptop)
         val repository = SavedHaroldRepository(store)
@@ -66,8 +65,8 @@ class SavedHaroldRepositoryTest {
 
     @Test
     fun removeClearsCachedDataForThatHaroldOnly() = runTest {
-        val laptop = harold("http://laptop.local:3847", "devcred_laptop", "laptop", "tide", "bolt")
-        val desktop = harold("http://desktop.local:3847", "devcred_desktop", "desktop", "ink", "mark")
+        val laptop = harold("ssh://gary@laptop.local:22", "laptop", "tide", "bolt")
+        val desktop = harold("ssh://gary@desktop.local:22", "desktop", "ink", "mark")
         val store = FakeCredentialStore()
         store.save(laptop)
         store.save(desktop)
@@ -83,42 +82,33 @@ class SavedHaroldRepositoryTest {
     }
 
     @Test
-    fun forgetRemovesTheHaroldWhenRevokeFails() = runTest {
-        val laptop = harold("http://laptop.local:3847", "devcred_laptop", "laptop", "tide", "bolt")
-        val desktop = harold("http://desktop.local:3847", "devcred_desktop", "desktop", "ink", "mark")
+    fun forgetRemovesTheSavedConnection() = runTest {
+        val laptop = harold("ssh://gary@laptop.local:22", "laptop", "tide", "bolt")
+        val desktop = harold("ssh://gary@desktop.local:22", "desktop", "ink", "mark")
         val store = FakeCredentialStore()
         store.save(laptop)
         store.save(desktop)
         val repository = SavedHaroldRepository(store)
-        var revoked = 0
 
         val remains = forgetSavedHarold(
             serverOrigin = laptop.serverOrigin,
-            deviceId = laptop.deviceId,
-            revoke = { origin, deviceId ->
-                revoked += 1
-                assertEquals(laptop.serverOrigin, origin)
-                assertEquals(laptop.deviceId, deviceId)
-                Result.failure(IllegalStateException("offline"))
-            },
             repository = repository,
         )
 
-        assertEquals(1, revoked)
         assertTrue(remains)
         assertEquals(listOf(desktop), store.list())
     }
 
     @Test
     fun forgettingTheActiveHaroldConnectsTheOneThatRemains() = runTest {
-        val gateway = FakeSessionGateway(PairedState.Paired("http://laptop.local:3847", "device_laptop", "Pixel"))
-        gateway.pairedAfterRefresh = PairedState.Paired("http://desktop.local:3847", "device_desktop", "Pixel")
+        val gateway = FakeSessionGateway(PairedState.Paired("ssh://gary@laptop.local:22", "Pixel"))
+        gateway.pairedAfterRefresh = PairedState.Paired("ssh://gary@desktop.local:22", "Pixel")
         val connections = mutableListOf<String>()
         var disconnected = false
         var showedPairing = false
 
         settleAfterForget(
-            removedOrigin = "http://laptop.local:3847",
+            removedOrigin = "ssh://gary@laptop.local:22",
             remains = true,
             gateway = gateway,
             disconnect = { disconnected = true },
@@ -128,18 +118,18 @@ class SavedHaroldRepositoryTest {
 
         assertTrue(disconnected)
         assertFalse(showedPairing)
-        assertEquals(listOf("http://desktop.local:3847"), connections)
+        assertEquals(listOf("ssh://gary@desktop.local:22"), connections)
         assertEquals(0, gateway.clearLocalAccessCount)
     }
 
     @Test
     fun forgettingTheLastHaroldShowsPairing() = runTest {
-        val gateway = FakeSessionGateway(PairedState.Paired("http://laptop.local:3847", "device_laptop", "Pixel"))
+        val gateway = FakeSessionGateway(PairedState.Paired("ssh://gary@laptop.local:22", "Pixel"))
         var disconnected = false
         var showedPairing = false
 
         settleAfterForget(
-            removedOrigin = "http://laptop.local:3847",
+            removedOrigin = "ssh://gary@laptop.local:22",
             remains = false,
             gateway = gateway,
             disconnect = { disconnected = true },
@@ -155,17 +145,21 @@ class SavedHaroldRepositoryTest {
 
 private fun harold(
     serverOrigin: String,
-    credential: String,
     name: String,
     colorId: String,
     iconId: String,
 ) = StoredCredential(
-    formatVersion = 1,
-    deviceId = "device_$name",
+    formatVersion = 3,
     serverOrigin = serverOrigin,
     deviceName = "Pixel",
-    credential = credential,
     name = name,
     colorId = colorId,
     iconId = iconId,
+    ssh = SshConfig(
+        host = serverOrigin,
+        port = 22,
+        user = "gary",
+        auth = SshAuth.Password(secret = "hunter2"),
+        hostKeyFingerprint = "SHA256:abc",
+    ),
 )

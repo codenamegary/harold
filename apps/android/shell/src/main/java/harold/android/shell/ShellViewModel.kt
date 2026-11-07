@@ -9,8 +9,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import harold.android.credentials.SavedHaroldRepository
-import harold.android.credentials.forgetSavedHarold
 import harold.android.live.SessionOwner
 import harold.android.navigation.Navigator
 import harold.android.network.AgentApi
@@ -28,7 +26,6 @@ class ShellViewModel @Inject constructor(
     private val sessionOwner: SessionOwner,
     private val agentApi: AgentApi,
     private val navigator: Navigator,
-    private val savedHaroldRepository: SavedHaroldRepository,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ShellUiState())
     val uiState: StateFlow<ShellUiState> = _uiState.asStateFlow()
@@ -53,10 +50,6 @@ class ShellViewModel @Inject constructor(
         viewModelScope.launch {
             sessionOwner.connectionState.collect { state ->
                 _uiState.update { current -> current.fromConnectionState(state) }
-
-                if (state.status is ConnectionStatus.AuthFailed) {
-                    rejectCurrentHarold()
-                }
             }
         }
     }
@@ -86,9 +79,8 @@ class ShellViewModel @Inject constructor(
     }
 
     /**
-     * Proves the authenticated HTTP path end to end without pulling in workspace
-     * selection: one page of one workspace is enough to show reachable, empty, or
-     * rejected.
+     * Proves the SSH path end to end without pulling in workspace selection:
+     * one page of one workspace is enough to show reachable, empty, or failed.
      */
     private fun probeWorkspaces(serverOrigin: String) {
         _uiState.update { current -> current.fromWorkspaceProbe(WorkspaceProbe.Loading) }
@@ -101,38 +93,13 @@ class ShellViewModel @Inject constructor(
                 onFailure = ::probeFailure,
             )
 
-            if (probe is WorkspaceProbe.Unauthorized) {
-                rejectCurrentHarold()
-                return@launch
-            }
-
             _uiState.update { current -> current.fromWorkspaceProbe(probe) }
-        }
-    }
-
-    private fun rejectCurrentHarold() {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
-        viewModelScope.launch {
-            val remains = forgetSavedHarold(
-                serverOrigin = paired.serverOrigin,
-                deviceId = paired.deviceId,
-                revoke = agentApi::revokeDevice,
-                repository = savedHaroldRepository,
-            )
-            if (!remains) {
-                sessionGateway.clearLocalAccess()
-                navigator.showShell()
-                return@launch
-            }
-            sessionGateway.refresh()
         }
     }
 
     private fun probeFailure(error: Throwable): WorkspaceProbe =
         when (val apiError = (error as? AgentApiException)?.error) {
-            is AgentApiError.Unauthorized -> WorkspaceProbe.Unauthorized(apiError.detail)
             is AgentApiError.Problem -> WorkspaceProbe.Failed(apiError.detail ?: apiError.title)
-            is AgentApiError.Decode -> WorkspaceProbe.Failed("Unexpected response from Harold")
             is AgentApiError.Transport -> WorkspaceProbe.Failed("Could not reach Harold")
             null -> WorkspaceProbe.Failed(error.message ?: "Could not reach Harold")
         }

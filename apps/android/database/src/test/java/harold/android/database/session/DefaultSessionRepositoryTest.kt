@@ -2,18 +2,15 @@ package harold.android.database.session
 
 import androidx.room.Room
 import harold.android.contracts.AgentAuth
-import harold.android.contracts.AgentAuthSession
 import harold.android.contracts.AgentAuthSummary
 import harold.android.contracts.AgentId
 import harold.android.contracts.AgentSettings
 import harold.android.contracts.AgentSettingsCollection
-import harold.android.contracts.AuthSessionAction
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectoryCollection
 import harold.android.contracts.PageInfo
-import harold.android.contracts.RuntimeSettingsView
 import harold.android.contracts.Session
 import harold.android.contracts.SessionCollection
 import harold.android.contracts.Workspace
@@ -278,7 +275,6 @@ private class ChatFakeAgentApi : AgentApi {
         sessionId: String,
     ): Result<Unit> = deleted
 
-    override suspend fun getRuntimeSettings(serverOrigin: String) = unused<RuntimeSettingsView>()
 
     override suspend fun listFilesystemDirectories(
         serverOrigin: String,
@@ -302,24 +298,10 @@ private class ChatFakeAgentApi : AgentApi {
         agentId: AgentId,
     ) = unused<AgentAuth>()
 
-    override suspend fun startAgentAuthSession(
-        serverOrigin: String,
-        agentId: AgentId,
-    ) = unused<AgentAuthSession>()
-
-    override suspend fun applyAgentAuthSessionAction(
-        serverOrigin: String,
-        agentId: AgentId,
-        sessionId: String,
-        action: AuthSessionAction,
-    ) = unused<AgentAuthSession>()
-
     override suspend fun logoutAgentAuth(
         serverOrigin: String,
         agentId: AgentId,
     ) = unused<AgentAuthSummary>()
-
-    override suspend fun revokeDevice(serverOrigin: String, deviceId: String) = unused<Unit>()
 
     private fun <T> unused(): Result<T> = Result.failure(UnsupportedOperationException())
 }

@@ -7,13 +7,11 @@ class SavedHaroldRosterTest {
     @Test
     fun savingASecondHaroldKeepsTheFirst() {
         val laptop = savedHarold(
-            serverOrigin = "http://laptop.local:3847",
-            credential = "devcred_laptop",
+            serverOrigin = "ssh://gary@laptop.local:22",
             name = "laptop",
         )
         val desktop = savedHarold(
-            serverOrigin = "http://desktop.local:3847",
-            credential = "devcred_desktop",
+            serverOrigin = "ssh://gary@desktop.local:22",
             name = "desktop",
         )
 
@@ -25,17 +23,14 @@ class SavedHaroldRosterTest {
     @Test
     fun savingTheSameAddressReplacesThatHaroldAndKeepsTheOther() {
         val laptop = savedHarold(
-            serverOrigin = "http://laptop.local:3847",
-            credential = "devcred_laptop",
+            serverOrigin = "ssh://gary@laptop.local:22",
             name = "laptop",
         )
         val desktop = savedHarold(
-            serverOrigin = "http://desktop.local:3847",
-            credential = "devcred_desktop",
+            serverOrigin = "ssh://gary@desktop.local:22",
             name = "desktop",
         )
         val renamedLaptop = laptop.copy(
-            credential = "devcred_laptop_new",
             name = "work laptop",
             colorId = "tide",
             iconId = "bolt",
@@ -50,13 +45,11 @@ class SavedHaroldRosterTest {
     @Test
     fun aRosterRoundTripsEverySavedHarold() {
         val laptop = savedHarold(
-            serverOrigin = "http://laptop.local:3847",
-            credential = "devcred_laptop",
+            serverOrigin = "ssh://gary@laptop.local:22",
             name = "laptop",
         )
         val desktop = savedHarold(
-            serverOrigin = "http://desktop.local:3847",
-            credential = "devcred_desktop",
+            serverOrigin = "ssh://gary@desktop.local:22",
             name = "desktop",
         ).copy(deviceName = null)
 
@@ -71,38 +64,14 @@ class SavedHaroldRosterTest {
     }
 
     @Test
-    fun rowsWrittenBeforeDirectModeDecodeAsServerConnections() {
-        val raw = """[
-            {
-              "formatVersion": 1,
-              "deviceId": "device_laptop",
-              "serverOrigin": "http://laptop.local:3847",
-              "deviceName": "Pixel",
-              "credential": "devcred_laptop",
-              "name": "laptop",
-              "colorId": "ink",
-              "iconId": "mark"
-            }
-        ]"""
-
-        val saved = decodeSavedHarolds(raw).single()
-
-        assertEquals(HaroldTransport.Server, saved.transport)
-        assertEquals(null, saved.ssh)
-    }
-
-    @Test
-    fun aDirectConnectionRoundTripsItsSshKeyAndFingerprint() {
-        val direct = StoredCredential(
-            formatVersion = 2,
-            deviceId = "SHA256:abc",
+    fun aConnectionRoundTripsItsSshKeyAndFingerprint() {
+        val connection = StoredCredential(
+            formatVersion = 3,
             serverOrigin = "ssh://gary@laptop.local:22",
             deviceName = "laptop.local",
-            credential = "",
-            name = "laptop direct",
+            name = "laptop",
             colorId = "tide",
             iconId = "terminal",
-            transport = HaroldTransport.Ssh,
             ssh = SshConfig(
                 host = "laptop.local",
                 port = 22,
@@ -115,21 +84,46 @@ class SavedHaroldRosterTest {
             ),
         )
 
-        assertEquals(listOf(direct), decodeSavedHarolds(encodeSavedHarolds(listOf(direct))))
+        assertEquals(listOf(connection), decodeSavedHarolds(encodeSavedHarolds(listOf(connection))))
+    }
+
+    @Test
+    fun aPasswordConnectionRoundTripsItsSecret() {
+        val connection = StoredCredential(
+            formatVersion = 3,
+            serverOrigin = "ssh://gary@laptop.local:22",
+            deviceName = "laptop.local",
+            name = "laptop",
+            colorId = "tide",
+            iconId = "terminal",
+            ssh = SshConfig(
+                host = "laptop.local",
+                port = 22,
+                user = "gary",
+                auth = SshAuth.Password(secret = "hunter2"),
+                hostKeyFingerprint = "SHA256:abc",
+            ),
+        )
+
+        assertEquals(listOf(connection), decodeSavedHarolds(encodeSavedHarolds(listOf(connection))))
     }
 }
 
 private fun savedHarold(
     serverOrigin: String,
-    credential: String,
     name: String,
 ) = StoredCredential(
-    formatVersion = 1,
-    deviceId = "device_$name",
+    formatVersion = 3,
     serverOrigin = serverOrigin,
     deviceName = "Pixel",
-    credential = credential,
     name = name,
     colorId = "ink",
     iconId = "mark",
+    ssh = SshConfig(
+        host = "host.local",
+        port = 22,
+        user = "gary",
+        auth = SshAuth.Password(secret = "hunter2"),
+        hostKeyFingerprint = "SHA256:abc",
+    ),
 )

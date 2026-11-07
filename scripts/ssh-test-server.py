@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Small SSH server for exercising Harold Direct without root or system sshd.
+"""Small SSH server for exercising Harold's SSH transport without root or system sshd.
 
 It accepts exec channels and SFTP as the current user. Pass --authorized-keys
 to require a specific phone key; omit it to trust any public key.

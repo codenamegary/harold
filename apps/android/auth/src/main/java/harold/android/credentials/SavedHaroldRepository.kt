@@ -43,13 +43,8 @@ class SavedHaroldRepository(
 
 suspend fun forgetSavedHarold(
     serverOrigin: String,
-    deviceId: String,
-    revoke: suspend (serverOrigin: String, deviceId: String) -> Result<Unit>,
     repository: SavedHaroldRepository,
-): Boolean {
-    revoke(serverOrigin, deviceId)
-    return repository.remove(serverOrigin)
-}
+): Boolean = repository.remove(serverOrigin)
 
 suspend fun settleAfterForget(
     removedOrigin: String,

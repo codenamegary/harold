@@ -47,12 +47,11 @@ class ShellUiStateTest {
     @Test
     fun keepsRepairAvailableWhenAuthFails() {
         val state = ShellUiState()
-            .fromPairedState(PairedState.Paired("http://127.0.0.1:8787", "device_01", "Pixel"))
+            .fromPairedState(PairedState.Paired("ssh://gary@127.0.0.1:22", "Pixel"))
             .fromConnectionStatus(ConnectionStatus.AuthFailed(detail = null))
 
         assertEquals("Re-pair", state.pairLabel)
         assertTrue(state.pairEnabled)
-        assertTrue(state.retryVisible)
     }
 
     @Test

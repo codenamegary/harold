@@ -146,7 +146,6 @@ class SessionConfigWriter(
         val apiError = (cause as? AgentApiException)?.error
         val detail = when (apiError) {
             is AgentApiError.Problem -> apiError.detail
-            is AgentApiError.Unauthorized -> apiError.detail
             else -> null
         }
         return detail ?: "Setting the config option failed"

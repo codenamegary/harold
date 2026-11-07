@@ -1,11 +1,9 @@
 package harold.android.workspaces
 
 import harold.android.contracts.AgentAuth
-import harold.android.contracts.AgentAuthSession
 import harold.android.contracts.AgentAuthSummary
 import harold.android.contracts.AgentId
 import harold.android.contracts.AgentSettingsCollection
-import harold.android.contracts.AuthSessionAction
 import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
@@ -13,7 +11,6 @@ import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectory
 import harold.android.contracts.FilesystemDirectoryCollection
 import harold.android.contracts.FilesystemDirectoryCreated
-import harold.android.contracts.RuntimeSettingsView
 import harold.android.contracts.SessionCollection
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
@@ -406,7 +403,7 @@ class AddWorkspaceViewModelTest {
     }
 
     private fun fakeSession() =
-        FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel"))
+        FakeSessionGateway(PairedState.Paired(ORIGIN, "Pixel"))
 
     private companion object {
         const val ORIGIN = "http://127.0.0.1:8787"
@@ -472,8 +469,6 @@ private class FakeAddUserRepository(
         limit: Int,
     ): Result<WorkspaceCollection> = Result.failure(UnsupportedOperationException())
 
-    override suspend fun getRuntimeSettings(serverOrigin: String): Result<RuntimeSettingsView> =
-        Result.failure(UnsupportedOperationException())
 
     override suspend fun listFilesystemDirectories(
         serverOrigin: String,
@@ -530,27 +525,10 @@ private class FakeAddUserRepository(
         agentId: AgentId,
     ): Result<AgentAuth> = Result.failure(UnsupportedOperationException())
 
-    override suspend fun startAgentAuthSession(
-        serverOrigin: String,
-        agentId: AgentId,
-    ): Result<AgentAuthSession> = Result.failure(UnsupportedOperationException())
-
-    override suspend fun applyAgentAuthSessionAction(
-        serverOrigin: String,
-        agentId: AgentId,
-        sessionId: String,
-        action: AuthSessionAction,
-    ): Result<AgentAuthSession> = Result.failure(UnsupportedOperationException())
-
     override suspend fun logoutAgentAuth(
         serverOrigin: String,
         agentId: AgentId,
     ): Result<AgentAuthSummary> = Result.failure(UnsupportedOperationException())
-
-    override suspend fun revokeDevice(
-        serverOrigin: String,
-        deviceId: String,
-    ): Result<Unit> = Result.success(Unit)
 }
 
 private class FakeAddWorkspaceRepository(

@@ -31,15 +31,12 @@ internal fun encodeSavedHarolds(saved: List<StoredCredential>): String =
             add(
                 buildJsonObject {
                     put("formatVersion", harold.formatVersion)
-                    put("deviceId", harold.deviceId)
                     put("serverOrigin", harold.serverOrigin)
                     put("deviceName", harold.deviceName)
-                    put("credential", harold.credential)
                     put("name", harold.name)
                     put("colorId", harold.colorId)
                     put("iconId", harold.iconId)
-                    put("transport", harold.transport.storageValue)
-                    harold.ssh?.let { ssh -> put("ssh", encodeSsh(ssh)) }
+                    put("ssh", encodeSsh(harold.ssh))
                 },
             )
         }
@@ -54,18 +51,12 @@ internal fun decodeSavedHarolds(raw: String?): List<StoredCredential> {
         val harold = element.jsonObject
         StoredCredential(
             formatVersion = harold.requireInt("formatVersion"),
-            deviceId = harold.requireString("deviceId"),
             serverOrigin = harold.requireString("serverOrigin"),
             deviceName = harold.optionalString("deviceName"),
-            credential = harold.requireString("credential"),
             name = harold.requireString("name"),
             colorId = harold.requireString("colorId"),
             iconId = harold.requireString("iconId"),
-            // Rows written before direct mode existed decode as server rows.
-            transport = harold.optionalString("transport").toTransport(),
-            ssh = harold["ssh"]?.let { value ->
-                if (value is JsonNull) null else decodeSsh(value.jsonObject)
-            },
+            ssh = decodeSsh(harold.getValue("ssh").jsonObject),
         )
     }
 }
@@ -111,18 +102,6 @@ private fun decodeSsh(element: JsonObject): SshConfig {
         hostKeyFingerprint = element.requireString("hostKeyFingerprint"),
     )
 }
-
-private val HaroldTransport.storageValue: String
-    get() = when (this) {
-        HaroldTransport.Server -> "server"
-        HaroldTransport.Ssh -> "ssh"
-    }
-
-private fun String?.toTransport(): HaroldTransport =
-    when (this) {
-        "ssh" -> HaroldTransport.Ssh
-        else -> HaroldTransport.Server
-    }
 
 private fun JsonObject.requireString(key: String): String = getValue(key).jsonPrimitive.content
 

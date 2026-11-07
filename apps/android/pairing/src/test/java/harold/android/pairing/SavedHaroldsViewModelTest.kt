@@ -1,11 +1,12 @@
 package harold.android.pairing
 
 import harold.android.credentials.SavedHaroldRepository
-import harold.android.user.UserRepository
+import harold.android.credentials.SshAuth
+import harold.android.credentials.SshConfig
 import harold.android.credentials.StoredCredential
 import harold.android.navigation.Navigator
-import harold.android.navigation.AddConnection
 import harold.android.navigation.Shell
+import harold.android.navigation.SshSetup
 import harold.android.session.InactiveHaroldConnections
 import harold.android.session.PairedState
 import harold.android.testing.FakeCredentialStore
@@ -48,34 +49,34 @@ class SavedHaroldsViewModelTest {
     }
 
     @Test
-    fun editLeavesTheCredentialAndCanReuseAColor() = runTest {
+    fun editKeepsTheConnectionAndCanReuseAColor() = runTest {
         val store = storeWithTwo()
+        val desktopBefore = store.list().single { it.name == "desktop" }.ssh
         val viewModel = viewModel(store)
 
-        viewModel.startEdit("http://laptop.local:3847")
+        viewModel.startEdit("ssh://gary@laptop.local:22")
         viewModel.onNameChanged("work")
         viewModel.onColorSelected("ink")
         viewModel.saveEdit()
 
-        val laptop = store.list().single { harold -> harold.serverOrigin == "http://laptop.local:3847" }
-        assertEquals("devcred_laptop", laptop.credential)
+        val laptop = store.list().single { it.serverOrigin == "ssh://gary@laptop.local:22" }
         assertEquals("work", laptop.name)
         assertEquals("ink", laptop.colorId)
-        assertEquals("devcred_desktop", store.list().single { harold -> harold.name == "desktop" }.credential)
+        assertEquals(desktopBefore, store.list().single { it.name == "desktop" }.ssh)
     }
 
     @Test
-    fun removingTheLastHaroldShowsPairing() = runTest {
+    fun removingTheLastHaroldOpensHostSetup() = runTest {
         val store = FakeCredentialStore()
-        store.save(saved("http://laptop.local:3847", "devcred_laptop", "laptop", "tide", "bolt"))
+        store.save(saved("ssh://gary@laptop.local:22", "laptop", "tide", "bolt"))
         val navigator = Navigator()
         navigator.start(paired = true)
         val viewModel = viewModel(store, navigator)
 
-        viewModel.remove("http://laptop.local:3847")
+        viewModel.remove("ssh://gary@laptop.local:22")
 
         assertEquals(emptyList<StoredCredential>(), store.list())
-        assertEquals(listOf(Shell, AddConnection), navigator.backStack.toList())
+        assertEquals(listOf(Shell, SshSetup), navigator.backStack.toList())
     }
 }
 
@@ -84,8 +85,7 @@ private fun viewModel(
     navigator: Navigator = Navigator(),
 ): SavedHaroldsViewModel = SavedHaroldsViewModel(
     repository = SavedHaroldRepository(store),
-    userRepository = RevokeOnlyUserRepository(),
-    sessionGateway = FakeSessionGateway(PairedState.Paired("http://laptop.local:3847", "device_laptop", "Pixel")),
+    sessionGateway = FakeSessionGateway(PairedState.Paired("ssh://gary@laptop.local:22", "Pixel")),
     sessionOwner = NoopSessionOwner(),
     navigator = navigator,
     connections = InactiveHaroldConnections,
@@ -93,63 +93,31 @@ private fun viewModel(
 
 private suspend fun storeWithTwo(): FakeCredentialStore {
     val store = FakeCredentialStore()
-    store.save(saved("http://laptop.local:3847", "devcred_laptop", "laptop", "tide", "bolt"))
-    store.save(saved("http://desktop.local:3847", "devcred_desktop", "desktop", "ink", "mark"))
+    store.save(saved("ssh://gary@laptop.local:22", "laptop", "tide", "bolt"))
+    store.save(saved("ssh://gary@desktop.local:22", "desktop", "ink", "mark"))
     return store
 }
 
 private fun saved(
     serverOrigin: String,
-    credential: String,
     name: String,
     colorId: String,
     iconId: String,
 ) = StoredCredential(
-    formatVersion = 1,
-    deviceId = "device_$name",
+    formatVersion = 3,
     serverOrigin = serverOrigin,
     deviceName = "Pixel",
-    credential = credential,
     name = name,
     colorId = colorId,
     iconId = iconId,
+    ssh = SshConfig(
+        host = serverOrigin,
+        port = 22,
+        user = "gary",
+        auth = SshAuth.Password(secret = "hunter2"),
+        hostKeyFingerprint = "SHA256:abc",
+    ),
 )
-
-private class RevokeOnlyUserRepository : UserRepository {
-    override suspend fun revokeDevice(serverOrigin: String, deviceId: String): Result<Unit> =
-        Result.success(Unit)
-
-    override suspend fun listWorkspaces(serverOrigin: String, limit: Int) = error("unused")
-    override suspend fun getRuntimeSettings(serverOrigin: String) = error("unused")
-    override suspend fun listFilesystemDirectories(serverOrigin: String, root: String?) = error("unused")
-    override suspend fun createFilesystemDirectory(
-        serverOrigin: String,
-        body: harold.android.contracts.CreateFilesystemDirectoryBody,
-    ) = Result.failure<harold.android.contracts.FilesystemDirectoryCreated>(
-        UnsupportedOperationException("unused"),
-    )
-
-    override suspend fun createWorkspace(
-        serverOrigin: String,
-        body: harold.android.contracts.CreateWorkspaceBody,
-    ) = error("unused")
-    override suspend fun listSessions(serverOrigin: String, cwd: String?) = error("unused")
-    override suspend fun listAgents(serverOrigin: String) = error("unused")
-    override suspend fun createSession(
-        serverOrigin: String,
-        body: harold.android.contracts.CreateSessionBody,
-    ) = error("unused")
-    override suspend fun deleteSession(serverOrigin: String, agentId: String, sessionId: String) = error("unused")
-    override suspend fun getAgentAuth(serverOrigin: String, agentId: String) = error("unused")
-    override suspend fun startAgentAuthSession(serverOrigin: String, agentId: String) = error("unused")
-    override suspend fun applyAgentAuthSessionAction(
-        serverOrigin: String,
-        agentId: String,
-        sessionId: String,
-        action: harold.android.contracts.AuthSessionAction,
-    ) = error("unused")
-    override suspend fun logoutAgentAuth(serverOrigin: String, agentId: String) = error("unused")
-}
 
 private class NoopSessionOwner : harold.android.live.SessionOwner {
     override val connectionState = kotlinx.coroutines.flow.MutableStateFlow(harold.android.stream.ConnectionState())

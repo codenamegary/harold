@@ -3,7 +3,6 @@ package harold.android.pairing
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import harold.android.credentials.HaroldTransport
 import harold.android.credentials.SavedHaroldRepository
 import harold.android.credentials.forgetSavedHarold
 import harold.android.credentials.settleAfterForget
@@ -13,7 +12,6 @@ import harold.android.session.HaroldConnection
 import harold.android.session.HaroldConnectionStatus
 import harold.android.session.HaroldConnections
 import harold.android.session.SessionGateway
-import harold.android.user.UserRepository
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,11 +22,9 @@ import kotlinx.coroutines.launch
 data class SavedHaroldRow(
     val serverOrigin: String,
     val endpoint: String = serverOrigin,
-    val deviceId: String,
     val name: String,
     val colorId: String,
     val iconId: String,
-    val transport: HaroldTransport = HaroldTransport.Server,
     val status: HaroldConnectionStatus = HaroldConnectionStatus.Closed,
 )
 
@@ -43,7 +39,6 @@ data class SavedHaroldsUiState(
 @HiltViewModel
 class SavedHaroldsViewModel @Inject constructor(
     private val repository: SavedHaroldRepository,
-    private val userRepository: UserRepository,
     private val sessionGateway: SessionGateway,
     private val sessionOwner: SessionOwner,
     private val navigator: Navigator,
@@ -97,8 +92,6 @@ class SavedHaroldsViewModel @Inject constructor(
         viewModelScope.launch {
             val remains = forgetSavedHarold(
                 serverOrigin = row.serverOrigin,
-                deviceId = row.deviceId,
-                revoke = userRepository::revokeDevice,
                 repository = repository,
             )
             settleAfterForget(
@@ -145,11 +138,9 @@ class SavedHaroldsViewModel @Inject constructor(
             SavedHaroldRow(
                 serverOrigin = harold.serverOrigin,
                 endpoint = harold.displayEndpoint,
-                deviceId = harold.deviceId,
                 name = harold.name,
                 colorId = harold.colorId,
                 iconId = harold.iconId,
-                transport = harold.transport,
             )
         }
         _uiState.update { current -> current.copy(rows = saved) }

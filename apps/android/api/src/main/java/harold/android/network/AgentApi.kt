@@ -1,14 +1,12 @@
 package harold.android.network
 
 import harold.android.contracts.AgentAuth
-import harold.android.contracts.AgentAuthSession
 import harold.android.contracts.AgentAuthSummary
 import harold.android.contracts.AgentId
+import harold.android.contracts.AgentSettingsCollection
 import harold.android.contracts.AttachmentDescriptor
 import harold.android.contracts.AttachmentKind
 import harold.android.contracts.AttachmentUploadRequest
-import harold.android.contracts.AgentSettingsCollection
-import harold.android.contracts.AuthSessionAction
 import harold.android.contracts.ConfigValue
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
@@ -17,7 +15,6 @@ import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectoryCollection
 import harold.android.contracts.FilesystemDirectoryCreated
 import harold.android.contracts.PromptRequestBody
-import harold.android.contracts.RuntimeSettingsView
 import harold.android.contracts.SessionCollection
 import harold.android.contracts.SetSessionWorktreePathBody
 import harold.android.contracts.Workspace
@@ -25,19 +22,10 @@ import harold.android.contracts.WorkspaceCollection
 import kotlinx.serialization.json.JsonElement
 
 sealed interface AgentApiError {
-    /** Terminal: the credential is missing, revoked, or rejected. */
-    data class Unauthorized(
-        val detail: String?,
-    ) : AgentApiError
-
     data class Problem(
         val status: Int,
         val title: String,
         val detail: String?,
-    ) : AgentApiError
-
-    data class Decode(
-        val cause: Throwable,
     ) : AgentApiError
 
     data class Transport(
@@ -49,19 +37,16 @@ class AgentApiException(
     val error: AgentApiError,
 ) : Exception(
     when (error) {
-        is AgentApiError.Unauthorized -> error.detail ?: "Unauthorized"
         is AgentApiError.Problem -> error.detail ?: error.title
-        is AgentApiError.Decode -> error.cause.message ?: "Unexpected response"
         is AgentApiError.Transport -> error.cause.message ?: "Transport error"
     },
     when (error) {
-        is AgentApiError.Decode -> error.cause
         is AgentApiError.Transport -> error.cause
         else -> null
     },
 )
 
-/** Write surface for the server-owned worktree path on a session. */
+/** Write surface for the host-owned worktree path on a session. */
 interface SessionWorktreePathApi {
     suspend fun updateSessionWorktreePath(
         serverOrigin: String,
@@ -72,7 +57,7 @@ interface SessionWorktreePathApi {
     )
 }
 
-/** All surfaces a transport adapter provides for one saved connection. */
+/** All surfaces the SSH transport provides for one saved connection. */
 interface AgentTransportApi : AgentApi, AttachmentApi, SessionConfigApi, SessionCommandApi, GitApi
 
 interface AgentApi : SessionWorktreePathApi {
@@ -80,8 +65,6 @@ interface AgentApi : SessionWorktreePathApi {
         serverOrigin: String,
         limit: Int,
     ): Result<WorkspaceCollection>
-
-    suspend fun getRuntimeSettings(serverOrigin: String): Result<RuntimeSettingsView>
 
     suspend fun listFilesystemDirectories(
         serverOrigin: String,
@@ -121,31 +104,13 @@ interface AgentApi : SessionWorktreePathApi {
         agentId: AgentId,
     ): Result<AgentAuth>
 
-    suspend fun startAgentAuthSession(
-        serverOrigin: String,
-        agentId: AgentId,
-    ): Result<AgentAuthSession>
-
-    suspend fun applyAgentAuthSessionAction(
-        serverOrigin: String,
-        agentId: AgentId,
-        sessionId: String,
-        action: AuthSessionAction,
-    ): Result<AgentAuthSession>
-
     suspend fun logoutAgentAuth(
         serverOrigin: String,
         agentId: AgentId,
     ): Result<AgentAuthSummary>
-
-    /** Removes this device on the server (DELETE /v1/devices/{id}). */
-    suspend fun revokeDevice(
-        serverOrigin: String,
-        deviceId: String,
-    ): Result<Unit>
 }
 
-/** Upload surface for chat attachments. Workspace-scoped, server-validated. */
+/** Upload surface for chat attachments. Workspace-scoped. */
 interface AttachmentApi {
     suspend fun uploadAttachment(
         serverOrigin: String,
@@ -172,10 +137,10 @@ interface SessionConfigApi {
 }
 
 /**
- * Command surface for the watched session: prompts and cancels go to
- * `/v1/sessions/:id/prompts|cancel`, permission and extension replies go to
- * `/v1/permissions|extensions/:requestId/replies`. Commands are independent
- * of the SSE event stream — each call succeeds or fails on its own.
+ * Command surface for the watched session: prompts and cancels go to the
+ * active ACP session, permission and elicitation replies go to the session
+ * that owns the pending request. Commands are independent of the event
+ * stream — each call succeeds or fails on its own.
  */
 interface SessionCommandApi {
     suspend fun prompt(
@@ -203,7 +168,7 @@ interface SessionCommandApi {
         result: JsonElement,
     ): Result<Unit>
 
-    /** Posts the raw ACP elicitation result; the server forwards it untouched. */
+    /** Posts the raw ACP elicitation result. */
     suspend fun replyElicitation(
         serverOrigin: String,
         requestId: String,

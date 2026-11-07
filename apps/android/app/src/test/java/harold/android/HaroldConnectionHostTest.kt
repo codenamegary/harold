@@ -70,7 +70,7 @@ class HaroldConnectionHostTest {
         connections: RecordingConnections,
     ): HaroldConnectionHost = HaroldConnectionHost(
         connections = connections,
-        sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel")),
+        sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "Pixel")),
         sessionOwner = owner,
         scope = backgroundScope,
     )

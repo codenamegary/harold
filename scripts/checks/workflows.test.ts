@@ -80,6 +80,19 @@ describe("pull request triggers", () => {
   })
 })
 
+describe("workflow set", () => {
+  test("ships exactly the ci, release, and android release workflows", async () => {
+    // Everything else is deleted; a stray workflow file sneaking back in
+    // fails here so the set stays auditable.
+    const files = [...(await loadWorkflows()).keys()].sort()
+    expect(files).toEqual([
+      join(workflowsRoot, "ci.yml"),
+      join(workflowsRoot, "release-android.yml"),
+      join(workflowsRoot, "release-please.yml"),
+    ])
+  })
+})
+
 describe("ci.yml", () => {
   test("runs on every pull request regardless of base branch", async () => {
     // Stacked PRs target other PR branches, not main. A branches filter on
@@ -112,7 +125,7 @@ describe("ci.yml", () => {
 
   test("path-filtered jobs wait for changes and read their own output", async () => {
     const jobs = (await loadCi()).jobs ?? {}
-    for (const id of ["check", "android", "smoke"]) {
+    for (const id of ["check", "android"]) {
       const job = jobs[id]
       expect(job).toBeDefined()
       expect(needsOf(job)).toContain("changes")
@@ -120,7 +133,14 @@ describe("ci.yml", () => {
     }
   })
 
-  test("filters keep the path coverage of the retired workflows", async () => {
+  test("check lints and runs the script checks", async () => {
+    const check = (await loadCi()).jobs?.check
+    const runs = (check?.steps ?? []).map((step) => step.run ?? "").join("\n")
+    expect(runs).toContain("bun run lint")
+    expect(runs).toContain("bun test scripts")
+  })
+
+  test("filters cover the check and android paths", async () => {
     const changes = (await loadCi()).jobs?.["changes"]
     const step = (changes?.steps ?? []).find((s) => s.uses?.startsWith("dorny/paths-filter"))
     expect(step).toBeDefined()
@@ -132,25 +152,6 @@ describe("ci.yml", () => {
     expect(filters.check).toContain("**")
     expect(filters.check).toContain("!apps/android/**")
     expect(filters.android).toContain("apps/android/**")
-    expect(filters.smoke).toEqual(
-      expect.arrayContaining(["apps/server/**", "packages/contracts/**", "bun.lock"]),
-    )
-  })
-
-  test("smoke runs GLM through the z.ai coding plan provider with its own secret", async () => {
-    const smoke = (await loadCi()).jobs?.smoke
-    const step = (smoke?.steps ?? []).find((s) => s.run === "bun run test:smoke")
-    expect(step?.env?.OPENCODE_SMOKE_MODEL).toBe("zai-coding-plan/glm-5.3-flash")
-    // opencode's zai-coding-plan provider reads ZHIPU_API_KEY from the env.
-    expect(step?.env?.ZHIPU_API_KEY).toBe("${{ secrets.ZAI_CODING_API_KEY }}")
-  })
-})
-
-describe("deploy-demo-server.yml", () => {
-  test("redeploys when a served review asset changes", async () => {
-    const workflow = await loadWorkflow(`${workflowsRoot}/deploy-demo-server.yml`)
-    expect(workflow.on?.push?.paths).toContain("docs/store-android/review-pairing-qr.png")
-    expect(workflow.on?.push?.paths).toContain("docs/store-android/foreground-service-demo.mp4")
   })
 })
 

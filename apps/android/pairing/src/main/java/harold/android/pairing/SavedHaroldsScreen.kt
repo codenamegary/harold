@@ -24,7 +24,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -37,7 +36,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import harold.android.ui.components.HaroldAppearanceEditor
 import harold.android.ui.components.HaroldBadge
-import harold.android.credentials.HaroldTransport
 import harold.android.session.HaroldConnectionStatus
 import harold.android.ui.components.HaroldButton
 import harold.android.ui.components.HaroldButtonVariant
@@ -199,9 +197,7 @@ fun SavedHaroldsScreen(
                                 )
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
-                                    TransportPill(transport = row.transport)
                                     Text(
                                         text = statusLabel(row.status),
                                         style = MaterialTheme.typography.labelSmall,
@@ -254,27 +250,6 @@ fun SavedHaroldsScreen(
     }
 }
 
-
-@Composable
-private fun TransportPill(transport: HaroldTransport) {
-    val label = when (transport) {
-        HaroldTransport.Server -> stringResource(R.string.transport_server)
-        HaroldTransport.Ssh -> stringResource(R.string.transport_ssh)
-    }
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier
-                .padding(horizontal = 8.dp, vertical = 2.dp)
-                .testTag("saved_harold_transport_${transport.name.lowercase()}"),
-        )
-    }
-}
 
 private fun statusLabel(status: HaroldConnectionStatus): String = when (status) {
     HaroldConnectionStatus.Connecting -> "Connecting"

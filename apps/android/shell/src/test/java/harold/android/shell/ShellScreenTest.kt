@@ -125,6 +125,6 @@ class ShellScreenTest {
 
     private fun pairedWith(status: ConnectionStatus): ShellUiState =
         ShellUiState()
-            .fromPairedState(PairedState.Paired("http://127.0.0.1:8787", "device_01", "Pixel"))
+            .fromPairedState(PairedState.Paired("ssh://gary@127.0.0.1:22", "Pixel"))
             .fromConnectionState(ConnectionState(status = status))
 }

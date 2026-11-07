@@ -28,7 +28,6 @@ jobs:
       # everything; otherwise the filter step decides.
       check: ${{ steps.all.outputs.check || steps.filter.outputs.check }}
       android: ${{ steps.all.outputs.android || steps.filter.outputs.android }}
-      smoke: ${{ steps.all.outputs.smoke || steps.filter.outputs.smoke }}
     steps:
       # pull requests diff via the GitHub API, push events diff git history
       # against the previous push (base defaults to the pushed branch).
@@ -51,17 +50,12 @@ jobs:
             android:
               - 'apps/android/**'
               - '.github/workflows/ci.yml'
-            smoke:
-              - 'apps/server/**'
-              - 'packages/contracts/**'
-              - 'bun.lock'
-              - '.github/workflows/ci.yml'
 
       - name: Run everything on manual dispatch
         id: all
         if: github.event_name == 'workflow_dispatch'
         run: |
-          for name in check android smoke; do
+          for name in check android; do
             echo "$name=true" >> "$GITHUB_OUTPUT"
           done
 
@@ -78,108 +72,13 @@ jobs:
         with:
           bun-version: 1.4.2
 
-      - name: Setup LCOV
-        uses: hrishikesh-kadam/setup-lcov@v1
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Lint and typecheck
+      - name: Lint and script checks
         run: |
           bun run lint
-          bun run lint:boundaries
-          bun run typecheck
           bun test scripts
-
-      - name: Test with coverage
-        id: coverage
-        run: bun run test:coverage
-
-      - name: Build HTML coverage report
-        if: always() && steps.coverage.outcome == 'success'
-        run: |
-          echo "## Test coverage" >> "$GITHUB_STEP_SUMMARY"
-          # lcov source paths are relative to each package, so genhtml runs from there.
-          for name in server cli; do
-            mkdir -p "coverage/html/$name"
-            (
-              cd "apps/$name"
-              genhtml "../../coverage/$name/lcov.info" \
-                --output-directory "../../coverage/html/$name" \
-                --title "apps/$name" \
-                --legend \
-                --show-details
-            )
-            {
-              echo ""
-              echo "### apps/$name"
-              echo ""
-              echo '```'
-              lcov --summary "coverage/$name/lcov.info"
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
-          done
-
-      # summary.json is the machine-readable entry point for anything that
-      # reads the artifact. Bump schemaVersion when its shape changes.
-      - name: Write coverage summary
-        if: always() && steps.coverage.outcome == 'success'
-        run: |
-          packages='{}'
-          for name in server cli; do
-            read -r lf lh fnf fnh < <(awk -F: '
-              /^LF:/ { lf += $2 } /^LH:/ { lh += $2 }
-              /^FNF:/ { fnf += $2 } /^FNH:/ { fnh += $2 }
-              END { print lf + 0, lh + 0, fnf + 0, fnh + 0 }
-            ' "coverage/$name/lcov.info")
-            packages="$(jq -c \
-              --arg name "$name" \
-              --argjson lf "$lf" --argjson lh "$lh" \
-              --argjson fnf "$fnf" --argjson fnh "$fnh" '
-              def metric($found; $hit):
-                { found: $found, hit: $hit,
-                  pct: (if $found > 0 then ($hit * 10000 / $found | round) / 100 else null end) };
-              . + { "apps/\($name)": {
-                lcov: "\($name)/lcov.info",
-                html: "html/\($name)/index.html",
-                lines: metric($lf; $lh),
-                functions: metric($fnf; $fnh)
-              } }' <<< "$packages")"
-          done
-          jq -n \
-            --arg commit "$GITHUB_SHA" \
-            --arg ref "$GITHUB_REF" \
-            --arg runId "$GITHUB_RUN_ID" \
-            --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --argjson packages "$packages" '
-            {
-              schemaVersion: 1,
-              commit: $commit,
-              ref: $ref,
-              runId: $runId,
-              generatedAt: $generatedAt,
-              packages: $packages
-            }' > coverage/summary.json
-          cat coverage/summary.json
-
-      - name: Upload coverage artifact
-        id: coverage-artifact
-        if: always() && steps.coverage.outcome == 'success'
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage
-          path: coverage/
-          retention-days: 90
-
-      - name: Link coverage artifact
-        if: always() && steps.coverage-artifact.outcome == 'success'
-        env:
-          ARTIFACT_URL: ${{ steps.coverage-artifact.outputs.artifact-url }}
-        run: |
-          {
-            echo ""
-            echo "Full report (lcov, HTML, summary.json): [coverage artifact](${ARTIFACT_URL})"
-          } >> "$GITHUB_STEP_SUMMARY"
 
   android:
     needs: changes
@@ -219,52 +118,12 @@ jobs:
           name: test-results
           path: apps/android/**/build/test-results/testDebugUnitTest/
 
-  smoke:
-    needs: changes
-    if: needs.changes.outputs.smoke == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.2
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Install OpenCode CLI
-        run: |
-          curl -fsSL https://opencode.ai/install | bash -s -- -v 1.18.31
-          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
-
-      - name: Run smoke tests
-        env:
-          HAROLD_RUN_SMOKE: "1"
-          OPENCODE_SMOKE_MODEL: zai-coding-plan/glm-5.3-flash
-          # opencode's zai-coding-plan provider reads ZHIPU_API_KEY from the
-          # env; the value is the z.ai coding subscription key stored in the
-          # ZAI_CODING_API_KEY secret. Free OpenCode Zen models stopped
-          # working — see https://github.com/codenamegary/harold/issues/398
-          ZHIPU_API_KEY: ${{ secrets.ZAI_CODING_API_KEY }}
-        run: bun run test:smoke
-
-      - name: Upload opencode logs
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: opencode-logs
-          path: ~/.local/share/opencode/log/
-          if-no-files-found: ignore
-
   # The single required status check. It always runs (even when jobs above
   # are skipped or failed) and fails unless every job reported success or
   # was skipped by the path filter — see scripts/ci/gate.ts.
   ci-ok:
     if: always()
-    needs: [changes, check, android, smoke]
+    needs: [changes, check, android]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

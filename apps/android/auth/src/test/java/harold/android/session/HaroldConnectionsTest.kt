@@ -2,6 +2,8 @@ package harold.android.session
 
 import harold.android.contracts.SessionState
 import harold.android.credentials.SavedHaroldRepository
+import harold.android.credentials.SshAuth
+import harold.android.credentials.SshConfig
 import harold.android.credentials.StoredCredential
 import harold.android.testing.FakeCredentialStore
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -143,14 +145,19 @@ private fun status(roster: HaroldConnections, serverOrigin: String): HaroldConne
     roster.connections.value.single { connection -> connection.serverOrigin == serverOrigin }.status
 
 private fun saved(serverOrigin: String, credential: String, deviceId: String) = StoredCredential(
-    formatVersion = 1,
-    deviceId = deviceId,
+    formatVersion = 3,
     serverOrigin = serverOrigin,
     deviceName = "Pixel",
-    credential = credential,
     name = "harold",
     colorId = "ink",
     iconId = "mark",
+    ssh = SshConfig(
+        host = serverOrigin,
+        port = 22,
+        user = "gary",
+        auth = SshAuth.Password(secret = "hunter2"),
+        hostKeyFingerprint = "SHA256:abc",
+    ),
 )
 
 private const val LAPTOP = "http://laptop.local:3847"

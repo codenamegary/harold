@@ -7,7 +7,6 @@ import harold.android.contracts.AvailableCommand
 import harold.android.contracts.PermissionRequest
 import harold.android.contracts.SessionState
 import harold.android.contracts.catalogSessionKey
-import harold.android.credentials.HaroldTransport
 import harold.android.live.AcpTranscriptState
 import harold.android.live.ContextUsage
 import harold.android.live.Elicitation
@@ -30,7 +29,6 @@ data class SessionRow(
     val haroldName: String = "",
     val haroldColorId: String = "",
     val haroldIconId: String = "",
-    val haroldTransport: HaroldTransport = HaroldTransport.Server,
     val haroldReachable: Boolean = true,
     val needsAttention: Boolean = false,
     /** "Needs answer", "Needs permission", or "Needs input". */

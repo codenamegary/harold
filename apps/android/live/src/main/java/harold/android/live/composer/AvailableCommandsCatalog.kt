@@ -5,9 +5,9 @@ import harold.android.contracts.AvailableCommand
 import harold.android.contracts.catalogSessionKey
 
 /**
- * In-memory cache of slash commands each session has advertised. The hub
- * replays the latest list on subscribe. This keeps the last copy so a
- * session we already saw can show its picker before that replay arrives.
+ * In-memory cache of slash commands each session has advertised. The session
+ * replays the latest list on subscribe. This keeps the last copy so a session
+ * we already saw can show its picker before that replay arrives.
  */
 class AvailableCommandsCatalog {
     private val byKey = linkedMapOf<String, List<AvailableCommand>>()

@@ -13,13 +13,13 @@ data class GeneratedSshKey(
 )
 
 /**
- * Generates the phone-owned key pair used for direct mode. Ed25519 is preferred;
- * if the bundled crypto provider cannot create it, ECDSA P-256 is the fallback.
- * Both formats are plain OpenSSH keys, so the host only sees one authorized_keys
- * line either way.
+ * Generates the phone-owned key pair used for SSH connections. Ed25519 is
+ * preferred; if the bundled crypto provider cannot create it, ECDSA P-256 is
+ * the fallback. Both formats are plain OpenSSH keys, so the host only sees one
+ * authorized_keys line either way.
  */
 object SshKeyGenerator {
-    private const val COMMENT = "harold-direct@android"
+    private const val COMMENT = "harold@android"
 
     fun generate(): GeneratedSshKey {
         val ed25519 = runCatching { generateEd25519() }

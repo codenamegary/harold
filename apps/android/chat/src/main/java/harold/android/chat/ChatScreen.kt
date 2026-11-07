@@ -49,7 +49,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import harold.android.credentials.HaroldTransport
 import harold.android.ui.components.HaroldBadge
 import harold.android.ui.components.HaroldButton
 import harold.android.ui.components.HaroldButtonVariant
@@ -302,10 +301,6 @@ fun ChatScreen(
     onVoiceCommandDismiss: () -> Unit = {},
     onVoiceCommandPick: (String) -> Unit = {},
     onComposerCommandPick: (String) -> Unit = {},
-    onAuthSignIn: () -> Unit = {},
-    onAuthConfirm: (String) -> Unit = {},
-    onAuthCancel: () -> Unit = {},
-    onAuthLogout: () -> Unit = {},
     onDisconnectFromServer: () -> Unit = {},
     onPairAnotherHarold: () -> Unit = {},
     onSavedHarolds: () -> Unit = {},
@@ -490,19 +485,14 @@ fun ChatScreen(
     val disconnectName = uiState.disconnectHaroldName
     val disconnectColorId = uiState.disconnectHaroldColorId
     val disconnectIconId = uiState.disconnectHaroldIconId
-    val isDirectConnection =
-        uiState.selectedSession?.haroldTransport == HaroldTransport.Ssh
     val hasDisconnectBadge =
         disconnectColorId.isNotEmpty() ||
             disconnectIconId.isNotEmpty() ||
             disconnectName.isNotEmpty()
-    val disconnectLabel = when {
-        isDirectConnection && disconnectName.isNotEmpty() ->
-            stringResource(R.string.chat_remove_ssh_named, disconnectName)
-        isDirectConnection -> stringResource(R.string.chat_remove_ssh)
-        disconnectName.isNotEmpty() ->
-            stringResource(R.string.chat_disconnect_server_named, disconnectName)
-        else -> stringResource(R.string.chat_disconnect_from_server)
+    val disconnectLabel = if (disconnectName.isNotEmpty()) {
+        stringResource(R.string.chat_remove_named, disconnectName)
+    } else {
+        stringResource(R.string.chat_remove)
     }
 
     if (disconnectConfirmVisible) {
@@ -510,25 +500,15 @@ fun ChatScreen(
             onDismissRequest = { disconnectConfirmVisible = false },
             title = {
                 Text(
-                    text = when {
-                        isDirectConnection && disconnectName.isNotEmpty() ->
-                            stringResource(R.string.chat_remove_ssh_confirm_title_named, disconnectName)
-                        isDirectConnection ->
-                            stringResource(R.string.chat_remove_ssh_confirm_title)
-                        disconnectName.isNotEmpty() ->
-                            stringResource(R.string.chat_disconnect_confirm_title_named, disconnectName)
-                        else -> stringResource(R.string.chat_disconnect_confirm_title)
+                    text = if (disconnectName.isNotEmpty()) {
+                        stringResource(R.string.chat_remove_confirm_title_named, disconnectName)
+                    } else {
+                        stringResource(R.string.chat_remove_confirm_title)
                     },
                 )
             },
             text = {
-                Text(
-                    text = if (isDirectConnection) {
-                        stringResource(R.string.chat_remove_ssh_confirm_body)
-                    } else {
-                        stringResource(R.string.chat_disconnect_confirm_body)
-                    },
-                )
+                Text(text = stringResource(R.string.chat_remove_confirm_body))
             },
             confirmButton = {
                 TextButton(
@@ -540,13 +520,7 @@ fun ChatScreen(
                         .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                         .testTag("disconnect_confirm"),
                 ) {
-                    Text(
-                        text = if (isDirectConnection) {
-                            stringResource(R.string.chat_remove_ssh_confirm)
-                        } else {
-                            stringResource(R.string.chat_disconnect_confirm)
-                        },
-                    )
+                    Text(text = stringResource(R.string.chat_remove_confirm))
                 }
             },
             dismissButton = {
@@ -556,7 +530,7 @@ fun ChatScreen(
                         .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
                         .testTag("disconnect_cancel"),
                 ) {
-                    Text(text = stringResource(R.string.chat_disconnect_cancel))
+                    Text(text = stringResource(R.string.chat_remove_cancel))
                 }
             },
             modifier = Modifier.testTag("disconnect_confirm_dialog"),
@@ -730,25 +704,6 @@ fun ChatScreen(
                                 },
                                 modifier = Modifier.testTag("workspaces_menu_item"),
                             )
-                            if (uiState.agentAuth.authSummary?.canLogout == true) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = if (uiState.agentAuth.actionBusy) {
-                                                stringResource(R.string.agent_auth_signing_out)
-                                            } else {
-                                                stringResource(R.string.agent_auth_sign_out)
-                                            },
-                                        )
-                                    },
-                                    onClick = {
-                                        menuExpanded = false
-                                        onAuthLogout()
-                                    },
-                                    enabled = uiState.agentAuth.canLogoutAction,
-                                    modifier = Modifier.testTag("auth_sign_out_menu_item"),
-                                )
-                            }
                             DropdownMenuItem(
                                 text = { Text(text = stringResource(R.string.chat_saved_harolds)) },
                                 onClick = {
@@ -839,13 +794,7 @@ fun ChatScreen(
                     AgentAuthPanel(
                         agentName = selected.agentLabel.ifBlank { selected.agentId },
                         summary = summary,
-                        auth = uiState.agentAuth.agentAuth,
-                        submitting = uiState.agentAuth.panelSubmitting,
-                        actionBusy = uiState.agentAuth.actionBusy,
                         error = uiState.agentAuth.error,
-                        onSignIn = onAuthSignIn,
-                        onConfirm = onAuthConfirm,
-                        onCancel = onAuthCancel,
                     )
                 }
             }

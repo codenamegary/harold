@@ -1,7 +1,6 @@
 package harold.android.user
 
 import harold.android.contracts.AgentId
-import harold.android.contracts.AuthSessionAction
 import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateWorkspaceBody
@@ -15,9 +14,6 @@ class DefaultUserRepository @Inject constructor(
         serverOrigin: String,
         limit: Int,
     ) = agentApi.listWorkspaces(serverOrigin, limit)
-
-    override suspend fun getRuntimeSettings(serverOrigin: String) =
-        agentApi.getRuntimeSettings(serverOrigin)
 
     override suspend fun listFilesystemDirectories(
         serverOrigin: String,
@@ -57,25 +53,8 @@ class DefaultUserRepository @Inject constructor(
         agentId: AgentId,
     ) = agentApi.getAgentAuth(serverOrigin, agentId)
 
-    override suspend fun startAgentAuthSession(
-        serverOrigin: String,
-        agentId: AgentId,
-    ) = agentApi.startAgentAuthSession(serverOrigin, agentId)
-
-    override suspend fun applyAgentAuthSessionAction(
-        serverOrigin: String,
-        agentId: AgentId,
-        sessionId: String,
-        action: AuthSessionAction,
-    ) = agentApi.applyAgentAuthSessionAction(serverOrigin, agentId, sessionId, action)
-
     override suspend fun logoutAgentAuth(
         serverOrigin: String,
         agentId: AgentId,
     ) = agentApi.logoutAgentAuth(serverOrigin, agentId)
-
-    override suspend fun revokeDevice(
-        serverOrigin: String,
-        deviceId: String,
-    ) = agentApi.revokeDevice(serverOrigin, deviceId)
 }

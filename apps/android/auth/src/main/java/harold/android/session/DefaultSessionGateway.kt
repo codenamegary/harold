@@ -3,38 +3,23 @@ package harold.android.session
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import harold.android.credentials.CredentialHolder
 import harold.android.credentials.CredentialStore
-import harold.android.credentials.HaroldTransport
 
 class DefaultSessionGateway(
     private val credentialStore: CredentialStore,
-    private val credentialHolder: CredentialHolder = CredentialHolder(),
     private val connections: HaroldConnections = InactiveHaroldConnections,
 ) : SessionGateway {
     private val _pairedState = MutableStateFlow<PairedState>(PairedState.NotPaired)
     override val pairedState: StateFlow<PairedState> = _pairedState.asStateFlow()
 
     override suspend fun refresh() {
-        val saved = credentialStore.list()
-
-        // Only hub credentials belong in the OkHttp interceptor. Direct SSH
-        // material stays in the encrypted roster and is resolved by :transport.
-        credentialHolder.publish(
-            saved
-                .filter { harold -> harold.transport == HaroldTransport.Server }
-                .associate { harold -> harold.serverOrigin to harold.credential },
-        )
-
-        val stored = saved.firstOrNull()
+        val stored = credentialStore.list().firstOrNull()
         _pairedState.value = if (stored == null) {
             PairedState.NotPaired
         } else {
             PairedState.Paired(
                 serverOrigin = stored.serverOrigin,
-                deviceId = stored.deviceId,
                 deviceName = stored.deviceName,
-                transport = stored.transport,
             )
         }
         connections.refresh()
@@ -42,7 +27,6 @@ class DefaultSessionGateway(
 
     override suspend fun clearLocalAccess() {
         credentialStore.clear()
-        credentialHolder.clear()
         _pairedState.value = PairedState.NotPaired
         connections.refresh()
     }

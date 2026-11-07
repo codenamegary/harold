@@ -6,12 +6,5 @@
   "singleQuote": false,
   "trailingComma": "all",
   "sortPackageJson": false,
-  "ignorePatterns": [
-    "packages/core/src/agent-catalog/generated",
-    "packages/core/src/agent-catalog/registry.snapshot.json",
-    "bun.lock",
-    "skills-lock.json",
-    ".agents",
-    "prototype"
-  ]
+  "ignorePatterns": ["apps/android", "bun.lock", "skills-lock.json", ".agents"]
 }

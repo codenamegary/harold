@@ -24,7 +24,7 @@ private const val BACK_STACK_KEY = "back_stack"
 private val backStackSerializer = ListSerializer(AppRoute.serializer())
 
 /**
- * Owns the back stack for the activity. An empty stack means the pairing gate
+ * Owns the back stack for the activity. An empty stack means the start route
  * has not resolved yet. The start route is chosen once. Later moves are events
  * from the screen that owns them.
  */
@@ -32,7 +32,6 @@ private val backStackSerializer = ListSerializer(AppRoute.serializer())
 class Navigator @Inject constructor() {
     val backStack: SnapshotStateList<AppRoute> = mutableStateListOf()
 
-    private var pairingQueued: Boolean = false
     private var preferredAddWorkspaceOrigin: String? = null
     private val workspaceCreatedChannel = Channel<CreatedWorkspaceResult>(Channel.CONFLATED)
     val workspaceCreated: Flow<CreatedWorkspaceResult> = workspaceCreatedChannel.receiveAsFlow()
@@ -69,15 +68,15 @@ class Navigator @Inject constructor() {
         replaceWith(Shell)
     }
 
+    /** The connections list "Add connection" action opens SSH host setup. */
     fun openAddConnection() {
         if (backStack.isEmpty()) {
-            pairingQueued = true
             return
         }
-        if (backStack.lastOrNull() == AddConnection) {
+        if (backStack.lastOrNull() == SshSetup) {
             return
         }
-        backStack.add(AddConnection)
+        backStack.add(SshSetup)
     }
 
     fun openSshSetup() {
@@ -88,17 +87,6 @@ class Navigator @Inject constructor() {
             return
         }
         backStack.add(SshSetup)
-    }
-
-    fun openPairing() {
-        if (backStack.isEmpty()) {
-            pairingQueued = true
-            return
-        }
-        if (backStack.lastOrNull() == Pairing) {
-            return
-        }
-        backStack.add(Pairing)
     }
 
     fun openSessions() {
@@ -204,9 +192,5 @@ class Navigator @Inject constructor() {
     private fun replaceWith(root: AppRoute) {
         backStack.clear()
         backStack.add(root)
-        if (pairingQueued) {
-            pairingQueued = false
-            openPairing()
-        }
     }
 }

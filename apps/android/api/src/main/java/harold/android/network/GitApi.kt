@@ -6,10 +6,7 @@ import harold.android.contracts.GitScope
 import harold.android.contracts.GitSummary
 import harold.android.contracts.GitWorktreeCollection
 
-/**
- * Read-only git surface for the Changes feature. The routes are path-scoped and
- * authenticated, matching the `/v1/git/...` routes.
- */
+/** Read-only git surface for the Changes feature, executed over SSH. */
 interface GitApi {
     suspend fun getSummary(
         serverOrigin: String,

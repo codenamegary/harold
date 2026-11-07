@@ -111,12 +111,17 @@ private fun storedHarold(
     credential: String,
     name: String,
 ) = StoredCredential(
-    formatVersion = 1,
-    deviceId = "device_$name",
+    formatVersion = 3,
     serverOrigin = serverOrigin,
     deviceName = "Pixel",
-    credential = credential,
     name = name,
     colorId = "ink",
     iconId = "mark",
+    ssh = SshConfig(
+        host = serverOrigin,
+        port = 22,
+        user = "gary",
+        auth = SshAuth.Password(secret = "hunter2"),
+        hostKeyFingerprint = "SHA256:abc",
+    ),
 )

@@ -3,7 +3,6 @@ package harold.android.pairing
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import harold.android.credentials.HaroldTransport
 import harold.android.credentials.SavedHaroldRepository
 import harold.android.credentials.SshAuth
 import harold.android.credentials.SshConfig
@@ -276,17 +275,14 @@ class SshSetupViewModel @Inject constructor(
             val existing = repository.list()
             val saved = StoredCredential(
                 formatVersion = FORMAT_VERSION,
-                deviceId = fingerprint,
                 serverOrigin = uniqueSshOrigin(config.connectionId, existing),
                 deviceName = config.host,
-                credential = "",
                 name = unusedName(
                     base = state.name.trim().ifBlank { suggestedName(config.host) },
                     usedNames = existing.map { credential -> credential.name }.toSet(),
                 ),
                 colorId = state.colorId,
                 iconId = state.iconId,
-                transport = HaroldTransport.Ssh,
                 ssh = config.copy(hostKeyFingerprint = fingerprint),
             )
             repository.save(saved)
@@ -387,7 +383,7 @@ class SshSetupViewModel @Inject constructor(
             ?.toAuth()
 
     companion object {
-        private const val FORMAT_VERSION = 2
+        private const val FORMAT_VERSION = 3
 
         // Keep one phone key across setup-screen recreations. The key only
         // becomes durable when the connection is saved.
@@ -413,8 +409,8 @@ fun defaultCredentialName(mode: SshAuthMode, host: String = ""): String {
 }
 
 /**
- * A saved connection is identified by [StoredCredential.serverOrigin]. Direct
- * SSH hosts share that key when they point at the same user, host, and port,
+ * A saved connection is identified by [StoredCredential.serverOrigin]. SSH
+ * hosts share that key when they point at the same user, host, and port,
  * so later connections get a stable suffix instead of replacing the first one.
  */
 internal fun uniqueSshOrigin(base: String, saved: List<StoredCredential>): String {
@@ -426,4 +422,15 @@ internal fun uniqueSshOrigin(base: String, saved: List<StoredCredential>): Strin
         suffix += 1
     }
     return "$base#$suffix"
+}
+
+internal fun unusedName(base: String, usedNames: Set<String>): String {
+    if (base !in usedNames) {
+        return base
+    }
+    var number = 2
+    while ("$base $number" in usedNames) {
+        number += 1
+    }
+    return "$base $number"
 }

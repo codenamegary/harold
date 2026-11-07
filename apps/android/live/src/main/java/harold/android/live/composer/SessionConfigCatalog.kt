@@ -5,10 +5,10 @@ import harold.android.contracts.ConfigOption
 import harold.android.contracts.catalogSessionKey
 
 /**
- * In-memory cache of the config options each session has advertised. The hub
- * delivers `session_config` once per subscribe, so this keeps the last copy
- * for a session we already saw, letting a watch restore the selectors before
- * the fresh frame arrives.
+ * In-memory cache of the config options each session has advertised. The
+ * session delivers `session_config` once per subscribe, so this keeps the
+ * last copy for a session we already saw, letting a watch restore the
+ * selectors before the fresh frame arrives.
  */
 class SessionConfigCatalog {
     private val byKey = linkedMapOf<String, List<ConfigOption>>()

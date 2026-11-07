@@ -1,6 +1,5 @@
 package harold.android.shell
 
-import harold.android.credentials.HaroldTransport
 import harold.android.stream.ConnectionState
 import harold.android.stream.ConnectionStatus
 import harold.android.session.PairedState
@@ -10,11 +9,6 @@ sealed interface WorkspaceProbe {
 
     data class Loaded(
         val count: Int,
-    ) : WorkspaceProbe
-
-    /** The credential was rejected on HTTP. Same user choice as a rejected socket. */
-    data class Unauthorized(
-        val detail: String?,
     ) : WorkspaceProbe
 
     data class Failed(
@@ -30,10 +24,9 @@ data class ShellUiState(
     val connectionStatus: String? = null,
     val workspacesSummary: String? = null,
     val streamStalled: Boolean = false,
-    val probeUnauthorized: Boolean = false,
 ) {
-    /** Either transport can stop on its own, and either one needs the same escape hatch. */
-    val retryVisible: Boolean get() = streamStalled || probeUnauthorized
+    /** A stalled connection needs the same escape hatch as any other. */
+    val retryVisible: Boolean get() = streamStalled
 }
 
 fun ShellUiState.fromPairedState(pairedState: PairedState): ShellUiState =
@@ -45,16 +38,11 @@ fun ShellUiState.fromPairedState(pairedState: PairedState): ShellUiState =
             connectionStatus = null,
             workspacesSummary = null,
             streamStalled = false,
-            probeUnauthorized = false,
         )
 
         is PairedState.Paired -> copy(
             status = buildString {
-                if (pairedState.transport == HaroldTransport.Ssh) {
-                    append("Direct SSH to ")
-                } else {
-                    append("Paired to ")
-                }
+                append("Paired to ")
                 append(pairedState.serverOrigin)
                 pairedState.deviceName?.let { name ->
                     append("\n")
@@ -75,7 +63,6 @@ fun ShellUiState.fromConnectionState(state: ConnectionState): ShellUiState =
 fun ShellUiState.fromWorkspaceProbe(probe: WorkspaceProbe): ShellUiState =
     copy(
         workspacesSummary = probe.summary(),
-        probeUnauthorized = probe is WorkspaceProbe.Unauthorized,
     )
 
 private fun ConnectionStatus.label(): String? =
@@ -99,9 +86,6 @@ private fun WorkspaceProbe.summary(): String =
             1 -> "1 workspace"
             else -> "$count workspaces"
         }
-
-        is WorkspaceProbe.Unauthorized ->
-            "Workspaces unavailable. ${detail ?: "Not authorized"}"
 
         is WorkspaceProbe.Failed -> "Workspaces unavailable. $message"
     }

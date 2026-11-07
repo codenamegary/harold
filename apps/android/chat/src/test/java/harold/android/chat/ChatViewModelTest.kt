@@ -545,59 +545,6 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun pendingSessionIsCreatedOnceLoginSucceeds() = runTest(dispatcher) {
-        val inProgress = harold.android.contracts.AgentAuthSession(
-            sessionId = "auth-1",
-            agentId = "cursor",
-            status = harold.android.contracts.AuthSessionStatus.InProgress,
-            steps = listOf(
-                harold.android.contracts.AuthStep.Confirm(
-                    stepId = "confirm-1",
-                    title = "Ready?",
-                    body = "Finish login",
-                    confirmLabel = "I have logged in",
-                ),
-            ),
-            error = null,
-        )
-        val repository = ChatFakeUserRepository(
-            agentAuth = harold.android.contracts.AgentAuth(
-                agentId = "cursor",
-                status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
-                error = null,
-                session = inProgress,
-            ),
-            actionSession = inProgress.copy(
-                status = harold.android.contracts.AuthSessionStatus.Succeeded,
-                steps = emptyList(),
-            ),
-        )
-        repository.createFailure = AgentApiException(
-            AgentApiError.Problem(status = 409, title = "Agent authentication required", detail = null),
-        )
-        val sessionOwner = ChatFakeSessionOwner()
-        val viewModel = createViewModel(
-            repository = repository,
-            navigation = ChatFakeNavigationPreferences(),
-            sessionOwner = sessionOwner,
-        )
-
-        advanceUntilIdle()
-        createSessionThroughRoute(repository)
-        assertTrue(viewModel.uiState.value.isPendingNewSession)
-
-        repository.createFailure = null
-        viewModel.onAuthConfirm("confirm-1")
-        advanceUntilIdle()
-
-        assertEquals(2, repository.createCalls.size)
-        assertEquals("/tmp/harold", repository.createCalls.last().cwd)
-        assertEquals("sess_new", viewModel.uiState.value.selectedSession?.sessionId)
-        assertEquals("cursor" to "sess_new", sessionOwner.target)
-        assertEquals("sess_new", sessionOwner.rememberedConfigs.single().second)
-    }
-
-    @Test
     fun composerSendPromptsTheNewlyCreatedSession() = runTest(dispatcher) {
         val repository = ChatFakeUserRepository()
         val sessionOwner = ChatFakeSessionOwner()
@@ -1540,130 +1487,10 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun authSignInStartsSession() = runTest(dispatcher) {
-        val repository = ChatFakeUserRepository(
-            agentAuth = harold.android.contracts.AgentAuth(
-                agentId = "cursor",
-                status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
-                error = null,
-                session = null,
-            ),
-            startSession = harold.android.contracts.AgentAuthSession(
-                sessionId = "auth-1",
-                agentId = "cursor",
-                status = harold.android.contracts.AuthSessionStatus.InProgress,
-                steps = listOf(
-                    harold.android.contracts.AuthStep.Confirm(
-                        stepId = "confirm-1",
-                        title = "Ready?",
-                        body = "Finish login",
-                        confirmLabel = "I have logged in",
-                    ),
-                ),
-                error = null,
-            ),
-        )
-        val viewModel = createViewModel(
-            repository = repository,
-            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-        )
-        advanceUntilIdle()
-
-        assertTrue(viewModel.uiState.value.agentAuth.showAuthPanel)
-        viewModel.onAuthSignIn()
-        advanceUntilIdle()
-
-        assertEquals(1, repository.authStartCalls.size)
-        assertEquals("auth-1", viewModel.uiState.value.agentAuth.agentAuth?.session?.sessionId)
-        assertTrue(viewModel.uiState.value.agentAuth.showAuthPanel)
-    }
-
-    @Test
-    fun authConfirmAndCancelCallRepository() = runTest(dispatcher) {
-        val inProgress = harold.android.contracts.AgentAuthSession(
-            sessionId = "auth-1",
-            agentId = "cursor",
-            status = harold.android.contracts.AuthSessionStatus.InProgress,
-            steps = listOf(
-                harold.android.contracts.AuthStep.Confirm(
-                    stepId = "confirm-1",
-                    title = "Ready?",
-                    body = "Finish login",
-                    confirmLabel = "I have logged in",
-                ),
-            ),
-            error = null,
-        )
-        val repository = ChatFakeUserRepository(
-            agentAuth = harold.android.contracts.AgentAuth(
-                agentId = "cursor",
-                status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
-                error = null,
-                session = inProgress,
-            ),
-            actionSession = inProgress.copy(
-                steps = listOf(
-                    harold.android.contracts.AuthStep.Working(label = "Checking…"),
-                ),
-            ),
-        )
-        val viewModel = createViewModel(
-            repository = repository,
-            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-        )
-        advanceUntilIdle()
-
-        viewModel.onAuthConfirm("confirm-1")
-        advanceUntilIdle()
-        assertEquals(1, repository.authActionCalls.size)
-        assertEquals(
-            harold.android.contracts.AuthSessionAction.Confirm("confirm-1"),
-            repository.authActionCalls.single().third,
-        )
-
-        viewModel.onAuthCancel()
-        advanceUntilIdle()
-        assertEquals(2, repository.authActionCalls.size)
-        assertEquals(
-            harold.android.contracts.AuthSessionAction.Cancel,
-            repository.authActionCalls.last().third,
-        )
-    }
-
-    @Test
-    fun authLogoutWhenCanLogout() = runTest(dispatcher) {
-        val repository = ChatFakeUserRepository(
-            agentAuth = harold.android.contracts.AgentAuth(
-                agentId = "cursor",
-                status = harold.android.contracts.AgentAuthStatus.Authenticated,
-                error = null,
-                session = null,
-            ),
-            canLogout = true,
-        )
-        val viewModel = createViewModel(
-            repository = repository,
-            navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
-        )
-        advanceUntilIdle()
-
-        assertTrue(viewModel.uiState.value.agentAuth.authSummary?.canLogout == true)
-        viewModel.onAuthLogout()
-        advanceUntilIdle()
-
-        assertEquals(listOf("cursor"), repository.authLogoutCalls)
-        assertEquals(
-            harold.android.contracts.AgentAuthStatus.NeedsAuth,
-            viewModel.uiState.value.agentAuth.summary?.status,
-        )
-        assertTrue(viewModel.uiState.value.agentAuth.showAuthPanel)
-    }
-
-    @Test
-    fun disconnectFromServerRevokesDeviceAndClearsLocalAccess() = runTest(dispatcher) {
+    fun disconnectFromServerRemovesTheConnectionAndClearsLocalAccess() = runTest(dispatcher) {
         val repository = ChatFakeUserRepository()
         val sessionGateway = FakeSessionGateway(
-            PairedState.Paired(ORIGIN, "device_01", "Pixel"),
+            PairedState.Paired(ORIGIN, "Pixel"),
         )
         val sessionOwner = ChatFakeSessionOwner()
         val navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02")
@@ -1694,7 +1521,6 @@ class ChatViewModelTest {
         viewModel.disconnectFromServer()
         advanceUntilIdle()
 
-        assertEquals(listOf("device_01"), repository.revokeDeviceCalls)
         assertEquals(PairedState.NotPaired, sessionGateway.pairedState.value)
         assertTrue(navigation.lastSessionCleared)
         assertEquals(1, sessionOwner.disconnects)
@@ -1708,8 +1534,8 @@ class ChatViewModelTest {
         store.save(savedHarold(ORIGIN, "device_01", "devcred_loop", "loopback"))
         store.save(savedHarold(desktopOrigin, "device_desktop", "devcred_desk", "desktop"))
         val repository = ChatFakeUserRepository()
-        val sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel"))
-        sessionGateway.pairedAfterRefresh = PairedState.Paired(desktopOrigin, "device_desktop", "Pixel")
+        val sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "Pixel"))
+        sessionGateway.pairedAfterRefresh = PairedState.Paired(desktopOrigin, "Pixel")
         val sessionOwner = ChatFakeSessionOwner()
         val navigator = Navigator()
         navigator.start(paired = true)
@@ -2048,7 +1874,7 @@ class ChatViewModelTest {
     )
 
     private fun pairedGateway(): FakeSessionGateway =
-        FakeSessionGateway(PairedState.Paired(ORIGIN, "device_01", "Pixel"))
+        FakeSessionGateway(PairedState.Paired(ORIGIN, "Pixel"))
 
     private fun TestScope.createSessionThroughRoute(
         repository: ChatFakeUserRepository,
@@ -2485,18 +2311,11 @@ private class ChatFakeUserRepository(
         error = null,
         session = null,
     ),
-    private val startSession: harold.android.contracts.AgentAuthSession? = null,
-    private val actionSession: harold.android.contracts.AgentAuthSession? = null,
-    var canLogout: Boolean = false,
     var sessionsGate: CompletableDeferred<Unit>? = null,
 ) : UserRepository {
     val createCalls = mutableListOf<CreateSessionBody>()
     val deleteCalls = mutableListOf<Pair<String, String>>()
     val authGetCalls = mutableListOf<String>()
-    val authStartCalls = mutableListOf<String>()
-    val authActionCalls = mutableListOf<Triple<String, String, harold.android.contracts.AuthSessionAction>>()
-    val authLogoutCalls = mutableListOf<String>()
-    val revokeDeviceCalls = mutableListOf<String>()
     var agentAuthOverride: harold.android.contracts.AgentAuth = agentAuth
     var createFailure: Throwable? = null
     var sessionsOverride: List<Session>? = null
@@ -2529,9 +2348,6 @@ private class ChatFakeUserRepository(
             page = PageInfo(limit = 100, count = 1),
         ),
     )
-
-    override suspend fun getRuntimeSettings(serverOrigin: String) =
-        Result.failure<harold.android.contracts.RuntimeSettingsView>(UnsupportedOperationException())
 
     override suspend fun listFilesystemDirectories(
         serverOrigin: String,
@@ -2586,7 +2402,7 @@ private class ChatFakeUserRepository(
                                 it.status == harold.android.contracts.AuthSessionStatus.InProgress
                             }
                             ?.sessionId,
-                        canLogout = canLogout,
+                        canLogout = false,
                     ),
                 ),
             ),
@@ -2661,72 +2477,10 @@ private class ChatFakeUserRepository(
         return Result.success(agentAuthOverride.copy(agentId = agentId))
     }
 
-    override suspend fun startAgentAuthSession(
-        serverOrigin: String,
-        agentId: String,
-    ): Result<harold.android.contracts.AgentAuthSession> {
-        authStartCalls += agentId
-        val session = startSession ?: return Result.failure(UnsupportedOperationException())
-        agentAuthOverride = agentAuthOverride.copy(
-            status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
-            session = session,
-        )
-        return Result.success(session)
-    }
-
-    override suspend fun applyAgentAuthSessionAction(
-        serverOrigin: String,
-        agentId: String,
-        sessionId: String,
-        action: harold.android.contracts.AuthSessionAction,
-    ): Result<harold.android.contracts.AgentAuthSession> {
-        authActionCalls += Triple(agentId, sessionId, action)
-        val session = when (action) {
-            is harold.android.contracts.AuthSessionAction.Cancel -> {
-                (actionSession ?: agentAuthOverride.session)?.copy(
-                    status = harold.android.contracts.AuthSessionStatus.Cancelled,
-                    steps = listOf(
-                        harold.android.contracts.AuthStep.Done(
-                            outcome = harold.android.contracts.AuthDoneOutcome.Cancelled,
-                            message = null,
-                        ),
-                    ),
-                )
-            }
-            else -> actionSession
-        } ?: return Result.failure(UnsupportedOperationException())
-        agentAuthOverride = agentAuthOverride.copy(session = session)
-        return Result.success(session)
-    }
-
     override suspend fun logoutAgentAuth(
         serverOrigin: String,
         agentId: String,
-    ): Result<harold.android.contracts.AgentAuthSummary> {
-        authLogoutCalls += agentId
-        val summary = harold.android.contracts.AgentAuthSummary(
-            status = harold.android.contracts.AgentAuthStatus.NeedsAuth,
-            error = null,
-            activeSessionId = null,
-            canLogout = false,
-        )
-        agentAuthOverride = harold.android.contracts.AgentAuth(
-            agentId = agentId,
-            status = summary.status,
-            error = null,
-            session = null,
-        )
-        canLogout = false
-        return Result.success(summary)
-    }
-
-    override suspend fun revokeDevice(
-        serverOrigin: String,
-        deviceId: String,
-    ): Result<Unit> {
-        revokeDeviceCalls += deviceId
-        return Result.success(Unit)
-    }
+    ) = Result.failure<harold.android.contracts.AgentAuthSummary>(UnsupportedOperationException())
 }
 
 private fun savedHarold(
@@ -2735,14 +2489,13 @@ private fun savedHarold(
     credential: String,
     name: String,
 ) = StoredCredential(
-    formatVersion = 1,
-    deviceId = deviceId,
+    formatVersion = 3,
     serverOrigin = serverOrigin,
     deviceName = "Pixel",
-    credential = credential,
     name = name,
     colorId = "ink",
     iconId = "mark",
+    ssh = sshConfig(serverOrigin),
 )
 
 private fun session(
@@ -2777,14 +2530,21 @@ private fun storedHarold(
     iconId: String,
     deviceId: String,
 ) = StoredCredential(
-    formatVersion = 1,
-    deviceId = deviceId,
+    formatVersion = 3,
     serverOrigin = serverOrigin,
     deviceName = "Pixel",
-    credential = "devcred_$deviceId",
     name = name,
     colorId = colorId,
     iconId = iconId,
+    ssh = sshConfig(serverOrigin),
+)
+
+private fun sshConfig(serverOrigin: String) = harold.android.credentials.SshConfig(
+    host = serverOrigin,
+    port = 22,
+    user = "gary",
+    auth = harold.android.credentials.SshAuth.Password(secret = "hunter2"),
+    hostKeyFingerprint = "SHA256:abc",
 )
 
 private class RecordingHaroldConnections(

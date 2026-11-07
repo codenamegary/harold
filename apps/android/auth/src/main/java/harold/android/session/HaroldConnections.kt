@@ -1,9 +1,6 @@
 package harold.android.session
 
 import harold.android.contracts.SessionState
-import harold.android.credentials.ConnectionCapabilities
-import harold.android.credentials.HaroldTransport
-import harold.android.credentials.capabilitiesOf
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -17,18 +14,14 @@ enum class HaroldConnectionStatus {
 data class HaroldConnection(
     val serverOrigin: String,
     val status: HaroldConnectionStatus,
-    val transport: HaroldTransport = HaroldTransport.Server,
-) {
-    val capabilities: ConnectionCapabilities get() = capabilitiesOf(transport)
-}
+)
 
 fun interface HaroldReachability {
     suspend fun check(serverOrigin: String): Result<Unit>
 }
 
 /**
- * One live link per saved Harold. A link uses that Harold's device credential
- * because authenticated requests look the credential up by server origin.
+ * One live link per saved Harold, keyed by that Harold's roster id.
  */
 interface HaroldConnections {
     val connections: StateFlow<List<HaroldConnection>>

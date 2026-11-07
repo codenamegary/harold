@@ -164,7 +164,6 @@ class DefaultHaroldConnections(
                 HaroldConnection(
                     serverOrigin = harold.serverOrigin,
                     status = statuses[harold.serverOrigin] ?: HaroldConnectionStatus.Closed,
-                    transport = harold.transport,
                 )
             }
         }

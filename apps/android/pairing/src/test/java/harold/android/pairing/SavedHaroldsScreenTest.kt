@@ -25,8 +25,7 @@ class SavedHaroldsScreenTest {
                     uiState = SavedHaroldsUiState(
                         rows = listOf(
                             SavedHaroldRow(
-                                serverOrigin = "http://laptop.local:3847",
-                                deviceId = "device_laptop",
+                                serverOrigin = "ssh://gary@laptop.local:22",
                                 name = "laptop",
                                 colorId = "tide",
                                 iconId = "bolt",
@@ -48,9 +47,9 @@ class SavedHaroldsScreenTest {
 
         composeTestRule.onNodeWithText("Connections").assertIsDisplayed()
         composeTestRule.onNodeWithText("laptop").assertIsDisplayed()
-        composeTestRule.onNodeWithText("http://laptop.local:3847").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("saved_harold_badge_http://laptop.local:3847").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("saved_harold_edit_http://laptop.local:3847").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("saved_harold_remove_http://laptop.local:3847").assertIsDisplayed()
+        composeTestRule.onNodeWithText("ssh://gary@laptop.local:22").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("saved_harold_badge_ssh://gary@laptop.local:22").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("saved_harold_edit_ssh://gary@laptop.local:22").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("saved_harold_remove_ssh://gary@laptop.local:22").assertIsDisplayed()
     }
 }

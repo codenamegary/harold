@@ -304,7 +304,7 @@ class SessionsViewModelTest {
     )
 
     private companion object {
-        val PAIRED = PairedState.Paired("http://127.0.0.1:8787", "device_01", "Pixel")
+        val PAIRED = PairedState.Paired("http://127.0.0.1:8787", "Pixel")
         const val LAPTOP = "http://laptop.local:3847"
         const val DESKTOP = "http://desktop.local:3847"
     }
@@ -326,14 +326,19 @@ private fun storedHarold(
     iconId: String,
     deviceId: String,
 ) = StoredCredential(
-    formatVersion = 1,
-    deviceId = deviceId,
+    formatVersion = 3,
     serverOrigin = serverOrigin,
     deviceName = "Pixel",
-    credential = "devcred_$deviceId",
     name = name,
     colorId = colorId,
     iconId = iconId,
+    ssh = harold.android.credentials.SshConfig(
+        host = serverOrigin,
+        port = 22,
+        user = "gary",
+        auth = harold.android.credentials.SshAuth.Password(secret = "hunter2"),
+        hostKeyFingerprint = "SHA256:abc",
+    ),
 )
 
 private suspend fun saved(vararg harolds: StoredCredential): SavedHaroldRepository {
@@ -376,7 +381,6 @@ private class OriginSessionRepository(
         harold.android.contracts.AgentSettingsCollection(emptyList()),
     )
 
-    override suspend fun getRuntimeSettings(serverOrigin: String) = error("unused")
     override suspend fun listFilesystemDirectories(serverOrigin: String, root: String?) = error("unused")
     override suspend fun createFilesystemDirectory(
         serverOrigin: String,
@@ -395,15 +399,7 @@ private class OriginSessionRepository(
     ) = error("unused")
     override suspend fun deleteSession(serverOrigin: String, agentId: AgentId, sessionId: String) = error("unused")
     override suspend fun getAgentAuth(serverOrigin: String, agentId: AgentId) = error("unused")
-    override suspend fun startAgentAuthSession(serverOrigin: String, agentId: AgentId) = error("unused")
-    override suspend fun applyAgentAuthSessionAction(
-        serverOrigin: String,
-        agentId: AgentId,
-        sessionId: String,
-        action: harold.android.contracts.AuthSessionAction,
-    ) = error("unused")
     override suspend fun logoutAgentAuth(serverOrigin: String, agentId: AgentId) = error("unused")
-    override suspend fun revokeDevice(serverOrigin: String, deviceId: String) = error("unused")
 }
 
 private class SessionsFakeSessionOwner : SessionOwner {

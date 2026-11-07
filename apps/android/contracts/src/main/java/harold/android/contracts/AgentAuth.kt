@@ -95,19 +95,6 @@ sealed interface AuthStep {
 }
 
 @Serializable
-sealed interface AuthSessionAction {
-    @Serializable
-    @SerialName("confirm")
-    data class Confirm(
-        val stepId: String,
-    ) : AuthSessionAction
-
-    @Serializable
-    @SerialName("cancel")
-    data object Cancel : AuthSessionAction
-}
-
-@Serializable
 data class AgentAuthSession(
     val sessionId: String,
     val agentId: AgentId,

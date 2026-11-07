@@ -1,12 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { join } from "node:path"
 import { Glob } from "bun"
-import {
-  REVIEW_CODE,
-  REVIEW_ENDPOINT,
-  renderReviewPairingQrPng,
-  reviewPairingUri,
-} from "../../docs/store-android/src/pairing-qr"
 
 const repoRoot = join(import.meta.dir, "../..")
 const storeRoot = join(repoRoot, "docs/store-android")
@@ -84,27 +78,7 @@ describe("Google Play store assets", () => {
     }
   })
 
-  test("review pairing QR matches the demo server pairing URI", async () => {
-    expect(REVIEW_ENDPOINT).toBe("https://harold-demo.codenamegary.com")
-    expect(REVIEW_CODE).toBe("DEM-O01")
-    expect(reviewPairingUri()).toBe(
-      "harold://pair?v=1&endpoint=https%3A%2F%2Fharold-demo.codenamegary.com&code=DEM-O01",
-    )
-
-    const file = "review-pairing-qr.png"
-    await expectFileWithin(file, megabyte)
-    const png = await readPng(file)
-    expect(png.width).toBe(1024)
-    expect(png.height).toBe(1024)
-
-    // Regenerate and compare bytes so the checked-in image cannot drift from
-    // the URI, size, or error correction level the docs promise.
-    const generated = await renderReviewPairingQrPng()
-    const committed = new Uint8Array(await Bun.file(join(storeRoot, file)).arrayBuffer())
-    expect(Buffer.from(committed).equals(generated), `${file} is current`).toBe(true)
-  })
-
-  test("foreground service demo video is a compact MP4 with a hosted URL", async () => {
+  test("foreground service demo video is a compact MP4 referenced by the docs", async () => {
     const file = "foreground-service-demo.mp4"
     const path = join(storeRoot, file)
     const video = Bun.file(path)
@@ -120,21 +94,16 @@ describe("Google Play store assets", () => {
     const listing = await Bun.file(join(storeRoot, "store-listing.md")).text()
     for (const doc of [readme, listing]) {
       expect(doc).toContain(file)
-      expect(doc).toContain("https://harold-demo.codenamegary.com/foreground-service-demo.mp4")
     }
   })
 
-  test("review access docs point at the demo server and QR", async () => {
+  test("review access docs describe connecting to an SSH host", async () => {
     const readme = await Bun.file(join(storeRoot, "README.md")).text()
     const listing = await Bun.file(join(storeRoot, "store-listing.md")).text()
     const appAccess = section(listing, "## App access for review")
 
     for (const doc of [readme, appAccess]) {
-      expect(doc).toContain("review-pairing-qr.png")
-      expect(doc).toContain("https://harold-demo.codenamegary.com/review-pairing-qr.png")
-      expect(doc).toContain(REVIEW_ENDPOINT)
-      expect(doc).toContain(REVIEW_CODE)
-      expect(doc).toContain("XXX-XXX")
+      expect(doc).toContain("SSH")
     }
   })
 

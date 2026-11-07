@@ -19,5 +19,4 @@ dependencies {
 
     testImplementation(project(":testing"))
     testImplementation(libs.bundles.unit.test)
-    testImplementation(libs.okhttp.mockwebserver)
 }

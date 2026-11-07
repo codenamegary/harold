@@ -29,14 +29,14 @@ Control your AI coding agents from your phone. Plan, build, review, and ship.
 
 ## Full description (4,000 characters max)
 
-Harold puts the AI coding agents on your computer in your pocket.
+Harold puts the AI coding agents on your computers in your pocket.
 
-It is an Android client for your own agent setup. Harold pairs with the Harold CLI on your machine and gives you a clean mobile workspace for the sessions you already run. No account. No Harold cloud relay. Your prompts and code go to the server you choose.
+It is an Android SSH client for your own agent setup. Harold connects to your machines over SSH and gives you a clean mobile workspace for the sessions you already run. No account. No relay. Your prompts and code travel over SSH to machines you control.
 
 WHAT YOU CAN DO
 
-- Pair with a QR code from your terminal.
-- Start a session in any workspace on your machine.
+- Add a host and sign in with your SSH credentials.
+- Start a session in any workspace on that host.
 - Pick your ACP agent, model, and mode.
 - Use Plan mode to think before you edit.
 - Attach photos and files to a prompt.
@@ -49,26 +49,25 @@ WHAT YOU CAN DO
 
 BUILT FOR YOUR OWN AGENTS
 
-Harold works with any agent that speaks the Agent Client Protocol (ACP). Use the agents you already trust, including Cursor, Claude, Codex, OpenCode, Gemini CLI, GitHub Copilot, goose, and more. Harold does not bundle a model or an agent. It connects to the tools on your machine.
+Harold works with any agent that speaks the Agent Client Protocol (ACP). Use the agents you already trust, including Cursor, Claude, Codex, OpenCode, Gemini CLI, GitHub Copilot, goose, and more. Harold does not bundle a model or an agent. It runs them on your machines over SSH.
 
 HOW IT WORKS
 
-1. Install the Harold CLI on the computer where your agents run.
-2. Run `harold setup`, then `harold start`.
-3. Run `harold pair` and scan the QR code with the app.
+1. Install an ACP-compatible coding agent on a machine you can reach with SSH.
+2. Add that host in the Harold app.
+3. Sign in with your SSH credentials and start a session.
 
-Your phone talks directly to the Harold instance you run. Use a trusted local network, Tailscale, a reverse proxy, or a tunnel. Use HTTPS for any endpoint outside your network.
+Your phone talks straight to the host over SSH. No extra ports, no extra services, no account.
 
 REQUIREMENTS
 
 - Android 11 or newer.
-- A computer that can run Bun and the Harold CLI.
-- An ACP-compatible coding agent.
-- A network route from your phone to that computer.
+- A host you can reach with SSH that runs an ACP-compatible coding agent.
+- An SSH account on that host that can run the agent.
 
 PRIVACY
 
-Harold has no account and no developer-operated cloud relay. Your pairing credential is stored encrypted on your phone. Prompts, attachments, session state, and agent output travel between your phone and the Harold server you pair with. Voice dictation uses an on-device English model. The transcript is sent with your prompt when you send it.
+Harold has no account and no developer-operated relay. Your SSH credentials are stored encrypted on your phone. Prompts, attachments, session state, and agent output travel between your phone and your hosts over SSH. Voice dictation uses an on-device English model. The transcript is sent with your prompt when you send it.
 
 Links:
 
@@ -82,7 +81,7 @@ Links:
 | ------------------ | ------------------------------ | ----------------- | ---------- |
 | App icon           | `app-icon-512x512.png`         | 512 x 512 PNG     | 1 MB       |
 | Feature graphic    | `feature-graphic-1024x500.png` | 1,024 x 500 PNG   | 15 MB      |
-| Phone screenshot 1 | `phone-01-pairing.png`         | 1,080 x 1,920 PNG | 8 MB       |
+| Phone screenshot 1 | `phone-01-connect.png`         | 1,080 x 1,920 PNG | 8 MB       |
 | Phone screenshot 2 | `phone-02-sessions.png`        | 1,080 x 1,920 PNG | 8 MB       |
 | Phone screenshot 3 | `phone-03-plan.png`            | 1,080 x 1,920 PNG | 8 MB       |
 | Phone screenshot 4 | `phone-04-answer.png`          | 1,080 x 1,920 PNG | 8 MB       |
@@ -93,11 +92,11 @@ Links:
 
 The icon is a full-bleed square with no alpha and no rounded corners. Play applies its own launcher mask.
 
-The screenshots come from the recorded demo walk in `docs/demo/render/public/slices`. Each 9:20 phone frame is placed on a 9:16 canvas. The full app screen is kept.
+Each screenshot is a full app screen captured on a phone, placed on a 9:16 canvas. The full app screen is kept.
 
 ## Screenshot order
 
-1. **Pairing**: Pair once and your machine is in your pocket.
+1. **Connect**: Add an SSH host and your machines are in your pocket.
 2. **Sessions**: Every session in reach.
 3. **Plan**: Plan with your agent and attach context.
 4. **Answer**: Answer agent questions inline.
@@ -108,26 +107,22 @@ The screenshots come from the recorded demo walk in `docs/demo/render/public/sli
 
 ## App access for review
 
-Harold needs a reachable Harold server and a paired device. A reviewer cannot pass the pairing screen without one.
+Harold connects to your machines over SSH. There is no Harold service, account, or hosted environment, so there is nothing to unlock for review.
 
-The public review server is the demo Harold at `https://harold-demo.codenamegary.com`. In Play Console under **App access**, provide:
+A reviewer can install the app and connect it to any SSH host they control:
 
-- Endpoint: `https://harold-demo.codenamegary.com`
-- Pairing code: `DEM-O01`
-- QR code URL: `https://harold-demo.codenamegary.com/review-pairing-qr.png`
-- QR file: `review-pairing-qr.png` (the same image, for upload)
+- Host: any machine reachable over SSH. A small VPS works.
+- Agent: install any ACP-compatible coding agent on that host.
+- Sign in: the reviewer's own SSH credentials.
 
-The reviewer can scan the QR code with the app or enter the endpoint and code by hand. The demo server serves the QR from the public URL and redeploys when the checked-in image changes. The demo server accepts any code shaped `XXX-XXX`, so the code does not expire. Each claim creates a fresh demo device, and the credential stays valid across demo server restarts.
-
-The QR encodes `harold://pair?v=1&endpoint=https%3A%2F%2Fharold-demo.codenamegary.com&code=DEM-O01`.
+The app only needs one host that runs SSH and an ACP agent.
 
 ## Foreground service declaration
 
 Play Console asks for the foreground service type, a description, the user impact if the task is deferred or interrupted, and a demo video.
 
 - Type: **Special use**
-- Video: `https://harold-demo.codenamegary.com/foreground-service-demo.mp4`
-- File: `foreground-service-demo.mp4`
+- Video: `foreground-service-demo.mp4` — host the file at a public URL for the declaration form
 
 Description:
 
@@ -146,10 +141,9 @@ User impact if interrupted:
 Review this against the current Play data safety form before submitting.
 
 - The developer does not collect or share data.
-- The app sends prompts, attachments, session state, and device pairing data to the Harold server you configure.
-- Camera access is used only to scan pairing QR codes.
+- The app sends prompts, attachments, and session state to the SSH host you configure.
 - Microphone access is used only for voice dictation. Audio is processed on device by the bundled English Vosk model.
-- App data can be deleted by clearing Android app data. Server data can be deleted on the host.
+- App data can be deleted by clearing Android app data. Host data stays on your machines and can be deleted there.
 
 ## Content rating draft
 
@@ -159,8 +153,7 @@ The app is a utility for developers. It does not include ads or purchases. It ha
 
 - [ ] Publish the privacy policy and replace the TODO link.
 - [ ] Confirm the contact email in Play Console.
-- [ ] Provide review access to the demo server with the hosted QR URL.
-- [ ] Complete the Foreground Service permissions declaration with the hosted video URL.
+- [ ] Complete the Foreground Service permissions declaration with a public URL for the demo video.
 - [ ] Complete the Data safety form.
 - [ ] Complete the Content rating questionnaire.
 - [ ] Confirm the app name and short description character counts.

@@ -12,13 +12,13 @@ import harold.android.network.SessionConfigApi
 import harold.android.network.SessionWorktreePathApi
 import harold.android.session.HaroldReachability
 import harold.android.stream.SessionStreamFactory
-import harold.android.transport.routing.RoutingAgentApi
-import harold.android.transport.routing.RoutingSessionStreamFactory
-import harold.android.transport.routing.TransportHaroldReachability
 import harold.android.transport.ssh.JschSshConnectionFactory
+import harold.android.transport.ssh.SshAgentApi
 import harold.android.transport.ssh.SshConnectionFactory
 import harold.android.transport.ssh.SshEnrollment
 import harold.android.transport.ssh.SshProbe
+import harold.android.transport.ssh.SshReachability
+import harold.android.transport.ssh.SshSessionStreamFactory
 import javax.inject.Singleton
 
 @Module
@@ -26,35 +26,35 @@ import javax.inject.Singleton
 abstract class TransportModule {
     @Binds
     @Singleton
-    abstract fun agentApi(impl: RoutingAgentApi): AgentApi
+    abstract fun agentApi(impl: SshAgentApi): AgentApi
 
     @Binds
     @Singleton
-    abstract fun attachmentApi(impl: RoutingAgentApi): AttachmentApi
+    abstract fun attachmentApi(impl: SshAgentApi): AttachmentApi
 
     @Binds
     @Singleton
-    abstract fun sessionConfigApi(impl: RoutingAgentApi): SessionConfigApi
+    abstract fun sessionConfigApi(impl: SshAgentApi): SessionConfigApi
 
     @Binds
     @Singleton
-    abstract fun sessionCommandApi(impl: RoutingAgentApi): SessionCommandApi
+    abstract fun sessionCommandApi(impl: SshAgentApi): SessionCommandApi
 
     @Binds
     @Singleton
-    abstract fun gitApi(impl: RoutingAgentApi): GitApi
+    abstract fun gitApi(impl: SshAgentApi): GitApi
 
     @Binds
     @Singleton
-    abstract fun sessionWorktreePathApi(impl: RoutingAgentApi): SessionWorktreePathApi
+    abstract fun sessionWorktreePathApi(impl: SshAgentApi): SessionWorktreePathApi
 
     @Binds
     @Singleton
-    abstract fun sessionStreamFactory(impl: RoutingSessionStreamFactory): SessionStreamFactory
+    abstract fun sessionStreamFactory(impl: SshSessionStreamFactory): SessionStreamFactory
 
     @Binds
     @Singleton
-    abstract fun haroldReachability(impl: TransportHaroldReachability): HaroldReachability
+    abstract fun haroldReachability(impl: SshReachability): HaroldReachability
 
     @Binds
     @Singleton

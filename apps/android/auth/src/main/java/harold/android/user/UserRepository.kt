@@ -1,18 +1,15 @@
 package harold.android.user
 
 import harold.android.contracts.AgentAuth
-import harold.android.contracts.AgentAuthSession
 import harold.android.contracts.AgentAuthSummary
 import harold.android.contracts.AgentId
 import harold.android.contracts.AgentSettingsCollection
-import harold.android.contracts.AuthSessionAction
 import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectoryCollection
 import harold.android.contracts.FilesystemDirectoryCreated
-import harold.android.contracts.RuntimeSettingsView
 import harold.android.contracts.SessionCollection
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
@@ -22,8 +19,6 @@ interface UserRepository {
         serverOrigin: String,
         limit: Int = 100,
     ): Result<WorkspaceCollection>
-
-    suspend fun getRuntimeSettings(serverOrigin: String): Result<RuntimeSettingsView>
 
     suspend fun listFilesystemDirectories(
         serverOrigin: String,
@@ -63,25 +58,8 @@ interface UserRepository {
         agentId: AgentId,
     ): Result<AgentAuth>
 
-    suspend fun startAgentAuthSession(
-        serverOrigin: String,
-        agentId: AgentId,
-    ): Result<AgentAuthSession>
-
-    suspend fun applyAgentAuthSessionAction(
-        serverOrigin: String,
-        agentId: AgentId,
-        sessionId: String,
-        action: AuthSessionAction,
-    ): Result<AgentAuthSession>
-
     suspend fun logoutAgentAuth(
         serverOrigin: String,
         agentId: AgentId,
     ): Result<AgentAuthSummary>
-
-    suspend fun revokeDevice(
-        serverOrigin: String,
-        deviceId: String,
-    ): Result<Unit>
 }

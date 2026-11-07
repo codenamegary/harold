@@ -481,8 +481,8 @@ class DefaultSessionOwner @Inject constructor(
             } finally {
                 // Runs on every exit: watch change, disconnect, terminal
                 // status, or loop cancellation mid-wait. Without it a
-                // cancelled iteration leaks the open stream (and its server
-                // side hub subscriber) until the socket dies on its own.
+                // cancelled iteration leaks the open stream (and its remote
+                // agent process) until the connection dies on its own.
                 active.close()
                 if (stream === active) {
                     stream = null
