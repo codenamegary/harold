@@ -102,6 +102,32 @@ class SshSetupViewModelTest {
     }
 
     @Test
+    fun savingTwoConnectionsToTheSameHostKeepsBoth() = runTest {
+        val connections = FakeCredentialStore()
+        val first = fixture(connections = connections)
+        first.viewModel.onHostChanged("laptop.local")
+        first.viewModel.onUserChanged("gary")
+        first.viewModel.testConnection()
+        first.viewModel.onTrustChanged(true)
+        first.viewModel.save()
+
+        val second = fixture(connections = connections)
+        second.viewModel.onHostChanged("laptop.local")
+        second.viewModel.onUserChanged("gary")
+        second.viewModel.testConnection()
+        second.viewModel.onTrustChanged(true)
+        second.viewModel.save()
+
+        val saved = connections.list()
+        assertEquals(2, saved.size)
+        assertEquals(
+            listOf("ssh://gary@laptop.local:22", "ssh://gary@laptop.local:22#2"),
+            saved.map { credential -> credential.serverOrigin },
+        )
+        assertEquals(listOf("laptop", "laptop 2"), saved.map { credential -> credential.name })
+    }
+
+    @Test
     fun deletingTheSelectedCredentialClearsTheSelection() = runTest {
         val savedKey = savedKey()
         val fixture = fixture(initialCredentials = listOf(savedKey))
@@ -122,9 +148,9 @@ private data class Fixture(
 )
 
 private fun fixture(
+    connections: FakeCredentialStore = FakeCredentialStore(),
     initialCredentials: List<SshCredential> = emptyList(),
 ): Fixture {
-    val connections = FakeCredentialStore()
     val credentials = FakeSshCredentialStore(initialCredentials)
     val probe = SshProbe { Result.success("SHA256:test") }
     return Fixture(

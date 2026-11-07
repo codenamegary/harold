@@ -37,9 +37,11 @@ No Harold process is installed and no Harold port is opened.
 5. Test the connection. The app shows the host key fingerprint. Trust it to pin
    the key, then save.
 
-Saved connections show a `Server` or `SSH` badge. SSH keys and passwords live
-in the encrypted saved-connection store on the device. The host key is pinned by SHA-256
-fingerprint on every later connection.
+Saved connections show a `Server` or `SSH` badge. You can save more than one
+connection to the same SSH host. Each keeps its own name, appearance, and
+credential. SSH keys and passwords live in the encrypted saved-connection store
+on the device. The host key is pinned by SHA-256 fingerprint on every later
+connection.
 
 ### Saved credentials
 

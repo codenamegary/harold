@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 
 data class SavedHaroldRow(
     val serverOrigin: String,
+    val endpoint: String = serverOrigin,
     val deviceId: String,
     val name: String,
     val colorId: String,
@@ -143,6 +144,7 @@ class SavedHaroldsViewModel @Inject constructor(
         saved = repository.list().map { harold ->
             SavedHaroldRow(
                 serverOrigin = harold.serverOrigin,
+                endpoint = harold.displayEndpoint,
                 deviceId = harold.deviceId,
                 name = harold.name,
                 colorId = harold.colorId,

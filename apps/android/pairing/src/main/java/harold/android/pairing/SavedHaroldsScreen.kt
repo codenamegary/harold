@@ -140,7 +140,7 @@ fun SavedHaroldsScreen(
                                 nameFieldTag = "saved_harold_name",
                                 colorTagPrefix = "saved_harold_color_",
                                 iconTagPrefix = "saved_harold_icon_",
-                                endpointSubtitle = row.serverOrigin,
+                                endpointSubtitle = row.endpoint,
                             )
 
                             Row(
@@ -191,7 +191,7 @@ fun SavedHaroldsScreen(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
-                                    text = row.serverOrigin,
+                                    text = row.endpoint,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,

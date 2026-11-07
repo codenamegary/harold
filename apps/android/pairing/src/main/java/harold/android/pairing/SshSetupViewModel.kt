@@ -273,13 +273,17 @@ class SshSetupViewModel @Inject constructor(
                 null
             }
 
+            val existing = repository.list()
             val saved = StoredCredential(
                 formatVersion = FORMAT_VERSION,
                 deviceId = fingerprint,
-                serverOrigin = config.connectionId,
+                serverOrigin = uniqueSshOrigin(config.connectionId, existing),
                 deviceName = config.host,
                 credential = "",
-                name = state.name.trim().ifBlank { suggestedName(config.host) },
+                name = unusedName(
+                    base = state.name.trim().ifBlank { suggestedName(config.host) },
+                    usedNames = existing.map { credential -> credential.name }.toSet(),
+                ),
                 colorId = state.colorId,
                 iconId = state.iconId,
                 transport = HaroldTransport.Ssh,
@@ -406,4 +410,20 @@ fun defaultCredentialName(mode: SshAuthMode, host: String = ""): String {
         SshAuthMode.ImportedKey -> "$prefix imported key"
         SshAuthMode.Password -> "$prefix SSH password"
     }
+}
+
+/**
+ * A saved connection is identified by [StoredCredential.serverOrigin]. Direct
+ * SSH hosts share that key when they point at the same user, host, and port,
+ * so later connections get a stable suffix instead of replacing the first one.
+ */
+internal fun uniqueSshOrigin(base: String, saved: List<StoredCredential>): String {
+    if (saved.none { credential -> credential.serverOrigin == base }) {
+        return base
+    }
+    var suffix = 2
+    while (saved.any { credential -> credential.serverOrigin == "$base#$suffix" }) {
+        suffix += 1
+    }
+    return "$base#$suffix"
 }

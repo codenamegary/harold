@@ -27,7 +27,7 @@ fun proposedHaroldIdentity(
     )
 }
 
-private fun unusedName(base: String, usedNames: Set<String>): String {
+internal fun unusedName(base: String, usedNames: Set<String>): String {
     if (base !in usedNames) {
         return base
     }

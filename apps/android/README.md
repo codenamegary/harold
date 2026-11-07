@@ -54,9 +54,10 @@ The app has two saved-connection transports:
 
 `StoredCredential.transport` defaults to `Server`, so credentials written before
 direct mode still decode unchanged. SSH rows use a synthetic
-`ssh://user@host:port` connection key. Keys and passwords are stored in the same
-encrypted connection store as server credentials. Host keys are pinned by SHA-256
-fingerprint.
+`ssh://user@host:port` connection key. When several saved rows point at the same
+SSH endpoint, later rows get a numeric suffix so they stay separate entries.
+Keys and passwords are stored in the same encrypted connection store as server
+credentials. Host keys are pinned by SHA-256 fingerprint.
 
 Direct-mode host state lives under `~/.harold/direct/`: one JSON file per
 session, `flock` locks per active session, uploads, and a workspace list.
