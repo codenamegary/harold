@@ -215,7 +215,11 @@ class CreateSessionViewModel @Inject constructor(
             val rememberedId = workspaceId(remembered.connectionId, remembered.workspaceId)
             rows.firstOrNull { row -> row.id == rememberedId }
         }
-        val selected = pendingRow ?: explicitRow ?: rememberedRow ?: rows.firstOrNull()
+        val defaultRow = rows.firstOrNull { row ->
+            row.connectionId == defaultWorkspaceOrigin() &&
+                row.path == defaultWorkspacePath()
+        }
+        val selected = pendingRow ?: explicitRow ?: rememberedRow ?: defaultRow ?: rows.firstOrNull()
         val agentsForSelection = selected != null && selected.connectionId == agentsOrigin
 
         _uiState.update { state ->
@@ -324,10 +328,42 @@ class CreateSessionViewModel @Inject constructor(
                 selectedAgentId = current.selectedAgentId
                     ?.takeIf { selected -> agents.any { agent -> agent.id == selected } }
                     ?: rememberedAgent
+                    ?: defaultAgentForSelectedWorkspace(agents)
                     ?: agents.firstOrNull()?.id,
                 error = null,
             )
         }
+    }
+
+    /**
+     * Device-local default workspace: the saved connection whose default the
+     * user picked in connection settings, matched by host path.
+     */
+    private fun defaultWorkspacePath(): String? {
+        val origin = _uiState.value.workspaces
+            .firstOrNull { row -> row.connectionId == defaultWorkspaceOrigin() }
+            ?.connectionId
+            ?: return null
+        return savedConnections
+            .find { connection -> connection.connectionId == origin }
+            ?.defaultWorkspacePath
+    }
+
+    private fun defaultWorkspaceOrigin(): String? =
+        savedConnections
+            .firstOrNull { connection -> !connection.defaultWorkspacePath.isNullOrBlank() }
+            ?.connectionId
+
+    private fun defaultAgentForSelectedWorkspace(agents: List<AgentOption>): AgentId? {
+        val origin = _uiState.value.workspaces
+            .firstOrNull { row -> row.id == _uiState.value.selectedWorkspaceId }
+            ?.connectionId
+            ?: return null
+        val default = savedConnections
+            .find { connection -> connection.connectionId == origin }
+            ?.defaultAgentId
+            ?: return null
+        return default.takeIf { id -> agents.any { agent -> agent.id == id } }
     }
 
     private fun rememberedAgentForSelectedWorkspace(): AgentId? {

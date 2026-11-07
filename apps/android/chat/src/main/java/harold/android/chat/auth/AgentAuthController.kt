@@ -8,6 +8,7 @@ import harold.android.contracts.AuthSessionStatus
 import harold.android.contracts.toSummary
 import harold.android.network.apiErrorMessage
 import harold.android.user.UserRepository
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,6 +49,7 @@ data class AgentAuthUiState(
  */
 class AgentAuthController(
     private val userRepository: UserRepository,
+    private val scope: CoroutineScope,
     private val origin: () -> String?,
     private val selectedAgent: () -> AgentId?,
 ) {
@@ -90,6 +92,47 @@ class AgentAuthController(
             summaries = summaries + (agentId to summary)
         }
         _state.update { current -> current.copy(agentAuth = auth, summary = summary) }
+    }
+
+    /**
+     * Signs the agent out through its host CLI, then re-probes. Fails into
+     * the panel error when the agent has no logout.
+     */
+    fun logout(agentId: AgentId) {
+        val serverOrigin = origin() ?: return
+        _state.update { current -> current.copy(error = null) }
+        scope.launch {
+            userRepository.logoutAgentAuth(serverOrigin, agentId).fold(
+                onSuccess = { summary ->
+                    summaries = summaries + (agentId to summary)
+                    _state.update { current ->
+                        current.copy(agentAuth = null, summary = summary, error = null)
+                    }
+                },
+                onFailure = { error ->
+                    _state.update { current -> current.copy(error = apiErrorMessage(error)) }
+                },
+            )
+        }
+    }
+
+    /**
+     * Tears down the agent's live process; the next session spawns fresh and
+     * the auth state is re-probed.
+     */
+    fun restart(agentId: AgentId) {
+        val serverOrigin = origin() ?: return
+        _state.update { current -> current.copy(error = null) }
+        scope.launch {
+            userRepository.restartAgent(serverOrigin, agentId).fold(
+                onSuccess = {
+                    hydrate(agentId)
+                },
+                onFailure = { error ->
+                    _state.update { current -> current.copy(error = apiErrorMessage(error)) }
+                },
+            )
+        }
     }
 
     suspend fun hydrate(agentId: AgentId) {

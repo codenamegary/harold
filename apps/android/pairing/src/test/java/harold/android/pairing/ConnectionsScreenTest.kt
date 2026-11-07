@@ -13,12 +13,12 @@ import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [30])
-class SavedHaroldsScreenTest {
+class ConnectionsScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
     @Test
-    fun showsEachHaroldNameOriginAndBadge() {
+    fun showsEachConnectionNameOriginAndBadge() {
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
                 ConnectionsScreen(
@@ -48,8 +48,9 @@ class SavedHaroldsScreenTest {
         composeTestRule.onNodeWithText("Connections").assertIsDisplayed()
         composeTestRule.onNodeWithText("laptop").assertIsDisplayed()
         composeTestRule.onNodeWithText("ssh://gary@laptop.local:22").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("saved_harold_badge_ssh://gary@laptop.local:22").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("saved_harold_edit_ssh://gary@laptop.local:22").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("saved_harold_remove_ssh://gary@laptop.local:22").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("connection_badge_ssh://gary@laptop.local:22").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("connection_agents_ssh://gary@laptop.local:22").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("connection_settings_ssh://gary@laptop.local:22").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("connection_remove_ssh://gary@laptop.local:22").assertIsDisplayed()
     }
 }

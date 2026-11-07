@@ -125,6 +125,7 @@ class ChatViewModel @Inject constructor(
      */
     private val agentAuth = AgentAuthController(
         userRepository = userRepository,
+        scope = viewModelScope,
         origin = ::selectedOrPairedOrigin,
         selectedAgent = { _uiState.value.selectedSession?.agentId },
     )
@@ -149,7 +150,8 @@ class ChatViewModel @Inject constructor(
 
     private var workspaceByPath: Map<String, WorkspaceRow> = emptyMap()
     private var agentLabels: Map<AgentId, String> = emptyMap()
-    private var agentCapabilities: Map<AgentId, AgentCapabilityInventory?> = emptyMap()
+    /** Live handshake results, keyed by the session that produced them. */
+    private var agentCapabilities: Map<String, AgentCapabilityInventory?> = emptyMap()
     private var cachedSessions: List<CachedSession> = emptyList()
     private var savedConnections: List<SavedConnection> = emptyList()
     private var pairedOrigin: String? = null
@@ -219,6 +221,9 @@ class ChatViewModel @Inject constructor(
                     is StreamStatus.TransportError -> status.message
                 }
                 _uiState.update { current -> current.copy(connectionBanner = banner) }
+                if (state.status is StreamStatus.Live) {
+                    refreshLiveCapabilities()
+                }
             }
         }
 
@@ -806,12 +811,51 @@ class ChatViewModel @Inject constructor(
 
     private fun syncAttachmentGating() {
         val session = _uiState.value.selectedSession
-        val inventory = session?.agentId?.let { agentId -> agentCapabilities[agentId] }
+        val inventory = session?.let { current ->
+            agentCapabilities[catalogSessionKey(current.agentId, current.sessionId)]
+        }
         _uiState.update { current ->
             current.copy(
                 supportsImageAttachments = supportsImageAttachments(inventory),
                 supportsFileAttachments = supportsFileAttachments(inventory),
             )
+        }
+    }
+
+    /**
+     * Reads the live handshake of the selected session. Null until the agent
+     * answered `initialize`, so the composer stays text-only until then, and
+     * nothing about capabilities is persisted.
+     */
+    private fun refreshLiveCapabilities() {
+        val selected = _uiState.value.selectedSession ?: return
+        val connectionId = selected.connectionId.takeIf { it.isNotEmpty() } ?: return
+        viewModelScope.launch {
+            userRepository.getAgentCapabilities(
+                connectionId = connectionId,
+                agentId = selected.agentId,
+                sessionId = selected.sessionId,
+            ).onSuccess { inventory ->
+                val key = catalogSessionKey(selected.agentId, selected.sessionId)
+                agentCapabilities = agentCapabilities + (key to inventory)
+                syncAttachmentGating()
+            }
+        }
+    }
+
+    fun restartAgentAuth() {
+        selectedOrPairedOrigin()?.let { origin ->
+            _uiState.value.selectedSession?.agentId?.let { agentId ->
+                agentAuth.restart(agentId)
+            }
+        }
+    }
+
+    fun logoutAgentAuth() {
+        selectedOrPairedOrigin()?.let { origin ->
+            _uiState.value.selectedSession?.agentId?.let { agentId ->
+                agentAuth.logout(agentId)
+            }
         }
     }
 
@@ -1578,6 +1622,7 @@ class ChatViewModel @Inject constructor(
             sessionOwner.connect(selected.connectionId)
         }
         sessionOwner.watch(selected.agentId, selected.sessionId)
+        refreshLiveCapabilities()
     }
 
     private fun onHaroldLinks(links: List<ConnectionHealth>) {
@@ -1695,8 +1740,6 @@ class ChatViewModel @Inject constructor(
         }
         agentLabels = agentLabels + agents.associate { agent -> agent.id to agent.displayName }
         agentAuth.mergeSummaries(agents.associate { agent -> agent.id to agent.authSummary })
-        agentCapabilities = agentCapabilities + agents.associate { agent -> agent.id to agent.capabilities }
-        syncAttachmentGating()
     }
 
     /**

@@ -303,7 +303,9 @@ fun ChatScreen(
     onComposerCommandPick: (String) -> Unit = {},
     onDisconnectFromServer: () -> Unit = {},
     onPairAnotherHarold: () -> Unit = {},
-    onSavedHarolds: () -> Unit = {},
+    onConnections: () -> Unit = {},
+    onAgentAuthRestart: () -> Unit = {},
+    onAgentAuthLogout: () -> Unit = {},
     agentLabel: String = "",
     onElicitationOpen: () -> Unit = {},
     onElicitationClose: () -> Unit = {},
@@ -708,9 +710,9 @@ fun ChatScreen(
                                 text = { Text(text = stringResource(R.string.chat_connections)) },
                                 onClick = {
                                     menuExpanded = false
-                                    onSavedHarolds()
+                                    onConnections()
                                 },
-                                modifier = Modifier.testTag("saved_harolds_menu_item"),
+                                modifier = Modifier.testTag("connections_menu_item"),
                             )
                             DropdownMenuItem(
                                 text = { Text(text = stringResource(R.string.chat_add_connection)) },
@@ -795,6 +797,8 @@ fun ChatScreen(
                         agentName = selected.agentLabel.ifBlank { selected.agentId },
                         summary = summary,
                         error = uiState.agentAuth.error,
+                        onRestart = onAgentAuthRestart,
+                        onLogout = onAgentAuthLogout,
                     )
                 }
             }

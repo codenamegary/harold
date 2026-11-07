@@ -9,6 +9,7 @@ android {
 
 dependencies {
     implementation(project(":navigation"))
+    implementation(project(":contracts"))
     implementation(project(":auth"))
     implementation(project(":live"))
     implementation(project(":transport"))

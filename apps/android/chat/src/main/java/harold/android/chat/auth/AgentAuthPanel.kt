@@ -15,14 +15,19 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Row
 import harold.android.chat.R
 import harold.android.contracts.AgentAuthSummary
+import harold.android.ui.components.HaroldButton
+import harold.android.ui.components.HaroldButtonVariant
 
 @Composable
 fun AgentAuthPanel(
     agentName: String,
     summary: AgentAuthSummary,
     error: String?,
+    onRestart: () -> Unit = {},
+    onLogout: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val contentDescription = stringResource(R.string.agent_auth_panel_content_description, agentName)
@@ -61,6 +66,30 @@ fun AgentAuthPanel(
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.testTag("agent_auth_summary_error"),
                 )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                HaroldButton(
+                    text = stringResource(R.string.agent_auth_restart),
+                    onClick = onRestart,
+                    variant = HaroldButtonVariant.Secondary,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("agent_auth_restart"),
+                )
+                if (summary.canLogout) {
+                    HaroldButton(
+                        text = stringResource(R.string.agent_auth_logout),
+                        onClick = onLogout,
+                        variant = HaroldButtonVariant.Secondary,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("agent_auth_logout"),
+                    )
+                }
             }
 
             error?.let { message ->

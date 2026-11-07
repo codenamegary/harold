@@ -32,6 +32,18 @@ data object AddWorkspace : AppRoute
 @Serializable
 data object Connections : AppRoute
 
+/** Per-connection agent management: detection, settings, sign-in state. */
+@Serializable
+data class Agents(
+    val connectionId: String,
+) : AppRoute
+
+/** Per-connection settings: host details, credentials, appearance, danger zone. */
+@Serializable
+data class ConnectionSettings(
+    val connectionId: String,
+) : AppRoute
+
 @Serializable
 data class Changes(
     val connectionId: String,

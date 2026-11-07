@@ -61,7 +61,9 @@
     <string name="permission_option_content_description">Permission option: %1$s</string>
     <string name="agent_auth_host_login">Host login</string>
     <string name="agent_auth_panel_content_description">%1$s auth</string>
-    <string name="agent_auth_manage_on_host">Manage %1$s sign-in on the host with its own CLI.</string>
+    <string name="agent_auth_manage_on_host">Manage %1$s sign-in on the host with its own CLI. Restarting closes the agent\'s live session so the new sign-in takes effect.</string>
+    <string name="agent_auth_restart">Restart agent</string>
+    <string name="agent_auth_logout">Sign out</string>
     <string name="chat_add_connection">Add connection</string>
     <string name="chat_connections">Connections</string>
     <string name="chat_remove">Remove connection</string>

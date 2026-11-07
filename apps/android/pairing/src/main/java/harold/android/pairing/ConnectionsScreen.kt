@@ -14,9 +14,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -55,22 +56,24 @@ fun ConnectionsScreen(
     onIconSelected: (String) -> Unit,
     onSave: () -> Unit,
     onCancelEdit: () -> Unit,
+    onOpenSettings: (String) -> Unit = {},
+    onOpenAgents: (String) -> Unit = {},
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text(text = stringResource(R.string.saved_harolds_title)) },
+                title = { Text(text = stringResource(R.string.connections_title)) },
                 navigationIcon = {
                     IconButton(
                         onClick = onBack,
                         modifier = Modifier
                             .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                            .testTag("saved_harolds_back"),
+                            .testTag("connections_back"),
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.saved_harolds_back),
+                            contentDescription = stringResource(R.string.connections_back),
                         )
                     }
                 },
@@ -79,11 +82,11 @@ fun ConnectionsScreen(
                         onClick = onAdd,
                         modifier = Modifier
                             .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                            .testTag("saved_harolds_add"),
+                            .testTag("connections_add"),
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Add,
-                            contentDescription = stringResource(R.string.saved_harolds_add),
+                            contentDescription = stringResource(R.string.connections_add),
                         )
                     }
                 },
@@ -99,12 +102,12 @@ fun ConnectionsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             HaroldButton(
-                text = stringResource(R.string.saved_harolds_add),
+                text = stringResource(R.string.connections_add),
                 onClick = onAdd,
                 variant = HaroldButtonVariant.Primary,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("saved_harolds_add_button"),
+                    .testTag("connections_add_button"),
             )
             uiState.rows.forEach { row ->
                 val isEditing = uiState.editingOrigin == row.connectionId
@@ -116,7 +119,7 @@ fun ConnectionsScreen(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("saved_harold_${row.connectionId}"),
+                        .testTag("connection_${row.connectionId}"),
                 ) {
                     if (isEditing) {
                         Column(
@@ -135,9 +138,9 @@ fun ConnectionsScreen(
                                 nameLabel = stringResource(R.string.pairing_name_label),
                                 colorLabel = stringResource(R.string.pairing_color_label),
                                 iconLabel = stringResource(R.string.pairing_icon_label),
-                                nameFieldTag = "saved_harold_name",
-                                colorTagPrefix = "saved_harold_color_",
-                                iconTagPrefix = "saved_harold_icon_",
+                                nameFieldTag = "connection_name",
+                                colorTagPrefix = "connection_color_",
+                                iconTagPrefix = "connection_icon_",
                                 endpointSubtitle = row.endpoint,
                             )
 
@@ -151,15 +154,15 @@ fun ConnectionsScreen(
                                     variant = HaroldButtonVariant.Secondary,
                                     modifier = Modifier
                                         .weight(1f)
-                                        .testTag("saved_harold_cancel"),
+                                        .testTag("connection_cancel"),
                                 )
                                 HaroldButton(
-                                    text = stringResource(R.string.saved_harolds_save),
+                                    text = stringResource(R.string.connections_save),
                                     onClick = onSave,
                                     variant = HaroldButtonVariant.Primary,
                                     modifier = Modifier
                                         .weight(1f)
-                                        .testTag("saved_harold_save"),
+                                        .testTag("connection_save"),
                                 )
                             }
                         }
@@ -175,7 +178,7 @@ fun ConnectionsScreen(
                                 colorId = row.colorId,
                                 iconId = row.iconId,
                                 size = 40.dp,
-                                modifier = Modifier.testTag("saved_harold_badge_${row.connectionId}"),
+                                modifier = Modifier.testTag("connection_badge_${row.connectionId}"),
                             )
                             Column(
                                 modifier = Modifier.weight(1f),
@@ -207,7 +210,7 @@ fun ConnectionsScreen(
                                             MaterialTheme.colorScheme.onSurfaceVariant
                                         },
                                         modifier = Modifier.testTag(
-                                            "saved_harold_status_${row.connectionId}",
+                                            "connection_status_${row.connectionId}",
                                         ),
                                     )
                                 }
@@ -216,14 +219,26 @@ fun ConnectionsScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 IconButton(
-                                    onClick = { onEdit(row.connectionId) },
+                                    onClick = { onOpenAgents(row.connectionId) },
                                     modifier = Modifier
                                         .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                                        .testTag("saved_harold_edit_${row.connectionId}"),
+                                        .testTag("connection_agents_${row.connectionId}"),
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Filled.Edit,
-                                        contentDescription = stringResource(R.string.saved_harolds_edit),
+                                        imageVector = Icons.AutoMirrored.Filled.ListAlt,
+                                        contentDescription = stringResource(R.string.agents_title),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { onOpenSettings(row.connectionId) },
+                                    modifier = Modifier
+                                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                                        .testTag("connection_settings_${row.connectionId}"),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Settings,
+                                        contentDescription = stringResource(R.string.settings_title),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
@@ -231,11 +246,11 @@ fun ConnectionsScreen(
                                     onClick = { onRemove(row.connectionId) },
                                     modifier = Modifier
                                         .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                                        .testTag("saved_harold_remove_${row.connectionId}"),
+                                        .testTag("connection_remove_${row.connectionId}"),
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.Delete,
-                                        contentDescription = stringResource(R.string.saved_harolds_remove),
+                                        contentDescription = stringResource(R.string.connections_remove),
                                         tint = MaterialTheme.colorScheme.error,
                                     )
                                 }

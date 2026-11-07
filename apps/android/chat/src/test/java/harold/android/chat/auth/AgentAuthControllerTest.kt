@@ -17,6 +17,8 @@ import harold.android.user.UserRepository
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -34,8 +36,10 @@ class AgentAuthControllerTest {
     private fun controller(
         repository: FakeAuthUserRepository,
         selected: () -> AgentId? = { selectedAgentId },
+        scope: CoroutineScope = CoroutineScope(UnconfinedTestDispatcher()),
     ) = AgentAuthController(
         userRepository = repository,
+        scope = scope,
         origin = { ORIGIN },
         selectedAgent = selected,
     )

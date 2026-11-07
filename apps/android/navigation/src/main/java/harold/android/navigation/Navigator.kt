@@ -168,6 +168,20 @@ class Navigator @Inject constructor() {
         backStack.add(Connections)
     }
 
+    fun openAgents(connectionId: String) {
+        if (backStack.isEmpty() || backStack.lastOrNull() == Agents(connectionId)) {
+            return
+        }
+        backStack.add(Agents(connectionId))
+    }
+
+    fun openConnectionSettings(connectionId: String) {
+        if (backStack.isEmpty() || backStack.lastOrNull() == ConnectionSettings(connectionId)) {
+            return
+        }
+        backStack.add(ConnectionSettings(connectionId))
+    }
+
     fun goBack(): Boolean {
         if (backStack.size <= 1) {
             return false
