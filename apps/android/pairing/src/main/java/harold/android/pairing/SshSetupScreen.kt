@@ -1,11 +1,13 @@
 package harold.android.pairing
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,6 +15,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -22,17 +25,26 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -60,6 +72,17 @@ fun SshSetupScreen(
     onSave: () -> Unit,
 ) {
     val clipboard = LocalClipboardManager.current
+    var authHelpVisible by remember { mutableStateOf(false) }
+    val helpSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    if (authHelpVisible) {
+        ModalBottomSheet(
+            onDismissRequest = { authHelpVisible = false },
+            sheetState = helpSheetState,
+        ) {
+            SshAuthHelpSheet(onClose = { authHelpVisible = false })
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -124,10 +147,36 @@ fun SshSetupScreen(
                 )
             }
 
-            Text(
-                text = stringResource(R.string.ssh_auth_label),
-                style = MaterialTheme.typography.labelLarge,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.ssh_auth_label),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier
+                        .clickable { authHelpVisible = true }
+                        .semantics { role = Role.Button }
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                        .testTag("ssh_auth_help"),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Info,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = stringResource(R.string.ssh_auth_help),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = uiState.authMode == SshAuthMode.GeneratedKey,
@@ -313,5 +362,82 @@ fun SshSetupScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SshAuthHelpSheet(onClose: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 28.dp)
+            .testTag("ssh_auth_help_sheet"),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.ssh_auth_help_title),
+            style = MaterialTheme.typography.headlineSmall,
+        )
+        Text(
+            text = stringResource(R.string.ssh_auth_help_intro),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        AuthHelpSection(
+            title = stringResource(R.string.ssh_auth_help_storage_title),
+            body = stringResource(R.string.ssh_auth_help_storage_body),
+        )
+        AuthHelpSection(
+            title = stringResource(R.string.ssh_auth_help_privacy_title),
+            body = stringResource(R.string.ssh_auth_help_privacy_body),
+        )
+
+        Text(
+            text = stringResource(R.string.ssh_auth_help_choose_title),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        AuthHelpSection(
+            title = stringResource(R.string.ssh_auth_help_generate_title),
+            body = stringResource(R.string.ssh_auth_help_generate_body),
+        )
+        AuthHelpSection(
+            title = stringResource(R.string.ssh_auth_help_import_title),
+            body = stringResource(R.string.ssh_auth_help_import_body),
+        )
+        AuthHelpSection(
+            title = stringResource(R.string.ssh_auth_help_password_title),
+            body = stringResource(R.string.ssh_auth_help_password_body),
+        )
+        AuthHelpSection(
+            title = stringResource(R.string.ssh_auth_help_pinning_title),
+            body = stringResource(R.string.ssh_auth_help_pinning_body),
+        )
+
+        HaroldButton(
+            text = stringResource(R.string.ssh_auth_help_close),
+            onClick = onClose,
+            variant = HaroldButtonVariant.Primary,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("ssh_auth_help_close"),
+        )
+    }
+}
+
+@Composable
+private fun AuthHelpSection(title: String, body: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+        )
+        Text(
+            text = body,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
