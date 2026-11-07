@@ -49,6 +49,7 @@ import harold.android.live.AcpTranscriptState
 import harold.android.live.Elicitation
 import harold.android.live.ElicitationDraft
 import harold.android.live.SessionOwner
+import harold.android.live.WatchTarget
 import harold.android.live.SessionSnapshot
 import harold.android.live.emptyAcpTranscript
 import harold.android.live.toContent
@@ -1335,10 +1336,18 @@ class ChatViewModel @Inject constructor(
                 if (item.id == row.id) item.copy(needsAttention = false) else item
             }
         }
-        val remembered = if (row.connectionReachable) {
-            emptyAcpTranscript
-        } else {
-            transcriptMemory[row.id] ?: emptyAcpTranscript
+        val remembered = when {
+            // The owner still holds this session's live stream and its
+            // transcript; wiping here would blank the chat with no replay to
+            // refill it, because watch() keeps the stream for the same
+            // target.
+            row.connectionReachable &&
+                watchedOrigin == row.connectionId &&
+                sessionOwner.watchTarget == WatchTarget(row.agentId, row.sessionId) ->
+                _uiState.value.transcript
+
+            !row.connectionReachable -> transcriptMemory[row.id] ?: emptyAcpTranscript
+            else -> emptyAcpTranscript
         }
         _uiState.update { current ->
             current.resetSessionScopedState(

@@ -116,6 +116,17 @@ class SshAcpSession(
         )
         val initializeObject = initialize as? JsonObject
         this.capabilities = buildCapabilityInventory(initialize)
+
+        // Every open is a full replay: session/load resends the conversation
+        // from the agent's history. The stream owner keeps its last
+        // transcript across a reconnect, so it must drop it before the
+        // replay lands or the content shows twice.
+        emitFrame(
+            SessionStreamServerMessage.StreamReset(
+                agentId = agentId,
+                sessionId = sessionId,
+            ),
+        )
         val capabilities = initializeObject?.get("agentCapabilities") as? JsonObject
         val canLoad = capabilities?.get("loadSession").asBooleanOrFalse()
         val canResume = (capabilities?.get("sessionCapabilities") as? JsonObject)

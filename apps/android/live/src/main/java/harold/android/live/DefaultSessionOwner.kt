@@ -84,6 +84,13 @@ class DefaultSessionOwner @Inject constructor(
     private var stream: SessionStream? = null
     private var watchAgentId: AgentId? = null
     private var watchSessionId: String? = null
+
+    override val watchTarget: WatchTarget?
+        get() = synchronized(lock) {
+            val sessionId = watchSessionId ?: return null
+            val agentId = watchAgentId ?: return null
+            WatchTarget(agentId = agentId, sessionId = sessionId)
+        }
     private var pendingPrompt: String? = null
     private var turnSerial: Int = 0
 
@@ -123,8 +130,6 @@ class DefaultSessionOwner @Inject constructor(
 
         data object ResumeProbe : LoopWake
     }
-
-    private data class WatchTarget(val agentId: AgentId, val sessionId: String)
 
     private fun currentWatchTarget(): WatchTarget? {
         synchronized(lock) {

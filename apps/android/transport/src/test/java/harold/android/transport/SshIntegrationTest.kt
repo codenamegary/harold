@@ -146,6 +146,15 @@ class SshIntegrationTest {
 
     @After
     fun tearDown() {
+        // Runs even when a test body fails: a leftover agents.json would
+        // carry this run's temp paths into the host's real agent config.
+        if (::factory.isInitialized) {
+            runBlocking {
+                factory.useConnection(connectionId) { connection, _ ->
+                    connection.runCommand("rm -f ~/.harold/agents.json")
+                }
+            }
+        }
         server?.destroy()
         server?.waitFor(5, TimeUnit.SECONDS)
         scope.cancel()
@@ -195,6 +204,10 @@ class SshIntegrationTest {
         }
         withTimeout(30_000) { subscribed.await() }
 
+        // Every stream open is a full replay and must start with a reset, so
+        // the stream owner clears what it holds before the replay lands.
+        assertTrue(frames.first() is SessionStreamServerMessage.StreamReset)
+
         // The lock blocks a second device while this session is active.
         step("open second")
         val second = factory.open(connectionId, "opencode", created.sessionId, scope)
@@ -234,8 +247,10 @@ class SshIntegrationTest {
         val resumed = factory.open(connectionId, "opencode", created.sessionId, scope).getOrThrow()
         step("reopened")
         val replayed = CompletableDeferred<Unit>()
+        val resumedFrames = mutableListOf<SessionStreamServerMessage>()
         val resumeCollector = scope.launch {
             resumed.events.collect { message ->
+                resumedFrames += message
                 if (message is SessionStreamServerMessage.SessionUpdate) {
                     if (message.update.toString().contains("replayed history")) {
                         replayed.complete(Unit)
@@ -246,6 +261,11 @@ class SshIntegrationTest {
         withTimeout(30_000) { replayed.await() }
         resumeCollector.cancel()
         resumed.close()
+
+        // The reopened stream replays the conversation again and must also
+        // start with a reset, or the resumed transcript would duplicate.
+        assertTrue(resumedFrames.first() is SessionStreamServerMessage.StreamReset)
+        assertTrue(frames.count { it is SessionStreamServerMessage.StreamReset } >= 1)
 
         api.deleteSession(connectionId, "opencode", created.sessionId).getOrThrow()
         assertFalse(
@@ -337,9 +357,6 @@ class SshIntegrationTest {
                 .isFailure,
         )
 
-        factory.useConnection(connectionId) { connection, _ ->
-            connection.runCommand("rm -f ~/.harold/agents.json")
-        }
         Unit
     }
 

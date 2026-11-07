@@ -34,6 +34,15 @@ interface SessionOwner {
     fun disconnect()
 
     /**
+     * The session the stream is pointed at, or null when nothing is watched.
+     * Same-target [watch] calls keep the live stream running, so callers can
+     * use this to tell "reselecting the open session" from "switching
+     * sessions" without duplicating the replay.
+     */
+    val watchTarget: WatchTarget?
+        get() = null
+
+    /**
      * Marks the start of a background period. The next [onForeground] can
      * compare the stream's last frame time to tell a surviving socket from
      * one frozen through Doze.

@@ -452,7 +452,7 @@ class DefaultSessionOwnerTest {
     fun reconnectClearsTranscriptThenFoldsANewReplay() = runTest {
         val factory = ScriptedSessionStreamFactory(
             listOf(
-                liveThen(DisconnectCause.Retryable("closed")),
+                holdOpen(),
                 holdOpen(),
             ),
         )
@@ -461,16 +461,7 @@ class DefaultSessionOwnerTest {
         owner.connect(ORIGIN)
         owner.watch("cursor", "sess_01")
         advanceUntilIdle()
-
-        assertEquals(2, factory.openCount)
-        assertTrue(owner.snapshot.value.reconnecting)
-        assertEquals(0, owner.snapshot.value.transcript.rows.size)
-        assertEquals(SessionState.Offline, owner.snapshot.value.transcript.sessionState)
-        assertEquals(
-            "a retryable disconnect re-opens the same watched session",
-            listOf("cursor" to "sess_01", "cursor" to "sess_01"),
-            factory.openedTargets,
-        )
+        assertEquals(1, factory.openCount)
 
         factory.lastStream!!.emit(
             SessionStreamServerMessage.SessionUpdate(
@@ -479,7 +470,61 @@ class DefaultSessionOwnerTest {
                 update = JsonObject(
                     mapOf(
                         "sessionUpdate" to JsonPrimitive("agent_message_chunk"),
-                        "text" to JsonPrimitive("replayed"),
+                        "text" to JsonPrimitive("first"),
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+        assertEquals(
+            listOf("first"),
+            owner.snapshot.value.transcript.rows
+                .filterIsInstance<TranscriptAssistantRow>()
+                .map { it.text },
+        )
+
+        factory.lastStream!!.disconnect(DisconnectCause.Retryable("closed"))
+        advanceUntilIdle()
+
+        assertEquals(2, factory.openCount)
+        assertTrue(owner.snapshot.value.reconnecting)
+        assertEquals(SessionState.Offline, owner.snapshot.value.transcript.sessionState)
+        assertEquals(
+            "a retryable disconnect re-opens the same watched session",
+            listOf("cursor" to "sess_01", "cursor" to "sess_01"),
+            factory.openedTargets,
+        )
+        assertTrue(
+            "the replay has not arrived yet, so the old rows stay visible",
+            owner.snapshot.value.transcript.rows.isNotEmpty(),
+        )
+
+        // The stream contract: every open starts with a full replay, so the
+        // owner must drop the rows it kept visible before folding the new
+        // ones. Without the reset the replay would duplicate the transcript.
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.StreamReset(agentId = "cursor", sessionId = "sess_01"),
+        )
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionUpdate(
+                agentId = "cursor",
+                sessionId = "sess_01",
+                update = JsonObject(
+                    mapOf(
+                        "sessionUpdate" to JsonPrimitive("agent_message_chunk"),
+                        "text" to JsonPrimitive("first"),
+                    ),
+                ),
+            ),
+        )
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.SessionUpdate(
+                agentId = "cursor",
+                sessionId = "sess_01",
+                update = JsonObject(
+                    mapOf(
+                        "sessionUpdate" to JsonPrimitive("agent_message_chunk"),
+                        "text" to JsonPrimitive("second"),
                     ),
                 ),
             ),
@@ -490,10 +535,14 @@ class DefaultSessionOwnerTest {
         advanceUntilIdle()
 
         assertFalse(owner.snapshot.value.reconnecting)
-        val lastAssistant = owner.snapshot.value.transcript.rows
-            .filterIsInstance<TranscriptAssistantRow>()
-            .last()
-        assertEquals("replayed", lastAssistant.text)
+        // Adjacent chunks merge into one row, so compare the joined text:
+        // without the reset this would read "firstfirstsecond".
+        assertEquals(
+            "firstsecond",
+            owner.snapshot.value.transcript.rows
+                .filterIsInstance<TranscriptAssistantRow>()
+                .joinToString("") { it.text },
+        )
         owner.disconnect()
         advanceUntilIdle()
     }
