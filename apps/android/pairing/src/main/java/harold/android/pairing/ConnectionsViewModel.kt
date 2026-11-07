@@ -95,7 +95,7 @@ class ConnectionsViewModel @Inject constructor(
                 repository = repository,
             )
             settleAfterForget(
-                removedOrigin = row.connectionId,
+                removedConnectionId = row.connectionId,
                 remains = remains,
                 gateway = sessionGateway,
                 disconnect = sessionOwner::disconnect,

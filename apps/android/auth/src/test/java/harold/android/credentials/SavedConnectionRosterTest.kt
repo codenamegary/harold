@@ -3,7 +3,7 @@ package harold.android.credentials
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-class SavedHaroldRosterTest {
+class SavedConnectionRosterTest {
     @Test
     fun savingASecondHaroldKeepsTheFirst() {
         val laptop = savedConnection(
@@ -43,7 +43,7 @@ class SavedHaroldRosterTest {
     }
 
     @Test
-    fun aRosterRoundTripsEverySavedHarold() {
+    fun aRosterRoundTripsEverySavedConnection() {
         val laptop = savedConnection(
             connectionId = "ssh://gary@laptop.local:22",
             name = "laptop",

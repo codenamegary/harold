@@ -269,7 +269,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             sessionGateway.pairedState.collect { paired ->
                 if (paired is PairedState.Paired) {
-                    sessionForegroundCoordinator?.setServerOrigin(
+                    sessionForegroundCoordinator?.setConnectionId(
                         selectedSessionOrigin() ?: paired.connectionId,
                     )
                     _uiState.value.selectedSession?.let { selected ->
@@ -277,7 +277,7 @@ class ChatViewModel @Inject constructor(
                     }
                     refreshCatalog()
                 } else {
-                    sessionForegroundCoordinator?.setServerOrigin(null)
+                    sessionForegroundCoordinator?.setConnectionId(null)
                     sessionOwner.watch(null, null)
                     _uiState.update { current ->
                         current.copy(
@@ -332,7 +332,7 @@ class ChatViewModel @Inject constructor(
         sessionOwner.onForeground()
         refreshChangesBadge()
         val origin = selectedOrPairedOrigin() ?: return
-        sessionForegroundCoordinator?.setServerOrigin(origin)
+        sessionForegroundCoordinator?.setConnectionId(origin)
         viewModelScope.launch {
             refreshCatalog()
         }
@@ -1223,7 +1223,7 @@ class ChatViewModel @Inject constructor(
                     repository = connectionRepository,
                 )
                 settleAfterForget(
-                    removedOrigin = originToRemove,
+                    removedConnectionId = originToRemove,
                     remains = remains,
                     gateway = sessionGateway,
                     disconnect = sessionOwner::disconnect,

@@ -16,7 +16,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class HaroldConnectionsTest {
     @Test
-    fun connectsEverySavedHaroldWhileTheAppIsOpen() = runTest {
+    fun connectsEverySavedConnectionWhileTheAppIsOpen() = runTest {
         val checks = mutableListOf<String>()
         val roster = roster(
             ConnectionReachability { origin ->

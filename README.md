@@ -21,10 +21,29 @@ apksigner verify --print-certs harold-android-<version>.apk
 
 You need a machine you can reach with SSH that runs an ACP-compatible coding agent. Use an agent you already trust. OpenCode, Claude Code, Gemini CLI, and more all speak ACP.
 
+Host requirements:
+
+- sshd with exec and SFTP
+- an ACP-compatible agent CLI
+- `git` (for workspace and change review)
+- `flock` (Linux; macOS uses a lock directory fallback)
+
 1. Add the host in the Harold app.
 2. Sign in with your SSH credentials.
 3. Start a session in any folder on that host.
 
+Harold installs nothing on the host. It runs your agent CLI over an SSH exec channel and keeps its own notes in `~/.harold/` as plain files.
+
+## Working on the app
+
+```sh
+bun install    # repo tooling (oxlint, scripts)
+bun run check  # lint + script tests
+```
+
+The Android build and the SSH integration test are documented in
+[apps/android/README.md](apps/android/README.md).
+
 ## Architecture
 
-See [docs/architecture.md](docs/architecture.md).
+See [docs/architecture.md](docs/architecture.md): the SSH session flow, the `~/.harold/` state layout, agent settings, and how to run the integration test without touching a real host.

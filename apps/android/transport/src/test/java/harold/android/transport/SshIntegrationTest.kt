@@ -130,12 +130,15 @@ class SshIntegrationTest {
         api = SshAgentApi(factory, registry)
 
         // The test harness can leave a lock child behind when a previous run
-        // is killed. Real sshd releases it on disconnect.
+        // is killed. Real sshd releases it on disconnect. Also start the
+        // host state fresh: a previous run's agents.json would carry a path
+        // into its deleted temp directory.
         factory.useConnection(connectionId) { connection, _ ->
             connection.runCommand(
                 "fuser -k ~/.harold/locks/opencode/ses_test_opencode.lock " +
                     ">/dev/null 2>&1 || true; " +
-                    "rm -f ~/.harold/locks/opencode/ses_test_opencode.lock",
+                    "rm -f ~/.harold/locks/opencode/ses_test_opencode.lock; " +
+                    "rm -f ~/.harold/agents.json",
             )
         }
         Unit

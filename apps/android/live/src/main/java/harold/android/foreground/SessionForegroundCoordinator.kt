@@ -46,7 +46,7 @@ class SessionForegroundCoordinator @Inject constructor(
     private var connectionId: String? = null
     private var permissionPromptDismissed: Boolean = false
 
-    fun setServerOrigin(origin: String?) {
+    fun setConnectionId(origin: String?) {
         connectionId = origin
         if (origin == null) {
             tracker.replaceAll(emptyList())

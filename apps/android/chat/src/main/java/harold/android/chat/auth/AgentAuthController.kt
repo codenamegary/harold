@@ -99,10 +99,10 @@ class AgentAuthController(
      * the panel error when the agent has no logout.
      */
     fun logout(agentId: AgentId) {
-        val serverOrigin = origin() ?: return
+        val connectionId = origin() ?: return
         _state.update { current -> current.copy(error = null) }
         scope.launch {
-            userRepository.logoutAgentAuth(serverOrigin, agentId).fold(
+            userRepository.logoutAgentAuth(connectionId, agentId).fold(
                 onSuccess = { summary ->
                     summaries = summaries + (agentId to summary)
                     _state.update { current ->
@@ -121,10 +121,10 @@ class AgentAuthController(
      * the auth state is re-probed.
      */
     fun restart(agentId: AgentId) {
-        val serverOrigin = origin() ?: return
+        val connectionId = origin() ?: return
         _state.update { current -> current.copy(error = null) }
         scope.launch {
-            userRepository.restartAgent(serverOrigin, agentId).fold(
+            userRepository.restartAgent(connectionId, agentId).fold(
                 onSuccess = {
                     hydrate(agentId)
                 },

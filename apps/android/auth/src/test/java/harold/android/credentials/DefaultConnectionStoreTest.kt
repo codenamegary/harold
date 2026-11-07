@@ -49,7 +49,7 @@ class DefaultCredentialStoreTest {
     }
 
     @Test
-    fun clearRemovesEverySavedHarold() = runTest {
+    fun clearRemovesEverySavedConnection() = runTest {
         val store = newStore()
         store.save(
             storedConnection(

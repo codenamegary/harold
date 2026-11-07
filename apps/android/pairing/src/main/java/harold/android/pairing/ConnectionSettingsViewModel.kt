@@ -179,7 +179,7 @@ class ConnectionSettingsViewModel @Inject constructor(
             )
             hideForgetConfirm()
             settleAfterForget(
-                removedOrigin = connectionId,
+                removedConnectionId = connectionId,
                 remains = remains,
                 gateway = sessionGateway,
                 disconnect = sessionOwner::disconnect,

@@ -61,7 +61,7 @@ suspend fun forgetConnection(
 ): Boolean = repository.remove(connectionId)
 
 suspend fun settleAfterForget(
-    removedOrigin: String,
+    removedConnectionId: String,
     remains: Boolean,
     gateway: SessionGateway,
     disconnect: () -> Unit,
@@ -69,7 +69,7 @@ suspend fun settleAfterForget(
     showPairing: () -> Unit,
 ) {
     val active = gateway.pairedState.value
-    val removedActive = active is PairedState.Paired && active.connectionId == removedOrigin
+    val removedActive = active is PairedState.Paired && active.connectionId == removedConnectionId
     if (!remains) {
         disconnect()
         gateway.clearLocalAccess()

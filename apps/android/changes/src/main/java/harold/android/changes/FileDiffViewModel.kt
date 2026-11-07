@@ -46,7 +46,7 @@ class FileDiffViewModel @Inject constructor(
     val uiState: StateFlow<FileDiffUiState> = _uiState.asStateFlow()
 
     private var startedKey: String? = null
-    private var lastServerOrigin: String = ""
+    private var lastConnectionId: String = ""
     private var lastWorktreePath: String = ""
     private var lastScope: GitScope = GitScope.Uncommitted
     private var lastFilePath: String = ""
@@ -59,7 +59,7 @@ class FileDiffViewModel @Inject constructor(
         filePath: String,
         oldPath: String?,
     ) {
-        lastServerOrigin = connectionId
+        lastConnectionId = connectionId
         lastWorktreePath = worktreePath
         lastScope = scope
         lastFilePath = filePath
@@ -106,7 +106,7 @@ class FileDiffViewModel @Inject constructor(
         }
         startedKey = null
         start(
-            connectionId = lastServerOrigin,
+            connectionId = lastConnectionId,
             worktreePath = lastWorktreePath,
             scope = lastScope,
             filePath = lastFilePath,

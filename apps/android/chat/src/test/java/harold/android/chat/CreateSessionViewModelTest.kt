@@ -63,7 +63,7 @@ class CreateSessionViewModelTest {
     }
 
     @Test
-    fun listsWorkspacesFromEverySavedHarold() = runTest {
+    fun listsWorkspacesFromEverySavedConnection() = runTest {
         val repository = FakeCreateRepository(
             workspaces = mapOf(
                 LAPTOP to listOf(workspace("ws_laptop", WorkspaceState.Available, name = "notes")),

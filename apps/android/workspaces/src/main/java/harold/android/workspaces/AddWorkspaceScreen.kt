@@ -140,7 +140,7 @@ fun AddWorkspaceScreen(
             if (uiState.connections.size > 1) {
                 HaroldServerDropdown(
                     connections = uiState.connections,
-                    selectedServerOrigin = uiState.selectedServerOrigin,
+                    selectedConnectionId = uiState.selectedConnectionId,
                     enabled = !uiState.submitting,
                     onConnectionChanged = onConnectionChanged,
                 )
@@ -706,12 +706,12 @@ private fun LabeledValue(
 @Composable
 private fun HaroldServerDropdown(
     connections: List<WorkspaceConnectionBadge>,
-    selectedServerOrigin: String,
+    selectedConnectionId: String,
     enabled: Boolean,
     onConnectionChanged: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val selected = connections.firstOrNull { it.connectionId == selectedServerOrigin } ?: connections.firstOrNull()
+    val selected = connections.firstOrNull { it.connectionId == selectedConnectionId } ?: connections.firstOrNull()
 
     ExposedDropdownMenuBox(
         expanded = expanded,

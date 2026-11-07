@@ -16,7 +16,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /**
- * Keeps a connection to every saved Harold while the app is open, and keeps
+ * Keeps a connection to every saved connection while the app is open, and keeps
  * only Harolds with a live session connected while the app is in the background.
  */
 @Singleton

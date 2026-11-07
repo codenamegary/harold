@@ -61,7 +61,7 @@ class NavigatorTest {
     }
 
     @Test
-    fun savedHaroldsOpensOnTopOfChat() {
+    fun connectionsOpensOnTopOfChat() {
         val navigator = Navigator()
         navigator.start(paired = true)
 

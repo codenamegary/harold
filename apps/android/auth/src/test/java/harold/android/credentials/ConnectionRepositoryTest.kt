@@ -10,7 +10,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class SavedHaroldRepositoryTest {
+class ConnectionRepositoryTest {
     @Test
     fun editChangesTheNameColorAndIconAndLeavesTheConnection() = runTest {
         val laptop = savedConnection("ssh://gary@laptop.local:22", "laptop", "tide", "bolt")
@@ -108,7 +108,7 @@ class SavedHaroldRepositoryTest {
         var showedPairing = false
 
         settleAfterForget(
-            removedOrigin = "ssh://gary@laptop.local:22",
+            removedConnectionId = "ssh://gary@laptop.local:22",
             remains = true,
             gateway = gateway,
             disconnect = { disconnected = true },
@@ -129,7 +129,7 @@ class SavedHaroldRepositoryTest {
         var showedPairing = false
 
         settleAfterForget(
-            removedOrigin = "ssh://gary@laptop.local:22",
+            removedConnectionId = "ssh://gary@laptop.local:22",
             remains = false,
             gateway = gateway,
             disconnect = { disconnected = true },

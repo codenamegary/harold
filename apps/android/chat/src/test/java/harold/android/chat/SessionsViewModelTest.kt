@@ -157,7 +157,7 @@ class SessionsViewModelTest {
     }
 
     @Test
-    fun loadsSessionsFromEverySavedHaroldNewestFirst() = runTest {
+    fun loadsSessionsFromEverySavedConnectionNewestFirst() = runTest {
         val repository = OriginSessionRepository(
             sessionsByOrigin = mapOf(
                 LAPTOP to listOf(session("sess_laptop", "Alpha", "2026-08-02T00:00:00.000Z")),

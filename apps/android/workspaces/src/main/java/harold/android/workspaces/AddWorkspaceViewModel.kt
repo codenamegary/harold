@@ -43,7 +43,7 @@ sealed interface BrowserLoadState {
 
 data class AddWorkspaceUiState(
     val connections: List<WorkspaceConnectionBadge> = emptyList(),
-    val selectedServerOrigin: String = "",
+    val selectedConnectionId: String = "",
     val mode: AddWorkspaceMode = AddWorkspaceMode.OpenFolder,
     val browserLoadState: BrowserLoadState = BrowserLoadState.Loading,
     val folderQuery: String = "",
@@ -125,7 +125,7 @@ class AddWorkspaceViewModel @Inject constructor(
                 iconId = connection.iconId,
             )
         }
-        val preferredOrigin = navigator.consumePreferredAddWorkspaceOrigin()
+        val preferredOrigin = navigator.consumePreferredAddWorkspaceConnection()
         val initialOrigin = preferredOrigin?.takeIf { origin ->
             saved.isEmpty() || saved.any { it.connectionId == origin }
         } ?: paired?.connectionId?.takeIf { origin ->
@@ -135,19 +135,19 @@ class AddWorkspaceViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 connections = saved,
-                selectedServerOrigin = initialOrigin,
+                selectedConnectionId = initialOrigin,
             )
         }
         loadBrowser(initialOrigin, root = null)
     }
 
     fun onConnectionChanged(connectionId: String) {
-        if (connectionId == _uiState.value.selectedServerOrigin) {
+        if (connectionId == _uiState.value.selectedConnectionId) {
             return
         }
         _uiState.update {
             it.copy(
-                selectedServerOrigin = connectionId,
+                selectedConnectionId = connectionId,
                 browserLoadState = BrowserLoadState.Loading,
                 folderQuery = "",
                 selectedFolderPath = "",
@@ -415,7 +415,7 @@ class AddWorkspaceViewModel @Inject constructor(
     }
 
     private fun currentOrigin(): String =
-        _uiState.value.selectedServerOrigin.ifEmpty {
+        _uiState.value.selectedConnectionId.ifEmpty {
             (sessionGateway.pairedState.value as? PairedState.Paired)?.connectionId.orEmpty()
         }
 }

@@ -1,6 +1,6 @@
 # Harold Android
 
-Native Jetpack Compose app for the Harold user workflow.
+Native Jetpack Compose app. Harold connects to your machines over SSH and drives ACP coding agents from the phone.
 
 ## Prerequisites
 
@@ -28,51 +28,75 @@ Install a debug build on a connected device or emulator:
 ./gradlew :app:installDebug
 ```
 
-## Migration from pre-rename app
+## The SSH transport, end to end
 
-The application id was renamed to `harold.android` (formerly `server.agent.android`). Because the `applicationId` changed, existing installations will not upgrade in-place.
+Harold speaks to one machine per saved connection:
 
-1. Uninstall the legacy build from your device or emulator:
-   ```sh
-   adb uninstall server.agent.android
-   ```
-2. Install the Harold Android app. Use a release APK from GitHub Releases, or a debug build (installs as `harold.android.debug`):
-   ```sh
-   ./gradlew :app:installDebug
-   ```
-3. Pair using the in-app scanner or by pointing your phone camera at the terminal pairing QR code (`harold://pair`), which opens Harold directly. Payloads using any other scheme are rejected as invalid pairing URIs.
+```
+Android app -> SSH exec -> `agent acp` (one ACP process per session)
+```
 
-## Transport
+- Connecting to a host enrolls the phone with it: generate an Ed25519 key
+  (or import a key, or use a password), append the public key to
+  `~/.ssh/authorized_keys` on the host, and pin the host key by SHA-256
+  fingerprint. The app refuses to connect if the host key changes later.
+- A saved connection keeps a copy of its credential in the encrypted
+  connection store. SSH keys and passwords can also be named and saved for
+  reuse in a separate encrypted store; the SSH setup screen can pick an
+  existing entry or create a new one. Removing a saved credential does not
+  break a connection that already copied it.
+- When several saved connections point at the same SSH endpoint, later rows
+  get a numeric suffix on their connection id so they stay separate entries.
 
-The app has two saved-connection transports:
+## Host state
 
-- **Harold Hub** uses HTTP and SSE to a Harold daemon. Pairing is a QR code or
-  a manual code. The server owns sessions, replay, and fan-out.
-- **Harold Direct** uses SSH and runs `agent acp` directly. Pairing is SSH key
-  enrollment. Each app connection owns one ACP process and no Harold process
-  runs on the host.
+Everything Harold keeps on the host lives under `~/.harold/`:
 
-`StoredCredential.transport` defaults to `Server`, so credentials written before
-direct mode still decode unchanged. SSH rows use a synthetic
-`ssh://user@host:port` connection key. When several saved rows point at the same
-SSH endpoint, later rows get a numeric suffix so they stay separate entries.
-Keys and passwords are stored in the same encrypted connection store as server
-credentials. Host keys are pinned by SHA-256 fingerprint.
+```
+~/.harold/
+  agents.json        shared agent config (written over SFTP, atomic temp + rename)
+  workspaces.json    remembered workspace folders
+  sessions/<agent>/<sessionId>.json   one JSON file per session
+  locks/<agent>/<sessionId>.lock      flock (with a mkdir fallback) per active session
+  uploads/<sessionId>/...             attachment uploads
+```
 
-Direct-mode host state lives under `~/.harold/direct/`: one JSON file per
-session, `flock` locks per active session, uploads, and a workspace list.
+No Harold process, daemon, or port runs on the host. A closing app or a lost
+network ends the agent process and releases the lock; opening the session
+again spawns a fresh process and resumes through ACP `session/load`.
 
-SSH keys and passwords can be named and saved for reuse. Saved credentials
-live in a separate encrypted store with its own Android Keystore key, and the
-SSH setup screen can select an existing entry or create a new one. A saved
-connection copies the material it needs, so removing a saved credential does
-not break an existing connection.
+## Agent settings
 
-Every build type allows cleartext HTTP traffic, so the app can pair with a LAN host over `http://`. One network security config in `src/main` sets this. No trust-all TLS. SSH is a raw TCP connection and is not affected by the HTTP cleartext policy.
+The per-connection Agents screen manages `agents.json`:
+
+- A hardcoded catalog of known ACP agents ships with the app. Scanning probes
+  the host with `command -v` for every known binary in one round trip.
+- Detection merges into existing rows without touching user-owned fields
+  (`enabled`, `path`, `args`). Dismissed agents stay dismissed across scans.
+  Custom agents (name, path, args) can be added for anything the catalog does
+  not know and are deleted outright.
+- Auth state is probed from the agent's own CLI (`claude auth status --json`,
+  `cursor-agent status --format json`) with a 30 second TTL, and shown as a
+  badge. Probing is advisory; sign-in always happens on the host, and
+  restarting an agent respawns its process and re-probes.
+- Composer capability buttons (images, files) come from the live ACP
+  `initialize` response of the active session. Nothing is persisted: a
+  session is text-only until its handshake completes.
+
+## Offline cache
+
+Room keeps the last snapshot of workspaces, sessions, and agents. Each row is
+keyed by connection id, so several connections can share the database without
+colliding. The database, DAOs, and repositories live in the shared
+`:database` module, which `:chat` and `:workspaces` depend on. View models
+collect the repository flows, then call `refresh` to read the live state from
+the host over SSH. Removing a connection deletes every cached row for it.
 
 ## Debug and release builds
 
-Debug builds use the application id `harold.android.debug` and a `-debug` version suffix. They install next to the release app (`harold.android`) and never replace it.
+Debug builds use the application id `harold.android.debug` and a `-debug`
+version suffix. They install next to the release app (`harold.android`) and
+never replace it.
 
 Release builds are signed only when these env vars are all set:
 
@@ -81,46 +105,19 @@ Release builds are signed only when these env vars are all set:
 - `ANDROID_KEY_ALIAS`
 - `ANDROID_KEY_PASSWORD`
 
-Without them, `assembleRelease` produces an unsigned APK. CI signs releases with the distribution key held in repo secrets.
+Without them, `assembleRelease` produces an unsigned APK. CI signs releases
+with the distribution key held in repo secrets.
 
-`versionName` is set by release-please. `versionCode` is derived from it as `major * 10000 + minor * 100 + patch`.
+`versionName` is set by release-please. `versionCode` is derived from it as
+`major * 10000 + minor * 100 + patch`.
 
-## Authenticated transport
+## Tests
 
-One OkHttp client serves every saved Harold. Each request gets the device
-credential for the Harold it is calling, as `Authorization: Bearer`.
-The credential never appears in a URL or a log line.
-
-While the app is open, every saved Harold has its own connection. One Harold
-that cannot be reached leaves the others connected. In the background, a Harold
-stays connected only while it has a session that is starting, running, waiting
-for permission, or stopping.
-
-- HTTP: `GET /v1/workspaces?limit=1` proves the path from the shell.
-- Session events: `GET /v1/sessions/:sessionId/events?agentId=…` as SSE while a
-  chat is selected. Opening the stream is the subscribe; switching sessions
-  closes it and opens another. Presence Online is this open stream. The server
-  sends `: ping` heartbeats every 25 s; roughly 75 s of silence is treated as a
-  retryable disconnect.
-- Commands: prompts, cancels, and permission/extension replies are REST POSTs,
-  independent of the stream.
-
-Reconnect uses `min(250 * 2^(attempt - 1), 4000)` ms with no jitter. A rejected
-credential on the shell stops auto-retry for that Harold and forgets it. The
-others stay connected. When none remain, the app returns to pairing. Every
-other disconnect, slow consumer included, keeps reconnecting.
-
-## Offline cache
-
-Room keeps the last REST snapshot of workspaces, sessions, and agents. Each row
-is keyed by `serverOrigin`, so several Harolds can share the database without
-colliding. The database, DAOs, and repositories live in the shared `:database`
-module, which both `:chat` and `:workspaces` depend on. View models collect the
-repository flows, then call `refresh` to fetch the live list. Create-session reads
-the same workspace cache, so its picker still works while a Harold is offline.
-Creates and deletes call the server first and update Room only after the server
-accepts the change. Removing a saved Harold deletes every cached row for that
-origin.
+Unit tests run with the standard gate above. The SSH integration test
+(`SshIntegrationTest` in `:transport`) drives a real SSH session against
+`scripts/ssh-test-server.py` and a fake ACP agent
+(`scripts/fake-acp-agent.py`) — see [docs/architecture.md](../../docs/architecture.md)
+for setup.
 
 ## CI
 

@@ -32,7 +32,7 @@ private val backStackSerializer = ListSerializer(AppRoute.serializer())
 class Navigator @Inject constructor() {
     val backStack: SnapshotStateList<AppRoute> = mutableStateListOf()
 
-    private var preferredAddWorkspaceOrigin: String? = null
+    private var preferredAddWorkspaceConnection: String? = null
     private val workspaceCreatedChannel = Channel<CreatedWorkspaceResult>(Channel.CONFLATED)
     val workspaceCreated: Flow<CreatedWorkspaceResult> = workspaceCreatedChannel.receiveAsFlow()
 
@@ -101,15 +101,15 @@ class Navigator @Inject constructor() {
         backStack.add(Workspaces)
     }
 
-    fun openAddWorkspace(preferredServerOrigin: String = "") {
-        preferredAddWorkspaceOrigin = preferredServerOrigin.takeIf { it.isNotEmpty() }
+    fun openAddWorkspace(preferredConnectionId: String = "") {
+        preferredAddWorkspaceConnection = preferredConnectionId.takeIf { it.isNotEmpty() }
         workspaceCreatedChannel.tryReceive()
         backStack.add(AddWorkspace)
     }
 
-    fun consumePreferredAddWorkspaceOrigin(): String? {
-        val origin = preferredAddWorkspaceOrigin
-        preferredAddWorkspaceOrigin = null
+    fun consumePreferredAddWorkspaceConnection(): String? {
+        val origin = preferredAddWorkspaceConnection
+        preferredAddWorkspaceConnection = null
         return origin
     }
 

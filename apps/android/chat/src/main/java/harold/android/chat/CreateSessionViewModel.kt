@@ -70,7 +70,7 @@ class CreateSessionViewModel @Inject constructor(
             .firstOrNull { row -> row.id == _uiState.value.selectedWorkspaceId }
             ?.connectionId
             .orEmpty()
-        navigator.openAddWorkspace(preferredServerOrigin = selectedOrigin)
+        navigator.openAddWorkspace(preferredConnectionId = selectedOrigin)
     }
 
     fun onWorkspaceChanged(workspaceId: String) {
