@@ -1,11 +1,11 @@
 package harold.android.session
 
 import harold.android.contracts.SessionState
-import harold.android.credentials.SavedHaroldRepository
+import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SshAuth
 import harold.android.credentials.SshConfig
-import harold.android.credentials.StoredCredential
-import harold.android.testing.FakeCredentialStore
+import harold.android.credentials.SavedConnection
+import harold.android.testing.FakeConnectionStore
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -19,7 +19,7 @@ class HaroldConnectionsTest {
     fun connectsEverySavedHaroldWhileTheAppIsOpen() = runTest {
         val checks = mutableListOf<String>()
         val roster = roster(
-            HaroldReachability { origin ->
+            ConnectionReachability { origin ->
                 checks += origin
                 Result.success(Unit)
             },
@@ -31,14 +31,14 @@ class HaroldConnectionsTest {
 
         assertEquals(setOf(LAPTOP, DESKTOP), checks.toSet())
         assertEquals(2, checks.size)
-        assertEquals(HaroldConnectionStatus.Connected, status(roster, LAPTOP))
-        assertEquals(HaroldConnectionStatus.Connected, status(roster, DESKTOP))
+        assertEquals(ConnectionStatus.Connected, status(roster, LAPTOP))
+        assertEquals(ConnectionStatus.Connected, status(roster, DESKTOP))
     }
 
     @Test
     fun keepsTheOtherHaroldConnectedWhenOneCannotBeReached() = runTest {
         val roster = roster(
-            HaroldReachability { origin ->
+            ConnectionReachability { origin ->
                 if (origin == LAPTOP) {
                     Result.failure(IllegalStateException("offline"))
                 } else {
@@ -51,8 +51,8 @@ class HaroldConnectionsTest {
         roster.refresh()
         runCurrent()
 
-        assertEquals(HaroldConnectionStatus.Unreachable, status(roster, LAPTOP))
-        assertEquals(HaroldConnectionStatus.Connected, status(roster, DESKTOP))
+        assertEquals(ConnectionStatus.Unreachable, status(roster, LAPTOP))
+        assertEquals(ConnectionStatus.Connected, status(roster, DESKTOP))
     }
 
     @Test
@@ -69,7 +69,7 @@ class HaroldConnectionsTest {
             SessionState.Error,
         )
         val origins = (live + quiet).map { state -> "http://${state.name.lowercase()}.local:3847" }
-        val roster = roster(origins, HaroldReachability { Result.success(Unit) })
+        val roster = roster(origins, ConnectionReachability { Result.success(Unit) })
 
         roster.onForeground()
         roster.refresh()
@@ -83,12 +83,12 @@ class HaroldConnectionsTest {
 
         live.forEach { state ->
             val origin = "http://${state.name.lowercase()}.local:3847"
-            assertEquals(state.name, HaroldConnectionStatus.Connected, status(roster, origin))
+            assertEquals(state.name, ConnectionStatus.Connected, status(roster, origin))
             assertEquals(true, roster.shouldStayConnected(origin))
         }
         quiet.forEach { state ->
             val origin = "http://${state.name.lowercase()}.local:3847"
-            assertEquals(state.name, HaroldConnectionStatus.Closed, status(roster, origin))
+            assertEquals(state.name, ConnectionStatus.Closed, status(roster, origin))
             assertEquals(false, roster.shouldStayConnected(origin))
         }
     }
@@ -97,7 +97,7 @@ class HaroldConnectionsTest {
     fun openingTheAppReconnectsHaroldsClosedInTheBackground() = runTest {
         val checks = mutableListOf<String>()
         val roster = roster(
-            HaroldReachability { origin ->
+            ConnectionReachability { origin ->
                 checks += origin
                 Result.success(Unit)
             },
@@ -111,48 +111,48 @@ class HaroldConnectionsTest {
 
         roster.onBackground()
         runCurrent()
-        assertEquals(HaroldConnectionStatus.Closed, status(roster, LAPTOP))
+        assertEquals(ConnectionStatus.Closed, status(roster, LAPTOP))
 
         roster.onForeground()
         runCurrent()
 
         assertEquals(setOf(LAPTOP, DESKTOP), checks.toSet())
-        assertEquals(HaroldConnectionStatus.Connected, status(roster, LAPTOP))
-        assertEquals(HaroldConnectionStatus.Connected, status(roster, DESKTOP))
+        assertEquals(ConnectionStatus.Connected, status(roster, LAPTOP))
+        assertEquals(ConnectionStatus.Connected, status(roster, DESKTOP))
     }
 
     private suspend fun TestScope.roster(
-        reachability: HaroldReachability,
-    ): HaroldConnections = roster(listOf(LAPTOP, DESKTOP), reachability)
+        reachability: ConnectionReachability,
+    ): Connections = roster(listOf(LAPTOP, DESKTOP), reachability)
 
     private suspend fun TestScope.roster(
         origins: List<String>,
-        reachability: HaroldReachability,
-    ): HaroldConnections {
-        val store = FakeCredentialStore()
+        reachability: ConnectionReachability,
+    ): Connections {
+        val store = FakeConnectionStore()
         origins.forEachIndexed { index, origin ->
             store.save(saved(origin, "devcred_$index", "device_$index"))
         }
-        return DefaultHaroldConnections(
-            savedHarolds = SavedHaroldRepository(store),
+        return DefaultConnections(
+            savedConnections = ConnectionRepository(store),
             reachability = reachability,
             scope = backgroundScope,
         )
     }
 }
 
-private fun status(roster: HaroldConnections, serverOrigin: String): HaroldConnectionStatus =
-    roster.connections.value.single { connection -> connection.serverOrigin == serverOrigin }.status
+private fun status(roster: Connections, connectionId: String): ConnectionStatus =
+    roster.connections.value.single { connection -> connection.connectionId == connectionId }.status
 
-private fun saved(serverOrigin: String, credential: String, deviceId: String) = StoredCredential(
+private fun saved(connectionId: String, credential: String, deviceId: String) = SavedConnection(
     formatVersion = 3,
-    serverOrigin = serverOrigin,
+    connectionId = connectionId,
     deviceName = "Pixel",
     name = "harold",
     colorId = "ink",
     iconId = "mark",
     ssh = SshConfig(
-        host = serverOrigin,
+        host = connectionId,
         port = 22,
         user = "gary",
         auth = SshAuth.Password(secret = "hunter2"),

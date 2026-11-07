@@ -47,10 +47,10 @@ class SshAgentApi @Inject constructor(
     private val registry: SshAcpRegistry,
 ) : AgentTransportApi {
     override suspend fun listWorkspaces(
-        serverOrigin: String,
+        connectionId: String,
         limit: Int,
     ): Result<WorkspaceCollection> = sshCall {
-        factory.useConnection(serverOrigin) { connection, store ->
+        factory.useConnection(connectionId) { connection, store ->
             val now = Instant.now().toString()
             val workspaces = linkedMapOf<String, Workspace>()
             store.workspaces().forEach { workspace ->
@@ -79,10 +79,10 @@ class SshAgentApi @Inject constructor(
     }
 
     override suspend fun listFilesystemDirectories(
-        serverOrigin: String,
+        connectionId: String,
         root: String?,
     ): Result<FilesystemDirectoryCollection> = sshCall {
-        factory.useConnection(serverOrigin) { connection, store ->
+        factory.useConnection(connectionId) { connection, store ->
             val path = root?.takeIf { it.isNotBlank() } ?: store.home
             val items = connection.list(path)
                 .filter { entry -> entry.directory }
@@ -103,10 +103,10 @@ class SshAgentApi @Inject constructor(
     }
 
     override suspend fun createFilesystemDirectory(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateFilesystemDirectoryBody,
     ): Result<FilesystemDirectoryCreated> = sshCall {
-        factory.useConnection(serverOrigin) { connection, _ ->
+        factory.useConnection(connectionId) { connection, _ ->
             val path = "${body.parent.trimEnd('/')}/${body.name}"
             connection.mkdir(path)
             FilesystemDirectoryCreated(name = body.name, path = path)
@@ -114,10 +114,10 @@ class SshAgentApi @Inject constructor(
     }
 
     override suspend fun createWorkspace(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace> = sshCall {
-        factory.useConnection(serverOrigin) { connection, store ->
+        factory.useConnection(connectionId) { connection, store ->
             when (body.source) {
                 WorkspaceSource.Folder -> {
                     val entry = connection.stat(body.path)
@@ -145,10 +145,10 @@ class SshAgentApi @Inject constructor(
     }
 
     override suspend fun listSessions(
-        serverOrigin: String,
+        connectionId: String,
         cwd: String?,
     ): Result<SessionCollection> = sshCall {
-        factory.useConnection(serverOrigin) { _, store ->
+        factory.useConnection(connectionId) { _, store ->
             SessionCollection(
                 items = store.listSessions()
                     .filter { metadata -> cwd == null || metadata.cwd == cwd }
@@ -166,16 +166,16 @@ class SshAgentApi @Inject constructor(
         }.getOrThrow()
     }
 
-    override suspend fun listAgents(serverOrigin: String): Result<AgentSettingsCollection> = sshCall {
-        factory.useConnection(serverOrigin) { connection, _ -> detectAgents(connection) }.getOrThrow()
+    override suspend fun listAgents(connectionId: String): Result<AgentSettingsCollection> = sshCall {
+        factory.useConnection(connectionId) { connection, _ -> detectAgents(connection) }.getOrThrow()
     }
 
     override suspend fun createSession(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateSessionBody,
     ): Result<CreateSessionResponse> = sshCall {
         factory.createSession(
-            connectionId = serverOrigin,
+            connectionId = connectionId,
             agentId = body.agentId,
             cwd = body.cwd,
             deviceName = deviceName(),
@@ -183,15 +183,15 @@ class SshAgentApi @Inject constructor(
     }
 
     override suspend fun deleteSession(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
     ): Result<Unit> = sshCall {
-        factory.deleteSession(serverOrigin, agentId, sessionId).getOrThrow()
+        factory.deleteSession(connectionId, agentId, sessionId).getOrThrow()
     }
 
     override suspend fun getAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ): Result<AgentAuth> = Result.success(
         AgentAuth(
@@ -203,29 +203,29 @@ class SshAgentApi @Inject constructor(
     )
 
     override suspend fun logoutAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ): Result<AgentAuthSummary> = unsupported("Agent sign-in is managed by the agent CLI on the host.")
 
     override suspend fun prompt(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
         body: PromptRequestBody,
-    ): Result<Unit> = active(serverOrigin, agentId, sessionId) { session ->
+    ): Result<Unit> = active(connectionId, agentId, sessionId) { session ->
         session.prompt(body)
     }
 
     override suspend fun cancel(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
-    ): Result<Unit> = active(serverOrigin, agentId, sessionId) { session ->
+    ): Result<Unit> = active(connectionId, agentId, sessionId) { session ->
         session.cancel()
     }
 
     override suspend fun replyPermission(
-        serverOrigin: String,
+        connectionId: String,
         requestId: String,
         optionId: String,
     ): Result<Unit> {
@@ -239,13 +239,13 @@ class SshAgentApi @Inject constructor(
     }
 
     override suspend fun replyExtension(
-        serverOrigin: String,
+        connectionId: String,
         requestId: String,
         result: JsonElement,
     ): Result<Unit> = unsupported("ACP extensions are not available over SSH.")
 
     override suspend fun replyElicitation(
-        serverOrigin: String,
+        connectionId: String,
         requestId: String,
         result: JsonElement,
     ): Result<Unit> {
@@ -259,20 +259,20 @@ class SshAgentApi @Inject constructor(
     }
 
     override suspend fun setConfigOption(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
         configId: String,
         value: ConfigValue,
-    ): Result<Unit> = active(serverOrigin, agentId, sessionId) { session ->
+    ): Result<Unit> = active(connectionId, agentId, sessionId) { session ->
         session.setConfigOption(configId, value)
     }
 
     override suspend fun uploadAttachment(
-        serverOrigin: String,
+        connectionId: String,
         request: AttachmentUploadRequest,
     ): Result<AttachmentDescriptor> = sshCall {
-        factory.useConnection(serverOrigin) { _, store ->
+        factory.useConnection(connectionId) { _, store ->
             val path = store.writeUpload(
                 sessionId = request.sessionId,
                 fileName = request.fileName,
@@ -290,12 +290,12 @@ class SshAgentApi @Inject constructor(
     }
 
     override suspend fun deleteAttachment(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
         attachmentId: String,
     ): Result<Unit> = sshCall {
-        factory.useConnection(serverOrigin) { connection, store ->
+        factory.useConnection(connectionId) { connection, store ->
             val path = if (attachmentId.startsWith("/")) {
                 attachmentId
             } else {
@@ -306,38 +306,38 @@ class SshAgentApi @Inject constructor(
     }
 
     override suspend fun getSummary(
-        serverOrigin: String,
+        connectionId: String,
         path: String,
-    ): Result<GitSummary> = git(serverOrigin) { ssh -> ssh.summary(path) }
+    ): Result<GitSummary> = git(connectionId) { ssh -> ssh.summary(path) }
 
     override suspend fun listWorktrees(
-        serverOrigin: String,
+        connectionId: String,
         path: String,
-    ): Result<GitWorktreeCollection> = git(serverOrigin) { ssh -> ssh.worktrees(path) }
+    ): Result<GitWorktreeCollection> = git(connectionId) { ssh -> ssh.worktrees(path) }
 
     override suspend fun getChanges(
-        serverOrigin: String,
+        connectionId: String,
         path: String,
         scope: GitScope,
-    ): Result<GitChanges> = git(serverOrigin) { ssh -> ssh.changes(path, scope) }
+    ): Result<GitChanges> = git(connectionId) { ssh -> ssh.changes(path, scope) }
 
     override suspend fun getFileDiff(
-        serverOrigin: String,
+        connectionId: String,
         worktreePath: String,
         scope: GitScope,
         filePath: String,
         oldPath: String?,
-    ): Result<GitFileDiff> = git(serverOrigin) { ssh ->
+    ): Result<GitFileDiff> = git(connectionId) { ssh ->
         ssh.fileDiff(worktreePath, scope, filePath, oldPath)
     }
 
     override suspend fun updateSessionWorktreePath(
-        serverOrigin: String,
+        connectionId: String,
         sessionId: String,
         body: SetSessionWorktreePathBody,
     ): Result<Unit> = sshCall {
         factory.updateWorktreePath(
-            connectionId = serverOrigin,
+            connectionId = connectionId,
             agentId = body.agentId,
             sessionId = sessionId,
             worktreePath = body.worktreePath,

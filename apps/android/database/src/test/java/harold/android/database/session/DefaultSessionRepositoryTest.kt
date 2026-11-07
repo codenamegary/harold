@@ -140,7 +140,7 @@ class DefaultSessionRepositoryTest {
         repository.refreshAgents(ORIGIN)
 
         val result = repository.createSession(
-            serverOrigin = ORIGIN,
+            connectionId = ORIGIN,
             body = CreateSessionBody(agentId = "cursor", cwd = "/tmp/harold"),
         )
 
@@ -158,7 +158,7 @@ class DefaultSessionRepositoryTest {
         api.created = Result.failure(IllegalStateException("offline"))
 
         val result = repository.createSession(
-            serverOrigin = ORIGIN,
+            connectionId = ORIGIN,
             body = CreateSessionBody(agentId = "cursor", cwd = "/tmp/harold"),
         )
 
@@ -253,53 +253,53 @@ private class ChatFakeAgentApi : AgentApi {
     var deleted: Result<Unit> = Result.success(Unit)
 
     override suspend fun listSessions(
-        serverOrigin: String,
+        connectionId: String,
         cwd: String?,
     ): Result<SessionCollection> = sessions
 
-    override suspend fun listAgents(serverOrigin: String): Result<AgentSettingsCollection> = agents
+    override suspend fun listAgents(connectionId: String): Result<AgentSettingsCollection> = agents
 
     override suspend fun listWorkspaces(
-        serverOrigin: String,
+        connectionId: String,
         limit: Int,
     ): Result<WorkspaceCollection> = workspaces
 
     override suspend fun createSession(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateSessionBody,
     ): Result<CreateSessionResponse> = created
 
     override suspend fun deleteSession(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
     ): Result<Unit> = deleted
 
 
     override suspend fun listFilesystemDirectories(
-        serverOrigin: String,
+        connectionId: String,
         root: String?,
     ) = unused<FilesystemDirectoryCollection>()
 
     override suspend fun createFilesystemDirectory(
-        serverOrigin: String,
+        connectionId: String,
         body: harold.android.contracts.CreateFilesystemDirectoryBody,
     ) = Result.failure<harold.android.contracts.FilesystemDirectoryCreated>(
         UnsupportedOperationException("unused"),
     )
 
     override suspend fun createWorkspace(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
     ) = unused<Workspace>()
 
     override suspend fun getAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ) = unused<AgentAuth>()
 
     override suspend fun logoutAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ) = unused<AgentAuthSummary>()
 

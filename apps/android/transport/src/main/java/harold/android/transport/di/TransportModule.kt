@@ -10,7 +10,7 @@ import harold.android.network.GitApi
 import harold.android.network.SessionCommandApi
 import harold.android.network.SessionConfigApi
 import harold.android.network.SessionWorktreePathApi
-import harold.android.session.HaroldReachability
+import harold.android.session.ConnectionReachability
 import harold.android.stream.SessionStreamFactory
 import harold.android.transport.ssh.JschSshConnectionFactory
 import harold.android.transport.ssh.SshAgentApi
@@ -54,7 +54,7 @@ abstract class TransportModule {
 
     @Binds
     @Singleton
-    abstract fun haroldReachability(impl: SshReachability): HaroldReachability
+    abstract fun haroldReachability(impl: SshReachability): ConnectionReachability
 
     @Binds
     @Singleton

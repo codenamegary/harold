@@ -35,13 +35,13 @@ class DefaultSessionPreferences internal constructor(
         }
     }
 
-    override suspend fun loadLastModel(serverOrigin: String, agentId: String): String? =
-        decodeModels(dataStore.data.first()[KEY_LAST_MODELS])[modelKey(serverOrigin, agentId)]
+    override suspend fun loadLastModel(connectionId: String, agentId: String): String? =
+        decodeModels(dataStore.data.first()[KEY_LAST_MODELS])[modelKey(connectionId, agentId)]
 
-    override suspend fun saveLastModel(serverOrigin: String, agentId: String, model: String) {
+    override suspend fun saveLastModel(connectionId: String, agentId: String, model: String) {
         dataStore.edit { preferences ->
             val models = decodeModels(preferences[KEY_LAST_MODELS]) +
-                (modelKey(serverOrigin, agentId) to model)
+                (modelKey(connectionId, agentId) to model)
             preferences[KEY_LAST_MODELS] = json.encodeToString(models)
         }
     }
@@ -51,7 +51,7 @@ class DefaultSessionPreferences internal constructor(
             runCatching { json.decodeFromString<Map<String, String>>(encoded) }.getOrNull()
         }.orEmpty()
 
-    private fun modelKey(serverOrigin: String, agentId: String): String = "$serverOrigin|$agentId"
+    private fun modelKey(connectionId: String, agentId: String): String = "$connectionId|$agentId"
 
     private companion object {
         const val PREFERENCES_FILE_NAME = "session.preferences_pb"

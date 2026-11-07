@@ -73,7 +73,7 @@ class WorkspaceDaoTest {
         )
 
         dao.replaceByOrigin(
-            serverOrigin = ORIGIN,
+            connectionId = ORIGIN,
             workspaces = listOf(workspace(id = "ws_new", name = "new", position = 0)),
         )
 
@@ -86,7 +86,7 @@ class WorkspaceDaoTest {
         name: String = "harold",
         position: Int = 0,
     ) = WorkspaceEntity(
-        serverOrigin = origin,
+        connectionId = origin,
         id = id,
         name = name,
         path = "/tmp/harold",

@@ -30,11 +30,11 @@ data object Workspaces : AppRoute
 data object AddWorkspace : AppRoute
 
 @Serializable
-data object SavedHarolds : AppRoute
+data object Connections : AppRoute
 
 @Serializable
 data class Changes(
-    val serverOrigin: String,
+    val connectionId: String,
     val agentId: AgentId,
     val sessionId: String,
     val cwd: String,
@@ -43,7 +43,7 @@ data class Changes(
 
 @Serializable
 data class FileDiff(
-    val serverOrigin: String,
+    val connectionId: String,
     val worktreePath: String,
     val scope: GitScope,
     val filePath: String,

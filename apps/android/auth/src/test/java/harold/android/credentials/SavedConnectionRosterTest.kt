@@ -6,28 +6,28 @@ import org.junit.Test
 class SavedHaroldRosterTest {
     @Test
     fun savingASecondHaroldKeepsTheFirst() {
-        val laptop = savedHarold(
-            serverOrigin = "ssh://gary@laptop.local:22",
+        val laptop = savedConnection(
+            connectionId = "ssh://gary@laptop.local:22",
             name = "laptop",
         )
-        val desktop = savedHarold(
-            serverOrigin = "ssh://gary@desktop.local:22",
+        val desktop = savedConnection(
+            connectionId = "ssh://gary@desktop.local:22",
             name = "desktop",
         )
 
-        val saved = upsertSavedHarold(upsertSavedHarold(emptyList(), laptop), desktop)
+        val saved = upsertSavedConnection(upsertSavedConnection(emptyList(), laptop), desktop)
 
         assertEquals(listOf(laptop, desktop), saved)
     }
 
     @Test
     fun savingTheSameAddressReplacesThatHaroldAndKeepsTheOther() {
-        val laptop = savedHarold(
-            serverOrigin = "ssh://gary@laptop.local:22",
+        val laptop = savedConnection(
+            connectionId = "ssh://gary@laptop.local:22",
             name = "laptop",
         )
-        val desktop = savedHarold(
-            serverOrigin = "ssh://gary@desktop.local:22",
+        val desktop = savedConnection(
+            connectionId = "ssh://gary@desktop.local:22",
             name = "desktop",
         )
         val renamedLaptop = laptop.copy(
@@ -36,38 +36,38 @@ class SavedHaroldRosterTest {
             iconId = "bolt",
         )
 
-        val saved = upsertSavedHarold(upsertSavedHarold(emptyList(), laptop), desktop)
-        val updated = upsertSavedHarold(saved, renamedLaptop)
+        val saved = upsertSavedConnection(upsertSavedConnection(emptyList(), laptop), desktop)
+        val updated = upsertSavedConnection(saved, renamedLaptop)
 
         assertEquals(listOf(renamedLaptop, desktop), updated)
     }
 
     @Test
     fun aRosterRoundTripsEverySavedHarold() {
-        val laptop = savedHarold(
-            serverOrigin = "ssh://gary@laptop.local:22",
+        val laptop = savedConnection(
+            connectionId = "ssh://gary@laptop.local:22",
             name = "laptop",
         )
-        val desktop = savedHarold(
-            serverOrigin = "ssh://gary@desktop.local:22",
+        val desktop = savedConnection(
+            connectionId = "ssh://gary@desktop.local:22",
             name = "desktop",
         ).copy(deviceName = null)
 
         val saved = listOf(laptop, desktop)
 
-        assertEquals(saved, decodeSavedHarolds(encodeSavedHarolds(saved)))
+        assertEquals(saved, decodeSavedConnections(encodeSavedConnections(saved)))
     }
 
     @Test
     fun aMissingRosterIsAnEmptyList() {
-        assertEquals(emptyList<StoredCredential>(), decodeSavedHarolds(null))
+        assertEquals(emptyList<SavedConnection>(), decodeSavedConnections(null))
     }
 
     @Test
     fun aConnectionRoundTripsItsSshKeyAndFingerprint() {
-        val connection = StoredCredential(
+        val connection = SavedConnection(
             formatVersion = 3,
-            serverOrigin = "ssh://gary@laptop.local:22",
+            connectionId = "ssh://gary@laptop.local:22",
             deviceName = "laptop.local",
             name = "laptop",
             colorId = "tide",
@@ -84,14 +84,14 @@ class SavedHaroldRosterTest {
             ),
         )
 
-        assertEquals(listOf(connection), decodeSavedHarolds(encodeSavedHarolds(listOf(connection))))
+        assertEquals(listOf(connection), decodeSavedConnections(encodeSavedConnections(listOf(connection))))
     }
 
     @Test
     fun aPasswordConnectionRoundTripsItsSecret() {
-        val connection = StoredCredential(
+        val connection = SavedConnection(
             formatVersion = 3,
-            serverOrigin = "ssh://gary@laptop.local:22",
+            connectionId = "ssh://gary@laptop.local:22",
             deviceName = "laptop.local",
             name = "laptop",
             colorId = "tide",
@@ -105,16 +105,16 @@ class SavedHaroldRosterTest {
             ),
         )
 
-        assertEquals(listOf(connection), decodeSavedHarolds(encodeSavedHarolds(listOf(connection))))
+        assertEquals(listOf(connection), decodeSavedConnections(encodeSavedConnections(listOf(connection))))
     }
 }
 
-private fun savedHarold(
-    serverOrigin: String,
+private fun savedConnection(
+    connectionId: String,
     name: String,
-) = StoredCredential(
+) = SavedConnection(
     formatVersion = 3,
-    serverOrigin = serverOrigin,
+    connectionId = connectionId,
     deviceName = "Pixel",
     name = name,
     colorId = "ink",

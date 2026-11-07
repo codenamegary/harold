@@ -15,7 +15,7 @@ import harold.android.live.composer.SessionConfigCatalog
 import harold.android.network.SessionCommandApi
 import harold.android.stream.ConnectionSignal
 import harold.android.stream.ConnectionState
-import harold.android.stream.ConnectionStatus
+import harold.android.stream.StreamStatus
 import harold.android.stream.DisconnectCause
 import harold.android.stream.ReconnectPolicy
 import harold.android.stream.SessionStream
@@ -78,7 +78,7 @@ class DefaultSessionOwner @Inject constructor(
     private var pump: Job? = null
 
     private var loop: Job? = null
-    private var serverOrigin: String? = null
+    private var connectionId: String? = null
 
     @Volatile
     private var stream: SessionStream? = null
@@ -134,8 +134,8 @@ class DefaultSessionOwner @Inject constructor(
         }
     }
 
-    override fun connect(serverOrigin: String) {
-        if (this.serverOrigin == serverOrigin && loop?.isActive == true) {
+    override fun connect(connectionId: String) {
+        if (this.connectionId == connectionId && loop?.isActive == true) {
             // Already connecting/live/reconnecting toward this server: tearing
             // the loop down would kill a healthy stream. `retry()` only lands
             // here when the loop has stopped (AuthFailed/TransportError).
@@ -145,9 +145,9 @@ class DefaultSessionOwner @Inject constructor(
             return
         }
 
-        val movedServer = this.serverOrigin?.let { it != serverOrigin } ?: false
+        val movedServer = this.connectionId?.let { it != connectionId } ?: false
 
-        this.serverOrigin = serverOrigin
+        this.connectionId = connectionId
         loop?.cancel()
         stream?.close()
         stream = null
@@ -164,11 +164,11 @@ class DefaultSessionOwner @Inject constructor(
         synchronized(lock) {
             ensurePumpLocked()
         }
-        loop = scope.launch { run(serverOrigin) }
+        loop = scope.launch { run(connectionId) }
     }
 
     override fun retry() {
-        val origin = serverOrigin ?: return
+        val origin = connectionId ?: return
 
         connect(origin)
     }
@@ -194,7 +194,7 @@ class DefaultSessionOwner @Inject constructor(
             _sessionTitles.value = emptyMap()
             _snapshot.value = SessionSnapshot()
         }
-        _connectionState.update { current -> current.copy(status = ConnectionStatus.Idle) }
+        _connectionState.update { current -> current.copy(status = StreamStatus.Idle) }
     }
 
     override fun watch(agentId: AgentId?, sessionId: String?) {
@@ -223,7 +223,7 @@ class DefaultSessionOwner @Inject constructor(
         stream?.close()
         stream = null
         backgroundFrameMark = null
-        _connectionState.update { current -> current.copy(status = ConnectionStatus.Idle) }
+        _connectionState.update { current -> current.copy(status = StreamStatus.Idle) }
     }
 
     override fun onBackground() {
@@ -251,7 +251,7 @@ class DefaultSessionOwner @Inject constructor(
             }
         }
 
-        if (_connectionState.value.status is ConnectionStatus.Reconnecting) {
+        if (_connectionState.value.status is StreamStatus.Reconnecting) {
             // The stream already died and the loop is backing off. Skip the
             // remaining delay: the phone is in the user's hands.
             streamProbes.trySend(Unit)
@@ -268,7 +268,7 @@ class DefaultSessionOwner @Inject constructor(
                 ?: return Result.failure(IllegalStateException("No session is being watched"))
             val targetSession = watchSessionId
                 ?: return Result.failure(IllegalStateException("No session is being watched"))
-            val targetOrigin = serverOrigin
+            val targetOrigin = connectionId
                 ?: return Result.failure(IllegalStateException("Not connected to a server"))
             agentId = targetAgent
             sessionId = targetSession
@@ -302,7 +302,7 @@ class DefaultSessionOwner @Inject constructor(
         val sessionId: String
         val origin: String
         synchronized(lock) {
-            origin = serverOrigin
+            origin = connectionId
                 ?: return Result.failure(IllegalStateException("Not connected to a server"))
             agentId = watchAgentId
                 ?: return Result.failure(IllegalStateException("No session is being watched"))
@@ -315,7 +315,7 @@ class DefaultSessionOwner @Inject constructor(
     override suspend fun replyPermission(requestId: String, optionId: String): Result<Unit> {
         val origin: String
         synchronized(lock) {
-            origin = serverOrigin
+            origin = connectionId
                 ?: return Result.failure(IllegalStateException("Not connected to a server"))
             _snapshot.update { current ->
                 current.copy(
@@ -330,7 +330,7 @@ class DefaultSessionOwner @Inject constructor(
     override suspend fun replyExtension(requestId: String, result: JsonElement): Result<Unit> {
         val origin: String
         synchronized(lock) {
-            origin = serverOrigin
+            origin = connectionId
                 ?: return Result.failure(IllegalStateException("Not connected to a server"))
             _snapshot.update { current ->
                 current.copy(extension = null)
@@ -341,7 +341,7 @@ class DefaultSessionOwner @Inject constructor(
 
     override suspend fun replyElicitation(requestId: String, result: JsonElement): Result<Unit> {
         val origin = synchronized(lock) {
-            serverOrigin ?: return Result.failure(
+            connectionId ?: return Result.failure(
                 IllegalStateException("Not connected to a server"),
             )
         }
@@ -379,7 +379,7 @@ class DefaultSessionOwner @Inject constructor(
         }
     }
 
-    private suspend fun run(serverOrigin: String) {
+    private suspend fun run(connectionId: String) {
         var reconnect = false
 
         while (currentCoroutineContext().isActive) {
@@ -420,7 +420,7 @@ class DefaultSessionOwner @Inject constructor(
 
             val closed = CompletableDeferred<DisconnectCause>()
             val active = streamFactory.open(
-                serverOrigin = serverOrigin,
+                connectionId = connectionId,
                 agentId = target.agentId,
                 sessionId = target.sessionId,
                 lastEventId = resumeFrom,
@@ -465,7 +465,7 @@ class DefaultSessionOwner @Inject constructor(
                 applyConnection(ConnectionSignal.Disconnected(requireNotNull(disconnectCause)))
 
                 val status = _connectionState.value.status
-                if (status !is ConnectionStatus.Reconnecting) {
+                if (status !is StreamStatus.Reconnecting) {
                     synchronized(lock) {
                         pump?.cancel()
                         pump = null
@@ -586,7 +586,7 @@ class DefaultSessionOwner @Inject constructor(
                 val queued = pendingPrompt
                 pendingPrompt = null
                 if (queued != null) {
-                    val origin = serverOrigin
+                    val origin = connectionId
                     if (origin != null) {
                         scope.launch {
                             commandApi.prompt(

@@ -27,7 +27,7 @@ interface SessionOwner {
     /** Emits after each prompt_complete frame for the watched session. */
     val promptCompletions: Flow<Unit>
 
-    fun connect(serverOrigin: String)
+    fun connect(connectionId: String)
 
     fun retry()
 

@@ -5,7 +5,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import harold.android.live.SessionOwner
-import harold.android.session.HaroldConnections
+import harold.android.session.Connections
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 import javax.inject.Inject
@@ -21,13 +21,13 @@ import kotlinx.coroutines.launch
  */
 @Singleton
 class HaroldConnectionHost(
-    private val connections: HaroldConnections,
+    private val connections: Connections,
     private val sessionGateway: SessionGateway,
     private val sessionOwner: SessionOwner,
     private val scope: CoroutineScope,
 ) : DefaultLifecycleObserver {
     @Inject constructor(
-        connections: HaroldConnections,
+        connections: Connections,
         sessionGateway: SessionGateway,
         sessionOwner: SessionOwner,
     ) : this(
@@ -58,8 +58,8 @@ class HaroldConnectionHost(
         scope.launch {
             sessionGateway.refresh()
             val paired = sessionGateway.pairedState.value as? PairedState.Paired
-            if (paired != null && connections.shouldStayConnected(paired.serverOrigin)) {
-                sessionOwner.connect(paired.serverOrigin)
+            if (paired != null && connections.shouldStayConnected(paired.connectionId)) {
+                sessionOwner.connect(paired.connectionId)
                 sessionOwner.onForeground()
             } else {
                 sessionOwner.closeForBackground()
@@ -70,7 +70,7 @@ class HaroldConnectionHost(
     fun onAppBackground() {
         connections.onBackground()
         val paired = sessionGateway.pairedState.value as? PairedState.Paired
-        if (paired != null && connections.shouldStayConnected(paired.serverOrigin)) {
+        if (paired != null && connections.shouldStayConnected(paired.connectionId)) {
             sessionOwner.onBackground()
         } else {
             sessionOwner.closeForBackground()

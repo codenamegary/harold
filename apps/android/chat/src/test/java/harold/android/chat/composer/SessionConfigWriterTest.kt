@@ -36,7 +36,7 @@ class SessionConfigWriterTest {
         assertEquals(
             listOf(
                 FakeSessionConfigApi.Call(
-                    serverOrigin = ORIGIN,
+                    connectionId = ORIGIN,
                     agentId = "cursor",
                     sessionId = "sess_01",
                     configId = "model",
@@ -160,7 +160,7 @@ class SessionConfigWriterTest {
             writer.onSnapshot(ORIGIN, "cursor", "sess_01", listOf(selectOption("model", "m2")))
 
             val settled = awaitItem()
-            assertEquals(ORIGIN, settled.serverOrigin)
+            assertEquals(ORIGIN, settled.connectionId)
             assertEquals("cursor", settled.agentId)
             assertEquals("sess_01", settled.sessionId)
             assertEquals("model", settled.configId)
@@ -238,7 +238,7 @@ class SessionConfigWriterTest {
 
 private class FakeSessionConfigApi : SessionConfigApi {
     data class Call(
-        val serverOrigin: String,
+        val connectionId: String,
         val agentId: String,
         val sessionId: String,
         val configId: String,
@@ -250,13 +250,13 @@ private class FakeSessionConfigApi : SessionConfigApi {
     var handler: (suspend (Call) -> Result<Unit>)? = null
 
     override suspend fun setConfigOption(
-        serverOrigin: String,
+        connectionId: String,
         agentId: String,
         sessionId: String,
         configId: String,
         value: ConfigValue,
     ): Result<Unit> {
-        val call = Call(serverOrigin, agentId, sessionId, configId, value)
+        val call = Call(connectionId, agentId, sessionId, configId, value)
         calls += call
         return handler?.invoke(call) ?: result
     }

@@ -21,11 +21,11 @@ class SavedHaroldsScreenTest {
     fun showsEachHaroldNameOriginAndBadge() {
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
-                SavedHaroldsScreen(
-                    uiState = SavedHaroldsUiState(
+                ConnectionsScreen(
+                    uiState = ConnectionsUiState(
                         rows = listOf(
-                            SavedHaroldRow(
-                                serverOrigin = "ssh://gary@laptop.local:22",
+                            ConnectionRow(
+                                connectionId = "ssh://gary@laptop.local:22",
                                 name = "laptop",
                                 colorId = "tide",
                                 iconId = "bolt",

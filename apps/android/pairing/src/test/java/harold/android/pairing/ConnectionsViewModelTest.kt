@@ -1,15 +1,15 @@
 package harold.android.pairing
 
-import harold.android.credentials.SavedHaroldRepository
+import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SshAuth
 import harold.android.credentials.SshConfig
-import harold.android.credentials.StoredCredential
+import harold.android.credentials.SavedConnection
 import harold.android.navigation.Navigator
 import harold.android.navigation.Shell
 import harold.android.navigation.SshSetup
-import harold.android.session.InactiveHaroldConnections
+import harold.android.session.InactiveConnections
 import harold.android.session.PairedState
-import harold.android.testing.FakeCredentialStore
+import harold.android.testing.FakeConnectionStore
 import harold.android.testing.FakeSessionGateway
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -59,7 +59,7 @@ class SavedHaroldsViewModelTest {
         viewModel.onColorSelected("ink")
         viewModel.saveEdit()
 
-        val laptop = store.list().single { it.serverOrigin == "ssh://gary@laptop.local:22" }
+        val laptop = store.list().single { it.connectionId == "ssh://gary@laptop.local:22" }
         assertEquals("work", laptop.name)
         assertEquals("ink", laptop.colorId)
         assertEquals(desktopBefore, store.list().single { it.name == "desktop" }.ssh)
@@ -67,7 +67,7 @@ class SavedHaroldsViewModelTest {
 
     @Test
     fun removingTheLastHaroldOpensHostSetup() = runTest {
-        val store = FakeCredentialStore()
+        val store = FakeConnectionStore()
         store.save(saved("ssh://gary@laptop.local:22", "laptop", "tide", "bolt"))
         val navigator = Navigator()
         navigator.start(paired = true)
@@ -75,43 +75,43 @@ class SavedHaroldsViewModelTest {
 
         viewModel.remove("ssh://gary@laptop.local:22")
 
-        assertEquals(emptyList<StoredCredential>(), store.list())
+        assertEquals(emptyList<SavedConnection>(), store.list())
         assertEquals(listOf(Shell, SshSetup), navigator.backStack.toList())
     }
 }
 
 private fun viewModel(
-    store: FakeCredentialStore,
+    store: FakeConnectionStore,
     navigator: Navigator = Navigator(),
-): SavedHaroldsViewModel = SavedHaroldsViewModel(
-    repository = SavedHaroldRepository(store),
+): ConnectionsViewModel = ConnectionsViewModel(
+    repository = ConnectionRepository(store),
     sessionGateway = FakeSessionGateway(PairedState.Paired("ssh://gary@laptop.local:22", "Pixel")),
     sessionOwner = NoopSessionOwner(),
     navigator = navigator,
-    connections = InactiveHaroldConnections,
+    connections = InactiveConnections,
 )
 
-private suspend fun storeWithTwo(): FakeCredentialStore {
-    val store = FakeCredentialStore()
+private suspend fun storeWithTwo(): FakeConnectionStore {
+    val store = FakeConnectionStore()
     store.save(saved("ssh://gary@laptop.local:22", "laptop", "tide", "bolt"))
     store.save(saved("ssh://gary@desktop.local:22", "desktop", "ink", "mark"))
     return store
 }
 
 private fun saved(
-    serverOrigin: String,
+    connectionId: String,
     name: String,
     colorId: String,
     iconId: String,
-) = StoredCredential(
+) = SavedConnection(
     formatVersion = 3,
-    serverOrigin = serverOrigin,
+    connectionId = connectionId,
     deviceName = "Pixel",
     name = name,
     colorId = colorId,
     iconId = iconId,
     ssh = SshConfig(
-        host = serverOrigin,
+        host = connectionId,
         port = 22,
         user = "gary",
         auth = SshAuth.Password(secret = "hunter2"),
@@ -124,7 +124,7 @@ private class NoopSessionOwner : harold.android.live.SessionOwner {
     override val snapshot = kotlinx.coroutines.flow.MutableStateFlow(harold.android.live.SessionSnapshot())
     override val sessionTitles = kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, String>())
     override val promptCompletions = kotlinx.coroutines.flow.MutableSharedFlow<Unit>()
-    override fun connect(serverOrigin: String) = Unit
+    override fun connect(connectionId: String) = Unit
     override fun retry() = Unit
     override fun disconnect() = Unit
     override fun onForeground() = Unit

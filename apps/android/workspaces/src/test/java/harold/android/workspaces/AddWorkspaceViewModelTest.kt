@@ -465,13 +465,13 @@ private class FakeAddUserRepository(
     val createDirectoryCalls = mutableListOf<CreateFilesystemDirectoryBody>()
 
     override suspend fun listWorkspaces(
-        serverOrigin: String,
+        connectionId: String,
         limit: Int,
     ): Result<WorkspaceCollection> = Result.failure(UnsupportedOperationException())
 
 
     override suspend fun listFilesystemDirectories(
-        serverOrigin: String,
+        connectionId: String,
         root: String?,
     ): Result<FilesystemDirectoryCollection> {
         listCalls += root
@@ -488,7 +488,7 @@ private class FakeAddUserRepository(
     }
 
     override suspend fun createFilesystemDirectory(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateFilesystemDirectoryBody,
     ): Result<FilesystemDirectoryCreated> {
         events += "mkdir"
@@ -497,36 +497,36 @@ private class FakeAddUserRepository(
     }
 
     override suspend fun createWorkspace(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace> = Result.failure(UnsupportedOperationException())
 
     override suspend fun listSessions(
-        serverOrigin: String,
+        connectionId: String,
         cwd: String?,
     ): Result<SessionCollection> = Result.failure(UnsupportedOperationException())
 
-    override suspend fun listAgents(serverOrigin: String): Result<AgentSettingsCollection> =
+    override suspend fun listAgents(connectionId: String): Result<AgentSettingsCollection> =
         Result.failure(UnsupportedOperationException())
 
     override suspend fun createSession(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateSessionBody,
     ): Result<CreateSessionResponse> = Result.failure(UnsupportedOperationException())
 
     override suspend fun deleteSession(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
     ): Result<Unit> = Result.failure(UnsupportedOperationException())
 
     override suspend fun getAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ): Result<AgentAuth> = Result.failure(UnsupportedOperationException())
 
     override suspend fun logoutAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ): Result<AgentAuthSummary> = Result.failure(UnsupportedOperationException())
 }
@@ -540,12 +540,12 @@ private class FakeAddWorkspaceRepository(
 
     override fun observe(): Flow<List<CachedWorkspace>> = cached
 
-    override fun observe(serverOrigin: String): Flow<List<CachedWorkspace>> = cached
+    override fun observe(connectionId: String): Flow<List<CachedWorkspace>> = cached
 
-    override suspend fun refresh(serverOrigin: String): Result<Unit> = Result.success(Unit)
+    override suspend fun refresh(connectionId: String): Result<Unit> = Result.success(Unit)
 
     override suspend fun create(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace> {
         events += "create"
@@ -560,7 +560,7 @@ private class FakeAddWorkspaceRepository(
             createdAt = "2026-08-10T00:00:00.000Z",
             lastUsedAt = "2026-08-10T00:00:00.000Z",
         )
-        cached.value = listOf(CachedWorkspace(serverOrigin, workspace))
+        cached.value = listOf(CachedWorkspace(connectionId, workspace))
         return Result.success(workspace)
     }
 }

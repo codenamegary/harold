@@ -3,11 +3,11 @@ package harold.android.session
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import harold.android.credentials.CredentialStore
+import harold.android.credentials.ConnectionStore
 
 class DefaultSessionGateway(
-    private val credentialStore: CredentialStore,
-    private val connections: HaroldConnections = InactiveHaroldConnections,
+    private val credentialStore: ConnectionStore,
+    private val connections: Connections = InactiveConnections,
 ) : SessionGateway {
     private val _pairedState = MutableStateFlow<PairedState>(PairedState.NotPaired)
     override val pairedState: StateFlow<PairedState> = _pairedState.asStateFlow()
@@ -18,7 +18,7 @@ class DefaultSessionGateway(
             PairedState.NotPaired
         } else {
             PairedState.Paired(
-                serverOrigin = stored.serverOrigin,
+                connectionId = stored.connectionId,
                 deviceName = stored.deviceName,
             )
         }

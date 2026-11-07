@@ -45,13 +45,13 @@ class SessionConfigWriter(
     private var error: String? = null
 
     fun onSnapshot(
-        serverOrigin: String?,
+        connectionId: String?,
         agentId: AgentId?,
         sessionId: String?,
         configOptions: List<ConfigOption>,
     ) {
-        val nextTarget = if (serverOrigin != null && agentId != null && !sessionId.isNullOrEmpty()) {
-            Target(serverOrigin, agentId, sessionId)
+        val nextTarget = if (connectionId != null && agentId != null && !sessionId.isNullOrEmpty()) {
+            Target(connectionId, agentId, sessionId)
         } else {
             null
         }
@@ -69,7 +69,7 @@ class SessionConfigWriter(
             error = null
             _settled.tryEmit(
                 SettledWrite(
-                    serverOrigin = nextTarget?.serverOrigin.orEmpty(),
+                    connectionId = nextTarget?.connectionId.orEmpty(),
                     agentId = nextTarget?.agentId.orEmpty(),
                     sessionId = nextTarget?.sessionId.orEmpty(),
                     configId = settling.configId,
@@ -93,7 +93,7 @@ class SessionConfigWriter(
         emit()
         job = scope.launch {
             val result = api.setConfigOption(
-                serverOrigin = target.serverOrigin,
+                connectionId = target.connectionId,
                 agentId = target.agentId,
                 sessionId = target.sessionId,
                 configId = configId,
@@ -152,7 +152,7 @@ class SessionConfigWriter(
     }
 
     private data class Target(
-        val serverOrigin: String,
+        val connectionId: String,
         val agentId: AgentId,
         val sessionId: String,
     )
@@ -165,7 +165,7 @@ class SessionConfigWriter(
 
 /** A write the server confirmed by echoing the new value in a snapshot. */
 data class SettledWrite(
-    val serverOrigin: String,
+    val connectionId: String,
     val agentId: AgentId,
     val sessionId: String,
     val configId: String,

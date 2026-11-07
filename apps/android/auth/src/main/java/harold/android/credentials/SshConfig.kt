@@ -16,7 +16,7 @@ sealed interface SshAuth {
 
 /**
  * SSH host coordinates. [connectionId] is the synthetic roster key, so every
- * saved connection shares one list keyed by [StoredCredential.serverOrigin].
+ * saved connection shares one list keyed by [SavedConnection.connectionId].
  */
 data class SshConfig(
     val host: String,

@@ -7,7 +7,7 @@ import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.FilesystemDirectory
 import harold.android.contracts.WorkspaceSource
-import harold.android.credentials.SavedHaroldRepository
+import harold.android.credentials.ConnectionRepository
 import harold.android.navigation.CreatedWorkspaceResult
 import harold.android.navigation.Navigator
 import harold.android.network.apiErrorMessage
@@ -42,7 +42,7 @@ sealed interface BrowserLoadState {
 }
 
 data class AddWorkspaceUiState(
-    val harolds: List<WorkspaceHaroldBadge> = emptyList(),
+    val connections: List<WorkspaceConnectionBadge> = emptyList(),
     val selectedServerOrigin: String = "",
     val mode: AddWorkspaceMode = AddWorkspaceMode.OpenFolder,
     val browserLoadState: BrowserLoadState = BrowserLoadState.Loading,
@@ -104,7 +104,7 @@ class AddWorkspaceViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val workspaceRepository: WorkspaceRepository,
     private val navigator: Navigator,
-    private val savedHaroldRepository: SavedHaroldRepository? = null,
+    private val connectionRepository: ConnectionRepository? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AddWorkspaceUiState())
     val uiState: StateFlow<AddWorkspaceUiState> = _uiState.asStateFlow()
@@ -117,37 +117,37 @@ class AddWorkspaceViewModel @Inject constructor(
 
     private suspend fun initialize() {
         val paired = sessionGateway.pairedState.value as? PairedState.Paired
-        val saved = savedHaroldRepository?.list().orEmpty().map { harold ->
-            WorkspaceHaroldBadge(
-                serverOrigin = harold.serverOrigin,
-                name = harold.name,
-                colorId = harold.colorId,
-                iconId = harold.iconId,
+        val saved = connectionRepository?.list().orEmpty().map { connection ->
+            WorkspaceConnectionBadge(
+                connectionId = connection.connectionId,
+                name = connection.name,
+                colorId = connection.colorId,
+                iconId = connection.iconId,
             )
         }
         val preferredOrigin = navigator.consumePreferredAddWorkspaceOrigin()
         val initialOrigin = preferredOrigin?.takeIf { origin ->
-            saved.isEmpty() || saved.any { it.serverOrigin == origin }
-        } ?: paired?.serverOrigin?.takeIf { origin ->
-            saved.isEmpty() || saved.any { it.serverOrigin == origin }
-        } ?: saved.firstOrNull()?.serverOrigin.orEmpty()
+            saved.isEmpty() || saved.any { it.connectionId == origin }
+        } ?: paired?.connectionId?.takeIf { origin ->
+            saved.isEmpty() || saved.any { it.connectionId == origin }
+        } ?: saved.firstOrNull()?.connectionId.orEmpty()
 
         _uiState.update {
             it.copy(
-                harolds = saved,
+                connections = saved,
                 selectedServerOrigin = initialOrigin,
             )
         }
         loadBrowser(initialOrigin, root = null)
     }
 
-    fun onHaroldChanged(serverOrigin: String) {
-        if (serverOrigin == _uiState.value.selectedServerOrigin) {
+    fun onConnectionChanged(connectionId: String) {
+        if (connectionId == _uiState.value.selectedServerOrigin) {
             return
         }
         _uiState.update {
             it.copy(
-                selectedServerOrigin = serverOrigin,
+                selectedServerOrigin = connectionId,
                 browserLoadState = BrowserLoadState.Loading,
                 folderQuery = "",
                 selectedFolderPath = "",
@@ -159,7 +159,7 @@ class AddWorkspaceViewModel @Inject constructor(
             )
         }
         viewModelScope.launch {
-            loadBrowser(serverOrigin, root = null)
+            loadBrowser(connectionId, root = null)
         }
     }
 
@@ -272,7 +272,7 @@ class AddWorkspaceViewModel @Inject constructor(
             _uiState.update { it.copy(submitting = true, submitError = null) }
 
             userRepository.createFilesystemDirectory(
-                serverOrigin = origin,
+                connectionId = origin,
                 body = CreateFilesystemDirectoryBody(parent = parent, name = folderName),
             ).fold(
                 onSuccess = { created ->
@@ -322,7 +322,7 @@ class AddWorkspaceViewModel @Inject constructor(
 
     private suspend fun submitFolder(origin: String, state: AddWorkspaceUiState) {
         workspaceRepository.create(
-            serverOrigin = origin,
+            connectionId = origin,
             body = CreateWorkspaceBody(
                 source = WorkspaceSource.Folder,
                 path = state.selectedFolderPath,
@@ -339,7 +339,7 @@ class AddWorkspaceViewModel @Inject constructor(
     private suspend fun submitClone(origin: String, state: AddWorkspaceUiState) {
         val destinationName = state.cloneFolderName.trim()
         val createdFolder = userRepository.createFilesystemDirectory(
-            serverOrigin = origin,
+            connectionId = origin,
             body = CreateFilesystemDirectoryBody(parent = state.cloneParent, name = destinationName),
         )
 
@@ -356,7 +356,7 @@ class AddWorkspaceViewModel @Inject constructor(
         val destination = createdFolder.getOrThrow().path
 
         workspaceRepository.create(
-            serverOrigin = origin,
+            connectionId = origin,
             body = CreateWorkspaceBody(
                 source = WorkspaceSource.Git,
                 path = destination,
@@ -383,7 +383,7 @@ class AddWorkspaceViewModel @Inject constructor(
         navigator.reportWorkspaceCreated(
             CreatedWorkspaceResult(
                 workspaceId = workspaceId,
-                serverOrigin = origin,
+                connectionId = origin,
             ),
         )
         navigator.goBack()
@@ -416,7 +416,7 @@ class AddWorkspaceViewModel @Inject constructor(
 
     private fun currentOrigin(): String =
         _uiState.value.selectedServerOrigin.ifEmpty {
-            (sessionGateway.pairedState.value as? PairedState.Paired)?.serverOrigin.orEmpty()
+            (sessionGateway.pairedState.value as? PairedState.Paired)?.connectionId.orEmpty()
         }
 }
 

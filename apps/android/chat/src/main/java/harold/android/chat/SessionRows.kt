@@ -34,6 +34,6 @@ fun CachedSession.toSessionRow(): SessionRow = SessionRow(
     agentLabel = agentLabel,
     state = SessionState.Idle,
     updatedAt = session.updatedAt,
-    serverOrigin = serverOrigin,
+    connectionId = connectionId,
     worktreePath = session.worktreePath,
 )

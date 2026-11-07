@@ -38,7 +38,7 @@ class PendingAttachmentUiTest {
         val uploading = uploadingChip()
         val ready = uploading.copy(
             status = AttachmentUploadStatus.Ready,
-            uploadedPath = "/workspace/.harold/attachments/att_1.png",
+            uploadedPath = "/workspace/.harold/uploads/att_1.png",
             uploadedId = "att_1",
         )
 
@@ -89,7 +89,7 @@ class PendingAttachmentUiTest {
                     if (existing.localId == uploading.localId) {
                         existing.copy(
                             status = AttachmentUploadStatus.Ready,
-                            uploadedPath = "/workspace/.harold/attachments/att_1.png",
+                            uploadedPath = "/workspace/.harold/uploads/att_1.png",
                             uploadedId = "att_1",
                         )
                     } else {

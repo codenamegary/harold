@@ -3,12 +3,12 @@ package harold.android.workspaces
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceState
-import harold.android.credentials.SavedHaroldRepository
-import harold.android.credentials.StoredCredential
+import harold.android.credentials.ConnectionRepository
+import harold.android.credentials.SavedConnection
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.session.PairedState
-import harold.android.testing.FakeCredentialStore
+import harold.android.testing.FakeConnectionStore
 import harold.android.testing.FakeSessionGateway
 import harold.android.database.workspace.CachedWorkspace
 import harold.android.database.workspace.WorkspaceRepository
@@ -88,9 +88,9 @@ class WorkspacesViewModelTest {
 
     @Test
     fun firstCachedFrameAlreadyHasScopedIdsAndBadges() = runTest(dispatcher) {
-        val store = FakeCredentialStore()
-        store.save(storedHarold(LAPTOP, "laptop", "tide", "bolt"))
-        store.save(storedHarold(DESKTOP, "desktop", "ink", "mark"))
+        val store = FakeConnectionStore()
+        store.save(storedConnection(LAPTOP, "laptop", "tide", "bolt"))
+        store.save(storedConnection(DESKTOP, "desktop", "ink", "mark"))
         val repository = FakeWorkspaceRepository()
         repository.seed(
             listOf(
@@ -102,7 +102,7 @@ class WorkspacesViewModelTest {
         val viewModel = WorkspacesViewModel(
             sessionGateway = FakeSessionGateway(PairedState.NotPaired),
             workspaceRepository = repository,
-            savedHaroldRepository = SavedHaroldRepository(store),
+            connectionRepository = ConnectionRepository(store),
         )
         advanceUntilIdle()
 
@@ -113,11 +113,11 @@ class WorkspacesViewModelTest {
         )
         assertEquals(
             "laptop",
-            viewModel.uiState.value.haroldByWorkspaceId["$LAPTOP|ws_laptop"]?.name,
+            viewModel.uiState.value.connectionByWorkspaceId["$LAPTOP|ws_laptop"]?.name,
         )
         assertEquals(
             "desktop",
-            viewModel.uiState.value.haroldByWorkspaceId["$DESKTOP|ws_desktop"]?.name,
+            viewModel.uiState.value.connectionByWorkspaceId["$DESKTOP|ws_desktop"]?.name,
         )
     }
 
@@ -155,20 +155,20 @@ class WorkspacesViewModelTest {
     }
 }
 
-private fun storedHarold(
-    serverOrigin: String,
+private fun storedConnection(
+    connectionId: String,
     name: String,
     colorId: String,
     iconId: String,
-) = StoredCredential(
+) = SavedConnection(
     formatVersion = 3,
-    serverOrigin = serverOrigin,
+    connectionId = connectionId,
     deviceName = "Pixel",
     name = name,
     colorId = colorId,
     iconId = iconId,
     ssh = harold.android.credentials.SshConfig(
-        host = serverOrigin,
+        host = connectionId,
         port = 22,
         user = "gary",
         auth = harold.android.credentials.SshAuth.Password(secret = "hunter2"),
@@ -193,17 +193,17 @@ private class FakeWorkspaceRepository(
 
     override fun observe(): Flow<List<CachedWorkspace>> = cached
 
-    override fun observe(serverOrigin: String): Flow<List<CachedWorkspace>> =
-        cached.map { workspaces -> workspaces.filter { cached -> cached.serverOrigin == serverOrigin } }
+    override fun observe(connectionId: String): Flow<List<CachedWorkspace>> =
+        cached.map { workspaces -> workspaces.filter { cached -> cached.connectionId == connectionId } }
 
-    override suspend fun refresh(serverOrigin: String): Result<Unit> {
+    override suspend fun refresh(connectionId: String): Result<Unit> {
         apiFailure?.let { error -> return Result.failure(error) }
-        cached.value = workspaces.map { workspace -> CachedWorkspace(serverOrigin, workspace) }
+        cached.value = workspaces.map { workspace -> CachedWorkspace(connectionId, workspace) }
         return Result.success(Unit)
     }
 
     override suspend fun create(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace> = Result.failure(UnsupportedOperationException())
 

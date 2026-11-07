@@ -43,7 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import harold.android.stream.ConnectionState
-import harold.android.stream.ConnectionStatus
+import harold.android.stream.StreamStatus
 import harold.android.session.PairedState
 import harold.android.ui.theme.HaroldTheme
 import harold.android.ui.theme.AppMark
@@ -312,7 +312,7 @@ private fun ShellScreenLivePreview() {
                 .fromPairedState(
                     PairedState.Paired("ssh://gary@127.0.0.1:22", "Pixel 8"),
                 )
-                .fromConnectionState(ConnectionState(status = ConnectionStatus.Live))
+                .fromConnectionState(ConnectionState(status = StreamStatus.Live))
                 .fromWorkspaceProbe(WorkspaceProbe.Loaded(count = 4)),
             onPairClick = {},
             onRetryClick = {},
@@ -330,7 +330,7 @@ private fun ShellScreenAuthFailedPreview() {
                     PairedState.Paired("ssh://gary@127.0.0.1:22", "Pixel 8"),
                 )
                 .fromConnectionState(
-                    ConnectionState(status = ConnectionStatus.AuthFailed(detail = null)),
+                    ConnectionState(status = StreamStatus.AuthFailed(detail = null)),
                 ),
             onPairClick = {},
             onRetryClick = {},

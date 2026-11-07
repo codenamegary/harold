@@ -1,29 +1,29 @@
 package harold.android.stream
 
-sealed interface ConnectionStatus {
-    data object Idle : ConnectionStatus
+sealed interface StreamStatus {
+    data object Idle : StreamStatus
 
-    data object Connecting : ConnectionStatus
+    data object Connecting : StreamStatus
 
-    data object Live : ConnectionStatus
+    data object Live : StreamStatus
 
     data class Reconnecting(
         val attempt: Int,
-    ) : ConnectionStatus
+    ) : StreamStatus
 
     /** Terminal. Auto-retry stops until the user asks for it. */
     data class AuthFailed(
         val detail: String?,
-    ) : ConnectionStatus
+    ) : StreamStatus
 
     /** Terminal. The server said something this build cannot decode. */
     data class TransportError(
         val message: String,
-    ) : ConnectionStatus
+    ) : StreamStatus
 }
 
 data class ConnectionState(
-    val status: ConnectionStatus = ConnectionStatus.Idle,
+    val status: StreamStatus = StreamStatus.Idle,
     /** Consecutive failed connects. Survives `Connecting` so backoff keeps growing. */
     val attempt: Int = 0,
 )
@@ -57,21 +57,21 @@ sealed interface ConnectionSignal {
 
 fun reduce(state: ConnectionState, signal: ConnectionSignal): ConnectionState =
     when (signal) {
-        ConnectionSignal.ConnectRequested -> state.copy(status = ConnectionStatus.Connecting)
+        ConnectionSignal.ConnectRequested -> state.copy(status = StreamStatus.Connecting)
 
-        ConnectionSignal.Connected -> state.copy(status = ConnectionStatus.Live, attempt = 0)
+        ConnectionSignal.Connected -> state.copy(status = StreamStatus.Live, attempt = 0)
 
-        ConnectionSignal.Idle -> state.copy(status = ConnectionStatus.Idle, attempt = 0)
+        ConnectionSignal.Idle -> state.copy(status = StreamStatus.Idle, attempt = 0)
 
         is ConnectionSignal.Disconnected -> when (val cause = signal.cause) {
             is DisconnectCause.Unauthorized ->
-                state.copy(status = ConnectionStatus.AuthFailed(detail = cause.detail))
+                state.copy(status = StreamStatus.AuthFailed(detail = cause.detail))
 
             is DisconnectCause.Protocol ->
-                state.copy(status = ConnectionStatus.TransportError(message = cause.message))
+                state.copy(status = StreamStatus.TransportError(message = cause.message))
 
             is DisconnectCause.Retryable -> state.copy(
-                status = ConnectionStatus.Reconnecting(attempt = state.attempt + 1),
+                status = StreamStatus.Reconnecting(attempt = state.attempt + 1),
                 attempt = state.attempt + 1,
             )
         }

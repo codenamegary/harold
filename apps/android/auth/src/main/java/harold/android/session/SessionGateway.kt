@@ -6,7 +6,7 @@ sealed interface PairedState {
     data object NotPaired : PairedState
 
     data class Paired(
-        val serverOrigin: String,
+        val connectionId: String,
         val deviceName: String?,
     ) : PairedState
 }

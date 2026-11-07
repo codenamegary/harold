@@ -3,14 +3,14 @@ package harold.android.pairing
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import harold.android.credentials.SavedHaroldRepository
-import harold.android.credentials.forgetSavedHarold
+import harold.android.credentials.ConnectionRepository
+import harold.android.credentials.forgetConnection
 import harold.android.credentials.settleAfterForget
 import harold.android.live.SessionOwner
 import harold.android.navigation.Navigator
-import harold.android.session.HaroldConnection
-import harold.android.session.HaroldConnectionStatus
-import harold.android.session.HaroldConnections
+import harold.android.session.ConnectionHealth
+import harold.android.session.ConnectionStatus
+import harold.android.session.Connections
 import harold.android.session.SessionGateway
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,17 +19,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-data class SavedHaroldRow(
-    val serverOrigin: String,
-    val endpoint: String = serverOrigin,
+data class ConnectionRow(
+    val connectionId: String,
+    val endpoint: String = connectionId,
     val name: String,
     val colorId: String,
     val iconId: String,
-    val status: HaroldConnectionStatus = HaroldConnectionStatus.Closed,
+    val status: ConnectionStatus = ConnectionStatus.Closed,
 )
 
-data class SavedHaroldsUiState(
-    val rows: List<SavedHaroldRow> = emptyList(),
+data class ConnectionsUiState(
+    val rows: List<ConnectionRow> = emptyList(),
     val editingOrigin: String? = null,
     val name: String = "",
     val colorId: String = "",
@@ -37,17 +37,17 @@ data class SavedHaroldsUiState(
 )
 
 @HiltViewModel
-class SavedHaroldsViewModel @Inject constructor(
-    private val repository: SavedHaroldRepository,
+class ConnectionsViewModel @Inject constructor(
+    private val repository: ConnectionRepository,
     private val sessionGateway: SessionGateway,
     private val sessionOwner: SessionOwner,
     private val navigator: Navigator,
-    private val connections: HaroldConnections,
+    private val connections: Connections,
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(SavedHaroldsUiState())
-    val uiState: StateFlow<SavedHaroldsUiState> = _uiState.asStateFlow()
+    private val _uiState = MutableStateFlow(ConnectionsUiState())
+    val uiState: StateFlow<ConnectionsUiState> = _uiState.asStateFlow()
 
-    private var saved: List<SavedHaroldRow> = emptyList()
+    private var saved: List<ConnectionRow> = emptyList()
 
     init {
         viewModelScope.launch { reload() }
@@ -57,11 +57,11 @@ class SavedHaroldsViewModel @Inject constructor(
         viewModelScope.launch { connections.refresh() }
     }
 
-    fun startEdit(serverOrigin: String) {
-        val row = _uiState.value.rows.find { item -> item.serverOrigin == serverOrigin } ?: return
+    fun startEdit(connectionId: String) {
+        val row = _uiState.value.rows.find { item -> item.connectionId == connectionId } ?: return
         _uiState.update { current ->
             current.copy(
-                editingOrigin = row.serverOrigin,
+                editingOrigin = row.connectionId,
                 name = row.name,
                 colorId = row.colorId,
                 iconId = row.iconId,
@@ -77,7 +77,7 @@ class SavedHaroldsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             repository.edit(
-                serverOrigin = origin,
+                connectionId = origin,
                 name = state.name.trim(),
                 colorId = state.colorId,
                 iconId = state.iconId,
@@ -87,15 +87,15 @@ class SavedHaroldsViewModel @Inject constructor(
         }
     }
 
-    fun remove(serverOrigin: String) {
-        val row = _uiState.value.rows.find { item -> item.serverOrigin == serverOrigin } ?: return
+    fun remove(connectionId: String) {
+        val row = _uiState.value.rows.find { item -> item.connectionId == connectionId } ?: return
         viewModelScope.launch {
-            val remains = forgetSavedHarold(
-                serverOrigin = row.serverOrigin,
+            val remains = forgetConnection(
+                connectionId = row.connectionId,
                 repository = repository,
             )
             settleAfterForget(
-                removedOrigin = row.serverOrigin,
+                removedOrigin = row.connectionId,
                 remains = remains,
                 gateway = sessionGateway,
                 disconnect = sessionOwner::disconnect,
@@ -134,23 +134,23 @@ class SavedHaroldsViewModel @Inject constructor(
     }
 
     private suspend fun reload() {
-        saved = repository.list().map { harold ->
-            SavedHaroldRow(
-                serverOrigin = harold.serverOrigin,
-                endpoint = harold.displayEndpoint,
-                name = harold.name,
-                colorId = harold.colorId,
-                iconId = harold.iconId,
+        saved = repository.list().map { connection ->
+            ConnectionRow(
+                connectionId = connection.connectionId,
+                endpoint = connection.displayEndpoint,
+                name = connection.name,
+                colorId = connection.colorId,
+                iconId = connection.iconId,
             )
         }
         _uiState.update { current -> current.copy(rows = saved) }
         applyLinks(connections.connections.value)
     }
 
-    private fun applyLinks(links: List<HaroldConnection>) {
-        val byOrigin = links.associateBy { link -> link.serverOrigin }
+    private fun applyLinks(links: List<ConnectionHealth>) {
+        val byOrigin = links.associateBy { link -> link.connectionId }
         val rows = saved.map { row ->
-            row.copy(status = byOrigin[row.serverOrigin]?.status ?: HaroldConnectionStatus.Closed)
+            row.copy(status = byOrigin[row.connectionId]?.status ?: ConnectionStatus.Closed)
         }
         _uiState.update { current -> current.copy(rows = rows) }
     }

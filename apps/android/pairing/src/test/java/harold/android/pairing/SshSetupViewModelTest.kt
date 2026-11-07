@@ -1,11 +1,11 @@
 package harold.android.pairing
 
-import harold.android.credentials.SavedHaroldRepository
+import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SshAuth
 import harold.android.credentials.SshCredential
 import harold.android.credentials.SshCredentialKind
 import harold.android.navigation.Navigator
-import harold.android.testing.FakeCredentialStore
+import harold.android.testing.FakeConnectionStore
 import harold.android.testing.FakeSessionGateway
 import harold.android.testing.FakeSshCredentialStore
 import harold.android.transport.ssh.SshProbe
@@ -103,7 +103,7 @@ class SshSetupViewModelTest {
 
     @Test
     fun savingTwoConnectionsToTheSameHostKeepsBoth() = runTest {
-        val connections = FakeCredentialStore()
+        val connections = FakeConnectionStore()
         val first = fixture(connections = connections)
         first.viewModel.onHostChanged("laptop.local")
         first.viewModel.onUserChanged("gary")
@@ -122,7 +122,7 @@ class SshSetupViewModelTest {
         assertEquals(2, saved.size)
         assertEquals(
             listOf("ssh://gary@laptop.local:22", "ssh://gary@laptop.local:22#2"),
-            saved.map { credential -> credential.serverOrigin },
+            saved.map { credential -> credential.connectionId },
         )
         assertEquals(listOf("laptop", "laptop 2"), saved.map { credential -> credential.name })
     }
@@ -143,19 +143,19 @@ class SshSetupViewModelTest {
 
 private data class Fixture(
     val viewModel: SshSetupViewModel,
-    val connections: FakeCredentialStore,
+    val connections: FakeConnectionStore,
     val credentials: FakeSshCredentialStore,
 )
 
 private fun fixture(
-    connections: FakeCredentialStore = FakeCredentialStore(),
+    connections: FakeConnectionStore = FakeConnectionStore(),
     initialCredentials: List<SshCredential> = emptyList(),
 ): Fixture {
     val credentials = FakeSshCredentialStore(initialCredentials)
     val probe = SshProbe { Result.success("SHA256:test") }
     return Fixture(
         viewModel = SshSetupViewModel(
-            repository = SavedHaroldRepository(connections),
+            repository = ConnectionRepository(connections),
             gateway = FakeSessionGateway(),
             enrollment = probe,
             navigator = Navigator(),

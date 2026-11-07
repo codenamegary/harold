@@ -1,8 +1,8 @@
 package harold.android.session
 
 import harold.android.contracts.SessionState
-import harold.android.credentials.SavedHaroldRepository
-import harold.android.credentials.StoredCredential
+import harold.android.credentials.ConnectionRepository
+import harold.android.credentials.SavedConnection
 import harold.android.stream.ReconnectPolicy
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
@@ -19,28 +19,28 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 
-class DefaultHaroldConnections(
-    private val savedHarolds: SavedHaroldRepository,
-    private val reachability: HaroldReachability,
+class DefaultConnections(
+    private val savedConnections: ConnectionRepository,
+    private val reachability: ConnectionReachability,
     private val scope: CoroutineScope,
-) : HaroldConnections {
+) : Connections {
     @Inject constructor(
-        savedHarolds: SavedHaroldRepository,
-        reachability: HaroldReachability,
+        savedConnections: ConnectionRepository,
+        reachability: ConnectionReachability,
     ) : this(
-        savedHarolds = savedHarolds,
+        savedConnections = savedConnections,
         reachability = reachability,
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     )
 
     private val lock = Any()
-    private val _connections = MutableStateFlow<List<HaroldConnection>>(emptyList())
-    override val connections: StateFlow<List<HaroldConnection>> = _connections.asStateFlow()
+    private val _connections = MutableStateFlow<List<ConnectionHealth>>(emptyList())
+    override val connections: StateFlow<List<ConnectionHealth>> = _connections.asStateFlow()
 
     private var foreground: Boolean = false
-    private var saved: List<StoredCredential> = emptyList()
+    private var saved: List<SavedConnection> = emptyList()
     private val sessionStates = mutableMapOf<String, List<SessionState>>()
-    private val statuses = linkedMapOf<String, HaroldConnectionStatus>()
+    private val statuses = linkedMapOf<String, ConnectionStatus>()
     private val jobs = linkedMapOf<String, Job>()
 
     override fun onForeground() {
@@ -54,29 +54,29 @@ class DefaultHaroldConnections(
     }
 
     override suspend fun refresh() {
-        val next = savedHarolds.list()
+        val next = savedConnections.list()
         synchronized(lock) {
             saved = next
         }
         reconcile()
     }
 
-    override fun setSessionStates(serverOrigin: String, states: List<SessionState>) {
+    override fun setSessionStates(connectionId: String, states: List<SessionState>) {
         synchronized(lock) {
-            sessionStates[serverOrigin] = states
+            sessionStates[connectionId] = states
         }
         reconcile()
     }
 
-    override fun shouldStayConnected(serverOrigin: String): Boolean = synchronized(lock) {
-        saved.any { harold -> harold.serverOrigin == serverOrigin } && shouldHoldLocked(serverOrigin)
+    override fun shouldStayConnected(connectionId: String): Boolean = synchronized(lock) {
+        saved.any { connection -> connection.connectionId == connectionId } && shouldHoldLocked(connectionId)
     }
 
     private fun reconcile() {
         val openOrigins: List<String>
         val closeOrigins: List<String>
         synchronized(lock) {
-            val known = saved.map { harold -> harold.serverOrigin }
+            val known = saved.map { connection -> connection.connectionId }
             sessionStates.keys.retainAll(known.toSet())
             closeOrigins = known.filter { origin -> !shouldHoldLocked(origin) } +
                 jobs.keys.filter { origin -> origin !in known }
@@ -87,22 +87,22 @@ class DefaultHaroldConnections(
         publish()
     }
 
-    private fun shouldHoldLocked(serverOrigin: String): Boolean {
+    private fun shouldHoldLocked(connectionId: String): Boolean {
         if (foreground) {
             return true
         }
-        return sessionStates[serverOrigin].orEmpty().any(::isLiveSession)
+        return sessionStates[connectionId].orEmpty().any(::isLiveSession)
     }
 
-    private fun open(serverOrigin: String) {
+    private fun open(connectionId: String) {
         lateinit var link: Job
         link = scope.launch(start = CoroutineStart.LAZY) {
             try {
                 var attempt = 0
                 while (coroutineContext.isActive) {
-                    setStatus(serverOrigin, HaroldConnectionStatus.Connecting, link)
+                    setStatus(connectionId, ConnectionStatus.Connecting, link)
                     val result = try {
-                        reachability.check(serverOrigin)
+                        reachability.check(connectionId)
                     } catch (error: CancellationException) {
                         throw error
                     } catch (error: Throwable) {
@@ -112,58 +112,58 @@ class DefaultHaroldConnections(
                         return@launch
                     }
                     if (result.isSuccess) {
-                        setStatus(serverOrigin, HaroldConnectionStatus.Connected, link)
+                        setStatus(connectionId, ConnectionStatus.Connected, link)
                         suspendCancellableCoroutine<Unit> { }
                     } else {
-                        setStatus(serverOrigin, HaroldConnectionStatus.Unreachable, link)
+                        setStatus(connectionId, ConnectionStatus.Unreachable, link)
                         attempt += 1
                         delay(ReconnectPolicy.delayMillis(attempt))
                     }
                 }
             } finally {
                 synchronized(lock) {
-                    if (jobs[serverOrigin] === link) {
-                        jobs.remove(serverOrigin)
-                        statuses[serverOrigin] = HaroldConnectionStatus.Closed
+                    if (jobs[connectionId] === link) {
+                        jobs.remove(connectionId)
+                        statuses[connectionId] = ConnectionStatus.Closed
                     }
                 }
                 publish()
             }
         }
         val previous = synchronized(lock) {
-            val existing = jobs[serverOrigin]
-            jobs[serverOrigin] = link
-            statuses[serverOrigin] = HaroldConnectionStatus.Connecting
+            val existing = jobs[connectionId]
+            jobs[connectionId] = link
+            statuses[connectionId] = ConnectionStatus.Connecting
             existing
         }
         previous?.cancel()
         link.start()
     }
 
-    private fun close(serverOrigin: String) {
+    private fun close(connectionId: String) {
         val job = synchronized(lock) {
-            statuses[serverOrigin] = HaroldConnectionStatus.Closed
-            jobs.remove(serverOrigin)
+            statuses[connectionId] = ConnectionStatus.Closed
+            jobs.remove(connectionId)
         }
         job?.cancel()
     }
 
-    private fun setStatus(serverOrigin: String, status: HaroldConnectionStatus, job: Job?) {
+    private fun setStatus(connectionId: String, status: ConnectionStatus, job: Job?) {
         synchronized(lock) {
-            if (job == null || jobs[serverOrigin] !== job) {
+            if (job == null || jobs[connectionId] !== job) {
                 return
             }
-            statuses[serverOrigin] = status
+            statuses[connectionId] = status
         }
         publish()
     }
 
     private fun publish() {
         val next = synchronized(lock) {
-            saved.map { harold ->
-                HaroldConnection(
-                    serverOrigin = harold.serverOrigin,
-                    status = statuses[harold.serverOrigin] ?: HaroldConnectionStatus.Closed,
+            saved.map { connection ->
+                ConnectionHealth(
+                    connectionId = connection.connectionId,
+                    status = statuses[connection.connectionId] ?: ConnectionStatus.Closed,
                 )
             }
         }

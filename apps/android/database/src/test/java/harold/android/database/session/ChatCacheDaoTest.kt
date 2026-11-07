@@ -69,7 +69,7 @@ class ChatCacheDaoTest {
         )
 
         sessionDao.replaceByOrigin(
-            serverOrigin = ORIGIN,
+            connectionId = ORIGIN,
             sessions = listOf(session(sessionId = "sess_new", title = "new")),
         )
 
@@ -135,14 +135,14 @@ class ChatCacheDaoTest {
     @Test
     fun agentsReplaceByOriginAndKeepServerOrder() = runTest {
         agentDao.replaceByOrigin(
-            serverOrigin = ORIGIN,
+            connectionId = ORIGIN,
             agents = listOf(
                 agent("claude", "Claude", position = 0),
                 agent("cursor", "Cursor", position = 1),
             ),
         )
         agentDao.replaceByOrigin(
-            serverOrigin = ORIGIN,
+            connectionId = ORIGIN,
             agents = listOf(
                 agent("cursor", "Cursor", position = 0),
                 agent("claude", "Claude", position = 1),
@@ -166,8 +166,8 @@ class ChatCacheDaoTest {
         )
         agentDao.upsertAll(
             listOf(
-                agent(agentId = "cursor", serverOrigin = "http://laptop:3847"),
-                agent(agentId = "cursor", serverOrigin = "http://desktop:3847"),
+                agent(agentId = "cursor", connectionId = "http://laptop:3847"),
+                agent(agentId = "cursor", connectionId = "http://desktop:3847"),
             ),
         )
 
@@ -176,11 +176,11 @@ class ChatCacheDaoTest {
 
         assertEquals(
             listOf("http://desktop:3847"),
-            sessionDao.observeAll().first().map { session -> session.serverOrigin },
+            sessionDao.observeAll().first().map { session -> session.connectionId },
         )
         assertEquals(
             listOf("http://desktop:3847"),
-            agentDao.observeByOrigin("http://desktop:3847").first().map { agent -> agent.serverOrigin },
+            agentDao.observeByOrigin("http://desktop:3847").first().map { agent -> agent.connectionId },
         )
     }
 
@@ -190,7 +190,7 @@ class ChatCacheDaoTest {
         sessionId: String = "sess_01",
         title: String = "Alpha",
     ) = SessionEntity(
-        serverOrigin = origin,
+        connectionId = origin,
         agentId = agentId,
         sessionId = sessionId,
         cwd = "/tmp/harold",
@@ -204,10 +204,10 @@ class ChatCacheDaoTest {
     private fun agent(
         agentId: String = "cursor",
         displayName: String = "Cursor",
-        serverOrigin: String = ORIGIN,
+        connectionId: String = ORIGIN,
         position: Int = 0,
     ) = AgentEntity(
-        serverOrigin = serverOrigin,
+        connectionId = connectionId,
         agentId = agentId,
         displayName = displayName,
         available = true,

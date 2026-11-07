@@ -28,14 +28,14 @@ class ChangesEntryProvider @Inject constructor() : FeatureEntryProvider {
             val viewModel: ChangesViewModel = hiltViewModel()
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
             LaunchedEffect(
-                route.serverOrigin,
+                route.connectionId,
                 route.agentId,
                 route.sessionId,
                 route.cwd,
                 route.worktreePath,
             ) {
                 viewModel.start(
-                    serverOrigin = route.serverOrigin,
+                    connectionId = route.connectionId,
                     agentId = route.agentId,
                     sessionId = route.sessionId,
                     cwd = route.cwd,
@@ -56,7 +56,7 @@ class ChangesEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onToggleAllFolders = viewModel::toggleAllFolders,
                 onFileClick = { file ->
                     navigator.openFileDiff(
-                        serverOrigin = route.serverOrigin,
+                        connectionId = route.connectionId,
                         worktreePath = uiState.selectedWorktreePath,
                         scope = uiState.scope,
                         filePath = file.path,
@@ -70,14 +70,14 @@ class ChangesEntryProvider @Inject constructor() : FeatureEntryProvider {
             val viewModel: FileDiffViewModel = hiltViewModel()
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
             LaunchedEffect(
-                route.serverOrigin,
+                route.connectionId,
                 route.worktreePath,
                 route.scope,
                 route.filePath,
                 route.oldPath,
             ) {
                 viewModel.start(
-                    serverOrigin = route.serverOrigin,
+                    connectionId = route.connectionId,
                     worktreePath = route.worktreePath,
                     scope = route.scope,
                     filePath = route.filePath,

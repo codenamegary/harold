@@ -2,9 +2,7 @@ package harold.android.database
 
 import android.content.Context
 import androidx.room.Room
-import androidx.room.migration.Migration
 import androidx.room.withTransaction
-import androidx.sqlite.db.SupportSQLiteDatabase
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -39,8 +37,10 @@ abstract class DatabaseModule {
         ): HaroldDatabase = Room.databaseBuilder(
             context,
             HaroldDatabase::class.java,
-            "harold.db",
-        ).addMigrations(MIGRATION_1_2).build()
+            "connection.db",
+        )
+            .fallbackToDestructiveMigration(dropAllTables = true)
+            .build()
 
         @Provides
         fun workspaceDao(database: HaroldDatabase): WorkspaceDao = database.workspaceDao()
@@ -67,23 +67,17 @@ abstract class DatabaseModule {
     }
 }
 
-val MIGRATION_1_2 = object : Migration(1, 2) {
-    override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("ALTER TABLE sessions ADD COLUMN worktreePath TEXT")
-    }
-}
-
 class RoomLocalCacheCleaner(
     private val database: HaroldDatabase,
     private val workspaceDao: WorkspaceDao,
     private val sessionDao: SessionDao,
     private val agentDao: AgentDao,
 ) : LocalCacheCleaner {
-    override suspend fun deleteByOrigin(serverOrigin: String) {
+    override suspend fun deleteByOrigin(connectionId: String) {
         database.withTransaction {
-            workspaceDao.deleteByOrigin(serverOrigin)
-            sessionDao.deleteByOrigin(serverOrigin)
-            agentDao.deleteByOrigin(serverOrigin)
+            workspaceDao.deleteByOrigin(connectionId)
+            sessionDao.deleteByOrigin(connectionId)
+            agentDao.deleteByOrigin(connectionId)
         }
     }
 }

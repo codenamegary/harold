@@ -42,11 +42,11 @@ class NavigatorTest {
     fun addConnectionOpensSshSetup() {
         val navigator = Navigator()
         navigator.start(paired = true)
-        navigator.openSavedHarolds()
+        navigator.openConnections()
 
         navigator.openAddConnection()
 
-        assertEquals(listOf(Chat, SavedHarolds, SshSetup), navigator.backStack.toList())
+        assertEquals(listOf(Chat, Connections, SshSetup), navigator.backStack.toList())
     }
 
     @Test
@@ -65,9 +65,9 @@ class NavigatorTest {
         val navigator = Navigator()
         navigator.start(paired = true)
 
-        navigator.openSavedHarolds()
+        navigator.openConnections()
 
-        assertEquals(listOf(Chat, SavedHarolds), navigator.backStack.toList())
+        assertEquals(listOf(Chat, Connections), navigator.backStack.toList())
     }
 
     @Test

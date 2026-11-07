@@ -67,7 +67,7 @@ class ActiveSessionPolicyTest {
     @Test
     fun oneHaroldUsesItsIconAndOpensThatSession() {
         val presentation = runningNotification(
-            listOf(snapshot("s1", "Build fix", SessionState.Running, haroldIconId = "bolt")),
+            listOf(snapshot("s1", "Build fix", SessionState.Running, connectionIconId = "bolt")),
         )
 
         assertEquals("Harold", presentation.copy.title)
@@ -82,8 +82,8 @@ class ActiveSessionPolicyTest {
     fun severalHaroldsUseTheAppIconAndOpenTheSessionList() {
         val presentation = runningNotification(
             listOf(
-                snapshot("s1", "Build fix", SessionState.Running, haroldIconId = "bolt"),
-                snapshot("s2", "Notes", SessionState.Starting, haroldIconId = "mark"),
+                snapshot("s1", "Build fix", SessionState.Running, connectionIconId = "bolt"),
+                snapshot("s2", "Notes", SessionState.Starting, connectionIconId = "mark"),
             ),
         )
 
@@ -98,8 +98,8 @@ class ActiveSessionPolicyTest {
         val alert = permissionNotification(
             sessionId = "s2",
             sessionName = "Notes",
-            haroldName = "laptop",
-            haroldIconId = "bolt",
+            connectionName = "laptop",
+            connectionIconId = "bolt",
         )
 
         assertEquals("Notes · Needs permission", alert.text)
@@ -122,11 +122,11 @@ class ActiveSessionPolicyTest {
         id: String,
         name: String,
         state: SessionState,
-        haroldIconId: String? = null,
+        connectionIconId: String? = null,
     ): ActiveSessionSnapshot = ActiveSessionSnapshot(
         id = id,
         name = name,
         state = state,
-        haroldIconId = haroldIconId,
+        connectionIconId = connectionIconId,
     )
 }

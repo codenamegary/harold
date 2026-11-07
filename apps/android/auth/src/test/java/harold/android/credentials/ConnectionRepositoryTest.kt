@@ -2,7 +2,7 @@ package harold.android.credentials
 
 import harold.android.database.LocalCacheCleaner
 import harold.android.session.PairedState
-import harold.android.testing.FakeCredentialStore
+import harold.android.testing.FakeConnectionStore
 import harold.android.testing.FakeSessionGateway
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -13,38 +13,38 @@ import org.junit.Test
 class SavedHaroldRepositoryTest {
     @Test
     fun editChangesTheNameColorAndIconAndLeavesTheConnection() = runTest {
-        val laptop = harold("ssh://gary@laptop.local:22", "laptop", "tide", "bolt")
-        val desktop = harold("ssh://gary@desktop.local:22", "desktop", "ink", "mark")
-        val store = FakeCredentialStore()
+        val laptop = savedConnection("ssh://gary@laptop.local:22", "laptop", "tide", "bolt")
+        val desktop = savedConnection("ssh://gary@desktop.local:22", "desktop", "ink", "mark")
+        val store = FakeConnectionStore()
         store.save(laptop)
         store.save(desktop)
-        val repository = SavedHaroldRepository(store)
+        val repository = ConnectionRepository(store)
 
         repository.edit(
-            serverOrigin = laptop.serverOrigin,
+            connectionId = laptop.connectionId,
             name = "work",
             colorId = "ink",
             iconId = "home",
         )
 
         val saved = store.list()
-        val edited = saved.single { item -> item.serverOrigin == laptop.serverOrigin }
+        val edited = saved.single { item -> item.connectionId == laptop.connectionId }
         assertEquals("work", edited.name)
         assertEquals("ink", edited.colorId)
         assertEquals("home", edited.iconId)
-        assertEquals(desktop, saved.single { item -> item.serverOrigin == desktop.serverOrigin })
+        assertEquals(desktop, saved.single { item -> item.connectionId == desktop.connectionId })
     }
 
     @Test
     fun removeDropsOneHaroldAndReportsWhenAnyRemain() = runTest {
-        val laptop = harold("ssh://gary@laptop.local:22", "laptop", "tide", "bolt")
-        val desktop = harold("ssh://gary@desktop.local:22", "desktop", "ink", "mark")
-        val store = FakeCredentialStore()
+        val laptop = savedConnection("ssh://gary@laptop.local:22", "laptop", "tide", "bolt")
+        val desktop = savedConnection("ssh://gary@desktop.local:22", "desktop", "ink", "mark")
+        val store = FakeConnectionStore()
         store.save(laptop)
         store.save(desktop)
-        val repository = SavedHaroldRepository(store)
+        val repository = ConnectionRepository(store)
 
-        val remains = repository.remove(laptop.serverOrigin)
+        val remains = repository.remove(laptop.connectionId)
 
         assertTrue(remains)
         assertEquals(listOf(desktop), store.list())
@@ -52,46 +52,46 @@ class SavedHaroldRepositoryTest {
 
     @Test
     fun removingTheLastHaroldLeavesNone() = runTest {
-        val laptop = harold("ssh://gary@laptop.local:22", "laptop", "tide", "bolt")
-        val store = FakeCredentialStore()
+        val laptop = savedConnection("ssh://gary@laptop.local:22", "laptop", "tide", "bolt")
+        val store = FakeConnectionStore()
         store.save(laptop)
-        val repository = SavedHaroldRepository(store)
+        val repository = ConnectionRepository(store)
 
-        val remains = repository.remove(laptop.serverOrigin)
+        val remains = repository.remove(laptop.connectionId)
 
         assertFalse(remains)
-        assertEquals(emptyList<StoredCredential>(), store.list())
+        assertEquals(emptyList<SavedConnection>(), store.list())
     }
 
     @Test
     fun removeClearsCachedDataForThatHaroldOnly() = runTest {
-        val laptop = harold("ssh://gary@laptop.local:22", "laptop", "tide", "bolt")
-        val desktop = harold("ssh://gary@desktop.local:22", "desktop", "ink", "mark")
-        val store = FakeCredentialStore()
+        val laptop = savedConnection("ssh://gary@laptop.local:22", "laptop", "tide", "bolt")
+        val desktop = savedConnection("ssh://gary@desktop.local:22", "desktop", "ink", "mark")
+        val store = FakeConnectionStore()
         store.save(laptop)
         store.save(desktop)
         val cleaned = mutableListOf<String>()
-        val repository = SavedHaroldRepository(
+        val repository = ConnectionRepository(
             store = store,
-            localCacheCleaner = LocalCacheCleaner { serverOrigin -> cleaned += serverOrigin },
+            localCacheCleaner = LocalCacheCleaner { connectionId -> cleaned += connectionId },
         )
 
-        repository.remove(laptop.serverOrigin)
+        repository.remove(laptop.connectionId)
 
-        assertEquals(listOf(laptop.serverOrigin), cleaned)
+        assertEquals(listOf(laptop.connectionId), cleaned)
     }
 
     @Test
     fun forgetRemovesTheSavedConnection() = runTest {
-        val laptop = harold("ssh://gary@laptop.local:22", "laptop", "tide", "bolt")
-        val desktop = harold("ssh://gary@desktop.local:22", "desktop", "ink", "mark")
-        val store = FakeCredentialStore()
+        val laptop = savedConnection("ssh://gary@laptop.local:22", "laptop", "tide", "bolt")
+        val desktop = savedConnection("ssh://gary@desktop.local:22", "desktop", "ink", "mark")
+        val store = FakeConnectionStore()
         store.save(laptop)
         store.save(desktop)
-        val repository = SavedHaroldRepository(store)
+        val repository = ConnectionRepository(store)
 
-        val remains = forgetSavedHarold(
-            serverOrigin = laptop.serverOrigin,
+        val remains = forgetConnection(
+            connectionId = laptop.connectionId,
             repository = repository,
         )
 
@@ -143,20 +143,20 @@ class SavedHaroldRepositoryTest {
     }
 }
 
-private fun harold(
-    serverOrigin: String,
+private fun savedConnection(
+    connectionId: String,
     name: String,
     colorId: String,
     iconId: String,
-) = StoredCredential(
+) = SavedConnection(
     formatVersion = 3,
-    serverOrigin = serverOrigin,
+    connectionId = connectionId,
     deviceName = "Pixel",
     name = name,
     colorId = colorId,
     iconId = iconId,
     ssh = SshConfig(
-        host = serverOrigin,
+        host = connectionId,
         port = 22,
         user = "gary",
         auth = SshAuth.Password(secret = "hunter2"),

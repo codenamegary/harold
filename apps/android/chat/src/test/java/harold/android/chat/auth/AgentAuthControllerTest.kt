@@ -182,7 +182,7 @@ class AgentAuthControllerTest {
         val gates = ArrayDeque<CompletableDeferred<Result<AgentAuth>>>()
 
         override suspend fun getAgentAuth(
-            serverOrigin: String,
+            connectionId: String,
             agentId: AgentId,
         ): Result<AgentAuth> {
             authGetCalls += agentId
@@ -192,53 +192,53 @@ class AgentAuthControllerTest {
         }
 
         override suspend fun logoutAgentAuth(
-            serverOrigin: String,
+            connectionId: String,
             agentId: AgentId,
         ) = Result.failure<AgentAuthSummary>(UnsupportedOperationException())
 
         override suspend fun listWorkspaces(
-            serverOrigin: String,
+            connectionId: String,
             limit: Int,
         ) = Result.failure<WorkspaceCollection>(UnsupportedOperationException())
 
         override suspend fun listFilesystemDirectories(
-            serverOrigin: String,
+            connectionId: String,
             root: String?,
         ) = Result.failure<FilesystemDirectoryCollection>(UnsupportedOperationException())
 
         override suspend fun createFilesystemDirectory(
-            serverOrigin: String,
+            connectionId: String,
             body: CreateFilesystemDirectoryBody,
         ) = Result.failure<harold.android.contracts.FilesystemDirectoryCreated>(
             UnsupportedOperationException("unused"),
         )
 
         override suspend fun createWorkspace(
-            serverOrigin: String,
+            connectionId: String,
             body: CreateWorkspaceBody,
         ) = Result.failure<Workspace>(UnsupportedOperationException())
 
         override suspend fun listSessions(
-            serverOrigin: String,
+            connectionId: String,
             cwd: String?,
         ) = Result.failure<SessionCollection>(UnsupportedOperationException())
 
-        override suspend fun listAgents(serverOrigin: String) =
+        override suspend fun listAgents(connectionId: String) =
             Result.failure<AgentSettingsCollection>(UnsupportedOperationException())
 
         override suspend fun createSession(
-            serverOrigin: String,
+            connectionId: String,
             body: CreateSessionBody,
         ) = Result.failure<CreateSessionResponse>(UnsupportedOperationException())
 
         override suspend fun deleteSession(
-            serverOrigin: String,
+            connectionId: String,
             agentId: AgentId,
             sessionId: String,
         ) = Result.failure<Unit>(UnsupportedOperationException())
     }
 
     companion object {
-        private const val ORIGIN = "ssh://gary@harold.local:22"
+        private const val ORIGIN = "ssh://gary@connection.local:22"
     }
 }

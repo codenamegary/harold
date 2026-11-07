@@ -62,8 +62,8 @@
     <string name="agent_auth_host_login">Host login</string>
     <string name="agent_auth_panel_content_description">%1$s auth</string>
     <string name="agent_auth_manage_on_host">Manage %1$s sign-in on the host with its own CLI.</string>
-    <string name="chat_pair_another_harold">Add connection</string>
-    <string name="chat_saved_harolds">Connections</string>
+    <string name="chat_add_connection">Add connection</string>
+    <string name="chat_connections">Connections</string>
     <string name="chat_remove">Remove connection</string>
     <string name="chat_remove_named">Remove %1$s</string>
     <string name="chat_remove_confirm_title">Remove connection?</string>

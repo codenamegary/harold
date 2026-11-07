@@ -45,7 +45,7 @@ class ChangesViewModelTest {
         val viewModel = ChangesViewModel(git, sessions)
 
         viewModel.start(
-            serverOrigin = ORIGIN,
+            connectionId = ORIGIN,
             agentId = "cursor",
             sessionId = "sess_01",
             cwd = REPO,
@@ -64,7 +64,7 @@ class ChangesViewModelTest {
         val viewModel = ChangesViewModel(git, sessions)
 
         viewModel.start(
-            serverOrigin = ORIGIN,
+            connectionId = ORIGIN,
             agentId = "cursor",
             sessionId = "sess_01",
             cwd = REPO,
@@ -85,7 +85,7 @@ class ChangesViewModelTest {
         val sessions = FakeWorktreePathApi()
         val viewModel = ChangesViewModel(git, sessions)
         viewModel.start(
-            serverOrigin = ORIGIN,
+            connectionId = ORIGIN,
             agentId = "cursor",
             sessionId = "sess_01",
             cwd = REPO,
@@ -111,7 +111,7 @@ class ChangesViewModelTest {
         )
         val viewModel = ChangesViewModel(git, sessions)
         viewModel.start(
-            serverOrigin = ORIGIN,
+            connectionId = ORIGIN,
             agentId = "cursor",
             sessionId = "sess_01",
             cwd = REPO,
@@ -138,7 +138,7 @@ private class FakeWorktreePathApi(
     val updates = mutableListOf<Pair<String, SetSessionWorktreePathBody>>()
 
     override suspend fun updateSessionWorktreePath(
-        serverOrigin: String,
+        connectionId: String,
         sessionId: String,
         body: SetSessionWorktreePathBody,
     ): Result<Unit> {
@@ -175,17 +175,17 @@ private class FakeGitApi : GitApi {
     )
 
     override suspend fun getSummary(
-        serverOrigin: String,
+        connectionId: String,
         path: String,
     ): Result<GitSummary> = Result.success(GitSummary(repository, 0))
 
     override suspend fun listWorktrees(
-        serverOrigin: String,
+        connectionId: String,
         path: String,
     ): Result<GitWorktreeCollection> = Result.success(GitWorktreeCollection(worktrees))
 
     override suspend fun getChanges(
-        serverOrigin: String,
+        connectionId: String,
         path: String,
         scope: GitScope,
     ): Result<GitChanges> = Result.success(
@@ -198,7 +198,7 @@ private class FakeGitApi : GitApi {
     )
 
     override suspend fun getFileDiff(
-        serverOrigin: String,
+        connectionId: String,
         worktreePath: String,
         scope: GitScope,
         filePath: String,

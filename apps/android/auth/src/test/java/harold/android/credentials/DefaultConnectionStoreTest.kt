@@ -10,13 +10,13 @@ class DefaultCredentialStoreTest {
     @Test
     fun savingASecondHaroldKeepsTheFirst() = runTest {
         val store = newStore()
-        val laptop = storedHarold(
-            serverOrigin = "http://laptop.local:3847",
+        val laptop = storedConnection(
+            connectionId = "http://laptop.local:3847",
             credential = "devcred_laptop",
             name = "laptop",
         )
-        val desktop = storedHarold(
-            serverOrigin = "http://desktop.local:3847",
+        val desktop = storedConnection(
+            connectionId = "http://desktop.local:3847",
             credential = "devcred_desktop",
             name = "desktop",
         )
@@ -31,14 +31,14 @@ class DefaultCredentialStoreTest {
     fun replaceKeepsOnlyTheNewHarold() = runTest {
         val store = newStore()
         store.save(
-            storedHarold(
-                serverOrigin = "http://laptop.local:3847",
+            storedConnection(
+                connectionId = "http://laptop.local:3847",
                 credential = "devcred_laptop",
                 name = "laptop",
             ),
         )
-        val phone = storedHarold(
-            serverOrigin = "http://phone.local:3847",
+        val phone = storedConnection(
+            connectionId = "http://phone.local:3847",
             credential = "devcred_phone",
             name = "phone",
         )
@@ -52,8 +52,8 @@ class DefaultCredentialStoreTest {
     fun clearRemovesEverySavedHarold() = runTest {
         val store = newStore()
         store.save(
-            storedHarold(
-                serverOrigin = "http://laptop.local:3847",
+            storedConnection(
+                connectionId = "http://laptop.local:3847",
                 credential = "devcred_laptop",
                 name = "laptop",
             ),
@@ -61,35 +61,35 @@ class DefaultCredentialStoreTest {
 
         store.clear()
 
-        assertEquals(emptyList<StoredCredential>(), store.list())
+        assertEquals(emptyList<SavedConnection>(), store.list())
     }
 
     @Test
     fun removeDropsOneHaroldAndKeepsTheOther() = runTest {
         val store = newStore()
-        val laptop = storedHarold(
-            serverOrigin = "http://laptop.local:3847",
+        val laptop = storedConnection(
+            connectionId = "http://laptop.local:3847",
             credential = "devcred_laptop",
             name = "laptop",
         )
-        val desktop = storedHarold(
-            serverOrigin = "http://desktop.local:3847",
+        val desktop = storedConnection(
+            connectionId = "http://desktop.local:3847",
             credential = "devcred_desktop",
             name = "desktop",
         )
         store.save(laptop)
         store.save(desktop)
 
-        store.remove(laptop.serverOrigin)
+        store.remove(laptop.connectionId)
 
         assertEquals(listOf(desktop), store.list())
     }
 }
 
-private fun newStore(): DefaultCredentialStore {
+private fun newStore(): DefaultConnectionStore {
     val file = File.createTempFile("harold-roster", ".preferences_pb")
     file.delete()
-    return DefaultCredentialStore(
+    return DefaultConnectionStore(
         dataStore = PreferenceDataStoreFactory.create { file },
         cipher = IdentityCipher(),
     )
@@ -106,19 +106,19 @@ private class IdentityCipher : CredentialCipher {
     override fun deleteKey() = Unit
 }
 
-private fun storedHarold(
-    serverOrigin: String,
+private fun storedConnection(
+    connectionId: String,
     credential: String,
     name: String,
-) = StoredCredential(
+) = SavedConnection(
     formatVersion = 3,
-    serverOrigin = serverOrigin,
+    connectionId = connectionId,
     deviceName = "Pixel",
     name = name,
     colorId = "ink",
     iconId = "mark",
     ssh = SshConfig(
-        host = serverOrigin,
+        host = connectionId,
         port = 22,
         user = "gary",
         auth = SshAuth.Password(secret = "hunter2"),

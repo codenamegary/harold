@@ -156,47 +156,47 @@ private class WorkspaceFakeAgentApi : AgentApi {
     )
 
     override suspend fun listWorkspaces(
-        serverOrigin: String,
+        connectionId: String,
         limit: Int,
     ): Result<WorkspaceCollection> = workspaces
 
     override suspend fun createWorkspace(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace> = created
 
 
     override suspend fun listFilesystemDirectories(
-        serverOrigin: String,
+        connectionId: String,
         root: String?,
     ) = unused<FilesystemDirectoryCollection>()
 
     override suspend fun createFilesystemDirectory(
-        serverOrigin: String,
+        connectionId: String,
         body: harold.android.contracts.CreateFilesystemDirectoryBody,
     ) = Result.failure<harold.android.contracts.FilesystemDirectoryCreated>(
         UnsupportedOperationException("unused"),
     )
 
-    override suspend fun listSessions(serverOrigin: String, cwd: String?) = unused<SessionCollection>()
+    override suspend fun listSessions(connectionId: String, cwd: String?) = unused<SessionCollection>()
 
-    override suspend fun listAgents(serverOrigin: String) = unused<AgentSettingsCollection>()
+    override suspend fun listAgents(connectionId: String) = unused<AgentSettingsCollection>()
 
     override suspend fun createSession(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateSessionBody,
     ) = unused<CreateSessionResponse>()
 
     override suspend fun deleteSession(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
     ) = unused<Unit>()
 
-    override suspend fun getAgentAuth(serverOrigin: String, agentId: AgentId) = unused<AgentAuth>()
+    override suspend fun getAgentAuth(connectionId: String, agentId: AgentId) = unused<AgentAuth>()
 
     override suspend fun logoutAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ) = unused<AgentAuthSummary>()
 

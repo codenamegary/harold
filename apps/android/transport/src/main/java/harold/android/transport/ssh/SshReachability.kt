@@ -1,8 +1,8 @@
 package harold.android.transport.ssh
 
-import harold.android.credentials.SavedHaroldRepository
+import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SshConfig
-import harold.android.session.HaroldReachability
+import harold.android.session.ConnectionReachability
 import java.net.InetSocketAddress
 import java.net.Socket
 import javax.inject.Inject
@@ -13,11 +13,11 @@ import kotlinx.coroutines.withContext
 /** A saved connection is live when its TCP endpoint accepts a socket. */
 @Singleton
 class SshReachability @Inject constructor(
-    private val savedHarolds: SavedHaroldRepository,
-) : HaroldReachability {
-    override suspend fun check(serverOrigin: String): Result<Unit> {
-        val config = savedHarolds.find(serverOrigin)?.ssh
-            ?: return Result.failure(IllegalStateException("Saved connection not found: $serverOrigin"))
+    private val savedConnections: ConnectionRepository,
+) : ConnectionReachability {
+    override suspend fun check(connectionId: String): Result<Unit> {
+        val config = savedConnections.find(connectionId)?.ssh
+            ?: return Result.failure(IllegalStateException("Saved connection not found: $connectionId"))
         return check(config)
     }
 

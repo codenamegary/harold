@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 /** The workspace and agent a session was started with, scoped to one Harold. */
 @Serializable
 data class LastSessionSelection(
-    val serverOrigin: String,
+    val connectionId: String,
     val workspaceId: String,
     val agentId: AgentId,
 )
@@ -16,7 +16,7 @@ interface SessionPreferences {
 
     suspend fun saveLastSessionSelection(selection: LastSessionSelection)
 
-    suspend fun loadLastModel(serverOrigin: String, agentId: AgentId): String?
+    suspend fun loadLastModel(connectionId: String, agentId: AgentId): String?
 
-    suspend fun saveLastModel(serverOrigin: String, agentId: AgentId, model: String)
+    suspend fun saveLastModel(connectionId: String, agentId: AgentId, model: String)
 }

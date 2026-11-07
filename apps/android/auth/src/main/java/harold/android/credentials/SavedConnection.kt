@@ -1,6 +1,6 @@
 package harold.android.credentials
 
-data class StoredCredential(
+data class SavedConnection(
     val formatVersion: Int,
     /**
      * Roster id. SSH connections store a synthetic `ssh://user@host:port` key
@@ -8,7 +8,7 @@ data class StoredCredential(
      * points at the same SSH endpoint, later rows add a `#<number>` suffix so
      * each row keeps its own identity.
      */
-    val serverOrigin: String,
+    val connectionId: String,
     val deviceName: String?,
     val name: String,
     val colorId: String,
@@ -19,5 +19,5 @@ data class StoredCredential(
     val displayEndpoint: String
         get() = ssh?.let { config ->
             "ssh://${config.user}@${config.host}:${config.port}"
-        } ?: serverOrigin
+        } ?: connectionId
 }

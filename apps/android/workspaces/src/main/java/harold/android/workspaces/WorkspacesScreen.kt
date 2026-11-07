@@ -143,7 +143,7 @@ fun WorkspacesScreen(
                         items(state.workspaces, key = { workspace -> workspace.id }) { workspace ->
                             WorkspaceCard(
                                 workspace = workspace,
-                                harold = uiState.haroldByWorkspaceId[workspace.id],
+                                connection = uiState.connectionByWorkspaceId[workspace.id],
                             )
                         }
                     }
@@ -156,7 +156,7 @@ fun WorkspacesScreen(
 @Composable
 private fun WorkspaceCard(
     workspace: Workspace,
-    harold: WorkspaceHaroldBadge? = null,
+    connection: WorkspaceConnectionBadge? = null,
 ) {
     Card(
         colors = CardDefaults.cardColors(
@@ -174,10 +174,10 @@ private fun WorkspaceCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (harold != null) {
+            if (connection != null) {
                 HaroldBadge(
-                    colorId = harold.colorId,
-                    iconId = harold.iconId,
+                    colorId = connection.colorId,
+                    iconId = connection.iconId,
                     size = 28.dp,
                 )
             }

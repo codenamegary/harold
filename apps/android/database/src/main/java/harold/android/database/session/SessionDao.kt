@@ -13,48 +13,48 @@ abstract class SessionDao {
     abstract fun observeAll(): Flow<List<SessionEntity>>
 
     @Query(
-        "SELECT * FROM sessions WHERE serverOrigin = :serverOrigin ORDER BY updatedAt DESC",
+        "SELECT * FROM sessions WHERE connectionId = :connectionId ORDER BY updatedAt DESC",
     )
-    abstract fun observeByOrigin(serverOrigin: String): Flow<List<SessionEntity>>
+    abstract fun observeByOrigin(connectionId: String): Flow<List<SessionEntity>>
 
-    @Query("SELECT * FROM sessions WHERE serverOrigin = :serverOrigin")
-    abstract suspend fun sessions(serverOrigin: String): List<SessionEntity>
+    @Query("SELECT * FROM sessions WHERE connectionId = :connectionId")
+    abstract suspend fun sessions(connectionId: String): List<SessionEntity>
 
     @Upsert
     abstract suspend fun upsertAll(sessions: List<SessionEntity>)
 
     @Query(
-        "DELETE FROM sessions WHERE serverOrigin = :serverOrigin " +
+        "DELETE FROM sessions WHERE connectionId = :connectionId " +
             "AND agentId = :agentId AND sessionId = :sessionId",
     )
     abstract suspend fun delete(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
     )
 
     @Query(
         "UPDATE sessions SET worktreePath = :worktreePath " +
-            "WHERE serverOrigin = :serverOrigin " +
+            "WHERE connectionId = :connectionId " +
             "AND agentId = :agentId AND sessionId = :sessionId " +
             "AND (worktreePath IS NOT :worktreePath)",
     )
     abstract suspend fun updateWorktreePath(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
         worktreePath: String?,
     ): Int
 
-    @Query("DELETE FROM sessions WHERE serverOrigin = :serverOrigin")
-    abstract suspend fun deleteByOrigin(serverOrigin: String)
+    @Query("DELETE FROM sessions WHERE connectionId = :connectionId")
+    abstract suspend fun deleteByOrigin(connectionId: String)
 
     @Transaction
     open suspend fun replaceByOrigin(
-        serverOrigin: String,
+        connectionId: String,
         sessions: List<SessionEntity>,
     ) {
-        deleteByOrigin(serverOrigin)
+        deleteByOrigin(connectionId)
         upsertAll(sessions)
     }
 }

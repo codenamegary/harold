@@ -43,11 +43,11 @@ class SessionForegroundCoordinator @Inject constructor(
     private val _state = MutableStateFlow(ForegroundCoordinatorState())
     val state: StateFlow<ForegroundCoordinatorState> = _state.asStateFlow()
 
-    private var serverOrigin: String? = null
+    private var connectionId: String? = null
     private var permissionPromptDismissed: Boolean = false
 
     fun setServerOrigin(origin: String?) {
-        serverOrigin = origin
+        connectionId = origin
         if (origin == null) {
             tracker.replaceAll(emptyList())
             permissionPromptDismissed = false

@@ -8,24 +8,24 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 abstract class AgentDao {
-    @Query("SELECT * FROM agents WHERE serverOrigin = :serverOrigin ORDER BY position")
-    abstract fun observeByOrigin(serverOrigin: String): Flow<List<AgentEntity>>
+    @Query("SELECT * FROM agents WHERE connectionId = :connectionId ORDER BY position")
+    abstract fun observeByOrigin(connectionId: String): Flow<List<AgentEntity>>
 
-    @Query("SELECT * FROM agents WHERE serverOrigin = :serverOrigin ORDER BY position")
-    abstract suspend fun agents(serverOrigin: String): List<AgentEntity>
+    @Query("SELECT * FROM agents WHERE connectionId = :connectionId ORDER BY position")
+    abstract suspend fun agents(connectionId: String): List<AgentEntity>
 
     @Upsert
     abstract suspend fun upsertAll(agents: List<AgentEntity>)
 
-    @Query("DELETE FROM agents WHERE serverOrigin = :serverOrigin")
-    abstract suspend fun deleteByOrigin(serverOrigin: String)
+    @Query("DELETE FROM agents WHERE connectionId = :connectionId")
+    abstract suspend fun deleteByOrigin(connectionId: String)
 
     @Transaction
     open suspend fun replaceByOrigin(
-        serverOrigin: String,
+        connectionId: String,
         agents: List<AgentEntity>,
     ) {
-        deleteByOrigin(serverOrigin)
+        deleteByOrigin(connectionId)
         upsertAll(agents)
     }
 }

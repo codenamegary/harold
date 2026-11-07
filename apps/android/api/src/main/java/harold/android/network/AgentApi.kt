@@ -49,7 +49,7 @@ class AgentApiException(
 /** Write surface for the host-owned worktree path on a session. */
 interface SessionWorktreePathApi {
     suspend fun updateSessionWorktreePath(
-        serverOrigin: String,
+        connectionId: String,
         sessionId: String,
         body: SetSessionWorktreePathBody,
     ): Result<Unit> = Result.failure(
@@ -62,50 +62,50 @@ interface AgentTransportApi : AgentApi, AttachmentApi, SessionConfigApi, Session
 
 interface AgentApi : SessionWorktreePathApi {
     suspend fun listWorkspaces(
-        serverOrigin: String,
+        connectionId: String,
         limit: Int,
     ): Result<WorkspaceCollection>
 
     suspend fun listFilesystemDirectories(
-        serverOrigin: String,
+        connectionId: String,
         root: String? = null,
     ): Result<FilesystemDirectoryCollection>
 
     suspend fun createFilesystemDirectory(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateFilesystemDirectoryBody,
     ): Result<FilesystemDirectoryCreated>
 
     suspend fun createWorkspace(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace>
 
     suspend fun listSessions(
-        serverOrigin: String,
+        connectionId: String,
         cwd: String? = null,
     ): Result<SessionCollection>
 
-    suspend fun listAgents(serverOrigin: String): Result<AgentSettingsCollection>
+    suspend fun listAgents(connectionId: String): Result<AgentSettingsCollection>
 
     suspend fun createSession(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateSessionBody,
     ): Result<CreateSessionResponse>
 
     suspend fun deleteSession(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
     ): Result<Unit>
 
     suspend fun getAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ): Result<AgentAuth>
 
     suspend fun logoutAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ): Result<AgentAuthSummary>
 }
@@ -113,12 +113,12 @@ interface AgentApi : SessionWorktreePathApi {
 /** Upload surface for chat attachments. Workspace-scoped. */
 interface AttachmentApi {
     suspend fun uploadAttachment(
-        serverOrigin: String,
+        connectionId: String,
         request: AttachmentUploadRequest,
     ): Result<AttachmentDescriptor>
 
     suspend fun deleteAttachment(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
         attachmentId: String,
@@ -128,7 +128,7 @@ interface AttachmentApi {
 /** Write surface for session config options. The session_config frame echoes the result. */
 interface SessionConfigApi {
     suspend fun setConfigOption(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
         configId: String,
@@ -144,33 +144,33 @@ interface SessionConfigApi {
  */
 interface SessionCommandApi {
     suspend fun prompt(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
         body: PromptRequestBody,
     ): Result<Unit>
 
     suspend fun cancel(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
     ): Result<Unit>
 
     suspend fun replyPermission(
-        serverOrigin: String,
+        connectionId: String,
         requestId: String,
         optionId: String,
     ): Result<Unit>
 
     suspend fun replyExtension(
-        serverOrigin: String,
+        connectionId: String,
         requestId: String,
         result: JsonElement,
     ): Result<Unit>
 
     /** Posts the raw ACP elicitation result. */
     suspend fun replyElicitation(
-        serverOrigin: String,
+        connectionId: String,
         requestId: String,
         result: JsonElement,
     ): Result<Unit> = Result.failure(

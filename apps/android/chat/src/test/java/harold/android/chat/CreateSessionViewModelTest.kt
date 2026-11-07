@@ -11,8 +11,8 @@ import harold.android.contracts.PageInfo
 import harold.android.contracts.SessionCollection
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceState
-import harold.android.credentials.SavedHaroldRepository
-import harold.android.credentials.StoredCredential
+import harold.android.credentials.ConnectionRepository
+import harold.android.credentials.SavedConnection
 import harold.android.database.session.CachedAgent
 import harold.android.database.session.SessionRepository
 import harold.android.database.workspace.WorkspaceRepository
@@ -24,7 +24,7 @@ import harold.android.navigation.LastSessionSelection
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.session.PairedState
-import harold.android.testing.FakeCredentialStore
+import harold.android.testing.FakeConnectionStore
 import harold.android.testing.FakeSessionGateway
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -64,7 +64,7 @@ class CreateSessionViewModelTest {
 
     @Test
     fun listsWorkspacesFromEverySavedHarold() = runTest {
-        val repository = HaroldCreateRepository(
+        val repository = FakeCreateRepository(
             workspaces = mapOf(
                 LAPTOP to listOf(workspace("ws_laptop", WorkspaceState.Available, name = "notes")),
                 DESKTOP to listOf(workspace("ws_desktop", WorkspaceState.Available, name = "notes")),
@@ -76,21 +76,21 @@ class CreateSessionViewModelTest {
         )
         val viewModel = viewModel(
             repository = repository,
-            savedHarolds = saved(harold(LAPTOP, "laptop", "tide", "bolt"), harold(DESKTOP, "desktop", "ink", "mark")),
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt"), savedConnection(DESKTOP, "desktop", "ink", "mark")),
         )
 
         val rows = viewModel.uiState.value.workspaces
         assertEquals(listOf("notes", "notes"), rows.map { row -> row.name })
-        assertEquals(listOf("laptop", "desktop"), rows.map { row -> row.haroldName })
-        assertEquals(listOf("tide", "ink"), rows.map { row -> row.haroldColorId })
-        assertEquals(listOf("bolt", "mark"), rows.map { row -> row.haroldIconId })
+        assertEquals(listOf("laptop", "desktop"), rows.map { row -> row.connectionName })
+        assertEquals(listOf("tide", "ink"), rows.map { row -> row.connectionColorId })
+        assertEquals(listOf("bolt", "mark"), rows.map { row -> row.connectionIconId })
         assertTrue(rows[0].id != rows[1].id)
         assertEquals(listOf("cursor"), viewModel.uiState.value.agents.map { agent -> agent.id })
     }
 
     @Test
     fun keepsCachedWorkspacesWhenTheHaroldIsOffline() = runTest {
-        val network = HaroldCreateRepository(
+        val network = FakeCreateRepository(
             workspaces = emptyMap(),
             agents = mapOf(LAPTOP to listOf(agent("cursor", enabled = true))),
             failWorkspaces = setOf(LAPTOP),
@@ -104,17 +104,17 @@ class CreateSessionViewModelTest {
         val viewModel = viewModel(
             repository = network,
             workspaceRepository = workspaceRepository,
-            savedHarolds = saved(harold(LAPTOP, "laptop", "tide", "bolt")),
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
         )
 
         assertEquals(listOf("$LAPTOP|ws_cached"), viewModel.uiState.value.workspaces.map { row -> row.id })
-        assertEquals(listOf("laptop"), viewModel.uiState.value.workspaces.map { row -> row.haroldName })
+        assertEquals(listOf("laptop"), viewModel.uiState.value.workspaces.map { row -> row.connectionName })
         assertNull(viewModel.uiState.value.error)
     }
 
     @Test
     fun pickingAWorkspaceLimitsAgentsToThatHarold() = runTest {
-        val repository = HaroldCreateRepository(
+        val repository = FakeCreateRepository(
             workspaces = mapOf(
                 LAPTOP to listOf(workspace("ws_laptop", WorkspaceState.Available, name = "notes")),
                 DESKTOP to listOf(workspace("ws_desktop", WorkspaceState.Available, name = "server")),
@@ -128,9 +128,9 @@ class CreateSessionViewModelTest {
         val viewModel = viewModel(
             commands = commands,
             repository = repository,
-            savedHarolds = saved(harold(LAPTOP, "laptop", "tide", "bolt"), harold(DESKTOP, "desktop", "ink", "mark")),
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt"), savedConnection(DESKTOP, "desktop", "ink", "mark")),
         )
-        val desktop = viewModel.uiState.value.workspaces.single { row -> row.haroldName == "desktop" }
+        val desktop = viewModel.uiState.value.workspaces.single { row -> row.connectionName == "desktop" }
 
         viewModel.onWorkspaceChanged(desktop.id)
 
@@ -142,7 +142,7 @@ class CreateSessionViewModelTest {
 
     @Test
     fun agentLoadFailureShowsAnErrorAndDoesNotStartASession() = runTest {
-        val repository = HaroldCreateRepository(
+        val repository = FakeCreateRepository(
             workspaces = mapOf(
                 LAPTOP to listOf(workspace("ws_laptop", WorkspaceState.Available, name = "notes")),
             ),
@@ -153,7 +153,7 @@ class CreateSessionViewModelTest {
         val viewModel = viewModel(
             commands = commands,
             repository = repository,
-            savedHarolds = saved(harold(LAPTOP, "laptop", "tide", "bolt")),
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
         )
 
         assertEquals("agents offline", viewModel.uiState.value.error)
@@ -165,7 +165,7 @@ class CreateSessionViewModelTest {
 
     @Test
     fun keepsCachedAgentsWhenTheHaroldIsOffline() = runTest {
-        val network = HaroldCreateRepository(
+        val network = FakeCreateRepository(
             workspaces = mapOf(
                 LAPTOP to listOf(workspace("ws_laptop", WorkspaceState.Available, name = "notes")),
             ),
@@ -177,7 +177,7 @@ class CreateSessionViewModelTest {
                 LAPTOP,
                 listOf(
                     CachedAgent(
-                        serverOrigin = LAPTOP,
+                        connectionId = LAPTOP,
                         agentId = "cursor",
                         displayName = "Cursor",
                         enabled = true,
@@ -189,7 +189,7 @@ class CreateSessionViewModelTest {
         val viewModel = viewModel(
             repository = network,
             sessionRepository = sessionRepository,
-            savedHarolds = saved(harold(LAPTOP, "laptop", "tide", "bolt")),
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
         )
 
         assertEquals(listOf("cursor"), viewModel.uiState.value.agents.map { agent -> agent.id })
@@ -276,13 +276,13 @@ class CreateSessionViewModelTest {
     fun newWorkspaceSelectsCreatedWorkspaceOnSaveAndKeepsSelectionOnCancel() = runTest {
         val navigator = testNavigator()
         navigator.openCreateSession()
-        val savedHarolds = saved(
-            harold(LAPTOP, "laptop", "tide", "bolt"),
-            harold(DESKTOP, "desktop", "ink", "mark"),
+        val savedConnections = saved(
+            savedConnection(LAPTOP, "laptop", "tide", "bolt"),
+            savedConnection(DESKTOP, "desktop", "ink", "mark"),
         )
         val laptopWorkspaces = mutableListOf(workspace("ws_laptop", WorkspaceState.Available, name = "notes"))
         val desktopWorkspaces = mutableListOf(workspace("ws_desktop", WorkspaceState.Available, name = "docs"))
-        val repository = HaroldCreateRepository(
+        val repository = FakeCreateRepository(
             workspaces = mapOf(
                 LAPTOP to laptopWorkspaces,
                 DESKTOP to desktopWorkspaces,
@@ -297,7 +297,7 @@ class CreateSessionViewModelTest {
             navigator = navigator,
             repository = repository,
             workspaceRepository = workspaceRepository,
-            savedHarolds = savedHarolds,
+            savedConnections = savedConnections,
         )
 
         assertEquals("$LAPTOP|ws_laptop", viewModel.uiState.value.selectedWorkspaceId)
@@ -317,7 +317,7 @@ class CreateSessionViewModelTest {
         navigator.reportWorkspaceCreated(
             CreatedWorkspaceResult(
                 workspaceId = "ws_new",
-                serverOrigin = DESKTOP,
+                connectionId = DESKTOP,
             ),
         )
         navigator.goBack()
@@ -328,7 +328,7 @@ class CreateSessionViewModelTest {
 
     @Test
     fun preselectsTheRememberedWorkspaceAndAgent() = runTest {
-        val repository = HaroldCreateRepository(
+        val repository = FakeCreateRepository(
             workspaces = mapOf(
                 LAPTOP to listOf(
                     workspace("ws_notes", WorkspaceState.Available, name = "notes"),
@@ -344,7 +344,7 @@ class CreateSessionViewModelTest {
         )
         val preferences = FakeSessionPreferences(
             selection = LastSessionSelection(
-                serverOrigin = LAPTOP,
+                connectionId = LAPTOP,
                 workspaceId = "ws_server",
                 agentId = "codex",
             ),
@@ -352,7 +352,7 @@ class CreateSessionViewModelTest {
 
         val viewModel = viewModel(
             repository = repository,
-            savedHarolds = saved(harold(LAPTOP, "laptop", "tide", "bolt")),
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
             sessionPreferences = preferences,
         )
 
@@ -362,7 +362,7 @@ class CreateSessionViewModelTest {
 
     @Test
     fun missingRememberedWorkspaceFallsBackToTheFirstWorkspaceAndAgent() = runTest {
-        val repository = HaroldCreateRepository(
+        val repository = FakeCreateRepository(
             workspaces = mapOf(
                 LAPTOP to listOf(workspace("ws_notes", WorkspaceState.Available, name = "notes")),
             ),
@@ -375,7 +375,7 @@ class CreateSessionViewModelTest {
         )
         val preferences = FakeSessionPreferences(
             selection = LastSessionSelection(
-                serverOrigin = LAPTOP,
+                connectionId = LAPTOP,
                 workspaceId = "ws_gone",
                 agentId = "codex",
             ),
@@ -383,7 +383,7 @@ class CreateSessionViewModelTest {
 
         val viewModel = viewModel(
             repository = repository,
-            savedHarolds = saved(harold(LAPTOP, "laptop", "tide", "bolt")),
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
             sessionPreferences = preferences,
         )
 
@@ -393,7 +393,7 @@ class CreateSessionViewModelTest {
 
     @Test
     fun disabledRememberedAgentKeepsTheWorkspaceAndUsesTheFirstEnabledAgent() = runTest {
-        val repository = HaroldCreateRepository(
+        val repository = FakeCreateRepository(
             workspaces = mapOf(
                 LAPTOP to listOf(workspace("ws_notes", WorkspaceState.Available, name = "notes")),
             ),
@@ -406,7 +406,7 @@ class CreateSessionViewModelTest {
         )
         val preferences = FakeSessionPreferences(
             selection = LastSessionSelection(
-                serverOrigin = LAPTOP,
+                connectionId = LAPTOP,
                 workspaceId = "ws_notes",
                 agentId = "codex",
             ),
@@ -414,7 +414,7 @@ class CreateSessionViewModelTest {
 
         val viewModel = viewModel(
             repository = repository,
-            savedHarolds = saved(harold(LAPTOP, "laptop", "tide", "bolt")),
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
             sessionPreferences = preferences,
         )
 
@@ -424,7 +424,7 @@ class CreateSessionViewModelTest {
 
     @Test
     fun rememberedWorkspaceFromAnUnpairedHaroldFallsBack() = runTest {
-        val repository = HaroldCreateRepository(
+        val repository = FakeCreateRepository(
             workspaces = mapOf(
                 LAPTOP to listOf(workspace("ws_laptop", WorkspaceState.Available, name = "notes")),
             ),
@@ -434,7 +434,7 @@ class CreateSessionViewModelTest {
         )
         val preferences = FakeSessionPreferences(
             selection = LastSessionSelection(
-                serverOrigin = DESKTOP,
+                connectionId = DESKTOP,
                 workspaceId = "ws_desktop",
                 agentId = "codex",
             ),
@@ -442,7 +442,7 @@ class CreateSessionViewModelTest {
 
         val viewModel = viewModel(
             repository = repository,
-            savedHarolds = saved(harold(LAPTOP, "laptop", "tide", "bolt")),
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
             sessionPreferences = preferences,
         )
 
@@ -452,7 +452,7 @@ class CreateSessionViewModelTest {
 
     @Test
     fun explicitSelectionBeatsTheRememberedSelectionOnLaterEmissions() = runTest {
-        val repository = HaroldCreateRepository(
+        val repository = FakeCreateRepository(
             workspaces = mapOf(
                 LAPTOP to listOf(
                     workspace("ws_laptop", WorkspaceState.Available, name = "notes"),
@@ -469,7 +469,7 @@ class CreateSessionViewModelTest {
         val workspaceRepository = TestWorkspaceRepository(repository)
         val preferences = FakeSessionPreferences(
             selection = LastSessionSelection(
-                serverOrigin = LAPTOP,
+                connectionId = LAPTOP,
                 workspaceId = "ws_laptop",
                 agentId = "cursor",
             ),
@@ -477,7 +477,7 @@ class CreateSessionViewModelTest {
         val viewModel = viewModel(
             repository = repository,
             workspaceRepository = workspaceRepository,
-            savedHarolds = saved(harold(LAPTOP, "laptop", "tide", "bolt")),
+            savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
             sessionPreferences = preferences,
         )
         val other = viewModel.uiState.value.workspaces.single { row -> row.id == "$LAPTOP|ws_other" }
@@ -501,7 +501,7 @@ class CreateSessionViewModelTest {
         navigator.openCreateSession()
         val laptopWorkspaces = mutableListOf(workspace("ws_laptop", WorkspaceState.Available, name = "notes"))
         val desktopWorkspaces = mutableListOf(workspace("ws_desktop", WorkspaceState.Available, name = "docs"))
-        val repository = HaroldCreateRepository(
+        val repository = FakeCreateRepository(
             workspaces = mapOf(
                 LAPTOP to laptopWorkspaces,
                 DESKTOP to desktopWorkspaces,
@@ -514,7 +514,7 @@ class CreateSessionViewModelTest {
         val workspaceRepository = TestWorkspaceRepository(repository)
         val preferences = FakeSessionPreferences(
             selection = LastSessionSelection(
-                serverOrigin = LAPTOP,
+                connectionId = LAPTOP,
                 workspaceId = "ws_laptop",
                 agentId = "cursor",
             ),
@@ -523,9 +523,9 @@ class CreateSessionViewModelTest {
             navigator = navigator,
             repository = repository,
             workspaceRepository = workspaceRepository,
-            savedHarolds = saved(
-                harold(LAPTOP, "laptop", "tide", "bolt"),
-                harold(DESKTOP, "desktop", "ink", "mark"),
+            savedConnections = saved(
+                savedConnection(LAPTOP, "laptop", "tide", "bolt"),
+                savedConnection(DESKTOP, "desktop", "ink", "mark"),
             ),
             sessionPreferences = preferences,
         )
@@ -536,7 +536,7 @@ class CreateSessionViewModelTest {
         desktopWorkspaces += fresh
         workspaceRepository.seed(DESKTOP, listOf(fresh))
         navigator.reportWorkspaceCreated(
-            CreatedWorkspaceResult(workspaceId = "ws_new", serverOrigin = DESKTOP),
+            CreatedWorkspaceResult(workspaceId = "ws_new", connectionId = DESKTOP),
         )
 
         assertEquals("$DESKTOP|ws_new", viewModel.uiState.value.selectedWorkspaceId)
@@ -549,7 +549,7 @@ class CreateSessionViewModelTest {
         repository: harold.android.user.UserRepository = repository(),
         sessionRepository: SessionRepository = TestSessionRepository(repository),
         workspaceRepository: WorkspaceRepository = TestWorkspaceRepository(repository),
-        savedHarolds: SavedHaroldRepository? = null,
+        savedConnections: ConnectionRepository? = null,
         sessionPreferences: FakeSessionPreferences = FakeSessionPreferences(),
     ): CreateSessionViewModel = CreateSessionViewModel(
         sessionGateway = FakeSessionGateway(PAIRED),
@@ -558,7 +558,7 @@ class CreateSessionViewModelTest {
         userRepository = repository,
         sessionCommands = commands,
         navigator = navigator,
-        savedHaroldRepository = savedHarolds,
+        connectionRepository = savedConnections,
         sessionPreferences = sessionPreferences,
     )
 
@@ -611,9 +611,9 @@ class CreateSessionViewModelTest {
     }
 }
 
-private fun harold(origin: String, name: String, colorId: String, iconId: String) = StoredCredential(
+private fun savedConnection(origin: String, name: String, colorId: String, iconId: String) = SavedConnection(
     formatVersion = 3,
-    serverOrigin = origin,
+    connectionId = origin,
     deviceName = "Pixel",
     name = name,
     colorId = colorId,
@@ -627,13 +627,13 @@ private fun harold(origin: String, name: String, colorId: String, iconId: String
     ),
 )
 
-private suspend fun saved(vararg harolds: StoredCredential): SavedHaroldRepository {
-    val store = FakeCredentialStore()
-    harolds.forEach { harold -> store.save(harold) }
-    return SavedHaroldRepository(store)
+private suspend fun saved(vararg connections: SavedConnection): ConnectionRepository {
+    val store = FakeConnectionStore()
+    connections.forEach { connection -> store.save(connection) }
+    return ConnectionRepository(store)
 }
 
-private class HaroldCreateRepository(
+private class FakeCreateRepository(
     private val workspaces: Map<String, List<Workspace>>,
     private val agents: Map<String, List<AgentSettings>>,
     private val failAgents: Set<String> = emptySet(),
@@ -651,45 +651,45 @@ private class HaroldCreateRepository(
 ) : harold.android.user.UserRepository {
     val createdOrigins = mutableListOf<String>()
 
-    override suspend fun listWorkspaces(serverOrigin: String, limit: Int): Result<ItemCollection<Workspace>> {
-        if (serverOrigin in failWorkspaces) {
+    override suspend fun listWorkspaces(connectionId: String, limit: Int): Result<ItemCollection<Workspace>> {
+        if (connectionId in failWorkspaces) {
             return Result.failure(IllegalStateException("workspaces offline"))
         }
         return Result.success(
             ItemCollection(
-                items = workspaces[serverOrigin].orEmpty(),
-                page = PageInfo(limit = limit, count = workspaces[serverOrigin].orEmpty().size),
+                items = workspaces[connectionId].orEmpty(),
+                page = PageInfo(limit = limit, count = workspaces[connectionId].orEmpty().size),
             ),
         )
     }
 
-    override suspend fun listAgents(serverOrigin: String): Result<AgentSettingsCollection> {
-        if (serverOrigin in failAgents) {
+    override suspend fun listAgents(connectionId: String): Result<AgentSettingsCollection> {
+        if (connectionId in failAgents) {
             return Result.failure(IllegalStateException("agents offline"))
         }
-        return Result.success(AgentSettingsCollection(agents[serverOrigin].orEmpty()))
+        return Result.success(AgentSettingsCollection(agents[connectionId].orEmpty()))
     }
 
-    override suspend fun createSession(serverOrigin: String, body: CreateSessionBody): Result<CreateSessionResponse> {
-        createdOrigins += serverOrigin
+    override suspend fun createSession(connectionId: String, body: CreateSessionBody): Result<CreateSessionResponse> {
+        createdOrigins += connectionId
         return createResult
     }
 
-    override suspend fun listFilesystemDirectories(serverOrigin: String, root: String?) = error("unused")
+    override suspend fun listFilesystemDirectories(connectionId: String, root: String?) = error("unused")
     override suspend fun createFilesystemDirectory(
-        serverOrigin: String,
+        connectionId: String,
         body: harold.android.contracts.CreateFilesystemDirectoryBody,
     ) = Result.failure<harold.android.contracts.FilesystemDirectoryCreated>(
         UnsupportedOperationException("unused"),
     )
 
     override suspend fun createWorkspace(
-        serverOrigin: String,
+        connectionId: String,
         body: harold.android.contracts.CreateWorkspaceBody,
     ) = error("unused")
-    override suspend fun listSessions(serverOrigin: String, cwd: String?) =
+    override suspend fun listSessions(connectionId: String, cwd: String?) =
         Result.success(SessionCollection(emptyList()))
-    override suspend fun deleteSession(serverOrigin: String, agentId: AgentId, sessionId: String) = error("unused")
-    override suspend fun getAgentAuth(serverOrigin: String, agentId: AgentId) = error("unused")
-    override suspend fun logoutAgentAuth(serverOrigin: String, agentId: AgentId) = error("unused")
+    override suspend fun deleteSession(connectionId: String, agentId: AgentId, sessionId: String) = error("unused")
+    override suspend fun getAgentAuth(connectionId: String, agentId: AgentId) = error("unused")
+    override suspend fun logoutAgentAuth(connectionId: String, agentId: AgentId) = error("unused")
 }

@@ -201,9 +201,9 @@ private fun SessionDropdownItem(
     onClick: () -> Unit,
 ) {
     val hasHaroldIdentity =
-        session.haroldColorId.isNotEmpty() ||
-            session.haroldIconId.isNotEmpty() ||
-            session.haroldName.isNotEmpty()
+        session.connectionColorId.isNotEmpty() ||
+            session.connectionIconId.isNotEmpty() ||
+            session.connectionName.isNotEmpty()
 
     Row(
         modifier = Modifier
@@ -217,8 +217,8 @@ private fun SessionDropdownItem(
     ) {
         if (hasHaroldIdentity) {
             HaroldBadge(
-                colorId = session.haroldColorId,
-                iconId = session.haroldIconId,
+                colorId = session.connectionColorId,
+                iconId = session.connectionIconId,
                 size = 22.dp,
                 modifier = Modifier.testTag("session_menu_badge_${session.id}"),
             )
@@ -482,9 +482,9 @@ fun ChatScreen(
         )
     }
 
-    val disconnectName = uiState.disconnectHaroldName
-    val disconnectColorId = uiState.disconnectHaroldColorId
-    val disconnectIconId = uiState.disconnectHaroldIconId
+    val disconnectName = uiState.disconnectConnectionName
+    val disconnectColorId = uiState.disconnectConnectionColorId
+    val disconnectIconId = uiState.disconnectConnectionIconId
     val hasDisconnectBadge =
         disconnectColorId.isNotEmpty() ||
             disconnectIconId.isNotEmpty() ||
@@ -566,16 +566,16 @@ fun ChatScreen(
                                     if (
                                         selected != null &&
                                         (
-                                            selected.haroldColorId.isNotEmpty() ||
-                                                selected.haroldIconId.isNotEmpty() ||
-                                                selected.haroldName.isNotEmpty()
+                                            selected.connectionColorId.isNotEmpty() ||
+                                                selected.connectionIconId.isNotEmpty() ||
+                                                selected.connectionName.isNotEmpty()
                                             )
                                     ) {
                                         HaroldBadge(
-                                            colorId = selected.haroldColorId,
-                                            iconId = selected.haroldIconId,
+                                            colorId = selected.connectionColorId,
+                                            iconId = selected.connectionIconId,
                                             size = 24.dp,
-                                            modifier = Modifier.testTag("chat_session_harold_badge"),
+                                            modifier = Modifier.testTag("chat_session_connection_badge"),
                                         )
                                     }
                                     Text(
@@ -705,7 +705,7 @@ fun ChatScreen(
                                 modifier = Modifier.testTag("workspaces_menu_item"),
                             )
                             DropdownMenuItem(
-                                text = { Text(text = stringResource(R.string.chat_saved_harolds)) },
+                                text = { Text(text = stringResource(R.string.chat_connections)) },
                                 onClick = {
                                     menuExpanded = false
                                     onSavedHarolds()
@@ -713,7 +713,7 @@ fun ChatScreen(
                                 modifier = Modifier.testTag("saved_harolds_menu_item"),
                             )
                             DropdownMenuItem(
-                                text = { Text(text = stringResource(R.string.chat_pair_another_harold)) },
+                                text = { Text(text = stringResource(R.string.chat_add_connection)) },
                                 onClick = {
                                     menuExpanded = false
                                     onPairAnotherHarold()

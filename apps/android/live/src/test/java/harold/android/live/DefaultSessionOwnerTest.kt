@@ -12,7 +12,7 @@ import harold.android.contracts.SelectOption
 import harold.android.contracts.SessionState
 import harold.android.contracts.SessionStreamServerMessage
 import harold.android.network.SessionCommandApi
-import harold.android.stream.ConnectionStatus
+import harold.android.stream.StreamStatus
 import harold.android.stream.DisconnectCause
 import harold.android.stream.SessionStream
 import harold.android.stream.SessionStreamFactory
@@ -54,7 +54,7 @@ class DefaultSessionOwnerTest {
 
         assertEquals(1, factory.openCount)
         assertEquals(listOf("cursor" to "sess_01"), factory.openedTargets)
-        assertEquals(ConnectionStatus.TransportError("stop"), owner.connectionState.value.status)
+        assertEquals(StreamStatus.TransportError("stop"), owner.connectionState.value.status)
     }
 
     @Test
@@ -70,7 +70,7 @@ class DefaultSessionOwnerTest {
         assertEquals(0, factory.openCount)
         // Nothing is watched, so there is no stream to open and the status
         // must not claim to be connecting.
-        assertEquals(ConnectionStatus.Idle, owner.connectionState.value.status)
+        assertEquals(StreamStatus.Idle, owner.connectionState.value.status)
 
         owner.watch("cursor", "sess_01")
         advanceUntilIdle()
@@ -91,7 +91,7 @@ class DefaultSessionOwnerTest {
         advanceUntilIdle()
 
         assertEquals(1, factory.openCount)
-        assertEquals(ConnectionStatus.Live, owner.connectionState.value.status)
+        assertEquals(StreamStatus.Live, owner.connectionState.value.status)
 
         owner.disconnect()
         advanceUntilIdle()
@@ -137,7 +137,7 @@ class DefaultSessionOwnerTest {
 
         assertTrue(first.closed)
         assertEquals(2, factory.openCount)
-        assertEquals(ConnectionStatus.Live, owner.connectionState.value.status)
+        assertEquals(StreamStatus.Live, owner.connectionState.value.status)
         assertEquals(listOf(null, null), factory.openedEventIds)
 
         owner.disconnect()
@@ -183,13 +183,13 @@ class DefaultSessionOwnerTest {
         advanceUntilIdle()
 
         assertTrue(first.closed)
-        assertEquals(ConnectionStatus.Idle, owner.connectionState.value.status)
+        assertEquals(StreamStatus.Idle, owner.connectionState.value.status)
 
         owner.connect(ORIGIN)
         advanceUntilIdle()
 
         assertEquals(2, factory.openCount)
-        assertEquals(ConnectionStatus.Live, owner.connectionState.value.status)
+        assertEquals(StreamStatus.Live, owner.connectionState.value.status)
 
         owner.disconnect()
         advanceUntilIdle()
@@ -308,7 +308,7 @@ class DefaultSessionOwnerTest {
         runCurrent()
 
         assertEquals(listOf(0L, 100L), factory.openedAt)
-        assertEquals(ConnectionStatus.Live, owner.connectionState.value.status)
+        assertEquals(StreamStatus.Live, owner.connectionState.value.status)
 
         owner.disconnect()
         advanceUntilIdle()
@@ -329,7 +329,7 @@ class DefaultSessionOwnerTest {
         advanceUntilIdle()
 
         assertEquals(2, factory.openCount)
-        assertEquals(ConnectionStatus.TransportError("stop"), owner.connectionState.value.status)
+        assertEquals(StreamStatus.TransportError("stop"), owner.connectionState.value.status)
     }
 
     @Test
@@ -382,7 +382,7 @@ class DefaultSessionOwnerTest {
 
         assertEquals(1, factory.openCount)
         assertEquals(
-            ConnectionStatus.AuthFailed(detail = "unauthorized"),
+            StreamStatus.AuthFailed(detail = "unauthorized"),
             owner.connectionState.value.status,
         )
     }
@@ -404,7 +404,7 @@ class DefaultSessionOwnerTest {
         advanceUntilIdle()
 
         assertEquals(2, factory.openCount)
-        assertEquals(ConnectionStatus.TransportError("stop"), owner.connectionState.value.status)
+        assertEquals(StreamStatus.TransportError("stop"), owner.connectionState.value.status)
     }
 
     @Test
@@ -511,7 +511,7 @@ class DefaultSessionOwnerTest {
         advanceUntilIdle()
 
         assertTrue(factory.openCount <= 1)
-        assertEquals(ConnectionStatus.Idle, owner.connectionState.value.status)
+        assertEquals(StreamStatus.Idle, owner.connectionState.value.status)
     }
 
     @Test
@@ -532,7 +532,7 @@ class DefaultSessionOwnerTest {
         advanceUntilIdle()
 
         assertEquals(2, factory.openCount)
-        assertEquals(ConnectionStatus.TransportError("stop"), owner.connectionState.value.status)
+        assertEquals(StreamStatus.TransportError("stop"), owner.connectionState.value.status)
     }
 
     @Test
@@ -1738,7 +1738,7 @@ private class ScriptedSessionStreamFactory(
         private set
 
     override fun open(
-        serverOrigin: String,
+        connectionId: String,
         agentId: String,
         sessionId: String,
         lastEventId: String?,
@@ -1800,7 +1800,7 @@ private class ScriptedCommandApi : SessionCommandApi {
     var promptResult: Result<Unit> = Result.success(Unit)
 
     override suspend fun prompt(
-        serverOrigin: String,
+        connectionId: String,
         agentId: String,
         sessionId: String,
         body: PromptRequestBody,
@@ -1810,7 +1810,7 @@ private class ScriptedCommandApi : SessionCommandApi {
     }
 
     override suspend fun cancel(
-        serverOrigin: String,
+        connectionId: String,
         agentId: String,
         sessionId: String,
     ): Result<Unit> {
@@ -1819,7 +1819,7 @@ private class ScriptedCommandApi : SessionCommandApi {
     }
 
     override suspend fun replyPermission(
-        serverOrigin: String,
+        connectionId: String,
         requestId: String,
         optionId: String,
     ): Result<Unit> {
@@ -1828,7 +1828,7 @@ private class ScriptedCommandApi : SessionCommandApi {
     }
 
     override suspend fun replyExtension(
-        serverOrigin: String,
+        connectionId: String,
         requestId: String,
         result: JsonElement,
     ): Result<Unit> {
@@ -1837,7 +1837,7 @@ private class ScriptedCommandApi : SessionCommandApi {
     }
 
     override suspend fun replyElicitation(
-        serverOrigin: String,
+        connectionId: String,
         requestId: String,
         result: JsonElement,
     ): Result<Unit> {

@@ -25,20 +25,20 @@ data class SessionRow(
     val state: SessionState,
     val updatedAt: String,
     val worktreePath: String? = null,
-    val serverOrigin: String = "",
-    val haroldName: String = "",
-    val haroldColorId: String = "",
-    val haroldIconId: String = "",
-    val haroldReachable: Boolean = true,
+    val connectionId: String = "",
+    val connectionName: String = "",
+    val connectionColorId: String = "",
+    val connectionIconId: String = "",
+    val connectionReachable: Boolean = true,
     val needsAttention: Boolean = false,
     /** "Needs answer", "Needs permission", or "Needs input". */
     val attentionLabel: String = "Needs input",
 ) {
     val id: String
-        get() = if (serverOrigin.isEmpty()) {
+        get() = if (connectionId.isEmpty()) {
             catalogSessionKey(agentId, sessionId)
         } else {
-            "$serverOrigin|${catalogSessionKey(agentId, sessionId)}"
+            "$connectionId|${catalogSessionKey(agentId, sessionId)}"
         }
 }
 
@@ -115,22 +115,22 @@ data class ChatUiState(
     val voiceCommandListVisible: Boolean = false,
     /** The auth panel slice; the AgentAuthController owns it and the view model mirrors it. */
     val agentAuth: AgentAuthUiState = AgentAuthUiState(),
-    val activeHaroldName: String = "",
-    val activeHaroldColorId: String = "",
-    val activeHaroldIconId: String = "",
+    val activeConnectionName: String = "",
+    val activeConnectionColorId: String = "",
+    val activeConnectionIconId: String = "",
 ) {
     /** Latest context window usage for the selected session, if the agent reports it. */
     val contextUsage: ContextUsage?
         get() = transcript.usage
 
-    val disconnectHaroldName: String
-        get() = selectedSession?.haroldName?.takeIf { it.isNotEmpty() } ?: activeHaroldName
+    val disconnectConnectionName: String
+        get() = selectedSession?.connectionName?.takeIf { it.isNotEmpty() } ?: activeConnectionName
 
-    val disconnectHaroldColorId: String
-        get() = selectedSession?.haroldColorId?.takeIf { it.isNotEmpty() } ?: activeHaroldColorId
+    val disconnectConnectionColorId: String
+        get() = selectedSession?.connectionColorId?.takeIf { it.isNotEmpty() } ?: activeConnectionColorId
 
-    val disconnectHaroldIconId: String
-        get() = selectedSession?.haroldIconId?.takeIf { it.isNotEmpty() } ?: activeHaroldIconId
+    val disconnectConnectionIconId: String
+        get() = selectedSession?.connectionIconId?.takeIf { it.isNotEmpty() } ?: activeConnectionIconId
 
     val activePermissionRequest: PermissionRequest?
         get() = activePermissionRequest(pendingPermissions)
@@ -153,7 +153,7 @@ data class ChatUiState(
     val composerEnabled: Boolean
         get() {
             val session = selectedSession ?: return false
-            return session.haroldReachable &&
+            return session.connectionReachable &&
                 isComposerPromptable(
                     agentId = session.agentId,
                     sessionId = session.sessionId,
@@ -171,7 +171,7 @@ data class ChatUiState(
 
     val composerBlockedMessage: String?
         get() = when {
-            selectedSession?.haroldReachable == false -> WAITING_FOR_HAROLD
+            selectedSession?.connectionReachable == false -> WAITING_FOR_HAROLD
             isPendingNewSession -> PENDING_SESSION_MESSAGE
             // The reconnect banner already explains why the composer is
             // locked. Showing the Offline message too just adds a red line

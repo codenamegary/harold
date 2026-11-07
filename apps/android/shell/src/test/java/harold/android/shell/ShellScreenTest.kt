@@ -19,7 +19,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import harold.android.stream.ConnectionState
-import harold.android.stream.ConnectionStatus
+import harold.android.stream.StreamStatus
 import harold.android.session.PairedState
 import harold.android.ui.theme.HaroldTheme
 
@@ -45,7 +45,7 @@ class ShellScreenTest {
 
     @Test
     fun showsConnectingWhileTheStreamOpens() {
-        setShell(pairedWith(ConnectionStatus.Connecting))
+        setShell(pairedWith(StreamStatus.Connecting))
 
         composeTestRule.onNodeWithTag("shell_connection_status").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("Connecting").performScrollTo().assertIsDisplayed()
@@ -53,21 +53,21 @@ class ShellScreenTest {
 
     @Test
     fun showsLiveOnceTheStreamIsOpen() {
-        setShell(pairedWith(ConnectionStatus.Live))
+        setShell(pairedWith(StreamStatus.Live))
 
         composeTestRule.onNodeWithText("Live").performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun showsReconnectingWithTheAttemptCount() {
-        setShell(pairedWith(ConnectionStatus.Reconnecting(attempt = 2)))
+        setShell(pairedWith(StreamStatus.Reconnecting(attempt = 2)))
 
         composeTestRule.onNodeWithText("Reconnecting (attempt 2)").performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun showsTransportErrors() {
-        setShell(pairedWith(ConnectionStatus.TransportError("unknown event type")))
+        setShell(pairedWith(StreamStatus.TransportError("unknown event type")))
 
         composeTestRule.onNodeWithText("Transport error. unknown event type")
             .performScrollTo()
@@ -77,7 +77,7 @@ class ShellScreenTest {
     @Test
     fun offersRetryAndRepairWhenAuthFails() {
         var retries = 0
-        setShell(pairedWith(ConnectionStatus.AuthFailed(detail = null)), onRetryClick = { retries += 1 })
+        setShell(pairedWith(StreamStatus.AuthFailed(detail = null)), onRetryClick = { retries += 1 })
 
         composeTestRule.onNodeWithText("Auth failed").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithTag("shell_retry_button")
@@ -92,7 +92,7 @@ class ShellScreenTest {
 
     @Test
     fun hidesRetryWhileTheStreamIsHealthy() {
-        setShell(pairedWith(ConnectionStatus.Live))
+        setShell(pairedWith(StreamStatus.Live))
 
         assertEquals(
             0,
@@ -102,7 +102,7 @@ class ShellScreenTest {
 
     @Test
     fun showsTheWorkspaceProbeResult() {
-        setShell(pairedWith(ConnectionStatus.Live).fromWorkspaceProbe(WorkspaceProbe.Loaded(count = 4)))
+        setShell(pairedWith(StreamStatus.Live).fromWorkspaceProbe(WorkspaceProbe.Loaded(count = 4)))
 
         composeTestRule.onNodeWithTag("shell_workspaces_summary").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithText("4 workspaces").performScrollTo().assertIsDisplayed()
@@ -123,7 +123,7 @@ class ShellScreenTest {
         }
     }
 
-    private fun pairedWith(status: ConnectionStatus): ShellUiState =
+    private fun pairedWith(status: StreamStatus): ShellUiState =
         ShellUiState()
             .fromPairedState(PairedState.Paired("ssh://gary@127.0.0.1:22", "Pixel"))
             .fromConnectionState(ConnectionState(status = status))

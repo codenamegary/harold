@@ -101,7 +101,7 @@ class AttachmentContractsTest {
                     kind = AttachmentKind.Image,
                     name = "shot.png",
                     mimeType = "image/png",
-                    path = "/ws/.harold/attachments/att_1.png",
+                    path = "/ws/.harold/uploads/att_1.png",
                 ),
             ),
         )
@@ -118,7 +118,7 @@ class AttachmentContractsTest {
         assertEquals("image", (first["kind"] as JsonPrimitive).content)
         assertEquals("shot.png", (first["name"] as JsonPrimitive).content)
         assertEquals(
-            "/ws/.harold/attachments/att_1.png",
+            "/ws/.harold/uploads/att_1.png",
             (first["path"] as JsonPrimitive).content,
         )
     }
@@ -141,7 +141,7 @@ class AttachmentContractsTest {
             kind = AttachmentKind.File,
             name = "notes.md",
             mimeType = "text/markdown",
-            path = "/ws/.harold/attachments/att_2.md",
+            path = "/ws/.harold/uploads/att_2.md",
         )
 
         val decoded = Json.decodeFromString(

@@ -16,10 +16,10 @@ import kotlinx.serialization.json.Json
 
 data class CreatedWorkspaceResult(
     val workspaceId: String,
-    val serverOrigin: String = "",
+    val connectionId: String = "",
 )
 
-private const val SAVED_STATE_KEY = "harold.navigation"
+private const val SAVED_STATE_KEY = "connection.navigation"
 private const val BACK_STACK_KEY = "back_stack"
 private val backStackSerializer = ListSerializer(AppRoute.serializer())
 
@@ -120,7 +120,7 @@ class Navigator @Inject constructor() {
     }
 
     fun openChanges(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
         cwd: String,
@@ -131,7 +131,7 @@ class Navigator @Inject constructor() {
         }
         backStack.add(
             Changes(
-                serverOrigin = serverOrigin,
+                connectionId = connectionId,
                 agentId = agentId,
                 sessionId = sessionId,
                 cwd = cwd,
@@ -141,7 +141,7 @@ class Navigator @Inject constructor() {
     }
 
     fun openFileDiff(
-        serverOrigin: String,
+        connectionId: String,
         worktreePath: String,
         scope: GitScope,
         filePath: String,
@@ -152,7 +152,7 @@ class Navigator @Inject constructor() {
         }
         backStack.add(
             FileDiff(
-                serverOrigin = serverOrigin,
+                connectionId = connectionId,
                 worktreePath = worktreePath,
                 scope = scope,
                 filePath = filePath,
@@ -161,11 +161,11 @@ class Navigator @Inject constructor() {
         )
     }
 
-    fun openSavedHarolds() {
-        if (backStack.isEmpty() || backStack.lastOrNull() == SavedHarolds) {
+    fun openConnections() {
+        if (backStack.isEmpty() || backStack.lastOrNull() == Connections) {
             return
         }
-        backStack.add(SavedHarolds)
+        backStack.add(Connections)
     }
 
     fun goBack(): Boolean {

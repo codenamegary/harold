@@ -3,13 +3,13 @@ package harold.android.pairing
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import harold.android.credentials.SavedHaroldRepository
+import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SshAuth
 import harold.android.credentials.SshConfig
 import harold.android.credentials.SshCredential
 import harold.android.credentials.SshCredentialKind
 import harold.android.credentials.SshCredentialStore
-import harold.android.credentials.StoredCredential
+import harold.android.credentials.SavedConnection
 import harold.android.navigation.Navigator
 import harold.android.session.SessionGateway
 import harold.android.transport.ssh.GeneratedSshKey
@@ -81,7 +81,7 @@ data class SshSetupUiState(
 
 @HiltViewModel
 class SshSetupViewModel @Inject constructor(
-    private val repository: SavedHaroldRepository,
+    private val repository: ConnectionRepository,
     private val gateway: SessionGateway,
     private val enrollment: SshProbe,
     private val navigator: Navigator,
@@ -273,9 +273,9 @@ class SshSetupViewModel @Inject constructor(
             }
 
             val existing = repository.list()
-            val saved = StoredCredential(
+            val saved = SavedConnection(
                 formatVersion = FORMAT_VERSION,
-                serverOrigin = uniqueSshOrigin(config.connectionId, existing),
+                connectionId = uniqueSshOrigin(config.connectionId, existing),
                 deviceName = config.host,
                 name = unusedName(
                     base = state.name.trim().ifBlank { suggestedName(config.host) },
@@ -409,16 +409,16 @@ fun defaultCredentialName(mode: SshAuthMode, host: String = ""): String {
 }
 
 /**
- * A saved connection is identified by [StoredCredential.serverOrigin]. SSH
+ * A saved connection is identified by [SavedConnection.connectionId]. SSH
  * hosts share that key when they point at the same user, host, and port,
  * so later connections get a stable suffix instead of replacing the first one.
  */
-internal fun uniqueSshOrigin(base: String, saved: List<StoredCredential>): String {
-    if (saved.none { credential -> credential.serverOrigin == base }) {
+internal fun uniqueSshOrigin(base: String, saved: List<SavedConnection>): String {
+    if (saved.none { credential -> credential.connectionId == base }) {
         return base
     }
     var suffix = 2
-    while (saved.any { credential -> credential.serverOrigin == "$base#$suffix" }) {
+    while (saved.any { credential -> credential.connectionId == "$base#$suffix" }) {
         suffix += 1
     }
     return "$base#$suffix"

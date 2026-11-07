@@ -26,13 +26,13 @@ class SshSessionStreamFactory @Inject constructor(
     private val sessions: SshAcpSessionFactory,
 ) : SessionStreamFactory {
     override fun open(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
         lastEventId: String?,
         handlers: SessionStreamHandlers,
     ): SessionStream = SshSessionStream(
-        serverOrigin = serverOrigin,
+        connectionId = connectionId,
         agentId = agentId,
         sessionId = sessionId,
         sessions = sessions,
@@ -41,7 +41,7 @@ class SshSessionStreamFactory @Inject constructor(
 }
 
 private class SshSessionStream(
-    private val serverOrigin: String,
+    private val connectionId: String,
     private val agentId: AgentId,
     private val sessionId: String,
     private val sessions: SshAcpSessionFactory,
@@ -55,7 +55,7 @@ private class SshSessionStream(
 
     init {
         job = scope.launch {
-            val opened = sessions.open(serverOrigin, agentId, sessionId, this)
+            val opened = sessions.open(connectionId, agentId, sessionId, this)
             if (closed.get()) {
                 opened.getOrNull()?.close()
                 return@launch

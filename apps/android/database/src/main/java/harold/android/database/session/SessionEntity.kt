@@ -6,10 +6,10 @@ import harold.android.contracts.Session
 
 @Entity(
     tableName = "sessions",
-    primaryKeys = ["serverOrigin", "agentId", "sessionId"],
+    primaryKeys = ["connectionId", "agentId", "sessionId"],
 )
 data class SessionEntity(
-    val serverOrigin: String,
+    val connectionId: String,
     val agentId: AgentId,
     val sessionId: String,
     val cwd: String,

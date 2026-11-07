@@ -24,9 +24,9 @@ class DefaultCredentialStoreInstrumentedTest {
 
     @Test
     fun savesAndRestoresConnection() = runTest {
-        val credential = StoredCredential(
+        val credential = SavedConnection(
             formatVersion = 3,
-            serverOrigin = "ssh://gary@127.0.0.1:22",
+            connectionId = "ssh://gary@127.0.0.1:22",
             deviceName = "Google Pixel 8",
             name = "laptop",
             colorId = "ink",
@@ -42,9 +42,9 @@ class DefaultCredentialStoreInstrumentedTest {
     @Test
     fun clearRemovesStoredConnection() = runTest {
         store.save(
-            StoredCredential(
+            SavedConnection(
                 formatVersion = 3,
-                serverOrigin = "ssh://gary@127.0.0.1:22",
+                connectionId = "ssh://gary@127.0.0.1:22",
                 deviceName = "Google Pixel 8",
                 name = "laptop",
                 colorId = "ink",
@@ -55,14 +55,14 @@ class DefaultCredentialStoreInstrumentedTest {
 
         store.clear()
 
-        assertEquals(emptyList<StoredCredential>(), store.list())
+        assertEquals(emptyList<SavedConnection>(), store.list())
     }
 
     @Test
     fun newGatewayRestoresPairedConnectionAfterSimulatedRestart() = runTest {
-        val credential = StoredCredential(
+        val credential = SavedConnection(
             formatVersion = 3,
-            serverOrigin = "ssh://gary@10.0.2.2:22",
+            connectionId = "ssh://gary@10.0.2.2:22",
             deviceName = "Emulator",
             name = "laptop",
             colorId = "ink",
@@ -77,7 +77,7 @@ class DefaultCredentialStoreInstrumentedTest {
 
         assertEquals(
             PairedState.Paired(
-                serverOrigin = "ssh://gary@10.0.2.2:22",
+                connectionId = "ssh://gary@10.0.2.2:22",
                 deviceName = "Emulator",
             ),
             gateway.pairedState.value,
@@ -87,9 +87,9 @@ class DefaultCredentialStoreInstrumentedTest {
     @Test
     fun clearLocalAccessSurvivesAcrossNewGateway() = runTest {
         store.save(
-            StoredCredential(
+            SavedConnection(
                 formatVersion = 3,
-                serverOrigin = "ssh://gary@10.0.2.2:22",
+                connectionId = "ssh://gary@10.0.2.2:22",
                 deviceName = "Emulator",
                 name = "laptop",
                 colorId = "ink",
@@ -106,7 +106,7 @@ class DefaultCredentialStoreInstrumentedTest {
         second.refresh()
 
         assertEquals(PairedState.NotPaired, second.pairedState.value)
-        assertEquals(emptyList<StoredCredential>(), store.list())
+        assertEquals(emptyList<SavedConnection>(), store.list())
     }
 
     private fun sshConfig() = SshConfig(
@@ -118,13 +118,13 @@ class DefaultCredentialStoreInstrumentedTest {
     )
 
     companion object {
-        private lateinit var store: DefaultCredentialStore
+        private lateinit var store: DefaultConnectionStore
 
         @JvmStatic
         @BeforeClass
         fun createStore() {
             val context = InstrumentationRegistry.getInstrumentation().targetContext
-            store = DefaultCredentialStore(context.applicationContext)
+            store = DefaultConnectionStore(context.applicationContext)
         }
     }
 }

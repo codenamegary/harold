@@ -8,14 +8,14 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import harold.android.database.LocalCacheCleaner
-import harold.android.credentials.CredentialStore
-import harold.android.credentials.DefaultCredentialStore
+import harold.android.credentials.ConnectionStore
+import harold.android.credentials.DefaultConnectionStore
 import harold.android.credentials.DefaultSshCredentialStore
-import harold.android.credentials.SavedHaroldRepository
+import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SshCredentialStore
-import harold.android.session.DefaultHaroldConnections
+import harold.android.session.DefaultConnections
 import harold.android.session.DefaultSessionGateway
-import harold.android.session.HaroldConnections
+import harold.android.session.Connections
 import harold.android.session.SessionGateway
 import harold.android.user.DefaultUserRepository
 import harold.android.user.UserRepository
@@ -30,7 +30,7 @@ abstract class AuthModule {
 
     @Binds
     @Singleton
-    abstract fun credentialStore(impl: DefaultCredentialStore): CredentialStore
+    abstract fun credentialStore(impl: DefaultConnectionStore): ConnectionStore
 
     @Binds
     @Singleton
@@ -42,14 +42,14 @@ abstract class AuthModule {
 
     @Binds
     @Singleton
-    abstract fun haroldConnections(impl: DefaultHaroldConnections): HaroldConnections
+    abstract fun connections(impl: DefaultConnections): Connections
 
     companion object {
         @Provides
         @Singleton
         fun defaultSessionGateway(
-            credentialStore: CredentialStore,
-            connections: HaroldConnections,
+            credentialStore: ConnectionStore,
+            connections: Connections,
         ): DefaultSessionGateway = DefaultSessionGateway(
             credentialStore = credentialStore,
             connections = connections,
@@ -59,7 +59,7 @@ abstract class AuthModule {
         @Singleton
         fun defaultCredentialStore(
             @ApplicationContext context: Context,
-        ): DefaultCredentialStore = DefaultCredentialStore(context)
+        ): DefaultConnectionStore = DefaultConnectionStore(context)
 
         @Provides
         @Singleton
@@ -69,10 +69,10 @@ abstract class AuthModule {
 
         @Provides
         @Singleton
-        fun savedHaroldRepository(
-            credentialStore: CredentialStore,
+        fun connectionRepository(
+            credentialStore: ConnectionStore,
             localCacheCleaner: LocalCacheCleaner,
-        ): SavedHaroldRepository = SavedHaroldRepository(
+        ): ConnectionRepository = ConnectionRepository(
             store = credentialStore,
             localCacheCleaner = localCacheCleaner,
         )

@@ -1,7 +1,7 @@
 package harold.android.shell
 
 import harold.android.stream.ConnectionState
-import harold.android.stream.ConnectionStatus
+import harold.android.stream.StreamStatus
 import harold.android.session.PairedState
 
 sealed interface WorkspaceProbe {
@@ -43,7 +43,7 @@ fun ShellUiState.fromPairedState(pairedState: PairedState): ShellUiState =
         is PairedState.Paired -> copy(
             status = buildString {
                 append("Paired to ")
-                append(pairedState.serverOrigin)
+                append(pairedState.connectionId)
                 pairedState.deviceName?.let { name ->
                     append("\n")
                     append(name)
@@ -65,18 +65,18 @@ fun ShellUiState.fromWorkspaceProbe(probe: WorkspaceProbe): ShellUiState =
         workspacesSummary = probe.summary(),
     )
 
-private fun ConnectionStatus.label(): String? =
+private fun StreamStatus.label(): String? =
     when (this) {
-        ConnectionStatus.Idle -> null
-        ConnectionStatus.Connecting -> "Connecting"
-        ConnectionStatus.Live -> "Live"
-        is ConnectionStatus.Reconnecting -> "Reconnecting (attempt $attempt)"
-        is ConnectionStatus.AuthFailed -> detail?.let { "Auth failed. $it" } ?: "Auth failed"
-        is ConnectionStatus.TransportError -> "Transport error. $message"
+        StreamStatus.Idle -> null
+        StreamStatus.Connecting -> "Connecting"
+        StreamStatus.Live -> "Live"
+        is StreamStatus.Reconnecting -> "Reconnecting (attempt $attempt)"
+        is StreamStatus.AuthFailed -> detail?.let { "Auth failed. $it" } ?: "Auth failed"
+        is StreamStatus.TransportError -> "Transport error. $message"
     }
 
-private fun ConnectionStatus.hasStoppedRetrying(): Boolean =
-    this is ConnectionStatus.AuthFailed || this is ConnectionStatus.TransportError
+private fun StreamStatus.hasStoppedRetrying(): Boolean =
+    this is StreamStatus.AuthFailed || this is StreamStatus.TransportError
 
 private fun WorkspaceProbe.summary(): String =
     when (this) {

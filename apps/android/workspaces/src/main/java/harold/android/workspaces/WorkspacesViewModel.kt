@@ -4,8 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import harold.android.contracts.Workspace
-import harold.android.credentials.SavedHaroldRepository
-import harold.android.credentials.StoredCredential
+import harold.android.credentials.ConnectionRepository
+import harold.android.credentials.SavedConnection
 import harold.android.network.apiErrorMessage
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
@@ -17,8 +17,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-data class WorkspaceHaroldBadge(
-    val serverOrigin: String,
+data class WorkspaceConnectionBadge(
+    val connectionId: String,
     val name: String,
     val colorId: String,
     val iconId: String,
@@ -40,20 +40,20 @@ sealed interface WorkspacesLoadState {
 
 data class WorkspacesUiState(
     val loadState: WorkspacesLoadState = WorkspacesLoadState.Loading,
-    val haroldByWorkspaceId: Map<String, WorkspaceHaroldBadge> = emptyMap(),
+    val connectionByWorkspaceId: Map<String, WorkspaceConnectionBadge> = emptyMap(),
 )
 
 @HiltViewModel
 class WorkspacesViewModel @Inject constructor(
     private val sessionGateway: SessionGateway,
     private val workspaceRepository: WorkspaceRepository,
-    private val savedHaroldRepository: SavedHaroldRepository? = null,
+    private val connectionRepository: ConnectionRepository? = null,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(WorkspacesUiState())
     val uiState: StateFlow<WorkspacesUiState> = _uiState.asStateFlow()
 
     private var cached: List<CachedWorkspace> = emptyList()
-    private var savedHarolds: List<StoredCredential> = emptyList()
+    private var savedConnections: List<SavedConnection> = emptyList()
     private var targetOrigins: List<String> = emptyList()
     private var refreshing = false
     private var loadAttempted = false
@@ -63,7 +63,7 @@ class WorkspacesViewModel @Inject constructor(
         viewModelScope.launch {
             // Read credentials before the first Room emission so cached rows
             // already carry the right host badges and scoped IDs.
-            loadHaroldMetadata()
+            loadConnectionMetadata()
             workspaceRepository.observe().collect { workspaces ->
                 cached = workspaces
                 publish()
@@ -78,7 +78,7 @@ class WorkspacesViewModel @Inject constructor(
     }
 
     private suspend fun loadWorkspaces() {
-        loadHaroldMetadata()
+        loadConnectionMetadata()
 
         refreshing = true
         loadAttempted = true
@@ -87,8 +87,8 @@ class WorkspacesViewModel @Inject constructor(
 
         var anySuccess = false
         var lastError: Throwable? = null
-        targetOrigins.forEach { serverOrigin ->
-            workspaceRepository.refresh(serverOrigin).fold(
+        targetOrigins.forEach { connectionId ->
+            workspaceRepository.refresh(connectionId).fold(
                 onSuccess = { anySuccess = true },
                 onFailure = { error -> lastError = error },
             )
@@ -99,21 +99,21 @@ class WorkspacesViewModel @Inject constructor(
         publish()
     }
 
-    private suspend fun loadHaroldMetadata() {
-        savedHarolds = savedHaroldRepository?.list().orEmpty()
+    private suspend fun loadConnectionMetadata() {
+        savedConnections = connectionRepository?.list().orEmpty()
         val paired = sessionGateway.pairedState.value as? PairedState.Paired
-        targetOrigins = if (savedHarolds.isNotEmpty()) {
-            savedHarolds.map { harold -> harold.serverOrigin }
+        targetOrigins = if (savedConnections.isNotEmpty()) {
+            savedConnections.map { connection -> connection.connectionId }
         } else {
-            listOfNotNull(paired?.serverOrigin)
+            listOfNotNull(paired?.connectionId)
         }
     }
 
     private fun publish() {
-        val savedByOrigin = savedHarolds.associateBy { harold -> harold.serverOrigin }
+        val savedByOrigin = savedConnections.associateBy { connection -> connection.connectionId }
         val source = if (loadAttempted) {
-            targetOrigins.flatMap { serverOrigin ->
-                cached.filter { workspace -> workspace.serverOrigin == serverOrigin }
+            targetOrigins.flatMap { connectionId ->
+                cached.filter { workspace -> workspace.connectionId == connectionId }
             }
         } else {
             cached
@@ -121,20 +121,20 @@ class WorkspacesViewModel @Inject constructor(
         val scoped = targetOrigins.size > 1
 
         val workspaces = mutableListOf<Workspace>()
-        val badges = mutableMapOf<String, WorkspaceHaroldBadge>()
+        val badges = mutableMapOf<String, WorkspaceConnectionBadge>()
         source.forEach { cachedWorkspace ->
             val id = if (scoped) {
-                "${cachedWorkspace.serverOrigin}|${cachedWorkspace.workspace.id}"
+                "${cachedWorkspace.connectionId}|${cachedWorkspace.workspace.id}"
             } else {
                 cachedWorkspace.workspace.id
             }
             workspaces += cachedWorkspace.workspace.copy(id = id)
-            savedByOrigin[cachedWorkspace.serverOrigin]?.let { harold ->
-                badges[id] = WorkspaceHaroldBadge(
-                    serverOrigin = harold.serverOrigin,
-                    name = harold.name,
-                    colorId = harold.colorId,
-                    iconId = harold.iconId,
+            savedByOrigin[cachedWorkspace.connectionId]?.let { connection ->
+                badges[id] = WorkspaceConnectionBadge(
+                    connectionId = connection.connectionId,
+                    name = connection.name,
+                    colorId = connection.colorId,
+                    iconId = connection.iconId,
                 )
             }
         }
@@ -148,7 +148,7 @@ class WorkspacesViewModel @Inject constructor(
 
         _uiState.value = WorkspacesUiState(
             loadState = loadState,
-            haroldByWorkspaceId = badges,
+            connectionByWorkspaceId = badges,
         )
     }
 }

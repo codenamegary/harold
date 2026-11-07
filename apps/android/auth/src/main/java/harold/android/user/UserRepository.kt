@@ -16,50 +16,50 @@ import harold.android.contracts.WorkspaceCollection
 
 interface UserRepository {
     suspend fun listWorkspaces(
-        serverOrigin: String,
+        connectionId: String,
         limit: Int = 100,
     ): Result<WorkspaceCollection>
 
     suspend fun listFilesystemDirectories(
-        serverOrigin: String,
+        connectionId: String,
         root: String? = null,
     ): Result<FilesystemDirectoryCollection>
 
     suspend fun createFilesystemDirectory(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateFilesystemDirectoryBody,
     ): Result<FilesystemDirectoryCreated>
 
     suspend fun createWorkspace(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace>
 
     suspend fun listSessions(
-        serverOrigin: String,
+        connectionId: String,
         cwd: String? = null,
     ): Result<SessionCollection>
 
-    suspend fun listAgents(serverOrigin: String): Result<AgentSettingsCollection>
+    suspend fun listAgents(connectionId: String): Result<AgentSettingsCollection>
 
     suspend fun createSession(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateSessionBody,
     ): Result<CreateSessionResponse>
 
     suspend fun deleteSession(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
     ): Result<Unit>
 
     suspend fun getAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ): Result<AgentAuth>
 
     suspend fun logoutAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ): Result<AgentAuthSummary>
 }

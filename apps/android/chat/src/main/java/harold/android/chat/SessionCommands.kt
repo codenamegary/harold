@@ -12,10 +12,10 @@ sealed interface SessionCommand {
 
     data class Created(
         val response: CreateSessionResponse,
-        val serverOrigin: String = "",
-        val haroldName: String = "",
-        val haroldColorId: String = "",
-        val haroldIconId: String = "",
+        val connectionId: String = "",
+        val connectionName: String = "",
+        val connectionColorId: String = "",
+        val connectionIconId: String = "",
     ) : SessionCommand
 
     data class Pending(val workspace: WorkspaceRow, val agentId: AgentId) : SessionCommand

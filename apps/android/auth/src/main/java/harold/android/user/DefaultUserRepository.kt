@@ -11,50 +11,50 @@ class DefaultUserRepository @Inject constructor(
     private val agentApi: AgentApi,
 ) : UserRepository {
     override suspend fun listWorkspaces(
-        serverOrigin: String,
+        connectionId: String,
         limit: Int,
-    ) = agentApi.listWorkspaces(serverOrigin, limit)
+    ) = agentApi.listWorkspaces(connectionId, limit)
 
     override suspend fun listFilesystemDirectories(
-        serverOrigin: String,
+        connectionId: String,
         root: String?,
-    ) = agentApi.listFilesystemDirectories(serverOrigin, root)
+    ) = agentApi.listFilesystemDirectories(connectionId, root)
 
     override suspend fun createFilesystemDirectory(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateFilesystemDirectoryBody,
-    ) = agentApi.createFilesystemDirectory(serverOrigin, body)
+    ) = agentApi.createFilesystemDirectory(connectionId, body)
 
     override suspend fun createWorkspace(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
-    ) = agentApi.createWorkspace(serverOrigin, body)
+    ) = agentApi.createWorkspace(connectionId, body)
 
     override suspend fun listSessions(
-        serverOrigin: String,
+        connectionId: String,
         cwd: String?,
-    ) = agentApi.listSessions(serverOrigin, cwd)
+    ) = agentApi.listSessions(connectionId, cwd)
 
-    override suspend fun listAgents(serverOrigin: String) = agentApi.listAgents(serverOrigin)
+    override suspend fun listAgents(connectionId: String) = agentApi.listAgents(connectionId)
 
     override suspend fun createSession(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateSessionBody,
-    ) = agentApi.createSession(serverOrigin, body)
+    ) = agentApi.createSession(connectionId, body)
 
     override suspend fun deleteSession(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
-    ) = agentApi.deleteSession(serverOrigin, agentId, sessionId)
+    ) = agentApi.deleteSession(connectionId, agentId, sessionId)
 
     override suspend fun getAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
-    ) = agentApi.getAgentAuth(serverOrigin, agentId)
+    ) = agentApi.getAgentAuth(connectionId, agentId)
 
     override suspend fun logoutAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
-    ) = agentApi.logoutAgentAuth(serverOrigin, agentId)
+    ) = agentApi.logoutAgentAuth(connectionId, agentId)
 }

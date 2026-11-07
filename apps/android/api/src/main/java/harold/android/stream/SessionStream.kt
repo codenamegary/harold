@@ -29,7 +29,7 @@ fun interface SessionStreamFactory {
      * replay.
      */
     fun open(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
         lastEventId: String?,

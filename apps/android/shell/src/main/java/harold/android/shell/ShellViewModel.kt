@@ -16,7 +16,7 @@ import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
-import harold.android.stream.ConnectionStatus
+import harold.android.stream.StreamStatus
 
 private const val WORKSPACE_PROBE_LIMIT = 1
 
@@ -42,7 +42,7 @@ class ShellViewModel @Inject constructor(
 
                 when (pairedState) {
                     PairedState.NotPaired -> sessionOwner.disconnect()
-                    is PairedState.Paired -> open(pairedState.serverOrigin)
+                    is PairedState.Paired -> open(pairedState.connectionId)
                 }
             }
         }
@@ -70,23 +70,23 @@ class ShellViewModel @Inject constructor(
         val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
 
         sessionOwner.retry()
-        probeWorkspaces(paired.serverOrigin)
+        probeWorkspaces(paired.connectionId)
     }
 
-    private fun open(serverOrigin: String) {
-        sessionOwner.connect(serverOrigin)
-        probeWorkspaces(serverOrigin)
+    private fun open(connectionId: String) {
+        sessionOwner.connect(connectionId)
+        probeWorkspaces(connectionId)
     }
 
     /**
      * Proves the SSH path end to end without pulling in workspace selection:
      * one page of one workspace is enough to show reachable, empty, or failed.
      */
-    private fun probeWorkspaces(serverOrigin: String) {
+    private fun probeWorkspaces(connectionId: String) {
         _uiState.update { current -> current.fromWorkspaceProbe(WorkspaceProbe.Loading) }
 
         viewModelScope.launch {
-            val probe = agentApi.listWorkspaces(serverOrigin, WORKSPACE_PROBE_LIMIT).fold(
+            val probe = agentApi.listWorkspaces(connectionId, WORKSPACE_PROBE_LIMIT).fold(
                 onSuccess = { collection ->
                     WorkspaceProbe.Loaded(count = collection.page.count ?: collection.items.size)
                 },

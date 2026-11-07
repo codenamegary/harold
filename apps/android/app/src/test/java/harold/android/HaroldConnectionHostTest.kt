@@ -5,8 +5,8 @@ import harold.android.contracts.AttachmentReference
 import harold.android.contracts.ConfigOption
 import harold.android.live.SessionOwner
 import harold.android.live.SessionSnapshot
-import harold.android.session.HaroldConnection
-import harold.android.session.HaroldConnections
+import harold.android.session.ConnectionHealth
+import harold.android.session.Connections
 import harold.android.session.PairedState
 import harold.android.stream.ConnectionState
 import harold.android.testing.FakeSessionGateway
@@ -78,13 +78,13 @@ class HaroldConnectionHostTest {
 
 private class RecordingConnections(
     private val stay: Boolean,
-) : HaroldConnections {
+) : Connections {
     var foregrounds = 0
         private set
     var backgrounds = 0
         private set
 
-    override val connections: StateFlow<List<HaroldConnection>> =
+    override val connections: StateFlow<List<ConnectionHealth>> =
         MutableStateFlow(emptyList())
 
     override fun onForeground() {
@@ -98,11 +98,11 @@ private class RecordingConnections(
     override suspend fun refresh() = Unit
 
     override fun setSessionStates(
-        serverOrigin: String,
+        connectionId: String,
         states: List<harold.android.contracts.SessionState>,
     ) = Unit
 
-    override fun shouldStayConnected(serverOrigin: String): Boolean = stay
+    override fun shouldStayConnected(connectionId: String): Boolean = stay
 }
 
 private class RecordingSessionOwner : SessionOwner {
@@ -119,8 +119,8 @@ private class RecordingSessionOwner : SessionOwner {
     override val sessionTitles: StateFlow<Map<String, String>> = MutableStateFlow(emptyMap())
     override val promptCompletions: Flow<Unit> = MutableSharedFlow()
 
-    override fun connect(serverOrigin: String) {
-        connects += serverOrigin
+    override fun connect(connectionId: String) {
+        connects += connectionId
     }
 
     override fun retry() = Unit

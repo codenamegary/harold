@@ -2,11 +2,11 @@ package harold.android.transport
 
 import harold.android.contracts.PromptRequestBody
 import harold.android.contracts.SessionStreamServerMessage
-import harold.android.credentials.SavedHaroldRepository
+import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SshAuth
 import harold.android.credentials.SshConfig
-import harold.android.credentials.StoredCredential
-import harold.android.testing.FakeCredentialStore
+import harold.android.credentials.SavedConnection
+import harold.android.testing.FakeConnectionStore
 import harold.android.transport.ssh.SshAcpRegistry
 import harold.android.transport.ssh.SshAcpSessionFactory
 import harold.android.transport.ssh.SshAgentApi
@@ -47,7 +47,7 @@ class SshIntegrationTest {
     private var server: Process? = null
     private lateinit var tempDir: Path
     private lateinit var connectionId: String
-    private lateinit var repository: SavedHaroldRepository
+    private lateinit var repository: ConnectionRepository
     private lateinit var factory: SshAcpSessionFactory
     private lateinit var api: SshAgentApi
 
@@ -109,16 +109,16 @@ class SshIntegrationTest {
         val fingerprint = captureHostKeyFingerprint(base)
         val config = base.copy(hostKeyFingerprint = fingerprint)
         connectionId = config.connectionId
-        val saved = StoredCredential(
+        val saved = SavedConnection(
             formatVersion = 3,
-            serverOrigin = connectionId,
+            connectionId = connectionId,
             deviceName = "integration",
             name = "integration",
             colorId = "tide",
             iconId = "terminal",
             ssh = config,
         )
-        repository = SavedHaroldRepository(FakeCredentialStore(saved))
+        repository = ConnectionRepository(FakeConnectionStore(saved))
         val registry = SshAcpRegistry()
         factory = SshAcpSessionFactory(repository, JschSshConnectionFactory(), registry)
         api = SshAgentApi(factory, registry)

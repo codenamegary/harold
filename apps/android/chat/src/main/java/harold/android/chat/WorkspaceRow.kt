@@ -8,10 +8,10 @@ data class WorkspaceRow(
     val name: String,
     val path: String,
     val state: WorkspaceState,
-    val serverOrigin: String = "",
-    val haroldName: String = "",
-    val haroldColorId: String = "",
-    val haroldIconId: String = "",
+    val connectionId: String = "",
+    val connectionName: String = "",
+    val connectionColorId: String = "",
+    val connectionIconId: String = "",
 ) {
     fun pickerLabel(): String = name
 }

@@ -8,33 +8,33 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 abstract class WorkspaceDao {
-    @Query("SELECT * FROM workspaces ORDER BY serverOrigin, position")
+    @Query("SELECT * FROM workspaces ORDER BY connectionId, position")
     abstract fun observeAll(): Flow<List<WorkspaceEntity>>
 
-    @Query("SELECT * FROM workspaces WHERE serverOrigin = :serverOrigin ORDER BY position")
-    abstract fun observeByOrigin(serverOrigin: String): Flow<List<WorkspaceEntity>>
+    @Query("SELECT * FROM workspaces WHERE connectionId = :connectionId ORDER BY position")
+    abstract fun observeByOrigin(connectionId: String): Flow<List<WorkspaceEntity>>
 
     @Upsert
     abstract suspend fun upsertAll(workspaces: List<WorkspaceEntity>)
 
-    @Query("SELECT COUNT(*) FROM workspaces WHERE serverOrigin = :serverOrigin")
-    abstract suspend fun countByOrigin(serverOrigin: String): Int
+    @Query("SELECT COUNT(*) FROM workspaces WHERE connectionId = :connectionId")
+    abstract suspend fun countByOrigin(connectionId: String): Int
 
-    @Query("DELETE FROM workspaces WHERE serverOrigin = :serverOrigin AND id = :id")
+    @Query("DELETE FROM workspaces WHERE connectionId = :connectionId AND id = :id")
     abstract suspend fun delete(
-        serverOrigin: String,
+        connectionId: String,
         id: String,
     )
 
-    @Query("DELETE FROM workspaces WHERE serverOrigin = :serverOrigin")
-    abstract suspend fun deleteByOrigin(serverOrigin: String)
+    @Query("DELETE FROM workspaces WHERE connectionId = :connectionId")
+    abstract suspend fun deleteByOrigin(connectionId: String)
 
     @Transaction
     open suspend fun replaceByOrigin(
-        serverOrigin: String,
+        connectionId: String,
         workspaces: List<WorkspaceEntity>,
     ) {
-        deleteByOrigin(serverOrigin)
+        deleteByOrigin(connectionId)
         upsertAll(workspaces)
     }
 }

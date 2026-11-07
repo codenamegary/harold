@@ -11,52 +11,52 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
-fun upsertSavedHarold(
-    saved: List<StoredCredential>,
-    next: StoredCredential,
-): List<StoredCredential> {
-    val index = saved.indexOfFirst { harold -> harold.serverOrigin == next.serverOrigin }
+fun upsertSavedConnection(
+    saved: List<SavedConnection>,
+    next: SavedConnection,
+): List<SavedConnection> {
+    val index = saved.indexOfFirst { connection -> connection.connectionId == next.connectionId }
     if (index < 0) {
         return saved + next
     }
 
-    return saved.mapIndexed { itemIndex, harold ->
-        if (itemIndex == index) next else harold
+    return saved.mapIndexed { itemIndex, connection ->
+        if (itemIndex == index) next else connection
     }
 }
 
-internal fun encodeSavedHarolds(saved: List<StoredCredential>): String =
+internal fun encodeSavedConnections(saved: List<SavedConnection>): String =
     buildJsonArray {
-        saved.forEach { harold ->
+        saved.forEach { connection ->
             add(
                 buildJsonObject {
-                    put("formatVersion", harold.formatVersion)
-                    put("serverOrigin", harold.serverOrigin)
-                    put("deviceName", harold.deviceName)
-                    put("name", harold.name)
-                    put("colorId", harold.colorId)
-                    put("iconId", harold.iconId)
-                    put("ssh", encodeSsh(harold.ssh))
+                    put("formatVersion", connection.formatVersion)
+                    put("connectionId", connection.connectionId)
+                    put("deviceName", connection.deviceName)
+                    put("name", connection.name)
+                    put("colorId", connection.colorId)
+                    put("iconId", connection.iconId)
+                    put("ssh", encodeSsh(connection.ssh))
                 },
             )
         }
     }.toString()
 
-internal fun decodeSavedHarolds(raw: String?): List<StoredCredential> {
+internal fun decodeSavedConnections(raw: String?): List<SavedConnection> {
     if (raw == null) {
         return emptyList()
     }
 
     return Json.parseToJsonElement(raw).jsonArray.map { element ->
-        val harold = element.jsonObject
-        StoredCredential(
-            formatVersion = harold.requireInt("formatVersion"),
-            serverOrigin = harold.requireString("serverOrigin"),
-            deviceName = harold.optionalString("deviceName"),
-            name = harold.requireString("name"),
-            colorId = harold.requireString("colorId"),
-            iconId = harold.requireString("iconId"),
-            ssh = decodeSsh(harold.getValue("ssh").jsonObject),
+        val connection = element.jsonObject
+        SavedConnection(
+            formatVersion = connection.requireInt("formatVersion"),
+            connectionId = connection.requireString("connectionId"),
+            deviceName = connection.optionalString("deviceName"),
+            name = connection.requireString("name"),
+            colorId = connection.requireString("colorId"),
+            iconId = connection.requireString("iconId"),
+            ssh = decodeSsh(connection.getValue("ssh").jsonObject),
         )
     }
 }

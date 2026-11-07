@@ -55,20 +55,20 @@ class RoomLocalCacheCleanerTest {
 
         assertEquals(
             listOf(OTHER_ORIGIN),
-            database.workspaceDao().observeAll().first().map { row -> row.serverOrigin },
+            database.workspaceDao().observeAll().first().map { row -> row.connectionId },
         )
         assertEquals(
             listOf(OTHER_ORIGIN),
-            database.sessionDao().observeAll().first().map { row -> row.serverOrigin },
+            database.sessionDao().observeAll().first().map { row -> row.connectionId },
         )
         assertEquals(
             listOf(OTHER_ORIGIN),
-            database.agentDao().observeByOrigin(OTHER_ORIGIN).first().map { row -> row.serverOrigin },
+            database.agentDao().observeByOrigin(OTHER_ORIGIN).first().map { row -> row.connectionId },
         )
     }
 
     private fun workspace(origin: String) = WorkspaceEntity(
-        serverOrigin = origin,
+        connectionId = origin,
         id = "ws_01",
         name = "harold",
         path = "/tmp/harold",
@@ -79,7 +79,7 @@ class RoomLocalCacheCleanerTest {
     )
 
     private fun session(origin: String) = SessionEntity(
-        serverOrigin = origin,
+        connectionId = origin,
         agentId = "cursor",
         sessionId = "sess_01",
         cwd = "/tmp/harold",
@@ -91,7 +91,7 @@ class RoomLocalCacheCleanerTest {
     )
 
     private fun agent(origin: String) = AgentEntity(
-        serverOrigin = origin,
+        connectionId = origin,
         agentId = "cursor",
         displayName = "Cursor",
         available = true,

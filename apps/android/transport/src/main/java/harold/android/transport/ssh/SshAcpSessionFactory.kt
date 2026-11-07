@@ -1,7 +1,7 @@
 package harold.android.transport.ssh
 
 import harold.android.contracts.CreateSessionResponse
-import harold.android.credentials.SavedHaroldRepository
+import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SshConfig
 import harold.android.transport.acp.AcpClient
 import harold.android.transport.acp.AcpClientHandler
@@ -20,7 +20,7 @@ import kotlinx.serialization.json.put
 
 @Singleton
 class SshAcpSessionFactory @Inject constructor(
-    private val savedHarolds: SavedHaroldRepository,
+    private val savedConnections: ConnectionRepository,
     private val connectionFactory: SshConnectionFactory,
     private val registry: SshAcpRegistry,
 ) {
@@ -191,7 +191,7 @@ class SshAcpSessionFactory @Inject constructor(
     }
 
     private suspend fun sshConfig(connectionId: String): SshConfig =
-        savedHarolds.find(connectionId)?.ssh
+        savedConnections.find(connectionId)?.ssh
             ?: throw SshException("Saved connection not found: $connectionId")
 
     private fun agentCommand(agentId: String): String {

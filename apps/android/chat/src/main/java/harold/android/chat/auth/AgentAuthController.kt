@@ -93,10 +93,10 @@ class AgentAuthController(
     }
 
     suspend fun hydrate(agentId: AgentId) {
-        val serverOrigin = origin() ?: return
+        val connectionId = origin() ?: return
         hydrateGeneration += 1
         val generation = hydrateGeneration
-        userRepository.getAgentAuth(serverOrigin = serverOrigin, agentId = agentId).fold(
+        userRepository.getAgentAuth(connectionId = connectionId, agentId = agentId).fold(
             onSuccess = { auth ->
                 if (generation != hydrateGeneration || selectedAgent() != agentId) {
                     return

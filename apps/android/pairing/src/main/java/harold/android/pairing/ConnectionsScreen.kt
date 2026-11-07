@@ -36,7 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import harold.android.ui.components.HaroldAppearanceEditor
 import harold.android.ui.components.HaroldBadge
-import harold.android.session.HaroldConnectionStatus
+import harold.android.session.ConnectionStatus
 import harold.android.ui.components.HaroldButton
 import harold.android.ui.components.HaroldButtonVariant
 
@@ -44,8 +44,8 @@ private val MIN_TOUCH_TARGET = 48.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SavedHaroldsScreen(
-    uiState: SavedHaroldsUiState,
+fun ConnectionsScreen(
+    uiState: ConnectionsUiState,
     onBack: () -> Unit,
     onAdd: () -> Unit,
     onEdit: (String) -> Unit,
@@ -107,7 +107,7 @@ fun SavedHaroldsScreen(
                     .testTag("saved_harolds_add_button"),
             )
             uiState.rows.forEach { row ->
-                val isEditing = uiState.editingOrigin == row.serverOrigin
+                val isEditing = uiState.editingOrigin == row.connectionId
                 Card(
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(
@@ -116,7 +116,7 @@ fun SavedHaroldsScreen(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("saved_harold_${row.serverOrigin}"),
+                        .testTag("saved_harold_${row.connectionId}"),
                 ) {
                     if (isEditing) {
                         Column(
@@ -175,7 +175,7 @@ fun SavedHaroldsScreen(
                                 colorId = row.colorId,
                                 iconId = row.iconId,
                                 size = 40.dp,
-                                modifier = Modifier.testTag("saved_harold_badge_${row.serverOrigin}"),
+                                modifier = Modifier.testTag("saved_harold_badge_${row.connectionId}"),
                             )
                             Column(
                                 modifier = Modifier.weight(1f),
@@ -201,13 +201,13 @@ fun SavedHaroldsScreen(
                                     Text(
                                         text = statusLabel(row.status),
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = if (row.status == HaroldConnectionStatus.Unreachable) {
+                                        color = if (row.status == ConnectionStatus.Unreachable) {
                                             MaterialTheme.colorScheme.error
                                         } else {
                                             MaterialTheme.colorScheme.onSurfaceVariant
                                         },
                                         modifier = Modifier.testTag(
-                                            "saved_harold_status_${row.serverOrigin}",
+                                            "saved_harold_status_${row.connectionId}",
                                         ),
                                     )
                                 }
@@ -216,10 +216,10 @@ fun SavedHaroldsScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 IconButton(
-                                    onClick = { onEdit(row.serverOrigin) },
+                                    onClick = { onEdit(row.connectionId) },
                                     modifier = Modifier
                                         .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                                        .testTag("saved_harold_edit_${row.serverOrigin}"),
+                                        .testTag("saved_harold_edit_${row.connectionId}"),
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.Edit,
@@ -228,10 +228,10 @@ fun SavedHaroldsScreen(
                                     )
                                 }
                                 IconButton(
-                                    onClick = { onRemove(row.serverOrigin) },
+                                    onClick = { onRemove(row.connectionId) },
                                     modifier = Modifier
                                         .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                                        .testTag("saved_harold_remove_${row.serverOrigin}"),
+                                        .testTag("saved_harold_remove_${row.connectionId}"),
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.Delete,
@@ -251,9 +251,9 @@ fun SavedHaroldsScreen(
 }
 
 
-private fun statusLabel(status: HaroldConnectionStatus): String = when (status) {
-    HaroldConnectionStatus.Connecting -> "Connecting"
-    HaroldConnectionStatus.Connected -> "Connected"
-    HaroldConnectionStatus.Unreachable -> "Unreachable"
-    HaroldConnectionStatus.Closed -> "Offline"
+private fun statusLabel(status: ConnectionStatus): String = when (status) {
+    ConnectionStatus.Connecting -> "Connecting"
+    ConnectionStatus.Connected -> "Connected"
+    ConnectionStatus.Unreachable -> "Unreachable"
+    ConnectionStatus.Closed -> "Offline"
 }

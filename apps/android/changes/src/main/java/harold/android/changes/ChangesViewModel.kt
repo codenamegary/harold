@@ -72,7 +72,7 @@ class ChangesViewModel @Inject constructor(
     val uiState: StateFlow<ChangesUiState> = _uiState.asStateFlow()
 
     private var startedKey: String? = null
-    private var serverOrigin: String = ""
+    private var connectionId: String = ""
     private var agentId: String = ""
     private var sessionId: String = ""
     private var cwd: String = ""
@@ -81,18 +81,18 @@ class ChangesViewModel @Inject constructor(
     private var refreshJob: Job? = null
 
     fun start(
-        serverOrigin: String,
+        connectionId: String,
         agentId: String,
         sessionId: String,
         cwd: String,
         worktreePath: String?,
     ) {
-        val key = "$serverOrigin|$agentId|$sessionId|$cwd|$worktreePath"
+        val key = "$connectionId|$agentId|$sessionId|$cwd|$worktreePath"
         if (startedKey == key) {
             return
         }
         startedKey = key
-        this.serverOrigin = serverOrigin
+        this.connectionId = connectionId
         this.agentId = agentId
         this.sessionId = sessionId
         this.cwd = cwd
@@ -103,13 +103,13 @@ class ChangesViewModel @Inject constructor(
                 it.copy(loading = true, refreshing = false, error = null)
             }
             val summary = runCatching {
-                gitApi.getSummary(serverOrigin, cwd).getOrThrow()
+                gitApi.getSummary(connectionId, cwd).getOrThrow()
             }.getOrElse { error ->
                 showInitialError(error)
                 return@launch
             }
             val worktrees = runCatching {
-                gitApi.listWorktrees(serverOrigin, cwd).getOrThrow().items
+                gitApi.listWorktrees(connectionId, cwd).getOrThrow().items
             }.getOrElse { error ->
                 showInitialError(error)
                 return@launch
@@ -120,7 +120,7 @@ class ChangesViewModel @Inject constructor(
             if (worktreePath != null && storedPath == null) {
                 runCatching {
                     agentApi.updateSessionWorktreePath(
-                        serverOrigin = serverOrigin,
+                        connectionId = connectionId,
                         sessionId = sessionId,
                         body = SetSessionWorktreePathBody(agentId, null),
                     ).getOrThrow()
@@ -131,7 +131,7 @@ class ChangesViewModel @Inject constructor(
                 summary.repository
             } else {
                 runCatching {
-                    gitApi.getSummary(serverOrigin, selectedPath).getOrThrow().repository
+                    gitApi.getSummary(connectionId, selectedPath).getOrThrow().repository
                 }.getOrElse { summary.repository }
             }
             loadGroups(
@@ -149,10 +149,10 @@ class ChangesViewModel @Inject constructor(
         refreshJob = viewModelScope.launch {
             _uiState.update { it.copy(refreshing = true, error = null) }
             val summary = runCatching {
-                gitApi.getSummary(serverOrigin, cwd).getOrThrow()
+                gitApi.getSummary(connectionId, cwd).getOrThrow()
             }.getOrNull()
             val worktrees = runCatching {
-                gitApi.listWorktrees(serverOrigin, cwd).getOrThrow().items
+                gitApi.listWorktrees(connectionId, cwd).getOrThrow().items
             }.getOrNull()
             val selectedPath = _uiState.value.selectedWorktreePath
                 .ifEmpty { summary?.repository?.currentWorktreePath.orEmpty() }
@@ -167,7 +167,7 @@ class ChangesViewModel @Inject constructor(
                 return@launch
             }
             val repository = runCatching {
-                gitApi.getSummary(serverOrigin, selectedPath).getOrThrow().repository
+                gitApi.getSummary(connectionId, selectedPath).getOrThrow().repository
             }.getOrElse { _uiState.value.repository ?: return@launch }
             reloadSelected(
                 selectedPath = selectedPath,
@@ -188,11 +188,11 @@ class ChangesViewModel @Inject constructor(
                 return@launch
             }
             val repository = runCatching {
-                gitApi.getSummary(serverOrigin, selectedPath).getOrThrow().repository
+                gitApi.getSummary(connectionId, selectedPath).getOrThrow().repository
             }.getOrNull()
             val scope = _uiState.value.scope
             val group = runCatching {
-                gitApi.getChanges(serverOrigin, selectedPath, scope).getOrThrow()
+                gitApi.getChanges(connectionId, selectedPath, scope).getOrThrow()
             }.getOrNull()
             _uiState.update { current ->
                 if (repository == null || group == null) {
@@ -236,7 +236,7 @@ class ChangesViewModel @Inject constructor(
         }
         viewModelScope.launch {
             agentApi.updateSessionWorktreePath(
-                serverOrigin = serverOrigin,
+                connectionId = connectionId,
                 sessionId = sessionId,
                 body = SetSessionWorktreePathBody(agentId, path),
             ).onFailure { error ->
@@ -252,7 +252,7 @@ class ChangesViewModel @Inject constructor(
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             val repository = runCatching {
-                gitApi.getSummary(serverOrigin, path).getOrThrow().repository
+                gitApi.getSummary(connectionId, path).getOrThrow().repository
             }.getOrElse { error ->
                 showInitialError(error)
                 return@launch
@@ -311,7 +311,7 @@ class ChangesViewModel @Inject constructor(
         }
         startedKey = null
         start(
-            serverOrigin = serverOrigin,
+            connectionId = connectionId,
             agentId = agentId,
             sessionId = sessionId,
             cwd = cwd,
@@ -334,7 +334,7 @@ class ChangesViewModel @Inject constructor(
             ).map { scope ->
                 async {
                     scope to runCatching {
-                        gitApi.getChanges(serverOrigin, selectedPath, scope).getOrThrow()
+                        gitApi.getChanges(connectionId, selectedPath, scope).getOrThrow()
                     }
                 }
             }.awaitAll()
@@ -380,7 +380,7 @@ class ChangesViewModel @Inject constructor(
             scopes.map { scope ->
                 async {
                     scope to runCatching {
-                        gitApi.getChanges(serverOrigin, selectedPath, scope).getOrThrow()
+                        gitApi.getChanges(connectionId, selectedPath, scope).getOrThrow()
                     }
                 }
             }.awaitAll()

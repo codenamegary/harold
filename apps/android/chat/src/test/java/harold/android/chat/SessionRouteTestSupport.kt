@@ -49,41 +49,41 @@ internal class RouteUserRepository(
 ) : UserRepository {
     val deleted = mutableListOf<String>()
 
-    override suspend fun listWorkspaces(serverOrigin: String, limit: Int): Result<WorkspaceCollection> =
+    override suspend fun listWorkspaces(connectionId: String, limit: Int): Result<WorkspaceCollection> =
         Result.success(page(workspaces))
 
     override suspend fun listFilesystemDirectories(
-        serverOrigin: String,
+        connectionId: String,
         root: String?,
     ): Result<FilesystemDirectoryCollection> = unsupported()
 
     override suspend fun createFilesystemDirectory(
-        serverOrigin: String,
+        connectionId: String,
         body: harold.android.contracts.CreateFilesystemDirectoryBody,
     ) = Result.failure<harold.android.contracts.FilesystemDirectoryCreated>(
         UnsupportedOperationException("unused"),
     )
 
     override suspend fun createWorkspace(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateWorkspaceBody,
     ): Result<Workspace> = unsupported()
 
     override suspend fun listSessions(
-        serverOrigin: String,
+        connectionId: String,
         cwd: String?,
     ): Result<SessionCollection> = Result.success(SessionCollection(sessions))
 
-    override suspend fun listAgents(serverOrigin: String): Result<AgentSettingsCollection> =
+    override suspend fun listAgents(connectionId: String): Result<AgentSettingsCollection> =
         Result.success(AgentSettingsCollection(agents))
 
     override suspend fun createSession(
-        serverOrigin: String,
+        connectionId: String,
         body: CreateSessionBody,
     ): Result<CreateSessionResponse> = createResult
 
     override suspend fun deleteSession(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
         sessionId: String,
     ): Result<Unit> {
@@ -92,14 +92,14 @@ internal class RouteUserRepository(
     }
 
     override suspend fun getAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ): Result<AgentAuth> = Result.success(
         AgentAuth(agentId = agentId, status = authStatus, error = null, session = null),
     )
 
     override suspend fun logoutAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: AgentId,
     ): Result<AgentAuthSummary> = unsupported()
 

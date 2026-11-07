@@ -12,7 +12,7 @@ import dagger.multibindings.IntoSet
 import harold.android.navigation.AppRoute
 import harold.android.navigation.FeatureEntryProvider
 import harold.android.navigation.Navigator
-import harold.android.navigation.SavedHarolds
+import harold.android.navigation.Connections
 import harold.android.navigation.SshSetup
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -43,10 +43,10 @@ class PairingEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onDeleteCredential = viewModel::onDeleteCredential,
             )
         }
-        scope.entry<SavedHarolds> {
-            val viewModel: SavedHaroldsViewModel = hiltViewModel()
+        scope.entry<Connections> {
+            val viewModel: ConnectionsViewModel = hiltViewModel()
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-            SavedHaroldsScreen(
+            ConnectionsScreen(
                 uiState = uiState,
                 onBack = { navigator.goBack() },
                 onAdd = { navigator.openAddConnection() },

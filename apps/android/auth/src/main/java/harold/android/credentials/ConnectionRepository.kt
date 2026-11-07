@@ -4,26 +4,26 @@ import harold.android.database.LocalCacheCleaner
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 
-class SavedHaroldRepository(
-    private val store: CredentialStore,
+class ConnectionRepository(
+    private val store: ConnectionStore,
     private val localCacheCleaner: LocalCacheCleaner? = null,
 ) {
-    suspend fun list(): List<StoredCredential> = store.list()
+    suspend fun list(): List<SavedConnection> = store.list()
 
-    suspend fun find(connectionId: String): StoredCredential? =
-        store.list().find { harold -> harold.serverOrigin == connectionId }
+    suspend fun find(connectionId: String): SavedConnection? =
+        store.list().find { connection -> connection.connectionId == connectionId }
 
-    suspend fun save(credential: StoredCredential) {
+    suspend fun save(credential: SavedConnection) {
         store.save(credential)
     }
 
     suspend fun edit(
-        serverOrigin: String,
+        connectionId: String,
         name: String,
         colorId: String,
         iconId: String,
     ) {
-        val current = store.list().find { harold -> harold.serverOrigin == serverOrigin } ?: return
+        val current = store.list().find { connection -> connection.connectionId == connectionId } ?: return
         store.save(
             current.copy(
                 name = name,
@@ -34,17 +34,17 @@ class SavedHaroldRepository(
     }
 
     /** Drops the saved credential and every cached row for that server origin. */
-    suspend fun remove(serverOrigin: String): Boolean {
-        store.remove(serverOrigin)
-        localCacheCleaner?.deleteByOrigin(serverOrigin)
+    suspend fun remove(connectionId: String): Boolean {
+        store.remove(connectionId)
+        localCacheCleaner?.deleteByOrigin(connectionId)
         return store.list().isNotEmpty()
     }
 }
 
-suspend fun forgetSavedHarold(
-    serverOrigin: String,
-    repository: SavedHaroldRepository,
-): Boolean = repository.remove(serverOrigin)
+suspend fun forgetConnection(
+    connectionId: String,
+    repository: ConnectionRepository,
+): Boolean = repository.remove(connectionId)
 
 suspend fun settleAfterForget(
     removedOrigin: String,
@@ -55,7 +55,7 @@ suspend fun settleAfterForget(
     showPairing: () -> Unit,
 ) {
     val active = gateway.pairedState.value
-    val removedActive = active is PairedState.Paired && active.serverOrigin == removedOrigin
+    val removedActive = active is PairedState.Paired && active.connectionId == removedOrigin
     if (!remains) {
         disconnect()
         gateway.clearLocalAccess()
@@ -68,5 +68,5 @@ suspend fun settleAfterForget(
     disconnect()
     gateway.refresh()
     val next = gateway.pairedState.value as? PairedState.Paired ?: return
-    connect(next.serverOrigin)
+    connect(next.connectionId)
 }

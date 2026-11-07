@@ -1,13 +1,13 @@
 package harold.android.testing
 
-import harold.android.credentials.CredentialStore
-import harold.android.credentials.StoredCredential
-import harold.android.credentials.upsertSavedHarold
+import harold.android.credentials.ConnectionStore
+import harold.android.credentials.SavedConnection
+import harold.android.credentials.upsertSavedConnection
 
-class FakeCredentialStore(
-    initial: StoredCredential? = null,
-) : CredentialStore {
-    private val saved = mutableListOf<StoredCredential>()
+class FakeConnectionStore(
+    initial: SavedConnection? = null,
+) : ConnectionStore {
+    private val saved = mutableListOf<SavedConnection>()
 
     var clearCount: Int = 0
         private set
@@ -18,21 +18,21 @@ class FakeCredentialStore(
         }
     }
 
-    override suspend fun list(): List<StoredCredential> = saved.toList()
+    override suspend fun list(): List<SavedConnection> = saved.toList()
 
-    override suspend fun save(credential: StoredCredential) {
-        val next = upsertSavedHarold(saved.toList(), credential)
+    override suspend fun save(credential: SavedConnection) {
+        val next = upsertSavedConnection(saved.toList(), credential)
         saved.clear()
         saved.addAll(next)
     }
 
-    override suspend fun replace(credential: StoredCredential) {
+    override suspend fun replace(credential: SavedConnection) {
         saved.clear()
         saved += credential
     }
 
-    override suspend fun remove(serverOrigin: String) {
-        saved.removeAll { harold -> harold.serverOrigin == serverOrigin }
+    override suspend fun remove(connectionId: String) {
+        saved.removeAll { connection -> connection.connectionId == connectionId }
     }
 
     override suspend fun clear() {

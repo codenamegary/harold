@@ -49,7 +49,7 @@ class WorkspacesEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onCloneUrlChanged = viewModel::onCloneUrlChanged,
                 onCloneFolderNameChanged = viewModel::onCloneFolderNameChanged,
                 onSubmit = viewModel::submit,
-                onHaroldChanged = viewModel::onHaroldChanged,
+                onConnectionChanged = viewModel::onConnectionChanged,
             )
         }
     }

@@ -53,7 +53,7 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onChangesClick = {
                     uiState.selectedSession?.let { session ->
                         navigator.openChanges(
-                            serverOrigin = session.serverOrigin,
+                            connectionId = session.connectionId,
                             agentId = session.agentId,
                             sessionId = session.sessionId,
                             cwd = session.cwd,
@@ -97,7 +97,7 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onComposerCommandPick = viewModel::pickComposerCommand,
                 onDisconnectFromServer = viewModel::disconnectFromServer,
                 onPairAnotherHarold = navigator::openAddConnection,
-                onSavedHarolds = navigator::openSavedHarolds,
+                onSavedHarolds = navigator::openConnections,
                 agentLabel = uiState.selectedSession?.agentLabel.orEmpty(),
                 onElicitationOpen = viewModel::openElicitationSheet,
                 onElicitationClose = viewModel::closeElicitationSheet,
@@ -130,7 +130,7 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onSessionClick = viewModel::select,
                 onDeleteSession = viewModel::delete,
                 onCreateClick = navigator::openCreateSession,
-                onHaroldFilter = viewModel::onHaroldFilter,
+                onConnectionFilter = viewModel::onConnectionFilter,
             )
         }
 

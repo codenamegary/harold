@@ -92,7 +92,7 @@ fun AddWorkspaceScreen(
     onCloneUrlChanged: (String) -> Unit,
     onCloneFolderNameChanged: (String) -> Unit,
     onSubmit: () -> Unit,
-    onHaroldChanged: (String) -> Unit = {},
+    onConnectionChanged: (String) -> Unit = {},
 ) {
     val backContentDescription = stringResource(R.string.add_workspace_back_content_description)
     var newFolderOpen by remember { mutableStateOf(false) }
@@ -137,12 +137,12 @@ fun AddWorkspaceScreen(
                 .testTag("add_workspace_screen"),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            if (uiState.harolds.size > 1) {
+            if (uiState.connections.size > 1) {
                 HaroldServerDropdown(
-                    harolds = uiState.harolds,
+                    connections = uiState.connections,
                     selectedServerOrigin = uiState.selectedServerOrigin,
                     enabled = !uiState.submitting,
-                    onHaroldChanged = onHaroldChanged,
+                    onConnectionChanged = onConnectionChanged,
                 )
             }
 
@@ -705,13 +705,13 @@ private fun LabeledValue(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HaroldServerDropdown(
-    harolds: List<WorkspaceHaroldBadge>,
+    connections: List<WorkspaceConnectionBadge>,
     selectedServerOrigin: String,
     enabled: Boolean,
-    onHaroldChanged: (String) -> Unit,
+    onConnectionChanged: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val selected = harolds.firstOrNull { it.serverOrigin == selectedServerOrigin } ?: harolds.firstOrNull()
+    val selected = connections.firstOrNull { it.connectionId == selectedServerOrigin } ?: connections.firstOrNull()
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -746,21 +746,21 @@ private fun HaroldServerDropdown(
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {
-            harolds.forEach { harold ->
+            connections.forEach { connection ->
                 DropdownMenuItem(
                     leadingIcon = {
                         HaroldBadge(
-                            colorId = harold.colorId,
-                            iconId = harold.iconId,
+                            colorId = connection.colorId,
+                            iconId = connection.iconId,
                             size = 22.dp,
                         )
                     },
-                    text = { Text(text = harold.name) },
+                    text = { Text(text = connection.name) },
                     onClick = {
-                        onHaroldChanged(harold.serverOrigin)
+                        onConnectionChanged(connection.connectionId)
                         expanded = false
                     },
-                    modifier = Modifier.testTag("add_workspace_harold_${harold.serverOrigin}"),
+                    modifier = Modifier.testTag("add_workspace_harold_${connection.connectionId}"),
                 )
             }
         }

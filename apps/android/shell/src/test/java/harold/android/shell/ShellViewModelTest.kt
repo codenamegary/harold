@@ -7,13 +7,13 @@ import harold.android.contracts.PageInfo
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceState
-import harold.android.credentials.SavedHaroldRepository
+import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SshAuth
 import harold.android.credentials.SshConfig
-import harold.android.credentials.StoredCredential
+import harold.android.credentials.SavedConnection
 import harold.android.live.SessionOwner
 import harold.android.session.DefaultSessionGateway
-import harold.android.testing.FakeCredentialStore
+import harold.android.testing.FakeConnectionStore
 import harold.android.live.SessionSnapshot
 import harold.android.network.AgentApi
 import harold.android.network.AgentApiError
@@ -21,7 +21,7 @@ import harold.android.network.AgentApiException
 import harold.android.session.PairedState
 import harold.android.session.SessionGateway
 import harold.android.stream.ConnectionState
-import harold.android.stream.ConnectionStatus
+import harold.android.stream.StreamStatus
 import harold.android.testing.FakeSessionGateway
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -91,13 +91,13 @@ class ShellViewModelTest {
         val connection = FakeSessionOwner()
         val viewModel = viewModel(paired(), connection, FakeAgentApi(Result.success(collectionOf(1))))
 
-        connection.emit(ConnectionStatus.Live)
+        connection.emit(StreamStatus.Live)
         assertEquals("Live", viewModel.uiState.value.connectionStatus)
 
-        connection.emit(ConnectionStatus.Reconnecting(attempt = 2))
+        connection.emit(StreamStatus.Reconnecting(attempt = 2))
         assertEquals("Reconnecting (attempt 2)", viewModel.uiState.value.connectionStatus)
 
-        connection.emit(ConnectionStatus.TransportError("boom"))
+        connection.emit(StreamStatus.TransportError("boom"))
         assertEquals("Transport error. boom", viewModel.uiState.value.connectionStatus)
         assertTrue(viewModel.uiState.value.retryVisible)
     }
@@ -108,7 +108,7 @@ class ShellViewModelTest {
         val api = FakeAgentApi(Result.success(collectionOf(count = 1)))
         val viewModel = viewModel(paired(), connection, api)
 
-        connection.emit(ConnectionStatus.TransportError("timeout"))
+        connection.emit(StreamStatus.TransportError("timeout"))
         viewModel.onRetryClick()
 
         assertEquals(1, connection.retries)
@@ -197,21 +197,21 @@ class ShellViewModelTest {
 
     @Test
     fun removingOneHaroldKeepsTheOtherSaved() = runTest {
-        val store = FakeCredentialStore()
-        store.save(savedHarold("ssh://gary@laptop.local:22", "laptop"))
-        store.save(savedHarold("ssh://gary@desktop.local:22", "desktop"))
+        val store = FakeConnectionStore()
+        store.save(savedConnection("ssh://gary@laptop.local:22", "laptop"))
+        store.save(savedConnection("ssh://gary@desktop.local:22", "desktop"))
         val gateway = DefaultSessionGateway(credentialStore = store)
         val connection = FakeSessionOwner()
         viewModel(
             gateway,
             connection,
             FakeAgentApi(Result.success(collectionOf(1))),
-            savedHarolds = SavedHaroldRepository(store),
+            savedConnections = ConnectionRepository(store),
         )
 
         assertEquals(
             listOf("ssh://gary@laptop.local:22", "ssh://gary@desktop.local:22"),
-            store.list().map { harold -> harold.serverOrigin },
+            store.list().map { connection -> connection.connectionId },
         )
         assertEquals(
             PairedState.Paired("ssh://gary@laptop.local:22", "Pixel"),
@@ -224,7 +224,7 @@ class ShellViewModelTest {
         connection: SessionOwner,
         api: AgentApi,
         navigator: harold.android.navigation.Navigator = harold.android.navigation.Navigator(),
-        savedHarolds: SavedHaroldRepository = SavedHaroldRepository(FakeCredentialStore()),
+        savedConnections: ConnectionRepository = ConnectionRepository(FakeConnectionStore()),
     ): ShellViewModel = ShellViewModel(
         sessionGateway = session,
         sessionOwner = connection,
@@ -259,15 +259,15 @@ class ShellViewModelTest {
     }
 }
 
-private fun savedHarold(serverOrigin: String, name: String) = StoredCredential(
+private fun savedConnection(connectionId: String, name: String) = SavedConnection(
     formatVersion = 3,
-    serverOrigin = serverOrigin,
+    connectionId = connectionId,
     deviceName = "Pixel",
     name = name,
     colorId = "ink",
     iconId = "mark",
     ssh = SshConfig(
-        host = serverOrigin,
+        host = connectionId,
         port = 22,
         user = "gary",
         auth = SshAuth.Password(secret = "hunter2"),
@@ -314,12 +314,12 @@ private class FakeSessionOwner : SessionOwner {
     var backgroundMarks = 0
         private set
 
-    fun emit(status: ConnectionStatus) {
+    fun emit(status: StreamStatus) {
         _connectionState.value = _connectionState.value.copy(status = status)
     }
 
-    override fun connect(serverOrigin: String) {
-        connects += serverOrigin
+    override fun connect(connectionId: String) {
+        connects += connectionId
     }
 
     override fun retry() {
@@ -366,61 +366,61 @@ private class FakeAgentApi(
     val calls = mutableListOf<Pair<String, Int>>()
 
     override suspend fun listWorkspaces(
-        serverOrigin: String,
+        connectionId: String,
         limit: Int,
     ): Result<WorkspaceCollection> {
-        calls += serverOrigin to limit
+        calls += connectionId to limit
 
         return result
     }
 
     override suspend fun listFilesystemDirectories(
-        serverOrigin: String,
+        connectionId: String,
         root: String?,
     ): Result<harold.android.contracts.FilesystemDirectoryCollection> =
         Result.failure(UnsupportedOperationException())
 
     override suspend fun createFilesystemDirectory(
-        serverOrigin: String,
+        connectionId: String,
         body: harold.android.contracts.CreateFilesystemDirectoryBody,
     ) = Result.failure<harold.android.contracts.FilesystemDirectoryCreated>(
         UnsupportedOperationException("unused"),
     )
 
     override suspend fun createWorkspace(
-        serverOrigin: String,
+        connectionId: String,
         body: harold.android.contracts.CreateWorkspaceBody,
     ): Result<Workspace> = Result.failure(UnsupportedOperationException())
 
     override suspend fun listSessions(
-        serverOrigin: String,
+        connectionId: String,
         cwd: String?,
     ): Result<harold.android.contracts.SessionCollection> =
         Result.failure(UnsupportedOperationException())
 
-    override suspend fun listAgents(serverOrigin: String): Result<harold.android.contracts.AgentSettingsCollection> =
+    override suspend fun listAgents(connectionId: String): Result<harold.android.contracts.AgentSettingsCollection> =
         Result.failure(UnsupportedOperationException())
 
     override suspend fun createSession(
-        serverOrigin: String,
+        connectionId: String,
         body: harold.android.contracts.CreateSessionBody,
     ): Result<harold.android.contracts.CreateSessionResponse> =
         Result.failure(UnsupportedOperationException())
 
     override suspend fun deleteSession(
-        serverOrigin: String,
+        connectionId: String,
         agentId: harold.android.contracts.AgentId,
         sessionId: String,
     ): Result<Unit> = Result.failure(UnsupportedOperationException())
 
     override suspend fun getAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: harold.android.contracts.AgentId,
     ): Result<harold.android.contracts.AgentAuth> =
         Result.failure(UnsupportedOperationException())
 
     override suspend fun logoutAgentAuth(
-        serverOrigin: String,
+        connectionId: String,
         agentId: harold.android.contracts.AgentId,
     ): Result<harold.android.contracts.AgentAuthSummary> =
         Result.failure(UnsupportedOperationException())
