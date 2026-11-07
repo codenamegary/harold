@@ -142,7 +142,7 @@ class ShellViewModelTest {
 
         assertEquals(1, connection.disconnects)
         assertTrue(connection.connects.isEmpty())
-        assertEquals("Not paired", viewModel.uiState.value.status)
+        assertEquals("No connections yet", viewModel.uiState.value.status)
     }
 
     @Test

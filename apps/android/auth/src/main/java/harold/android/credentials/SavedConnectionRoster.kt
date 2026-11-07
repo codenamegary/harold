@@ -49,19 +49,22 @@ internal fun decodeSavedConnections(raw: String?): List<SavedConnection> {
         return emptyList()
     }
 
-    return Json.parseToJsonElement(raw).jsonArray.map { element ->
-        val connection = element.jsonObject
-        SavedConnection(
-            formatVersion = connection.requireInt("formatVersion"),
-            connectionId = connection.requireString("connectionId"),
-            deviceName = connection.optionalString("deviceName"),
-            name = connection.requireString("name"),
-            colorId = connection.requireString("colorId"),
-            iconId = connection.requireString("iconId"),
-            ssh = decodeSsh(connection.getValue("ssh").jsonObject),
-            defaultAgentId = connection.optionalString("defaultAgentId"),
-            defaultWorkspacePath = connection.optionalString("defaultWorkspacePath"),
-        )
+    // Rows that no longer match the current format are dropped, not migrated.
+    return Json.parseToJsonElement(raw).jsonArray.mapNotNull { element ->
+        runCatching {
+            val connection = element.jsonObject
+            SavedConnection(
+                formatVersion = connection.requireInt("formatVersion"),
+                connectionId = connection.requireString("connectionId"),
+                deviceName = connection.optionalString("deviceName"),
+                name = connection.requireString("name"),
+                colorId = connection.requireString("colorId"),
+                iconId = connection.requireString("iconId"),
+                ssh = decodeSsh(connection.getValue("ssh").jsonObject),
+                defaultAgentId = connection.optionalString("defaultAgentId"),
+                defaultWorkspacePath = connection.optionalString("defaultWorkspacePath"),
+            )
+        }.getOrNull()
     }
 }
 

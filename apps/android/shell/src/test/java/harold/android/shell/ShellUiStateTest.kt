@@ -76,7 +76,7 @@ class ShellUiStateTest {
         assertNull(state.connectionStatus)
         assertNull(state.workspacesSummary)
         assertFalse(state.retryVisible)
-        assertEquals("Pair", state.pairLabel)
+        assertEquals("Add connection", state.pairLabel)
     }
 
     private fun labelFor(status: StreamStatus): String? = uiFor(status).connectionStatus

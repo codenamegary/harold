@@ -18,9 +18,9 @@ sealed interface WorkspaceProbe {
 
 data class ShellUiState(
     val title: String = "Harold",
-    val status: String = "Not paired",
+    val status: String = "No connections yet",
     val pairEnabled: Boolean = true,
-    val pairLabel: String = "Pair",
+    val pairLabel: String = "Add connection",
     val connectionStatus: String? = null,
     val workspacesSummary: String? = null,
     val streamStalled: Boolean = false,
@@ -32,9 +32,9 @@ data class ShellUiState(
 fun ShellUiState.fromPairedState(pairedState: PairedState): ShellUiState =
     when (pairedState) {
         PairedState.NotPaired -> copy(
-            status = "Not paired",
+            status = "No connections yet",
             pairEnabled = true,
-            pairLabel = "Pair",
+            pairLabel = "Add connection",
             connectionStatus = null,
             workspacesSummary = null,
             streamStalled = false,

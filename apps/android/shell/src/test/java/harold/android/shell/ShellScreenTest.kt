@@ -36,7 +36,7 @@ class ShellScreenTest {
         composeTestRule.onNodeWithTag("shell_app_mark").assertIsDisplayed()
         assertTrue(composeTestRule.onAllNodesWithText("Harold").fetchSemanticsNodes().isNotEmpty())
         composeTestRule.onAllNodesWithText("OPERATOR CONSOLE").assertCountEquals(0)
-        composeTestRule.onNodeWithText("Not paired").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("No connections yet").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithTag("shell_hint").performScrollTo().assertIsDisplayed()
         composeTestRule.onNodeWithTag("shell_pair_button")
             .assertIsDisplayed()
