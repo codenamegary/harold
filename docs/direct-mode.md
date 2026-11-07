@@ -38,7 +38,7 @@ No Harold process is installed and no Harold port is opened.
    the key, then save.
 
 Saved connections show a `Server` or `SSH` badge. SSH keys and passwords live
-in the encrypted roster on the device. The host key is pinned by SHA-256
+in the encrypted saved-connection store on the device. The host key is pinned by SHA-256
 fingerprint on every later connection.
 
 ## Session flow
