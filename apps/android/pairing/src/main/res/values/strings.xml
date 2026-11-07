@@ -34,7 +34,6 @@
     <string name="add_connection_ssh_body">Run the agent directly over SSH. No Harold process or extra port on the host. One agent process per app connection.</string>
     <string name="add_connection_ssh_action">Set up SSH host</string>
     <string name="ssh_setup_title">SSH host</string>
-    <string name="ssh_setup_subtitle">Harold Direct uses your existing sshd and agent CLI. Generate a key, pin the host key, then start a session.</string>
     <string name="ssh_host_label">Host</string>
     <string name="ssh_port_label">Port</string>
     <string name="ssh_user_label">User</string>
