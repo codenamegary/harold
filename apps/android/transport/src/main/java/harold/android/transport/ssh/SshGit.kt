@@ -18,6 +18,14 @@ import harold.android.contracts.GitWorktreeCollection
 class SshGit(
     private val connection: SshConnection,
 ) {
+    /** True when the path is inside a git work tree. Cheap; no exception paths. */
+    suspend fun isGit(path: String): Boolean {
+        val result = connection.runCommand(
+            "cd ${SshSessionStore.shellQuote(path)} && git rev-parse --is-inside-work-tree",
+        )
+        return result.succeeded && result.stdout.trim() == "true"
+    }
+
     suspend fun summary(path: String): Result<GitSummary> = runCatching {
         val root = git(path, "rev-parse", "--show-toplevel").requiredTrimmed()
         val branch = git(root, "rev-parse", "--abbrev-ref", "HEAD").stdout.trim().ifBlank { null }

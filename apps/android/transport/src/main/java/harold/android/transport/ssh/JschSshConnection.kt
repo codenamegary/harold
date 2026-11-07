@@ -54,6 +54,15 @@ class JschSshConnection private constructor(
         channel.put(ByteArrayInputStream(content), path)
     }
 
+    override suspend fun rename(oldPath: String, newPath: String) = withContext(Dispatchers.IO) {
+        val channel = sftp()
+        val slash = newPath.lastIndexOf('/')
+        if (slash > 0) {
+            mkdirRecursive(channel, newPath.substring(0, slash))
+        }
+        channel.rename(oldPath, newPath)
+    }
+
     override suspend fun list(path: String): List<SshFileEntry> = withContext(Dispatchers.IO) {
         val channel = sftp()
         val resolved = runCatching { channel.realpath(path) }.getOrDefault(path)

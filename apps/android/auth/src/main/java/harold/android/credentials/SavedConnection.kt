@@ -14,6 +14,10 @@ data class SavedConnection(
     val colorId: String,
     val iconId: String,
     val ssh: SshConfig,
+    /** Device-local: the agent new sessions default to on this connection. */
+    val defaultAgentId: String? = null,
+    /** Device-local: the workspace new sessions default to on this connection. */
+    val defaultWorkspacePath: String? = null,
 ) {
     /** Human-readable endpoint without the private routing suffix. */
     val displayEndpoint: String

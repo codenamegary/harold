@@ -1,7 +1,12 @@
 package harold.android.transport
 
+import harold.android.contracts.CreateCustomAgentBody
+import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.PromptRequestBody
 import harold.android.contracts.SessionStreamServerMessage
+import harold.android.contracts.UpdateAgentBody
+import harold.android.contracts.WorkspaceSource
+import harold.android.contracts.WorkspaceState
 import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SshAuth
 import harold.android.credentials.SshConfig
@@ -13,6 +18,7 @@ import harold.android.transport.ssh.SshAgentApi
 import harold.android.transport.ssh.JschSshConnectionFactory
 import harold.android.transport.ssh.SshKeyGenerator
 import harold.android.transport.ssh.captureHostKeyFingerprint
+import harold.android.transport.ssh.SshSessionStore
 import harold.android.transport.ssh.runCommand
 import java.io.File
 import java.lang.Process
@@ -247,6 +253,139 @@ class SshIntegrationTest {
                 ),
             ),
         )
+    }
+
+    @Test
+    fun agentConfigRoundTripMergeAndCustomAgents() = runBlocking {
+        // First scan discovers the fake agent and writes agents.json.
+        val scanned = api.scanAgents(connectionId).getOrThrow()
+        val opencode = scanned.items.find { agent -> agent.id == "opencode" }
+        assertTrue(opencode != null && opencode.present)
+        factory.useConnection(connectionId) { _, store ->
+            assertTrue(store.readAgentsConfig() != null)
+        }
+
+        // A rescan preserves the user-owned fields.
+        api.updateAgent(
+            connectionId,
+            "opencode",
+            UpdateAgentBody(
+                displayName = "My OpenCode",
+                path = opencode!!.path,
+                args = listOf("acp", "--extra"),
+                enabled = false,
+            ),
+        ).getOrThrow()
+        val rescan = api.scanAgents(connectionId).getOrThrow()
+        val preserved = rescan.items.find { agent -> agent.id == "opencode" }!!
+        assertEquals("My OpenCode", preserved.displayName)
+        assertEquals(listOf("acp", "--extra"), preserved.args)
+        assertFalse(preserved.enabled)
+
+        // A dismissed known agent stays dismissed across rescans, whether or
+        // not the binary is on the host.
+        api.deleteAgent(connectionId, "cursor").getOrThrow()
+        val afterDismiss = api.scanAgents(connectionId).getOrThrow()
+        assertTrue(afterDismiss.items.find { agent -> agent.id == "cursor" }!!.dismissed)
+
+        // Custom agents: created with a verified path, deleted outright.
+        val helper = tempDir.resolve("helper-agent.sh")
+        Files.writeString(helper, "#!/bin/sh\necho hi\n")
+        helper.toFile().setExecutable(true)
+        val custom = api.createCustomAgent(
+            connectionId,
+            CreateCustomAgentBody(
+                displayName = "My Helper",
+                path = helper.toAbsolutePath().toString(),
+                args = listOf("--x"),
+            ),
+        ).getOrThrow()
+        assertTrue(custom.id.startsWith("custom-"))
+        assertTrue(custom.present)
+        assertTrue(custom.deletable)
+
+        val duplicate = api.createCustomAgent(
+            connectionId,
+            CreateCustomAgentBody(
+                displayName = "My Helper",
+                path = helper.toAbsolutePath().toString(),
+            ),
+        ).getOrThrow()
+        assertTrue(duplicate.id != custom.id)
+
+        assertTrue(
+            api.createCustomAgent(
+                connectionId,
+                CreateCustomAgentBody(
+                    displayName = "Broken",
+                    path = tempDir.resolve("missing-binary").toString(),
+                ),
+            ).isFailure,
+        )
+
+        api.deleteAgent(connectionId, custom.id).getOrThrow()
+        assertTrue(
+            api.updateAgent(connectionId, custom.id, UpdateAgentBody(enabled = true)).isFailure,
+        )
+
+        // An unknown agent id cannot be edited.
+        assertTrue(
+            api.updateAgent(connectionId, "not-a-known-agent", UpdateAgentBody(enabled = true))
+                .isFailure,
+        )
+
+        factory.useConnection(connectionId) { connection, _ ->
+            connection.runCommand("rm -f ~/.harold/agents.json")
+        }
+        Unit
+    }
+
+    @Test
+    fun workspaceValidationAndGitBadge() = runBlocking {
+        // A path that does not exist is rejected.
+        assertTrue(
+            api.createWorkspace(
+                connectionId,
+                CreateWorkspaceBody(
+                    source = WorkspaceSource.Folder,
+                    path = tempDir.resolve("does-not-exist").toString(),
+                ),
+            ).isFailure,
+        )
+
+        // A plain file is rejected as not a folder.
+        val file = tempDir.resolve("plain-file.txt")
+        Files.writeString(file, "just a file")
+        assertTrue(
+            api.createWorkspace(
+                connectionId,
+                CreateWorkspaceBody(source = WorkspaceSource.Folder, path = file.toString()),
+            ).isFailure,
+        )
+
+        // A real folder works, auto-names from the basename, and is not git yet.
+        val folder = Files.createTempDirectory(Path.of("/tmp/opencode"), "harold-ws")
+        val workspace = api.createWorkspace(
+            connectionId,
+            CreateWorkspaceBody(source = WorkspaceSource.Folder, path = folder.toString()),
+        ).getOrThrow()
+        assertEquals(WorkspaceState.Available, workspace.state)
+        assertEquals(folder.fileName.toString(), workspace.name)
+        assertFalse(workspace.git)
+
+        factory.useConnection(connectionId) { connection, _ ->
+            connection.runCommand(
+                "cd ${SshSessionStore.shellQuote(folder.toString())} && git init -q",
+            )
+        }
+        val listed = api.listWorkspaces(connectionId, limit = 100).getOrThrow()
+        assertEquals(true, listed.items.find { it.path == folder.toString() }?.git)
+
+        factory.useConnection(connectionId) { connection, store ->
+            connection.runCommand("rm -rf ${SshSessionStore.shellQuote(folder.toString())}")
+            store.forgetWorkspace(folder.toString())
+        }
+        Unit
     }
 
     private fun awaitPort(port: Int) {

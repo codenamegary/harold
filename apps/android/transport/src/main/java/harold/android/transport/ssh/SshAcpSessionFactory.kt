@@ -5,6 +5,7 @@ import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SshConfig
 import harold.android.transport.acp.AcpClient
 import harold.android.transport.acp.AcpClientHandler
+import harold.android.transport.acp.AcpRemoteException
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -39,7 +40,7 @@ class SshAcpSessionFactory @Inject constructor(
                 ?: throw SshException("No session metadata for $agentId/$sessionId.")
             val lock = store.acquireLock(agentId, sessionId).getOrThrow()
             val exec = try {
-                connection.exec(agentCommand(agentId))
+                connection.exec(agentCommand(store, agentId))
             } catch (error: Throwable) {
                 lock.close()
                 throw error
@@ -75,7 +76,7 @@ class SshAcpSessionFactory @Inject constructor(
         cwd: String,
         deviceName: String,
     ): Result<CreateSessionResponse> = useConnection(connectionId) { connection, store ->
-        val exec = connection.exec(agentCommand(agentId))
+        val exec = connection.exec(agentCommand(store, agentId))
         val client = AcpClient(
             input = exec.stdout,
             output = exec.stdin,
@@ -110,14 +111,21 @@ class SshAcpSessionFactory @Inject constructor(
                     )
                 },
             )
-            val response = client.request(
-                method = "session/new",
-                params = buildJsonObject {
-                    put("cwd", cwd)
-                    put("mcpServers", buildJsonArray { })
-                },
-                timeoutMillis = 180_000,
-            )
+            val response = try {
+                client.request(
+                    method = "session/new",
+                    params = buildJsonObject {
+                        put("cwd", cwd)
+                        put("mcpServers", buildJsonArray { })
+                    },
+                    timeoutMillis = 180_000,
+                )
+            } catch (error: AcpRemoteException) {
+                if (isAcpAuthRequiredError(error.code, error.message)) {
+                    throw SshAuthRequiredException(agentId, error.message)
+                }
+                throw error
+            }
             val sessionId = response.string("sessionId")
                 ?: throw SshException("The agent did not return a session id.")
             val responseObject = response as? JsonObject
@@ -194,8 +202,30 @@ class SshAcpSessionFactory @Inject constructor(
         savedConnections.find(connectionId)?.ssh
             ?: throw SshException("Saved connection not found: $connectionId")
 
-    private fun agentCommand(agentId: String): String {
-        val command = "exec " + SshAcpSession.commandFor(agentId)
+    /**
+     * Builds the launch command from the agent's saved settings:
+     * `<path or known binary> <args...>`. A disabled or dismissed agent
+     * cannot start.
+     */
+    private suspend fun agentCommand(store: SshSessionStore, agentId: String): String {
+        val row = store.agentsConfig().find { it.id == agentId }
+        if (row?.dismissed == true) {
+            throw SshException("$agentId was removed from this host's agent list.")
+        }
+        if (row?.enabled == false) {
+            throw SshException("$agentId is disabled. Enable it in the Agents screen.")
+        }
+        val known = knownAgent(agentId)
+        val binary = row?.path
+            ?: known?.command?.firstOrNull()
+            ?: agentId
+        val args = if (row?.path != null) {
+            row.args
+        } else {
+            known?.command?.drop(1).orEmpty()
+        }
+        val command = "exec " + (listOf(binary) + args)
+            .joinToString(" ") { token -> SshSessionStore.shellQuote(token) }
         return "exec bash -lc ${SshSessionStore.shellQuote(command)}"
     }
 

@@ -2,8 +2,12 @@ package harold.android.network
 
 import harold.android.contracts.AgentAuth
 import harold.android.contracts.AgentAuthSummary
+import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AgentId
+import harold.android.contracts.AgentSettings
 import harold.android.contracts.AgentSettingsCollection
+import harold.android.contracts.CreateCustomAgentBody
+import harold.android.contracts.UpdateAgentBody
 import harold.android.contracts.AttachmentDescriptor
 import harold.android.contracts.AttachmentKind
 import harold.android.contracts.AttachmentUploadRequest
@@ -57,6 +61,9 @@ interface SessionWorktreePathApi {
     )
 }
 
+private fun unsupported(what: String): UnsupportedOperationException =
+    UnsupportedOperationException(what)
+
 /** All surfaces the SSH transport provides for one saved connection. */
 interface AgentTransportApi : AgentApi, AttachmentApi, SessionConfigApi, SessionCommandApi, GitApi
 
@@ -87,6 +94,53 @@ interface AgentApi : SessionWorktreePathApi {
     ): Result<SessionCollection>
 
     suspend fun listAgents(connectionId: String): Result<AgentSettingsCollection>
+
+    /** Probes the host for every known agent and merges the results into agents.json. */
+    suspend fun scanAgents(
+        connectionId: String,
+    ): Result<AgentSettingsCollection> = Result.failure(unsupported("agent scans are not supported"))
+
+    /** Edits the user-owned fields of one agent row. */
+    suspend fun updateAgent(
+        connectionId: String,
+        agentId: AgentId,
+        body: UpdateAgentBody,
+    ): Result<AgentSettings> = Result.failure(unsupported("agent updates are not supported"))
+
+    /** Adds a custom agent the catalog does not know about. */
+    suspend fun createCustomAgent(
+        connectionId: String,
+        body: CreateCustomAgentBody,
+    ): Result<AgentSettings> = Result.failure(unsupported("custom agents are not supported"))
+
+    /**
+     * Removes an agent from the list: known agents keep a dismissal
+     * tombstone so rescans do not resurrect them, custom agents are deleted.
+     */
+    suspend fun deleteAgent(
+        connectionId: String,
+        agentId: AgentId,
+    ): Result<Unit> = Result.failure(unsupported("agent removal is not supported"))
+
+    /** Re-reads the host's shared config and drops in-memory caches. */
+    suspend fun reloadConfig(
+        connectionId: String,
+    ): Result<AgentSettingsCollection> = Result.failure(unsupported("config reloads are not supported"))
+
+    /** Closes the agent's live ACP processes; the next session spawns fresh. */
+    suspend fun restartAgent(
+        connectionId: String,
+        agentId: AgentId,
+    ): Result<Unit> = Result.failure(unsupported("agent restarts are not supported"))
+
+    /** The live capability handshake of the session, or null before it completes. */
+    suspend fun getAgentCapabilities(
+        connectionId: String,
+        agentId: AgentId,
+        sessionId: String,
+    ): Result<AgentCapabilityInventory?> = Result.failure(
+        unsupported("capability lookups are not supported"),
+    )
 
     suspend fun createSession(
         connectionId: String,

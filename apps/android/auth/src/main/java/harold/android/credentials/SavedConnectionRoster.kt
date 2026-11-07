@@ -37,6 +37,8 @@ internal fun encodeSavedConnections(saved: List<SavedConnection>): String =
                     put("colorId", connection.colorId)
                     put("iconId", connection.iconId)
                     put("ssh", encodeSsh(connection.ssh))
+                    put("defaultAgentId", connection.defaultAgentId)
+                    put("defaultWorkspacePath", connection.defaultWorkspacePath)
                 },
             )
         }
@@ -57,6 +59,8 @@ internal fun decodeSavedConnections(raw: String?): List<SavedConnection> {
             colorId = connection.requireString("colorId"),
             iconId = connection.requireString("iconId"),
             ssh = decodeSsh(connection.getValue("ssh").jsonObject),
+            defaultAgentId = connection.optionalString("defaultAgentId"),
+            defaultWorkspacePath = connection.optionalString("defaultWorkspacePath"),
         )
     }
 }

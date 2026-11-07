@@ -10,6 +10,15 @@ class SshException(
     cause: Throwable? = null,
 ) : Exception(message, cause)
 
+/**
+ * The agent answered `session/new` with an auth requirement. Sign-in happens
+ * on the host; the app surfaces instructions instead of running a login flow.
+ */
+class SshAuthRequiredException(
+    val agentId: String,
+    detail: String?,
+) : Exception(detail ?: "This agent needs you to sign in on the host.")
+
 data class SshFileEntry(
     val name: String,
     val path: String,
@@ -43,6 +52,9 @@ interface SshConnection : Closeable {
     suspend fun readFile(path: String): ByteArray
 
     suspend fun writeFile(path: String, content: ByteArray)
+
+    /** Atomic within the host filesystem: readers see the old or the new file. */
+    suspend fun rename(oldPath: String, newPath: String)
 
     suspend fun list(path: String): List<SshFileEntry>
 

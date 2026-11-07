@@ -23,14 +23,28 @@ class ConnectionRepository(
         colorId: String,
         iconId: String,
     ) {
-        val current = store.list().find { connection -> connection.connectionId == connectionId } ?: return
-        store.save(
-            current.copy(
+        mutate(connectionId) {
+            it.copy(
                 name = name,
                 colorId = colorId,
                 iconId = iconId,
-            ),
-        )
+            )
+        }
+    }
+
+    /** Device-local preference: the agent new sessions start with. */
+    suspend fun setDefaultAgent(connectionId: String, agentId: String?) {
+        mutate(connectionId) { it.copy(defaultAgentId = agentId) }
+    }
+
+    /** Device-local preference: the workspace new sessions start in. */
+    suspend fun setDefaultWorkspace(connectionId: String, path: String?) {
+        mutate(connectionId) { it.copy(defaultWorkspacePath = path) }
+    }
+
+    private suspend fun mutate(connectionId: String, change: (SavedConnection) -> SavedConnection) {
+        val current = store.list().find { connection -> connection.connectionId == connectionId } ?: return
+        store.save(change(current))
     }
 
     /** Drops the saved credential and every cached row for that server origin. */

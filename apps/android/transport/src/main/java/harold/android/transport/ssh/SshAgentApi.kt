@@ -3,9 +3,8 @@ package harold.android.transport.ssh
 import harold.android.contracts.AgentAuth
 import harold.android.contracts.AgentAuthStatus
 import harold.android.contracts.AgentAuthSummary
+import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AgentId
-import harold.android.contracts.AgentRuntimeState
-import harold.android.contracts.AgentRuntimeStatus
 import harold.android.contracts.AgentSettings
 import harold.android.contracts.AgentSettingsCollection
 import harold.android.contracts.AttachmentDescriptor
@@ -16,6 +15,7 @@ import harold.android.contracts.CreateFilesystemDirectoryBody
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.CreateWorkspaceBody
+import harold.android.contracts.CreateCustomAgentBody
 import harold.android.contracts.FilesystemDirectory
 import harold.android.contracts.FilesystemDirectoryCollection
 import harold.android.contracts.FilesystemDirectoryCreated
@@ -29,6 +29,7 @@ import harold.android.contracts.PromptRequestBody
 import harold.android.contracts.Session
 import harold.android.contracts.SessionCollection
 import harold.android.contracts.SetSessionWorktreePathBody
+import harold.android.contracts.UpdateAgentBody
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceSource
@@ -46,6 +47,15 @@ class SshAgentApi @Inject constructor(
     private val factory: SshAcpSessionFactory,
     private val registry: SshAcpRegistry,
 ) : AgentTransportApi {
+    private val authCache = AgentAuthCache()
+
+    private val unknownAuth = AgentAuthSummary(
+        status = AgentAuthStatus.Unknown,
+        error = null,
+        activeSessionId = null,
+        canLogout = false,
+    )
+
     override suspend fun listWorkspaces(
         connectionId: String,
         limit: Int,
@@ -167,8 +177,138 @@ class SshAgentApi @Inject constructor(
     }
 
     override suspend fun listAgents(connectionId: String): Result<AgentSettingsCollection> = sshCall {
-        factory.useConnection(connectionId) { connection, _ -> detectAgents(connection) }.getOrThrow()
+        factory.useConnection(connectionId) { connection, store ->
+            val firstScan = store.readAgentsConfig() == null
+            val rows = if (firstScan) {
+                // Detection runs on first connect and on an explicit scan —
+                // never silently on every connect.
+                val scanned = scanPresence(connection, emptyList())
+                store.writeAgentsConfig(scanned)
+                scanned
+            } else {
+                store.agentsConfig()
+            }
+            agentCollection(connection, connectionId, rows)
+        }.getOrThrow()
     }
+
+    override suspend fun scanAgents(connectionId: String): Result<AgentSettingsCollection> = sshCall {
+        factory.useConnection(connectionId) { connection, store ->
+            val rows = scanPresence(connection, store.agentsConfig())
+            store.writeAgentsConfig(rows)
+            agentCollection(connection, connectionId, rows)
+        }.getOrThrow()
+    }
+
+    override suspend fun updateAgent(
+        connectionId: String,
+        agentId: AgentId,
+        body: UpdateAgentBody,
+    ): Result<AgentSettings> = sshCall {
+        factory.useConnection(connectionId) { connection, store ->
+            val row = store.agentsConfig().find { it.id == agentId }
+                ?: throw SshException("Unknown agent: $agentId. Scan the host first.")
+            val newPath = body.path
+            newPath?.takeIf { it.isNotBlank() }?.let { path ->
+                if (!isExecutable(connection, path)) {
+                    throw SshException("That path is not an executable file on the host: $path")
+                }
+            }
+            val updated = row.copy(
+                displayName = body.displayName ?: row.displayName,
+                path = if (newPath != null) newPath.ifBlank { null } else row.path,
+                args = body.args ?: row.args,
+                enabled = body.enabled ?: row.enabled,
+                dismissed = body.dismissed ?: row.dismissed,
+                present = if (newPath?.isNotBlank() == true) true else row.present,
+                updatedAt = Instant.now().toString(),
+            )
+            store.updateAgentsConfig { rows ->
+                rows.map { if (it.id == agentId) updated else it }
+            }
+            agentCollection(connection, connectionId, store.agentsConfig())
+                .items.find { it.id == agentId }
+                ?: throw SshException("Agent row vanished while saving.")
+        }.getOrThrow()
+    }
+
+    override suspend fun createCustomAgent(
+        connectionId: String,
+        body: CreateCustomAgentBody,
+    ): Result<AgentSettings> = sshCall {
+        factory.useConnection(connectionId) { connection, store ->
+            val path = body.path.trim()
+            if (path.isEmpty()) {
+                throw SshException("A custom agent needs a path to its executable.")
+            }
+            if (!isExecutable(connection, path)) {
+                throw SshException("That path is not an executable file on the host: $path")
+            }
+            val rows = store.agentsConfig()
+            val row = HostAgentConfigRow(
+                id = allocateCustomAgentId(body.displayName, rows),
+                displayName = body.displayName.ifBlank { allocateCustomDisplayName(rows) },
+                path = path,
+                args = body.args,
+                enabled = true,
+                dismissed = false,
+                custom = true,
+                present = true,
+                updatedAt = Instant.now().toString(),
+            )
+            store.writeAgentsConfig(rows + row)
+            agentCollection(connection, connectionId, store.agentsConfig())
+                .items.find { it.id == row.id }
+                ?: throw SshException("Agent row vanished while saving.")
+        }.getOrThrow()
+    }
+
+    override suspend fun deleteAgent(connectionId: String, agentId: AgentId): Result<Unit> = sshCall {
+        factory.useConnection(connectionId) { _, store ->
+            val known = knownAgent(agentId) != null
+            store.updateAgentsConfig { rows ->
+                if (known) {
+                    // Known agents keep a tombstone so rescans do not
+                    // resurrect them. User-owned fields stay untouched.
+                    rows.map { current ->
+                        if (current.id == agentId) {
+                            current.copy(dismissed = true, updatedAt = Instant.now().toString())
+                        } else {
+                            current
+                        }
+                    }
+                } else {
+                    // Custom agents delete outright.
+                    rows.filterNot { it.id == agentId }
+                }
+            }
+            restartAgent(connectionId, agentId).getOrThrow()
+        }.getOrThrow()
+    }
+
+    override suspend fun reloadConfig(connectionId: String): Result<AgentSettingsCollection> = sshCall {
+        factory.useConnection(connectionId) { connection, store ->
+            authCache.clear()
+            agentCollection(connection, connectionId, store.agentsConfig())
+        }.getOrThrow()
+    }
+
+    override suspend fun restartAgent(connectionId: String, agentId: AgentId): Result<Unit> = sshCall {
+        registry.all()
+            .filter { it.connectionId == connectionId && it.agentId == agentId }
+            .forEach { session ->
+                runCatching { session.close() }
+            }
+        authCache.invalidate(connectionId, agentId)
+    }
+
+    override suspend fun getAgentCapabilities(
+        connectionId: String,
+        agentId: AgentId,
+        sessionId: String,
+    ): Result<AgentCapabilityInventory?> = Result.success(
+        registry.find(connectionId, agentId, sessionId)?.capabilities,
+    )
 
     override suspend fun createSession(
         connectionId: String,
@@ -193,19 +333,40 @@ class SshAgentApi @Inject constructor(
     override suspend fun getAgentAuth(
         connectionId: String,
         agentId: AgentId,
-    ): Result<AgentAuth> = Result.success(
-        AgentAuth(
-            agentId = agentId,
-            status = AgentAuthStatus.Unknown,
-            error = null,
-            session = null,
-        ),
-    )
+    ): Result<AgentAuth> = sshCall {
+        factory.useConnection(connectionId) { connection, _ ->
+            val probe = authCache.get(connectionId, agentId)
+                ?: probeAgentAuth(connection, connectionId, agentId)
+            AgentAuth(
+                agentId = agentId,
+                status = probe.status,
+                error = probe.error,
+                session = null,
+            )
+        }.getOrThrow()
+    }
 
     override suspend fun logoutAgentAuth(
         connectionId: String,
         agentId: AgentId,
-    ): Result<AgentAuthSummary> = unsupported("Agent sign-in is managed by the agent CLI on the host.")
+    ): Result<AgentAuthSummary> = sshCall {
+        factory.useConnection(connectionId) { connection, _ ->
+            val adapter = AgentAuthAdapters.resolve(agentId)
+                ?: throw AgentApiException(
+                    AgentApiError.Problem(
+                        status = 501,
+                        title = "Not available",
+                        detail = "This agent manages its sign-in on the host. " +
+                            "Log out through the agent CLI there.",
+                    ),
+                )
+            connection.runCommand(
+                "exec bash -lc ${SshSessionStore.shellQuote(adapter.logoutCommand)}",
+            )
+            authCache.invalidate(connectionId, agentId)
+            probeAgentAuth(connection, connectionId, agentId).summary()
+        }.getOrThrow()
+    }
 
     override suspend fun prompt(
         connectionId: String,
@@ -349,64 +510,74 @@ class SshAgentApi @Inject constructor(
         workspace: HostWorkspace,
     ): Workspace {
         val entry = connection.stat(workspace.path)
+        val available = entry?.directory == true
         return Workspace(
             id = workspace.id,
             name = workspace.name,
             path = workspace.path,
-            state = if (entry?.directory == true) WorkspaceState.Available else WorkspaceState.Missing,
+            state = if (available) WorkspaceState.Available else WorkspaceState.Missing,
             createdAt = workspace.createdAt,
             lastUsedAt = workspace.lastUsedAt,
+            git = available && SshGit(connection).isGit(workspace.path),
         )
     }
 
-    private suspend fun detectAgents(connection: SshConnection): AgentSettingsCollection {
-        val script = """
-            for c in cursor-agent opencode; do
-              p=${'$'}(command -v "${'$'}c" 2>/dev/null || true)
-              if [ -n "${'$'}p" ]; then printf '%s\t%s\n' "${'$'}c" "${'$'}p"; fi
-            done
-        """.trimIndent()
+    private suspend fun scanPresence(
+        connection: SshConnection,
+        existing: List<HostAgentConfigRow>,
+    ): List<HostAgentConfigRow> {
         val result = connection.runCommand(
-            "exec bash -lc ${SshSessionStore.shellQuote(script)}",
+            "exec bash -lc ${SshSessionStore.shellQuote(presenceProbeScript())}",
         )
         if (!result.succeeded) {
-            throw SshException(result.stderr.trim().ifBlank { "Could not detect agents." })
+            throw SshException(result.stderr.trim().ifBlank { "Could not scan the host for agents." })
         }
-        val items = result.stdout.lineSequence()
-            .filter { line -> line.contains('\t') }
-            .mapNotNull { line ->
-                val (command, path) = line.split('\t', limit = 2)
-                val id = when (command) {
-                    "cursor-agent" -> "cursor"
-                    else -> command
-                }
-                val display = when (id) {
-                    "cursor" -> "Cursor"
-                    "opencode" -> "OpenCode"
-                    else -> command
-                }
-                AgentSettings(
-                    id = id,
-                    displayName = display,
-                    available = true,
-                    enabled = true,
-                    path = path,
-                    args = listOf("acp"),
-                    present = true,
-                    popular = id == "cursor" || id == "opencode",
-                    deletable = false,
-                    state = AgentRuntimeState(AgentRuntimeStatus.Ready),
-                    capabilities = null,
-                    authSummary = AgentAuthSummary(
-                        status = AgentAuthStatus.Unknown,
-                        error = null,
-                        activeSessionId = null,
-                        canLogout = false,
-                    ),
-                )
-            }
-            .toList()
-        return AgentSettingsCollection(items = items)
+        return mergeScanRows(existing, parsePresenceProbe(result.stdout))
+    }
+
+    private suspend fun isExecutable(connection: SshConnection, path: String): Boolean {
+        val result = connection.runCommand(
+            "test -x ${SshSessionStore.shellQuote(path)} && echo ok",
+        )
+        return result.succeeded && result.stdout.trim() == "ok"
+    }
+
+    private suspend fun agentCollection(
+        connection: SshConnection,
+        connectionId: String,
+        rows: List<HostAgentConfigRow>,
+    ): AgentSettingsCollection {
+        val authById = authSummaries(connection, connectionId, rows)
+        return AgentSettingsCollection(items = agentSettingsView(rows) { id -> authById[id] ?: unknownAuth })
+    }
+
+    /** Probes sign-in state for the agents a CLI can actually report on, with a TTL cache. */
+    private suspend fun authSummaries(
+        connection: SshConnection,
+        connectionId: String,
+        rows: List<HostAgentConfigRow>,
+    ): Map<AgentId, AgentAuthSummary> {
+        val probed = HashMap<AgentId, AgentAuthSummary>()
+        rows.filter { it.id in AgentAuthAdapters.knownAgentIds && !it.dismissed }.forEach { row ->
+            val cached = authCache.get(connectionId, row.id)
+            probed[row.id] = (cached ?: probeAgentAuth(connection, connectionId, row.id)).summary()
+        }
+        return probed
+    }
+
+    private suspend fun probeAgentAuth(
+        connection: SshConnection,
+        connectionId: String,
+        agentId: AgentId,
+    ): AgentAuthProbe {
+        val adapter = AgentAuthAdapters.resolve(agentId)
+            ?: return AgentAuthProbe(AgentAuthStatus.Unknown, null, canLogout = false)
+        val result = connection.runCommand(
+            "exec bash -lc ${SshSessionStore.shellQuote(adapter.probeCommand)}",
+        )
+        val probe = adapter.probeResult(result)
+        authCache.put(connectionId, agentId, probe)
+        return probe
     }
 
     private suspend fun <T> active(
@@ -440,6 +611,16 @@ class SshAgentApi @Inject constructor(
     private suspend fun <T> sshCall(block: suspend () -> T): Result<T> =
         try {
             Result.success(block())
+        } catch (error: SshAuthRequiredException) {
+            Result.failure(
+                AgentApiException(
+                    AgentApiError.Problem(
+                        status = 401,
+                        title = "Sign in on the host",
+                        detail = hostLoginInstructions(error.agentId),
+                    ),
+                ),
+            )
         } catch (error: Throwable) {
             Result.failure(
                 AgentApiException(

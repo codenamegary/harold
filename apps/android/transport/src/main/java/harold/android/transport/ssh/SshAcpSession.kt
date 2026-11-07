@@ -1,5 +1,6 @@
 package harold.android.transport.ssh
 
+import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AgentId
 import harold.android.contracts.AttachmentKind
 import harold.android.contracts.AttachmentReference
@@ -78,6 +79,14 @@ class SshAcpSession(
 
     val closed = CompletableDeferred<String?>()
 
+    /**
+     * The live handshake result. Null until the agent answered `initialize`,
+     * and gone once this session closes — nothing about capabilities is
+     * persisted.
+     */
+    var capabilities: AgentCapabilityInventory? = null
+        private set
+
     suspend fun start() {
         acp.start()
         scope.launch {
@@ -106,6 +115,7 @@ class SshAcpSession(
             },
         )
         val initializeObject = initialize as? JsonObject
+        this.capabilities = buildCapabilityInventory(initialize)
         val capabilities = initializeObject?.get("agentCapabilities") as? JsonObject
         val canLoad = capabilities?.get("loadSession").asBooleanOrFalse()
         val canResume = (capabilities?.get("sessionCapabilities") as? JsonObject)
@@ -482,12 +492,6 @@ class SshAcpSession(
     companion object {
         private const val PERMISSION_TIMEOUT_MILLIS = 30 * 60 * 1000L
         private const val ELICITATION_TIMEOUT_MILLIS = 30 * 60 * 1000L
-
-        fun commandFor(agentId: AgentId): String = when (agentId) {
-            "cursor", "cursor-agent" -> "cursor-agent acp"
-            "opencode" -> "opencode acp"
-            else -> "$agentId acp"
-        }
     }
 }
 

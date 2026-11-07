@@ -509,6 +509,7 @@ private class FakeAddUserRepository(
     override suspend fun listAgents(connectionId: String): Result<AgentSettingsCollection> =
         Result.failure(UnsupportedOperationException())
 
+
     override suspend fun createSession(
         connectionId: String,
         body: CreateSessionBody,

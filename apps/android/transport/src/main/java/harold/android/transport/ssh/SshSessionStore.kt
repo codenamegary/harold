@@ -29,6 +29,25 @@ data class HostWorkspace(
 )
 
 /**
+ * One row of the host's shared agent config, `~/.harold/agents.json`. The
+ * user-owned fields ([enabled], [path], [args], [dismissed]) survive a rescan;
+ * detection only fills gaps and adds new rows. Custom agents ([custom]) are
+ * plain rows that can be deleted outright.
+ */
+@Serializable
+data class HostAgentConfigRow(
+    val id: String,
+    val displayName: String? = null,
+    val path: String? = null,
+    val args: List<String> = emptyList(),
+    val enabled: Boolean = true,
+    val dismissed: Boolean = false,
+    val custom: Boolean = false,
+    val present: Boolean = false,
+    val updatedAt: String,
+)
+
+/**
  * Host state under `~/.harold`. One JSON file per session, one lock file per
  * active session, and uploads grouped by session id. There is no daemon and
  * no shared index.
@@ -164,6 +183,34 @@ class SshSessionStore(
         writeWorkspaces(workspaces().filterNot { workspace -> workspace.path == path })
     }
 
+    fun agentsConfigPath(): String = "$baseDir/agents.json"
+
+    /** Null when the host has no agents.json yet (before the first scan). */
+    suspend fun readAgentsConfig(): List<HostAgentConfigRow>? {
+        val bytes = runCatching { connection.readFile(agentsConfigPath()) }.getOrNull()
+            ?: return null
+        return runCatching {
+            json.decodeFromString<List<HostAgentConfigRow>>(bytes.toString(Charsets.UTF_8))
+        }.getOrNull()
+    }
+
+    suspend fun agentsConfig(): List<HostAgentConfigRow> = readAgentsConfig().orEmpty()
+
+    /**
+     * Writes agents.json through a temp file plus rename, so a reader on
+     * another device never sees a half-written file.
+     */
+    suspend fun writeAgentsConfig(rows: List<HostAgentConfigRow>) {
+        val bytes = json.encodeToString(rows).toByteArray(Charsets.UTF_8)
+        val temp = "${agentsConfigPath()}.${ProcessId.value}.tmp"
+        connection.writeFile(temp, bytes)
+        connection.rename(temp, agentsConfigPath())
+    }
+
+    suspend fun updateAgentsConfig(update: (List<HostAgentConfigRow>) -> List<HostAgentConfigRow>) {
+        writeAgentsConfig(update(agentsConfig()))
+    }
+
     suspend fun uploadPath(sessionId: String, fileName: String): String =
         "$uploadsDir/${safe(sessionId)}/${safe(fileName)}"
 
@@ -205,6 +252,12 @@ class SshSessionStore(
 
         fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
     }
+}
+
+/** Stable per-process suffix for temp files on the host. */
+private object ProcessId {
+    val value: String
+        get() = runCatching { android.os.Process.myPid().toString() }.getOrDefault("android")
 }
 
 class SshSessionLock(

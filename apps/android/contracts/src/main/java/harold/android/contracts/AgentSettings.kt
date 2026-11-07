@@ -60,6 +60,7 @@ data class AgentSettings(
     val present: Boolean = false,
     val popular: Boolean = false,
     val deletable: Boolean = false,
+    val dismissed: Boolean = false,
     val state: AgentRuntimeState = AgentRuntimeState(AgentRuntimeStatus.Stopped),
     val capabilities: AgentCapabilityInventory? = null,
     val authSummary: AgentAuthSummary = AgentAuthSummary(
@@ -73,4 +74,22 @@ data class AgentSettings(
 @Serializable
 data class AgentSettingsCollection(
     val items: List<AgentSettings>,
+)
+
+/** User-owned edits on one agent row. Null fields are left untouched. */
+@Serializable
+data class UpdateAgentBody(
+    val displayName: String? = null,
+    val path: String? = null,
+    val args: List<String>? = null,
+    val enabled: Boolean? = null,
+    val dismissed: Boolean? = null,
+)
+
+/** Creates a host agent entry the catalog does not know about. */
+@Serializable
+data class CreateCustomAgentBody(
+    val displayName: String,
+    val path: String,
+    val args: List<String> = emptyList(),
 )
