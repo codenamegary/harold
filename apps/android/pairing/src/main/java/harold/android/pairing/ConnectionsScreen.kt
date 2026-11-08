@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +33,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -59,6 +62,8 @@ fun ConnectionsScreen(
     onOpenSettings: (String) -> Unit = {},
     onOpenAgents: (String) -> Unit = {},
 ) {
+    val addContentDescription = stringResource(R.string.connections_add)
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -77,20 +82,22 @@ fun ConnectionsScreen(
                         )
                     }
                 },
-                actions = {
-                    IconButton(
-                        onClick = onAdd,
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                            .testTag("connections_add"),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Add,
-                            contentDescription = stringResource(R.string.connections_add),
-                        )
-                    }
-                },
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onAdd,
+                modifier = Modifier
+                    .testTag("connections_add")
+                    .semantics {
+                        contentDescription = addContentDescription
+                    },
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = null,
+                )
+            }
         },
     ) { innerPadding ->
         Column(
@@ -101,14 +108,6 @@ fun ConnectionsScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            HaroldButton(
-                text = stringResource(R.string.connections_add),
-                onClick = onAdd,
-                variant = HaroldButtonVariant.Primary,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("connections_add_button"),
-            )
             uiState.rows.forEach { row ->
                 val isEditing = uiState.editingOrigin == row.connectionId
                 Card(
@@ -260,7 +259,7 @@ fun ConnectionsScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(88.dp))
         }
     }
 }
