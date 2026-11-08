@@ -11,9 +11,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import harold.android.live.SessionOwner
 import harold.android.navigation.Navigator
-import harold.android.network.AgentApi
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
+import harold.android.network.WorkspaceApi
 import harold.android.session.ActiveConnectionState
 import harold.android.session.ConnectionGateway
 import harold.android.stream.StreamStatus
@@ -24,7 +24,7 @@ private const val WORKSPACE_PROBE_LIMIT = 1
 class ShellViewModel @Inject constructor(
     private val connectionGateway: ConnectionGateway,
     private val sessionOwner: SessionOwner,
-    private val agentApi: AgentApi,
+    private val agentApi: WorkspaceApi,
     private val navigator: Navigator,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ShellUiState())

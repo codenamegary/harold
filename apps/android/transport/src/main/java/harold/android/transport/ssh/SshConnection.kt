@@ -10,25 +10,6 @@ class SshException(
     cause: Throwable? = null,
 ) : Exception(message, cause)
 
-/**
- * The agent process could not be launched or exited before the ACP
- * handshake. The message names the path or the agent's own stderr so the
- * user can fix the host instead of seeing a generic transport error.
- */
-class SshAgentLaunchException(
-    message: String,
-    cause: Throwable? = null,
-) : Exception(message, cause)
-
-/**
- * The agent answered `session/new` with an auth requirement. Sign-in happens
- * on the host; the app surfaces instructions instead of running a login flow.
- */
-class SshAuthRequiredException(
-    val agentId: String,
-    detail: String?,
-) : Exception(detail ?: "This agent needs you to sign in on the host.")
-
 data class SshFileEntry(
     val name: String,
     val path: String,
@@ -98,4 +79,7 @@ suspend fun SshConnection.runCommand(command: String): SshCommandResult {
 
 /** True when [path] exists on the host and is executable by the SSH user. */
 suspend fun SshConnection.isExecutable(path: String): Boolean =
-    runCommand("test -x ${SshSessionStore.shellQuote(path)}").succeeded
+    runCommand("test -x ${shellQuote(path)}").succeeded
+
+/** Quotes one argument for a POSIX shell. */
+fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"

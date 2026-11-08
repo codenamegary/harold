@@ -2,7 +2,7 @@ package harold.android.database.workspace
 
 import harold.android.contracts.CreateWorkspaceBody
 import harold.android.contracts.Workspace
-import harold.android.network.AgentApi
+import harold.android.network.WorkspaceApi
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -26,7 +26,7 @@ interface WorkspaceRepository {
 }
 
 class DefaultWorkspaceRepository @Inject constructor(
-    private val agentApi: AgentApi,
+    private val agentApi: WorkspaceApi,
     private val dao: WorkspaceDao,
 ) : WorkspaceRepository {
     override fun observe(): Flow<List<CachedWorkspace>> = dao.observeAll().map(::cached)

@@ -8,7 +8,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import harold.android.credentials.SshCredentialKind
-import harold.android.transport.ssh.GeneratedSshKey
+import harold.android.setup.SshSetupKey
 import harold.android.ui.theme.HaroldTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -32,8 +32,7 @@ class SshSetupScreenTest {
                     uiState = SshSetupUiState(
                         host = "laptop.local",
                         user = "gary",
-                        generatedKey = GeneratedSshKey(
-                            algorithm = "ed25519",
+                        generatedKey = SshSetupKey(
                             privateKeyPem = "pem",
                             publicKey = "ssh-ed25519 AAAA test@android",
                         ),

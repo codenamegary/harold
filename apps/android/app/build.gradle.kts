@@ -83,6 +83,8 @@ dependencies {
     implementation(project(":contracts"))
     implementation(project(":api"))
     implementation(project(":transport"))
+    implementation(project(":acp"))
+    implementation(project(":host"))
     implementation(project(":database"))
     implementation(project(":auth"))
     implementation(project(":live"))

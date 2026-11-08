@@ -22,6 +22,8 @@ include(
     ":contracts",
     ":api",
     ":transport",
+    ":acp",
+    ":host",
     ":database",
     ":auth",
     ":live",

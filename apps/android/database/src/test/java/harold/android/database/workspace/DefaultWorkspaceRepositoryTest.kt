@@ -15,7 +15,6 @@ import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceSource
 import harold.android.contracts.WorkspaceState
-import harold.android.network.AgentApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -140,7 +139,7 @@ class DefaultWorkspaceRepositoryTest {
     }
 }
 
-private class WorkspaceFakeAgentApi : AgentApi {
+private class WorkspaceFakeAgentApi : harold.android.network.WorkspaceApi {
     var workspaces: Result<WorkspaceCollection> = Result.success(
         WorkspaceCollection(items = emptyList(), page = PageInfo(limit = 100, count = 0)),
     )
@@ -165,7 +164,6 @@ private class WorkspaceFakeAgentApi : AgentApi {
         body: CreateWorkspaceBody,
     ): Result<Workspace> = created
 
-
     override suspend fun listFilesystemDirectories(
         connectionId: String,
         root: String?,
@@ -177,28 +175,6 @@ private class WorkspaceFakeAgentApi : AgentApi {
     ) = Result.failure<harold.android.contracts.FilesystemDirectoryCreated>(
         UnsupportedOperationException("unused"),
     )
-
-    override suspend fun listSessions(connectionId: String, cwd: String?) = unused<SessionCollection>()
-
-    override suspend fun listAgents(connectionId: String) = unused<AgentSettingsCollection>()
-
-    override suspend fun createSession(
-        connectionId: String,
-        body: CreateSessionBody,
-    ) = unused<CreateSessionResponse>()
-
-    override suspend fun deleteSession(
-        connectionId: String,
-        agentId: AgentId,
-        sessionId: String,
-    ) = unused<Unit>()
-
-    override suspend fun getAgentAuth(connectionId: String, agentId: AgentId) = unused<AgentAuth>()
-
-    override suspend fun logoutAgentAuth(
-        connectionId: String,
-        agentId: AgentId,
-    ) = unused<AgentAuthSummary>()
 
     private fun <T> unused(): Result<T> = Result.failure(UnsupportedOperationException())
 }

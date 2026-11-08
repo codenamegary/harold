@@ -7,7 +7,8 @@ import harold.android.contracts.CreateSessionResponse
 import harold.android.contracts.Session
 import harold.android.contracts.Workspace
 import harold.android.database.workspace.WorkspaceRepository
-import harold.android.network.AgentApi
+import harold.android.network.AcpAgentApi
+import harold.android.network.AgentSettingsApi
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -82,7 +83,8 @@ interface SessionWorktreePathStore {
 }
 
 class DefaultSessionRepository @Inject constructor(
-    private val agentApi: AgentApi,
+    private val agentApi: AcpAgentApi,
+    private val agentSettingsApi: AgentSettingsApi,
     private val workspaceRepository: WorkspaceRepository,
     private val sessionDao: SessionDao,
     private val agentDao: AgentDao,
@@ -163,7 +165,7 @@ class DefaultSessionRepository @Inject constructor(
         fetchAgents(connectionId).map { }
 
     private suspend fun fetchAgents(connectionId: String): Result<List<AgentSettings>> {
-        val result = agentApi.listAgents(connectionId)
+        val result = agentSettingsApi.listAgents(connectionId)
         if (result.isFailure) {
             return Result.failure(checkNotNull(result.exceptionOrNull()))
         }

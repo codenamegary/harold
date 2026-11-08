@@ -18,7 +18,6 @@ import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceState
 import harold.android.database.workspace.DefaultWorkspaceRepository
 import harold.android.database.workspace.WorkspaceRepository
-import harold.android.network.AgentApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -52,6 +51,7 @@ class DefaultSessionRepositoryTest {
         )
         repository = DefaultSessionRepository(
             agentApi = api,
+            agentSettingsApi = api,
             workspaceRepository = workspaceRepository,
             sessionDao = database.sessionDao(),
             agentDao = database.agentDao(),
@@ -226,7 +226,9 @@ class DefaultSessionRepositoryTest {
     }
 }
 
-private class ChatFakeAgentApi : AgentApi {
+private class ChatFakeAgentApi : harold.android.network.AcpAgentApi,
+    harold.android.network.AgentSettingsApi,
+    harold.android.network.WorkspaceApi {
     var sessions: Result<SessionCollection> = Result.success(SessionCollection(emptyList()))
     var agents: Result<AgentSettingsCollection> = Result.success(
         AgentSettingsCollection(
@@ -291,7 +293,6 @@ private class ChatFakeAgentApi : AgentApi {
         sessionId: String,
     ): Result<Unit> = deleted
 
-
     override suspend fun listFilesystemDirectories(
         connectionId: String,
         root: String?,
@@ -309,15 +310,38 @@ private class ChatFakeAgentApi : AgentApi {
         body: CreateWorkspaceBody,
     ) = unused<Workspace>()
 
-    override suspend fun getAgentAuth(
+    override suspend fun setConfigOption(
         connectionId: String,
         agentId: AgentId,
-    ) = unused<AgentAuth>()
+        sessionId: String,
+        configId: String,
+        value: harold.android.contracts.ConfigValue,
+    ) = unused<Unit>()
 
-    override suspend fun logoutAgentAuth(
+    override suspend fun prompt(
         connectionId: String,
         agentId: AgentId,
-    ) = unused<AgentAuthSummary>()
+        sessionId: String,
+        body: harold.android.contracts.PromptRequestBody,
+    ) = unused<Unit>()
+
+    override suspend fun cancel(
+        connectionId: String,
+        agentId: AgentId,
+        sessionId: String,
+    ) = unused<Unit>()
+
+    override suspend fun replyPermission(
+        connectionId: String,
+        requestId: String,
+        optionId: String,
+    ) = unused<Unit>()
+
+    override suspend fun replyExtension(
+        connectionId: String,
+        requestId: String,
+        result: kotlinx.serialization.json.JsonElement,
+    ) = unused<Unit>()
 
     private fun <T> unused(): Result<T> = Result.failure(UnsupportedOperationException())
 }

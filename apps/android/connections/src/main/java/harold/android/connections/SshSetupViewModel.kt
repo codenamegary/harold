@@ -12,9 +12,10 @@ import harold.android.credentials.SshCredentialStore
 import harold.android.credentials.SavedConnection
 import harold.android.navigation.Navigator
 import harold.android.session.ConnectionGateway
-import harold.android.transport.ssh.GeneratedSshKey
-import harold.android.transport.ssh.SshProbe
-import harold.android.transport.ssh.SshKeyGenerator
+import harold.android.setup.SshSetupApi
+import harold.android.setup.SshSetupAuth
+import harold.android.setup.SshSetupKey
+import harold.android.setup.SshSetupTarget
 import java.time.Instant
 import java.util.UUID
 import javax.inject.Inject
@@ -43,7 +44,7 @@ data class SshSetupUiState(
     val user: String = "",
     val name: String = "",
     val authMode: SshAuthMode = SshAuthMode.GeneratedKey,
-    val generatedKey: GeneratedSshKey? = null,
+    val generatedKey: SshSetupKey? = null,
     val importedKey: String = "",
     val password: String = "",
     val colorId: String = "tide",
@@ -83,12 +84,12 @@ data class SshSetupUiState(
 class SshSetupViewModel @Inject constructor(
     private val repository: ConnectionRepository,
     private val gateway: ConnectionGateway,
-    private val enrollment: SshProbe,
+    private val setup: SshSetupApi,
     private val navigator: Navigator,
     private val credentials: SshCredentialStore,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(
-        SshSetupUiState(generatedKey = pendingKey()),
+        SshSetupUiState(generatedKey = pendingKey(setup)),
     )
     val uiState: StateFlow<SshSetupUiState> = _uiState.asStateFlow()
 
@@ -224,7 +225,7 @@ class SshSetupViewModel @Inject constructor(
             current.copy(testing = true, errorMessage = null, testedFingerprint = null, trusted = false)
         }
         viewModelScope.launch {
-            enrollment.probe(config).fold(
+            setup.probe(config.toSetupTarget()).fold(
                 onSuccess = { fingerprint ->
                     _uiState.update { current ->
                         current.copy(
@@ -387,10 +388,10 @@ class SshSetupViewModel @Inject constructor(
 
         // Keep one phone key across setup-screen recreations. The key only
         // becomes durable when the connection is saved.
-        private var pendingKeyValue: GeneratedSshKey? = null
+        private var pendingKeyValue: SshSetupKey? = null
 
-        private fun pendingKey(): GeneratedSshKey =
-            pendingKeyValue ?: SshKeyGenerator.generate().also { key ->
+        private fun pendingKey(setup: SshSetupApi): SshSetupKey =
+            pendingKeyValue ?: setup.generateKey().also { key ->
                 pendingKeyValue = key
             }
 
@@ -398,6 +399,17 @@ class SshSetupViewModel @Inject constructor(
             host.substringBefore('.').ifBlank { "ssh" }
     }
 }
+
+private fun SshConfig.toSetupTarget(): SshSetupTarget = SshSetupTarget(
+    host = host,
+    port = port,
+    user = user,
+    auth = when (val value = auth) {
+        is SshAuth.PrivateKey -> SshSetupAuth.PrivateKey(value.pem, value.publicKey)
+        is SshAuth.Password -> SshSetupAuth.Password(value.secret)
+    },
+    hostKeyFingerprint = hostKeyFingerprint,
+)
 
 fun defaultCredentialName(mode: SshAuthMode, host: String = ""): String {
     val prefix = host.substringBefore('.').ifBlank { "Phone" }

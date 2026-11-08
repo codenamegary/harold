@@ -15,7 +15,7 @@ import harold.android.live.SessionOwner
 import harold.android.session.DefaultConnectionGateway
 import harold.android.testing.FakeConnectionStore
 import harold.android.live.SessionSnapshot
-import harold.android.network.AgentApi
+import harold.android.network.WorkspaceApi
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.session.ActiveConnectionState
@@ -222,7 +222,7 @@ class ShellViewModelTest {
     private fun viewModel(
         session: ConnectionGateway,
         connection: SessionOwner,
-        api: AgentApi,
+        api: WorkspaceApi,
         navigator: harold.android.navigation.Navigator = harold.android.navigation.Navigator(),
         savedConnections: ConnectionRepository = ConnectionRepository(FakeConnectionStore()),
     ): ShellViewModel = ShellViewModel(
@@ -362,7 +362,7 @@ private class FakeSessionOwner : SessionOwner {
 
 private class FakeAgentApi(
     private val result: Result<WorkspaceCollection>,
-) : AgentApi {
+) : harold.android.network.WorkspaceApi {
     val calls = mutableListOf<Pair<String, Int>>()
 
     override suspend fun listWorkspaces(
@@ -391,37 +391,4 @@ private class FakeAgentApi(
         connectionId: String,
         body: harold.android.contracts.CreateWorkspaceBody,
     ): Result<Workspace> = Result.failure(UnsupportedOperationException())
-
-    override suspend fun listSessions(
-        connectionId: String,
-        cwd: String?,
-    ): Result<harold.android.contracts.SessionCollection> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun listAgents(connectionId: String): Result<harold.android.contracts.AgentSettingsCollection> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun createSession(
-        connectionId: String,
-        body: harold.android.contracts.CreateSessionBody,
-    ): Result<harold.android.contracts.CreateSessionResponse> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun deleteSession(
-        connectionId: String,
-        agentId: harold.android.contracts.AgentId,
-        sessionId: String,
-    ): Result<Unit> = Result.failure(UnsupportedOperationException())
-
-    override suspend fun getAgentAuth(
-        connectionId: String,
-        agentId: harold.android.contracts.AgentId,
-    ): Result<harold.android.contracts.AgentAuth> =
-        Result.failure(UnsupportedOperationException())
-
-    override suspend fun logoutAgentAuth(
-        connectionId: String,
-        agentId: harold.android.contracts.AgentId,
-    ): Result<harold.android.contracts.AgentAuthSummary> =
-        Result.failure(UnsupportedOperationException())
 }

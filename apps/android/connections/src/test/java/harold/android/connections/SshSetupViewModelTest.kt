@@ -5,10 +5,12 @@ import harold.android.credentials.SshAuth
 import harold.android.credentials.SshCredential
 import harold.android.credentials.SshCredentialKind
 import harold.android.navigation.Navigator
+import harold.android.setup.SshSetupApi
+import harold.android.setup.SshSetupKey
+import harold.android.setup.SshSetupTarget
 import harold.android.testing.FakeConnectionStore
 import harold.android.testing.FakeConnectionGateway
 import harold.android.testing.FakeSshCredentialStore
-import harold.android.transport.ssh.SshProbe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -152,12 +154,20 @@ private fun fixture(
     initialCredentials: List<SshCredential> = emptyList(),
 ): Fixture {
     val credentials = FakeSshCredentialStore(initialCredentials)
-    val probe = SshProbe { Result.success("SHA256:test") }
+    val probe = object : SshSetupApi {
+        override fun generateKey(): SshSetupKey = SshSetupKey(
+            privateKeyPem = "-----BEGIN OPENSSH PRIVATE KEY-----\nkey\n-----END OPENSSH PRIVATE KEY-----",
+            publicKey = "ssh-ed25519 AAAA test",
+        )
+
+        override suspend fun probe(target: SshSetupTarget): Result<String> =
+            Result.success("SHA256:test")
+    }
     return Fixture(
         viewModel = SshSetupViewModel(
             repository = ConnectionRepository(connections),
             gateway = FakeConnectionGateway(),
-            enrollment = probe,
+            setup = probe,
             navigator = Navigator(),
             credentials = credentials,
         ),
