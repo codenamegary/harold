@@ -30,10 +30,11 @@ Install a debug build on a connected device or emulator:
 
 ## The SSH transport, end to end
 
-Harold speaks to one machine per saved connection:
+Harold keeps one SSH connection per host identity and one ACP agent process per
+agent. Many ACP sessions share that process:
 
 ```
-Android app -> SSH exec -> `agent acp` (one ACP process per session)
+Android app -> SSH connection pool -> `agent acp` (one process per host identity + agent) -> many ACP sessions
 ```
 
 - Connecting to a host enrolls the phone with it: generate an Ed25519 key
@@ -47,6 +48,25 @@ Android app -> SSH exec -> `agent acp` (one ACP process per session)
   break a connection that already copied it.
 - When several saved connections point at the same SSH endpoint, later rows
   get a numeric suffix on their connection id so they stay separate entries.
+  Rows with the same endpoint and credentials share one pooled SSH session and
+  one agent process.
+- Opening a session attaches to the warm process. Closing the event stream
+  detaches but keeps the process. Reopening resumes the transcript with ACP
+  `session/load` and a stream reset.
+- Creating, listing, deleting, restarting, and reading capabilities all use the
+  same warm process. A session list refresh or an agent scan does not spawn an
+  extra process.
+- If a process exits, every session it hosted goes offline. The watched session
+  reconnects through the one existing retry loop and starts one new process.
+  Other sessions stay offline until opened again.
+- Removing the last saved connection for a host identity closes its pooled SSH
+  session and every agent process on it.
+
+The Android app is split into `:transport` (SSH primitives and setup),
+`:host` (workspaces, git, agent settings, auth, process launch), `:acp` (ACP
+protocol, runtime, sessions, streams), and feature modules. Only `:app` wires
+the concrete implementations. Feature modules talk through the interfaces in
+`:api` and never hold an SSH connection or an agent process.
 
 ## Host state
 
@@ -64,8 +84,9 @@ and compiles the per-agent lists in memory; it does not write session files
 to the host. Older releases created `sessions/<agent>/<sessionId>.json`; those
 files are ignored and safe to delete.
 
-No Harold process, daemon, or port runs on the host. A closing app or a lost
-network ends the agent process. Opening the session again spawns a fresh
+No Harold daemon, service, or port runs on the host. Agent processes are
+children of the app's SSH sessions. A backgrounded app closes processes with
+no live session. A lost network ends them. Opening the session again starts one
 process and resumes through ACP `session/load`.
 
 ## Agent settings
@@ -119,10 +140,22 @@ with the distribution key held in repo secrets.
 ## Tests
 
 Unit tests run with the standard gate above. The SSH integration test
-(`SshIntegrationTest` in `:transport`) drives a real SSH session against
-`scripts/ssh-test-server.py` and a fake ACP agent
-(`scripts/fake-acp-agent.py`) — see [docs/architecture.md](../../docs/architecture.md)
-for setup.
+(`SshIntegrationTest` in `:acp`) drives a real SSH session against
+`scripts/ssh-test-server.py` and a multi-session fake ACP agent
+(`scripts/fake-acp-agent.py`). It is skipped unless the Python dependency is
+present:
+
+```sh
+python3 -m venv /tmp/harold-ssh-venv
+/tmp/harold-ssh-venv/bin/pip install asyncssh
+
+HAROLD_RUN_SSH_TESTS=1 ./gradlew :acp:testDebugUnitTest \
+  --tests '*SshIntegrationTest'
+```
+
+The test checks one agent process and one SSH connection are reused across
+sessions, opens, list refreshes, and management calls. It also checks process
+restart and session deletion.
 
 ## CI
 
