@@ -1,6 +1,7 @@
 package harold.android.credentials
 
 import harold.android.database.LocalCacheCleaner
+import harold.android.network.ConnectionResources
 import harold.android.session.ActiveConnectionState
 import harold.android.testing.FakeConnectionStore
 import harold.android.testing.FakeConnectionGateway
@@ -100,6 +101,45 @@ class ConnectionRepositoryTest {
     }
 
     @Test
+    fun removeClosesHostResourcesForThatConnection() = runTest {
+        val laptop = savedConnection("ssh://gary@laptop.local:22", "laptop", "tide", "bolt")
+        val store = FakeConnectionStore()
+        store.save(laptop)
+        val closed = mutableListOf<String>()
+        val repository = ConnectionRepository(
+            store = store,
+            connectionResources = RecordingConnectionResources(closed),
+        )
+
+        repository.remove(laptop.connectionId)
+
+        assertEquals(listOf(laptop.connectionId), closed)
+    }
+
+    @Test
+    fun saveClosesHostResourcesOnlyWhenTheSshConfigChanges() = runTest {
+        val laptop = savedConnection("ssh://gary@laptop.local:22", "laptop", "tide", "bolt")
+        val store = FakeConnectionStore()
+        store.save(laptop)
+        val closed = mutableListOf<String>()
+        val repository = ConnectionRepository(
+            store = store,
+            connectionResources = RecordingConnectionResources(closed),
+        )
+
+        repository.save(laptop.copy(name = "renamed"))
+        assertEquals(emptyList<String>(), closed)
+
+        repository.save(
+            laptop.copy(
+                name = "renamed",
+                ssh = laptop.ssh.copy(auth = SshAuth.Password(secret = "new-secret")),
+            ),
+        )
+        assertEquals(listOf(laptop.connectionId), closed)
+    }
+
+    @Test
     fun forgettingTheActiveHaroldConnectsTheOneThatRemains() = runTest {
         val gateway = FakeConnectionGateway(ActiveConnectionState.Active("ssh://gary@laptop.local:22", "Pixel"))
         gateway.activeAfterRefresh = ActiveConnectionState.Active("ssh://gary@desktop.local:22", "Pixel")
@@ -140,6 +180,14 @@ class ConnectionRepositoryTest {
         assertTrue(disconnected)
         assertTrue(showedConnectionSetup)
         assertEquals(ActiveConnectionState.NoConnection, gateway.activeConnection.value)
+    }
+}
+
+private class RecordingConnectionResources(
+    private val closed: MutableList<String>,
+) : ConnectionResources {
+    override suspend fun closeConnection(connectionId: String) {
+        closed += connectionId
     }
 }
 

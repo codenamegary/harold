@@ -1,12 +1,14 @@
 package harold.android.credentials
 
 import harold.android.database.LocalCacheCleaner
+import harold.android.network.ConnectionResources
 import harold.android.session.ActiveConnectionState
 import harold.android.session.ConnectionGateway
 
 class ConnectionRepository(
     private val store: ConnectionStore,
     private val localCacheCleaner: LocalCacheCleaner? = null,
+    private val connectionResources: ConnectionResources? = null,
 ) {
     suspend fun list(): List<SavedConnection> = store.list()
 
@@ -14,7 +16,13 @@ class ConnectionRepository(
         store.list().find { connection -> connection.connectionId == connectionId }
 
     suspend fun save(credential: SavedConnection) {
+        val existing = store.list().find { connection ->
+            connection.connectionId == credential.connectionId
+        }
         store.save(credential)
+        if (existing != null && existing.ssh != credential.ssh) {
+            connectionResources?.closeConnection(credential.connectionId)
+        }
     }
 
     suspend fun edit(
@@ -51,6 +59,7 @@ class ConnectionRepository(
     suspend fun remove(connectionId: String): Boolean {
         store.remove(connectionId)
         localCacheCleaner?.deleteByOrigin(connectionId)
+        connectionResources?.closeConnection(connectionId)
         return store.list().isNotEmpty()
     }
 }

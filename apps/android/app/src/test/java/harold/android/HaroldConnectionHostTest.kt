@@ -10,6 +10,8 @@ import harold.android.session.Connections
 import harold.android.session.ActiveConnectionState
 import harold.android.stream.ConnectionState
 import harold.android.testing.FakeConnectionGateway
+import harold.android.transport.ssh.SshConnectionLease
+import harold.android.transport.ssh.SshConnectionPool
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -28,7 +30,8 @@ class HaroldConnectionHostTest {
     fun foregroundConnectsTheFocusedHarold() = runTest {
         val owner = RecordingSessionOwner()
         val connections = RecordingConnections(stay = true)
-        val host = host(owner, connections)
+        val pool = RecordingPool()
+        val host = host(owner, connections, pool)
 
         host.onAppForeground()
         runCurrent()
@@ -37,43 +40,70 @@ class HaroldConnectionHostTest {
         assertEquals(listOf(ORIGIN), owner.connects)
         assertEquals(1, owner.foregrounds)
         assertEquals(0, owner.backgroundCloses)
+        assertEquals(0, pool.closeAlls)
     }
 
     @Test
     fun backgroundClosesTheFocusedStreamWhenNoSessionIsLive() = runTest {
         val owner = RecordingSessionOwner()
         val connections = RecordingConnections(stay = false)
-        val host = host(owner, connections)
+        val pool = RecordingPool()
+        val host = host(owner, connections, pool)
 
         host.onAppBackground()
 
         assertEquals(1, connections.backgrounds)
         assertEquals(1, owner.backgroundCloses)
         assertEquals(0, owner.backgrounds)
+        assertEquals(1, pool.closeAlls)
     }
 
     @Test
     fun backgroundKeepsTheFocusedStreamWhenASessionIsLive() = runTest {
         val owner = RecordingSessionOwner()
         val connections = RecordingConnections(stay = true)
-        val host = host(owner, connections)
+        val pool = RecordingPool()
+        val host = host(owner, connections, pool)
 
         host.onAppBackground()
 
         assertEquals(1, connections.backgrounds)
         assertEquals(0, owner.backgroundCloses)
         assertEquals(1, owner.backgrounds)
+        assertEquals(0, pool.closeAlls)
     }
 
     private fun TestScope.host(
         owner: RecordingSessionOwner,
         connections: RecordingConnections,
+        pool: RecordingPool,
     ): HaroldConnectionHost = HaroldConnectionHost(
         connections = connections,
         connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
         sessionOwner = owner,
+        connectionPool = pool,
         scope = backgroundScope,
     )
+}
+
+private class RecordingPool : SshConnectionPool {
+    var closeAlls = 0
+        private set
+
+    override suspend fun acquire(connectionId: String): SshConnectionLease =
+        error("not used")
+
+    override suspend fun keyFor(connectionId: String): String = error("not used")
+
+    override suspend fun close(connectionId: String) = Unit
+
+    override fun closeKey(key: String) = Unit
+
+    override fun closeAll() {
+        closeAlls += 1
+    }
+
+    override fun trimIdle(idleMillis: Long) = Unit
 }
 
 private class RecordingConnections(

@@ -6,6 +6,7 @@ import harold.android.process.AgentProcessLauncher
 import harold.android.process.LaunchableAgent
 import harold.android.process.TerminalLaunchSpec
 import harold.android.transport.ssh.SshConnection
+import harold.android.transport.ssh.SshConnectionLease
 import harold.android.transport.ssh.SshExecChannel
 import harold.android.transport.ssh.SshException
 import harold.android.transport.ssh.isExecutable
@@ -66,7 +67,7 @@ class SshAgentProcessLauncher @Inject constructor(
         }
     }
 
-    private suspend fun connect(connectionId: String): SshConnection =
+    private suspend fun connect(connectionId: String): SshConnectionLease =
         connections.open(connectionId)
 
     private suspend fun ensureAgentRows(
@@ -165,7 +166,7 @@ class SshAgentProcessLauncher @Inject constructor(
 
     private class SshAgentProcessChannel(
         private val exec: SshExecChannel,
-        private val connection: SshConnection,
+        private val connection: SshConnectionLease,
         override val label: String,
     ) : AgentProcessChannel {
         override val stdin get() = exec.stdin

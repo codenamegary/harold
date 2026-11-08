@@ -21,6 +21,9 @@ class JschSshConnection private constructor(
     private val sftpLock = Mutex()
     private var sftpChannel: ChannelSftp? = null
 
+    override val isConnected: Boolean
+        get() = session.isConnected
+
     override suspend fun exec(command: String): SshExecChannel = withContext(Dispatchers.IO) {
         val channel = session.openChannel("exec") as ChannelExec
         channel.setCommand(command)

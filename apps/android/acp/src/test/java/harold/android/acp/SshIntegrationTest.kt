@@ -23,7 +23,9 @@ import harold.android.network.AgentApiException
 import harold.android.network.AgentAuthCache
 import harold.android.testing.FakeConnectionStore
 import harold.android.transport.ssh.JschSshConnectionFactory
+import harold.android.transport.ssh.JschSshConnectionPool
 import harold.android.transport.ssh.SshConnection
+import harold.android.transport.ssh.SshConnectionPool
 import harold.android.transport.ssh.SshKeyGenerator
 import harold.android.transport.ssh.captureHostKeyFingerprint
 import harold.android.transport.ssh.runCommand
@@ -63,6 +65,7 @@ class SshIntegrationTest {
     private lateinit var connectionId: String
     private lateinit var sshConfig: SshConfig
     private lateinit var repository: ConnectionRepository
+    private lateinit var connectionPool: SshConnectionPool
     private lateinit var sessionFactory: AcpSessionFactory
     private lateinit var acpApi: DefaultAcpAgentApi
     private lateinit var hostAgents: HostAgentApi
@@ -152,7 +155,8 @@ class SshIntegrationTest {
         val registry = AcpSessionRegistry()
         val catalog = AcpSessionCatalog()
         val transport = JschSshConnectionFactory()
-        val connections = HostConnections(repository, transport)
+        connectionPool = JschSshConnectionPool(repository, transport)
+        val connections = HostConnections(repository, connectionPool)
         val launcher = SshAgentProcessLauncher(connections)
         sessionFactory = AcpSessionFactory(
             launcher = launcher,
@@ -187,6 +191,9 @@ class SshIntegrationTest {
                     connection.runCommand("rm -f ~/.harold/agents.json")
                 }
             }
+        }
+        if (::connectionPool.isInitialized) {
+            connectionPool.closeAll()
         }
         server?.destroy()
         server?.waitFor(5, TimeUnit.SECONDS)

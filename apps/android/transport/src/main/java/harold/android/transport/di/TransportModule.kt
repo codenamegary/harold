@@ -7,7 +7,9 @@ import dagger.hilt.components.SingletonComponent
 import harold.android.session.ConnectionReachability
 import harold.android.setup.SshSetupApi
 import harold.android.transport.ssh.JschSshConnectionFactory
+import harold.android.transport.ssh.JschSshConnectionPool
 import harold.android.transport.ssh.SshConnectionFactory
+import harold.android.transport.ssh.SshConnectionPool
 import harold.android.transport.ssh.SshReachability
 import harold.android.transport.ssh.SshSetup
 import javax.inject.Singleton
@@ -22,6 +24,10 @@ abstract class TransportModule {
     @Binds
     @Singleton
     abstract fun sshConnectionFactory(impl: JschSshConnectionFactory): SshConnectionFactory
+
+    @Binds
+    @Singleton
+    abstract fun sshConnectionPool(impl: JschSshConnectionPool): SshConnectionPool
 
     @Binds
     @Singleton

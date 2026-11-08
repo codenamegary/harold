@@ -8,6 +8,7 @@ import harold.android.live.SessionOwner
 import harold.android.session.Connections
 import harold.android.session.ActiveConnectionState
 import harold.android.session.ConnectionGateway
+import harold.android.transport.ssh.SshConnectionPool
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
@@ -24,16 +25,19 @@ class HaroldConnectionHost(
     private val connections: Connections,
     private val connectionGateway: ConnectionGateway,
     private val sessionOwner: SessionOwner,
+    private val connectionPool: SshConnectionPool,
     private val scope: CoroutineScope,
 ) : DefaultLifecycleObserver {
     @Inject constructor(
         connections: Connections,
         connectionGateway: ConnectionGateway,
         sessionOwner: SessionOwner,
+        connectionPool: SshConnectionPool,
     ) : this(
         connections = connections,
         connectionGateway = connectionGateway,
         sessionOwner = sessionOwner,
+        connectionPool = connectionPool,
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
     )
 
@@ -74,6 +78,7 @@ class HaroldConnectionHost(
             sessionOwner.onBackground()
         } else {
             sessionOwner.closeForBackground()
+            connectionPool.closeAll()
         }
     }
 }

@@ -13,6 +13,7 @@ import harold.android.credentials.DefaultConnectionStore
 import harold.android.credentials.DefaultSshCredentialStore
 import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SshCredentialStore
+import harold.android.network.ConnectionResources
 import harold.android.session.DefaultConnections
 import harold.android.session.DefaultConnectionGateway
 import harold.android.session.Connections
@@ -72,9 +73,11 @@ abstract class AuthModule {
         fun connectionRepository(
             credentialStore: ConnectionStore,
             localCacheCleaner: LocalCacheCleaner,
+            connectionResources: ConnectionResources,
         ): ConnectionRepository = ConnectionRepository(
             store = credentialStore,
             localCacheCleaner = localCacheCleaner,
+            connectionResources = connectionResources,
         )
     }
 }

@@ -38,6 +38,8 @@ interface SshExecChannel : Closeable {
 }
 
 interface SshConnection : Closeable {
+    val isConnected: Boolean
+
     suspend fun exec(command: String): SshExecChannel
 
     suspend fun readFile(path: String): ByteArray
