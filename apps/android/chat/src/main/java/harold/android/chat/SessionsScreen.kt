@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import harold.android.ui.components.HaroldBadge
 import harold.android.ui.components.LoadingSkeletonList
+import harold.android.ui.components.SwipeToDeleteListItem
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -227,9 +228,11 @@ fun SessionsListContent(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(uiState.sessions, key = { session -> session.id }) { session ->
-                        SwipeToRevealDelete(
+                        SwipeToDeleteListItem(
                             rowTag = session.id,
+                            deleteLabel = stringResource(R.string.sessions_delete),
                             onDelete = { onDeleteSession(session) },
+                            deleteActionTag = "session_delete_${session.id}",
                         ) {
                             SessionListRow(
                                 session = session,

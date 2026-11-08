@@ -1,4 +1,4 @@
-package harold.android.chat
+package harold.android.ui.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -23,8 +23,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
@@ -36,12 +40,20 @@ private enum class RevealValue {
 /** How far the row's trailing edge retracts to uncover Delete. */
 private val RevealWidth = 88.dp
 
+/**
+ * Wraps a list item so a horizontal drag reveals a destructive action at its
+ * trailing edge. The action is also exposed as a custom accessibility action.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun SwipeToRevealDelete(
+fun SwipeToDeleteListItem(
     rowTag: String,
+    deleteLabel: String,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    shape: Shape = RoundedCornerShape(12.dp),
+    deleteActionTag: String = "swipe_delete_action_$rowTag",
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -67,12 +79,23 @@ fun SwipeToRevealDelete(
         modifier = modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(shape)
             .anchoredDraggable(
                 state = state,
                 orientation = Orientation.Horizontal,
+                enabled = enabled,
                 flingBehavior = flingBehavior,
             )
+            .semantics {
+                if (enabled) {
+                    customActions = listOf(
+                        CustomAccessibilityAction(deleteLabel) {
+                            onDelete()
+                            true
+                        },
+                    )
+                }
+            }
             .testTag("swipe_delete_$rowTag"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -90,10 +113,10 @@ fun SwipeToRevealDelete(
             if (revealedPx > revealPx * 0.35f) {
                 TextButton(
                     onClick = onDelete,
-                    modifier = Modifier.testTag("session_delete_$rowTag"),
+                    modifier = Modifier.testTag(deleteActionTag),
                 ) {
                     Text(
-                        text = "Delete",
+                        text = deleteLabel,
                         color = MaterialTheme.colorScheme.onError,
                         style = MaterialTheme.typography.labelLarge,
                     )

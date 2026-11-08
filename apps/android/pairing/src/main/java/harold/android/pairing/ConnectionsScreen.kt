@@ -16,7 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,11 +37,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import harold.android.session.ConnectionStatus
 import harold.android.ui.components.HaroldAppearanceEditor
 import harold.android.ui.components.HaroldBadge
-import harold.android.session.ConnectionStatus
 import harold.android.ui.components.HaroldButton
 import harold.android.ui.components.HaroldButtonVariant
+import harold.android.ui.components.SwipeToDeleteListItem
 
 private val MIN_TOUCH_TARGET = 48.dp
 
@@ -110,148 +110,145 @@ fun ConnectionsScreen(
         ) {
             uiState.rows.forEach { row ->
                 val isEditing = uiState.editingOrigin == row.connectionId
-                Card(
+                SwipeToDeleteListItem(
+                    rowTag = row.connectionId,
+                    deleteLabel = stringResource(R.string.connections_remove),
+                    onDelete = { onRemove(row.connectionId) },
+                    enabled = !isEditing,
                     shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("connection_${row.connectionId}"),
+                    deleteActionTag = "connection_remove_${row.connectionId}",
                 ) {
-                    if (isEditing) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                        ) {
-                            HaroldAppearanceEditor(
-                                name = uiState.name,
-                                colorId = uiState.colorId,
-                                iconId = uiState.iconId,
-                                onNameChanged = onNameChanged,
-                                onColorSelected = onColorSelected,
-                                onIconSelected = onIconSelected,
-                                nameLabel = stringResource(R.string.pairing_name_label),
-                                colorLabel = stringResource(R.string.pairing_color_label),
-                                iconLabel = stringResource(R.string.pairing_icon_label),
-                                nameFieldTag = "connection_name",
-                                colorTagPrefix = "connection_color_",
-                                iconTagPrefix = "connection_icon_",
-                                endpointSubtitle = row.endpoint,
-                            )
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                HaroldButton(
-                                    text = stringResource(R.string.pairing_cancel),
-                                    onClick = onCancelEdit,
-                                    variant = HaroldButtonVariant.Secondary,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .testTag("connection_cancel"),
-                                )
-                                HaroldButton(
-                                    text = stringResource(R.string.connections_save),
-                                    onClick = onSave,
-                                    variant = HaroldButtonVariant.Primary,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .testTag("connection_save"),
-                                )
-                            }
-                        }
-                    } else {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        ) {
-                            HaroldBadge(
-                                colorId = row.colorId,
-                                iconId = row.iconId,
-                                size = 40.dp,
-                                modifier = Modifier.testTag("connection_badge_${row.connectionId}"),
-                            )
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("connection_${row.connectionId}"),
+                    ) {
+                        if (isEditing) {
                             Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
                             ) {
-                                Text(
-                                    text = row.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                                HaroldAppearanceEditor(
+                                    name = uiState.name,
+                                    colorId = uiState.colorId,
+                                    iconId = uiState.iconId,
+                                    onNameChanged = onNameChanged,
+                                    onColorSelected = onColorSelected,
+                                    onIconSelected = onIconSelected,
+                                    nameLabel = stringResource(R.string.pairing_name_label),
+                                    colorLabel = stringResource(R.string.pairing_color_label),
+                                    iconLabel = stringResource(R.string.pairing_icon_label),
+                                    nameFieldTag = "connection_name",
+                                    colorTagPrefix = "connection_color_",
+                                    iconTagPrefix = "connection_icon_",
+                                    endpointSubtitle = row.endpoint,
                                 )
-                                Text(
-                                    text = row.endpoint,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    HaroldButton(
+                                        text = stringResource(R.string.pairing_cancel),
+                                        onClick = onCancelEdit,
+                                        variant = HaroldButtonVariant.Secondary,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("connection_cancel"),
+                                    )
+                                    HaroldButton(
+                                        text = stringResource(R.string.connections_save),
+                                        onClick = onSave,
+                                        variant = HaroldButtonVariant.Primary,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("connection_save"),
+                                    )
+                                }
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            ) {
+                                HaroldBadge(
+                                    colorId = row.colorId,
+                                    iconId = row.iconId,
+                                    size = 40.dp,
+                                    modifier = Modifier.testTag("connection_badge_${row.connectionId}"),
                                 )
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                                ) {
+                                    Text(
+                                        text = row.name,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        text = row.endpoint,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text = statusLabel(row.status),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (row.status == ConnectionStatus.Unreachable) {
+                                                MaterialTheme.colorScheme.error
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                            modifier = Modifier.testTag(
+                                                "connection_status_${row.connectionId}",
+                                            ),
+                                        )
+                                    }
+                                }
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Text(
-                                        text = statusLabel(row.status),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (row.status == ConnectionStatus.Unreachable) {
-                                            MaterialTheme.colorScheme.error
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        },
-                                        modifier = Modifier.testTag(
-                                            "connection_status_${row.connectionId}",
-                                        ),
-                                    )
-                                }
-                            }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                IconButton(
-                                    onClick = { onOpenAgents(row.connectionId) },
-                                    modifier = Modifier
-                                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                                        .testTag("connection_agents_${row.connectionId}"),
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ListAlt,
-                                        contentDescription = stringResource(R.string.agents_title),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                IconButton(
-                                    onClick = { onOpenSettings(row.connectionId) },
-                                    modifier = Modifier
-                                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                                        .testTag("connection_settings_${row.connectionId}"),
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Settings,
-                                        contentDescription = stringResource(R.string.settings_title),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                IconButton(
-                                    onClick = { onRemove(row.connectionId) },
-                                    modifier = Modifier
-                                        .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
-                                        .testTag("connection_remove_${row.connectionId}"),
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Delete,
-                                        contentDescription = stringResource(R.string.connections_remove),
-                                        tint = MaterialTheme.colorScheme.error,
-                                    )
+                                    IconButton(
+                                        onClick = { onOpenAgents(row.connectionId) },
+                                        modifier = Modifier
+                                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                                            .testTag("connection_agents_${row.connectionId}"),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.ListAlt,
+                                            contentDescription = stringResource(R.string.agents_title),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { onOpenSettings(row.connectionId) },
+                                        modifier = Modifier
+                                            .defaultMinSize(minHeight = MIN_TOUCH_TARGET)
+                                            .testTag("connection_settings_${row.connectionId}"),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Settings,
+                                            contentDescription = stringResource(R.string.settings_title),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                 }
                             }
                         }

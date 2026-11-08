@@ -57,6 +57,7 @@
     <string name="sessions_title">Sessions</string>
     <string name="sessions_search_label">Search sessions</string>
     <string name="sessions_see_all">See all sessions…</string>
+    <string name="sessions_delete">Delete</string>
     <string name="sessions_back_content_description">Go back from sessions</string>
     <string name="permission_option_content_description">Permission option: %1$s</string>
     <string name="agent_auth_host_login">Host login</string>

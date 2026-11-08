@@ -5,6 +5,8 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import harold.android.ui.theme.HaroldTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -53,7 +55,49 @@ class ConnectionsScreenTest {
         composeTestRule.onNodeWithTag("connection_badge_ssh://gary@laptop.local:22").assertIsDisplayed()
         composeTestRule.onNodeWithTag("connection_agents_ssh://gary@laptop.local:22").assertIsDisplayed()
         composeTestRule.onNodeWithTag("connection_settings_ssh://gary@laptop.local:22").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("connection_remove_ssh://gary@laptop.local:22").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("swipe_delete_ssh://gary@laptop.local:22").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("connection_remove_ssh://gary@laptop.local:22").assertDoesNotExist()
+    }
+
+    @Test
+    fun swipingConnectionRevealsRemoveAction() {
+        var removed: String? = null
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ConnectionsScreen(
+                    uiState = ConnectionsUiState(
+                        rows = listOf(
+                            ConnectionRow(
+                                connectionId = "ssh://gary@laptop.local:22",
+                                name = "laptop",
+                                colorId = "tide",
+                                iconId = "bolt",
+                            ),
+                        ),
+                    ),
+                    onBack = {},
+                    onAdd = {},
+                    onEdit = {},
+                    onRemove = { removed = it },
+                    onNameChanged = {},
+                    onColorSelected = {},
+                    onIconSelected = {},
+                    onSave = {},
+                    onCancelEdit = {},
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithTag("swipe_delete_ssh://gary@laptop.local:22")
+            .performTouchInput { swipeLeft() }
+
+        composeTestRule
+            .onNodeWithTag("connection_remove_ssh://gary@laptop.local:22")
+            .assertIsDisplayed()
+            .performClick()
+
+        assertEquals("ssh://gary@laptop.local:22", removed)
     }
 
     @Test
