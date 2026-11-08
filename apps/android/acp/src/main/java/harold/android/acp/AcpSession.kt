@@ -16,24 +16,32 @@ import harold.android.contracts.SessionStreamServerMessage.PromptComplete
 import harold.android.contracts.SessionStreamServerMessage.SessionConfig
 import harold.android.contracts.SessionStreamServerMessage.SessionInfo
 import harold.android.contracts.SessionStreamServerMessage.SessionUpdate
+import harold.android.contracts.SessionStreamServerMessage.StreamReset
 import harold.android.contracts.SessionStreamServerMessage.Subscribed
-import harold.android.process.AgentProcessChannel
-import harold.android.process.AgentProcessLauncher
-import harold.android.process.SessionFileService
+import harold.android.process.AgentAuthRequiredException
+import harold.android.stream.SessionStatus
 import java.io.Closeable
 import java.time.Instant
 import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -42,139 +50,203 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 
 /**
- * One ACP agent process over one host process channel. The app owns the
- * process: closing the channel (or losing the network) ends the process.
+ * One ACP session hosted by an [AgentProcess]. Closing a stream detaches a
+ * subscriber; it never closes this object or the process. Attaching again
+ * reloads the agent's history with `session/load` and a [StreamReset].
  */
-class AcpSession(
+class AcpSession internal constructor(
     val connectionId: String,
     val agentId: AgentId,
     val sessionId: String,
-    private val initialInfo: AcpSessionInfo?,
-    private val channel: AgentProcessChannel,
-    private val launcher: AgentProcessLauncher,
-    private val files: SessionFileService,
-    private val scope: CoroutineScope,
-    private val registry: AcpSessionRegistry,
+    val cwd: String,
+    private val created: Boolean,
+    initialTitle: String?,
+    initialConfigOptions: List<JsonElement>,
+    private val process: AgentProcess,
     private val catalog: AcpSessionCatalog,
-) : AcpClientHandler, Closeable {
-    private val acp = AcpClient(
-        input = channel.stdout,
-        output = channel.stdin,
-        scope = scope,
-        handler = this,
-    )
-    private val terminals = AcpTerminals(connectionId, launcher, scope)
+    private val scope: CoroutineScope,
+) : Closeable {
+    internal val terminals = AcpTerminals(connectionId, process.launcher, scope)
+
     private val pendingPermissions = ConcurrentHashMap<String, CompletableDeferred<JsonElement>>()
     private val pendingElicitations = ConcurrentHashMap<String, CompletableDeferred<JsonElement>>()
     private val urlElicitationRequests = ConcurrentHashMap<String, String>()
     private val prompting = AtomicBoolean(false)
-    private var intentionalClose = false
+    private val promptWriteMutex = Mutex()
+    private val attachMutex = Mutex()
+    private val attachedOnce = AtomicBoolean(false)
+    private val closeRequested = AtomicBoolean(false)
+    private val nextSubscriberId = AtomicLong(0L)
+    private val subscribers = ConcurrentHashMap<Long, Subscriber>()
 
-    private val frames = kotlinx.coroutines.channels.Channel<SessionStreamServerMessage>(
-        capacity = kotlinx.coroutines.channels.Channel.UNLIMITED,
-    )
-    val events: kotlinx.coroutines.flow.Flow<SessionStreamServerMessage> =
-        frames.receiveAsFlow()
+    private val _status = MutableStateFlow(SessionStatus.Starting)
+    val status: StateFlow<SessionStatus> = _status.asStateFlow()
 
     val closed = CompletableDeferred<String?>()
 
+    @Volatile
+    private var title: String? = initialTitle
+
+    @Volatile
+    private var configOptions: List<JsonElement> = initialConfigOptions
+
+    val isClosed: Boolean
+        get() = closeRequested.get() || closed.isCompleted
+
+    val capabilityInventory: AgentCapabilityInventory?
+        get() = process.capabilities
+
+    fun hasSubscribers(): Boolean = subscribers.isNotEmpty()
+
+    fun hasWork(): Boolean = hasSubscribers() || prompting.get()
+
     /**
-     * The live handshake result. Null until the agent answered `initialize`,
-     * and gone once this session closes — nothing about capabilities is
-     * persisted.
+     * Registers a bounded subscriber channel and starts the attach sequence
+     * (`session/load` when this is a reattach). The reload runs beside the
+     * stream collector so a long replay cannot fill the bounded buffer before
+     * the stream starts draining it.
      */
-    var capabilities: AgentCapabilityInventory? = null
-        private set
-
-    suspend fun start() {
-        acp.start()
-        scope.launch {
-            val cause = acp.closed.await()
-            if (!intentionalClose) {
-                frames.close()
-                closed.complete(cause?.message ?: "Agent process closed")
-            }
+    suspend fun attach(): AcpSessionSubscription {
+        if (isClosed) {
+            error("The session is closed.")
+        }
+        if (process.isDead) {
+            _status.value = SessionStatus.Offline
+            throw AcpClosedException(process.closedReason ?: "The agent process is not running.")
         }
 
-        val initialize = acp.request(
-            method = "initialize",
-            params = acpInitializeParams(),
-        )
-        val initializeObject = initialize as? JsonObject
-        this.capabilities = buildCapabilityInventory(initialize)
-
-        // The catalog knows a session opened from a list row. Otherwise this
-        // process asks the agent for session/list, which supplies the cwd
-        // that session/load needs. No per-session file is involved.
-        val info = initialInfo ?: resolveSessionInfo(initialize)
-            ?: error(
-                "The agent did not return this session from session/list. " +
-                    "Refresh the session list and pick it again.",
-            )
-
-        // Every open is a full replay: session/load resends the conversation
-        // from the agent's history. The stream owner keeps its last
-        // transcript across a reconnect, so it must drop it before the
-        // replay lands or the content shows twice.
-        emitFrame(
-            SessionStreamServerMessage.StreamReset(
-                agentId = agentId,
-                sessionId = sessionId,
-            ),
-        )
-        val capabilities = initializeObject?.get("agentCapabilities") as? JsonObject
-        val canLoad = capabilities?.get("loadSession").asBooleanOrFalse()
-        val canResume = (capabilities?.get("sessionCapabilities") as? JsonObject)
-            ?.containsKey("resume") == true
-
-        val loadResponse = when {
-            canLoad -> acp.request(
-                method = "session/load",
-                params = loadParams(info.cwd),
-                timeoutMillis = 180_000,
-            )
-            canResume -> acp.request(
-                method = "session/resume",
-                params = loadParams(info.cwd),
-                timeoutMillis = 180_000,
-            )
-            else -> error(
-                "This agent does not support session/load or session/resume. " +
-                    "Pick an agent that can resume a session.",
-            )
+        val id = nextSubscriberId.incrementAndGet()
+        val channel = Channel<SessionStreamServerMessage>(capacity = SUBSCRIBER_BUFFER)
+        val closedSignal = CompletableDeferred<String?>()
+        val subscriber = Subscriber(channel = channel, closed = closedSignal)
+        subscribers[id] = subscriber
+        val subscription = AcpSessionSubscription(
+            events = channel.receiveAsFlow(),
+            closed = closedSignal,
+        ) {
+            detach(id, subscriber)
         }
-
-        val loadResponseObject = loadResponse as? JsonObject
-        val configOptions = (loadResponseObject?.get("configOptions") as? JsonArray)
-            ?.map { element -> element }
-            .orEmpty()
-        if (configOptions.isNotEmpty()) {
-            emitFrame(
-                SessionConfig(
-                    agentId = agentId,
-                    sessionId = sessionId,
-                    configOptions = configOptions,
-                ),
-            )
+        scope.launch(Dispatchers.IO) {
+            runAttach(id, subscriber)
         }
-        info.title?.let { title ->
-            emitFrame(
-                SessionInfo(
-                    agentId = agentId,
-                    sessionId = sessionId,
-                    title = title,
-                ),
-            )
-        }
-        emitFrame(Subscribed(agentId = agentId, sessionId = sessionId))
+        return subscription
     }
 
-    suspend fun prompt(body: PromptRequestBody): Result<Unit> {
-        if (closed.isCompleted) {
-            return Result.failure(IllegalStateException("The session is closed."))
+    private suspend fun runAttach(id: Long, subscriber: Subscriber) {
+        try {
+            attachMutex.withLock {
+                if (!subscribers.containsKey(id)) {
+                    return
+                }
+                val reload = !attachedOnce.compareAndSet(false, true) || !created
+                if (reload) {
+                    _status.value = SessionStatus.Reloading
+                    emitFrame(
+                        StreamReset(agentId = agentId, sessionId = sessionId),
+                    )
+                    val loadedOptions = try {
+                        process.sessionLoad(this, cwd)
+                    } catch (error: Throwable) {
+                        _status.value = when {
+                            error is AgentAuthRequiredException -> SessionStatus.AuthFailed
+                            process.isDead -> SessionStatus.Offline
+                            else -> SessionStatus.Error
+                        }
+                        throw error
+                    }
+                    configOptions = loadedOptions
+                    if (loadedOptions.isNotEmpty()) {
+                        emitFrame(
+                            SessionConfig(
+                                agentId = agentId,
+                                sessionId = sessionId,
+                                configOptions = loadedOptions,
+                            ),
+                        )
+                    }
+                    title?.let { currentTitle ->
+                        emitFrame(
+                            SessionInfo(
+                                agentId = agentId,
+                                sessionId = sessionId,
+                                title = currentTitle,
+                            ),
+                        )
+                    }
+                } else {
+                    emitFrame(
+                        StreamReset(agentId = agentId, sessionId = sessionId),
+                    )
+                    if (configOptions.isNotEmpty()) {
+                        emitFrame(
+                            SessionConfig(
+                                agentId = agentId,
+                                sessionId = sessionId,
+                                configOptions = configOptions,
+                            ),
+                        )
+                    }
+                    title?.let { currentTitle ->
+                        emitFrame(
+                            SessionInfo(
+                                agentId = agentId,
+                                sessionId = sessionId,
+                                title = currentTitle,
+                            ),
+                        )
+                    }
+                }
+                if (process.isDead) {
+                    _status.value = SessionStatus.Offline
+                    return
+                }
+                _status.value = SessionStatus.Ready
+                emitFrame(Subscribed(agentId = agentId, sessionId = sessionId))
+            }
+        } catch (error: Throwable) {
+            if (!process.isDead) {
+                tryEmitFrame(
+                    Error(
+                        message = error.message ?: "Could not attach to the session.",
+                        agentId = agentId,
+                        sessionId = sessionId,
+                    ),
+                )
+            }
+            failSubscriber(id, subscriber, error)
+        }
+    }
+
+    private fun failSubscriber(id: Long, subscriber: Subscriber, error: Throwable) {
+        if (!subscribers.remove(id, subscriber)) {
+            return
+        }
+        subscriber.channel.close()
+        subscriber.closed.complete(
+            error.message ?: "Could not attach to the session.",
+        )
+    }
+
+    /** Removes [subscription] without touching the process. */
+    fun detach(subscription: AcpSessionSubscription) {
+        subscription.detach()
+    }
+
+    fun detachAll() {
+        subscribers.keys.toList().forEach { id ->
+            subscribers[id]?.let { subscriber -> detach(id, subscriber) }
+        }
+    }
+
+    suspend fun prompt(body: PromptRequestBody): Result<Unit> = promptWriteMutex.withLock {
+        if (isClosed || process.isDead) {
+            _status.value = SessionStatus.Offline
+            return@withLock Result.failure(
+                AcpClosedException(process.closedReason ?: "The agent process is not running."),
+            )
         }
         if (!prompting.compareAndSet(false, true)) {
-            return Result.failure(IllegalStateException("A turn is already running."))
+            return@withLock Result.failure(IllegalStateException("A turn is already running."))
         }
 
         val prompt = buildJsonArray {
@@ -189,60 +261,65 @@ class AcpSession(
             }
         }
 
+        val pending = try {
+            process.beginPrompt(sessionId, prompt)
+        } catch (error: Throwable) {
+            prompting.set(false)
+            return@withLock Result.failure(error)
+        }
+
+        _status.value = SessionStatus.Running
         scope.launch(Dispatchers.IO) {
             try {
-                val response = acp.request(
-                    method = "session/prompt",
-                    params = buildJsonObject {
-                        put("sessionId", sessionId)
-                        put("prompt", prompt)
-                    },
-                    timeoutMillis = 60 * 60 * 1000L,
-                )
+                val response = pending.await(PROMPT_TIMEOUT_MILLIS)
                 val stopReason = response.string("stopReason")
                 if (stopReason == "cancelled") {
                     emitFrame(Cancelled(agentId = agentId, sessionId = sessionId))
                 } else {
                     emitFrame(PromptComplete(agentId = agentId, sessionId = sessionId))
                 }
+                if (!process.isDead) {
+                    _status.value = SessionStatus.Ready
+                }
             } catch (error: Throwable) {
-                emitFrame(
-                    Error(
-                        message = error.message ?: "Prompt failed",
-                        agentId = agentId,
-                        sessionId = sessionId,
-                    ),
-                )
+                if (process.isDead || error is AcpClosedException) {
+                    // onProcessClosed already told every subscriber; the turn
+                    // only needs to settle its own state.
+                    _status.value = SessionStatus.Offline
+                } else {
+                    emitFrame(
+                        Error(
+                            message = error.message ?: "Prompt failed",
+                            agentId = agentId,
+                            sessionId = sessionId,
+                        ),
+                    )
+                    _status.value = SessionStatus.Ready
+                }
             } finally {
                 prompting.set(false)
             }
         }
-        return Result.success(Unit)
+        Result.success(Unit)
     }
 
     suspend fun cancel(): Result<Unit> = runCatching {
-        acp.notify(
-            method = "session/cancel",
-            params = buildJsonObject { put("sessionId", sessionId) },
-        )
-        val cancelled = buildJsonObject {
-            putJsonObject("outcome") { put("outcome", "cancelled") }
-        }
-        pendingPermissions.values.forEach { deferred -> deferred.complete(cancelled) }
-        pendingPermissions.clear()
-        pendingElicitations.values.forEach { deferred ->
-            deferred.complete(buildJsonObject { put("action", "cancel") })
-        }
-        pendingElicitations.clear()
+        process.cancelSession(sessionId)
+        cancelPendingRequests()
     }
 
     fun hasPermission(requestId: String): Boolean = pendingPermissions.containsKey(requestId)
 
     fun hasElicitation(requestId: String): Boolean = pendingElicitations.containsKey(requestId)
 
+    internal fun ownsElicitation(elicitationId: String): Boolean =
+        urlElicitationRequests.containsKey(elicitationId)
+
     suspend fun replyPermission(requestId: String, optionId: String): Result<Unit> {
         val deferred = pendingPermissions.remove(requestId)
-            ?: return Result.failure(IllegalStateException("Permission request is no longer active."))
+            ?: return Result.failure(
+                IllegalStateException("Permission request is no longer active."),
+            )
         deferred.complete(
             buildJsonObject {
                 putJsonObject("outcome") {
@@ -251,6 +328,7 @@ class AcpSession(
                 }
             },
         )
+        settleStatusAfterReply()
         return Result.success(Unit)
     }
 
@@ -258,12 +336,14 @@ class AcpSession(
         val deferred = pendingElicitations.remove(requestId)
             ?: return Result.failure(IllegalStateException("Elicitation is no longer active."))
         deferred.complete(result)
+        settleStatusAfterReply()
         return Result.success(Unit)
     }
 
     suspend fun setConfigOption(configId: String, value: ConfigValue): Result<Unit> =
         runCatching {
-            val response = acp.request(
+            val response = process.request(
+                sessionId = sessionId,
                 method = "session/set_config_option",
                 params = buildJsonObject {
                     put("sessionId", sessionId)
@@ -278,107 +358,62 @@ class AcpSession(
                 },
             )
             val responseObject = response as? JsonObject
-            val configOptions = (responseObject?.get("configOptions") as? JsonArray)
+            val updatedOptions = (responseObject?.get("configOptions") as? JsonArray)
                 ?.map { element -> element }
                 .orEmpty()
+            configOptions = updatedOptions
             emitFrame(
                 SessionConfig(
                     agentId = agentId,
                     sessionId = sessionId,
-                    configOptions = configOptions,
+                    configOptions = updatedOptions,
                 ),
             )
         }
 
-    override suspend fun onNotification(method: String, params: JsonElement) {
-        when (method) {
-            "session/update" -> {
-                val update = (params as? JsonObject)?.get("update") as? JsonObject ?: return
-                val infoUpdate = parseSessionInfoUpdate(update)
-                if (infoUpdate != null) {
-                    catalog.updateInfo(connectionId, agentId, sessionId, infoUpdate)
-                    if (infoUpdate.titleChanged) {
-                        emitFrame(
-                            SessionInfo(
-                                agentId = agentId,
-                                sessionId = sessionId,
-                                title = infoUpdate.title,
-                            ),
-                        )
-                    }
-                    return
-                }
+    internal suspend fun handleUpdate(params: JsonElement) {
+        val update = (params as? JsonObject)?.get("update") as? JsonObject ?: return
+        val infoUpdate = parseSessionInfoUpdate(update)
+        if (infoUpdate != null) {
+            catalog.updateInfo(connectionId, agentId, sessionId, infoUpdate)
+            if (infoUpdate.titleChanged) {
+                title = infoUpdate.title
                 emitFrame(
-                    SessionUpdate(
+                    SessionInfo(
                         agentId = agentId,
                         sessionId = sessionId,
-                        update = update,
+                        title = infoUpdate.title,
                     ),
                 )
             }
-            "elicitation/complete" -> {
-                val elicitationId = params.string("elicitationId") ?: return
-                val requestId = urlElicitationRequests.remove(elicitationId) ?: elicitationId
-                emitFrame(
-                    ElicitationCompleted(
-                        elicitationId = elicitationId,
-                        requestId = requestId,
-                        agentId = agentId,
-                        sessionId = sessionId,
-                    ),
-                )
-            }
+            return
         }
+        emitFrame(
+            SessionUpdate(
+                agentId = agentId,
+                sessionId = sessionId,
+                update = update,
+            ),
+        )
     }
 
-    override suspend fun onRequest(id: String, method: String, params: JsonElement): JsonElement =
-        when (method) {
-            "session/request_permission" -> awaitPermission(id, params)
-            "elicitation/create" -> awaitElicitation(id, params)
-            "fs/read_text_file" -> readTextFile(params)
-            "fs/write_text_file" -> writeTextFile(params)
-            "terminal/create" -> buildJsonObject {
-                put("terminalId", terminals.create(params.requireObject()))
-            }
-            "terminal/output" -> terminals.output(params.requireString("terminalId"))
-            "terminal/wait_for_exit" -> terminals.waitForExit(params.requireString("terminalId"))
-            "terminal/kill" -> {
-                terminals.kill(params.requireString("terminalId"))
-                JsonNull
-            }
-            "terminal/release" -> {
-                terminals.release(params.requireString("terminalId"))
-                JsonNull
-            }
-            else -> throw AcpRemoteException(
-                code = -32601,
-                detail = "Method not found: $method",
-                data = null,
-            )
-        }
-
-    override fun close() {
-        intentionalClose = true
-        registry.remove(this)
-        frames.close()
-        val cancelled = buildJsonObject {
-            putJsonObject("outcome") { put("outcome", "cancelled") }
-        }
-        pendingPermissions.values.forEach { deferred -> deferred.complete(cancelled) }
-        pendingPermissions.clear()
-        pendingElicitations.values.forEach { deferred ->
-            deferred.complete(buildJsonObject { put("action", "cancel") })
-        }
-        pendingElicitations.clear()
-        terminals.close()
-        acp.close()
-        channel.close()
-        closed.complete(null)
+    internal suspend fun handleElicitationComplete(params: JsonElement) {
+        val elicitationId = params.string("elicitationId") ?: return
+        val requestId = urlElicitationRequests.remove(elicitationId) ?: elicitationId
+        emitFrame(
+            ElicitationCompleted(
+                elicitationId = elicitationId,
+                requestId = requestId,
+                agentId = agentId,
+                sessionId = sessionId,
+            ),
+        )
     }
 
-    private suspend fun awaitPermission(id: String, params: JsonElement): JsonElement {
+    internal suspend fun awaitPermission(id: String, params: JsonElement): JsonElement {
         val deferred = CompletableDeferred<JsonElement>()
         pendingPermissions[id] = deferred
+        _status.value = SessionStatus.AwaitingPermission
         emitFrame(
             PermissionRequest(
                 requestId = id,
@@ -391,16 +426,18 @@ class AcpSession(
             withTimeout(PERMISSION_TIMEOUT_MILLIS) { deferred.await() }
         } finally {
             pendingPermissions.remove(id)
+            settleStatusAfterReply()
         }
     }
 
-    private suspend fun awaitElicitation(id: String, params: JsonElement): JsonElement {
+    internal suspend fun awaitElicitation(id: String, params: JsonElement): JsonElement {
         val deferred = CompletableDeferred<JsonElement>()
         pendingElicitations[id] = deferred
         val elicitationId = params.string("elicitationId")
         if (elicitationId != null) {
             urlElicitationRequests[elicitationId] = id
         }
+        _status.value = SessionStatus.AwaitingAnswer
         emitFrame(
             ElicitationRequest(
                 requestId = id,
@@ -414,37 +451,113 @@ class AcpSession(
             withTimeout(ELICITATION_TIMEOUT_MILLIS) { deferred.await() }
         } finally {
             pendingElicitations.remove(id)
+            settleStatusAfterReply()
         }
     }
 
-    private suspend fun readTextFile(params: JsonElement): JsonElement {
-        val path = params.requireString("path")
-        val content = files.readTextFile(connectionId, path).getOrThrow()
-        val line = params.int("line") ?: 1
-        val limit = params.int("limit")
-        val lines = content.lines()
-        val from = (line - 1).coerceAtLeast(0)
-        val selected = if (limit == null) {
-            lines.drop(from)
+    /** Called by the owning process when the agent exits. */
+    fun onProcessClosed(reason: String) {
+        _status.value = SessionStatus.Offline
+        // Tell attached streams before their channels close. trySend keeps
+        // this best-effort even when a subscriber is not draining.
+        tryEmitFrame(
+            Error(
+                message = "The agent process stopped. Reopen the session to continue.",
+                agentId = agentId,
+                sessionId = sessionId,
+            ),
+        )
+        closeSubscribers(reason)
+        cancelPendingRequests()
+        terminals.close()
+    }
+
+    /**
+     * Delete/restart teardown only. Stream closes detach instead of calling
+     * this.
+     */
+    override fun close() {
+        if (!closeRequested.compareAndSet(false, true)) {
+            return
+        }
+        _status.value = SessionStatus.Offline
+        process.removeSession(this)
+        closeSubscribers(null)
+        cancelPendingRequests()
+        terminals.close()
+        closed.complete(null)
+    }
+
+    private fun detach(id: Long, subscriber: Subscriber) {
+        if (!subscribers.remove(id, subscriber)) {
+            return
+        }
+        subscriber.channel.close()
+        subscriber.closed.complete(null)
+        if (subscribers.isEmpty() && prompting.get()) {
+            scope.launch {
+                runCatching { process.cancelSession(sessionId) }
+            }
+            cancelPendingRequests()
+        }
+    }
+
+    private fun closeSubscribers(reason: String?) {
+        val current = subscribers.values.toList()
+        subscribers.clear()
+        current.forEach { subscriber ->
+            subscriber.channel.close()
+            subscriber.closed.complete(reason)
+        }
+    }
+
+    private fun cancelPendingRequests() {
+        val cancelled = buildJsonObject {
+            putJsonObject("outcome") { put("outcome", "cancelled") }
+        }
+        pendingPermissions.values.forEach { deferred -> deferred.complete(cancelled) }
+        pendingPermissions.clear()
+        pendingElicitations.values.forEach { deferred ->
+            deferred.complete(buildJsonObject { put("action", "cancel") })
+        }
+        pendingElicitations.clear()
+        urlElicitationRequests.clear()
+    }
+
+    private fun settleStatusAfterReply() {
+        if (process.isDead) {
+            _status.value = SessionStatus.Offline
+            return
+        }
+        _status.value = if (prompting.get()) {
+            SessionStatus.Running
         } else {
-            lines.drop(from).take(limit)
-        }
-        return buildJsonObject {
-            put("content", selected.joinToString("\n"))
+            SessionStatus.Ready
         }
     }
 
-    private suspend fun writeTextFile(params: JsonElement): JsonElement {
-        val path = params.requireString("path")
-        val content = params.requireString("content")
-        files.writeTextFile(connectionId, path, content).getOrThrow()
-        return JsonNull
+    private suspend fun emitFrame(message: SessionStreamServerMessage) {
+        subscribers.values.toList().forEach { subscriber ->
+            try {
+                subscriber.channel.send(message)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Throwable) {
+                // The subscriber detached while this frame was in flight.
+            }
+        }
+    }
+
+    private fun tryEmitFrame(message: SessionStreamServerMessage) {
+        subscribers.values.toList().forEach { subscriber ->
+            subscriber.channel.trySend(message)
+        }
     }
 
     private suspend fun contentBlock(reference: AttachmentReference): JsonObject =
         when (reference.kind) {
             AttachmentKind.Image -> {
-                val bytes = files.readBytes(connectionId, reference.path).getOrNull()
+                val bytes = process.readBytes(reference.path)
                 if (bytes == null) {
                     resourceLink(reference)
                 } else {
@@ -466,60 +579,37 @@ class AcpSession(
             put("mimeType", reference.mimeType)
         }
 
-    private suspend fun resolveSessionInfo(initialize: JsonElement): AcpSessionInfo? {
-        if (!initialize.advertisesSessionCapability("list")) {
-            return null
-        }
-        val seenCursors = mutableSetOf<String>()
-        var cursor: String? = null
-        var pages = 0
-        while (pages < MAX_SESSION_LIST_PAGES) {
-            pages += 1
-            val response = acp.request(
-                method = "session/list",
-                params = acpSessionListParams(cwd = null, cursor = cursor),
-                timeoutMillis = SESSION_LIST_TIMEOUT_MILLIS,
-            )
-            val page = parseSessionListPage(agentId, response)
-            page.sessions.firstOrNull { session -> session.sessionId == sessionId }
-                ?.let { session -> return session }
-            val next = page.nextCursor ?: return null
-            if (!seenCursors.add(next)) {
-                return null
-            }
-            cursor = next
-        }
-        return null
-    }
-
-    private suspend fun emitFrame(message: SessionStreamServerMessage) {
-        frames.send(message)
-    }
-
-    private fun loadParams(cwd: String): JsonObject = buildJsonObject {
-        put("sessionId", sessionId)
-        put("cwd", cwd)
-        put("mcpServers", buildJsonArray { })
-    }
+    private class Subscriber(
+        val channel: Channel<SessionStreamServerMessage>,
+        val closed: CompletableDeferred<String?>,
+    )
 
     companion object {
+        private const val SUBSCRIBER_BUFFER = 256
         private const val PERMISSION_TIMEOUT_MILLIS = 30 * 60 * 1000L
         private const val ELICITATION_TIMEOUT_MILLIS = 30 * 60 * 1000L
-        private const val MAX_SESSION_LIST_PAGES = 100
-        private const val SESSION_LIST_TIMEOUT_MILLIS = 60_000L
+        private const val PROMPT_TIMEOUT_MILLIS = 60 * 60 * 1000L
     }
 }
 
-private fun JsonElement?.asBooleanOrFalse(): Boolean =
-    (this as? JsonPrimitive)?.content?.toBooleanStrictOrNull() == true
+/**
+ * One attached stream's view of a session. [closed] completes with the death
+ * reason when the process exits; a caller-initiated detach completes it with
+ * null.
+ */
+class AcpSessionSubscription internal constructor(
+    val events: Flow<SessionStreamServerMessage>,
+    val closed: CompletableDeferred<String?>,
+    private val onDetach: () -> Unit,
+) {
+    private val detached = AtomicBoolean(false)
+
+    fun detach() {
+        if (detached.compareAndSet(false, true)) {
+            onDetach()
+        }
+    }
+}
 
 private fun JsonElement.string(key: String): String? =
     ((this as? JsonObject)?.get(key) as? JsonPrimitive)?.content
-
-private fun JsonElement.int(key: String): Int? = string(key)?.toIntOrNull()
-
-private fun JsonElement.requireString(key: String): String =
-    string(key) ?: error("Missing $key")
-
-private fun JsonElement.requireObject(): JsonObject =
-    this as? JsonObject ?: error("Expected an object")

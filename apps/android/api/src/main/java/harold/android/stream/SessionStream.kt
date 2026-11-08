@@ -2,6 +2,9 @@ package harold.android.stream
 
 import harold.android.contracts.AgentId
 import harold.android.contracts.SessionStreamServerMessage
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 data class SessionStreamHandlers(
     val onMessage: (SessionStreamServerMessage, cursor: String?) -> Unit,
@@ -19,7 +22,17 @@ interface SessionStream {
      * period to tell a surviving connection from one frozen through Doze.
      */
     fun lastFrameAtNanos(): Long?
+
+    /**
+     * Live session state. Fakes and other transport implementations that do
+     * not model status can leave the default.
+     */
+    val status: StateFlow<SessionStatus>
+        get() = defaultSessionStatus
 }
+
+private val defaultSessionStatus: StateFlow<SessionStatus> =
+    MutableStateFlow(SessionStatus.Ready).asStateFlow()
 
 fun interface SessionStreamFactory {
     /**

@@ -77,22 +77,44 @@ class AcpClient(
         }
     }
 
-    suspend fun request(method: String, params: JsonElement, timeoutMillis: Long = 120_000): JsonElement {
+    suspend fun request(method: String, params: JsonElement, timeoutMillis: Long = 120_000): JsonElement =
+        beginRequest(method, params).await(timeoutMillis)
+
+    /**
+     * Writes a request and returns before its response arrives. Used by
+     * prompts: callers know the write landed, then await the turn elsewhere.
+     */
+    suspend fun beginRequest(method: String, params: JsonElement): PendingRequest {
         val id = nextId.getAndIncrement()
+        val key = id.toString()
         val deferred = CompletableDeferred<JsonElement>()
-        pending[id.toString()] = deferred
+        pending[key] = deferred
         val message = buildJsonObject {
             put("jsonrpc", "2.0")
             put("id", id)
             put("method", method)
             put("params", params)
         }
-        write(message)
-        return try {
-            withTimeout(timeoutMillis) { deferred.await() }
-        } finally {
-            pending.remove(id.toString())
+        try {
+            write(message)
+        } catch (error: Throwable) {
+            pending.remove(key)
+            deferred.completeExceptionally(error)
+            throw error
         }
+        return PendingRequest(key, deferred)
+    }
+
+    inner class PendingRequest internal constructor(
+        private val key: String,
+        private val deferred: CompletableDeferred<JsonElement>,
+    ) {
+        suspend fun await(timeoutMillis: Long): JsonElement =
+            try {
+                withTimeout(timeoutMillis) { deferred.await() }
+            } finally {
+                pending.remove(key)
+            }
     }
 
     suspend fun notify(method: String, params: JsonElement) {
@@ -108,7 +130,10 @@ class AcpClient(
         runCatching { output.close() }
         runCatching { input.close() }
         runCatching { readerJob?.cancel() }
-        closed.complete(AcpClosedException("ACP client closed"))
+        val cause = AcpClosedException("ACP client closed")
+        pending.values.forEach { deferred -> deferred.completeExceptionally(cause) }
+        pending.clear()
+        closed.complete(cause)
     }
 
     private suspend fun write(message: JsonObject) {

@@ -1,10 +1,17 @@
 package harold.android
 
+import harold.android.acp.AcpSessionCatalog
+import harold.android.acp.AgentRuntime
 import harold.android.contracts.AgentId
 import harold.android.contracts.AttachmentReference
 import harold.android.contracts.ConfigOption
 import harold.android.live.SessionOwner
 import harold.android.live.SessionSnapshot
+import harold.android.process.AgentProcessChannel
+import harold.android.process.AgentProcessLauncher
+import harold.android.process.LaunchableAgent
+import harold.android.process.SessionFileService
+import harold.android.process.TerminalLaunchSpec
 import harold.android.session.ConnectionHealth
 import harold.android.session.Connections
 import harold.android.session.ActiveConnectionState
@@ -82,8 +89,37 @@ class HaroldConnectionHostTest {
         connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
         sessionOwner = owner,
         connectionPool = pool,
+        agentRuntime = AgentRuntime(NoopLauncher, NoopFiles, AcpSessionCatalog()),
         scope = backgroundScope,
     )
+}
+
+private object NoopLauncher : AgentProcessLauncher {
+    override suspend fun launchableAgents(connectionId: String): Result<List<LaunchableAgent>> =
+        Result.success(emptyList())
+
+    override suspend fun keyFor(connectionId: String): String = "key"
+
+    override suspend fun launchAgent(
+        connectionId: String,
+        agentId: String,
+    ): Result<AgentProcessChannel> = error("not used")
+
+    override suspend fun launchTerminal(
+        connectionId: String,
+        spec: TerminalLaunchSpec,
+    ): Result<AgentProcessChannel> = error("not used")
+}
+
+private object NoopFiles : SessionFileService {
+    override suspend fun readTextFile(connectionId: String, path: String): Result<String> =
+        error("not used")
+
+    override suspend fun writeTextFile(
+        connectionId: String,
+        path: String,
+        content: String,
+    ): Result<Unit> = error("not used")
 }
 
 private class RecordingPool : SshConnectionPool {

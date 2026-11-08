@@ -12,6 +12,13 @@ interface AgentProcessLauncher {
     /** Enabled, present agents for a connection, using the same agents.json scan rules as today. */
     suspend fun launchableAgents(connectionId: String): Result<List<LaunchableAgent>>
 
+    /**
+     * Stable key for the host identity behind a saved connection: endpoint,
+     * credentials, and pinned host key. Two saved rows that point at the same
+     * host share one key.
+     */
+    suspend fun keyFor(connectionId: String): String
+
     suspend fun launchAgent(connectionId: String, agentId: String): Result<AgentProcessChannel>
 
     suspend fun launchTerminal(

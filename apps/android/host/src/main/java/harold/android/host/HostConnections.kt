@@ -21,6 +21,10 @@ class HostConnections @Inject constructor(
     suspend fun open(connectionId: String): SshConnectionLease =
         connectionPool.acquire(connectionId)
 
+    /** Stable host-identity key for a saved connection. */
+    suspend fun key(connectionId: String): String =
+        connectionPool.keyFor(connectionId)
+
     suspend fun <T> useConnection(
         connectionId: String,
         block: suspend (SshConnectionLease, SshSessionStore) -> T,

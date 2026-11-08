@@ -66,7 +66,7 @@ class SshIntegrationTest {
     private lateinit var sshConfig: SshConfig
     private lateinit var repository: ConnectionRepository
     private lateinit var connectionPool: SshConnectionPool
-    private lateinit var sessionFactory: AcpSessionFactory
+    private lateinit var runtime: AgentRuntime
     private lateinit var acpApi: DefaultAcpAgentApi
     private lateinit var hostAgents: HostAgentApi
     private lateinit var hostWorkspaces: HostWorkspaceApi
@@ -152,21 +152,18 @@ class SshIntegrationTest {
             ssh = config,
         )
         repository = ConnectionRepository(FakeConnectionStore(saved))
-        val registry = AcpSessionRegistry()
         val catalog = AcpSessionCatalog()
         val transport = JschSshConnectionFactory()
         connectionPool = JschSshConnectionPool(repository, transport)
         val connections = HostConnections(repository, connectionPool)
         val launcher = SshAgentProcessLauncher(connections)
-        sessionFactory = AcpSessionFactory(
+        runtime = AgentRuntime(
             launcher = launcher,
-            registry = registry,
-            catalog = catalog,
             files = SshSessionFileService(connections),
+            catalog = catalog,
         )
         acpApi = DefaultAcpAgentApi(
-            factory = sessionFactory,
-            registry = registry,
+            runtime = runtime,
             authCache = AgentAuthCache(),
             launcher = launcher,
         )
@@ -191,6 +188,9 @@ class SshIntegrationTest {
                     connection.runCommand("rm -f ~/.harold/agents.json")
                 }
             }
+        }
+        if (::runtime.isInitialized) {
+            runBlocking { runtime.closeConnection(connectionId) }
         }
         if (::connectionPool.isInitialized) {
             connectionPool.closeAll()
@@ -254,10 +254,11 @@ class SshIntegrationTest {
         val subscribed = CompletableDeferred<Unit>()
         val titled = CompletableDeferred<String>()
         step("open first")
-        val session = sessionFactory.open(connectionId, "opencode", created.sessionId, scope).getOrThrow()
+        val session = runtime.openSession(connectionId, "opencode", created.sessionId).getOrThrow()
+        val subscription = session.attach()
         step("opened first")
         val collector = scope.launch {
-            session.events.collect { message ->
+            subscription.events.collect { message ->
                 frames += message
                 when (message) {
                     is SessionStreamServerMessage.Subscribed -> subscribed.complete(Unit)
@@ -300,18 +301,19 @@ class SshIntegrationTest {
         assertEquals("Fake titled session", withTimeout(30_000) { titled.await() })
 
         step("close first")
-        session.close()
+        subscription.detach()
         collector.cancel()
         // Give the test server a moment to reap the old exec child before
         // reopening the same session.
         kotlinx.coroutines.delay(300)
         step("reopen")
-        val resumed = sessionFactory.open(connectionId, "opencode", created.sessionId, scope).getOrThrow()
+        val resumed = runtime.openSession(connectionId, "opencode", created.sessionId).getOrThrow()
+        val resumedSubscription = resumed.attach()
         step("reopened")
         val replayed = CompletableDeferred<Unit>()
         val resumedFrames = mutableListOf<SessionStreamServerMessage>()
         val resumeCollector = scope.launch {
-            resumed.events.collect { message ->
+            resumedSubscription.events.collect { message ->
                 resumedFrames += message
                 if (message is SessionStreamServerMessage.SessionUpdate) {
                     if (message.update.toString().contains("replayed history")) {
@@ -322,7 +324,7 @@ class SshIntegrationTest {
         }
         withTimeout(30_000) { replayed.await() }
         resumeCollector.cancel()
-        resumed.close()
+        resumedSubscription.detach()
 
         // The reopened stream replays the conversation again and must also
         // start with a reset, or the resumed transcript would duplicate.

@@ -36,6 +36,9 @@ class SshAgentProcessLauncher @Inject constructor(
         }
     }
 
+    override suspend fun keyFor(connectionId: String): String =
+        connections.key(connectionId)
+
     override suspend fun launchAgent(
         connectionId: String,
         agentId: String,

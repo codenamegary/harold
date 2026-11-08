@@ -21,13 +21,14 @@ import harold.android.process.AgentProcessLauncher
 import harold.android.process.AgentProcessRestarter
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.serialization.json.JsonElement
 
-/** ACP session and command surface backed by live agent processes. */
+/** ACP session and command surface backed by the shared agent runtime. */
 @Singleton
 class DefaultAcpAgentApi @Inject constructor(
-    private val factory: AcpSessionFactory,
-    private val registry: AcpSessionRegistry,
+    private val runtime: AgentRuntime,
     private val authCache: AgentAuthCache,
     private val launcher: AgentProcessLauncher,
 ) : AcpAgentApi, SessionConfigApi, SessionCommandApi, AgentProcessRestarter {
@@ -35,7 +36,7 @@ class DefaultAcpAgentApi @Inject constructor(
         connectionId: String,
         cwd: String?,
     ): Result<SessionCollection> = acpCall(connectionId) {
-        val sessions = factory.listSessions(connectionId, cwd).getOrThrow()
+        val sessions = runtime.listSessions(connectionId, cwd).getOrThrow()
         SessionCollection(
             items = sessions.map { session ->
                 Session(
@@ -53,7 +54,7 @@ class DefaultAcpAgentApi @Inject constructor(
         connectionId: String,
         body: CreateSessionBody,
     ): Result<CreateSessionResponse> = acpCall(connectionId) {
-        factory.createSession(
+        runtime.createSession(
             connectionId = connectionId,
             agentId = body.agentId,
             cwd = body.cwd,
@@ -65,15 +66,14 @@ class DefaultAcpAgentApi @Inject constructor(
         agentId: AgentId,
         sessionId: String,
     ): Result<Unit> = acpCall(connectionId) {
-        factory.deleteSession(connectionId, agentId, sessionId).getOrThrow()
+        runtime.deleteSession(connectionId, agentId, sessionId).getOrThrow()
     }
 
-    override suspend fun restartAgent(connectionId: String, agentId: AgentId): Result<Unit> = acpCall(connectionId) {
-        registry.all()
-            .filter { it.connectionId == connectionId && it.agentId == agentId }
-            .forEach { session ->
-                runCatching { session.close() }
-            }
+    override suspend fun restartAgent(
+        connectionId: String,
+        agentId: AgentId,
+    ): Result<Unit> = acpCall(connectionId) {
+        runtime.restart(connectionId, agentId).getOrThrow()
         authCache.invalidate(connectionId, agentId)
     }
 
@@ -82,7 +82,7 @@ class DefaultAcpAgentApi @Inject constructor(
         agentId: AgentId,
         sessionId: String,
     ): Result<AgentCapabilityInventory?> = Result.success(
-        registry.find(connectionId, agentId, sessionId)?.capabilities,
+        runtime.capabilities(connectionId, agentId, sessionId),
     )
 
     override suspend fun prompt(
@@ -90,16 +90,16 @@ class DefaultAcpAgentApi @Inject constructor(
         agentId: AgentId,
         sessionId: String,
         body: PromptRequestBody,
-    ): Result<Unit> = active(connectionId, agentId, sessionId) { session ->
-        session.prompt(body)
+    ): Result<Unit> = acpCall(connectionId) {
+        sessionFor(connectionId, agentId, sessionId).prompt(body).getOrThrow()
     }
 
     override suspend fun cancel(
         connectionId: String,
         agentId: AgentId,
         sessionId: String,
-    ): Result<Unit> = active(connectionId, agentId, sessionId) { session ->
-        session.cancel()
+    ): Result<Unit> = acpCall(connectionId) {
+        sessionFor(connectionId, agentId, sessionId).cancel().getOrThrow()
     }
 
     override suspend fun replyPermission(
@@ -107,7 +107,7 @@ class DefaultAcpAgentApi @Inject constructor(
         requestId: String,
         optionId: String,
     ): Result<Unit> {
-        val session = registry.all().firstOrNull { it.hasPermission(requestId) }
+        val session = runtime.findSessionByRequest(requestId)
             ?: return Result.failure(
                 AgentApiException(
                     AgentApiError.Problem(409, "Permission resolved", "This request is no longer active."),
@@ -127,7 +127,7 @@ class DefaultAcpAgentApi @Inject constructor(
         requestId: String,
         result: JsonElement,
     ): Result<Unit> {
-        val session = registry.all().firstOrNull { it.hasElicitation(requestId) }
+        val session = runtime.findSessionByRequest(requestId)
             ?: return Result.failure(
                 AgentApiException(
                     AgentApiError.Problem(409, "Elicitation resolved", "This request is no longer active."),
@@ -142,28 +142,24 @@ class DefaultAcpAgentApi @Inject constructor(
         sessionId: String,
         configId: String,
         value: ConfigValue,
-    ): Result<Unit> = active(connectionId, agentId, sessionId) { session ->
-        session.setConfigOption(configId, value)
+    ): Result<Unit> = acpCall(connectionId) {
+        sessionFor(connectionId, agentId, sessionId)
+            .setConfigOption(configId, value)
+            .getOrThrow()
     }
 
-    private suspend fun <T> active(
+    /**
+     * Commands attach to the live session when one exists, otherwise they
+     * reopen it through the runtime. A warm process makes that cheap; a cold
+     * one performs `session/load` on attach.
+     */
+    private suspend fun sessionFor(
         connectionId: String,
-        agentId: String,
+        agentId: AgentId,
         sessionId: String,
-        block: suspend (AcpSession) -> Result<T>,
-    ): Result<T> {
-        val session = registry.find(connectionId, agentId, sessionId)
-            ?: return Result.failure(
-                AgentApiException(
-                    AgentApiError.Problem(
-                        status = 409,
-                        title = "Session not connected",
-                        detail = "Open this session again to start its agent process.",
-                    ),
-                ),
-            )
-        return block(session)
-    }
+    ): AcpSession =
+        runtime.findSession(connectionId, agentId, sessionId)
+            ?: runtime.openSession(connectionId, agentId, sessionId).getOrThrow()
 
     private suspend fun authRequiredDetail(connectionId: String, agentId: String): String {
         val displayName = runCatching {
@@ -180,6 +176,14 @@ class DefaultAcpAgentApi @Inject constructor(
     ): Result<T> =
         try {
             Result.success(block())
+        } catch (error: TimeoutCancellationException) {
+            Result.failure(
+                AgentApiException(
+                    AgentApiError.Unavailable("The agent did not respond in time. Try again."),
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: AgentAuthRequiredException) {
             Result.failure(
                 AgentApiException(
@@ -203,10 +207,35 @@ class DefaultAcpAgentApi @Inject constructor(
         } catch (error: Throwable) {
             Result.failure(
                 AgentApiException(
-                    AgentApiError.Transport(error),
+                    AgentApiError.Unavailable(unavailableDetail(error)),
                 ),
             )
         }
+
+    /**
+     * A semantic, user-safe message. Raw causes and stack traces never reach
+     * the chat surface.
+     */
+    private fun unavailableDetail(error: Throwable): String = when (error) {
+        is AcpClosedException -> "The agent connection closed. Try again."
+        is AcpRemoteException -> error.message
+            ?.takeIf { message -> message.isNotBlank() }
+            ?: "The agent rejected the request."
+        is IllegalStateException -> error.message
+            ?.takeIf { message -> message.isNotBlank() }
+            ?: "The agent is unavailable. Try again."
+        else -> {
+            val message = error.message.orEmpty()
+            if (
+                message.contains("does not support") ||
+                message.contains("did not return this session")
+            ) {
+                message
+            } else {
+                "The agent is unavailable. Try again."
+            }
+        }
+    }
 
     private fun <T> unsupported(message: String): Result<T> =
         Result.failure(

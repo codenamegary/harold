@@ -101,6 +101,7 @@ class ShellViewModel @Inject constructor(
         when (val apiError = (error as? AgentApiException)?.error) {
             is AgentApiError.Problem -> WorkspaceProbe.Failed(apiError.detail ?: apiError.title)
             is AgentApiError.Transport -> WorkspaceProbe.Failed("Could not reach Harold")
+            is AgentApiError.Unavailable -> WorkspaceProbe.Failed(apiError.detail)
             null -> WorkspaceProbe.Failed(error.message ?: "Could not reach Harold")
         }
 }

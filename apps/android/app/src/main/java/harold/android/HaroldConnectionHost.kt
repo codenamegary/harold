@@ -4,6 +4,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import harold.android.acp.AgentRuntime
 import harold.android.live.SessionOwner
 import harold.android.session.Connections
 import harold.android.session.ActiveConnectionState
@@ -26,6 +27,7 @@ class HaroldConnectionHost(
     private val connectionGateway: ConnectionGateway,
     private val sessionOwner: SessionOwner,
     private val connectionPool: SshConnectionPool,
+    private val agentRuntime: AgentRuntime,
     private val scope: CoroutineScope,
 ) : DefaultLifecycleObserver {
     @Inject constructor(
@@ -33,11 +35,13 @@ class HaroldConnectionHost(
         connectionGateway: ConnectionGateway,
         sessionOwner: SessionOwner,
         connectionPool: SshConnectionPool,
+        agentRuntime: AgentRuntime,
     ) : this(
         connections = connections,
         connectionGateway = connectionGateway,
         sessionOwner = sessionOwner,
         connectionPool = connectionPool,
+        agentRuntime = agentRuntime,
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
     )
 
@@ -59,6 +63,7 @@ class HaroldConnectionHost(
 
     fun onAppForeground() {
         connections.onForeground()
+        agentRuntime.trimIdle()
         scope.launch {
             connectionGateway.refresh()
             val active = connectionGateway.activeConnection.value as? ActiveConnectionState.Active
@@ -80,5 +85,6 @@ class HaroldConnectionHost(
             sessionOwner.closeForBackground()
             connectionPool.closeAll()
         }
+        agentRuntime.onBackground()
     }
 }
