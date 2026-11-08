@@ -302,7 +302,6 @@ fun ChatScreen(
     onVoiceCommandPick: (String) -> Unit = {},
     onComposerCommandPick: (String) -> Unit = {},
     onDisconnectFromServer: () -> Unit = {},
-    onAddConnection: () -> Unit = {},
     onConnections: () -> Unit = {},
     onAgentAuthRestart: () -> Unit = {},
     onAgentAuthLogout: () -> Unit = {},
@@ -713,14 +712,6 @@ fun ChatScreen(
                                     onConnections()
                                 },
                                 modifier = Modifier.testTag("connections_menu_item"),
-                            )
-                            DropdownMenuItem(
-                                text = { Text(text = stringResource(R.string.chat_add_connection)) },
-                                onClick = {
-                                    menuExpanded = false
-                                    onAddConnection()
-                                },
-                                modifier = Modifier.testTag("add_connection_menu_item"),
                             )
                             DropdownMenuItem(
                                 leadingIcon = if (hasDisconnectBadge) {

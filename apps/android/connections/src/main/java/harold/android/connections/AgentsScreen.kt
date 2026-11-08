@@ -1,6 +1,9 @@
 package harold.android.connections
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,43 +12,60 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import harold.android.contracts.AgentAuthStatus
 import harold.android.ui.components.HaroldButton
 import harold.android.ui.components.HaroldButtonVariant
+import harold.android.ui.components.HaroldCard
 import harold.android.ui.components.HaroldCheckboxRow
 import harold.android.ui.components.HaroldFormSection
+import harold.android.ui.components.HaroldSegmentOption
+import harold.android.ui.components.HaroldSegmentedControl
 import harold.android.ui.components.HaroldTextField
 
 private val MIN_TOUCH_TARGET = 48.dp
@@ -74,8 +94,28 @@ fun AgentsScreen(
     onCreateArgsChanged: (String) -> Unit,
     onCreateCustom: () -> Unit,
     onCancelCreateCustom: () -> Unit,
+    onSearchQueryChanged: (String) -> Unit = {},
+    onCategorySelected: (AgentCategory) -> Unit = {},
 ) {
     val addCustomContentDescription = stringResource(R.string.agents_custom_add)
+
+    val displayedRows = remember(uiState.rows, uiState.selectedCategory, uiState.searchQuery) {
+        val categoryRows = when (uiState.selectedCategory) {
+            AgentCategory.All -> uiState.rows
+            AgentCategory.Enabled -> uiState.rows.filter { it.enabled }
+            AgentCategory.Popular -> uiState.rows.filter { it.popular }
+        }
+        val query = uiState.searchQuery.trim().lowercase()
+        if (query.isEmpty()) {
+            categoryRows
+        } else {
+            categoryRows.filter { row ->
+                row.displayName.lowercase().contains(query) ||
+                    row.id.lowercase().contains(query) ||
+                    (row.path?.lowercase()?.contains(query) == true)
+            }
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -148,6 +188,75 @@ fun AgentsScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // Search field
+            OutlinedTextField(
+                value = uiState.searchQuery,
+                onValueChange = onSearchQueryChanged,
+                placeholder = {
+                    Text(
+                        text = stringResource(R.string.agents_search_placeholder),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                },
+                trailingIcon = {
+                    if (uiState.searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { onSearchQueryChanged("") }) {
+                            Icon(
+                                imageVector = Icons.Filled.Clear,
+                                contentDescription = "Clear search",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("agents_search_field"),
+            )
+
+            // Category Filter Segmented Control
+            HaroldSegmentedControl(
+                options = listOf(
+                    HaroldSegmentOption(
+                        value = AgentCategory.All,
+                        label = stringResource(R.string.agents_filter_all, uiState.totalCount),
+                        testTag = "agents_tab_all",
+                    ),
+                    HaroldSegmentOption(
+                        value = AgentCategory.Enabled,
+                        label = stringResource(R.string.agents_filter_enabled, uiState.enabledCount),
+                        testTag = "agents_tab_enabled",
+                    ),
+                    HaroldSegmentOption(
+                        value = AgentCategory.Popular,
+                        label = stringResource(R.string.agents_filter_popular, uiState.popularCount),
+                        testTag = "agents_tab_popular",
+                    ),
+                ),
+                selected = uiState.selectedCategory,
+                onSelect = onCategorySelected,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("agents_category_filter"),
+            )
+
             if (uiState.loading) {
                 Row(
                     modifier = Modifier
@@ -195,6 +304,42 @@ fun AgentsScreen(
                         .padding(16.dp)
                         .testTag("agents_empty"),
                 )
+            } else if (!uiState.loading && displayedRows.isEmpty() && uiState.rows.isNotEmpty()) {
+                HaroldCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.SearchOff,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(36.dp),
+                        )
+                        Text(
+                            text = if (uiState.searchQuery.isNotEmpty()) {
+                                stringResource(R.string.agents_no_match, uiState.searchQuery)
+                            } else when (uiState.selectedCategory) {
+                                AgentCategory.Enabled -> stringResource(R.string.agents_none_enabled)
+                                AgentCategory.Popular -> stringResource(R.string.agents_none_popular)
+                                else -> stringResource(R.string.agents_empty)
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
             }
 
             if (uiState.showCreateCustom) {
@@ -210,7 +355,7 @@ fun AgentsScreen(
                 )
             }
 
-            uiState.rows.forEach { row ->
+            displayedRows.forEach { row ->
                 AgentCard(
                     row = row,
                     editing = uiState.editingAgentId == row.id,
@@ -232,9 +377,10 @@ fun AgentsScreen(
                 Text(
                     text = stringResource(R.string.agents_dismissed_section),
                     style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
-                        .padding(top = 8.dp)
+                        .padding(top = 12.dp)
                         .testTag("agents_dismissed_section"),
                 )
                 uiState.dismissedRows.forEach { row ->
@@ -246,7 +392,7 @@ fun AgentsScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(88.dp))
         }
     }
 }
@@ -267,12 +413,22 @@ private fun AgentCard(
     onSaveEdit: () -> Unit,
     onCancelEdit: () -> Unit,
 ) {
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            contentColor = MaterialTheme.colorScheme.onSurface,
+    HaroldCard(
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(
+            1.dp,
+            if (row.enabled) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+            } else {
+                MaterialTheme.colorScheme.outlineVariant
+            },
         ),
+        containerColor = if (row.enabled) {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        } else {
+            MaterialTheme.colorScheme.surfaceContainer
+        },
+        contentColor = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier
             .fillMaxWidth()
             .testTag("agent_${row.id}"),
@@ -336,33 +492,137 @@ private fun AgentCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                // Header: Title & Badges on Left, Switch on Right
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = row.displayName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.testTag("agent_name_${row.id}"),
-                        )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = row.displayName,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.testTag("agent_name_${row.id}"),
+                            )
+                            if (row.popular) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Star,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(11.dp),
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.agents_popular_badge),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        )
+                                    }
+                                }
+                            }
+                            if (row.custom) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.agents_custom_badge),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    )
+                                }
+                            }
+                        }
+
+                        // Path (if present)
                         row.path?.let { path ->
                             Text(
                                 text = path,
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
+
+                    Box(
+                        modifier = Modifier.padding(start = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Switch(
+                            checked = row.enabled,
+                            onCheckedChange = { onToggleEnabled(row.id, it) },
+                            modifier = Modifier
+                                .defaultMinSize(minWidth = MIN_TOUCH_TARGET, minHeight = MIN_TOUCH_TARGET)
+                                .testTag("agent_enabled_${row.id}"),
+                        )
+                    }
+                }
+
+                // Status Chips Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("agent_status_${row.id}"),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    StatusPill(
+                        label = if (row.present) {
+                            stringResource(R.string.agents_present)
+                        } else {
+                            stringResource(R.string.agents_not_present)
+                        },
+                        isPositive = row.present,
+                    )
+                    StatusPill(
+                        label = if (row.enabled) {
+                            stringResource(R.string.agents_enabled)
+                        } else {
+                            stringResource(R.string.agents_disabled)
+                        },
+                        isPositive = row.enabled,
+                    )
+                    AuthStatusPill(status = row.authStatus)
+                }
+
+                // Divider before action row
+                HorizontalDivider(
+                    modifier = Modifier.padding(top = 2.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                )
+
+                // Bottom Action Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End,
+                ) {
                     IconButton(
                         onClick = { onRestart(row.id) },
                         modifier = Modifier
@@ -370,9 +630,10 @@ private fun AgentCard(
                             .testTag("agent_restart_${row.id}"),
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.Restore,
+                            imageVector = Icons.Filled.Refresh,
                             contentDescription = stringResource(R.string.agents_restart),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                     IconButton(
@@ -385,6 +646,7 @@ private fun AgentCard(
                             imageVector = Icons.Filled.Edit,
                             contentDescription = stringResource(R.string.agents_edit),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                     IconButton(
@@ -396,42 +658,101 @@ private fun AgentCard(
                         Icon(
                             imageVector = Icons.Filled.Delete,
                             contentDescription = stringResource(R.string.agents_delete),
-                            tint = MaterialTheme.colorScheme.error,
+                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                 }
-                Row(
-                    modifier = Modifier.testTag("agent_status_${row.id}"),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    StatusChip(
-                        text = if (row.present) {
-                            stringResource(R.string.agents_present)
-                        } else {
-                            stringResource(R.string.agents_not_present)
-                        },
-                        highlighted = row.present,
-                    )
-                    StatusChip(
-                        text = if (row.enabled) {
-                            stringResource(R.string.agents_enabled)
-                        } else {
-                            stringResource(R.string.agents_disabled)
-                        },
-                        highlighted = row.enabled,
-                    )
-                    StatusChip(
-                        text = authLabel(row.authStatus),
-                        highlighted = row.authStatus == AgentAuthStatus.Authenticated,
-                    )
-                }
-                HaroldCheckboxRow(
-                    checked = row.enabled,
-                    onCheckedChange = { checked -> onToggleEnabled(row.id, checked) },
-                    label = stringResource(R.string.agents_enabled),
-                    modifier = Modifier.testTag("agent_enabled_${row.id}"),
-                )
             }
+        }
+    }
+}
+
+@Composable
+private fun StatusPill(
+    label: String,
+    isPositive: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val containerColor = if (isPositive) {
+        MaterialTheme.colorScheme.surfaceContainerHighest
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    }
+    val contentColor = if (isPositive) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+    }
+    val dotColor = if (isPositive) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.outline
+    }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = containerColor,
+        modifier = modifier,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(5.dp)
+                    .background(dotColor, CircleShape),
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = contentColor,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AuthStatusPill(
+    status: AgentAuthStatus,
+    modifier: Modifier = Modifier,
+) {
+    val (containerColor, contentColor) = when (status) {
+        AgentAuthStatus.Authenticated -> Pair(
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+            MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+        AgentAuthStatus.NeedsAuth -> Pair(
+            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f),
+            MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+        AgentAuthStatus.Error -> Pair(
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+            MaterialTheme.colorScheme.onErrorContainer,
+        )
+        AgentAuthStatus.Unknown -> Pair(
+            MaterialTheme.colorScheme.surfaceContainerHighest,
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+        )
+    }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = containerColor,
+        modifier = modifier,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = authLabel(status),
+                style = MaterialTheme.typography.labelSmall,
+                color = contentColor,
+            )
         }
     }
 }
@@ -442,12 +763,11 @@ private fun DismissedAgentCard(
     onRestore: (String) -> Unit,
     onDelete: (String) -> Unit,
 ) {
-    Card(
+    HaroldCard(
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        ),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier
             .fillMaxWidth()
             .testTag("agent_dismissed_${row.id}"),
@@ -552,22 +872,6 @@ private fun CustomAgentForm(
             )
         }
     }
-}
-
-@Composable
-private fun StatusChip(
-    text: String,
-    highlighted: Boolean,
-) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelSmall,
-        color = if (highlighted) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-    )
 }
 
 @Composable

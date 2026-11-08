@@ -93,6 +93,8 @@ class ConnectionsEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onCreateArgsChanged = viewModel::onCreateArgsChanged,
                 onCreateCustom = viewModel::createCustom,
                 onCancelCreateCustom = viewModel::cancelCreateCustom,
+                onSearchQueryChanged = viewModel::onSearchQueryChanged,
+                onCategorySelected = viewModel::onCategorySelected,
             )
         }
         scope.entry<ConnectionSettings> { route ->

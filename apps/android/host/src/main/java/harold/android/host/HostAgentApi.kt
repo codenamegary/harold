@@ -69,7 +69,19 @@ class HostAgentApi @Inject constructor(
         body: UpdateAgentBody,
     ): Result<AgentSettings> = hostCall {
         connections.useConnection(connectionId) { connection, store ->
-            val row = store.agentsConfig().find { it.id == agentId }
+            val existingRows = store.agentsConfig()
+            val row = existingRows.find { it.id == agentId }
+                ?: knownAgent(agentId)?.let { known ->
+                    // Known agent not yet saved to config; seed it
+                    HostAgentConfigRow(
+                        id = known.id,
+                        path = null,
+                        args = known.command.drop(1),
+                        enabled = false,
+                        present = false,
+                        updatedAt = Instant.now().toString(),
+                    )
+                }
                 ?: throw SshException("Unknown agent: $agentId. Scan the host first.")
             val newPath = body.path
             newPath?.takeIf { it.isNotBlank() }?.let { path ->
@@ -87,7 +99,11 @@ class HostAgentApi @Inject constructor(
                 updatedAt = Instant.now().toString(),
             )
             store.updateAgentsConfig { rows ->
-                rows.map { if (it.id == agentId) updated else it }
+                if (rows.any { it.id == agentId }) {
+                    rows.map { if (it.id == agentId) updated else it }
+                } else {
+                    rows + updated
+                }
             }
             agentCollection(connection, connectionId, store.agentsConfig())
                 .items.find { it.id == agentId }

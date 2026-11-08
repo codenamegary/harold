@@ -229,7 +229,7 @@ class SessionSelectorUiTest {
         composeTestRule.onNodeWithTag("chat_session_connection_badge", useUnmergedTree = true).assertIsDisplayed()
         composeTestRule.onNodeWithTag("chat_overflow").performClick()
         composeTestRule.onNodeWithText("Connections").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Add connection").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Add connection").assertDoesNotExist()
         composeTestRule.onNodeWithText("Remove laptop").assertIsDisplayed()
         composeTestRule.onNodeWithTag("disconnect_menu_badge", useUnmergedTree = true).assertIsDisplayed()
     }

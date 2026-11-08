@@ -16,6 +16,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+enum class AgentCategory {
+    All,
+    Enabled,
+    Popular,
+}
+
 /** One row on the Agents screen. */
 data class AgentRow(
     val id: String,
@@ -48,8 +54,13 @@ data class AgentsUiState(
     val createName: String = "",
     val createPath: String = "",
     val createArgs: String = "",
+    val searchQuery: String = "",
+    val selectedCategory: AgentCategory = AgentCategory.All,
 ) {
     val showEditor: Boolean get() = editingAgentId != null
+    val totalCount: Int get() = rows.size
+    val enabledCount: Int get() = rows.count { it.enabled }
+    val popularCount: Int get() = rows.count { it.popular }
 }
 
 @HiltViewModel
@@ -73,6 +84,14 @@ class AgentsViewModel @Inject constructor(
         this.connectionId = connectionId
         _uiState.update { current -> current.copy(connectionId = connectionId) }
         refresh()
+    }
+
+    fun onSearchQueryChanged(value: String) {
+        _uiState.update { current -> current.copy(searchQuery = value) }
+    }
+
+    fun onCategorySelected(category: AgentCategory) {
+        _uiState.update { current -> current.copy(selectedCategory = category) }
     }
 
     fun refresh() {
@@ -127,6 +146,17 @@ class AgentsViewModel @Inject constructor(
     }
 
     fun toggleEnabled(agentId: String, enabled: Boolean) {
+        // Optimistically update the local row so the switch flips immediately in place
+        _uiState.update { current ->
+            val idx = current.rows.indexOfFirst { it.id == agentId }
+            if (idx >= 0) {
+                val updatedRow = current.rows[idx].copy(enabled = enabled)
+                val newRows = current.rows.toMutableList().apply { set(idx, updatedRow) }
+                current.copy(rows = newRows)
+            } else {
+                current
+            }
+        }
         viewModelScope.launch {
             userRepository.updateAgent(
                 connectionId,
@@ -135,8 +165,19 @@ class AgentsViewModel @Inject constructor(
             ).fold(
                 onSuccess = { agent -> replaceAgent(agent) },
                 onFailure = { error ->
+                    // Revert on failure
                     _uiState.update { current ->
-                        current.copy(error = error.message ?: "Could not update the agent.")
+                        val idx = current.rows.indexOfFirst { it.id == agentId }
+                        if (idx >= 0) {
+                            val revertedRow = current.rows[idx].copy(enabled = !enabled)
+                            val newRows = current.rows.toMutableList().apply { set(idx, revertedRow) }
+                            current.copy(
+                                rows = newRows,
+                                error = error.message ?: "Could not update the agent.",
+                            )
+                        } else {
+                            current.copy(error = error.message ?: "Could not update the agent.")
+                        }
                     }
                 },
             )
@@ -295,8 +336,14 @@ class AgentsViewModel @Inject constructor(
         agents: List<AgentSettings>,
         scanning: Boolean = _uiState.value.scanning,
     ) {
-        val rows = agents.filterNot { it.dismissed }.map(::agentRow)
-        val dismissed = agents.filter { it.dismissed }.map(::agentRow)
+        val sorted = agents.sortedWith(
+            compareByDescending<AgentSettings> { it.enabled }
+                .thenByDescending { it.popular }
+                .thenByDescending { it.present }
+                .thenBy { it.displayName.lowercase() },
+        )
+        val rows = sorted.filterNot { it.dismissed }.map(::agentRow)
+        val dismissed = sorted.filter { it.dismissed }.map(::agentRow)
         _uiState.update { current ->
             current.copy(
                 loading = false,
@@ -311,14 +358,25 @@ class AgentsViewModel @Inject constructor(
         val row = agentRow(agent)
         _uiState.update { current ->
             if (row.dismissed) {
+                val dismissIdx = current.dismissedRows.indexOfFirst { it.id == row.id }
+                val newDismissed = if (dismissIdx >= 0) {
+                    current.dismissedRows.toMutableList().apply { set(dismissIdx, row) }
+                } else {
+                    current.dismissedRows + row
+                }
                 current.copy(
                     rows = current.rows.filterNot { it.id == row.id },
-                    dismissedRows = current.dismissedRows
-                        .filterNot { it.id == row.id } + row,
+                    dismissedRows = newDismissed,
                 )
             } else {
+                val activeIdx = current.rows.indexOfFirst { it.id == row.id }
+                val newRows = if (activeIdx >= 0) {
+                    current.rows.toMutableList().apply { set(activeIdx, row) }
+                } else {
+                    current.rows + row
+                }
                 current.copy(
-                    rows = current.rows.filterNot { it.id == row.id } + row,
+                    rows = newRows,
                     dismissedRows = current.dismissedRows.filterNot { it.id == row.id },
                 )
             }
