@@ -12,18 +12,18 @@ class NavigatorTest {
 
         assertTrue(navigator.backStack.isEmpty())
 
-        navigator.start(paired = true)
-        navigator.start(paired = false)
+        navigator.start(hasConnection = true)
+        navigator.start(hasConnection = false)
         navigator.openSessions()
 
         assertEquals(listOf(Chat, Sessions), navigator.backStack.toList())
     }
 
     @Test
-    fun unpairedStartShowsTheShell() {
+    fun noConnectionStartShowsTheShell() {
         val navigator = Navigator()
 
-        navigator.start(paired = false)
+        navigator.start(hasConnection = false)
 
         assertEquals(listOf(Shell), navigator.backStack.toList())
     }
@@ -31,7 +31,7 @@ class NavigatorTest {
     @Test
     fun savingAConnectionReplacesTheStackWithChat() {
         val navigator = Navigator()
-        navigator.start(paired = false)
+        navigator.start(hasConnection = false)
 
         navigator.showChat()
 
@@ -41,7 +41,7 @@ class NavigatorTest {
     @Test
     fun addConnectionOpensSshSetup() {
         val navigator = Navigator()
-        navigator.start(paired = true)
+        navigator.start(hasConnection = true)
         navigator.openConnections()
 
         navigator.openAddConnection()
@@ -52,7 +52,7 @@ class NavigatorTest {
     @Test
     fun backFromTheRootLeavesTheStackInPlace() {
         val navigator = Navigator()
-        navigator.start(paired = true)
+        navigator.start(hasConnection = true)
         navigator.openSessions()
 
         assertTrue(navigator.goBack())
@@ -63,7 +63,7 @@ class NavigatorTest {
     @Test
     fun connectionsOpensOnTopOfChat() {
         val navigator = Navigator()
-        navigator.start(paired = true)
+        navigator.start(hasConnection = true)
 
         navigator.openConnections()
 
@@ -73,7 +73,7 @@ class NavigatorTest {
     @Test
     fun showShellReplacesWhateverIsShowing() {
         val navigator = Navigator()
-        navigator.start(paired = true)
+        navigator.start(hasConnection = true)
         navigator.openWorkspaces()
 
         navigator.showShell()
@@ -84,13 +84,13 @@ class NavigatorTest {
     @Test
     fun restoredStackSurvivesAndSkipsTheStartGate() {
         val before = Navigator()
-        before.start(paired = true)
+        before.start(hasConnection = true)
         before.openSessions()
         before.openCreateSession()
 
         val after = Navigator()
         after.restore(before.encode())
-        after.start(paired = false)
+        after.start(hasConnection = false)
 
         assertEquals(listOf(Chat, Sessions, CreateSession), after.backStack.toList())
     }

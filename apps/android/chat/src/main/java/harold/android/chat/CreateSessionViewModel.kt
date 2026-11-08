@@ -18,8 +18,8 @@ import harold.android.navigation.LastSessionSelection
 import harold.android.navigation.Navigator
 import harold.android.navigation.SessionPreferences
 import harold.android.network.apiErrorMessage
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
+import harold.android.session.ActiveConnectionState
+import harold.android.session.ConnectionGateway
 import harold.android.user.UserRepository
 import javax.inject.Inject
 import kotlinx.coroutines.Job
@@ -31,7 +31,7 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class CreateSessionViewModel @Inject constructor(
-    private val sessionGateway: SessionGateway,
+    private val connectionGateway: ConnectionGateway,
     private val sessionRepository: SessionRepository,
     private val workspaceRepository: WorkspaceRepository,
     private val userRepository: UserRepository,
@@ -47,14 +47,14 @@ class CreateSessionViewModel @Inject constructor(
     private var agentsOrigin: String? = null
     private var workspaceJob: Job? = null
     private var savedConnections: List<SavedConnection> = emptyList()
-    private var pairedOrigin: String? = null
+    private var activeOrigin: String? = null
     private var pendingCreatedWorkspace: CreatedWorkspaceResult? = null
     private var rememberedSelection: LastSessionSelection? = null
 
     init {
         viewModelScope.launch {
             loadConnectionMetadata()
-            // The first Room emission must already know the remembered pair,
+            // The first Room emission must already know the remembered connection,
             // otherwise the first workspace wins before the value arrives.
             rememberedSelection = sessionPreferences.loadLastSessionSelection()
             observeWorkspaces()
@@ -115,8 +115,8 @@ class CreateSessionViewModel @Inject constructor(
             return
         }
 
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired
-        val origin = workspace.connectionId.ifEmpty { paired?.connectionId }
+        val active = connectionGateway.activeConnection.value as? ActiveConnectionState.Active
+        val origin = workspace.connectionId.ifEmpty { active?.connectionId }
         if (origin == null) {
             _uiState.update { current -> current.copy(error = "Connect to Harold first") }
             return
@@ -164,7 +164,7 @@ class CreateSessionViewModel @Inject constructor(
 
     private suspend fun loadConnectionMetadata() {
         savedConnections = connectionRepository?.list().orEmpty()
-        pairedOrigin = (sessionGateway.pairedState.value as? PairedState.Paired)?.connectionId
+        activeOrigin = (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId
     }
 
     private fun observeWorkspaces() {
@@ -272,7 +272,7 @@ class CreateSessionViewModel @Inject constructor(
         if (savedConnections.isNotEmpty()) {
             savedConnections.map { connection -> connection.connectionId }.distinct()
         } else {
-            listOfNotNull(pairedOrigin)
+            listOfNotNull(activeOrigin)
         }
 
     private fun workspaceId(connectionId: String, workspaceId: String): String =

@@ -11,8 +11,8 @@ import harold.android.credentials.ConnectionRepository
 import harold.android.navigation.CreatedWorkspaceResult
 import harold.android.navigation.Navigator
 import harold.android.network.apiErrorMessage
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
+import harold.android.session.ActiveConnectionState
+import harold.android.session.ConnectionGateway
 import harold.android.user.UserRepository
 import harold.android.database.workspace.WorkspaceRepository
 import javax.inject.Inject
@@ -100,7 +100,7 @@ data class AddWorkspaceUiState(
 
 @HiltViewModel
 class AddWorkspaceViewModel @Inject constructor(
-    private val sessionGateway: SessionGateway,
+    private val connectionGateway: ConnectionGateway,
     private val userRepository: UserRepository,
     private val workspaceRepository: WorkspaceRepository,
     private val navigator: Navigator,
@@ -116,7 +116,7 @@ class AddWorkspaceViewModel @Inject constructor(
     }
 
     private suspend fun initialize() {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired
+        val active = connectionGateway.activeConnection.value as? ActiveConnectionState.Active
         val saved = connectionRepository?.list().orEmpty().map { connection ->
             WorkspaceConnectionBadge(
                 connectionId = connection.connectionId,
@@ -128,7 +128,7 @@ class AddWorkspaceViewModel @Inject constructor(
         val preferredOrigin = navigator.consumePreferredAddWorkspaceConnection()
         val initialOrigin = preferredOrigin?.takeIf { origin ->
             saved.isEmpty() || saved.any { it.connectionId == origin }
-        } ?: paired?.connectionId?.takeIf { origin ->
+        } ?: active?.connectionId?.takeIf { origin ->
             saved.isEmpty() || saved.any { it.connectionId == origin }
         } ?: saved.firstOrNull()?.connectionId.orEmpty()
 
@@ -416,7 +416,7 @@ class AddWorkspaceViewModel @Inject constructor(
 
     private fun currentOrigin(): String =
         _uiState.value.selectedConnectionId.ifEmpty {
-            (sessionGateway.pairedState.value as? PairedState.Paired)?.connectionId.orEmpty()
+            (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId.orEmpty()
         }
 }
 

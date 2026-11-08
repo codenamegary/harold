@@ -51,7 +51,7 @@ class ShellEntryProvider @Inject constructor() : FeatureEntryProvider {
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
             ShellScreen(
                 uiState = uiState,
-                onPairClick = viewModel::onPairClick,
+                onAddConnectionClick = viewModel::onAddConnectionClick,
                 onRetryClick = viewModel::onRetryClick,
             )
         }

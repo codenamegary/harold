@@ -14,15 +14,15 @@ import harold.android.navigation.Navigator
 import harold.android.network.AgentApi
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
+import harold.android.session.ActiveConnectionState
+import harold.android.session.ConnectionGateway
 import harold.android.stream.StreamStatus
 
 private const val WORKSPACE_PROBE_LIMIT = 1
 
 @HiltViewModel
 class ShellViewModel @Inject constructor(
-    private val sessionGateway: SessionGateway,
+    private val connectionGateway: ConnectionGateway,
     private val sessionOwner: SessionOwner,
     private val agentApi: AgentApi,
     private val navigator: Navigator,
@@ -32,17 +32,17 @@ class ShellViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            sessionGateway.refresh()
-            navigator.start(paired = sessionGateway.pairedState.value is PairedState.Paired)
+            connectionGateway.refresh()
+            navigator.start(hasConnection = connectionGateway.activeConnection.value is ActiveConnectionState.Active)
         }
 
         viewModelScope.launch {
-            sessionGateway.pairedState.collect { pairedState ->
-                _uiState.update { current -> current.fromPairedState(pairedState) }
+            connectionGateway.activeConnection.collect { activeConnection ->
+                _uiState.update { current -> current.fromActiveConnectionState(activeConnection) }
 
-                when (pairedState) {
-                    PairedState.NotPaired -> sessionOwner.disconnect()
-                    is PairedState.Paired -> open(pairedState.connectionId)
+                when (activeConnection) {
+                    ActiveConnectionState.NoConnection -> sessionOwner.disconnect()
+                    is ActiveConnectionState.Active -> open(activeConnection.connectionId)
                 }
             }
         }
@@ -54,7 +54,7 @@ class ShellViewModel @Inject constructor(
         }
     }
 
-    fun onPairClick() {
+    fun onAddConnectionClick() {
         navigator.openAddConnection()
     }
 
@@ -67,10 +67,10 @@ class ShellViewModel @Inject constructor(
     }
 
     fun onRetryClick() {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired ?: return
+        val active = connectionGateway.activeConnection.value as? ActiveConnectionState.Active ?: return
 
         sessionOwner.retry()
-        probeWorkspaces(paired.connectionId)
+        probeWorkspaces(active.connectionId)
     }
 
     private fun open(connectionId: String) {

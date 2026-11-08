@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import harold.android.stream.ConnectionState
 import harold.android.stream.StreamStatus
-import harold.android.session.PairedState
+import harold.android.session.ActiveConnectionState
 
 class ShellUiStateTest {
     @Test
@@ -45,13 +45,13 @@ class ShellUiStateTest {
     }
 
     @Test
-    fun keepsRepairAvailableWhenAuthFails() {
+    fun keepsChangeConnectionAvailableWhenAuthFails() {
         val state = ShellUiState()
-            .fromPairedState(PairedState.Paired("ssh://gary@127.0.0.1:22", "Pixel"))
+            .fromActiveConnectionState(ActiveConnectionState.Active("ssh://gary@127.0.0.1:22", "Pixel"))
             .fromConnectionStatus(StreamStatus.AuthFailed(detail = null))
 
-        assertEquals("Re-pair", state.pairLabel)
-        assertTrue(state.pairEnabled)
+        assertEquals("Change connection", state.addConnectionLabel)
+        assertTrue(state.addConnectionEnabled)
     }
 
     @Test
@@ -67,16 +67,16 @@ class ShellUiStateTest {
     }
 
     @Test
-    fun clearsConnectionDetailWhenTheDeviceIsNotPaired() {
+    fun clearsConnectionDetailWhenThereIsNoConnection() {
         val state = ShellUiState()
             .fromConnectionStatus(StreamStatus.AuthFailed(detail = "gone"))
             .fromWorkspaceProbe(WorkspaceProbe.Loaded(count = 2))
-            .fromPairedState(PairedState.NotPaired)
+            .fromActiveConnectionState(ActiveConnectionState.NoConnection)
 
         assertNull(state.connectionStatus)
         assertNull(state.workspacesSummary)
         assertFalse(state.retryVisible)
-        assertEquals("Add connection", state.pairLabel)
+        assertEquals("Add connection", state.addConnectionLabel)
     }
 
     private fun labelFor(status: StreamStatus): String? = uiFor(status).connectionStatus

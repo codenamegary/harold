@@ -1,8 +1,8 @@
 package harold.android.credentials
 
 import harold.android.database.LocalCacheCleaner
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
+import harold.android.session.ActiveConnectionState
+import harold.android.session.ConnectionGateway
 
 class ConnectionRepository(
     private val store: ConnectionStore,
@@ -63,17 +63,17 @@ suspend fun forgetConnection(
 suspend fun settleAfterForget(
     removedConnectionId: String,
     remains: Boolean,
-    gateway: SessionGateway,
+    gateway: ConnectionGateway,
     disconnect: () -> Unit,
     connect: (String) -> Unit,
-    showPairing: () -> Unit,
+    showConnectionSetup: () -> Unit,
 ) {
-    val active = gateway.pairedState.value
-    val removedActive = active is PairedState.Paired && active.connectionId == removedConnectionId
+    val active = gateway.activeConnection.value
+    val removedActive = active is ActiveConnectionState.Active && active.connectionId == removedConnectionId
     if (!remains) {
         disconnect()
         gateway.clearLocalAccess()
-        showPairing()
+        showConnectionSetup()
         return
     }
     if (!removedActive) {
@@ -81,6 +81,6 @@ suspend fun settleAfterForget(
     }
     disconnect()
     gateway.refresh()
-    val next = gateway.pairedState.value as? PairedState.Paired ?: return
+    val next = gateway.activeConnection.value as? ActiveConnectionState.Active ?: return
     connect(next.connectionId)
 }

@@ -52,11 +52,11 @@ import harold.android.network.GitApi
 import harold.android.network.SessionConfigApi
 import harold.android.session.ConnectionHealth
 import harold.android.session.ConnectionStatus
-import harold.android.session.PairedState
+import harold.android.session.ActiveConnectionState
 import harold.android.testing.FakeConnectionStore
-import harold.android.session.SessionGateway
+import harold.android.session.ConnectionGateway
 import harold.android.stream.ConnectionState
-import harold.android.testing.FakeSessionGateway
+import harold.android.testing.FakeConnectionGateway
 import harold.android.testing.FakeSpeechRecognitionClient
 import harold.android.user.UserRepository
 import harold.android.voice.ImmediateVoiceDictationRestartScheduler
@@ -109,7 +109,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun tellsConnectionsWhichSessionsAreLiveOnThePairedHarold() = runTest(dispatcher) {
+    fun tellsConnectionsWhichSessionsAreLiveOnTheActiveConnection() = runTest(dispatcher) {
         val reported = mutableListOf<Pair<String, List<harold.android.contracts.SessionState>>>()
         val viewModel = createViewModel(
             repository = ChatFakeUserRepository(),
@@ -616,7 +616,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
         val selected = viewModel.uiState.value.selectedSession!!
         val sessionsRoute = SessionsViewModel(
-            sessionGateway = pairedGateway(),
+            connectionGateway = activeGateway(),
             sessionRepository = TestSessionRepository(repository),
             sessionCommands = sessionCommands,
             navigator = Navigator(),
@@ -1553,8 +1553,8 @@ class ChatViewModelTest {
     @Test
     fun disconnectFromServerRemovesTheConnectionAndClearsLocalAccess() = runTest(dispatcher) {
         val repository = ChatFakeUserRepository()
-        val sessionGateway = FakeSessionGateway(
-            PairedState.Paired(ORIGIN, "Pixel"),
+        val connectionGateway = FakeConnectionGateway(
+            ActiveConnectionState.Active(ORIGIN, "Pixel"),
         )
         val sessionOwner = ChatFakeSessionOwner()
         val navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02")
@@ -1562,7 +1562,7 @@ class ChatViewModelTest {
             repository = repository,
             navigation = navigation,
             sessionOwner = sessionOwner,
-            sessionGateway = sessionGateway,
+            connectionGateway = connectionGateway,
         )
         advanceUntilIdle()
 
@@ -1585,7 +1585,7 @@ class ChatViewModelTest {
         viewModel.disconnectFromServer()
         advanceUntilIdle()
 
-        assertEquals(PairedState.NotPaired, sessionGateway.pairedState.value)
+        assertEquals(ActiveConnectionState.NoConnection, connectionGateway.activeConnection.value)
         assertTrue(navigation.lastSessionCleared)
         assertEquals(1, sessionOwner.disconnects)
         assertTrue(viewModel.uiState.value.availableCommands.isEmpty())
@@ -1598,16 +1598,16 @@ class ChatViewModelTest {
         store.save(savedConnection(ORIGIN, "device_01", "devcred_loop", "loopback"))
         store.save(savedConnection(desktopOrigin, "device_desktop", "devcred_desk", "desktop"))
         val repository = ChatFakeUserRepository()
-        val sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "Pixel"))
-        sessionGateway.pairedAfterRefresh = PairedState.Paired(desktopOrigin, "Pixel")
+        val connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel"))
+        connectionGateway.activeAfterRefresh = ActiveConnectionState.Active(desktopOrigin, "Pixel")
         val sessionOwner = ChatFakeSessionOwner()
         val navigator = Navigator()
-        navigator.start(paired = true)
+        navigator.start(hasConnection = true)
         val viewModel = createViewModel(
             repository = repository,
             navigation = ChatFakeNavigationPreferences(lastSessionId = "sess_02"),
             sessionOwner = sessionOwner,
-            sessionGateway = sessionGateway,
+            connectionGateway = connectionGateway,
             connectionRepository = ConnectionRepository(store),
             navigator = navigator,
         )
@@ -1619,7 +1619,7 @@ class ChatViewModelTest {
         assertEquals(listOf(desktopOrigin), store.list().map { connection -> connection.connectionId })
         assertEquals(desktopOrigin, sessionOwner.connections.last())
         assertEquals(listOf(harold.android.navigation.Chat), navigator.backStack.toList())
-        assertEquals(0, sessionGateway.clearLocalAccessCount)
+        assertEquals(0, connectionGateway.clearLocalAccessCount)
     }
 
     @Test
@@ -1901,7 +1901,7 @@ class ChatViewModelTest {
         repository: ChatFakeUserRepository,
         navigation: ChatFakeNavigationPreferences,
         sessionOwner: ChatFakeSessionOwner = ChatFakeSessionOwner(),
-        sessionGateway: FakeSessionGateway = pairedGateway(),
+        connectionGateway: FakeConnectionGateway = activeGateway(),
         sessionRepository: SessionRepository = TestSessionRepository(repository),
         configApi: SessionConfigApi = RecordingSessionConfigApi(),
         attachmentApi: AttachmentApi = NoopAttachmentApi(),
@@ -1914,7 +1914,7 @@ class ChatViewModelTest {
         permissionNotifier: harold.android.foreground.PermissionAttentionNotifier? = null,
     ): ChatViewModel = ChatViewModel(
         savedStateHandle = SavedStateHandle(),
-        sessionGateway = sessionGateway,
+        connectionGateway = connectionGateway,
         sessionOwner = sessionOwner,
         sessionRepository = sessionRepository,
         userRepository = repository,
@@ -1937,15 +1937,15 @@ class ChatViewModelTest {
         permissionNotifier = permissionNotifier,
     )
 
-    private fun pairedGateway(): FakeSessionGateway =
-        FakeSessionGateway(PairedState.Paired(ORIGIN, "Pixel"))
+    private fun activeGateway(): FakeConnectionGateway =
+        FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel"))
 
     private fun TestScope.createSessionThroughRoute(
         repository: ChatFakeUserRepository,
         sessionPreferences: FakeSessionPreferences = FakeSessionPreferences(),
     ) {
         val route = CreateSessionViewModel(
-            sessionGateway = pairedGateway(),
+            connectionGateway = activeGateway(),
             sessionRepository = TestSessionRepository(repository),
             workspaceRepository = TestWorkspaceRepository(repository),
             userRepository = repository,
@@ -1965,7 +1965,7 @@ class ChatViewModelTest {
         sessionPreferences: FakeSessionPreferences,
     ) {
         val route = CreateSessionViewModel(
-            sessionGateway = pairedGateway(),
+            connectionGateway = activeGateway(),
             sessionRepository = TestSessionRepository(repository),
             workspaceRepository = TestWorkspaceRepository(repository),
             userRepository = repository,

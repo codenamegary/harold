@@ -11,8 +11,8 @@ import harold.android.foreground.SessionAttentionMarks
 import harold.android.live.SessionOwner
 import harold.android.navigation.Navigator
 import harold.android.network.apiErrorMessage
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
+import harold.android.session.ActiveConnectionState
+import harold.android.session.ConnectionGateway
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,7 +38,7 @@ data class SessionsUiState(
 
 @HiltViewModel
 class SessionsViewModel @Inject constructor(
-    private val sessionGateway: SessionGateway,
+    private val connectionGateway: ConnectionGateway,
     private val sessionRepository: SessionRepository,
     private val sessionCommands: SessionCommands,
     private val navigator: Navigator,
@@ -102,8 +102,8 @@ class SessionsViewModel @Inject constructor(
     }
 
     fun delete(row: SessionRow) {
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired
-        val origin = row.connectionId.ifEmpty { paired?.connectionId } ?: return
+        val active = connectionGateway.activeConnection.value as? ActiveConnectionState.Active
+        val origin = row.connectionId.ifEmpty { active?.connectionId } ?: return
 
         viewModelScope.launch {
             sessionRepository.deleteSession(
@@ -141,9 +141,9 @@ class SessionsViewModel @Inject constructor(
             )
         }
 
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired
+        val active = connectionGateway.activeConnection.value as? ActiveConnectionState.Active
         val origins = saved.map { connection -> connection.connectionId }
-            .ifEmpty { listOfNotNull(paired?.connectionId) }
+            .ifEmpty { listOfNotNull(active?.connectionId) }
 
         var anySuccess = false
         var lastError: Throwable? = null

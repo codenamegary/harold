@@ -14,9 +14,9 @@ import harold.android.credentials.DefaultSshCredentialStore
 import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SshCredentialStore
 import harold.android.session.DefaultConnections
-import harold.android.session.DefaultSessionGateway
+import harold.android.session.DefaultConnectionGateway
 import harold.android.session.Connections
-import harold.android.session.SessionGateway
+import harold.android.session.ConnectionGateway
 import harold.android.user.DefaultUserRepository
 import harold.android.user.UserRepository
 import javax.inject.Singleton
@@ -26,7 +26,7 @@ import javax.inject.Singleton
 abstract class AuthModule {
     @Binds
     @Singleton
-    abstract fun sessionGateway(impl: DefaultSessionGateway): SessionGateway
+    abstract fun connectionGateway(impl: DefaultConnectionGateway): ConnectionGateway
 
     @Binds
     @Singleton
@@ -47,10 +47,10 @@ abstract class AuthModule {
     companion object {
         @Provides
         @Singleton
-        fun defaultSessionGateway(
+        fun defaultConnectionGateway(
             credentialStore: ConnectionStore,
             connections: Connections,
-        ): DefaultSessionGateway = DefaultSessionGateway(
+        ): DefaultConnectionGateway = DefaultConnectionGateway(
             credentialStore = credentialStore,
             connections = connections,
         )

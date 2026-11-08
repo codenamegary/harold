@@ -50,7 +50,7 @@ class BuildConventionsTest {
             ":voice",
             ":design",
             ":testing",
-            ":pairing",
+            ":connections",
             ":chat",
             ":workspaces",
             ":shell",
@@ -62,7 +62,7 @@ class BuildConventionsTest {
     @Test
     fun featureModulesUseTheFeatureConvention() {
         val root = androidRoot()
-        listOf("pairing", "chat", "workspaces", "shell").forEach { name ->
+        listOf("connections", "chat", "workspaces", "shell").forEach { name ->
             val buildFile = File(root, "$name/build.gradle.kts").readText()
             assertTrue(buildFile, buildFile.contains("alias(libs.plugins.harold.android.feature)"))
         }

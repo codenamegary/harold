@@ -2,7 +2,7 @@ package harold.android.shell
 
 import harold.android.stream.ConnectionState
 import harold.android.stream.StreamStatus
-import harold.android.session.PairedState
+import harold.android.session.ActiveConnectionState
 
 sealed interface WorkspaceProbe {
     data object Loading : WorkspaceProbe
@@ -19,8 +19,8 @@ sealed interface WorkspaceProbe {
 data class ShellUiState(
     val title: String = "Harold",
     val status: String = "No connections yet",
-    val pairEnabled: Boolean = true,
-    val pairLabel: String = "Add connection",
+    val addConnectionEnabled: Boolean = true,
+    val addConnectionLabel: String = "Add connection",
     val connectionStatus: String? = null,
     val workspacesSummary: String? = null,
     val streamStalled: Boolean = false,
@@ -29,28 +29,28 @@ data class ShellUiState(
     val retryVisible: Boolean get() = streamStalled
 }
 
-fun ShellUiState.fromPairedState(pairedState: PairedState): ShellUiState =
-    when (pairedState) {
-        PairedState.NotPaired -> copy(
+fun ShellUiState.fromActiveConnectionState(activeConnection: ActiveConnectionState): ShellUiState =
+    when (activeConnection) {
+        ActiveConnectionState.NoConnection -> copy(
             status = "No connections yet",
-            pairEnabled = true,
-            pairLabel = "Add connection",
+            addConnectionEnabled = true,
+            addConnectionLabel = "Add connection",
             connectionStatus = null,
             workspacesSummary = null,
             streamStalled = false,
         )
 
-        is PairedState.Paired -> copy(
+        is ActiveConnectionState.Active -> copy(
             status = buildString {
-                append("Paired to ")
-                append(pairedState.connectionId)
-                pairedState.deviceName?.let { name ->
+                append("Connected to ")
+                append(activeConnection.connectionId)
+                activeConnection.deviceName?.let { name ->
                     append("\n")
                     append(name)
                 }
             },
-            pairEnabled = true,
-            pairLabel = "Re-pair",
+            addConnectionEnabled = true,
+            addConnectionLabel = "Change connection",
         )
     }
 

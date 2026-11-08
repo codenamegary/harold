@@ -47,7 +47,7 @@ class StartFlowNavigationTest {
     }
 
     @Test
-    fun unpairedStartShowsTheShellAndStaysPut() {
+    fun noConnectionStartShowsTheShellAndStaysPut() {
         val navigator = Navigator()
 
         composeTestRule.setContent {
@@ -82,12 +82,12 @@ class StartFlowNavigationTest {
             }
         }
 
-        composeTestRule.runOnIdle { navigator.start(paired = false) }
+        composeTestRule.runOnIdle { navigator.start(hasConnection = false) }
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("route_shell").assertIsDisplayed()
 
         composeTestRule.runOnIdle {
-            navigator.start(paired = true)
+            navigator.start(hasConnection = true)
             navigator.openAddConnection()
         }
         composeTestRule.waitForIdle()

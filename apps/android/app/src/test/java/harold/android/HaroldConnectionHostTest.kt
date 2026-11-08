@@ -7,9 +7,9 @@ import harold.android.live.SessionOwner
 import harold.android.live.SessionSnapshot
 import harold.android.session.ConnectionHealth
 import harold.android.session.Connections
-import harold.android.session.PairedState
+import harold.android.session.ActiveConnectionState
 import harold.android.stream.ConnectionState
-import harold.android.testing.FakeSessionGateway
+import harold.android.testing.FakeConnectionGateway
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -70,7 +70,7 @@ class HaroldConnectionHostTest {
         connections: RecordingConnections,
     ): HaroldConnectionHost = HaroldConnectionHost(
         connections = connections,
-        sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "Pixel")),
+        connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
         sessionOwner = owner,
         scope = backgroundScope,
     )

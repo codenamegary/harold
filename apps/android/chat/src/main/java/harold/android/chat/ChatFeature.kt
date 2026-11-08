@@ -96,7 +96,7 @@ class ChatEntryProvider @Inject constructor() : FeatureEntryProvider {
                 onVoiceCommandPick = viewModel::pickVoiceCommand,
                 onComposerCommandPick = viewModel::pickComposerCommand,
                 onDisconnectFromServer = viewModel::disconnectFromServer,
-                onPairAnotherHarold = navigator::openAddConnection,
+                onAddConnection = navigator::openAddConnection,
                 onConnections = navigator::openConnections,
                 onAgentAuthRestart = viewModel::restartAgentAuth,
                 onAgentAuthLogout = viewModel::logoutAgentAuth,

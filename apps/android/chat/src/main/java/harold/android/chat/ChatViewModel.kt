@@ -65,8 +65,8 @@ import harold.android.credentials.SavedConnection
 import harold.android.session.ConnectionHealth
 import harold.android.session.ConnectionStatus
 import harold.android.session.Connections
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
+import harold.android.session.ActiveConnectionState
+import harold.android.session.ConnectionGateway
 import harold.android.stream.StreamStatus
 import harold.android.ui.promptinput.PromptEdit
 import harold.android.ui.promptinput.applyEdit
@@ -94,7 +94,7 @@ import kotlinx.serialization.json.JsonPrimitive
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
-    private val sessionGateway: SessionGateway,
+    private val connectionGateway: ConnectionGateway,
     private val sessionOwner: SessionOwner,
     private val sessionRepository: SessionRepository,
     private val userRepository: UserRepository,
@@ -129,20 +129,20 @@ class ChatViewModel @Inject constructor(
     private val agentAuth = AgentAuthController(
         userRepository = userRepository,
         scope = viewModelScope,
-        origin = ::selectedOrPairedOrigin,
+        origin = ::selectedOrActiveOrigin,
         selectedAgent = { _uiState.value.selectedSession?.agentId },
     )
 
     /**
      * Session-scoped actions must follow the selected session's Harold. The
-     * paired state is only the active fallback for legacy single-Harold flows.
+     * active connection is only the fallback for legacy single-Harold flows.
      */
     private fun selectedSessionOrigin(): String? =
         _uiState.value.selectedSession?.connectionId?.takeIf { origin -> origin.isNotEmpty() }
 
-    private fun selectedOrPairedOrigin(): String? =
+    private fun selectedOrActiveOrigin(): String? =
         selectedSessionOrigin()
-            ?: (sessionGateway.pairedState.value as? PairedState.Paired)?.connectionId
+            ?: (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId
 
     /**
      * The composer's text and caret. The prompt input paints its tokens from
@@ -157,7 +157,7 @@ class ChatViewModel @Inject constructor(
     private var agentCapabilities: Map<String, AgentCapabilityInventory?> = emptyMap()
     private var cachedSessions: List<CachedSession> = emptyList()
     private var savedConnections: List<SavedConnection> = emptyList()
-    private var pairedOrigin: String? = null
+    private var activeOrigin: String? = null
     private var metadataLoaded = false
     private val unreachableOrigins = mutableSetOf<String>()
     private val refreshMutex = Mutex()
@@ -270,10 +270,10 @@ class ChatViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            sessionGateway.pairedState.collect { paired ->
-                if (paired is PairedState.Paired) {
+            connectionGateway.activeConnection.collect { active ->
+                if (active is ActiveConnectionState.Active) {
                     sessionForegroundCoordinator?.setConnectionId(
-                        selectedSessionOrigin() ?: paired.connectionId,
+                        selectedSessionOrigin() ?: active.connectionId,
                     )
                     _uiState.value.selectedSession?.let { selected ->
                         sessionOwner.watch(selected.agentId, selected.sessionId)
@@ -334,7 +334,7 @@ class ChatViewModel @Inject constructor(
     fun onResume() {
         sessionOwner.onForeground()
         refreshChangesBadge()
-        val origin = selectedOrPairedOrigin() ?: return
+        val origin = selectedOrActiveOrigin() ?: return
         sessionForegroundCoordinator?.setConnectionId(origin)
         viewModelScope.launch {
             refreshCatalog()
@@ -347,7 +347,7 @@ class ChatViewModel @Inject constructor(
 
     private fun refreshChangesBadge() {
         val selected = _uiState.value.selectedSession
-        val origin = selectedOrPairedOrigin()
+        val origin = selectedOrActiveOrigin()
         val path = selected?.worktreePath ?: selected?.cwd.orEmpty()
         if (
             selected == null ||
@@ -675,7 +675,7 @@ class ChatViewModel @Inject constructor(
 
     /** Picker intake: bytes are read by the screen, previews decode off-main. */
     fun onAttachmentsPicked(files: List<AttachmentPick>) {
-        val origin = selectedOrPairedOrigin() ?: return
+        val origin = selectedOrActiveOrigin() ?: return
         if (files.isEmpty()) {
             return
         }
@@ -727,7 +727,7 @@ class ChatViewModel @Inject constructor(
         }
         if (attachment.status == AttachmentUploadStatus.Ready && attachment.uploadedId != null) {
             viewModelScope.launch {
-                val origin = selectedOrPairedOrigin() ?: return@launch
+                val origin = selectedOrActiveOrigin() ?: return@launch
                 val session = _uiState.value.selectedSession ?: return@launch
                 attachmentApi.deleteAttachment(
                     connectionId = origin,
@@ -744,7 +744,7 @@ class ChatViewModel @Inject constructor(
         if (attachment.status != AttachmentUploadStatus.Failed) {
             return
         }
-        val origin = selectedOrPairedOrigin() ?: return
+        val origin = selectedOrActiveOrigin() ?: return
         _uiState.update { current ->
             current.copy(
                 pendingAttachments = current.pendingAttachments.map { existing ->
@@ -847,7 +847,7 @@ class ChatViewModel @Inject constructor(
     }
 
     fun restartAgentAuth() {
-        selectedOrPairedOrigin()?.let { origin ->
+        selectedOrActiveOrigin()?.let { origin ->
             _uiState.value.selectedSession?.agentId?.let { agentId ->
                 agentAuth.restart(agentId)
             }
@@ -855,7 +855,7 @@ class ChatViewModel @Inject constructor(
     }
 
     fun logoutAgentAuth() {
-        selectedOrPairedOrigin()?.let { origin ->
+        selectedOrActiveOrigin()?.let { origin ->
             _uiState.value.selectedSession?.agentId?.let { agentId ->
                 agentAuth.logout(agentId)
             }
@@ -1217,8 +1217,8 @@ class ChatViewModel @Inject constructor(
             } else {
                 null
             }
-            val paired = sessionGateway.pairedState.value as? PairedState.Paired
-            val originToRemove = targetSaved?.connectionId ?: paired?.connectionId
+            val active = connectionGateway.activeConnection.value as? ActiveConnectionState.Active
+            val originToRemove = targetSaved?.connectionId ?: active?.connectionId
 
             if (originToRemove != null) {
                 val remains = forgetConnection(
@@ -1228,10 +1228,10 @@ class ChatViewModel @Inject constructor(
                 settleAfterForget(
                     removedConnectionId = originToRemove,
                     remains = remains,
-                    gateway = sessionGateway,
+                    gateway = connectionGateway,
                     disconnect = sessionOwner::disconnect,
                     connect = sessionOwner::connect,
-                    showPairing = {
+                    showConnectionSetup = {
                         navigator.showShell()
                         navigator.openAddConnection()
                     },
@@ -1395,7 +1395,7 @@ class ChatViewModel @Inject constructor(
 
         configWriter.onSnapshot(
             connectionId = selectedSessionOrigin()
-                ?: (sessionGateway.pairedState.value as? PairedState.Paired)?.connectionId,
+                ?: (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId,
             agentId = snapshot.agentId,
             sessionId = snapshot.sessionId,
             configOptions = snapshot.configOptions,
@@ -1516,7 +1516,7 @@ class ChatViewModel @Inject constructor(
         ) {
             return
         }
-        val origin = open.connectionId.ifEmpty { pairedOrigin.orEmpty() }
+        val origin = open.connectionId.ifEmpty { activeOrigin.orEmpty() }
         if (origin.isEmpty() || open.sessionId.isEmpty()) {
             return
         }
@@ -1572,7 +1572,7 @@ class ChatViewModel @Inject constructor(
             return
         }
         val origin = selected.connectionId.ifEmpty {
-            (sessionGateway.pairedState.value as? PairedState.Paired)?.connectionId.orEmpty()
+            (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId.orEmpty()
         }
         if (origin.isEmpty()) {
             return
@@ -1728,7 +1728,7 @@ class ChatViewModel @Inject constructor(
 
     private suspend fun loadConnectionMetadata() {
         savedConnections = connectionRepository.list()
-        pairedOrigin = (sessionGateway.pairedState.value as? PairedState.Paired)?.connectionId
+        activeOrigin = (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId
         metadataLoaded = true
         unreachableOrigins.retainAll(targetOrigins().toSet())
     }
@@ -1737,11 +1737,11 @@ class ChatViewModel @Inject constructor(
         if (savedConnections.isNotEmpty()) {
             savedConnections.map { connection -> connection.connectionId }.distinct()
         } else {
-            listOfNotNull(pairedOrigin)
+            listOfNotNull(activeOrigin)
         }
 
     private fun activeHarold(): SavedConnection? =
-        savedConnections.firstOrNull { connection -> connection.connectionId == pairedOrigin }
+        savedConnections.firstOrNull { connection -> connection.connectionId == activeOrigin }
             ?: savedConnections.firstOrNull()
 
     private fun applyWorkspaces(workspaces: List<Workspace>?) {
@@ -1921,7 +1921,7 @@ class ChatViewModel @Inject constructor(
             tracker.replaceAll(snapshots)
             sessionForegroundCoordinator?.onSessionsChanged()
         }
-        val fallback = (sessionGateway.pairedState.value as? PairedState.Paired)?.connectionId
+        val fallback = (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId
         catalog.groupBy { row -> row.connectionId.ifEmpty { fallback.orEmpty() } }
             .forEach { (origin, rows) ->
                 if (origin.isNotEmpty()) {
@@ -1935,7 +1935,7 @@ class ChatViewModel @Inject constructor(
             return
         }
         val origin = row.connectionId.ifEmpty {
-            (sessionGateway.pairedState.value as? PairedState.Paired)?.connectionId.orEmpty()
+            (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId.orEmpty()
         }
         if (origin.isEmpty()) {
             return
@@ -1960,7 +1960,7 @@ class ChatViewModel @Inject constructor(
         }
         val pending = PendingModelApply(
             connectionId = row.connectionId.ifEmpty {
-                (sessionGateway.pairedState.value as? PairedState.Paired)?.connectionId.orEmpty()
+                (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId.orEmpty()
             },
             agentId = row.agentId,
             sessionId = row.sessionId,
@@ -2073,7 +2073,7 @@ class ChatViewModel @Inject constructor(
 
     private fun sessionModelKey(row: SessionRow): String {
         val origin = row.connectionId.ifEmpty {
-            (sessionGateway.pairedState.value as? PairedState.Paired)?.connectionId.orEmpty()
+            (connectionGateway.activeConnection.value as? ActiveConnectionState.Active)?.connectionId.orEmpty()
         }
         if (origin.isEmpty() || row.sessionId.isEmpty()) {
             return ""

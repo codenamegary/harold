@@ -16,10 +16,10 @@ import harold.android.live.SessionSnapshot
 import harold.android.navigation.Chat
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
-import harold.android.session.PairedState
+import harold.android.session.ActiveConnectionState
 import harold.android.stream.ConnectionState
 import harold.android.testing.FakeConnectionStore
-import harold.android.testing.FakeSessionGateway
+import harold.android.testing.FakeConnectionGateway
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -235,7 +235,7 @@ class SessionsViewModelTest {
         sessionOwner: SessionsFakeSessionOwner = SessionsFakeSessionOwner(),
         savedConnections: ConnectionRepository = ConnectionRepository(FakeConnectionStore()),
     ): SessionsViewModel = SessionsViewModel(
-        sessionGateway = FakeSessionGateway(PAIRED),
+        connectionGateway = FakeConnectionGateway(ACTIVE),
         sessionRepository = sessionRepository,
         sessionCommands = commands,
         navigator = navigator,
@@ -245,7 +245,7 @@ class SessionsViewModelTest {
 
     @Test
     fun showsCachedSessionsWhenTheHaroldIsOffline() = runTest {
-        val origin = PAIRED.connectionId
+        val origin = ACTIVE.connectionId
         val network = OriginSessionRepository(
             sessionsByOrigin = mapOf(origin to listOf(session("sess_cached", "Cached", "2026-08-03T00:00:00.000Z"))),
         )
@@ -304,7 +304,7 @@ class SessionsViewModelTest {
     )
 
     private companion object {
-        val PAIRED = PairedState.Paired("http://127.0.0.1:8787", "Pixel")
+        val ACTIVE = ActiveConnectionState.Active("http://127.0.0.1:8787", "Pixel")
         const val LAPTOP = "http://laptop.local:3847"
         const val DESKTOP = "http://desktop.local:3847"
     }

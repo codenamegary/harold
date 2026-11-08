@@ -50,11 +50,11 @@ class Navigator @Inject constructor() {
         }
     }
 
-    fun start(paired: Boolean) {
+    fun start(hasConnection: Boolean) {
         if (backStack.isNotEmpty()) {
             return
         }
-        replaceWith(if (paired) Chat else Shell)
+        replaceWith(if (hasConnection) Chat else Shell)
     }
 
     fun showChat() {

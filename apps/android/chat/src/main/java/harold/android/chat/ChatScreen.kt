@@ -302,7 +302,7 @@ fun ChatScreen(
     onVoiceCommandPick: (String) -> Unit = {},
     onComposerCommandPick: (String) -> Unit = {},
     onDisconnectFromServer: () -> Unit = {},
-    onPairAnotherHarold: () -> Unit = {},
+    onAddConnection: () -> Unit = {},
     onConnections: () -> Unit = {},
     onAgentAuthRestart: () -> Unit = {},
     onAgentAuthLogout: () -> Unit = {},
@@ -718,9 +718,9 @@ fun ChatScreen(
                                 text = { Text(text = stringResource(R.string.chat_add_connection)) },
                                 onClick = {
                                     menuExpanded = false
-                                    onPairAnotherHarold()
+                                    onAddConnection()
                                 },
-                                modifier = Modifier.testTag("pair_another_menu_item"),
+                                modifier = Modifier.testTag("add_connection_menu_item"),
                             )
                             DropdownMenuItem(
                                 leadingIcon = if (hasDisconnectBadge) {

@@ -8,8 +8,8 @@ import org.junit.Before
 import org.junit.BeforeClass
 import org.junit.Test
 import org.junit.runner.RunWith
-import harold.android.session.DefaultSessionGateway
-import harold.android.session.PairedState
+import harold.android.session.DefaultConnectionGateway
+import harold.android.session.ActiveConnectionState
 
 /**
  * DataStore forbids multiple live instances on the same file, so this class keeps
@@ -59,7 +59,7 @@ class DefaultCredentialStoreInstrumentedTest {
     }
 
     @Test
-    fun newGatewayRestoresPairedConnectionAfterSimulatedRestart() = runTest {
+    fun newGatewayRestoresActiveConnectionAfterSimulatedRestart() = runTest {
         val credential = SavedConnection(
             formatVersion = 3,
             connectionId = "ssh://gary@10.0.2.2:22",
@@ -71,16 +71,16 @@ class DefaultCredentialStoreInstrumentedTest {
         )
         store.save(credential)
 
-        val gateway = DefaultSessionGateway(credentialStore = store)
+        val gateway = DefaultConnectionGateway(credentialStore = store)
 
         gateway.refresh()
 
         assertEquals(
-            PairedState.Paired(
+            ActiveConnectionState.Active(
                 connectionId = "ssh://gary@10.0.2.2:22",
                 deviceName = "Emulator",
             ),
-            gateway.pairedState.value,
+            gateway.activeConnection.value,
         )
     }
 
@@ -98,14 +98,14 @@ class DefaultCredentialStoreInstrumentedTest {
             ),
         )
 
-        val first = DefaultSessionGateway(credentialStore = store)
+        val first = DefaultConnectionGateway(credentialStore = store)
         first.refresh()
         first.clearLocalAccess()
 
-        val second = DefaultSessionGateway(credentialStore = store)
+        val second = DefaultConnectionGateway(credentialStore = store)
         second.refresh()
 
-        assertEquals(PairedState.NotPaired, second.pairedState.value)
+        assertEquals(ActiveConnectionState.NoConnection, second.activeConnection.value)
         assertEquals(emptyList<SavedConnection>(), store.list())
     }
 

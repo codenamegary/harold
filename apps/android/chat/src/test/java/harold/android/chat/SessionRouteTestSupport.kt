@@ -18,9 +18,9 @@ import harold.android.contracts.SessionCollection
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import harold.android.navigation.Navigator
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
-import harold.android.testing.FakeSessionGateway
+import harold.android.session.ActiveConnectionState
+import harold.android.session.ConnectionGateway
+import harold.android.testing.FakeConnectionGateway
 import harold.android.user.UserRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -113,6 +113,6 @@ internal class RouteUserRepository(
 
 internal fun testNavigator(): Navigator {
     val navigator = Navigator()
-    navigator.start(paired = true)
+    navigator.start(hasConnection = true)
     return navigator
 }

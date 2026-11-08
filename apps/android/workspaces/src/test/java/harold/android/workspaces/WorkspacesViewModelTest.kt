@@ -7,9 +7,9 @@ import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SavedConnection
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
-import harold.android.session.PairedState
+import harold.android.session.ActiveConnectionState
 import harold.android.testing.FakeConnectionStore
-import harold.android.testing.FakeSessionGateway
+import harold.android.testing.FakeConnectionGateway
 import harold.android.database.workspace.CachedWorkspace
 import harold.android.database.workspace.WorkspaceRepository
 import kotlinx.coroutines.Dispatchers
@@ -45,7 +45,7 @@ class WorkspacesViewModelTest {
     @Test
     fun loadsWorkspaces() = runTest(dispatcher) {
         val viewModel = WorkspacesViewModel(
-            sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "Pixel")),
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
             workspaceRepository = FakeWorkspaceRepository(),
         )
 
@@ -60,7 +60,7 @@ class WorkspacesViewModelTest {
     @Test
     fun reportsEmptyWorkspaces() = runTest(dispatcher) {
         val viewModel = WorkspacesViewModel(
-            sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "Pixel")),
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
             workspaceRepository = FakeWorkspaceRepository(workspaces = emptyList()),
         )
 
@@ -73,7 +73,7 @@ class WorkspacesViewModelTest {
     @Test
     fun reportsApiFailure() = runTest(dispatcher) {
         val viewModel = WorkspacesViewModel(
-            sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "Pixel")),
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
             workspaceRepository = FakeWorkspaceRepository(
                 apiFailure = AgentApiException(AgentApiError.Transport(RuntimeException("boom"))),
             ),
@@ -100,7 +100,7 @@ class WorkspacesViewModelTest {
         )
 
         val viewModel = WorkspacesViewModel(
-            sessionGateway = FakeSessionGateway(PairedState.NotPaired),
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.NoConnection),
             workspaceRepository = repository,
             connectionRepository = ConnectionRepository(store),
         )
@@ -128,7 +128,7 @@ class WorkspacesViewModelTest {
         )
         repository.seed(listOf(CachedWorkspace(ORIGIN, workspace())))
         val viewModel = WorkspacesViewModel(
-            sessionGateway = FakeSessionGateway(PairedState.Paired(ORIGIN, "Pixel")),
+            connectionGateway = FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel")),
             workspaceRepository = repository,
         )
 

@@ -564,7 +564,7 @@ class DefaultSessionOwnerTest {
     }
 
     @Test
-    fun coldStartsAgainWhenThePairedServerChanges() = runTest {
+    fun coldStartsAgainWhenTheActiveServerChanges() = runTest {
         val factory = ScriptedSessionStreamFactory(
             listOf(
                 liveThen(DisconnectCause.Protocol("stop")),

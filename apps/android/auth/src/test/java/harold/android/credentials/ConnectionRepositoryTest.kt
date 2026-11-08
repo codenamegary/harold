@@ -1,9 +1,9 @@
 package harold.android.credentials
 
 import harold.android.database.LocalCacheCleaner
-import harold.android.session.PairedState
+import harold.android.session.ActiveConnectionState
 import harold.android.testing.FakeConnectionStore
-import harold.android.testing.FakeSessionGateway
+import harold.android.testing.FakeConnectionGateway
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -101,11 +101,11 @@ class ConnectionRepositoryTest {
 
     @Test
     fun forgettingTheActiveHaroldConnectsTheOneThatRemains() = runTest {
-        val gateway = FakeSessionGateway(PairedState.Paired("ssh://gary@laptop.local:22", "Pixel"))
-        gateway.pairedAfterRefresh = PairedState.Paired("ssh://gary@desktop.local:22", "Pixel")
+        val gateway = FakeConnectionGateway(ActiveConnectionState.Active("ssh://gary@laptop.local:22", "Pixel"))
+        gateway.activeAfterRefresh = ActiveConnectionState.Active("ssh://gary@desktop.local:22", "Pixel")
         val connections = mutableListOf<String>()
         var disconnected = false
-        var showedPairing = false
+        var showedConnectionSetup = false
 
         settleAfterForget(
             removedConnectionId = "ssh://gary@laptop.local:22",
@@ -113,20 +113,20 @@ class ConnectionRepositoryTest {
             gateway = gateway,
             disconnect = { disconnected = true },
             connect = { origin -> connections += origin },
-            showPairing = { showedPairing = true },
+            showConnectionSetup = { showedConnectionSetup = true },
         )
 
         assertTrue(disconnected)
-        assertFalse(showedPairing)
+        assertFalse(showedConnectionSetup)
         assertEquals(listOf("ssh://gary@desktop.local:22"), connections)
         assertEquals(0, gateway.clearLocalAccessCount)
     }
 
     @Test
-    fun forgettingTheLastHaroldShowsPairing() = runTest {
-        val gateway = FakeSessionGateway(PairedState.Paired("ssh://gary@laptop.local:22", "Pixel"))
+    fun forgettingTheLastHaroldShowsConnectionSetup() = runTest {
+        val gateway = FakeConnectionGateway(ActiveConnectionState.Active("ssh://gary@laptop.local:22", "Pixel"))
         var disconnected = false
-        var showedPairing = false
+        var showedConnectionSetup = false
 
         settleAfterForget(
             removedConnectionId = "ssh://gary@laptop.local:22",
@@ -134,12 +134,12 @@ class ConnectionRepositoryTest {
             gateway = gateway,
             disconnect = { disconnected = true },
             connect = { _ -> error("should not connect") },
-            showPairing = { showedPairing = true },
+            showConnectionSetup = { showedConnectionSetup = true },
         )
 
         assertTrue(disconnected)
-        assertTrue(showedPairing)
-        assertEquals(PairedState.NotPaired, gateway.pairedState.value)
+        assertTrue(showedConnectionSetup)
+        assertEquals(ActiveConnectionState.NoConnection, gateway.activeConnection.value)
     }
 }
 

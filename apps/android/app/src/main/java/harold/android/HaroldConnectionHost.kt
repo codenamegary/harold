@@ -6,8 +6,8 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import harold.android.live.SessionOwner
 import harold.android.session.Connections
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
+import harold.android.session.ActiveConnectionState
+import harold.android.session.ConnectionGateway
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
@@ -22,17 +22,17 @@ import kotlinx.coroutines.launch
 @Singleton
 class HaroldConnectionHost(
     private val connections: Connections,
-    private val sessionGateway: SessionGateway,
+    private val connectionGateway: ConnectionGateway,
     private val sessionOwner: SessionOwner,
     private val scope: CoroutineScope,
 ) : DefaultLifecycleObserver {
     @Inject constructor(
         connections: Connections,
-        sessionGateway: SessionGateway,
+        connectionGateway: ConnectionGateway,
         sessionOwner: SessionOwner,
     ) : this(
         connections = connections,
-        sessionGateway = sessionGateway,
+        connectionGateway = connectionGateway,
         sessionOwner = sessionOwner,
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
     )
@@ -56,10 +56,10 @@ class HaroldConnectionHost(
     fun onAppForeground() {
         connections.onForeground()
         scope.launch {
-            sessionGateway.refresh()
-            val paired = sessionGateway.pairedState.value as? PairedState.Paired
-            if (paired != null && connections.shouldStayConnected(paired.connectionId)) {
-                sessionOwner.connect(paired.connectionId)
+            connectionGateway.refresh()
+            val active = connectionGateway.activeConnection.value as? ActiveConnectionState.Active
+            if (active != null && connections.shouldStayConnected(active.connectionId)) {
+                sessionOwner.connect(active.connectionId)
                 sessionOwner.onForeground()
             } else {
                 sessionOwner.closeForBackground()
@@ -69,8 +69,8 @@ class HaroldConnectionHost(
 
     fun onAppBackground() {
         connections.onBackground()
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired
-        if (paired != null && connections.shouldStayConnected(paired.connectionId)) {
+        val active = connectionGateway.activeConnection.value as? ActiveConnectionState.Active
+        if (active != null && connections.shouldStayConnected(active.connectionId)) {
             sessionOwner.onBackground()
         } else {
             sessionOwner.closeForBackground()

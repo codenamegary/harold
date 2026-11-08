@@ -88,7 +88,7 @@ dependencies {
     implementation(project(":live"))
     implementation(project(":voice"))
     implementation(project(":design"))
-    implementation(project(":pairing"))
+    implementation(project(":connections"))
     implementation(project(":chat"))
     implementation(project(":changes"))
     implementation(project(":workspaces"))

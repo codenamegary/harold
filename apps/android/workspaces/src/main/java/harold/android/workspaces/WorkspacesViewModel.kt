@@ -7,8 +7,8 @@ import harold.android.contracts.Workspace
 import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SavedConnection
 import harold.android.network.apiErrorMessage
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
+import harold.android.session.ActiveConnectionState
+import harold.android.session.ConnectionGateway
 import harold.android.database.workspace.CachedWorkspace
 import harold.android.database.workspace.WorkspaceRepository
 import javax.inject.Inject
@@ -45,7 +45,7 @@ data class WorkspacesUiState(
 
 @HiltViewModel
 class WorkspacesViewModel @Inject constructor(
-    private val sessionGateway: SessionGateway,
+    private val connectionGateway: ConnectionGateway,
     private val workspaceRepository: WorkspaceRepository,
     private val connectionRepository: ConnectionRepository? = null,
 ) : ViewModel() {
@@ -101,11 +101,11 @@ class WorkspacesViewModel @Inject constructor(
 
     private suspend fun loadConnectionMetadata() {
         savedConnections = connectionRepository?.list().orEmpty()
-        val paired = sessionGateway.pairedState.value as? PairedState.Paired
+        val active = connectionGateway.activeConnection.value as? ActiveConnectionState.Active
         targetOrigins = if (savedConnections.isNotEmpty()) {
             savedConnections.map { connection -> connection.connectionId }
         } else {
-            listOfNotNull(paired?.connectionId)
+            listOfNotNull(active?.connectionId)
         }
     }
 

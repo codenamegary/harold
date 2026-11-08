@@ -12,17 +12,17 @@ import harold.android.credentials.SshAuth
 import harold.android.credentials.SshConfig
 import harold.android.credentials.SavedConnection
 import harold.android.live.SessionOwner
-import harold.android.session.DefaultSessionGateway
+import harold.android.session.DefaultConnectionGateway
 import harold.android.testing.FakeConnectionStore
 import harold.android.live.SessionSnapshot
 import harold.android.network.AgentApi
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
+import harold.android.session.ActiveConnectionState
+import harold.android.session.ConnectionGateway
 import harold.android.stream.ConnectionState
 import harold.android.stream.StreamStatus
-import harold.android.testing.FakeSessionGateway
+import harold.android.testing.FakeConnectionGateway
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -55,10 +55,10 @@ class ShellViewModelTest {
     }
 
     @Test
-    fun connectsTheStreamAndProbesWorkspacesOncePaired() = runTest {
+    fun connectsTheStreamAndProbesWorkspacesOnceActive() = runTest {
         val connection = FakeSessionOwner()
         val api = FakeAgentApi(Result.success(collectionOf(count = 3)))
-        val viewModel = viewModel(paired(), connection, api)
+        val viewModel = viewModel(active(), connection, api)
 
         assertEquals(listOf(ORIGIN), connection.connects)
         assertEquals(listOf(ORIGIN to 1), api.calls)
@@ -68,7 +68,7 @@ class ShellViewModelTest {
     @Test
     fun reportsAnEmptyServer() = runTest {
         val api = FakeAgentApi(Result.success(collectionOf(count = 0)))
-        val viewModel = viewModel(paired(), FakeSessionOwner(), api)
+        val viewModel = viewModel(active(), FakeSessionOwner(), api)
 
         assertEquals("No workspaces", viewModel.uiState.value.workspacesSummary)
     }
@@ -78,7 +78,7 @@ class ShellViewModelTest {
         val api = FakeAgentApi(
             Result.failure(AgentApiException(AgentApiError.Transport(RuntimeException("boom")))),
         )
-        val viewModel = viewModel(paired(), FakeSessionOwner(), api)
+        val viewModel = viewModel(active(), FakeSessionOwner(), api)
 
         assertEquals(
             "Workspaces unavailable. Could not reach Harold",
@@ -89,7 +89,7 @@ class ShellViewModelTest {
     @Test
     fun mirrorsTheStreamConnectionStatus() = runTest {
         val connection = FakeSessionOwner()
-        val viewModel = viewModel(paired(), connection, FakeAgentApi(Result.success(collectionOf(1))))
+        val viewModel = viewModel(active(), connection, FakeAgentApi(Result.success(collectionOf(1))))
 
         connection.emit(StreamStatus.Live)
         assertEquals("Live", viewModel.uiState.value.connectionStatus)
@@ -106,7 +106,7 @@ class ShellViewModelTest {
     fun retryReconnectsAndReprobes() = runTest {
         val connection = FakeSessionOwner()
         val api = FakeAgentApi(Result.success(collectionOf(count = 1)))
-        val viewModel = viewModel(paired(), connection, api)
+        val viewModel = viewModel(active(), connection, api)
 
         connection.emit(StreamStatus.TransportError("timeout"))
         viewModel.onRetryClick()
@@ -119,7 +119,7 @@ class ShellViewModelTest {
     fun forwardsLifecycleForegroundAndBackgroundSignals() = runTest {
         val connection = FakeSessionOwner()
         val viewModel = viewModel(
-            paired(),
+            active(),
             connection,
             FakeAgentApi(Result.success(collectionOf(1))),
         )
@@ -132,10 +132,10 @@ class ShellViewModelTest {
     }
 
     @Test
-    fun stopsTheStreamWhenTheDeviceIsNotPaired() = runTest {
+    fun stopsTheStreamWhenThereIsNoConnection() = runTest {
         val connection = FakeSessionOwner()
         val viewModel = viewModel(
-            FakeSessionGateway(PairedState.NotPaired),
+            FakeConnectionGateway(ActiveConnectionState.NoConnection),
             connection,
             FakeAgentApi(Result.success(collectionOf(1))),
         )
@@ -146,10 +146,10 @@ class ShellViewModelTest {
     }
 
     @Test
-    fun pairedColdStartChoosesChatOnce() = runTest {
+    fun activeColdStartChoosesChatOnce() = runTest {
         val navigator = harold.android.navigation.Navigator()
         viewModel(
-            paired(),
+            active(),
             FakeSessionOwner(),
             FakeAgentApi(Result.success(collectionOf(1))),
             navigator,
@@ -159,10 +159,10 @@ class ShellViewModelTest {
     }
 
     @Test
-    fun unpairedColdStartChoosesShell() = runTest {
+    fun noConnectionColdStartChoosesShell() = runTest {
         val navigator = harold.android.navigation.Navigator()
         viewModel(
-            FakeSessionGateway(PairedState.NotPaired),
+            FakeConnectionGateway(ActiveConnectionState.NoConnection),
             FakeSessionOwner(),
             FakeAgentApi(Result.success(collectionOf(1))),
             navigator,
@@ -178,9 +178,9 @@ class ShellViewModelTest {
         val release = kotlinx.coroutines.CompletableDeferred<Unit>()
         val navigator = harold.android.navigation.Navigator()
         viewModel(
-            GatedSessionGateway(
+            GatedConnectionGateway(
                 release = release,
-                resolved = PairedState.Paired(ORIGIN, "Pixel"),
+                resolved = ActiveConnectionState.Active(ORIGIN, "Pixel"),
             ),
             FakeSessionOwner(),
             FakeAgentApi(Result.success(collectionOf(1))),
@@ -200,7 +200,7 @@ class ShellViewModelTest {
         val store = FakeConnectionStore()
         store.save(savedConnection("ssh://gary@laptop.local:22", "laptop"))
         store.save(savedConnection("ssh://gary@desktop.local:22", "desktop"))
-        val gateway = DefaultSessionGateway(credentialStore = store)
+        val gateway = DefaultConnectionGateway(credentialStore = store)
         val connection = FakeSessionOwner()
         viewModel(
             gateway,
@@ -214,26 +214,26 @@ class ShellViewModelTest {
             store.list().map { connection -> connection.connectionId },
         )
         assertEquals(
-            PairedState.Paired("ssh://gary@laptop.local:22", "Pixel"),
-            gateway.pairedState.value,
+            ActiveConnectionState.Active("ssh://gary@laptop.local:22", "Pixel"),
+            gateway.activeConnection.value,
         )
     }
 
     private fun viewModel(
-        session: SessionGateway,
+        session: ConnectionGateway,
         connection: SessionOwner,
         api: AgentApi,
         navigator: harold.android.navigation.Navigator = harold.android.navigation.Navigator(),
         savedConnections: ConnectionRepository = ConnectionRepository(FakeConnectionStore()),
     ): ShellViewModel = ShellViewModel(
-        sessionGateway = session,
+        connectionGateway = session,
         sessionOwner = connection,
         agentApi = api,
         navigator = navigator,
     )
 
-    private fun paired(): FakeSessionGateway =
-        FakeSessionGateway(PairedState.Paired(ORIGIN, "Pixel"))
+    private fun active(): FakeConnectionGateway =
+        FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel"))
 
     private fun collectionOf(count: Int): WorkspaceCollection =
         ItemCollection(
@@ -275,20 +275,20 @@ private fun savedConnection(connectionId: String, name: String) = SavedConnectio
     ),
 )
 
-private class GatedSessionGateway(
+private class GatedConnectionGateway(
     private val release: kotlinx.coroutines.CompletableDeferred<Unit>,
-    private val resolved: PairedState,
-) : SessionGateway {
-    private val _pairedState = MutableStateFlow<PairedState>(PairedState.NotPaired)
-    override val pairedState: StateFlow<PairedState> = _pairedState.asStateFlow()
+    private val resolved: ActiveConnectionState,
+) : ConnectionGateway {
+    private val _activeConnection = MutableStateFlow<ActiveConnectionState>(ActiveConnectionState.NoConnection)
+    override val activeConnection: StateFlow<ActiveConnectionState> = _activeConnection.asStateFlow()
 
     override suspend fun refresh() {
         release.await()
-        _pairedState.value = resolved
+        _activeConnection.value = resolved
     }
 
     override suspend fun clearLocalAccess() {
-        _pairedState.value = PairedState.NotPaired
+        _activeConnection.value = ActiveConnectionState.NoConnection
     }
 }
 

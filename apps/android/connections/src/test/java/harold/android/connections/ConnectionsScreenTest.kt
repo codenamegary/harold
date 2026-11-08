@@ -1,0 +1,142 @@
+package harold.android.connections
+
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
+import harold.android.ui.theme.HaroldTheme
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [30])
+class ConnectionsScreenTest {
+    @get:Rule
+    val composeTestRule = createComposeRule()
+
+    @Test
+    fun showsEachConnectionNameOriginAndBadge() {
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ConnectionsScreen(
+                    uiState = ConnectionsUiState(
+                        rows = listOf(
+                            ConnectionRow(
+                                connectionId = "ssh://gary@laptop.local:22",
+                                name = "laptop",
+                                colorId = "tide",
+                                iconId = "bolt",
+                            ),
+                        ),
+                    ),
+                    onBack = {},
+                    onAdd = {},
+                    onEdit = {},
+                    onRemove = {},
+                    onNameChanged = {},
+                    onColorSelected = {},
+                    onIconSelected = {},
+                    onSave = {},
+                    onCancelEdit = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Connections").assertIsDisplayed()
+        composeTestRule.onNodeWithText("laptop").assertIsDisplayed()
+        composeTestRule.onNodeWithText("ssh://gary@laptop.local:22").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("connection_badge_ssh://gary@laptop.local:22").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("connection_agents_ssh://gary@laptop.local:22").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("connection_settings_ssh://gary@laptop.local:22").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("swipe_delete_ssh://gary@laptop.local:22").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("connection_remove_ssh://gary@laptop.local:22").assertDoesNotExist()
+    }
+
+    @Test
+    fun swipingConnectionAsksForConfirmationBeforeRemoving() {
+        var removed: String? = null
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ConnectionsScreen(
+                    uiState = ConnectionsUiState(
+                        rows = listOf(
+                            ConnectionRow(
+                                connectionId = "ssh://gary@laptop.local:22",
+                                name = "laptop",
+                                colorId = "tide",
+                                iconId = "bolt",
+                            ),
+                        ),
+                    ),
+                    onBack = {},
+                    onAdd = {},
+                    onEdit = {},
+                    onRemove = { removed = it },
+                    onNameChanged = {},
+                    onColorSelected = {},
+                    onIconSelected = {},
+                    onSave = {},
+                    onCancelEdit = {},
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithTag("swipe_delete_ssh://gary@laptop.local:22")
+            .performTouchInput { swipeLeft() }
+
+        composeTestRule
+            .onNodeWithTag("connection_remove_ssh://gary@laptop.local:22")
+            .assertIsDisplayed()
+            .performClick()
+
+        composeTestRule.onNodeWithText("Remove connection?").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "This removes the saved SSH credential and connection data from this phone. The host is unchanged.",
+            )
+            .assertIsDisplayed()
+        assertNull(removed)
+
+        composeTestRule
+            .onNodeWithTag("swipe_delete_confirm_action_ssh://gary@laptop.local:22")
+            .performClick()
+
+        assertEquals("ssh://gary@laptop.local:22", removed)
+    }
+
+    @Test
+    fun addConnectionFabOpensSshSetup() {
+        var addClicks = 0
+        composeTestRule.setContent {
+            HaroldTheme(dynamicColor = false) {
+                ConnectionsScreen(
+                    uiState = ConnectionsUiState(),
+                    onBack = {},
+                    onAdd = { addClicks++ },
+                    onEdit = {},
+                    onRemove = {},
+                    onNameChanged = {},
+                    onColorSelected = {},
+                    onIconSelected = {},
+                    onSave = {},
+                    onCancelEdit = {},
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithTag("connections_add")
+            .assertIsDisplayed()
+            .performClick()
+        assertEquals(1, addClicks)
+    }
+}

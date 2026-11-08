@@ -28,7 +28,7 @@ include(
     ":voice",
     ":design",
     ":testing",
-    ":pairing",
+    ":connections",
     ":chat",
     ":changes",
     ":workspaces",

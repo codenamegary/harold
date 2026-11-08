@@ -21,9 +21,9 @@ import harold.android.navigation.Navigator
 import harold.android.navigation.Workspaces
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
-import harold.android.session.PairedState
-import harold.android.session.SessionGateway
-import harold.android.testing.FakeSessionGateway
+import harold.android.session.ActiveConnectionState
+import harold.android.session.ConnectionGateway
+import harold.android.testing.FakeConnectionGateway
 import harold.android.user.UserRepository
 import harold.android.database.workspace.CachedWorkspace
 import harold.android.database.workspace.WorkspaceRepository
@@ -388,7 +388,7 @@ class AddWorkspaceViewModelTest {
         workspaceRepository: WorkspaceRepository = FakeAddWorkspaceRepository(),
         navigator: Navigator = Navigator(),
     ) = AddWorkspaceViewModel(
-        sessionGateway = fakeSession(),
+        connectionGateway = fakeSession(),
         navigator = navigator,
         userRepository = userRepository,
         workspaceRepository = workspaceRepository,
@@ -396,14 +396,14 @@ class AddWorkspaceViewModelTest {
 
     private fun openAddWorkspace(): Navigator {
         val navigator = Navigator()
-        navigator.start(paired = true)
+        navigator.start(hasConnection = true)
         navigator.openWorkspaces()
         navigator.openAddWorkspace()
         return navigator
     }
 
     private fun fakeSession() =
-        FakeSessionGateway(PairedState.Paired(ORIGIN, "Pixel"))
+        FakeConnectionGateway(ActiveConnectionState.Active(ORIGIN, "Pixel"))
 
     private companion object {
         const val ORIGIN = "http://127.0.0.1:8787"

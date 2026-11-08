@@ -23,9 +23,9 @@ import harold.android.navigation.CreatedWorkspaceResult
 import harold.android.navigation.LastSessionSelection
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
-import harold.android.session.PairedState
+import harold.android.session.ActiveConnectionState
 import harold.android.testing.FakeConnectionStore
-import harold.android.testing.FakeSessionGateway
+import harold.android.testing.FakeConnectionGateway
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -423,7 +423,7 @@ class CreateSessionViewModelTest {
     }
 
     @Test
-    fun rememberedWorkspaceFromAnUnpairedHaroldFallsBack() = runTest {
+    fun rememberedWorkspaceWithoutAnActiveConnectionFallsBack() = runTest {
         val repository = FakeCreateRepository(
             workspaces = mapOf(
                 LAPTOP to listOf(workspace("ws_laptop", WorkspaceState.Available, name = "notes")),
@@ -552,7 +552,7 @@ class CreateSessionViewModelTest {
         savedConnections: ConnectionRepository? = null,
         sessionPreferences: FakeSessionPreferences = FakeSessionPreferences(),
     ): CreateSessionViewModel = CreateSessionViewModel(
-        sessionGateway = FakeSessionGateway(PAIRED),
+        connectionGateway = FakeConnectionGateway(ACTIVE),
         sessionRepository = sessionRepository,
         workspaceRepository = workspaceRepository,
         userRepository = repository,
@@ -605,7 +605,7 @@ class CreateSessionViewModelTest {
     )
 
     private companion object {
-        val PAIRED = PairedState.Paired("http://127.0.0.1:8787", "Pixel")
+        val ACTIVE = ActiveConnectionState.Active("http://127.0.0.1:8787", "Pixel")
         const val LAPTOP = "http://laptop.local:3847"
         const val DESKTOP = "http://desktop.local:3847"
     }
