@@ -117,6 +117,8 @@ fun ConnectionsScreen(
                     enabled = !isEditing,
                     shape = RoundedCornerShape(14.dp),
                     deleteActionTag = "connection_remove_${row.connectionId}",
+                    confirmationTitle = stringResource(R.string.connections_remove_confirm_title),
+                    confirmationText = stringResource(R.string.connections_remove_confirm_body),
                 ) {
                     Card(
                         shape = RoundedCornerShape(14.dp),

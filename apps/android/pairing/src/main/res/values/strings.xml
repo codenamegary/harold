@@ -8,6 +8,8 @@
     <string name="connections_back">Go back from connections</string>
     <string name="connections_edit">Edit</string>
     <string name="connections_remove">Remove</string>
+    <string name="connections_remove_confirm_title">Remove connection?</string>
+    <string name="connections_remove_confirm_body">This removes the saved SSH credential and connection data from this phone. The host is unchanged.</string>
     <string name="connections_save">Save</string>
     <string name="connections_add">Add connection</string>
     <string name="ssh_setup_title">SSH host</string>

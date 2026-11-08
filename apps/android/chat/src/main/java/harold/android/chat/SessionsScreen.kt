@@ -233,6 +233,8 @@ fun SessionsListContent(
                             deleteLabel = stringResource(R.string.sessions_delete),
                             onDelete = { onDeleteSession(session) },
                             deleteActionTag = "session_delete_${session.id}",
+                            confirmationTitle = stringResource(R.string.sessions_delete_confirm_title),
+                            confirmationText = stringResource(R.string.sessions_delete_confirm_body),
                         ) {
                             SessionListRow(
                                 session = session,

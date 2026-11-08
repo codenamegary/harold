@@ -9,6 +9,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import harold.android.ui.theme.HaroldTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -60,7 +61,7 @@ class ConnectionsScreenTest {
     }
 
     @Test
-    fun swipingConnectionRevealsRemoveAction() {
+    fun swipingConnectionAsksForConfirmationBeforeRemoving() {
         var removed: String? = null
         composeTestRule.setContent {
             HaroldTheme(dynamicColor = false) {
@@ -95,6 +96,18 @@ class ConnectionsScreenTest {
         composeTestRule
             .onNodeWithTag("connection_remove_ssh://gary@laptop.local:22")
             .assertIsDisplayed()
+            .performClick()
+
+        composeTestRule.onNodeWithText("Remove connection?").assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(
+                "This removes the saved SSH credential and connection data from this phone. The host is unchanged.",
+            )
+            .assertIsDisplayed()
+        assertNull(removed)
+
+        composeTestRule
+            .onNodeWithTag("swipe_delete_confirm_action_ssh://gary@laptop.local:22")
             .performClick()
 
         assertEquals("ssh://gary@laptop.local:22", removed)
