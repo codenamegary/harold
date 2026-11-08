@@ -16,7 +16,6 @@ import harold.android.contracts.SessionStreamServerMessage.PromptComplete
 import harold.android.contracts.SessionStreamServerMessage.SessionConfig
 import harold.android.contracts.SessionStreamServerMessage.SessionInfo
 import harold.android.contracts.SessionStreamServerMessage.SessionUpdate
-import harold.android.contracts.SessionStreamServerMessage.SessionWorktreePath
 import harold.android.contracts.SessionStreamServerMessage.Subscribed
 import harold.android.transport.acp.AcpClient
 import harold.android.transport.acp.AcpClientHandler
@@ -44,19 +43,18 @@ import kotlinx.serialization.json.putJsonObject
 
 /**
  * One ACP agent process over one SSH exec channel. The app owns the process:
- * closing the channel (or losing the network) ends the process and releases
- * the session lock.
+ * closing the channel (or losing the network) ends the process.
  */
 class SshAcpSession(
     val connectionId: String,
     val agentId: AgentId,
     val sessionId: String,
-    private val metadata: HostSessionMetadata,
-    private val store: SshSessionStore,
+    private val initialInfo: AcpSessionInfo?,
     private val connection: SshConnection,
     private val exec: SshExecChannel,
-    private val lock: SshSessionLock?,
     private val scope: CoroutineScope,
+    private val registry: SshAcpRegistry,
+    private val catalog: SshSessionCatalog,
 ) : AcpClientHandler, Closeable {
     private val acp = AcpClient(
         input = exec.stdout,
@@ -99,23 +97,19 @@ class SshAcpSession(
 
         val initialize = acp.request(
             method = "initialize",
-            params = buildJsonObject {
-                put("protocolVersion", 1)
-                putJsonObject("clientCapabilities") {
-                    putJsonObject("fs") {
-                        put("readTextFile", true)
-                        put("writeTextFile", true)
-                    }
-                    put("terminal", true)
-                }
-                putJsonObject("clientInfo") {
-                    put("name", "Harold Android")
-                    put("version", "android")
-                }
-            },
+            params = acpInitializeParams(),
         )
         val initializeObject = initialize as? JsonObject
         this.capabilities = buildCapabilityInventory(initialize)
+
+        // The catalog knows a session opened from a list row. Otherwise this
+        // process asks the agent for session/list, which supplies the cwd
+        // that session/load needs. No per-session file is involved.
+        val info = initialInfo ?: resolveSessionInfo(initialize)
+            ?: error(
+                "The agent did not return this session from session/list. " +
+                    "Refresh the session list and pick it again.",
+            )
 
         // Every open is a full replay: session/load resends the conversation
         // from the agent's history. The stream owner keeps its last
@@ -135,12 +129,12 @@ class SshAcpSession(
         val loadResponse = when {
             canLoad -> acp.request(
                 method = "session/load",
-                params = loadParams(),
+                params = loadParams(info.cwd),
                 timeoutMillis = 180_000,
             )
             canResume -> acp.request(
                 method = "session/resume",
-                params = loadParams(),
+                params = loadParams(info.cwd),
                 timeoutMillis = 180_000,
             )
             else -> error(
@@ -162,24 +156,16 @@ class SshAcpSession(
                 ),
             )
         }
-        emitFrame(
-            SessionInfo(
-                agentId = agentId,
-                sessionId = sessionId,
-                title = metadata.title,
-            ),
-        )
-        metadata.worktreePath?.let { worktreePath ->
+        info.title?.let { title ->
             emitFrame(
-                SessionWorktreePath(
+                SessionInfo(
                     agentId = agentId,
                     sessionId = sessionId,
-                    worktreePath = worktreePath,
+                    title = title,
                 ),
             )
         }
         emitFrame(Subscribed(agentId = agentId, sessionId = sessionId))
-        runCatching { store.touchSession(agentId, sessionId) }
     }
 
     suspend fun prompt(body: PromptRequestBody): Result<Unit> {
@@ -204,16 +190,6 @@ class SshAcpSession(
 
         scope.launch(Dispatchers.IO) {
             try {
-                rememberTitle(body.text)
-                store.readSession(agentId, sessionId)?.title?.let { title ->
-                    emitFrame(
-                        SessionInfo(
-                            agentId = agentId,
-                            sessionId = sessionId,
-                            title = title,
-                        ),
-                    )
-                }
                 val response = acp.request(
                     method = "session/prompt",
                     params = buildJsonObject {
@@ -228,7 +204,6 @@ class SshAcpSession(
                 } else {
                     emitFrame(PromptComplete(agentId = agentId, sessionId = sessionId))
                 }
-                runCatching { store.touchSession(agentId, sessionId) }
             } catch (error: Throwable) {
                 emitFrame(
                     Error(
@@ -317,7 +292,21 @@ class SshAcpSession(
     override suspend fun onNotification(method: String, params: JsonElement) {
         when (method) {
             "session/update" -> {
-                val update = (params as? JsonObject)?.get("update") ?: return
+                val update = (params as? JsonObject)?.get("update") as? JsonObject ?: return
+                val infoUpdate = parseSessionInfoUpdate(update)
+                if (infoUpdate != null) {
+                    catalog.updateInfo(connectionId, agentId, sessionId, infoUpdate)
+                    if (infoUpdate.titleChanged) {
+                        emitFrame(
+                            SessionInfo(
+                                agentId = agentId,
+                                sessionId = sessionId,
+                                title = infoUpdate.title,
+                            ),
+                        )
+                    }
+                    return
+                }
                 emitFrame(
                     SessionUpdate(
                         agentId = agentId,
@@ -369,6 +358,7 @@ class SshAcpSession(
 
     override fun close() {
         intentionalClose = true
+        registry.remove(this)
         frames.close()
         val cancelled = buildJsonObject {
             putJsonObject("outcome") { put("outcome", "cancelled") }
@@ -382,9 +372,6 @@ class SshAcpSession(
         terminals.close()
         acp.close()
         exec.close()
-        // Release the remote flock before disconnecting the SSH session;
-        // JSch waits for open channels during disconnect.
-        lock?.close()
         connection.close()
         closed.complete(null)
     }
@@ -479,30 +466,47 @@ class SshAcpSession(
             put("mimeType", reference.mimeType)
         }
 
-    private suspend fun rememberTitle(text: String) {
-        val current = runCatching { store.readSession(agentId, sessionId) }.getOrNull() ?: return
-        if (current.title.isNotBlank() && current.title != sessionId && current.title != "New session") {
-            return
+    private suspend fun resolveSessionInfo(initialize: JsonElement): AcpSessionInfo? {
+        if (!initialize.advertisesSessionCapability("list")) {
+            return null
         }
-        val title = text.trim().replace('\n', ' ').take(80).ifBlank { "New session" }
-        runCatching {
-            store.writeSession(current.copy(title = title, lastUsedAt = Instant.now().toString()))
+        val seenCursors = mutableSetOf<String>()
+        var cursor: String? = null
+        var pages = 0
+        while (pages < MAX_SESSION_LIST_PAGES) {
+            pages += 1
+            val response = acp.request(
+                method = "session/list",
+                params = acpSessionListParams(cwd = null, cursor = cursor),
+                timeoutMillis = SESSION_LIST_TIMEOUT_MILLIS,
+            )
+            val page = parseSessionListPage(agentId, response)
+            page.sessions.firstOrNull { session -> session.sessionId == sessionId }
+                ?.let { session -> return session }
+            val next = page.nextCursor ?: return null
+            if (!seenCursors.add(next)) {
+                return null
+            }
+            cursor = next
         }
+        return null
     }
 
     private suspend fun emitFrame(message: SessionStreamServerMessage) {
         frames.send(message)
     }
 
-    private fun loadParams(): JsonObject = buildJsonObject {
+    private fun loadParams(cwd: String): JsonObject = buildJsonObject {
         put("sessionId", sessionId)
-        put("cwd", metadata.cwd)
+        put("cwd", cwd)
         put("mcpServers", buildJsonArray { })
     }
 
     companion object {
         private const val PERMISSION_TIMEOUT_MILLIS = 30 * 60 * 1000L
         private const val ELICITATION_TIMEOUT_MILLIS = 30 * 60 * 1000L
+        private const val MAX_SESSION_LIST_PAGES = 100
+        private const val SESSION_LIST_TIMEOUT_MILLIS = 60_000L
     }
 }
 

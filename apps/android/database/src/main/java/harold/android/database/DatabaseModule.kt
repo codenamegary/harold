@@ -13,6 +13,7 @@ import harold.android.database.session.AgentDao
 import harold.android.database.session.DefaultSessionRepository
 import harold.android.database.session.SessionDao
 import harold.android.database.session.SessionRepository
+import harold.android.database.session.SessionWorktreePathStore
 import harold.android.database.workspace.DefaultWorkspaceRepository
 import harold.android.database.workspace.WorkspaceDao
 import harold.android.database.workspace.WorkspaceRepository
@@ -24,6 +25,12 @@ abstract class DatabaseModule {
     @Binds
     @Singleton
     abstract fun sessionRepository(impl: DefaultSessionRepository): SessionRepository
+
+    @Binds
+    @Singleton
+    abstract fun sessionWorktreePathStore(
+        impl: DefaultSessionRepository,
+    ): SessionWorktreePathStore
 
     @Binds
     @Singleton

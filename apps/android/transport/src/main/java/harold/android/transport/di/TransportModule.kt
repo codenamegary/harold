@@ -9,7 +9,6 @@ import harold.android.network.AttachmentApi
 import harold.android.network.GitApi
 import harold.android.network.SessionCommandApi
 import harold.android.network.SessionConfigApi
-import harold.android.network.SessionWorktreePathApi
 import harold.android.session.ConnectionReachability
 import harold.android.stream.SessionStreamFactory
 import harold.android.transport.ssh.JschSshConnectionFactory
@@ -43,10 +42,6 @@ abstract class TransportModule {
     @Binds
     @Singleton
     abstract fun gitApi(impl: SshAgentApi): GitApi
-
-    @Binds
-    @Singleton
-    abstract fun sessionWorktreePathApi(impl: SshAgentApi): SessionWorktreePathApi
 
     @Binds
     @Singleton

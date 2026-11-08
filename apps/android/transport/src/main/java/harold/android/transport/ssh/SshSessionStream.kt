@@ -119,7 +119,7 @@ private class SshSessionStream(
         is SshException -> DisconnectCause.Retryable(error.message ?: "SSH connection failed")
         else -> {
             val message = error.message ?: "Session failed."
-            if (message.contains("does not support") || message.contains("metadata")) {
+            if (message.contains("does not support") || message.contains("did not return this session")) {
                 DisconnectCause.Protocol(message)
             } else {
                 DisconnectCause.Retryable(message)
@@ -128,7 +128,7 @@ private class SshSessionStream(
     }
 
     private fun causeFor(reason: String): DisconnectCause =
-        if (reason.contains("does not support") || reason.contains("metadata")) {
+        if (reason.contains("does not support") || reason.contains("did not return this session")) {
             DisconnectCause.Protocol(reason)
         } else {
             DisconnectCause.Retryable(reason)

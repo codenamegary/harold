@@ -87,6 +87,19 @@ class KnownAgentsTest {
     }
 
     @Test
+    fun scanRepairsAStalePathWhenDetectionFindsTheAgentElsewhere() {
+        val existing = listOf(row(id = "opencode", path = "/usr/local/bin/opencode"))
+        val merged = mergeScanRows(
+            existing = existing,
+            scan = listOf(AgentScanEntry("opencode", "/home/u/.opencode/bin/opencode")),
+            stalePaths = setOf("/usr/local/bin/opencode"),
+        )
+        val row = merged.single()
+        assertEquals("/home/u/.opencode/bin/opencode", row.path)
+        assertTrue(row.present)
+    }
+
+    @Test
     fun scanKeepsDismissedAgentsDismissed() {
         val existing = listOf(row(id = "cursor", dismissed = true, enabled = false))
         val merged = mergeScanRows(existing, listOf(AgentScanEntry("cursor", "/usr/bin/cursor-agent")))

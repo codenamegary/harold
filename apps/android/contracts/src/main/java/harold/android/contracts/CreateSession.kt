@@ -9,13 +9,6 @@ data class CreateSessionBody(
     val cwd: String,
 )
 
-/** REST body for `PUT /v1/sessions/:sessionId/worktree-path`. */
-@Serializable
-data class SetSessionWorktreePathBody(
-    val agentId: AgentId,
-    val worktreePath: String?,
-)
-
 /**
  * The 201 response from `POST /v1/sessions`: the created ACP session plus the
  * agent's config options at creation time. Later config changes arrive on the

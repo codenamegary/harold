@@ -24,9 +24,10 @@ import harold.android.network.SessionConfigApi
 /**
  * Owns the composer config value and its write semantics. A pick flips the
  * option in place and PUTs immediately; a newer pick aborts the stale request;
- * a failed PUT rolls back and surfaces the Problem detail; the session_config
- * echo settles the value and clears the overlay. The ViewModel only forwards
- * snapshots in and actions through.
+ * a failed PUT rolls back and surfaces the Problem detail when the session is
+ * live. Failures while the session is still starting stay out of the composer.
+ * The session_config echo settles the value and clears the overlay. The
+ * ViewModel only forwards snapshots in and actions through.
  */
 class SessionConfigWriter(
     private val api: SessionConfigApi,
@@ -43,12 +44,14 @@ class SessionConfigWriter(
     private var pending: Pending? = null
     private var job: Job? = null
     private var error: String? = null
+    private var live = true
 
     fun onSnapshot(
         connectionId: String?,
         agentId: AgentId?,
         sessionId: String?,
         configOptions: List<ConfigOption>,
+        live: Boolean = true,
     ) {
         val nextTarget = if (connectionId != null && agentId != null && !sessionId.isNullOrEmpty()) {
             Target(connectionId, agentId, sessionId)
@@ -62,6 +65,7 @@ class SessionConfigWriter(
             error = null
         }
         target = nextTarget
+        this.live = live
         options = configOptions
         val settling = pending
         if (settling != null && options.currentValue(settling.configId) == settling.value) {
@@ -88,6 +92,10 @@ class SessionConfigWriter(
         val target = target ?: return
         job?.cancel()
         val write = Pending(configId = configId, value = value)
+        // A write attempted before the session is live cannot succeed. Keep
+        // the failure out of the composer instead of showing "Open this
+        // session again" while the session is still starting.
+        val writeWasLive = live
         pending = write
         error = null
         emit()
@@ -107,7 +115,7 @@ class SessionConfigWriter(
                     return@onFailure
                 }
                 pending = null
-                error = detailOf(cause)
+                error = if (writeWasLive) detailOf(cause) else null
                 emit()
             }
         }

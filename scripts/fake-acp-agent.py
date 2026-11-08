@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Tiny ACP agent used by the SSH integration test.
 
-Exercises initialize, session/new, session/load, prompt, permission, terminal,
-config options, and cancellation without a model provider.
+Exercises initialize, session/new, session/list, session/load, session/delete,
+prompt, permission, terminal, config options, and cancellation without a model
+provider. Session history lives in a per-agent JSON file when
+HAROLD_FAKE_ACP_STATE_DIR is set, so separate processes see the same list.
 """
 
 from __future__ import annotations
@@ -10,8 +12,16 @@ from __future__ import annotations
 import json
 import os
 import sys
+from datetime import datetime, timezone
 
 LOG_PATH = os.environ.get("HAROLD_FAKE_ACP_LOG")
+STATE_DIR = os.environ.get("HAROLD_FAKE_ACP_STATE_DIR")
+AGENT_ID = os.environ.get("HAROLD_FAKE_ACP_AGENT_ID", "opencode")
+SESSION_ID = os.environ.get("HAROLD_FAKE_ACP_SESSION_ID", "ses_test_opencode")
+PAGE_SIZE = int(os.environ.get("HAROLD_FAKE_ACP_LIST_PAGE_SIZE", "50"))
+
+next_id = 1000
+pending: dict[int, str] = {}
 
 
 def log(message: str) -> None:
@@ -20,9 +30,46 @@ def log(message: str) -> None:
             log_file.write(message + "\n")
 
 
-SESSION_ID = "ses_test_opencode"
-next_id = 1000
-pending: dict[int, str] = {}
+def now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def state_path() -> str | None:
+    if not STATE_DIR:
+        return None
+    os.makedirs(STATE_DIR, exist_ok=True)
+    return os.path.join(STATE_DIR, f"{AGENT_ID}.json")
+
+
+def load_sessions() -> list[dict]:
+    path = state_path()
+    if not path or not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as state_file:
+        return json.load(state_file)
+
+
+def save_sessions(sessions: list[dict]) -> None:
+    path = state_path()
+    if not path:
+        return
+    temp = path + ".tmp"
+    with open(temp, "w", encoding="utf-8") as state_file:
+        json.dump(sessions, state_file)
+    os.replace(temp, path)
+
+
+def upsert_session(cwd: str, title: str) -> None:
+    sessions = [s for s in load_sessions() if s.get("sessionId") != SESSION_ID]
+    sessions.append(
+        {
+            "sessionId": SESSION_ID,
+            "cwd": cwd,
+            "title": title,
+            "updatedAt": now(),
+        }
+    )
+    save_sessions(sessions)
 
 
 def send(message: dict) -> None:
@@ -60,12 +107,26 @@ def update(text: str) -> None:
     )
 
 
+def session_info(title: str) -> None:
+    notify(
+        "session/update",
+        {
+            "sessionId": SESSION_ID,
+            "update": {
+                "sessionUpdate": "session_info_update",
+                "title": title,
+                "updatedAt": now(),
+            },
+        },
+    )
+
+
 for line in sys.stdin:
     if not line.strip():
         continue
     message = json.loads(line)
     method = message.get("method")
-    log(f"recv method={method} id={message.get('id')}")
+    log(f"recv agent={AGENT_ID} method={method} id={message.get('id')}")
     request_id = message.get("id")
     params = message.get("params") or {}
 
@@ -115,13 +176,19 @@ for line in sys.stdin:
                 "agentCapabilities": {
                     "loadSession": True,
                     "promptCapabilities": {"image": True, "embeddedContext": True},
-                    "sessionCapabilities": {"resume": {}},
+                    "sessionCapabilities": {
+                        "list": {},
+                        "delete": {},
+                        "resume": {},
+                    },
                 },
                 "authMethods": [],
                 "agentInfo": {"name": "Fake ACP", "version": "1"},
             },
         )
     elif method == "session/new":
+        cwd = params.get("cwd", "/tmp")
+        upsert_session(cwd, "New session")
         respond(
             request_id,
             {
@@ -137,10 +204,34 @@ for line in sys.stdin:
                 ],
             },
         )
+    elif method == "session/list":
+        cwd = params.get("cwd")
+        sessions = [
+            session
+            for session in load_sessions()
+            if not cwd or session.get("cwd") == cwd
+        ]
+        offset = int(params.get("cursor") or 0)
+        page = sessions[offset : offset + PAGE_SIZE]
+        result = {"sessions": page}
+        if offset + PAGE_SIZE < len(sessions):
+            result["nextCursor"] = str(offset + PAGE_SIZE)
+        log(f"session/list cwd={cwd} returned={len(page)}")
+        respond(request_id, result)
+    elif method == "session/delete":
+        session_id = params.get("sessionId")
+        save_sessions(
+            [session for session in load_sessions() if session.get("sessionId") != session_id]
+        )
+        respond(request_id, {})
     elif method == "session/load":
+        upsert_session(params.get("cwd", "/tmp"), "Fake titled session")
+        session_info("Fake titled session")
         update("replayed history")
         respond(request_id, {"configOptions": []})
     elif method == "session/prompt":
+        upsert_session(params.get("cwd", "/tmp"), "Fake titled session")
+        session_info("Fake titled session")
         permission = request(
             "session/request_permission",
             {

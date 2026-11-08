@@ -95,6 +95,22 @@ class DefaultSessionRepositoryTest {
     }
 
     @Test
+    fun refreshKeepsThePhoneLocalWorktreePathWhenAcpDoesNotReportOne() = runTest {
+        api.sessions = Result.success(SessionCollection(listOf(session("sess_01", "Alpha"))))
+        repository.refresh(ORIGIN)
+        repository.saveWorktreePath(ORIGIN, "cursor", "sess_01", "/repo/.worktrees/feat-x")
+
+        // ACP session/list never carries worktrees, so a refresh must not
+        // wipe the selection the phone remembered.
+        repository.refresh(ORIGIN)
+
+        assertEquals(
+            "/repo/.worktrees/feat-x",
+            repository.observeSessions(ORIGIN).first().single().session.worktreePath,
+        )
+    }
+
+    @Test
     fun refreshReturnsTheLiveListsAndUpdatesTheWorkspaceCache() = runTest {
         api.sessions = Result.success(SessionCollection(listOf(session("sess_01", "Alpha"))))
 

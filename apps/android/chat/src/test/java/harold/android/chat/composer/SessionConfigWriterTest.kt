@@ -86,6 +86,44 @@ class SessionConfigWriterTest {
     }
 
     @Test
+    fun aWriteThatFailsBeforeTheSessionIsLiveDoesNotSurfaceAnError() = runTest {
+        val api = FakeSessionConfigApi()
+        api.result = Result.failure(
+            AgentApiException(
+                AgentApiError.Problem(
+                    status = 409,
+                    title = "Session not connected",
+                    detail = "Open this session again to start its agent process.",
+                ),
+            ),
+        )
+        val writer = SessionConfigWriter(api, this)
+        writer.onSnapshot(
+            ORIGIN,
+            "cursor",
+            "sess_01",
+            listOf(selectOption("model", "m1")),
+            live = false,
+        )
+
+        writer.set("model", ConfigValue.Text("m2"))
+        advanceUntilIdle()
+
+        assertEquals("m1", writer.state.value.model?.selectValue())
+        assertNull(writer.state.value.error)
+
+        writer.onSnapshot(
+            ORIGIN,
+            "cursor",
+            "sess_01",
+            listOf(selectOption("model", "m1")),
+            live = true,
+        )
+
+        assertNull(writer.state.value.error)
+    }
+
+    @Test
     fun newerPickIgnoresTheStaleWrite() = runTest {
         val gate = CompletableDeferred<Result<Unit>>()
         val api = FakeSessionConfigApi()

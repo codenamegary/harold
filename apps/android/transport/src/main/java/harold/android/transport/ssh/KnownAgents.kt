@@ -341,6 +341,53 @@ fun presenceProbeScript(): String {
     }
 }
 
+/**
+ * Runs the presence probe once and merges what it found into [existing].
+ * Callers persist the result; this function only talks to the host.
+ */
+suspend fun scanAgentRows(
+    connection: SshConnection,
+    existing: List<HostAgentConfigRow>,
+    now: String = Instant.now().toString(),
+): List<HostAgentConfigRow> {
+    val result = connection.runCommand(
+        "exec bash -lc ${SshSessionStore.shellQuote(presenceProbeScript())}",
+    )
+    if (!result.succeeded) {
+        throw SshException(
+            result.stderr.trim().ifBlank { "Could not scan the host for agents." },
+        )
+    }
+    val stalePaths = staleAgentPaths(connection, existing)
+    return mergeScanRows(existing, parsePresenceProbe(result.stdout), now, stalePaths)
+}
+
+/**
+ * Saved paths that no longer run on the host. A scan may replace those with
+ * the binary it just detected, but it must leave working custom paths alone.
+ */
+private suspend fun staleAgentPaths(
+    connection: SshConnection,
+    rows: List<HostAgentConfigRow>,
+): Set<String> {
+    val paths = rows.mapNotNull { row -> row.path?.takeIf { it.isNotBlank() } }.distinct()
+    if (paths.isEmpty()) {
+        return emptySet()
+    }
+    val script = "for p in " + paths.joinToString(" ") { path ->
+        SshSessionStore.shellQuote(path)
+    } + "; do [ -x \"\$p\" ] || printf '%s\\n' \"\$p\"; done"
+    val result = connection.runCommand("exec bash -lc ${SshSessionStore.shellQuote(script)}")
+    if (!result.succeeded) {
+        return emptySet()
+    }
+    return result.stdout
+        .lineSequence()
+        .map { line -> line.trim() }
+        .filter { line -> line.isNotEmpty() }
+        .toSet()
+}
+
 fun parsePresenceProbe(stdout: String): List<AgentScanEntry> =
     stdout.lineSequence()
         .filter { line -> line.contains('\t') }
@@ -353,13 +400,15 @@ fun parsePresenceProbe(stdout: String): List<AgentScanEntry> =
 /**
  * Merge rule for a scan: detection adds rows for agents it just found and
  * fills a missing path on an existing row, but never touches user-owned
- * fields (`enabled`, `args`, `displayName`, `dismissed`, `custom`). Custom
- * agents keep whatever the user configured, including their path.
+ * fields (`enabled`, `args`, `displayName`, `dismissed`, `custom`). A path
+ * in [stalePaths] is the one exception: the old binary is gone, so the path
+ * the scan just found replaces it. Working custom paths stay untouched.
  */
 fun mergeScanRows(
     existing: List<HostAgentConfigRow>,
     scan: List<AgentScanEntry>,
     now: String = Instant.now().toString(),
+    stalePaths: Set<String> = emptySet(),
 ): List<HostAgentConfigRow> {
     val rows = existing.toMutableList()
     scan.forEach { entry ->
@@ -376,8 +425,14 @@ fun mergeScanRows(
 
             else -> {
                 val row = rows[index]
+                val storedPath = row.path?.takeIf { path -> path.isNotBlank() }
+                val path = when {
+                    storedPath == null -> entry.path
+                    storedPath in stalePaths && storedPath != entry.path -> entry.path
+                    else -> storedPath
+                }
                 rows[index] = row.copy(
-                    path = row.path ?: entry.path,
+                    path = path,
                     present = true,
                     updatedAt = now,
                 )

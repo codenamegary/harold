@@ -81,11 +81,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -1397,8 +1399,11 @@ class ChatViewModel @Inject constructor(
             agentId = snapshot.agentId,
             sessionId = snapshot.sessionId,
             configOptions = snapshot.configOptions,
+            live = snapshot.transcript.live,
         )
-        applyRememberedModelIfPossible()
+        if (snapshot.transcript.live) {
+            applyRememberedModelIfPossible()
+        }
 
         _uiState.update { current ->
             val extension = snapshot.extension
@@ -1554,13 +1559,16 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * Session/list is the only title source for agents that never push
-     * session_info_update. Pull it once per session when a turn completes and
-     * the header still shows the raw ACP session id.
+     * `session/list` is the only title source for agents that never push
+     * `session_info_update`. Pull it once per session when a turn completes
+     * and the header still shows a placeholder.
      */
     private suspend fun pullSelectedSessionTitle() {
         val selected = _uiState.value.selectedSession ?: return
-        if (selected.sessionId.isEmpty() || selected.name != selected.sessionId) {
+        val placeholderName = selected.name.isBlank() ||
+            selected.name == selected.sessionId ||
+            selected.name == NEW_SESSION_NAME
+        if (selected.sessionId.isEmpty() || !placeholderName) {
             return
         }
         val origin = selected.connectionId.ifEmpty {
@@ -1967,6 +1975,24 @@ class ChatViewModel @Inject constructor(
         val pending = pendingModelApply ?: return
         modelSyncTimeoutJob?.cancel()
         modelSyncTimeoutJob = viewModelScope.launch {
+            // The registry only has a session after session/load completes,
+            // and the stream cannot deliver Subscribed before that. Waiting
+            // for live closes the window where a config write hits an empty
+            // registry and shows "Open this session again".
+            val live = withTimeoutOrNull(MODEL_SYNC_LIVE_TIMEOUT_MS) {
+                sessionOwner.snapshot.first { snapshot ->
+                    snapshot.transcript.live &&
+                        snapshot.agentId == pending.agentId &&
+                        snapshot.sessionId == pending.sessionId
+                }
+            }
+            if (pendingModelApply != pending) {
+                return@launch
+            }
+            if (live == null) {
+                finishModelSync(pending.key)
+                return@launch
+            }
             val remembered = sessionPreferences.loadLastModel(
                 connectionId = pending.connectionId,
                 agentId = pending.agentId,
@@ -1988,6 +2014,13 @@ class ChatViewModel @Inject constructor(
 
     private fun applyRememberedModelIfPossible() {
         val pending = pendingModelApply ?: return
+        val liveSnapshot = sessionOwner.snapshot.value
+        if (!liveSnapshot.transcript.live ||
+            liveSnapshot.agentId != pending.agentId ||
+            liveSnapshot.sessionId != pending.sessionId
+        ) {
+            return
+        }
         val selected = _uiState.value.selectedSession ?: return
         if (sessionModelKey(selected) != pending.key) {
             return
@@ -2089,6 +2122,7 @@ class ChatViewModel @Inject constructor(
         const val RECENT_SESSIONS_LIMIT = 5
         const val NEW_SESSION_NAME = "New session"
         const val MODEL_SYNC_TIMEOUT_MS = 3_000L
+        const val MODEL_SYNC_LIVE_TIMEOUT_MS = 30_000L
 
         fun modelSyncKey(connectionId: String, agentId: AgentId, sessionId: String): String =
             "$connectionId|$agentId|$sessionId"

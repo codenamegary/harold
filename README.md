@@ -26,13 +26,12 @@ Host requirements:
 - sshd with exec and SFTP
 - an ACP-compatible agent CLI
 - `git` (for workspace and change review)
-- `flock` (Linux; macOS uses a lock directory fallback)
 
 1. Add the host in the Harold app.
 2. Sign in with your SSH credentials.
 3. Start a session in any folder on that host.
 
-Harold installs nothing on the host. It runs your agent CLI over an SSH exec channel and keeps its own notes in `~/.harold/` as plain files.
+Harold installs nothing on the host. It runs your agent CLI over an SSH exec channel and keeps agent and workspace settings in `~/.harold/` as plain files. Session history stays with the agent and is read through ACP `session/list`.
 
 ## Working on the app
 

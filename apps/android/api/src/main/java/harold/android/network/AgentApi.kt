@@ -20,7 +20,6 @@ import harold.android.contracts.FilesystemDirectoryCollection
 import harold.android.contracts.FilesystemDirectoryCreated
 import harold.android.contracts.PromptRequestBody
 import harold.android.contracts.SessionCollection
-import harold.android.contracts.SetSessionWorktreePathBody
 import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceCollection
 import kotlinx.serialization.json.JsonElement
@@ -50,24 +49,13 @@ class AgentApiException(
     },
 )
 
-/** Write surface for the host-owned worktree path on a session. */
-interface SessionWorktreePathApi {
-    suspend fun updateSessionWorktreePath(
-        connectionId: String,
-        sessionId: String,
-        body: SetSessionWorktreePathBody,
-    ): Result<Unit> = Result.failure(
-        UnsupportedOperationException("worktree path updates are not supported"),
-    )
-}
-
 private fun unsupported(what: String): UnsupportedOperationException =
     UnsupportedOperationException(what)
 
 /** All surfaces the SSH transport provides for one saved connection. */
 interface AgentTransportApi : AgentApi, AttachmentApi, SessionConfigApi, SessionCommandApi, GitApi
 
-interface AgentApi : SessionWorktreePathApi {
+interface AgentApi {
     suspend fun listWorkspaces(
         connectionId: String,
         limit: Int,

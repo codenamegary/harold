@@ -7,9 +7,8 @@ import harold.android.contracts.GitChanges
 import harold.android.contracts.GitRepository
 import harold.android.contracts.GitScope
 import harold.android.contracts.GitWorktree
-import harold.android.contracts.SetSessionWorktreePathBody
+import harold.android.database.session.SessionWorktreePathStore
 import harold.android.network.GitApi
-import harold.android.network.SessionWorktreePathApi
 import harold.android.network.apiErrorMessage
 import javax.inject.Inject
 import kotlinx.coroutines.Job
@@ -66,7 +65,7 @@ data class ChangesUiState(
 @HiltViewModel
 class ChangesViewModel @Inject constructor(
     private val gitApi: GitApi,
-    private val agentApi: SessionWorktreePathApi,
+    private val worktreePaths: SessionWorktreePathStore,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ChangesUiState())
     val uiState: StateFlow<ChangesUiState> = _uiState.asStateFlow()
@@ -119,10 +118,11 @@ class ChangesViewModel @Inject constructor(
             }
             if (worktreePath != null && storedPath == null) {
                 runCatching {
-                    agentApi.updateSessionWorktreePath(
+                    worktreePaths.saveWorktreePath(
                         connectionId = connectionId,
+                        agentId = agentId,
                         sessionId = sessionId,
-                        body = SetSessionWorktreePathBody(agentId, null),
+                        worktreePath = null,
                     ).getOrThrow()
                 }
             }
@@ -235,10 +235,11 @@ class ChangesViewModel @Inject constructor(
             )
         }
         viewModelScope.launch {
-            agentApi.updateSessionWorktreePath(
+            worktreePaths.saveWorktreePath(
                 connectionId = connectionId,
+                agentId = agentId,
                 sessionId = sessionId,
-                body = SetSessionWorktreePathBody(agentId, path),
+                worktreePath = path,
             ).onFailure { error ->
                 _uiState.update { current ->
                     if (current.selectedWorktreePath != path) {

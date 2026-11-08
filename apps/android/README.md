@@ -56,14 +56,17 @@ Everything Harold keeps on the host lives under `~/.harold/`:
 ~/.harold/
   agents.json        shared agent config (written over SFTP, atomic temp + rename)
   workspaces.json    remembered workspace folders
-  sessions/<agent>/<sessionId>.json   one JSON file per session
-  locks/<agent>/<sessionId>.lock      flock (with a mkdir fallback) per active session
   uploads/<sessionId>/...             attachment uploads
 ```
 
+Session history stays with the agent. Harold reads it with ACP `session/list`
+and compiles the per-agent lists in memory; it does not write session files
+to the host. Older releases created `sessions/<agent>/<sessionId>.json`; those
+files are ignored and safe to delete.
+
 No Harold process, daemon, or port runs on the host. A closing app or a lost
-network ends the agent process and releases the lock; opening the session
-again spawns a fresh process and resumes through ACP `session/load`.
+network ends the agent process. Opening the session again spawns a fresh
+process and resumes through ACP `session/load`.
 
 ## Agent settings
 
@@ -72,7 +75,9 @@ The per-connection Agents screen manages `agents.json`:
 - A hardcoded catalog of known ACP agents ships with the app. Scanning probes
   the host with `command -v` for every known binary in one round trip.
 - Detection merges into existing rows without touching user-owned fields
-  (`enabled`, `path`, `args`). Dismissed agents stay dismissed across scans.
+  (`enabled`, `args`). Working custom paths stay untouched. If a saved path
+  no longer runs and the scan finds that agent at a new path, the new path
+  replaces the dead one. Dismissed agents stay dismissed across scans.
   Custom agents (name, path, args) can be added for anything the catalog does
   not know and are deleted outright.
 - Auth state is probed from the agent's own CLI (`claude auth status --json`,

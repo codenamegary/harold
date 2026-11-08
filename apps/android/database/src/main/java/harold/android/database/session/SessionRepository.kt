@@ -68,12 +68,25 @@ interface SessionRepository {
     )
 }
 
+/**
+ * App-local memory of the worktree a session is reviewed in. ACP knows
+ * nothing about worktrees, so this never leaves the phone.
+ */
+interface SessionWorktreePathStore {
+    suspend fun saveWorktreePath(
+        connectionId: String,
+        agentId: AgentId,
+        sessionId: String,
+        worktreePath: String?,
+    ): Result<Unit>
+}
+
 class DefaultSessionRepository @Inject constructor(
     private val agentApi: AgentApi,
     private val workspaceRepository: WorkspaceRepository,
     private val sessionDao: SessionDao,
     private val agentDao: AgentDao,
-) : SessionRepository {
+) : SessionRepository, SessionWorktreePathStore {
     override fun observeSessions(): Flow<List<CachedSession>> =
         sessionDao.observeAll().map(::cachedSessions)
 
@@ -110,11 +123,15 @@ class DefaultSessionRepository @Inject constructor(
             .associate { agent -> agent.agentId to agent.displayName }
 
         val workspaceByPath = workspaces.associateBy { workspace -> workspace.path }
-        val cachedWorkspaceByPath = sessionDao.sessions(connectionId).associate { session ->
+        val cachedSessions = sessionDao.sessions(connectionId)
+        val cachedWorkspaceByPath = cachedSessions.associate { session ->
             session.cwd to WorkspaceLabels(
                 id = session.workspaceId,
                 name = session.workspaceName,
             )
+        }
+        val cachedWorktreeBySession = cachedSessions.associate { session ->
+            (session.agentId to session.sessionId) to session.worktreePath
         }
 
         sessionDao.replaceByOrigin(
@@ -127,6 +144,10 @@ class DefaultSessionRepository @Inject constructor(
                     workspaceId = workspace?.id ?: cachedWorkspace?.id.orEmpty(),
                     workspaceName = workspace?.name ?: cachedWorkspace?.name ?: session.cwd,
                     agentLabel = agentLabels[session.agentId] ?: session.agentId,
+                    // ACP does not report worktrees. Keep the phone-local
+                    // choice unless a transport explicitly supplied one.
+                    worktreePath = session.worktreePath
+                        ?: cachedWorktreeBySession[session.agentId to session.sessionId],
                 )
             },
         )
@@ -206,6 +227,16 @@ class DefaultSessionRepository @Inject constructor(
         sessionDao.updateWorktreePath(connectionId, agentId, sessionId, worktreePath)
     }
 
+    override suspend fun saveWorktreePath(
+        connectionId: String,
+        agentId: AgentId,
+        sessionId: String,
+        worktreePath: String?,
+    ): Result<Unit> {
+        sessionDao.updateWorktreePath(connectionId, agentId, sessionId, worktreePath)
+        return Result.success(Unit)
+    }
+
     private fun cachedSessions(entities: List<SessionEntity>): List<CachedSession> =
         entities.map { entity ->
             CachedSession(
@@ -241,6 +272,7 @@ private fun Session.toEntity(
     workspaceId: String,
     workspaceName: String,
     agentLabel: String,
+    worktreePath: String? = this.worktreePath,
 ): SessionEntity = SessionEntity(
     connectionId = connectionId,
     agentId = agentId,

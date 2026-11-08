@@ -41,49 +41,101 @@ class JschSshConnection private constructor(
     }
 
     override suspend fun readFile(path: String): ByteArray = withContext(Dispatchers.IO) {
-        val channel = sftp()
-        channel.get(path).use { stream -> stream.readBytes() }
+        withSftp { channel ->
+            channel.get(path).use { stream -> stream.readBytes() }
+        }
     }
 
     override suspend fun writeFile(path: String, content: ByteArray) = withContext(Dispatchers.IO) {
-        val channel = sftp()
-        val slash = path.lastIndexOf('/')
-        if (slash > 0) {
-            mkdirRecursive(channel, path.substring(0, slash))
+        withSftp { channel ->
+            val slash = path.lastIndexOf('/')
+            if (slash > 0) {
+                mkdirRecursive(channel, path.substring(0, slash))
+            }
+            channel.put(ByteArrayInputStream(content), path)
         }
-        channel.put(ByteArrayInputStream(content), path)
+        Unit
     }
 
     override suspend fun rename(oldPath: String, newPath: String) = withContext(Dispatchers.IO) {
-        val channel = sftp()
-        val slash = newPath.lastIndexOf('/')
-        if (slash > 0) {
-            mkdirRecursive(channel, newPath.substring(0, slash))
+        withSftp { channel ->
+            val slash = newPath.lastIndexOf('/')
+            if (slash > 0) {
+                mkdirRecursive(channel, newPath.substring(0, slash))
+            }
+            channel.rename(oldPath, newPath)
         }
-        channel.rename(oldPath, newPath)
     }
 
     override suspend fun list(path: String): List<SshFileEntry> = withContext(Dispatchers.IO) {
-        val channel = sftp()
-        val resolved = runCatching { channel.realpath(path) }.getOrDefault(path)
-        channel.ls(resolved).mapNotNull { raw ->
-            val entry = raw as ChannelSftp.LsEntry
-            if (entry.filename == "." || entry.filename == "..") {
-                return@mapNotNull null
+        withSftp { channel ->
+            val resolved = runCatching { channel.realpath(path) }.getOrDefault(path)
+            channel.ls(resolved).mapNotNull { raw ->
+                val entry = raw as ChannelSftp.LsEntry
+                if (entry.filename == "." || entry.filename == "..") {
+                    return@mapNotNull null
+                }
+                SshFileEntry(
+                    name = entry.filename,
+                    path = joinPath(resolved, entry.filename),
+                    directory = entry.attrs.isDir,
+                    size = entry.attrs.size,
+                    modifiedAt = entry.attrs.mTime.toLong() * 1000L,
+                )
             }
-            SshFileEntry(
-                name = entry.filename,
-                path = joinPath(resolved, entry.filename),
-                directory = entry.attrs.isDir,
-                size = entry.attrs.size,
-                modifiedAt = entry.attrs.mTime.toLong() * 1000L,
-            )
         }
     }
 
     override suspend fun stat(path: String): SshFileEntry? = withContext(Dispatchers.IO) {
+        withSftp { channel -> statLocked(channel, path) }
+    }
+
+    override suspend fun mkdir(path: String) = withContext(Dispatchers.IO) {
+        withSftp { channel -> mkdirRecursive(channel, path) }
+    }
+
+    override suspend fun remove(path: String) = withContext(Dispatchers.IO) {
+        withSftp { channel ->
+            val entry = statLocked(channel, path)
+            if (entry?.directory == true) {
+                channel.rmdir(path)
+            } else {
+                channel.rm(path)
+            }
+        }
+    }
+
+    override suspend fun realPath(path: String): String = withContext(Dispatchers.IO) {
+        withSftp { channel -> channel.realpath(path) }
+    }
+
+    override fun close() {
+        runCatching { sftpChannel?.disconnect() }
+        sftpChannel = null
+        session.disconnect()
+    }
+
+    /**
+     * JSch's SFTP channel is not safe for concurrent operations. Every read,
+     * write, list, and stat holds the lock for the whole operation so two
+     * coroutines on one connection cannot interleave channel traffic.
+     */
+    private suspend fun <T> withSftp(block: (ChannelSftp) -> T): T = sftpLock.withLock {
+        val existing = sftpChannel
+        val channel = if (existing != null && existing.isConnected) {
+            existing
+        } else {
+            val opened = session.openChannel("sftp") as ChannelSftp
+            opened.connect(CONNECT_TIMEOUT_MILLIS)
+            sftpChannel = opened
+            opened
+        }
+        block(channel)
+    }
+
+    private fun statLocked(channel: ChannelSftp, path: String): SshFileEntry? =
         try {
-            val attrs = sftp().lstat(path)
+            val attrs = channel.lstat(path)
             SshFileEntry(
                 name = path.substringAfterLast('/'),
                 path = path,
@@ -98,42 +150,6 @@ class JschSshConnection private constructor(
                 throw wrap(error)
             }
         }
-    }
-
-    override suspend fun mkdir(path: String) = withContext(Dispatchers.IO) {
-        mkdirRecursive(sftp(), path)
-    }
-
-    override suspend fun remove(path: String) = withContext(Dispatchers.IO) {
-        val channel = sftp()
-        val entry = stat(path)
-        if (entry?.directory == true) {
-            channel.rmdir(path)
-        } else {
-            channel.rm(path)
-        }
-    }
-
-    override suspend fun realPath(path: String): String = withContext(Dispatchers.IO) {
-        sftp().realpath(path)
-    }
-
-    override fun close() {
-        runCatching { sftpChannel?.disconnect() }
-        sftpChannel = null
-        session.disconnect()
-    }
-
-    private suspend fun sftp(): ChannelSftp = sftpLock.withLock {
-        val existing = sftpChannel
-        if (existing != null && existing.isConnected) {
-            return@withLock existing
-        }
-        val channel = session.openChannel("sftp") as ChannelSftp
-        channel.connect(CONNECT_TIMEOUT_MILLIS)
-        sftpChannel = channel
-        channel
-    }
 
     private fun mkdirRecursive(channel: ChannelSftp, path: String) {
         if (path.isEmpty() || path == "/") {

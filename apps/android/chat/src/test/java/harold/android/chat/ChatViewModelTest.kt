@@ -1175,6 +1175,7 @@ class ChatViewModelTest {
             sessionOwner.snapshot.value.copy(
                 agentId = "cursor",
                 sessionId = "sess_new",
+                transcript = emptyAcpTranscript.copy(live = true),
                 configOptions = listOf(modelOption("m1", listOf("m1", "m2"))),
             ),
         )
@@ -1201,6 +1202,41 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun aNewSessionWaitsForTheLiveStreamBeforeApplyingTheRememberedModel() = runTest(dispatcher) {
+        val preferences = FakeSessionPreferences().apply {
+            seedModel(ORIGIN, "cursor", "m2")
+        }
+        val repository = ChatFakeUserRepository()
+        val sessionOwner = ChatFakeSessionOwner()
+        val configApi = RecordingSessionConfigApi()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = sessionOwner,
+            configApi = configApi,
+            sessionPreferences = preferences,
+        )
+        advanceUntilIdle()
+
+        startCreateSessionThroughRoute(repository, preferences)
+        val seeded = sessionOwner.snapshot.value.copy(
+            agentId = "cursor",
+            sessionId = "sess_new",
+            configOptions = listOf(modelOption("m1", listOf("m1", "m2"))),
+        )
+        sessionOwner.publish(seeded)
+        runCurrent()
+
+        assertTrue(configApi.calls.isEmpty())
+        assertTrue(viewModel.uiState.value.modelSyncPending)
+
+        sessionOwner.publish(seeded.copy(transcript = emptyAcpTranscript.copy(live = true)))
+        runCurrent()
+
+        assertEquals(ConfigValue.Text("m2"), configApi.calls.single().value)
+    }
+
+    @Test
     fun anUnavailableRememberedModelIsIgnoredWithoutAnError() = runTest(dispatcher) {
         val preferences = FakeSessionPreferences().apply {
             seedModel(ORIGIN, "cursor", "m_gone")
@@ -1222,6 +1258,7 @@ class ChatViewModelTest {
             sessionOwner.snapshot.value.copy(
                 agentId = "cursor",
                 sessionId = "sess_new",
+                transcript = emptyAcpTranscript.copy(live = true),
                 configOptions = listOf(modelOption("m1", listOf("m1"))),
             ),
         )
@@ -1254,6 +1291,7 @@ class ChatViewModelTest {
         val configSnapshot = sessionOwner.snapshot.value.copy(
             agentId = "cursor",
             sessionId = "sess_new",
+            transcript = emptyAcpTranscript.copy(live = true),
             configOptions = listOf(modelOption("m1", listOf("m1", "m2"))),
         )
         sessionOwner.publish(configSnapshot)
@@ -1288,13 +1326,38 @@ class ChatViewModelTest {
             sessionOwner.snapshot.value.copy(
                 agentId = "cursor",
                 sessionId = "sess_new",
-                configOptions = emptyList(),
+                transcript = emptyAcpTranscript.copy(live = true),
+                configOptions = listOf(modelOption("m1", listOf("m1", "m2"))),
             ),
         )
         runCurrent()
         assertTrue(viewModel.uiState.value.modelSyncPending)
 
         advanceTimeBy(ChatViewModel.MODEL_SYNC_TIMEOUT_MS + 1)
+        runCurrent()
+
+        assertFalse(viewModel.uiState.value.modelSyncPending)
+        assertTrue(viewModel.uiState.value.submitEnabled)
+    }
+
+    @Test
+    fun aSessionThatNeverGoesLiveStopsBlockingSubmitAfterTheLiveTimeout() = runTest(dispatcher) {
+        val preferences = FakeSessionPreferences().apply {
+            seedModel(ORIGIN, "cursor", "m2")
+        }
+        val repository = ChatFakeUserRepository()
+        val viewModel = createViewModel(
+            repository = repository,
+            navigation = ChatFakeNavigationPreferences(),
+            sessionOwner = ChatFakeSessionOwner(),
+            sessionPreferences = preferences,
+        )
+        advanceUntilIdle()
+
+        startCreateSessionThroughRoute(repository, preferences)
+        assertTrue(viewModel.uiState.value.modelSyncPending)
+
+        advanceTimeBy(ChatViewModel.MODEL_SYNC_LIVE_TIMEOUT_MS + 1)
         runCurrent()
 
         assertFalse(viewModel.uiState.value.modelSyncPending)
@@ -1324,6 +1387,7 @@ class ChatViewModelTest {
             sessionOwner.snapshot.value.copy(
                 agentId = "cursor",
                 sessionId = "sess_new",
+                transcript = emptyAcpTranscript.copy(live = true),
                 configOptions = listOf(modelOption("m1", listOf("m1", "m2"))),
             ),
         )

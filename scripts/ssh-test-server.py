@@ -16,6 +16,7 @@ import sys
 import asyncssh
 
 PATH_PREFIX: str | None = None
+HOME_DIR: str | None = None
 
 
 class TestSshServer(asyncssh.SSHServer):
@@ -85,24 +86,30 @@ async def handle_client(process: asyncssh.SSHServerProcess) -> None:
         return
 
     print(f"exec {command}", file=sys.stderr)
-    home = os.path.expanduser("~")
+    home = HOME_DIR or os.path.expanduser("~")
+    os.makedirs(home, exist_ok=True)
     env = os.environ.copy()
+    # A path prefix makes the integration test hermetic: only the fake agents
+    # in the prefix plus the base system tools are visible. Without a prefix,
+    # use the normal user PATH so manual SSH checks see real agents.
+    path_entries = (
+        [PATH_PREFIX, "/usr/bin", "/bin"]
+        if PATH_PREFIX
+        else [
+            f"{home}/.opencode/bin",
+            f"{home}/.local/bin",
+            "/usr/local/sbin",
+            "/usr/local/bin",
+            "/usr/sbin",
+            "/usr/bin",
+            "/sbin",
+            "/bin",
+        ]
+    )
     env.update(
         {
             "HOME": home,
-            "PATH": ":".join(
-                [
-                    *([PATH_PREFIX] if PATH_PREFIX else []),
-                    f"{home}/.opencode/bin",
-                    f"{home}/.local/bin",
-                    "/usr/local/sbin",
-                    "/usr/local/bin",
-                    "/usr/sbin",
-                    "/usr/bin",
-                    "/sbin",
-                    "/bin",
-                ]
-            ),
+            "PATH": ":".join(path_entries),
             "TERM": "xterm-256color",
         }
     )
@@ -144,7 +151,7 @@ async def handle_client(process: asyncssh.SSHServerProcess) -> None:
 
 
 async def main() -> None:
-    global PATH_PREFIX
+    global HOME_DIR, PATH_PREFIX
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=2222)
@@ -152,8 +159,10 @@ async def main() -> None:
     parser.add_argument("--authorized-keys", default=None)
     parser.add_argument("--password", default=None)
     parser.add_argument("--path-prefix", default=None)
+    parser.add_argument("--home", default=None)
     args = parser.parse_args()
     PATH_PREFIX = args.path_prefix
+    HOME_DIR = args.home
 
     host_key_path = pathlib.Path(args.host_key)
     if not host_key_path.exists():

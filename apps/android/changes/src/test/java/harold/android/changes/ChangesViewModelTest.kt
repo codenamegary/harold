@@ -8,9 +8,8 @@ import harold.android.contracts.GitScope
 import harold.android.contracts.GitSummary
 import harold.android.contracts.GitWorktree
 import harold.android.contracts.GitWorktreeCollection
-import harold.android.contracts.SetSessionWorktreePathBody
+import harold.android.database.session.SessionWorktreePathStore
 import harold.android.network.GitApi
-import harold.android.network.SessionWorktreePathApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -73,10 +72,7 @@ class ChangesViewModelTest {
         advanceUntilIdle()
 
         assertEquals(REPO, viewModel.uiState.value.selectedWorktreePath)
-        assertEquals(
-            listOf(SetSessionWorktreePathBody(agentId = "cursor", worktreePath = null)),
-            sessions.updates.map { it.second },
-        )
+        assertEquals(listOf<String?>(null), sessions.updates)
     }
 
     @Test
@@ -97,10 +93,7 @@ class ChangesViewModelTest {
 
         assertEquals(LINKED, viewModel.uiState.value.selectedWorktreePath)
         advanceUntilIdle()
-        assertEquals(
-            listOf(SetSessionWorktreePathBody(agentId = "cursor", worktreePath = LINKED)),
-            sessions.updates.map { it.second },
-        )
+        assertEquals(listOf<String?>(LINKED), sessions.updates)
     }
 
     @Test
@@ -134,15 +127,16 @@ class ChangesViewModelTest {
 
 private class FakeWorktreePathApi(
     private val failure: Throwable? = null,
-) : SessionWorktreePathApi {
-    val updates = mutableListOf<Pair<String, SetSessionWorktreePathBody>>()
+) : SessionWorktreePathStore {
+    val updates = mutableListOf<String?>()
 
-    override suspend fun updateSessionWorktreePath(
+    override suspend fun saveWorktreePath(
         connectionId: String,
+        agentId: String,
         sessionId: String,
-        body: SetSessionWorktreePathBody,
+        worktreePath: String?,
     ): Result<Unit> {
-        updates += sessionId to body
+        updates += worktreePath
         return failure?.let { Result.failure(it) } ?: Result.success(Unit)
     }
 }
