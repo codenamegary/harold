@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -58,6 +59,8 @@ class SwipeToDeleteListItemTest {
         composeTestRule
             .onNodeWithTag("swipe_delete_row")
             .performTouchInput { swipeLeft() }
+
+        composeTestRule.onNodeWithContentDescription("Delete").assertIsDisplayed()
 
         composeTestRule
             .onNodeWithTag("delete_row")
