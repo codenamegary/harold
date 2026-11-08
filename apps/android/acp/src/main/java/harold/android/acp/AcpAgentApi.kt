@@ -12,6 +12,7 @@ import harold.android.network.AcpAgentApi
 import harold.android.network.AgentApiError
 import harold.android.network.AgentApiException
 import harold.android.network.AgentAuthCache
+import harold.android.network.PromptResult
 import harold.android.network.SessionCommandApi
 import harold.android.network.SessionConfigApi
 import harold.android.network.hostLoginInstructions
@@ -90,7 +91,7 @@ class DefaultAcpAgentApi @Inject constructor(
         agentId: AgentId,
         sessionId: String,
         body: PromptRequestBody,
-    ): Result<Unit> = acpCall(connectionId) {
+    ): Result<PromptResult> = acpCall(connectionId) {
         sessionFor(connectionId, agentId, sessionId).prompt(body).getOrThrow()
     }
 

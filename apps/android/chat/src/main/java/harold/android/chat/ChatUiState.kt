@@ -12,6 +12,8 @@ import harold.android.live.ContextUsage
 import harold.android.live.Elicitation
 import harold.android.live.StreamExtension
 import harold.android.live.emptyAcpTranscript
+import harold.android.stream.SessionStatus
+import harold.android.stream.allowsPrompt
 import harold.android.voice.VoiceDictationUiState
 
 data class SessionRow(
@@ -86,6 +88,8 @@ data class ChatUiState(
     val recentSessionsLoading: Boolean = false,
     val recentSessionsError: String? = null,
     val transcript: AcpTranscriptState = emptyAcpTranscript,
+    /** Live ACP status of the watched session; gates the composer. */
+    val sessionStatus: SessionStatus = SessionStatus.Ready,
     val composerText: String = "",
     val composerSubmitting: Boolean = false,
     /** A newly created session is applying its remembered model; block submit only. */
@@ -154,6 +158,7 @@ data class ChatUiState(
         get() {
             val session = selectedSession ?: return false
             return session.connectionReachable &&
+                sessionStatus.allowsPrompt &&
                 isComposerPromptable(
                     agentId = session.agentId,
                     sessionId = session.sessionId,
@@ -233,6 +238,7 @@ internal fun ChatUiState.resetSessionScopedState(
 ): ChatUiState = copy(
     selectedSession = keep.selectedSession,
     transcript = keep.transcript,
+    sessionStatus = SessionStatus.Ready,
     composerText = "",
     composerSubmitting = false,
     modelSyncPending = false,

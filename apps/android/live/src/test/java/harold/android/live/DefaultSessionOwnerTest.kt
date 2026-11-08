@@ -11,9 +11,11 @@ import harold.android.contracts.PromptRequestBody
 import harold.android.contracts.SelectOption
 import harold.android.contracts.SessionState
 import harold.android.contracts.SessionStreamServerMessage
+import harold.android.network.PromptResult
 import harold.android.network.SessionCommandApi
 import harold.android.stream.StreamStatus
 import harold.android.stream.DisconnectCause
+import harold.android.stream.SessionStatus
 import harold.android.stream.SessionStream
 import harold.android.stream.SessionStreamFactory
 import harold.android.stream.SessionStreamHandlers
@@ -22,6 +24,8 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -190,6 +194,62 @@ class DefaultSessionOwnerTest {
 
         assertEquals(2, factory.openCount)
         assertEquals(StreamStatus.Live, owner.connectionState.value.status)
+
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun sessionStatusFollowsTheStreamAndDisconnectsSemantically() = runTest {
+        val factory = ScriptedSessionStreamFactory(listOf(holdOpen(), holdOpen()))
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+        val stream = requireNotNull(factory.lastStream)
+        assertEquals(SessionStatus.Ready, owner.sessionStatus.value)
+
+        stream.emitStatus(SessionStatus.Running)
+        advanceUntilIdle()
+        assertEquals(SessionStatus.Running, owner.sessionStatus.value)
+
+        stream.disconnect(DisconnectCause.Retryable("refused"))
+        runCurrent()
+        assertEquals(SessionStatus.Offline, owner.sessionStatus.value)
+
+        advanceUntilIdle()
+        assertEquals(2, factory.openCount)
+        assertEquals(SessionStatus.Ready, owner.sessionStatus.value)
+
+        factory.lastStream!!.disconnect(DisconnectCause.Unauthorized("sign in"))
+        advanceUntilIdle()
+        assertEquals(SessionStatus.AuthFailed, owner.sessionStatus.value)
+
+        owner.connect(ORIGIN)
+        advanceUntilIdle()
+        factory.lastStream!!.disconnect(DisconnectCause.Protocol("bad frame"))
+        advanceUntilIdle()
+        assertEquals(SessionStatus.Error, owner.sessionStatus.value)
+
+        owner.disconnect()
+        advanceUntilIdle()
+        assertEquals(SessionStatus.Offline, owner.sessionStatus.value)
+    }
+
+    @Test
+    fun closeForBackgroundMarksTheSessionOffline() = runTest {
+        val factory = ScriptedSessionStreamFactory(listOf(holdOpen(), holdOpen()))
+        val owner = owner(factory)
+
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+        assertEquals(SessionStatus.Ready, owner.sessionStatus.value)
+
+        owner.closeForBackground()
+        advanceUntilIdle()
+        assertEquals(SessionStatus.Offline, owner.sessionStatus.value)
 
         owner.disconnect()
         advanceUntilIdle()
@@ -802,6 +862,75 @@ class DefaultSessionOwnerTest {
         assertTrue(owner.prompt("hello").isFailure)
         owner.disconnect()
         advanceUntilIdle()
+    }
+
+    @Test
+    fun retryablePromptMapsToUnavailable() = runTest {
+        val (owner, commands, factory) = liveOwner()
+        commands.promptResult = Result.success(PromptResult.Retryable)
+
+        val error = owner.prompt("hello").exceptionOrNull()
+
+        val unavailable = (error as harold.android.network.AgentApiException)
+            .error as harold.android.network.AgentApiError.Unavailable
+        assertEquals("The agent is not available. Try again.", unavailable.detail)
+        owner.disconnect()
+        advanceUntilIdle()
+        factory.lastStream?.let { stream -> assertTrue(stream.closed) }
+    }
+
+    @Test
+    fun interruptedPromptMapsToAConflictThatNeverSuggestsAResend() = runTest {
+        val (owner, commands, _) = liveOwner()
+        commands.promptResult = Result.success(PromptResult.Interrupted)
+
+        val problem = (
+            (owner.prompt("hello").exceptionOrNull() as harold.android.network.AgentApiException)
+                .error as harold.android.network.AgentApiError.Problem
+            )
+
+        assertEquals(409, problem.status)
+        assertEquals("Turn interrupted", problem.title)
+        assertEquals(
+            "The agent may have received this prompt. Check the transcript before resending.",
+            problem.detail,
+        )
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun failedPromptMapsToPromptFailed() = runTest {
+        val (owner, commands, _) = liveOwner()
+        commands.promptResult = Result.success(PromptResult.Failed("remote rejected the turn"))
+
+        val problem = (
+            (owner.prompt("hello").exceptionOrNull() as harold.android.network.AgentApiException)
+                .error as harold.android.network.AgentApiError.Problem
+            )
+
+        assertEquals("Prompt failed", problem.title)
+        assertEquals("remote rejected the turn", problem.detail)
+        owner.disconnect()
+        advanceUntilIdle()
+    }
+
+    private suspend fun TestScope.liveOwner(): Triple<
+        DefaultSessionOwner,
+        ScriptedCommandApi,
+        ScriptedSessionStreamFactory,
+        > {
+        val factory = ScriptedSessionStreamFactory(listOf(holdOpen()))
+        val commands = ScriptedCommandApi()
+        val owner = owner(factory, commands)
+        owner.connect(ORIGIN)
+        owner.watch("cursor", "sess_01")
+        advanceUntilIdle()
+        factory.lastStream!!.emit(
+            SessionStreamServerMessage.Subscribed(agentId = "cursor", sessionId = "sess_01"),
+        )
+        advanceUntilIdle()
+        return Triple(owner, commands, factory)
     }
 
     @Test
@@ -1821,6 +1950,8 @@ private class ScriptedSessionStream(
     var closed = false
         private set
     private var frameAtNanos: Long? = null
+    private val _status = MutableStateFlow(SessionStatus.Ready)
+    override val status: StateFlow<SessionStatus> = _status
 
     override fun close() {
         closed = true
@@ -1831,6 +1962,10 @@ private class ScriptedSessionStream(
     fun emit(message: SessionStreamServerMessage, cursor: String? = null) {
         frameAtNanos = (frameAtNanos ?: 0L) + 1
         handlers.onMessage(message, cursor)
+    }
+
+    fun emitStatus(status: SessionStatus) {
+        _status.value = status
     }
 
     fun disconnect(cause: DisconnectCause) {
@@ -1846,14 +1981,14 @@ private class ScriptedCommandApi : SessionCommandApi {
     val permissionReplies = mutableListOf<Pair<String, String>>()
     val extensionReplies = mutableListOf<Pair<String, JsonElement>>()
     val elicitationReplies = mutableListOf<Pair<String, JsonElement>>()
-    var promptResult: Result<Unit> = Result.success(Unit)
+    var promptResult: Result<PromptResult> = Result.success(PromptResult.Accepted)
 
     override suspend fun prompt(
         connectionId: String,
         agentId: String,
         sessionId: String,
         body: PromptRequestBody,
-    ): Result<Unit> {
+    ): Result<PromptResult> {
         prompts += PromptCall(agentId = agentId, sessionId = sessionId, text = body.text)
         return promptResult
     }

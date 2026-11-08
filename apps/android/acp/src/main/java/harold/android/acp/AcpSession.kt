@@ -18,6 +18,7 @@ import harold.android.contracts.SessionStreamServerMessage.SessionInfo
 import harold.android.contracts.SessionStreamServerMessage.SessionUpdate
 import harold.android.contracts.SessionStreamServerMessage.StreamReset
 import harold.android.contracts.SessionStreamServerMessage.Subscribed
+import harold.android.network.PromptResult
 import harold.android.process.AgentAuthRequiredException
 import harold.android.stream.SessionStatus
 import java.io.Closeable
@@ -28,12 +29,16 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
@@ -72,7 +77,7 @@ class AcpSession internal constructor(
     private val pendingElicitations = ConcurrentHashMap<String, CompletableDeferred<JsonElement>>()
     private val urlElicitationRequests = ConcurrentHashMap<String, String>()
     private val prompting = AtomicBoolean(false)
-    private val promptWriteMutex = Mutex()
+    private val turnMutex = Mutex()
     private val attachMutex = Mutex()
     private val attachedOnce = AtomicBoolean(false)
     private val closeRequested = AtomicBoolean(false)
@@ -82,7 +87,18 @@ class AcpSession internal constructor(
     private val _status = MutableStateFlow(SessionStatus.Starting)
     val status: StateFlow<SessionStatus> = _status.asStateFlow()
 
+    /**
+     * Settles once per turn: [PromptResult.Accepted] when the agent answered,
+     * [PromptResult.Interrupted] when the process died or timed out, and
+     * [PromptResult.Failed] for a remote protocol failure.
+     */
+    private val _turnResults = MutableSharedFlow<PromptResult>(extraBufferCapacity = 1)
+    val turnResults: SharedFlow<PromptResult> = _turnResults.asSharedFlow()
+
     val closed = CompletableDeferred<String?>()
+
+    internal val isPrompting: Boolean
+        get() = prompting.get()
 
     @Volatile
     private var title: String? = initialTitle
@@ -205,7 +221,7 @@ class AcpSession internal constructor(
             }
         } catch (error: Throwable) {
             if (!process.isDead) {
-                tryEmitFrame(
+                emitFrame(
                     Error(
                         message = error.message ?: "Could not attach to the session.",
                         agentId = agentId,
@@ -238,17 +254,7 @@ class AcpSession internal constructor(
         }
     }
 
-    suspend fun prompt(body: PromptRequestBody): Result<Unit> = promptWriteMutex.withLock {
-        if (isClosed || process.isDead) {
-            _status.value = SessionStatus.Offline
-            return@withLock Result.failure(
-                AcpClosedException(process.closedReason ?: "The agent process is not running."),
-            )
-        }
-        if (!prompting.compareAndSet(false, true)) {
-            return@withLock Result.failure(IllegalStateException("A turn is already running."))
-        }
-
+    suspend fun prompt(body: PromptRequestBody): Result<PromptResult> {
         val prompt = buildJsonArray {
             add(
                 buildJsonObject {
@@ -261,46 +267,98 @@ class AcpSession internal constructor(
             }
         }
 
-        val pending = try {
-            process.beginPrompt(sessionId, prompt)
-        } catch (error: Throwable) {
-            prompting.set(false)
-            return@withLock Result.failure(error)
+        if (isClosed || process.isDead) {
+            _status.value = SessionStatus.Offline
+            return Result.success(PromptResult.Retryable)
         }
 
-        _status.value = SessionStatus.Running
-        scope.launch(Dispatchers.IO) {
-            try {
-                val response = pending.await(PROMPT_TIMEOUT_MILLIS)
-                val stopReason = response.string("stopReason")
-                if (stopReason == "cancelled") {
-                    emitFrame(Cancelled(agentId = agentId, sessionId = sessionId))
-                } else {
-                    emitFrame(PromptComplete(agentId = agentId, sessionId = sessionId))
-                }
-                if (!process.isDead) {
-                    _status.value = SessionStatus.Ready
-                }
-            } catch (error: Throwable) {
-                if (process.isDead || error is AcpClosedException) {
-                    // onProcessClosed already told every subscriber; the turn
-                    // only needs to settle its own state.
-                    _status.value = SessionStatus.Offline
-                } else {
-                    emitFrame(
-                        Error(
-                            message = error.message ?: "Prompt failed",
-                            agentId = agentId,
-                            sessionId = sessionId,
-                        ),
-                    )
-                    _status.value = SessionStatus.Ready
-                }
-            } finally {
+        // A second prompt waits for the current turn instead of failing. The
+        // lock is released by the turn coroutine once the agent settles it.
+        turnMutex.lock()
+        var handedOff = false
+        try {
+            if (isClosed || process.isDead) {
+                _status.value = SessionStatus.Offline
+                return Result.success(PromptResult.Retryable)
+            }
+            prompting.set(true)
+            val pending = try {
+                process.beginPrompt(sessionId, prompt)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: AcpClosedException) {
+                // The process died between the check and the write.
+                _status.value = SessionStatus.Offline
                 prompting.set(false)
+                return Result.success(PromptResult.Retryable)
+            } catch (_: Throwable) {
+                // The bytes may have reached the agent before the write failed.
+                prompting.set(false)
+                return Result.success(PromptResult.Interrupted)
+            }
+
+            handedOff = true
+            _status.value = SessionStatus.Running
+            scope.launch(Dispatchers.IO) {
+                val outcome = try {
+                    val response = pending.await(PROMPT_TIMEOUT_MILLIS)
+                    val stopReason = response.string("stopReason")
+                    if (stopReason == "cancelled") {
+                        emitFrame(Cancelled(agentId = agentId, sessionId = sessionId))
+                    } else {
+                        emitFrame(PromptComplete(agentId = agentId, sessionId = sessionId))
+                    }
+                    if (!process.isDead) {
+                        _status.value = SessionStatus.Ready
+                    }
+                    PromptResult.Accepted
+                } catch (error: TimeoutCancellationException) {
+                    // The turn may have reached the agent; never replay it.
+                    _status.value = if (process.isDead) {
+                        SessionStatus.Offline
+                    } else {
+                        SessionStatus.Ready
+                    }
+                    PromptResult.Interrupted
+                } catch (error: CancellationException) {
+                    _status.value = SessionStatus.Offline
+                    throw error
+                } catch (error: Throwable) {
+                    when {
+                        process.isDead || error is AcpClosedException -> {
+                            // onProcessClosed already told every subscriber;
+                            // the turn only needs to settle its own state.
+                            _status.value = SessionStatus.Offline
+                            PromptResult.Interrupted
+                        }
+
+                        else -> {
+                            emitFrame(
+                                Error(
+                                    message = error.message ?: "Prompt failed",
+                                    agentId = agentId,
+                                    sessionId = sessionId,
+                                ),
+                            )
+                            _status.value = SessionStatus.Ready
+                            PromptResult.Failed(
+                                error.message?.takeIf { message -> message.isNotBlank() }
+                                    ?: "Prompt failed",
+                            )
+                        }
+                    }
+                } finally {
+                    prompting.set(false)
+                    turnMutex.unlock()
+                }
+                _turnResults.tryEmit(outcome)
+            }
+            return Result.success(PromptResult.Accepted)
+        } finally {
+            if (!handedOff) {
+                turnMutex.unlock()
             }
         }
-        Result.success(Unit)
     }
 
     suspend fun cancel(): Result<Unit> = runCatching {
@@ -458,9 +516,9 @@ class AcpSession internal constructor(
     /** Called by the owning process when the agent exits. */
     fun onProcessClosed(reason: String) {
         _status.value = SessionStatus.Offline
-        // Tell attached streams before their channels close. trySend keeps
-        // this best-effort even when a subscriber is not draining.
-        tryEmitFrame(
+        // Tell attached streams before their channels close. Delivery is
+        // best-effort even when a subscriber is not draining.
+        emitFrame(
             Error(
                 message = "The agent process stopped. Reopen the session to continue.",
                 agentId = agentId,
@@ -536,21 +594,21 @@ class AcpSession internal constructor(
         }
     }
 
-    private suspend fun emitFrame(message: SessionStreamServerMessage) {
-        subscribers.values.toList().forEach { subscriber ->
-            try {
-                subscriber.channel.send(message)
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Throwable) {
-                // The subscriber detached while this frame was in flight.
+    /**
+     * Best-effort delivery that never blocks the shared agent-process
+     * notification loop. A subscriber whose 256-message buffer is full is
+     * disconnected so its owner reconnects and replays the session.
+     */
+    private fun emitFrame(message: SessionStreamServerMessage) {
+        subscribers.entries.toList().forEach { (id, subscriber) ->
+            val result = subscriber.channel.trySend(message)
+            if (result.isSuccess || result.isClosed) {
+                return@forEach
             }
-        }
-    }
-
-    private fun tryEmitFrame(message: SessionStreamServerMessage) {
-        subscribers.values.toList().forEach { subscriber ->
-            subscriber.channel.trySend(message)
+            if (subscribers.remove(id, subscriber)) {
+                subscriber.channel.close()
+                subscriber.closed.complete(STREAM_FELL_BEHIND)
+            }
         }
     }
 
@@ -589,6 +647,8 @@ class AcpSession internal constructor(
         private const val PERMISSION_TIMEOUT_MILLIS = 30 * 60 * 1000L
         private const val ELICITATION_TIMEOUT_MILLIS = 30 * 60 * 1000L
         private const val PROMPT_TIMEOUT_MILLIS = 60 * 60 * 1000L
+        private const val STREAM_FELL_BEHIND =
+            "The stream fell behind. Reopen the session to continue."
     }
 }
 

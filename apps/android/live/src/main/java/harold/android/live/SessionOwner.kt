@@ -1,12 +1,15 @@
 package harold.android.live
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.JsonElement
 import harold.android.contracts.AgentId
 import harold.android.contracts.AttachmentReference
 import harold.android.contracts.ConfigOption
 import harold.android.stream.ConnectionState
+import harold.android.stream.SessionStatus
 
 /**
  * Process-scoped owner of the session stream. Chat reads [snapshot] and
@@ -16,6 +19,13 @@ interface SessionOwner {
     val connectionState: StateFlow<ConnectionState>
 
     val snapshot: StateFlow<SessionSnapshot>
+
+    /**
+     * Live ACP state for the watched session. Fakes that do not model status
+     * can leave the default, which keeps the composer usable.
+     */
+    val sessionStatus: StateFlow<SessionStatus>
+        get() = defaultSessionStatus
 
     /**
      * Latest agent-pushed titles keyed by [harold.android.contracts.catalogSessionKey],
@@ -102,3 +112,6 @@ interface SessionOwner {
 
     fun forget(agentId: AgentId, sessionId: String)
 }
+
+private val defaultSessionStatus: StateFlow<SessionStatus> =
+    MutableStateFlow(SessionStatus.Ready).asStateFlow()

@@ -79,12 +79,17 @@ class HaroldConnectionHost(
     fun onAppBackground() {
         connections.onBackground()
         val active = connectionGateway.activeConnection.value as? ActiveConnectionState.Active
-        if (active != null && connections.shouldStayConnected(active.connectionId)) {
+        val staysConnected = active != null && connections.shouldStayConnected(active.connectionId)
+        if (staysConnected) {
             sessionOwner.onBackground()
         } else {
             sessionOwner.closeForBackground()
+        }
+        // Close idle ACP processes before the SSH entries they ride on. The
+        // runtime leaves any process with an attached stream alone.
+        agentRuntime.onBackground()
+        if (!staysConnected) {
             connectionPool.closeAll()
         }
-        agentRuntime.onBackground()
     }
 }

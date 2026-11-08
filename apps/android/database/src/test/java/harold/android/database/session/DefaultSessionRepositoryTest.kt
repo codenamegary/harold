@@ -323,7 +323,7 @@ private class ChatFakeAgentApi : harold.android.network.AcpAgentApi,
         agentId: AgentId,
         sessionId: String,
         body: harold.android.contracts.PromptRequestBody,
-    ) = unused<Unit>()
+    ) = unused<harold.android.network.PromptResult>()
 
     override suspend fun cancel(
         connectionId: String,

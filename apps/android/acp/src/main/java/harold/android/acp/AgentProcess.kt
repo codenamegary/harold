@@ -115,9 +115,11 @@ class AgentProcess internal constructor(
 
     /**
      * `session/new`: registers a detached session that the chat screen can
-     * attach to later without a `session/load`.
+     * attach to later without a `session/load`. The calling connection owns
+     * the new catalog row and [AcpSession], so duplicate saved rows sharing
+     * this process keep separate identities.
      */
-    suspend fun sessionNew(cwd: String): CreateSessionResponse {
+    suspend fun sessionNew(connectionId: String, cwd: String): CreateSessionResponse {
         ensureAlive()
         val response = try {
             acp.request(
@@ -151,7 +153,7 @@ class AgentProcess internal constructor(
                 updatedAt = now,
             ),
         )
-        sessions.remove(sessionId)?.close()
+        sessions.remove(sessionKey(connectionId, sessionId))?.close()
         val session = AcpSession(
             connectionId = connectionId,
             agentId = agentId,
@@ -164,7 +166,7 @@ class AgentProcess internal constructor(
             catalog = catalog,
             scope = scope,
         )
-        sessions[sessionId] = session
+        sessions[sessionKey(connectionId, sessionId)] = session
         touch()
         return CreateSessionResponse(
             agentId = agentId,
@@ -180,18 +182,23 @@ class AgentProcess internal constructor(
      * Finds or creates the in-memory session for [sessionId]. Attaching later
      * decides between the session/new fast path and `session/load`.
      */
-    suspend fun openSession(sessionId: String, cwdHint: String?): AcpSession {
+    suspend fun openSession(
+        connectionId: String,
+        sessionId: String,
+        cwdHint: String?,
+    ): AcpSession {
         ensureAlive()
-        sessions[sessionId]?.let { existing ->
+        val key = sessionKey(connectionId, sessionId)
+        sessions[key]?.let { existing ->
             if (!existing.isClosed) {
                 return existing
             }
-            sessions.remove(sessionId, existing)
+            sessions.remove(key, existing)
         }
         val info = catalog.find(connectionId, agentId, sessionId)
         val cwd = cwdHint
             ?: info?.cwd
-            ?: resolveSessionInfo(sessionId)?.cwd
+            ?: resolveSessionInfo(connectionId, sessionId)?.cwd
             ?: error(
                 "The agent did not return this session from session/list. " +
                     "Refresh the session list and pick it again.",
@@ -208,7 +215,7 @@ class AgentProcess internal constructor(
             catalog = catalog,
             scope = scope,
         )
-        sessions[sessionId] = session
+        sessions[key] = session
         touch()
         return session
     }
@@ -246,7 +253,7 @@ class AgentProcess internal constructor(
     }
 
     /** Every page of `session/list`, or nothing when the agent cannot list. */
-    suspend fun sessionList(cwd: String?): List<AcpSessionInfo> {
+    suspend fun sessionList(connectionId: String, cwd: String?): List<AcpSessionInfo> {
         ensureAlive()
         if (!canList) {
             return emptyList()
@@ -339,8 +346,19 @@ class AgentProcess internal constructor(
     internal suspend fun readBytes(path: String): ByteArray? =
         files.readBytes(connectionId, path).getOrNull()
 
+    /** The live session owned by one saved row, if this process hosts it. */
+    fun findSession(connectionId: String, sessionId: String): AcpSession? =
+        sessions[sessionKey(connectionId, sessionId)]?.takeIf { session -> !session.isClosed }
+
+    /** Removes and closes one saved row's session without touching the process. */
+    fun removeSession(connectionId: String, sessionId: String): AcpSession? {
+        val session = sessions.remove(sessionKey(connectionId, sessionId))
+        touch()
+        return session
+    }
+
     internal fun removeSession(session: AcpSession) {
-        sessions.remove(session.sessionId, session)
+        sessions.remove(sessionKey(session.connectionId, session.sessionId), session)
         touch()
     }
 
@@ -379,13 +397,15 @@ class AgentProcess internal constructor(
         when (method) {
             "session/update" -> {
                 val sessionId = params.string("sessionId") ?: return
-                sessions[sessionId]?.handleUpdate(params)
+                // Notifications carry no saved-row id. Deliver to every row
+                // watching this ACP session so duplicate rows stay in sync.
+                sessionsWithId(sessionId).forEach { session -> session.handleUpdate(params) }
             }
             "elicitation/complete" -> {
                 val elicitationId = params.string("elicitationId") ?: return
-                val session = params.string("sessionId")?.let { sessions[it] }
-                    ?: sessions.values.firstOrNull { it.ownsElicitation(elicitationId) }
-                session?.handleElicitationComplete(params)
+                val sessions = params.string("sessionId")?.let(::sessionsWithId)
+                    ?: sessions.values.filter { session -> session.ownsElicitation(elicitationId) }
+                sessions.forEach { session -> session.handleElicitationComplete(params) }
             }
         }
     }
@@ -401,7 +421,10 @@ class AgentProcess internal constructor(
             // instead of leaving the agent waiting forever.
             return buildJsonObject { put("action", "cancel") }
         }
-        val session = sessionId?.let { key -> sessions[key] }
+        val candidates = sessionId?.let(::sessionsWithId).orEmpty()
+        val session = candidates.firstOrNull { candidate -> candidate.isPrompting }
+            ?: candidates.firstOrNull { candidate -> candidate.hasWork() }
+            ?: candidates.firstOrNull()
             ?: throw AcpRemoteException(
                 code = -32602,
                 detail = "Unknown session: ${sessionId ?: "(none)"}",
@@ -449,8 +472,18 @@ class AgentProcess internal constructor(
         onClosed(this)
     }
 
-    private suspend fun resolveSessionInfo(sessionId: String): AcpSessionInfo? =
-        sessionList(cwd = null).firstOrNull { session -> session.sessionId == sessionId }
+    private suspend fun resolveSessionInfo(
+        connectionId: String,
+        sessionId: String,
+    ): AcpSessionInfo? =
+        sessionList(connectionId = connectionId, cwd = null)
+            .firstOrNull { session -> session.sessionId == sessionId }
+
+    private fun sessionsWithId(sessionId: String): List<AcpSession> =
+        sessions.values.filter { session -> session.sessionId == sessionId }
+
+    private fun sessionKey(connectionId: String, sessionId: String): String =
+        "$connectionId|$sessionId"
 
     private fun ensureAlive() {
         if (isDead) {

@@ -12,6 +12,7 @@ import harold.android.contracts.SessionState
 import harold.android.live.AcpTranscriptState
 import harold.android.live.ContextUsage
 import harold.android.live.emptyAcpTranscript
+import harold.android.stream.SessionStatus
 
 class ChatUiStateTest {
     @Test
@@ -46,9 +47,25 @@ class ChatUiStateTest {
     }
 
     @Test
+    fun composerRequiresAReadyOrRunningSessionStatus() {
+        val offline = ChatUiState(
+            selectedSession = sessionRow(SessionState.Idle),
+            sessionStatus = SessionStatus.Offline,
+        )
+        val ready = offline.copy(sessionStatus = SessionStatus.Ready)
+        val running = offline.copy(sessionStatus = SessionStatus.Running)
+
+        assertFalse(offline.composerEnabled)
+        assertTrue(ready.composerEnabled)
+        assertTrue(running.composerEnabled)
+        assertFalse(ready.copy(sessionStatus = SessionStatus.AuthFailed).composerEnabled)
+    }
+
+    @Test
     fun switchingSessionsClearsTheSessionScopedSurface() {
         val busy = ChatUiState(
             connectionBanner = "Reconnecting",
+            sessionStatus = SessionStatus.Offline,
             selectedSession = sessionRow(SessionState.Running),
             sessions = listOf(sessionRow(SessionState.Running)),
             recentSessions = listOf(sessionRow(SessionState.Running)),
@@ -77,6 +94,7 @@ class ChatUiStateTest {
         val reset = busy.resetSessionScopedState()
 
         assertNull(reset.selectedSession)
+        assertEquals(SessionStatus.Ready, reset.sessionStatus)
         assertNull(reset.contextUsage)
         assertEquals(emptyAcpTranscript, reset.transcript)
         assertEquals("", reset.composerText)

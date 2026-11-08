@@ -16,3 +16,7 @@ enum class SessionStatus {
     AuthFailed,
     Error,
 }
+
+/** True while the session can take a new prompt without waiting for a turn. */
+val SessionStatus.allowsPrompt: Boolean
+    get() = this == SessionStatus.Ready || this == SessionStatus.Running

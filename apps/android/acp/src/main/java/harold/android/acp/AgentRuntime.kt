@@ -91,7 +91,7 @@ class AgentRuntime @Inject constructor(
         cwd: String? = null,
     ): Result<AcpSession> = runCatching {
         val process = acquire(connectionId, agentId)
-        process.openSession(sessionId, cwd)
+        process.openSession(connectionId, sessionId, cwd)
     }
 
     suspend fun createSession(
@@ -100,7 +100,7 @@ class AgentRuntime @Inject constructor(
         cwd: String,
     ): Result<CreateSessionResponse> = runCatching {
         val process = acquire(connectionId, agentId)
-        process.sessionNew(cwd)
+        process.sessionNew(connectionId, cwd)
     }
 
     /**
@@ -125,7 +125,7 @@ class AgentRuntime @Inject constructor(
                     permits.withPermit {
                         row.id to runCatching {
                             val process = acquire(connectionId, row.id)
-                            process.sessionList(cwd)
+                            process.sessionList(connectionId, cwd)
                         }.getOrNull()
                     }
                 }
@@ -155,7 +155,7 @@ class AgentRuntime @Inject constructor(
         sessionId: String,
     ): Result<Unit> = runCatching {
         val process = acquire(connectionId, agentId)
-        process.sessions.remove(sessionId)?.close()
+        process.removeSession(connectionId, sessionId)?.close()
         process.sessionDelete(sessionId)
         catalog.remove(connectionId, agentId, sessionId)
     }
@@ -192,10 +192,24 @@ class AgentRuntime @Inject constructor(
         agentId: AgentId,
         sessionId: String,
     ): AcpSession? {
-        val process = liveProcesses().firstOrNull { candidate ->
-            candidate.connectionId == connectionId && candidate.agentId == agentId
-        } ?: return null
-        return process.sessions[sessionId]?.takeIf { session -> !session.isClosed }
+        val poolKey = connections[connectionId]
+        if (poolKey != null) {
+            val process = processes[processKey(poolKey, agentId)] ?: return null
+            if (process.isDead) {
+                return null
+            }
+            return process.findSession(connectionId, sessionId)
+        }
+        // The row may have been remembered by an earlier acquire; fall back
+        // to the session's own connection id instead of the process owner.
+        return liveProcesses()
+            .flatMap { process -> process.sessions.values.toList() }
+            .firstOrNull { session ->
+                session.connectionId == connectionId &&
+                    session.agentId == agentId &&
+                    session.sessionId == sessionId &&
+                    !session.isClosed
+            }
     }
 
     fun findSessionByRequest(requestId: String): AcpSession? =
@@ -204,6 +218,9 @@ class AgentRuntime @Inject constructor(
             .firstOrNull { session ->
                 session.hasPermission(requestId) || session.hasElicitation(requestId)
             }
+
+    /** The host identity key last used by a saved connection, if any. */
+    fun rememberedPoolKey(connectionId: String): String? = connections[connectionId]
 
     /**
      * Closes every process for the host identity behind a saved connection.

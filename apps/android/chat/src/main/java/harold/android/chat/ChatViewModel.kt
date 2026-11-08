@@ -231,6 +231,12 @@ class ChatViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            sessionOwner.sessionStatus.collect { status ->
+                _uiState.update { current -> current.copy(sessionStatus = status) }
+            }
+        }
+
+        viewModelScope.launch {
             sessionOwner.snapshot.collect(::applyLiveSnapshot)
         }
 

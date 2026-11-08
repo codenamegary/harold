@@ -16,7 +16,7 @@ interface SessionCommandApi {
         agentId: AgentId,
         sessionId: String,
         body: PromptRequestBody,
-    ): Result<Unit>
+    ): Result<PromptResult>
 
     suspend fun cancel(
         connectionId: String,
