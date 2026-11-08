@@ -8,12 +8,11 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "oxlint --deny-warnings",
-    "check": "bun run lint && bun test scripts",
+    "check": "bun run lint && bun run format:check && bun test scripts",
     "prepare": "husky"
   },
   "devDependencies": {
     "husky": "^9.1.7",
-    "lint-staged": "^17.5.1",
     "oxfmt": "^0.68.0",
     "oxlint": "^1.87.0",
     "oxlint-tsgolint": "^7.0.2003"

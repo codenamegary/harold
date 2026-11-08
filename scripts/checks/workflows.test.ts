@@ -133,10 +133,11 @@ describe("ci.yml", () => {
     }
   })
 
-  test("check lints and runs the script checks", async () => {
+  test("check lints, format-checks, and runs the script checks", async () => {
     const check = (await loadCi()).jobs?.check
     const runs = (check?.steps ?? []).map((step) => step.run ?? "").join("\n")
     expect(runs).toContain("bun run lint")
+    expect(runs).toContain("bun run format:check")
     expect(runs).toContain("bun test scripts")
   })
 

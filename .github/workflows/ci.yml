@@ -75,9 +75,10 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Lint and script checks
+      - name: Lint, format, and script checks
         run: |
           bun run lint
+          bun run format:check
           bun test scripts
 
   android:

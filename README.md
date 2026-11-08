@@ -37,7 +37,7 @@ Harold installs nothing on the host. It runs your agent CLI over an SSH exec cha
 
 ```sh
 bun install    # repo tooling (oxlint, scripts)
-bun run check  # lint + script tests
+bun run check  # lint, format check, and script tests
 ```
 
 The Android build and the SSH integration test are documented in
@@ -45,4 +45,4 @@ The Android build and the SSH integration test are documented in
 
 ## Architecture
 
-See [docs/architecture.md](docs/architecture.md): the SSH session flow, the `~/.harold/` state layout, agent settings, and how to run the integration test without touching a real host.
+See [apps/android/README.md](apps/android/README.md#the-ssh-transport-end-to-end): the SSH session flow, the `~/.harold/` state layout, agent settings, and how to run the integration test without touching a real host.
