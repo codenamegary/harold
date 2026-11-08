@@ -80,9 +80,12 @@ class AgentRuntimeTest {
             val permissionsB = CompletableDeferred<SessionStreamServerMessage.PermissionRequest>()
             val completeA = CompletableDeferred<Unit>()
             val completeB = CompletableDeferred<Unit>()
+            val subscribedA = CompletableDeferred<Unit>()
+            val subscribedB = CompletableDeferred<Unit>()
             val collectorA = launch {
                 sessionA.attach().events.collect { message ->
                     when (message) {
+                        is SessionStreamServerMessage.Subscribed -> subscribedA.complete(Unit)
                         is SessionStreamServerMessage.PermissionRequest ->
                             permissionsA.complete(message)
                         is SessionStreamServerMessage.PromptComplete -> completeA.complete(Unit)
@@ -93,12 +96,17 @@ class AgentRuntimeTest {
             val collectorB = launch {
                 sessionB.attach().events.collect { message ->
                     when (message) {
+                        is SessionStreamServerMessage.Subscribed -> subscribedB.complete(Unit)
                         is SessionStreamServerMessage.PermissionRequest ->
                             permissionsB.complete(message)
                         is SessionStreamServerMessage.PromptComplete -> completeB.complete(Unit)
                         else -> Unit
                     }
                 }
+            }
+            withTimeout(10_000) {
+                subscribedA.await()
+                subscribedB.await()
             }
 
             assertEquals(
@@ -255,17 +263,25 @@ class AgentRuntimeTest {
     fun listAndDeleteReuseTheProcess() = runBlocking {
         withRuntime { runtime, launcher ->
             val created = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/list").getOrThrow()
+            val sibling = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/list").getOrThrow()
+            assertEquals(1, launcher.launchCount)
 
             val listed = runtime.listSessions(FIRST_ROW).getOrThrow()
             assertTrue(listed.any { session -> session.sessionId == created.sessionId })
+            assertTrue(listed.any { session -> session.sessionId == sibling.sessionId })
 
             runtime.deleteSession(FIRST_ROW, AGENT_ID, created.sessionId).getOrThrow()
             assertEquals(1, launcher.launchCount)
             assertEquals(1, launcher.agents.single().sessionLists.get())
             assertEquals(1, launcher.agents.single().sessionDeletes.get())
+
+            // Delete removes only the targeted session; the warm process and
+            // its sibling session keep serving the next list.
             val after = runtime.listSessions(FIRST_ROW).getOrThrow()
             assertFalse(after.any { session -> session.sessionId == created.sessionId })
+            assertTrue(after.any { session -> session.sessionId == sibling.sessionId })
             assertEquals(1, launcher.launchCount)
+            assertEquals(2, launcher.agents.single().sessionLists.get())
         }
     }
 
