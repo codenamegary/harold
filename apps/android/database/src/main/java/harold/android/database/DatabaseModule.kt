@@ -10,9 +10,12 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import harold.android.database.session.AgentDao
+import harold.android.database.session.AgentRepository
+import harold.android.database.session.DefaultAgentRepository
 import harold.android.database.session.DefaultSessionRepository
-import harold.android.database.session.SessionDao
+import harold.android.database.session.DefaultSessionWorktreePathStore
 import harold.android.database.session.SessionRepository
+import harold.android.database.session.SessionWorktreePathDao
 import harold.android.database.session.SessionWorktreePathStore
 import harold.android.database.workspace.DefaultWorkspaceRepository
 import harold.android.database.workspace.WorkspaceDao
@@ -28,8 +31,12 @@ abstract class DatabaseModule {
 
     @Binds
     @Singleton
+    abstract fun agentRepository(impl: DefaultAgentRepository): AgentRepository
+
+    @Binds
+    @Singleton
     abstract fun sessionWorktreePathStore(
-        impl: DefaultSessionRepository,
+        impl: DefaultSessionWorktreePathStore,
     ): SessionWorktreePathStore
 
     @Binds
@@ -53,7 +60,8 @@ abstract class DatabaseModule {
         fun workspaceDao(database: HaroldDatabase): WorkspaceDao = database.workspaceDao()
 
         @Provides
-        fun sessionDao(database: HaroldDatabase): SessionDao = database.sessionDao()
+        fun worktreePathDao(database: HaroldDatabase): SessionWorktreePathDao =
+            database.sessionWorktreePathDao()
 
         @Provides
         fun agentDao(database: HaroldDatabase): AgentDao = database.agentDao()
@@ -63,12 +71,12 @@ abstract class DatabaseModule {
         fun localCacheCleaner(
             database: HaroldDatabase,
             workspaceDao: WorkspaceDao,
-            sessionDao: SessionDao,
+            worktreePathDao: SessionWorktreePathDao,
             agentDao: AgentDao,
         ): LocalCacheCleaner = RoomLocalCacheCleaner(
             database = database,
             workspaceDao = workspaceDao,
-            sessionDao = sessionDao,
+            worktreePathDao = worktreePathDao,
             agentDao = agentDao,
         )
     }
@@ -77,13 +85,13 @@ abstract class DatabaseModule {
 class RoomLocalCacheCleaner(
     private val database: HaroldDatabase,
     private val workspaceDao: WorkspaceDao,
-    private val sessionDao: SessionDao,
+    private val worktreePathDao: SessionWorktreePathDao,
     private val agentDao: AgentDao,
 ) : LocalCacheCleaner {
     override suspend fun deleteByOrigin(connectionId: String) {
         database.withTransaction {
             workspaceDao.deleteByOrigin(connectionId)
-            sessionDao.deleteByOrigin(connectionId)
+            worktreePathDao.deleteByOrigin(connectionId)
             agentDao.deleteByOrigin(connectionId)
         }
     }

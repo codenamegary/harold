@@ -35,6 +35,8 @@ import kotlinx.serialization.json.put
 class AgentProcess internal constructor(
     val connectionId: String,
     val agentId: AgentId,
+    /** SSH pool identity the process is bound to. */
+    val poolKey: String,
     /** Runtime map key: pool key plus agent id. */
     val key: String,
     private val channel: AgentProcessChannel,

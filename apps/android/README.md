@@ -109,14 +109,28 @@ The per-connection Agents screen manages `agents.json`:
   `initialize` response of the active session. Nothing is persisted: a
   session is text-only until its handshake completes.
 
-## Offline cache
+## Session catalog and caches
 
-Room keeps the last snapshot of workspaces, sessions, and agents. Each row is
-keyed by connection id, so several connections can share the database without
-colliding. The database, DAOs, and repositories live in the shared
-`:database` module, which `:chat` and `:workspaces` depend on. View models
-collect the repository flows, then call `refresh` to read the live state from
-the host over SSH. Removing a connection deletes every cached row for it.
+The agent owns session history. The app keeps one in-memory session snapshot
+per `(connection, agent)`, fed by the live ACP processes:
+
+- `initialize` starts with no rows.
+- `session/list` replaces that agent's snapshot.
+- `session/new` adds a row.
+- `session/update` patches its title and timestamp.
+- `session/delete` removes a row.
+- Process death removes only that agent's rows for the connections that
+  shared the process.
+
+The Sessions and Chat screens compose those live snapshots with the workspace
+and agent caches. On a cold start the list is empty until the first
+`session/list` answers, and each agent's answer appears independently. A
+remembered session id is only restored after it appears in the live snapshot.
+
+Room keeps the workspace and agent caches, plus a small table for the
+phone-local worktree path chosen for a session. The worktree path is keyed by
+connection, agent, and session because ACP knows nothing about worktrees.
+Removing a connection deletes every cached row for it.
 
 ## Debug and release builds
 

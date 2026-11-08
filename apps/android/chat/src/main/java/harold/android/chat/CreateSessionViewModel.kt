@@ -9,8 +9,8 @@ import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.WorkspaceState
 import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SavedConnection
+import harold.android.database.session.AgentRepository
 import harold.android.database.session.CachedAgent
-import harold.android.database.session.SessionRepository
 import harold.android.database.workspace.CachedWorkspace
 import harold.android.database.workspace.WorkspaceRepository
 import harold.android.navigation.CreatedWorkspaceResult
@@ -32,7 +32,7 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class CreateSessionViewModel @Inject constructor(
     private val connectionGateway: ConnectionGateway,
-    private val sessionRepository: SessionRepository,
+    private val agentRepository: AgentRepository,
     private val workspaceRepository: WorkspaceRepository,
     private val userRepository: UserRepository,
     private val sessionCommands: SessionCommands,
@@ -127,7 +127,7 @@ class CreateSessionViewModel @Inject constructor(
         // Config options only exist once the agent has a session, so create it
         // on confirm for the selectors to render before the first prompt.
         viewModelScope.launch {
-            val result = sessionRepository.createSession(
+            val result = userRepository.createSession(
                 connectionId = origin,
                 body = CreateSessionBody(
                     agentId = agentId,
@@ -286,7 +286,7 @@ class CreateSessionViewModel @Inject constructor(
         val origin = workspace.connectionId.ifEmpty { return }
         observeAgents(origin)
         viewModelScope.launch {
-            sessionRepository.refreshAgents(origin).onFailure { error ->
+            agentRepository.refreshAgents(origin).onFailure { error ->
                 if (agentsOrigin == origin && _uiState.value.agents.isEmpty()) {
                     _uiState.update { current ->
                         current.copy(
@@ -308,7 +308,7 @@ class CreateSessionViewModel @Inject constructor(
         agentsJob?.cancel()
         agentsOrigin = connectionId
         agentsJob = viewModelScope.launch {
-            sessionRepository.observeAgents(connectionId).collect { agents ->
+            agentRepository.observeAgents(connectionId).collect { agents ->
                 if (agentsOrigin == connectionId) {
                     applyAgents(agents)
                 }

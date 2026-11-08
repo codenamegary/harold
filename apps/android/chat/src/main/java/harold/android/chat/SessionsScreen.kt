@@ -201,6 +201,30 @@ fun SessionsListContent(
             )
         }
 
+        uiState.agents
+            .filter { agent -> agent.loading || agent.error != null }
+            .forEach { agent ->
+                val label = listOf(agent.connectionName, agent.agentId)
+                    .filter { part -> part.isNotEmpty() }
+                    .joinToString(" · ")
+                Text(
+                    text = if (agent.error != null) {
+                        "$label: ${agent.error}"
+                    } else {
+                        "Refreshing $label…"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (agent.error != null) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.testTag(
+                        "sessions_agent_status_${agent.connectionId}_${agent.agentId}",
+                    ),
+                )
+            }
+
         when {
             uiState.sessions.isEmpty() && uiState.loading -> {
                 LoadingSkeletonList(

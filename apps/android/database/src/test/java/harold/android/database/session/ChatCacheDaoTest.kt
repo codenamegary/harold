@@ -21,7 +21,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [30])
 class ChatCacheDaoTest {
     private lateinit var database: TestChatDatabase
-    private lateinit var sessionDao: SessionDao
+    private lateinit var worktreePathDao: SessionWorktreePathDao
     private lateinit var agentDao: AgentDao
 
     @Before
@@ -30,7 +30,7 @@ class ChatCacheDaoTest {
             RuntimeEnvironment.getApplication(),
             TestChatDatabase::class.java,
         ).allowMainThreadQueries().build()
-        sessionDao = database.sessionDao()
+        worktreePathDao = database.sessionWorktreePathDao()
         agentDao = database.agentDao()
     }
 
@@ -40,95 +40,57 @@ class ChatCacheDaoTest {
     }
 
     @Test
-    fun sessionsAreKeptApartByOriginAndAgent() = runTest {
-        sessionDao.upsertAll(
-            listOf(
-                session(origin = "http://laptop:3847", agentId = "cursor", sessionId = "sess_01", title = "laptop"),
-                session(origin = "http://desktop:3847", agentId = "cursor", sessionId = "sess_01", title = "desktop"),
-                session(origin = "http://laptop:3847", agentId = "claude", sessionId = "sess_01", title = "claude"),
-            ),
+    fun worktreePathsAreKeptApartByOriginAndAgent() = runTest {
+        worktreePathDao.upsert(
+            worktreePath(origin = "http://laptop:3847", agentId = "cursor", sessionId = "sess_01", path = "/a"),
+        )
+        worktreePathDao.upsert(
+            worktreePath(origin = "http://desktop:3847", agentId = "cursor", sessionId = "sess_01", path = "/b"),
+        )
+        worktreePathDao.upsert(
+            worktreePath(origin = "http://laptop:3847", agentId = "claude", sessionId = "sess_01", path = "/c"),
         )
 
-        assertEquals(3, sessionDao.observeAll().first().size)
+        assertEquals(3, worktreePathDao.observeAll().first().size)
         assertEquals(
-            listOf("laptop"),
-            sessionDao.observeByOrigin("http://laptop:3847")
+            listOf("/a"),
+            worktreePathDao.observeAll()
                 .first()
-                .filter { session -> session.agentId == "cursor" }
-                .map { session -> session.title },
+                .filter { row -> row.connectionId == "http://laptop:3847" && row.agentId == "cursor" }
+                .map { row -> row.worktreePath },
         )
     }
 
     @Test
-    fun replaceByOriginDropsRowsTheServerNoLongerLists() = runTest {
-        sessionDao.upsertAll(
-            listOf(
-                session(sessionId = "sess_old", title = "old"),
-                session(sessionId = "sess_keep", title = "keep"),
-            ),
-        )
+    fun worktreePathIsUpdatedAndClearedForOneSession() = runTest {
+        worktreePathDao.upsert(worktreePath(sessionId = "sess_01", path = "/old"))
+        worktreePathDao.upsert(worktreePath(sessionId = "sess_02", path = "/keep"))
 
-        sessionDao.replaceByOrigin(
-            connectionId = ORIGIN,
-            sessions = listOf(session(sessionId = "sess_new", title = "new")),
-        )
+        worktreePathDao.upsert(worktreePath(sessionId = "sess_01", path = "/new"))
 
         assertEquals(
-            listOf("sess_new"),
-            sessionDao.observeAll().first().map { session -> session.sessionId },
-        )
-    }
-
-    @Test
-    fun deleteRemovesOneSessionAndLeavesTheRest() = runTest {
-        sessionDao.upsertAll(
-            listOf(
-                session(sessionId = "sess_01", title = "one"),
-                session(sessionId = "sess_02", title = "two"),
-            ),
-        )
-
-        sessionDao.delete(ORIGIN, "cursor", "sess_01")
-
-        assertEquals(
-            listOf("sess_02"),
-            sessionDao.observeAll().first().map { session -> session.sessionId },
-        )
-    }
-
-    @Test
-    fun updateWorktreePathIsTargetedAndSkipsUnchangedRows() = runTest {
-        sessionDao.upsertAll(
-            listOf(
-                session(sessionId = "sess_01"),
-                session(sessionId = "sess_02"),
-            ),
-        )
-
-        assertEquals(
-            1,
-            sessionDao.updateWorktreePath(ORIGIN, "cursor", "sess_01", "/repo/.worktrees/feat-x"),
-        )
-
-        val rows = sessionDao.observeAll().first()
-        assertEquals(
-            "/repo/.worktrees/feat-x",
-            rows.first { row -> row.sessionId == "sess_01" }.worktreePath,
-        )
-        assertNull(rows.first { row -> row.sessionId == "sess_02" }.worktreePath)
-
-        assertEquals(
-            0,
-            sessionDao.updateWorktreePath(ORIGIN, "cursor", "sess_01", "/repo/.worktrees/feat-x"),
-        )
-        assertEquals(
-            1,
-            sessionDao.updateWorktreePath(ORIGIN, "cursor", "sess_01", null),
-        )
-        assertNull(
-            sessionDao.observeAll().first()
+            "/new",
+            worktreePathDao.observeAll().first()
                 .first { row -> row.sessionId == "sess_01" }
                 .worktreePath,
+        )
+
+        worktreePathDao.delete(ORIGIN, "cursor", "sess_01")
+        worktreePathDao.delete(ORIGIN, "cursor", "sess_02")
+
+        assertEquals(0, worktreePathDao.observeAll().first().size)
+    }
+
+    @Test
+    fun deleteByOriginClearsOnlyThatConnection() = runTest {
+        worktreePathDao.upsert(worktreePath(origin = "http://laptop:3847"))
+        worktreePathDao.upsert(worktreePath(origin = "http://desktop:3847"))
+
+        worktreePathDao.deleteByOrigin("http://laptop:3847")
+
+        assertEquals(
+            listOf("http://desktop:3847"),
+            worktreePathDao.observeAll().first().map { row -> row.connectionId },
         )
     }
 
@@ -158,12 +120,8 @@ class ChatCacheDaoTest {
 
     @Test
     fun deleteByOriginClearsOnlyThatHarold() = runTest {
-        sessionDao.upsertAll(
-            listOf(
-                session(origin = "http://laptop:3847", title = "laptop"),
-                session(origin = "http://desktop:3847", title = "desktop"),
-            ),
-        )
+        worktreePathDao.upsert(worktreePath(origin = "http://laptop:3847"))
+        worktreePathDao.upsert(worktreePath(origin = "http://desktop:3847"))
         agentDao.upsertAll(
             listOf(
                 agent(agentId = "cursor", connectionId = "http://laptop:3847"),
@@ -171,12 +129,12 @@ class ChatCacheDaoTest {
             ),
         )
 
-        sessionDao.deleteByOrigin("http://laptop:3847")
+        worktreePathDao.deleteByOrigin("http://laptop:3847")
         agentDao.deleteByOrigin("http://laptop:3847")
 
         assertEquals(
             listOf("http://desktop:3847"),
-            sessionDao.observeAll().first().map { session -> session.connectionId },
+            worktreePathDao.observeAll().first().map { row -> row.connectionId },
         )
         assertEquals(
             listOf("http://desktop:3847"),
@@ -184,21 +142,21 @@ class ChatCacheDaoTest {
         )
     }
 
-    private fun session(
+    @Test
+    fun missingWorktreePathReadsAsNull() = runTest {
+        assertNull(worktreePathDao.observeAll().first().firstOrNull())
+    }
+
+    private fun worktreePath(
         origin: String = ORIGIN,
         agentId: String = "cursor",
         sessionId: String = "sess_01",
-        title: String = "Alpha",
-    ) = SessionEntity(
+        path: String = "/repo/.worktrees/feat-x",
+    ) = SessionWorktreePathEntity(
         connectionId = origin,
         agentId = agentId,
         sessionId = sessionId,
-        cwd = "/tmp/harold",
-        title = title,
-        updatedAt = "2026-08-01T00:00:00.000Z",
-        workspaceId = "ws_01",
-        workspaceName = "harold",
-        agentLabel = agentId,
+        worktreePath = path,
     )
 
     private fun agent(
@@ -222,12 +180,12 @@ class ChatCacheDaoTest {
 }
 
 @Database(
-    entities = [SessionEntity::class, AgentEntity::class, WorkspaceEntity::class],
+    entities = [SessionWorktreePathEntity::class, AgentEntity::class, WorkspaceEntity::class],
     version = 1,
     exportSchema = false,
 )
 internal abstract class TestChatDatabase : RoomDatabase() {
-    abstract fun sessionDao(): SessionDao
+    abstract fun sessionWorktreePathDao(): SessionWorktreePathDao
 
     abstract fun agentDao(): AgentDao
 

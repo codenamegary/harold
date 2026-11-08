@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 abstract class AgentDao {
+    @Query("SELECT * FROM agents ORDER BY connectionId, position")
+    abstract fun observeAll(): Flow<List<AgentEntity>>
+
     @Query("SELECT * FROM agents WHERE connectionId = :connectionId ORDER BY position")
     abstract fun observeByOrigin(connectionId: String): Flow<List<AgentEntity>>
 

@@ -1,8 +1,6 @@
 package harold.android.database.session
 
 import androidx.room.Room
-import harold.android.contracts.AgentAuth
-import harold.android.contracts.AgentAuthSummary
 import harold.android.contracts.AgentId
 import harold.android.contracts.AgentSettings
 import harold.android.contracts.AgentSettingsCollection
@@ -18,7 +16,13 @@ import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceState
 import harold.android.database.workspace.DefaultWorkspaceRepository
 import harold.android.database.workspace.WorkspaceRepository
+import harold.android.network.AgentSessionSnapshot
+import harold.android.network.CatalogSession
+import harold.android.network.SessionCatalogReader
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -36,6 +40,9 @@ class DefaultSessionRepositoryTest {
     private lateinit var database: TestChatDatabase
     private lateinit var api: ChatFakeAgentApi
     private lateinit var workspaceRepository: WorkspaceRepository
+    private lateinit var agentRepository: AgentRepository
+    private lateinit var catalog: FakeSessionCatalog
+    private lateinit var worktreePaths: FakeWorktreePathStore
     private lateinit var repository: DefaultSessionRepository
 
     @Before
@@ -49,12 +56,18 @@ class DefaultSessionRepositoryTest {
             agentApi = api,
             dao = database.workspaceDao(),
         )
+        agentRepository = DefaultAgentRepository(
+            agentSettingsApi = api,
+            agentDao = database.agentDao(),
+        )
+        catalog = FakeSessionCatalog()
+        worktreePaths = FakeWorktreePathStore()
         repository = DefaultSessionRepository(
             agentApi = api,
-            agentSettingsApi = api,
+            agentRepository = agentRepository,
             workspaceRepository = workspaceRepository,
-            sessionDao = database.sessionDao(),
-            agentDao = database.agentDao(),
+            catalog = catalog,
+            worktreePaths = worktreePaths,
         )
     }
 
@@ -64,16 +77,17 @@ class DefaultSessionRepositoryTest {
     }
 
     @Test
-    fun refreshCachesSessionsWithWorkspaceAndAgentLabels() = runTest {
-        api.sessions = Result.success(
-            SessionCollection(
-                listOf(session("sess_01", "Alpha").copy(worktreePath = "/repo/.worktrees/a")),
-            ),
+    fun liveSnapshotIsComposedWithWorkspaceAgentAndWorktree() = runTest {
+        catalog.replace(
+            connectionId = ORIGIN,
+            agentId = "cursor",
+            sessions = listOf(catalogSession("sess_01", "Alpha")),
         )
+        worktreePaths.seed(ORIGIN, "cursor", "sess_01", "/repo/.worktrees/a")
+        api.sessions = Result.success(SessionCollection(listOf(session("sess_01", "Alpha"))))
 
-        val result = repository.refresh(ORIGIN)
+        assertTrue(repository.refresh(ORIGIN).isSuccess)
 
-        assertTrue(result.isSuccess)
         val cached = repository.observeSessions(ORIGIN).first().single()
         assertEquals("harold", cached.workspaceName)
         assertEquals("ws_01", cached.workspaceId)
@@ -82,9 +96,54 @@ class DefaultSessionRepositoryTest {
     }
 
     @Test
-    fun updateWorktreePathTargetsTheCachedRow() = runTest {
+    fun refreshFailureLeavesTheLiveSnapshotAlone() = runTest {
+        catalog.replace(
+            connectionId = ORIGIN,
+            agentId = "cursor",
+            sessions = listOf(catalogSession("sess_01", "Live")),
+        )
+        api.sessions = Result.failure(IllegalStateException("offline"))
+
+        val result = repository.refresh(ORIGIN)
+
+        assertTrue(result.isFailure)
+        assertEquals(
+            listOf("Live"),
+            repository.observeSessions(ORIGIN).first().map { cached -> cached.session.title },
+        )
+    }
+
+    @Test
+    fun refreshReturnsTheLiveListsAndUpdatesTheCaches() = runTest {
+        catalog.replace(
+            connectionId = ORIGIN,
+            agentId = "cursor",
+            sessions = listOf(catalogSession("sess_01", "Alpha")),
+        )
         api.sessions = Result.success(SessionCollection(listOf(session("sess_01", "Alpha"))))
-        repository.refresh(ORIGIN)
+
+        val result = repository.refresh(ORIGIN)
+
+        val live = result.getOrThrow()
+        assertEquals(listOf("cursor"), live.agents.map { agent -> agent.id })
+        assertEquals(listOf("harold"), live.workspaces.map { workspace -> workspace.name })
+        assertEquals(
+            listOf("harold"),
+            workspaceRepository.observe(ORIGIN).first().map { cached -> cached.workspace.name },
+        )
+        assertEquals(
+            listOf("cursor"),
+            agentRepository.observeAgents(ORIGIN).first().map { cached -> cached.agentId },
+        )
+    }
+
+    @Test
+    fun updateWorktreePathWritesTheSeparateStore() = runTest {
+        catalog.replace(
+            connectionId = ORIGIN,
+            agentId = "cursor",
+            sessions = listOf(catalogSession("sess_01", "Alpha")),
+        )
 
         repository.updateWorktreePath(ORIGIN, "cursor", "sess_01", "/repo/.worktrees/feat-x")
 
@@ -92,123 +151,60 @@ class DefaultSessionRepositoryTest {
             "/repo/.worktrees/feat-x",
             repository.observeSessions(ORIGIN).first().single().session.worktreePath,
         )
-    }
-
-    @Test
-    fun refreshKeepsThePhoneLocalWorktreePathWhenAcpDoesNotReportOne() = runTest {
-        api.sessions = Result.success(SessionCollection(listOf(session("sess_01", "Alpha"))))
-        repository.refresh(ORIGIN)
-        repository.saveWorktreePath(ORIGIN, "cursor", "sess_01", "/repo/.worktrees/feat-x")
-
-        // ACP session/list never carries worktrees, so a refresh must not
-        // wipe the selection the phone remembered.
-        repository.refresh(ORIGIN)
-
         assertEquals(
-            "/repo/.worktrees/feat-x",
-            repository.observeSessions(ORIGIN).first().single().session.worktreePath,
+            listOf("/repo/.worktrees/feat-x"),
+            worktreePaths.saved,
         )
     }
 
     @Test
-    fun refreshReturnsTheLiveListsAndUpdatesTheWorkspaceCache() = runTest {
-        api.sessions = Result.success(SessionCollection(listOf(session("sess_01", "Alpha"))))
-
-        val result = repository.refresh(ORIGIN)
-
-        val catalog = result.getOrThrow()
-        assertEquals(listOf("cursor"), catalog.agents.map { agent -> agent.id })
-        assertEquals(listOf("harold"), catalog.workspaces.map { workspace -> workspace.name })
-        assertEquals(
-            listOf("harold"),
-            workspaceRepository.observe(ORIGIN).first().map { cached -> cached.workspace.name },
+    fun createAndDeleteUseTheLiveAgentApi() = runTest {
+        catalog.replace(
+            connectionId = ORIGIN,
+            agentId = "cursor",
+            sessions = listOf(catalogSession("sess_01", "Alpha")),
         )
-    }
 
-    @Test
-    fun refreshFailureKeepsThePreviousCache() = runTest {
-        api.sessions = Result.success(SessionCollection(listOf(session("sess_01", "cached"))))
-        repository.refresh(ORIGIN)
-        api.sessions = Result.failure(IllegalStateException("offline"))
-
-        val result = repository.refresh(ORIGIN)
-
-        assertTrue(result.isFailure)
-        assertEquals(
-            listOf("cached"),
-            repository.observeSessions(ORIGIN).first().map { cached -> cached.session.title },
-        )
-    }
-
-    @Test
-    fun refreshAgentsCachesTheAgentList() = runTest {
-        val result = repository.refreshAgents(ORIGIN)
-
-        assertTrue(result.isSuccess)
-        assertEquals(
-            listOf("cursor"),
-            repository.observeAgents(ORIGIN).first().map { cached -> cached.agentId },
-        )
-    }
-
-    @Test
-    fun createCachesTheSessionOnlyAfterTheServerAcceptsIt() = runTest {
-        repository.refreshAgents(ORIGIN)
-
-        val result = repository.createSession(
+        val created = repository.createSession(
             connectionId = ORIGIN,
             body = CreateSessionBody(agentId = "cursor", cwd = "/tmp/harold"),
         )
 
-        assertTrue(result.isSuccess)
+        assertTrue(created.isSuccess)
+        assertEquals("sess_new", created.getOrThrow().sessionId)
+        assertEquals(listOf("/tmp/harold"), api.createdCwds)
+
+        assertTrue(repository.deleteSession(ORIGIN, "cursor", "sess_01").isSuccess)
+        assertEquals(listOf("sess_01"), api.deletedSessions)
+    }
+
+    @Test
+    fun worktreePathSurvivesAFreshAgentList() = runTest {
+        catalog.replace(
+            connectionId = ORIGIN,
+            agentId = "cursor",
+            sessions = listOf(catalogSession("sess_01", "Alpha")),
+        )
+        worktreePaths.seed(ORIGIN, "cursor", "sess_01", "/repo/.worktrees/feat-x")
+
+        catalog.replace(
+            connectionId = ORIGIN,
+            agentId = "cursor",
+            sessions = listOf(catalogSession("sess_01", "Renamed")),
+        )
+
         val cached = repository.observeSessions(ORIGIN).first().single()
-        assertEquals("sess_new", cached.session.sessionId)
-        // Workspace labels arrive with the next list refresh; a create call has
-        // no workspace payload to read.
-        assertEquals("/tmp/harold", cached.workspaceName)
-        assertEquals("Cursor", cached.agentLabel)
+        assertEquals("Renamed", cached.session.title)
+        assertEquals("/repo/.worktrees/feat-x", cached.session.worktreePath)
     }
 
-    @Test
-    fun createFailureDoesNotWriteToRoom() = runTest {
-        api.created = Result.failure(IllegalStateException("offline"))
-
-        val result = repository.createSession(
-            connectionId = ORIGIN,
-            body = CreateSessionBody(agentId = "cursor", cwd = "/tmp/harold"),
-        )
-
-        assertTrue(result.isFailure)
-        assertTrue(repository.observeSessions(ORIGIN).first().isEmpty())
-    }
-
-    @Test
-    fun deleteRemovesTheCachedSessionAfterTheServerAcceptsIt() = runTest {
-        api.sessions = Result.success(
-            SessionCollection(listOf(session("sess_01", "Alpha"), session("sess_02", "Beta"))),
-        )
-        repository.refresh(ORIGIN)
-
-        val result = repository.deleteSession(ORIGIN, "cursor", "sess_01")
-
-        assertTrue(result.isSuccess)
-        assertEquals(
-            listOf("sess_02"),
-            repository.observeSessions(ORIGIN).first().map { cached -> cached.session.sessionId },
-        )
-    }
-
-    @Test
-    fun deleteFailureKeepsTheCachedSession() = runTest {
-        api.sessions = Result.success(SessionCollection(listOf(session("sess_01", "Alpha"))))
-        repository.refresh(ORIGIN)
-        api.deleted = Result.failure(IllegalStateException("offline"))
-
-        val result = repository.deleteSession(ORIGIN, "cursor", "sess_01")
-
-        assertTrue(result.isFailure)
-        assertEquals(1, repository.observeSessions(ORIGIN).first().size)
-    }
+    private fun catalogSession(id: String, title: String) = CatalogSession(
+        agentId = "cursor",
+        sessionId = id,
+        cwd = "/tmp/harold",
+        title = title,
+        updatedAt = "2026-08-01T00:00:00.000Z",
+    )
 
     private fun session(
         id: String,
@@ -223,6 +219,84 @@ class DefaultSessionRepositoryTest {
 
     private companion object {
         const val ORIGIN = "http://127.0.0.1:8787"
+    }
+}
+
+private class FakeSessionCatalog : SessionCatalogReader {
+    private val snapshots = MutableStateFlow<List<AgentSessionSnapshot>>(emptyList())
+
+    override fun observeSnapshots(): Flow<List<AgentSessionSnapshot>> = snapshots
+
+    override fun observeSnapshots(connectionId: String): Flow<List<AgentSessionSnapshot>> =
+        snapshots.map { all -> all.filter { snapshot -> snapshot.connectionId == connectionId } }
+
+    override fun snapshots(): List<AgentSessionSnapshot> = snapshots.value
+
+    override fun sessions(connectionId: String): List<CatalogSession> =
+        snapshots.value.filter { snapshot -> snapshot.connectionId == connectionId }
+            .flatMap { snapshot -> snapshot.sessions }
+
+    override fun find(
+        connectionId: String,
+        agentId: AgentId,
+        sessionId: String,
+    ): CatalogSession? = sessions(connectionId)
+        .firstOrNull { session -> session.agentId == agentId && session.sessionId == sessionId }
+
+    override fun sessionDirectories(connectionId: String): List<String> =
+        sessions(connectionId).map { session -> session.cwd }.distinct()
+
+    fun replace(
+        connectionId: String,
+        agentId: AgentId,
+        sessions: List<CatalogSession>,
+    ) {
+        val others = snapshots.value.filterNot { snapshot ->
+            snapshot.connectionId == connectionId && snapshot.agentId == agentId
+        }
+        snapshots.value = others + AgentSessionSnapshot(
+            connectionId = connectionId,
+            agentId = agentId,
+            sessions = sessions,
+        )
+    }
+}
+
+private class FakeWorktreePathStore : SessionWorktreePathStore {
+    private val paths = MutableStateFlow<List<StoredWorktreePath>>(emptyList())
+    val saved = mutableListOf<String?>()
+
+    override fun observeWorktreePaths(): Flow<List<StoredWorktreePath>> = paths
+
+    override fun observeWorktreePaths(connectionId: String): Flow<List<StoredWorktreePath>> =
+        paths.map { all -> all.filter { path -> path.connectionId == connectionId } }
+
+    override suspend fun saveWorktreePath(
+        connectionId: String,
+        agentId: AgentId,
+        sessionId: String,
+        worktreePath: String?,
+    ): Result<Unit> {
+        saved += worktreePath
+        paths.value = paths.value.filterNot { path ->
+            path.connectionId == connectionId &&
+                path.agentId == agentId &&
+                path.sessionId == sessionId
+        } + listOfNotNull(
+            worktreePath?.let { value ->
+                StoredWorktreePath(connectionId, agentId, sessionId, value)
+            },
+        )
+        return Result.success(Unit)
+    }
+
+    fun seed(
+        connectionId: String,
+        agentId: AgentId,
+        sessionId: String,
+        worktreePath: String,
+    ) {
+        paths.value = paths.value + StoredWorktreePath(connectionId, agentId, sessionId, worktreePath)
     }
 }
 
@@ -269,6 +343,8 @@ private class ChatFakeAgentApi : harold.android.network.AcpAgentApi,
         ),
     )
     var deleted: Result<Unit> = Result.success(Unit)
+    val createdCwds = mutableListOf<String>()
+    val deletedSessions = mutableListOf<String>()
 
     override suspend fun listSessions(
         connectionId: String,
@@ -285,13 +361,19 @@ private class ChatFakeAgentApi : harold.android.network.AcpAgentApi,
     override suspend fun createSession(
         connectionId: String,
         body: CreateSessionBody,
-    ): Result<CreateSessionResponse> = created
+    ): Result<CreateSessionResponse> {
+        createdCwds += body.cwd
+        return created
+    }
 
     override suspend fun deleteSession(
         connectionId: String,
         agentId: AgentId,
         sessionId: String,
-    ): Result<Unit> = deleted
+    ): Result<Unit> {
+        deletedSessions += sessionId
+        return deleted
+    }
 
     override suspend fun listFilesystemDirectories(
         connectionId: String,

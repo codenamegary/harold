@@ -139,65 +139,94 @@ class AcpSessionListTest {
     }
 
     @Test
-    fun catalogKeepsSessionsForAgentsThatDidNotAnswer() {
+    fun catalogStartsWithNoRowsAndReplacesOnlyTheListedAgent() {
         val catalog = AcpSessionCatalog()
-        val opencode = session("opencode", "sess_1", "2026-11-01T00:00:00Z")
-        val amp = session("amp-acp", "sess_2", "2026-11-02T00:00:00Z")
-        catalog.replaceAll("conn", listOf(opencode, amp))
+        assertTrue(catalog.snapshots().isEmpty())
 
-        val merged = catalog.merge(
+        catalog.replaceAgent(
             connectionId = "conn",
-            sessions = listOf(opencode.copy(title = "renamed")),
-            refreshedAgentIds = setOf("opencode"),
-            attemptedAgentIds = setOf("opencode", "amp-acp"),
+            agentId = "opencode",
+            sessions = listOf(session("opencode", "sess_1", "2026-11-01T00:00:00Z")),
+        )
+        catalog.replaceAgent(
+            connectionId = "conn",
+            agentId = "amp-acp",
+            sessions = listOf(session("amp-acp", "sess_2", "2026-11-02T00:00:00Z")),
         )
 
-        assertEquals(2, merged.size)
+        catalog.replaceAgent(
+            connectionId = "conn",
+            agentId = "opencode",
+            sessions = listOf(session("opencode", "sess_1", "2026-11-01T00:00:00Z").copy(title = "renamed")),
+        )
+
+        assertEquals(2, catalog.snapshots().size)
         assertEquals("renamed", catalog.find("conn", "opencode", "sess_1")?.title)
-        assertEquals(amp, catalog.find("conn", "amp-acp", "sess_2"))
+        assertEquals("sess_2", catalog.find("conn", "amp-acp", "sess_2")?.sessionId)
     }
 
     @Test
     fun catalogDropsSessionsForAgentsThatAreNoLongerEnabled() {
         val catalog = AcpSessionCatalog()
-        val opencode = session("opencode", "sess_1", "2026-11-01T00:00:00Z")
-        val disabled = session("cursor", "sess_2", "2026-11-02T00:00:00Z")
-        catalog.replaceAll("conn", listOf(opencode, disabled))
-
-        catalog.merge(
+        catalog.replaceAgent(
             connectionId = "conn",
-            sessions = listOf(opencode),
-            refreshedAgentIds = setOf("opencode"),
-            attemptedAgentIds = setOf("opencode"),
+            agentId = "opencode",
+            sessions = listOf(session("opencode", "sess_1", "2026-11-01T00:00:00Z")),
+        )
+        catalog.replaceAgent(
+            connectionId = "conn",
+            agentId = "cursor",
+            sessions = listOf(session("cursor", "sess_2", "2026-11-02T00:00:00Z")),
         )
 
+        catalog.retainAgents("conn", setOf("opencode"))
+
         assertNull(catalog.find("conn", "cursor", "sess_2"))
+        assertEquals("sess_1", catalog.find("conn", "opencode", "sess_1")?.sessionId)
     }
 
     @Test
-    fun filteredCatalogRefreshKeepsOtherFolders() {
+    fun loadingAndFailureKeepThePreviousSnapshotRows() {
+        val catalog = AcpSessionCatalog()
+        catalog.replaceAgent(
+            connectionId = "conn",
+            agentId = "opencode",
+            sessions = listOf(session("opencode", "sess_1", "2026-11-01T00:00:00Z")),
+        )
+
+        catalog.markLoading("conn", listOf("opencode"))
+        assertEquals(true, catalog.snapshot("conn", "opencode")?.loading)
+        assertEquals(1, catalog.snapshot("conn", "opencode")?.sessions?.size)
+
+        catalog.markFailed("conn", "opencode", "offline")
+
+        assertEquals(false, catalog.snapshot("conn", "opencode")?.loading)
+        assertEquals("offline", catalog.snapshot("conn", "opencode")?.error)
+        assertEquals("sess_1", catalog.find("conn", "opencode", "sess_1")?.sessionId)
+    }
+
+    @Test
+    fun folderScopedRefreshKeepsSessionsInOtherFolders() {
         val catalog = AcpSessionCatalog()
         val inFolder = session("opencode", "sess_1", "2026-11-01T00:00:00Z")
         val elsewhere = session("opencode", "sess_2", "2026-11-02T00:00:00Z")
             .copy(cwd = "/other")
-        catalog.replaceAll("conn", listOf(inFolder, elsewhere))
+        catalog.replaceAgent("conn", "opencode", listOf(inFolder, elsewhere))
 
-        catalog.merge(
-            connectionId = "conn",
-            sessions = emptyList(),
-            refreshedAgentIds = setOf("opencode"),
-            cwd = "/repo",
-        )
+        catalog.replaceAgent("conn", "opencode", emptyList(), cwd = "/repo")
 
         assertNull(catalog.find("conn", "opencode", "sess_1"))
-        assertEquals(elsewhere, catalog.find("conn", "opencode", "sess_2"))
+        assertEquals("sess_2", catalog.find("conn", "opencode", "sess_2")?.sessionId)
     }
 
     @Test
     fun catalogUpdatesAndRemovesSessions() {
         val catalog = AcpSessionCatalog()
-        val opencode = session("opencode", "sess_1", "2026-11-01T00:00:00Z")
-        catalog.replaceAll("conn", listOf(opencode))
+        catalog.replaceAgent(
+            connectionId = "conn",
+            agentId = "opencode",
+            sessions = listOf(session("opencode", "sess_1", "2026-11-01T00:00:00Z")),
+        )
 
         catalog.updateInfo(
             connectionId = "conn",
@@ -213,6 +242,26 @@ class AcpSessionListTest {
         assertEquals("Named by the agent", catalog.find("conn", "opencode", "sess_1")?.title)
         catalog.remove("conn", "opencode", "sess_1")
         assertNull(catalog.find("conn", "opencode", "sess_1"))
+    }
+
+    @Test
+    fun removingAConnectionDropsAllItsSnapshots() {
+        val catalog = AcpSessionCatalog()
+        catalog.replaceAgent(
+            connectionId = "conn",
+            agentId = "opencode",
+            sessions = listOf(session("opencode", "sess_1", "2026-11-01T00:00:00Z")),
+        )
+        catalog.replaceAgent(
+            connectionId = "other",
+            agentId = "opencode",
+            sessions = listOf(session("opencode", "sess_2", "2026-11-01T00:00:00Z")),
+        )
+
+        catalog.removeConnection("conn")
+
+        assertNull(catalog.find("conn", "opencode", "sess_1"))
+        assertEquals("sess_2", catalog.find("other", "opencode", "sess_2")?.sessionId)
     }
 
     @Test

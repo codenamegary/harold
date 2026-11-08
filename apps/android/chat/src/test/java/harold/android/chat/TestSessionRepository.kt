@@ -3,46 +3,60 @@ package harold.android.chat
 import harold.android.contracts.AgentId
 import harold.android.contracts.CreateSessionBody
 import harold.android.contracts.CreateSessionResponse
-import harold.android.database.session.CachedAgent
-import harold.android.database.session.CachedSession
+import harold.android.database.session.SessionListItem
 import harold.android.database.session.SessionCatalog
 import harold.android.database.session.SessionRepository
+import harold.android.network.AgentSessionSnapshot
+import harold.android.network.CatalogSession
 import harold.android.user.UserRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 
 /**
- * Test double that exercises the session cache contract without Room. It reads
- * from the same [UserRepository] fake the view models used before caching.
+ * Test double for the live session catalog facade. It reads from the same
+ * [UserRepository] fake the view models used before the ACP runtime existed,
+ * and keeps all session state in memory.
  */
 class TestSessionRepository(
     private val network: UserRepository,
 ) : SessionRepository {
-    private val sessions = MutableStateFlow<List<CachedSession>>(emptyList())
-    private val agents = MutableStateFlow<Map<String, List<CachedAgent>>>(emptyMap())
+    private val sessions = MutableStateFlow<List<SessionListItem>>(emptyList())
+    private val loading = MutableStateFlow<Set<Pair<String, AgentId>>>(emptySet())
+    private val errors = MutableStateFlow<Map<Pair<String, AgentId>, String>>(emptyMap())
 
-    override fun observeSessions(): Flow<List<CachedSession>> = sessions
+    override fun observeSessions(): Flow<List<SessionListItem>> = sessions
 
-    override fun observeSessions(connectionId: String): Flow<List<CachedSession>> =
+    override fun observeSessions(connectionId: String): Flow<List<SessionListItem>> =
         sessions.map { cached -> cached.filter { session -> session.connectionId == connectionId } }
 
-    override fun observeAgents(connectionId: String): Flow<List<CachedAgent>> =
-        agents.map { cached -> cached[connectionId].orEmpty() }
+    override fun observeSnapshots(): Flow<List<AgentSessionSnapshot>> =
+        kotlinx.coroutines.flow.combine(sessions, loading, errors) { cached, refreshing, failures ->
+            cached
+                .groupBy { session -> session.connectionId to session.session.agentId }
+                .map { (key, rows) ->
+                    AgentSessionSnapshot(
+                        connectionId = key.first,
+                        agentId = key.second,
+                        sessions = rows.map { row -> row.session.toCatalog() },
+                        loading = key in refreshing,
+                        error = failures[key],
+                    )
+                }
+        }
 
     override suspend fun refresh(connectionId: String): Result<SessionCatalog> {
         val listed = network.listSessions(connectionId)
         if (listed.isFailure) {
             return Result.failure(checkNotNull(listed.exceptionOrNull()))
         }
-        val agentResult = network.listAgents(connectionId)
-        val agentItems = agentResult.getOrNull()?.items.orEmpty()
+        val agentItems = network.listAgents(connectionId).getOrNull()?.items.orEmpty()
         val workspaces = network.listWorkspaces(connectionId, 100).getOrNull()?.items.orEmpty()
         val agentLabels = agentItems.associate { agent -> agent.id to agent.displayName }
         val workspaceByPath = workspaces.associateBy { workspace -> workspace.path }
         val cached = listed.getOrThrow().items.map { session ->
             val workspace = workspaceByPath[session.cwd]
-            CachedSession(
+            SessionListItem(
                 connectionId = connectionId,
                 session = session,
                 workspaceId = workspace?.id.orEmpty(),
@@ -51,18 +65,6 @@ class TestSessionRepository(
             )
         }
         sessions.value = sessions.value.filterNot { session -> session.connectionId == connectionId } + cached
-        if (agentResult.isSuccess) {
-            agents.value = agents.value + (
-                connectionId to agentItems.map { agent ->
-                    CachedAgent(
-                        connectionId = connectionId,
-                        agentId = agent.id,
-                        displayName = agent.displayName,
-                        enabled = agent.enabled,
-                    )
-                }
-            )
-        }
         return Result.success(
             SessionCatalog(
                 agents = agentItems,
@@ -71,30 +73,10 @@ class TestSessionRepository(
         )
     }
 
-    override suspend fun refreshAgents(connectionId: String): Result<Unit> {
-        val listed = network.listAgents(connectionId)
-        if (listed.isFailure) {
-            return Result.failure(checkNotNull(listed.exceptionOrNull()))
-        }
-        agents.value = agents.value + (
-            connectionId to listed.getOrThrow().items.map { agent ->
-                CachedAgent(
-                    connectionId = connectionId,
-                    agentId = agent.id,
-                    displayName = agent.displayName,
-                    enabled = agent.enabled,
-                )
-            }
-        )
-        return Result.success(Unit)
-    }
-
     override suspend fun createSession(
         connectionId: String,
         body: CreateSessionBody,
     ): Result<CreateSessionResponse> = network.createSession(connectionId, body).onSuccess { created ->
-        val agent = agents.value[connectionId].orEmpty()
-            .firstOrNull { cached -> cached.agentId == created.agentId }
         val workspace = network.listWorkspaces(connectionId, 100)
             .getOrNull()
             ?.items
@@ -103,12 +85,12 @@ class TestSessionRepository(
             cached.connectionId == connectionId &&
                 cached.session.agentId == created.agentId &&
                 cached.session.sessionId == created.sessionId
-        } + CachedSession(
+        } + SessionListItem(
             connectionId = connectionId,
             session = created.toSession(),
             workspaceId = workspace?.id.orEmpty(),
             workspaceName = workspace?.name ?: created.cwd,
-            agentLabel = agent?.displayName ?: created.agentId,
+            agentLabel = created.agentId,
         )
     }
 
@@ -143,11 +125,24 @@ class TestSessionRepository(
         }
     }
 
-    fun seed(sessions: List<CachedSession>) {
+    fun seed(sessions: List<SessionListItem>) {
         this.sessions.value = sessions
     }
 
-    fun seedAgents(connectionId: String, agents: List<CachedAgent>) {
-        this.agents.value = this.agents.value + (connectionId to agents)
+    fun markLoading(connectionId: String, agentId: AgentId) {
+        loading.value = loading.value + (connectionId to agentId)
+    }
+
+    fun markFailed(connectionId: String, agentId: AgentId, message: String) {
+        loading.value = loading.value - (connectionId to agentId)
+        errors.value = errors.value + ((connectionId to agentId) to message)
     }
 }
+
+private fun harold.android.contracts.Session.toCatalog(): CatalogSession = CatalogSession(
+    agentId = agentId,
+    sessionId = sessionId,
+    cwd = cwd,
+    title = title,
+    updatedAt = updatedAt,
+)

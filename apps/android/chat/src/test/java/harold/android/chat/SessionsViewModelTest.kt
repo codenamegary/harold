@@ -9,7 +9,7 @@ import harold.android.contracts.Workspace
 import harold.android.contracts.WorkspaceState
 import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SavedConnection
-import harold.android.database.session.CachedSession
+import harold.android.database.session.SessionListItem
 import harold.android.database.session.SessionRepository
 import harold.android.live.SessionOwner
 import harold.android.live.SessionSnapshot
@@ -244,17 +244,29 @@ class SessionsViewModelTest {
     )
 
     @Test
-    fun showsCachedSessionsWhenTheHaroldIsOffline() = runTest {
+    fun showsNoSessionsWhenTheHaroldIsOfflineAndNoProcessHasAnswered() = runTest {
+        val origin = ACTIVE.connectionId
+        val network = OriginSessionRepository(sessionsByOrigin = emptyMap())
+        network.failOrigins += origin
+
+        val viewModel = viewModel(repository = network)
+
+        assertTrue(viewModel.uiState.value.sessions.isEmpty())
+        assertFalse(viewModel.uiState.value.loading)
+    }
+
+    @Test
+    fun keepsALiveSnapshotWhenTheHostGoesOffline() = runTest {
         val origin = ACTIVE.connectionId
         val network = OriginSessionRepository(
-            sessionsByOrigin = mapOf(origin to listOf(session("sess_cached", "Cached", "2026-08-03T00:00:00.000Z"))),
+            sessionsByOrigin = mapOf(origin to listOf(session("sess_live", "Live", "2026-08-03T00:00:00.000Z"))),
         )
         val sessionRepository = TestSessionRepository(network)
         sessionRepository.seed(
             listOf(
-                CachedSession(
+                SessionListItem(
                     connectionId = origin,
-                    session = session("sess_cached", "Cached", "2026-08-03T00:00:00.000Z"),
+                    session = session("sess_live", "Live", "2026-08-03T00:00:00.000Z"),
                     workspaceId = "ws_01",
                     workspaceName = "harold",
                     agentLabel = "Cursor",
@@ -265,7 +277,7 @@ class SessionsViewModelTest {
 
         val viewModel = viewModel(repository = network, sessionRepository = sessionRepository)
 
-        assertEquals(listOf("Cached"), viewModel.uiState.value.sessions.map { row -> row.name })
+        assertEquals(listOf("Live"), viewModel.uiState.value.sessions.map { row -> row.name })
         assertFalse(viewModel.uiState.value.sessions.single().connectionReachable)
         assertNull(viewModel.uiState.value.error)
     }

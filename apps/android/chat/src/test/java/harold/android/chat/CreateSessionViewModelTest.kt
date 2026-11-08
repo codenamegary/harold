@@ -14,7 +14,7 @@ import harold.android.contracts.WorkspaceState
 import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SavedConnection
 import harold.android.database.session.CachedAgent
-import harold.android.database.session.SessionRepository
+import harold.android.database.session.AgentRepository
 import harold.android.database.workspace.WorkspaceRepository
 import harold.android.navigation.AddWorkspace
 import harold.android.navigation.Chat
@@ -172,7 +172,7 @@ class CreateSessionViewModelTest {
             agents = emptyMap(),
             failAgents = setOf(LAPTOP),
         )
-        val sessionRepository = TestSessionRepository(network).apply {
+        val agentRepository = TestAgentRepository(network).apply {
             seedAgents(
                 LAPTOP,
                 listOf(
@@ -188,7 +188,7 @@ class CreateSessionViewModelTest {
 
         val viewModel = viewModel(
             repository = network,
-            sessionRepository = sessionRepository,
+            agentRepository = agentRepository,
             savedConnections = saved(savedConnection(LAPTOP, "laptop", "tide", "bolt")),
         )
 
@@ -547,13 +547,13 @@ class CreateSessionViewModelTest {
         commands: RecordingSessionCommands = RecordingSessionCommands(),
         navigator: harold.android.navigation.Navigator = testNavigator(),
         repository: harold.android.user.UserRepository = repository(),
-        sessionRepository: SessionRepository = TestSessionRepository(repository),
+        agentRepository: AgentRepository = TestAgentRepository(repository),
         workspaceRepository: WorkspaceRepository = TestWorkspaceRepository(repository),
         savedConnections: ConnectionRepository? = null,
         sessionPreferences: FakeSessionPreferences = FakeSessionPreferences(),
     ): CreateSessionViewModel = CreateSessionViewModel(
         connectionGateway = FakeConnectionGateway(ACTIVE),
-        sessionRepository = sessionRepository,
+        agentRepository = agentRepository,
         workspaceRepository = workspaceRepository,
         userRepository = repository,
         sessionCommands = commands,

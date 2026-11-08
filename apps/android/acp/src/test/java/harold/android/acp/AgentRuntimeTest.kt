@@ -235,7 +235,7 @@ class AgentRuntimeTest {
 
             val reopened = runtime.openSession(FIRST_ROW, AGENT_ID, created.sessionId).getOrThrow()
             val seen = mutableListOf<SessionStatus>()
-            val statusCollector = launch {
+            val statusCollector = launch(start = CoroutineStart.UNDISPATCHED) {
                 reopened.status.collect { status -> seen += status }
             }
             val reopenSubscribed = CompletableDeferred<Unit>()
@@ -311,6 +311,37 @@ class AgentRuntimeTest {
     }
 
     @Test
+    fun processDeathDropsOnlyThatAgentsCatalogRows() = runBlocking {
+        val launcher = FakeLauncher(listOf("agent-a", "agent-b"))
+        val catalog = AcpSessionCatalog()
+        val runtime = AgentRuntime(
+            launcher = launcher,
+            files = NoopFiles,
+            catalog = catalog,
+        )
+        try {
+            runtime.createSession(FIRST_ROW, "agent-a", "/tmp/a").getOrThrow()
+            runtime.createSession(FIRST_ROW, "agent-b", "/tmp/b").getOrThrow()
+            assertEquals(2, catalog.snapshots().size)
+
+            launcher.channels.first().kill()
+
+            withTimeout(10_000) {
+                while (catalog.snapshots().any { snapshot -> snapshot.agentId == "agent-a" }) {
+                    delay(10)
+                }
+            }
+            assertEquals(
+                listOf("agent-b"),
+                catalog.snapshots().map { snapshot -> snapshot.agentId },
+            )
+        } finally {
+            runtime.closeConnection(FIRST_ROW)
+            launcher.close()
+        }
+    }
+
+    @Test
     fun duplicateSavedRowsShareTheProcessButKeepTheirOwnSessions() = runBlocking {
         withRuntime { runtime, launcher ->
             val created = runtime.createSession(FIRST_ROW, AGENT_ID, "/tmp/duplicate").getOrThrow()
@@ -375,7 +406,9 @@ private object NoopFiles : SessionFileService {
     ): Result<Unit> = Result.failure(AgentLaunchException("not used"))
 }
 
-private class FakeLauncher : AgentProcessLauncher {
+private class FakeLauncher(
+    private val agentIds: List<AgentId> = listOf("fake-agent"),
+) : AgentProcessLauncher {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val channels = mutableListOf<FakeChannel>()
     val agents = mutableListOf<FakeAgent>()
@@ -383,7 +416,7 @@ private class FakeLauncher : AgentProcessLauncher {
         private set
 
     override suspend fun launchableAgents(connectionId: String): Result<List<LaunchableAgent>> =
-        Result.success(listOf(LaunchableAgent(id = "fake-agent", displayName = "Fake agent")))
+        Result.success(agentIds.map { id -> LaunchableAgent(id = id, displayName = id) })
 
     override suspend fun keyFor(connectionId: String): String = "shared-pool-key"
 

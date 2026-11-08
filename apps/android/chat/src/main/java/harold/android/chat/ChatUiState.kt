@@ -74,9 +74,9 @@ data class ChatUiState(
     val connectionBanner: String? = null,
     val selectedSession: SessionRow? = null,
     val sessions: List<SessionRow> = emptyList(),
-    /** True once the first cached snapshot (or an empty cache) has been read. */
+    /** True once the first live session snapshot (or an empty one) has been read. */
     val hasLoaded: Boolean = false,
-    /** True while the network refresh is running. Cached content stays visible. */
+    /** True while the live session refresh is running. Rows stay visible. */
     val isRefreshing: Boolean = false,
     val sessionsError: String? = null,
     /** True when the selected session's cwd resolved to a git worktree. */

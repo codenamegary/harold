@@ -3,6 +3,7 @@ package harold.android.acp
 import harold.android.contracts.AgentCapabilityInventory
 import harold.android.contracts.AgentId
 import harold.android.contracts.CreateSessionResponse
+import harold.android.network.CatalogSession
 import harold.android.process.AgentProcessLauncher
 import harold.android.process.SessionFileService
 import java.util.concurrent.ConcurrentHashMap
@@ -39,6 +40,13 @@ class AgentRuntime @Inject constructor(
     /** Saved connection id -> host identity key, kept after the row is removed. */
     private val connections = ConcurrentHashMap<String, String>()
 
+    /**
+     * Last known working directories. The catalog drops an agent's rows when
+     * its process dies, but a watched session still needs a cwd hint to
+     * `session/load` on the replacement process.
+     */
+    private val sessionCwds = ConcurrentHashMap<SessionKey, String>()
+
     private val processLocks = ConcurrentHashMap<String, Mutex>()
 
     suspend fun acquire(connectionId: String, agentId: AgentId): AgentProcess {
@@ -61,6 +69,7 @@ class AgentRuntime @Inject constructor(
             val process = AgentProcess(
                 connectionId = connectionId,
                 agentId = agentId,
+                poolKey = poolKey,
                 key = processKey,
                 channel = channel,
                 launcher = launcher,
@@ -91,7 +100,14 @@ class AgentRuntime @Inject constructor(
         cwd: String? = null,
     ): Result<AcpSession> = runCatching {
         val process = acquire(connectionId, agentId)
-        process.openSession(connectionId, sessionId, cwd)
+        val key = SessionKey(connectionId, agentId, sessionId)
+        val session = process.openSession(
+            connectionId = connectionId,
+            sessionId = sessionId,
+            cwdHint = cwd ?: sessionCwds[key],
+        )
+        sessionCwds[key] = session.cwd
+        session
     }
 
     suspend fun createSession(
@@ -100,53 +116,56 @@ class AgentRuntime @Inject constructor(
         cwd: String,
     ): Result<CreateSessionResponse> = runCatching {
         val process = acquire(connectionId, agentId)
-        process.sessionNew(connectionId, cwd)
+        process.sessionNew(connectionId, cwd).also { created ->
+            sessionCwds[SessionKey(connectionId, agentId, created.sessionId)] = created.cwd
+        }
     }
 
     /**
      * Compiles `session/list` from every enabled agent on the host, reusing
-     * warm processes. One broken or slow agent only drops its own rows; the
-     * rest still list.
+     * warm processes. Each agent's snapshot lands as soon as that agent
+     * answers, so one slow or broken agent only holds up its own rows.
      */
     suspend fun listSessions(
         connectionId: String,
         cwd: String? = null,
     ): Result<List<AcpSessionInfo>> = runCatching {
         val rows = launcher.launchableAgents(connectionId).getOrThrow()
+        catalog.retainAgents(connectionId, rows.map { row -> row.id }.toSet())
         if (rows.isEmpty()) {
-            catalog.replaceAll(connectionId, emptyList())
             return@runCatching emptyList()
         }
 
-        val results = coroutineScope {
+        catalog.markLoading(connectionId, rows.map { row -> row.id })
+        coroutineScope {
             val permits = Semaphore(MAX_CONCURRENT_AGENT_LISTS)
             rows.map { row ->
                 async(Dispatchers.IO) {
                     permits.withPermit {
-                        row.id to runCatching {
+                        runCatching {
                             val process = acquire(connectionId, row.id)
                             process.sessionList(connectionId, cwd)
-                        }.getOrNull()
+                        }.fold(
+                            onSuccess = { sessions ->
+                                catalog.replaceAgent(connectionId, row.id, sessions, cwd)
+                            },
+                            onFailure = { error ->
+                                catalog.markFailed(
+                                    connectionId = connectionId,
+                                    agentId = row.id,
+                                    message = error.message?.takeIf { message -> message.isNotBlank() }
+                                        ?: "Could not list this agent's sessions.",
+                                )
+                            },
+                        )
                     }
                 }
             }.awaitAll()
         }
 
-        val refreshedAgents = results
-            .mapNotNull { (agentId, sessions) -> agentId.takeIf { sessions != null } }
-            .toSet()
-        val attemptedAgents = rows.map { row -> row.id }.toSet()
-        val sessions = results
-            .flatMap { (_, listed) -> listed.orEmpty() }
+        catalog.sessions(connectionId)
             .filter { session -> cwd == null || session.cwd == cwd }
-        val merged = catalog.merge(
-            connectionId = connectionId,
-            sessions = sessions,
-            refreshedAgentIds = refreshedAgents,
-            attemptedAgentIds = attemptedAgents,
-            cwd = cwd,
-        )
-        if (cwd == null) merged else merged.filter { session -> session.cwd == cwd }
+            .map { session -> session.toSessionInfo() }
     }
 
     suspend fun deleteSession(
@@ -158,6 +177,7 @@ class AgentRuntime @Inject constructor(
         process.removeSession(connectionId, sessionId)?.close()
         process.sessionDelete(sessionId)
         catalog.remove(connectionId, agentId, sessionId)
+        sessionCwds.remove(SessionKey(connectionId, agentId, sessionId))
     }
 
     /** Detaches every stream from a session without closing its process. */
@@ -231,8 +251,10 @@ class AgentRuntime @Inject constructor(
             ?: runCatching { launcher.keyFor(connectionId) }.getOrNull()
             ?: return
         processes.values
-            .filter { process -> process.key.startsWith("$poolKey|agent=") }
+            .filter { process -> process.poolKey == poolKey }
             .forEach { process -> process.close(intentional = true) }
+        catalog.removeConnection(connectionId)
+        sessionCwds.keys.removeAll { key -> key.connectionId == connectionId }
     }
 
     /** Closes processes with no attached stream and no running prompt. */
@@ -258,6 +280,10 @@ class AgentRuntime @Inject constructor(
 
     private fun onProcessClosed(process: AgentProcess) {
         processes.remove(process.key, process)
+        connections
+            .filterValues { poolKey -> poolKey == process.poolKey }
+            .keys
+            .forEach { connectionId -> catalog.removeAgent(connectionId, process.agentId) }
     }
 
     private fun processKey(poolKey: String, agentId: AgentId): String =
@@ -268,3 +294,18 @@ class AgentRuntime @Inject constructor(
         private const val MAX_CONCURRENT_AGENT_LISTS = 4
     }
 }
+
+private fun CatalogSession.toSessionInfo(): AcpSessionInfo = AcpSessionInfo(
+    agentId = agentId,
+    sessionId = sessionId,
+    cwd = cwd,
+    title = title.takeIf { it.isNotBlank() },
+    updatedAt = updatedAt.takeIf { it.isNotBlank() },
+    additionalDirectories = additionalDirectories,
+)
+
+private data class SessionKey(
+    val connectionId: String,
+    val agentId: AgentId,
+    val sessionId: String,
+)

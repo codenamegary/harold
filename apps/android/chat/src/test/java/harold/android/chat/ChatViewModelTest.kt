@@ -32,7 +32,6 @@ import harold.android.contracts.WorkspaceCollection
 import harold.android.contracts.WorkspaceState
 import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.SavedConnection
-import harold.android.database.session.CachedSession
 import harold.android.database.session.SessionRepository
 import harold.android.live.ContextUsage
 import harold.android.live.SessionOwner
@@ -130,23 +129,12 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun paintsCachedSessionsBeforeTheRefreshCompletes() = runTest(dispatcher) {
+    fun waitsForTheLiveSessionListInsteadOfRestoringACache() = runTest(dispatcher) {
         val gate = CompletableDeferred<Unit>()
         val repository = ChatFakeUserRepository(sessionsGate = gate)
-        val cached = CachedSession(
-            connectionId = ORIGIN,
-            session = session("sess_cached", "Cached"),
-            workspaceId = "ws_01",
-            workspaceName = "harold",
-            agentLabel = "Cursor",
-        )
-        val sessionRepository = TestSessionRepository(repository).apply {
-            seed(listOf(cached))
-        }
         val viewModel = createViewModel(
             repository = repository,
             navigation = ChatFakeNavigationPreferences(),
-            sessionRepository = sessionRepository,
         )
 
         advanceUntilIdle()
@@ -154,7 +142,7 @@ class ChatViewModelTest {
         val loading = viewModel.uiState.value
         assertTrue(loading.hasLoaded)
         assertTrue(loading.isRefreshing)
-        assertEquals(listOf("Cached"), loading.sessions.map { row -> row.name })
+        assertTrue(loading.sessions.isEmpty())
 
         gate.complete(Unit)
         advanceUntilIdle()
@@ -1946,7 +1934,7 @@ class ChatViewModelTest {
     ) {
         val route = CreateSessionViewModel(
             connectionGateway = activeGateway(),
-            sessionRepository = TestSessionRepository(repository),
+            agentRepository = TestAgentRepository(repository),
             workspaceRepository = TestWorkspaceRepository(repository),
             userRepository = repository,
             sessionCommands = sessionCommands,
@@ -1966,7 +1954,7 @@ class ChatViewModelTest {
     ) {
         val route = CreateSessionViewModel(
             connectionGateway = activeGateway(),
-            sessionRepository = TestSessionRepository(repository),
+            agentRepository = TestAgentRepository(repository),
             workspaceRepository = TestWorkspaceRepository(repository),
             userRepository = repository,
             sessionCommands = sessionCommands,

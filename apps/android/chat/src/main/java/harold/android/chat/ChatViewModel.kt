@@ -32,7 +32,7 @@ import harold.android.contracts.parseConfigOptions
 import harold.android.credentials.ConnectionRepository
 import harold.android.credentials.forgetConnection
 import harold.android.credentials.settleAfterForget
-import harold.android.database.session.CachedSession
+import harold.android.database.session.SessionListItem
 import harold.android.database.session.SessionRepository
 import harold.android.di.PreviewDispatcher
 import harold.android.foreground.ActiveSessionSnapshot
@@ -155,7 +155,7 @@ class ChatViewModel @Inject constructor(
     private var agentLabels: Map<AgentId, String> = emptyMap()
     /** Live handshake results, keyed by the session that produced them. */
     private var agentCapabilities: Map<String, AgentCapabilityInventory?> = emptyMap()
-    private var cachedSessions: List<CachedSession> = emptyList()
+    private var liveSessions: List<SessionListItem> = emptyList()
     private var savedConnections: List<SavedConnection> = emptyList()
     private var activeOrigin: String? = null
     private var metadataLoaded = false
@@ -206,9 +206,9 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             sessionRepository.observeSessions().collect { sessions ->
-                cachedSessions = sessions
+                liveSessions = sessions
                 if (metadataLoaded) {
-                    publishCachedSessions()
+                    publishLiveSessions()
                 }
             }
         }
@@ -1679,7 +1679,7 @@ class ChatViewModel @Inject constructor(
 
     private suspend fun refreshCatalog() = refreshMutex.withLock {
         loadConnectionMetadata()
-        publishCachedSessions()
+        publishLiveSessions()
 
         val origins = targetOrigins()
         _uiState.update { current ->
@@ -1714,7 +1714,7 @@ class ChatViewModel @Inject constructor(
             )
         }
 
-        publishCachedSessions()
+        publishLiveSessions()
         _uiState.update { current ->
             current.copy(
                 hasLoaded = true,
@@ -1766,10 +1766,10 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * Paints the Room snapshot before the network refresh starts. The refresh
-     * writes to Room, and the flow collector calls this again with fresh rows.
+     * Paints the live ACP session catalog. Each agent's rows arrive as its
+     * `session/list` answer lands, so a slow agent does not hide the rest.
      */
-    private fun publishCachedSessions() {
+    private fun publishLiveSessions() {
         if (!metadataLoaded) {
             return
         }
@@ -1777,16 +1777,16 @@ class ChatViewModel @Inject constructor(
         val scopedToHarold = savedConnections.isNotEmpty()
         val haroldByOrigin = savedConnections.associateBy { connection -> connection.connectionId }
         val pushedTitles = sessionOwner.sessionTitles.value
-        val rows = cachedSessions
-            .filter { cached -> cached.connectionId in origins }
-            .map { cached ->
-                val connection = haroldByOrigin[cached.connectionId]
-                val row = cached.toSessionRow().copy(
-                    connectionId = if (scopedToHarold) cached.connectionId else "",
+        val rows = liveSessions
+            .filter { listed -> listed.connectionId in origins }
+            .map { listed ->
+                val connection = haroldByOrigin[listed.connectionId]
+                val row = listed.toSessionRow().copy(
+                    connectionId = if (scopedToHarold) listed.connectionId else "",
                     connectionName = connection?.name.orEmpty(),
                     connectionColorId = connection?.colorId.orEmpty(),
                     connectionIconId = connection?.iconId.orEmpty(),
-                    connectionReachable = cached.connectionId !in unreachableOrigins,
+                    connectionReachable = listed.connectionId !in unreachableOrigins,
                 )
                 titleFor(row, pushedTitles)?.let { title -> row.copy(name = title) } ?: row
             }
